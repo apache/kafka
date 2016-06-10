@@ -479,6 +479,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // handling exceptions and record the errors;
             // for API exceptions return them in the future,
             // for other exceptions throw directly
+        } catch (TimeoutException e) {
+            this.errors.record();
+            this.metrics.sensor("buffer-exhausted-records").record();
+            if (this.interceptors != null)
+                this.interceptors.onSendError(record, tp, e);
+            throw e;
         } catch (ApiException e) {
             log.debug("Exception occurred during message send:", e);
             if (callback != null)
