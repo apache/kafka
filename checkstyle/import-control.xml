@@ -123,6 +123,8 @@
     <allow pkg="com.fasterxml.jackson" />
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.log4j" />
+    <allow pkg="joptsimple" />
+    <allow pkg="kafka" />
   </subpackage>
 
   <subpackage name="streams">
@@ -149,6 +151,7 @@
       <allow pkg="scala.collection" />
       <allow pkg="org.I0Itec.zkclient" />
       <allow pkg="org.hamcrest.CoreMatchers" />
+      <allow pkg="org.apache.kafka.tools" />
     </subpackage>
 
     <subpackage name="state">
