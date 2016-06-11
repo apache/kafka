@@ -641,6 +641,7 @@ project(':tools') {
   archivesBaseName = "kafka-tools"
 
   dependencies {
+    compile project(':core')
     compile project(':clients')
     compile project(':log4j-appender')
     compile libs.argparse4j

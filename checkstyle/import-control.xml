@@ -123,6 +123,8 @@
     <allow pkg="com.fasterxml.jackson" />
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.log4j" />
+    <allow pkg="joptsimple" />
+    <allow pkg="kafka" />
   </subpackage>
 
   <subpackage name="streams">
