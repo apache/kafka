@@ -341,9 +341,11 @@ class FileMessageSet private[kafka](@volatile var file: File,
     if(targetSize > originalSize || targetSize < 0)
       throw new KafkaException("Attempt to truncate log segment to " + targetSize + " bytes failed, " +
                                " size of this log segment is " + originalSize + " bytes.")
-    channel.truncate(targetSize)
-    channel.position(targetSize)
-    _size.set(targetSize)
+    if (targetSize != channel.size()) {
+      channel.truncate(targetSize)
+      channel.position(targetSize)
+      _size.set(targetSize)
+    }
     originalSize - targetSize
   }
 
