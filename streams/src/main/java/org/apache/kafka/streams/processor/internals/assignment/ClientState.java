@@ -69,4 +69,15 @@ public class ClientState<T> {
         this.cost += cost;
     }
 
+    @Override
+    public String toString() {
+        return "ClientState{" +
+               "activeTasks=" + activeTasks +
+               ", assignedTasks=" + assignedTasks +
+               ", prevActiveTasks=" + prevActiveTasks +
+               ", prevAssignedTasks=" + prevAssignedTasks +
+               ", capacity=" + capacity +
+               ", cost=" + cost +
+               '}';
+    }
 }

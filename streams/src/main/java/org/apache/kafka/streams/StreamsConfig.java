@@ -67,6 +67,10 @@ public class StreamsConfig extends AbstractConfig {
     public static final String NUM_STANDBY_REPLICAS_CONFIG = "num.standby.replicas";
     private static final String NUM_STANDBY_REPLICAS_DOC = "The number of standby replicas for each task.";
 
+    /** <code>max.tasks.assigned</code> */
+    public static final String MAX_TASKS_ASSIGNED = "max.tasks.assigned";
+    private static final String MAX_TASKS_ASSIGNED_DOC = "The maximum number of tasks that might be assigned to a KafkaStreams instance.";
+
     /** <code>buffered.records.per.partition</code> */
     public static final String BUFFERED_RECORDS_PER_PARTITION_CONFIG = "buffered.records.per.partition";
     private static final String BUFFERED_RECORDS_PER_PARTITION_DOC = "The maximum number of records to buffer per partition.";
@@ -183,6 +187,11 @@ public class StreamsConfig extends AbstractConfig {
                                         0,
                                         Importance.LOW,
                                         NUM_STANDBY_REPLICAS_DOC)
+                                .define(MAX_TASKS_ASSIGNED,
+                                        Type.INT,
+                                        Integer.MAX_VALUE,
+                                        Importance.MEDIUM,
+                                        MAX_TASKS_ASSIGNED_DOC)
                                 .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
                                         Type.INT,
                                         1000,
@@ -231,6 +240,7 @@ public class StreamsConfig extends AbstractConfig {
         props.put(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE, streamThread);
         props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, getInt(REPLICATION_FACTOR_CONFIG));
         props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, getInt(NUM_STANDBY_REPLICAS_CONFIG));
+        props.put(StreamsConfig.MAX_TASKS_ASSIGNED, getInt(MAX_TASKS_ASSIGNED));
         props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamPartitionAssignor.class.getName());
 
         if (!getString(ZOOKEEPER_CONNECT_CONFIG).equals(""))

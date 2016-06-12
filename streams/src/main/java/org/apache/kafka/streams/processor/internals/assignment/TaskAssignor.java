@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -33,13 +32,13 @@ public class TaskAssignor<C, T extends Comparable<T>> {
 
     private static final Logger log = LoggerFactory.getLogger(TaskAssignor.class);
 
-    public static <C, T extends Comparable<T>> Map<C, ClientState<T>> assign(Map<C, ClientState<T>> states, Set<T> tasks, int numStandbyReplicas) {
+    public static <C, T extends Comparable<T>> Map<C, ClientState<T>> assign(Map<C, ClientState<T>> states, Set<T> tasks, int maxNumTasksPerState, int numStandbyReplicas) {
         long seed = 0L;
         for (C client : states.keySet()) {
             seed += client.hashCode();
         }
 
-        TaskAssignor<C, T> assignor = new TaskAssignor<>(states, tasks, seed);
+        TaskAssignor<C, T> assignor = new TaskAssignor<>(states, tasks, seed, maxNumTasksPerState);
         assignor.assignTasks();
         if (numStandbyReplicas > 0)
             assignor.assignStandbyTasks(numStandbyReplicas);
@@ -47,13 +46,18 @@ public class TaskAssignor<C, T extends Comparable<T>> {
         return assignor.states;
     }
 
+    public static <C, T extends Comparable<T>> Map<C, ClientState<T>> assign(Map<C, ClientState<T>> states, Set<T> tasks, int numStandbyReplicas) {
+        return assign(states, tasks, Integer.MAX_VALUE, numStandbyReplicas);
+    }
+
     private final Random rand;
     private final Map<C, ClientState<T>> states;
     private final Set<TaskPair<T>> taskPairs;
+    private final int maxNumTasksPerState;
     private final int maxNumTaskPairs;
     private final ArrayList<T> tasks;
 
-    private TaskAssignor(Map<C, ClientState<T>> states, Set<T> tasks, long randomSeed) {
+    private TaskAssignor(Map<C, ClientState<T>> states, Set<T> tasks, long randomSeed, int maxNumTasksPerState) {
         this.rand = new Random(randomSeed);
         this.states = new HashMap<>();
         for (Map.Entry<C, ClientState<T>> entry : states.entrySet()) {
@@ -64,6 +68,7 @@ public class TaskAssignor<C, T extends Comparable<T>> {
         int numTasks = tasks.size();
         this.maxNumTaskPairs = numTasks * (numTasks - 1) / 2;
         this.taskPairs = new HashSet<>(this.maxNumTaskPairs);
+        this.maxNumTasksPerState = maxNumTasksPerState;
     }
 
     public void assignTasks() {
@@ -86,9 +91,7 @@ public class TaskAssignor<C, T extends Comparable<T>> {
             if (state != null) {
                 state.assign(task, active);
             } else {
-                TaskAssignmentException ex = new TaskAssignmentException("failed to find an assignable client");
-                log.error(ex.getMessage(), ex);
-                throw ex;
+                log.warn("failed to find an assignable client for task: {}", task);
             }
         }
     }
@@ -112,18 +115,22 @@ public class TaskAssignor<C, T extends Comparable<T>> {
         double candidateAdditionCost = 0d;
 
         for (ClientState<T> state : states.values()) {
-            if (!state.assignedTasks.contains(task)) {
-                // if checkTaskPairs flag is on, skip this client if this task doesn't introduce a new task combination
-                if (checkTaskPairs && !state.assignedTasks.isEmpty() && !hasNewTaskPair(task, state))
-                    continue;
+            Set<T> assignedTasks = state.assignedTasks;
 
-                double additionCost = computeAdditionCost(task, state);
-                if (candidate == null ||
-                        (additionCost < candidateAdditionCost ||
-                            (additionCost == candidateAdditionCost && state.cost < candidate.cost))) {
-                    candidate = state;
-                    candidateAdditionCost = additionCost;
-                }
+            if (assignedTasks.size() >= maxNumTasksPerState || assignedTasks.contains(task)) {
+                continue;
+            }
+
+            // if checkTaskPairs flag is on, skip this client if this task doesn't introduce a new task combination
+            if (checkTaskPairs && !assignedTasks.isEmpty() && !hasNewTaskPair(task, state))
+                continue;
+
+            double additionCost = computeAdditionCost(task, state);
+            if (candidate == null ||
+                additionCost < candidateAdditionCost ||
+                (additionCost == candidateAdditionCost && state.cost < candidate.cost)) {
+                candidate = state;
+                candidateAdditionCost = additionCost;
             }
         }
 
