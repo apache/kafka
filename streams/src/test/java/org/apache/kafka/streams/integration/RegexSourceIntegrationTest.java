@@ -18,10 +18,15 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -29,15 +34,25 @@ import org.apache.kafka.streams.integration.utils.EmbeddedSingleNodeKafkaCluster
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.TopologyBuilder;
+import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
+import org.apache.kafka.streams.processor.internals.StreamTask;
+import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -62,6 +77,9 @@ public class RegexSourceIntegrationTest {
     private static final String FA_TOPIC = "fa";
     private static final String FOO_TOPIC = "foo";
 
+    private static final int FIRST_UPDATE = 0;
+    private static final int SECOND_UPDATE = 1;
+
     private static final String DEFAULT_OUTPUT_TOPIC = "outputTopic";
 
     @BeforeClass
@@ -78,19 +96,18 @@ public class RegexSourceIntegrationTest {
     }
 
     @Test
-    public void testShouldSubscribeToNewMatchingTopicsAfterStart() throws Exception {
-
-        String topic1TestMessage = "topic-1 test";
-        String topic2TestMessage = "topic-2 test";
-        String topic3TestMessage = "topic-3 test";
+    public void testRegexMatchesTopicsAWhenCreated() throws Exception {
 
         final Serde<String> stringSerde = Serdes.String();
 
         Properties streamsConfiguration = getStreamsConfig();
+        StreamsConfig streamsConfig = new StreamsConfig(streamsConfiguration);
+
+        CLUSTER.createTopic("TEST-TOPIC-1");
 
         KStreamBuilder builder = new KStreamBuilder();
 
-        KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("topic-\\d"));
+        KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-\\d"));
 
         pattern1Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
 
@@ -98,33 +115,75 @@ public class RegexSourceIntegrationTest {
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
 
         KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
+
+        Field streamThreadsField = streams.getClass().getDeclaredField("threads");
+        streamThreadsField.setAccessible(true);
+        StreamThread[] streamThreads =  (StreamThread[]) streamThreadsField.get(streams);
+        StreamThread originalThread = streamThreads[0];
+
+        TestStreamThread testStreamThread = new TestStreamThread(builder, streamsConfig,
+                                           new DefaultKafkaClientSupplier(),
+                                           originalThread.applicationId, originalThread.clientId, originalThread.processId, new Metrics(), new SystemTime());
+
+        streamThreads[0] = testStreamThread;
         streams.start();
-
-        //create topic after start will get picked up
-        CLUSTER.createTopic(TOPIC_3);
-
-        //pause for metadata discovery
-        Thread.sleep(5000);
-        Properties producerConfig = getProducerConfig();
-        produceMessage(TOPIC_1, Arrays.asList(topic1TestMessage), producerConfig);
-        produceMessage(TOPIC_2, Arrays.asList(topic2TestMessage), producerConfig);
-        produceMessage(TOPIC_3, Arrays.asList(topic3TestMessage), producerConfig);
-
-
-        Properties consumerConfig = getConsumerConfig();
-        List<String> expectedReceivedValues = Arrays.asList(topic1TestMessage, topic2TestMessage, topic3TestMessage);
-        List<KeyValue<String, String>> receivedKeyValues = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, DEFAULT_OUTPUT_TOPIC, 3);
-        List<String> actualValues = new ArrayList<>(3);
-
-        for (KeyValue<String, String> receivedKeyValue : receivedKeyValues) {
-            actualValues.add(receivedKeyValue.value);
-        }
-
+        Thread.sleep(1000);
+        CLUSTER.createTopic("TEST-TOPIC-2");
+        //pause to let metadata update
+        Thread.sleep(1000);
         streams.close();
-        Collections.sort(actualValues);
-        Collections.sort(expectedReceivedValues);
-        assertThat(actualValues, equalTo(expectedReceivedValues));
-        CLUSTER.deleteTopic(TOPIC_3);
+
+        List<String> expectedFirstAssignment = Arrays.asList("TEST-TOPIC-1");
+        List<String> expectedSecondAssignment = Arrays.asList("TEST-TOPIC-1", "TEST-TOPIC-2");
+
+        assertThat(testStreamThread.assignedTopicPartitions.get(FIRST_UPDATE), equalTo(expectedFirstAssignment));
+        assertThat(testStreamThread.assignedTopicPartitions.get(SECOND_UPDATE), equalTo(expectedSecondAssignment));
+    }
+
+    @Test
+    public void testRegexMatchesTopicsAWhenDeleted() throws Exception {
+
+        final Serde<String> stringSerde = Serdes.String();
+
+        Properties streamsConfiguration = getStreamsConfig();
+        StreamsConfig streamsConfig = new StreamsConfig(streamsConfiguration);
+
+        CLUSTER.createTopic("TEST-TOPIC-A");
+        CLUSTER.createTopic("TEST-TOPIC-B");
+
+        KStreamBuilder builder = new KStreamBuilder();
+
+        KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-[A-Z]"));
+
+        pattern1Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
+
+        // Remove any state from previous test runs
+        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
+
+        KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
+
+        Field streamThreadsField = streams.getClass().getDeclaredField("threads");
+        streamThreadsField.setAccessible(true);
+        StreamThread[] streamThreads =  (StreamThread[]) streamThreadsField.get(streams);
+        StreamThread originalThread = streamThreads[0];
+
+        TestStreamThread testStreamThread = new TestStreamThread(builder, streamsConfig,
+                new DefaultKafkaClientSupplier(),
+                originalThread.applicationId, originalThread.clientId, originalThread.processId, new Metrics(), new SystemTime());
+
+        streamThreads[0] = testStreamThread;
+        streams.start();
+        Thread.sleep(1000);
+        CLUSTER.deleteTopic("TEST-TOPIC-A");
+        //pause to let metadata update
+        Thread.sleep(1000);
+        streams.close();
+
+        List<String> expectedFirstAssignment = Arrays.asList("TEST-TOPIC-A", "TEST-TOPIC-B");
+        List<String> expectedSecondAssignment = Arrays.asList("TEST-TOPIC-B");
+
+        assertThat(testStreamThread.assignedTopicPartitions.get(FIRST_UPDATE), equalTo(expectedFirstAssignment));
+        assertThat(testStreamThread.assignedTopicPartitions.get(SECOND_UPDATE), equalTo(expectedSecondAssignment));
     }
 
 
@@ -250,7 +309,7 @@ public class RegexSourceIntegrationTest {
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "regex-source-integration-test");
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
-        streamsConfiguration.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "500");
+        streamsConfiguration.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1000");
         streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -269,5 +328,26 @@ public class RegexSourceIntegrationTest {
         return consumerConfig;
     }
 
+    private class TestStreamThread extends StreamThread {
+
+        public Map<Integer, List<String>> assignedTopicPartitions = new HashMap<>();
+        private int index =  0;
+
+        public TestStreamThread(TopologyBuilder builder, StreamsConfig config, KafkaClientSupplier clientSupplier, String applicationId, String clientId, UUID processId, Metrics metrics, Time time) {
+            super(builder, config, clientSupplier, applicationId, clientId, processId, metrics, time);
+        }
+
+        @Override
+        public StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitions) {
+            List<String> assignedTopics = new ArrayList<>();
+            for (TopicPartition partition : partitions) {
+                assignedTopics.add(partition.topic());
+            }
+            Collections.sort(assignedTopics);
+            assignedTopicPartitions.put(index++, assignedTopics);
+            return super.createStreamTask(id, partitions);
+        }
+
+    }
 
 }
