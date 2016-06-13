@@ -21,8 +21,11 @@ then
 fi
 
 # CYGINW == 1 if Cygwin is detected, else 0.
-[[ $(uname -a) =~ "CYGWIN" ]]
-CYGWIN=$((! $?))
+if [[ $(uname -a) =~ "CYGWIN" ]]; then
+  CYGWIN=1
+else
+  CYGWIN=0
+fi
 
 if [ -z "$INCLUDE_TEST_JARS" ]; then
   INCLUDE_TEST_JARS=false
@@ -45,11 +48,11 @@ should_include_file() {
 base_dir=$(dirname $0)/..
 
 if [ -z "$SCALA_VERSION" ]; then
-	SCALA_VERSION=2.10.6
+  SCALA_VERSION=2.10.6
 fi
 
 if [ -z "$SCALA_BINARY_VERSION" ]; then
-	SCALA_BINARY_VERSION=2.10
+  SCALA_BINARY_VERSION=2.10
 fi
 
 # run ./gradlew copyDependantLibs to get all dependant jars in a local dir
@@ -157,7 +160,7 @@ if [ -z "$KAFKA_LOG4J_OPTS" ]; then
   # Log to console. This is a tool.
   LOG4J_DIR="$base_dir/config/tools-log4j.properties"
   # If Cygwin is detected, LOG4J_DIR is converted to Windows format.
-  (( CYGWIN )) && LOG4J_DIR=`cygpath --path --mixed "${LOG4J_DIR}"`
+  (( CYGWIN )) && LOG4J_DIR=$(cygpath --path --mixed "${LOG4J_DIR}")
   KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:${LOG4J_DIR}"
 else
   # create logs directory
@@ -167,7 +170,7 @@ else
 fi
 
 # If Cygwin is detected, LOG_DIR is converted to Windows format.
-(( CYGWIN )) && LOG_DIR=`cygpath --path --mixed "${LOG_DIR}"`
+(( CYGWIN )) && LOG_DIR=$(cygpath --path --mixed "${LOG_DIR}")
 KAFKA_LOG4J_OPTS="-Dkafka.logs.dir=$LOG_DIR $KAFKA_LOG4J_OPTS"
 
 # Generic jvm settings you want to add
@@ -246,7 +249,7 @@ if [ "x$GC_LOG_ENABLED" = "xtrue" ]; then
 fi
 
 # If Cygwin is detected, classpath is converted to Windows format.
-(( CYGWIN )) && CLASSPATH=`cygpath --path --mixed "${CLASSPATH}"`
+(( CYGWIN )) && CLASSPATH=$(cygpath --path --mixed "${CLASSPATH}")
 
 # Launch mode
 if [ "x$DAEMON_MODE" = "xtrue" ]; then
