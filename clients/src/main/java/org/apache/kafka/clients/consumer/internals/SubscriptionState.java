@@ -31,12 +31,13 @@ import java.util.regex.Pattern;
  * or with {@link #assignFromSubscribed(Collection)} (automatic assignment from subscription).
  *
  * Once assigned, the partition is not considered "fetchable" until its initial position has
- * been set with {@link #seek(TopicPartition, long)}. Fetchable partitions track a fetch
- * position which is used to set the offset of the next fetch, and a consumed position
- * which is the last offset that has been returned to the user. You can suspend fetching
- * from a partition through {@link #pause(TopicPartition)} without affecting the fetched/consumed
- * offsets. The partition will remain unfetchable until the {@link #resume(TopicPartition)} is
- * used. You can also query the pause state independently with {@link #isPaused(TopicPartition)}.
+ * been set with {@link #seek(TopicPartition, long)}. Each fetchable partition tracks a position
+ * which is used to set the offset of the next fetch. The position used by the next fetch is
+ * one larger than the highest offset the consumer has seen in that partition. You can suspend
+ * fetching from a partition through {@link #pause(TopicPartition)} without affecting the
+ * fetched/consumed offsets. The partition will remain unfetchable until the
+ * {@link #resume(TopicPartition)} is used. You can also query the pause
+ * state independently with {@link #isPaused(TopicPartition)}.
  *
  * Note that pause state as well as fetch/consumed positions are not preserved when partition
  * assignment is changed whether directly by the user or through a group rebalance.
