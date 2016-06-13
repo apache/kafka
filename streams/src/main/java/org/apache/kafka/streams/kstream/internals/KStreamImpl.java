@@ -407,7 +407,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                          Serde<K> keySerde,
                                          Serde<V> thisValueSerde,
                                          Serde<V1> otherValueSerde,
-                                         KStreamJoin join) {
+                                         KStreamImplJoin join) {
         KStreamImpl<K, V> joinThis = this;
         KStreamImpl<K, V1> joinOther = (KStreamImpl) other;
 
@@ -441,7 +441,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
 
     /**
-     * Repartition a stream. This will is required on join operations occurring after
+     * Repartition a stream. This is required on join operations occurring after
      * an operation that changes the key, i.e, selectKey, map(..), flatMap(..).
      * @param keySerde      Serdes for serializing the keys
      * @param valSerde      Serdes for serilaizing the values
@@ -520,15 +520,15 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             KStreamImpl<K, V> thisStreamRepartitioned = this.repartitionForJoin(keySerde,
                                                                                 valueSerde,
                                                                                 false);
-            return thisStreamRepartitioned.doLeftJoin(other, joiner);
+            return thisStreamRepartitioned.doStreamTableLeftJoin(other, joiner);
         } else {
-            return doLeftJoin(other, joiner);
+            return doStreamTableLeftJoin(other, joiner);
         }
 
     }
 
-    private <V1, R> KStream<K, R> doLeftJoin(final KTable<K, V1> other,
-                                             final ValueJoiner<V, V1, R> joiner) {
+    private <V1, R> KStream<K, R> doStreamTableLeftJoin(final KTable<K, V1> other,
+                                                        final ValueJoiner<V, V1, R> joiner) {
         Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
 
         String name = topology.newName(LEFTJOIN_NAME);
@@ -586,7 +586,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             .build();
     }
 
-    private interface KStreamJoin {
+    private interface KStreamImplJoin {
 
         <K1, R, V1, V2> KStream<K1, R> join(KStream<K1, V1> lhs,
                                             KStream<K1, V2> other,
@@ -597,7 +597,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                             Serde<V2> otherValueSerde);
     }
 
-    private class DefaultJoin implements KStreamJoin {
+    private class DefaultJoin implements KStreamImplJoin {
 
         private final boolean outer;
 
@@ -662,7 +662,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
 
-    private class LeftJoin implements KStreamJoin {
+    private class LeftJoin implements KStreamImplJoin {
 
         @Override
         public <K1, R, V1, V2> KStream<K1, R> join(KStream<K1, V1> lhs,
