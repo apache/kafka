@@ -29,10 +29,10 @@ import java.util.Set;
 public interface Authorizer extends Configurable {
 
     /**
-     * @param session   The session being authenticated.
-     * @param operation Type of operation client is trying to perform on resource.
-     * @param resource  Resource the client is trying to access.
-     * @return
+     * @param session   the session being authorized
+     * @param operation type of operation client is trying to perform on resource
+     * @param resource  resource the client is trying to access
+     * @return true if the session is authorized to perform the operation on the resource, else false
      *
      * @throws org.apache.kafka.common.errors.InvalidResourceException if resource does not exist
      * @throws org.apache.kafka.common.errors.InvalidOperationException if requested operation is not
@@ -41,18 +41,18 @@ public interface Authorizer extends Configurable {
     public boolean authorize(Session session, Operation operation, Resource resource);
 
     /**
-     * implementation specific description, like, supported principal types.
+     * Implementation specific description, like, supported principal types.
      *
-     * @return implementation specific description.
+     * @return implementation specific description
      */
     public String description();
 
     /**
-     * add the acls to resource, this is an additive operation so existing acls will not be overwritten, instead these new
+     * Add the acls to resource, this is an additive operation so existing acls will not be overwritten, instead these new
      * acls will be added to existing acls.
      *
      * @param acls     set of acls to add to existing acls
-     * @param resource the resource to which these acls should be attached.
+     * @param resource the resource to which these acls should be attached
      *
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to add acls for the resource
      * @throws org.apache.kafka.common.errors.InvalidResourceException if resource does not exist
@@ -61,11 +61,11 @@ public interface Authorizer extends Configurable {
     public void addAcls(Set<Acl> acls, Resource resource);
 
     /**
-     * remove these acls from the resource.
+     * Remove these acls from the resource.
      *
-     * @param acls     set of acls to be removed.
-     * @param resource resource from which the acls should be removed.
-     * @return true if some acl got removed, false if no acl was removed.
+     * @param acls     set of acls to be removed
+     * @param resource resource from which the acls should be removed
+     * @return true if some acl got removed, false if no acl was removed
      *
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to remove acls for the resource
      * @throws org.apache.kafka.common.errors.InvalidResourceException if resource does not exist
@@ -74,10 +74,10 @@ public interface Authorizer extends Configurable {
     public boolean removeAcls(Set<Acl> acls, Resource resource);
 
     /**
-     * remove a resource along with all of its acls from acl store.
+     * Remove a resource along with all of its acls from acl store.
      *
-     * @param resource
-     * @return
+     * @param resource  resource that is to be removed
+     * @return true if resource existed and got deleted, else false
      *
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to remove acls for the resource
      * @throws org.apache.kafka.common.errors.InvalidResourceException if resource does not exist
@@ -85,10 +85,10 @@ public interface Authorizer extends Configurable {
     public boolean removeAcls(Resource resource);
 
     /**
-     * get set of acls for this resource
+     * Get set of acls for this resource.
      *
-     * @param resource
-     * @return empty set if no acls are found, otherwise the acls for the resource.
+     * @param resource resource whose acls are to be returned
+     * @return empty set if no acls are found, otherwise the acls for the resource
      *
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to access acls for the resource
      * @throws org.apache.kafka.common.errors.InvalidResourceException if resource does not exist
@@ -96,10 +96,10 @@ public interface Authorizer extends Configurable {
     public Set<Acl> acls(Resource resource);
 
     /**
-     * get the acls for this principal.
+     * Get acls for this principal.
      *
-     * @param principal
-     * @return empty Map if no acls exist for this principal, otherwise a map of resource -> acls for the principal.
+     * @param principal principal whole acls are to be returned
+     * @return empty Map if no acls exist for this principal, otherwise a map of resource -> acls for the principal
      *
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to access acls for the principal
      * @throws org.apache.kafka.common.errors.InvalidPrincipalException if principal is invalid
@@ -107,7 +107,7 @@ public interface Authorizer extends Configurable {
     public Map<Resource, Set<Acl>> acls(KafkaPrincipal principal);
 
     /**
-     * gets the map of resource to acls for all resources.
+     * Gets map of resource to acls for all resources.
      */
     public Map<Resource, Set<Acl>> acls();
 
