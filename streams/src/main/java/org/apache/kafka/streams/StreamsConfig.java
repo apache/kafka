@@ -32,6 +32,7 @@ import org.apache.kafka.streams.processor.DefaultPartitionGrouper;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -223,7 +224,7 @@ public class StreamsConfig extends AbstractConfig {
         Map<String, Object> tempProducerDefaultOverrides = new HashMap<>();
         tempProducerDefaultOverrides.put(ProducerConfig.LINGER_MS_CONFIG, "100");
 
-        PRODUCER_DEFAULT_OVERRIDES = new HashMap<>(tempProducerDefaultOverrides);
+        PRODUCER_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempProducerDefaultOverrides);
     }
 
     private static final Map<String, Object> CONSUMER_DEFAULT_OVERRIDES;
@@ -234,7 +235,7 @@ public class StreamsConfig extends AbstractConfig {
         tempConsumerDefaultOverrides.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         tempConsumerDefaultOverrides.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
-        CONSUMER_DEFAULT_OVERRIDES = new HashMap<>(tempConsumerDefaultOverrides);
+        CONSUMER_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
     }
 
     public static class InternalConfig {
@@ -246,10 +247,10 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     public Map<String, Object> getConsumerConfigs(StreamThread streamThread, String groupId, String clientId) throws ConfigException {
-        // first disable auto commit ignoring any user overridden values,
-        // this is necessary for streams commit semantics
         Map<String, Object> originals = this.originals();
 
+        // disable auto commit and throw exception if there is user overridden values,
+        // this is necessary for streams commit semantics
         if (originals.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
             throw new ConfigException("Unexpected user-specified consumer config " + ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG
                     + ", as the streams client will always turn off auto committing.");
@@ -274,10 +275,10 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     public Map<String, Object> getRestoreConsumerConfigs(String clientId) throws ConfigException {
-        // first disable auto commit ignoring any user overridden values,
-        // this is necessary for streams commit semantics
         Map<String, Object> originals = this.originals();
 
+        // disable auto commit and throw exception if there is user overridden values,
+        // this is necessary for streams commit semantics
         if (originals.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
             throw new ConfigException("Unexpected user-specified consumer config " + ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG
                     + ", as the streams client will always turn off auto committing.");
