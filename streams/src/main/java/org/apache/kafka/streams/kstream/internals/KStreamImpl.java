@@ -408,62 +408,30 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                          Serde<V> thisValueSerde,
                                          Serde<V1> otherValueSerde,
                                          KStreamJoin join) {
-        boolean otherRepartitionOnJoin = ((KStreamImpl) other).repartitionRequired;
+        KStreamImpl<K, V> joinThis = this;
+        KStreamImpl<K, V1> joinOther = (KStreamImpl) other;
 
-        // No repartitioning required so proceed with join
-        if (!otherRepartitionOnJoin && !this.repartitionRequired) {
-            ensureJoinableWith((KStreamImpl<K, V1>) other);
-            return join.join(this, other, joiner, windows, keySerde, thisValueSerde,
-                             otherValueSerde);
+        if (joinThis.repartitionRequired) {
+            joinThis = joinThis.repartitionForJoin(keySerde, thisValueSerde, joinOther
+                .repartitionRequired);
         }
 
-        // Other stream requires repartitioning. Repartition it and join this with
-        // the repartitioned stream
-        if (otherRepartitionOnJoin && !this.repartitionRequired) {
-            KStreamImpl<K, V1>
-                otherStreamRepartitioned =
-                ((KStreamImpl<K, V1>) other).repartitionForJoin(keySerde,
-                                                                otherValueSerde,
-                                                                false);
-            ensureJoinableWith(otherStreamRepartitioned);
-            return join.join(this,
-                             otherStreamRepartitioned,
-                             joiner,
-                             windows,
-                             keySerde,
-                             thisValueSerde,
-                             otherValueSerde);
+        if (joinOther.repartitionRequired) {
+            joinOther = joinOther.repartitionForJoin(keySerde, otherValueSerde, this
+                .repartitionRequired);
         }
 
-        // This stream requires repartitioning. Repartition it and join the new stream
-        // with other
-        if (!otherRepartitionOnJoin) {
-            KStreamImpl<K, V> thisStreamRepartitioned = this.repartitionForJoin(keySerde,
-                                                                                thisValueSerde,
-                                                                                false);
-            thisStreamRepartitioned.ensureJoinableWith((KStreamImpl<K, V1>) other);
-
-            return join.join(thisStreamRepartitioned,
-                             other,
-                             joiner,
-                             windows,
-                             keySerde,
-                             thisValueSerde,
-                             otherValueSerde);
+        // if both input streams need repartitioning we need to make sure
+        // that they are co-partitioned as this means the repartitioned streams
+        // will also be co-partitioned
+        if (this.repartitionRequired && ((KStreamImpl) other).repartitionRequired) {
+            this.ensureJoinableWith((AbstractStream<K>) other);
+        } else {
+            joinThis.ensureJoinableWith(joinOther);
         }
 
-        // Both streams need repartitioning. Repartition and join the repartitioned streams
-        ensureJoinableWith((KStreamImpl<K, V1>) other);
-        KStreamImpl<K, V> thisRepartitioned = this.repartitionForJoin(keySerde,
-                                                                      thisValueSerde,
-                                                                      true);
-        KStreamImpl<K, V1> otherRepartitioned = ((KStreamImpl<K, V1>) other)
-            .repartitionForJoin(keySerde,
-                                otherValueSerde,
-                                true);
-
-        return join.join(thisRepartitioned,
-                         otherRepartitioned,
+        return join.join(joinThis,
+                         joinOther,
                          joiner,
                          windows,
                          keySerde,
