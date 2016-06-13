@@ -31,6 +31,7 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
@@ -294,7 +295,7 @@ public class KStreamRepartitionJoinTest {
                       joiner,
                       JoinWindows.of("the-join").within(60 * 1000),
                       Serdes.Integer(),
-                      Serdes.String(),
+                      null,
                       Serdes.Integer())
             .to(Serdes.Integer(), Serdes.String(), outputTopic);
 
@@ -376,7 +377,7 @@ public class KStreamRepartitionJoinTest {
                 new KeyValue<>(3, 30),
                 new KeyValue<>(4, 40),
                 new KeyValue<>(5, 50)),
-            IntegrationTestUtils.producerConfig(
+            TestUtils.producerConfig(
                 CLUSTER.bootstrapServers(),
                 IntegerSerializer.class,
                 IntegerSerializer.class,
@@ -393,7 +394,7 @@ public class KStreamRepartitionJoinTest {
                 new KeyValue<>(3, "C"),
                 new KeyValue<>(4, "D"),
                 new KeyValue<>(5, "E")),
-            IntegrationTestUtils.producerConfig(
+            TestUtils.producerConfig(
                 CLUSTER.bootstrapServers(),
                 IntegerSerializer.class,
                 StringSerializer.class,
@@ -410,7 +411,7 @@ public class KStreamRepartitionJoinTest {
                 new KeyValue<>(12L, 3),
                 new KeyValue<>(15L, 4),
                 new KeyValue<>(20L, 5)),
-            IntegrationTestUtils.producerConfig(
+            TestUtils.producerConfig(
                 CLUSTER.bootstrapServers(),
                 LongSerializer.class,
                 IntegerSerializer.class,

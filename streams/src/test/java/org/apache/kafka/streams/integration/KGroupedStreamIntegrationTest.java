@@ -32,6 +32,7 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
@@ -423,7 +424,7 @@ public class KGroupedStreamIntegrationTest {
                 new KeyValue<>(3, "C"),
                 new KeyValue<>(4, "D"),
                 new KeyValue<>(5, "E")),
-            IntegrationTestUtils.producerConfig(
+            TestUtils.producerConfig(
                 CLUSTER.bootstrapServers(),
                 IntegerSerializer.class,
                 StringSerializer.class,

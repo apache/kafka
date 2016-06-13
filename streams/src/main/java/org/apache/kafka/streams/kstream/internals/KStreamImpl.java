@@ -329,7 +329,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         topology.addProcessor(name, new KStreamTransformValues<>(valueTransformerSupplier), this.name);
         topology.connectProcessorAndStateStores(name, stateStoreNames);
 
-        return new KStreamImpl<>(topology, name, sourceNodes, false);
+        return new KStreamImpl<>(topology, name, sourceNodes, this.repartitionRequired);
     }
 
     @Override
@@ -422,9 +422,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         if (otherRepartitionOnJoin && !this.repartitionRequired) {
             KStreamImpl<K, V1>
                 otherStreamRepartitioned =
-                ((KStreamImpl<K, V1>) other).repartitionStream(keySerde,
-                                                              otherValueSerde,
-                                                               false);
+                ((KStreamImpl<K, V1>) other).repartitionForJoin(keySerde,
+                                                                otherValueSerde,
+                                                                false);
             ensureJoinableWith(otherStreamRepartitioned);
             return join.join(this,
                              otherStreamRepartitioned,
@@ -438,9 +438,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         // This stream requires repartitioning. Repartition it and join the new stream
         // with other
         if (!otherRepartitionOnJoin) {
-            KStreamImpl<K, V> thisStreamRepartitioned = this.repartitionStream(keySerde,
-                                                                               thisValueSerde,
-                                                                               false);
+            KStreamImpl<K, V> thisStreamRepartitioned = this.repartitionForJoin(keySerde,
+                                                                                thisValueSerde,
+                                                                                false);
             thisStreamRepartitioned.ensureJoinableWith((KStreamImpl<K, V1>) other);
 
             return join.join(thisStreamRepartitioned,
@@ -454,13 +454,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         // Both streams need repartitioning. Repartition and join the repartitioned streams
         ensureJoinableWith((KStreamImpl<K, V1>) other);
-        KStreamImpl<K, V> thisRepartitioned = this.repartitionStream(keySerde,
-                                                                     thisValueSerde,
-                                                                     true);
+        KStreamImpl<K, V> thisRepartitioned = this.repartitionForJoin(keySerde,
+                                                                      thisValueSerde,
+                                                                      true);
         KStreamImpl<K, V1> otherRepartitioned = ((KStreamImpl<K, V1>) other)
-            .repartitionStream(keySerde,
-                               otherValueSerde,
-                               true);
+            .repartitionForJoin(keySerde,
+                                otherValueSerde,
+                                true);
 
         return join.join(thisRepartitioned,
                          otherRepartitioned,
@@ -480,9 +480,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
      * @param copartition   true if we need to co-partition these streams
      * @return
      */
-    private KStreamImpl<K, V> repartitionStream(Serde<K> keySerde,
-                                                Serde<V> valSerde,
-                                                boolean copartition) {
+    private KStreamImpl<K, V> repartitionForJoin(Serde<K> keySerde,
+                                                 Serde<V> valSerde,
+                                                 boolean copartition) {
         String repartitionTopic = this.name + REPARTITION_TOPIC_SUFFIX;
         String sinkName = topology.newName(SINK_NAME);
         String sourceName = topology.newName(SOURCE_NAME);
@@ -549,9 +549,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                           Serde<V> valueSerde) {
 
         if (repartitionRequired) {
-            KStreamImpl<K, V> thisStreamRepartitioned = this.repartitionStream(keySerde,
-                                                                               valueSerde,
-                                                                               false);
+            KStreamImpl<K, V> thisStreamRepartitioned = this.repartitionForJoin(keySerde,
+                                                                                valueSerde,
+                                                                                false);
             return thisStreamRepartitioned.doLeftJoin(other, joiner);
         } else {
             return doLeftJoin(other, joiner);
@@ -582,9 +582,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                    Serde<V1> valSerde) {
 
         String selectName = internalSelectKey(selector);
-        String name = addNotNullFilter(selectName);
         return new KGroupedStreamImpl<>(topology,
-                                        name,
+                                        selectName,
                                         sourceNodes,
                                         keySerde,
                                         valSerde, true);
@@ -599,23 +598,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public KGroupedStream<K, V> groupByKey(Serde<K> keySerde,
                                            Serde<V> valSerde) {
         return new KGroupedStreamImpl<>(topology,
-                                        addNotNullFilter(this.name),
+                                        this.name,
                                         sourceNodes,
                                         keySerde,
                                         valSerde,
                                         this.repartitionRequired);
     }
 
-    private String addNotNullFilter(final String parentName) {
-        String name = topology.newName(FILTER_NAME);
-        topology.addProcessor(name, new KStreamFilter<>(new Predicate<K, V>() {
-            @Override
-            public boolean test(final K key, final V value) {
-                return key != null;
-            }
-        }, false), parentName);
-        return name;
-    }
 
     private static <K, V> StateStoreSupplier createWindowedStateStore(final JoinWindows windows,
                                                                      final Serde<K> keySerde,

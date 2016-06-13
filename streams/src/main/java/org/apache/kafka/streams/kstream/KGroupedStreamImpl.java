@@ -60,7 +60,7 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
         return doAggregate(
             new KStreamReduce<K, V>(name, reducer),
             REDUCE_NAME,
-            storeFactory(valSerde, name).build());
+            keyValueStore(valSerde, name));
     }
 
 
@@ -83,7 +83,7 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
         return doAggregate(
             new KStreamAggregate<>(name, initializer, aggregator),
             AGGREGATE_NAME,
-            storeFactory(aggValueSerde, name).build());
+            keyValueStore(aggValueSerde, name));
     }
 
     @SuppressWarnings("unchecked")
@@ -127,6 +127,10 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
                 return aggregate + 1;
             }
         }, windows, Serdes.Long());
+    }
+
+    private <T> StateStoreSupplier keyValueStore(final Serde<T> aggValueSerde, final String name) {
+        return storeFactory(aggValueSerde, name).build();
     }
 
 

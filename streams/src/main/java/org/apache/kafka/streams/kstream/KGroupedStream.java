@@ -35,7 +35,8 @@ public interface KGroupedStream<K, V> {
 
 
     /**
-     * Combine values of this stream by key into a new instance of ever-updating {@link KTable}.
+     * Combine values of this stream by the grouped key into a new instance of ever-updating
+     * {@link KTable}.
      *
      * @param reducer           the instance of {@link Reducer}
      * @param name              the name of the resulted {@link KTable}

@@ -317,6 +317,7 @@ public interface KStream<K, V> {
 
     /**
      * Combine element values of this stream with another {@link KStream}'s elements of the same key using windowed Inner Join.
+     * If a record key is null it will not included in the resulting {@link KStream}
      *
      * @param otherStream       the instance of {@link KStream} joined with this stream
      * @param joiner            the instance of {@link ValueJoiner}
@@ -343,7 +344,7 @@ public interface KStream<K, V> {
 
     /**
      * Combine element values of this stream with another {@link KStream}'s elements of the same key using windowed Inner Join
-     * with default serializers and deserializers.
+     * with default serializers and deserializers. If a record key is null it will not included in the resulting {@link KStream}
      *
      * @param otherStream   the instance of {@link KStream} joined with this stream
      * @param joiner        the instance of {@link ValueJoiner}
@@ -361,6 +362,7 @@ public interface KStream<K, V> {
 
     /**
      * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Outer Join.
+     * If a record key is null it will not included in the resulting {@link KStream}
      *
      * @param otherStream       the instance of {@link KStream} joined with this stream
      * @param joiner            the instance of {@link ValueJoiner}
@@ -387,7 +389,7 @@ public interface KStream<K, V> {
 
     /**
      * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Outer Join
-     * with default serializers and deserializers.
+     * with default serializers and deserializers. If a record key is null it will not included in the resulting {@link KStream}
      *
      * @param otherStream   the instance of {@link KStream} joined with this stream
      * @param joiner        the instance of {@link ValueJoiner}
@@ -405,6 +407,7 @@ public interface KStream<K, V> {
 
     /**
      * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Left Join.
+     * If a record key is null it will not included in the resulting {@link KStream}
      *
      * @param otherStream       the instance of {@link KStream} joined with this stream
      * @param joiner            the instance of {@link ValueJoiner}
@@ -431,7 +434,7 @@ public interface KStream<K, V> {
 
     /**
      * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Left Join
-     * with default serializers and deserializers.
+     * with default serializers and deserializers. If a record key is null it will not included in the resulting {@link KStream}
      *
      * @param otherStream   the instance of {@link KStream} joined with this stream
      * @param joiner        the instance of {@link ValueJoiner}
@@ -449,6 +452,7 @@ public interface KStream<K, V> {
 
     /**
      * Combine values of this stream with {@link KTable}'s elements of the same key using non-windowed Left Join.
+     * If a record key is null it will not included in the resulting {@link KStream}
      *
      * @param table     the instance of {@link KTable} joined with this stream
      * @param joiner    the instance of {@link ValueJoiner}
@@ -460,25 +464,42 @@ public interface KStream<K, V> {
      */
     <V1, V2> KStream<K, V2> leftJoin(KTable<K, V1> table, ValueJoiner<V, V1, V2> joiner);
 
+    /**
+     * Combine values of this stream with {@link KTable}'s elements of the same key using non-windowed Left Join.
+     * If a record key is null it will not included in the resulting {@link KStream}
+     *
+     * @param table         the instance of {@link KTable} joined with this stream
+     * @param valueJoiner   the instance of {@link ValueJoiner}
+     * @param keySerde      key serdes for materializing this stream.
+     *                      If not specified the default serdes defined in the configs will be used
+     * @param valSerde      value serdes for materializing this stream,
+     *                      if not specified the default serdes defined in the configs will be used
+     * @param <V1>          the value type of the table
+     * @param <V2>          the value type of the new stream
+     *
+     * @return a {@link KStream} that contains join-records for each key and values computed by the given {@link ValueJoiner},
+     *         one for each matched record-pair with the same key and within the joining window intervals
+     */
     <V1, V2> KStream<K, V2> leftJoin(KTable<K, V1> table,
                                      ValueJoiner<V, V1, V2> valueJoiner,
                                      Serde<K> keySerde,
                                      Serde<V> valSerde);
     /**
      * Group the records of this {@link KStream} using the provided {@link KeyValueMapper} and
-     * default serializers and deserializers.
+     * default serializers and deserializers. If a record key is null it will not included in
+     * the resulting {@link KGroupedStream}
      *
      * @param selector      select the grouping key and value to be aggregated
      * @param <K1>          the key type of the {@link KGroupedStream}
      * @param <V1>          the value type of the {@link KGroupedStream}
      *
-     * @return a {@link KGroupedStream} that contains the re-partitioned records of this
-     * {@link KStream}
+     * @return a {@link KGroupedStream} that contains the the grouped records of the original {@link KStream}
      */
     <K1, V1> KGroupedStream<K1, V1> groupBy(KeyValueMapper<K, V, K1> selector);
 
     /**
-     * Group the records of this {@link KStream} using the provided {@link KeyValueMapper}
+     * Group the records of this {@link KStream} using the provided {@link KeyValueMapper}.
+     * If a record key is null it will not included in the resulting {@link KGroupedStream}
      *
      * @param selector      select the grouping key and value to be aggregated
      * @param keySerde      key serdes for materializing this stream,
@@ -488,22 +509,25 @@ public interface KStream<K, V> {
      * @param <K1>          the key type of the {@link KGroupedStream}
      * @param <V1>          the value type of the {@link KGroupedStream}
      *
-     * @return a {@link KGroupedStream} that contains the re-partitioned records of this
-     * {@link KStream}
+     * @return a {@link KGroupedStream} that contains the the grouped records of the original {@link KStream}
      */
     <K1, V1> KGroupedStream<K1, V1> groupBy(KeyValueMapper<K, V, K1> selector,
                                             Serde<K1> keySerde,
                                             Serde<V1> valSerde);
 
     /**
-     * Transform this {@link KStream} into a {@link KGroupedStream} grouped by the current key.
+     * Group the records with the same key into a {@link KGroupedStream} while preserving the
+     * original values. If a record key is null it will not included in the resulting
+     * {@link KGroupedStream}
      * Default Serdes will be used
      * @return a {@link KGroupedStream}
      */
     KGroupedStream<K, V> groupByKey();
 
     /**
-     * Transform this {@link KStream} into a {@link KGroupedStream} grouped by the current key.
+     * Group the records with the same key into a {@link KGroupedStream} while preserving the
+     * original values. If a record key is null it will not included in the resulting
+     * {@link KGroupedStream}
      * @param keySerde      key serdes for materializing this stream,
      *                      if not specified the default serdes defined in the configs will be used
      * @param valSerde    value serdes for materializing this stream,
