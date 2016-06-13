@@ -37,7 +37,8 @@ private[coordinator] sealed trait GroupState { def state: Byte }
  *         allow offset commits from previous generation
  *         allow offset fetch requests
  * transition: some members have joined by the timeout => AwaitingSync
- *             all members have left the group => Dead
+ *             all members have left the group => Empty
+ *             group is removed by partition emigration => Dead
  */
 private[coordinator] case object PreparingRebalance extends GroupState { val state: Byte = 1 }
 
@@ -52,6 +53,7 @@ private[coordinator] case object PreparingRebalance extends GroupState { val sta
  *             join group from new member or existing member with updated metadata => PreparingRebalance
  *             leave group from existing member => PreparingRebalance
  *             member failure detected => PreparingRebalance
+ *             group is removed by partition emigration => Dead
  */
 private[coordinator] case object AwaitingSync extends GroupState { val state: Byte = 5}
 
@@ -67,6 +69,7 @@ private[coordinator] case object AwaitingSync extends GroupState { val state: By
  *             leave group from existing member => PreparingRebalance
  *             leader join-group received => PreparingRebalance
  *             follower join-group with new metadata => PreparingRebalance
+ *             group is removed by partition emigration => Dead
  */
 private[coordinator] case object Stable extends GroupState { val state: Byte = 3 }
 
@@ -84,7 +87,8 @@ private[coordinator] case object Stable extends GroupState { val state: Byte = 3
 private[coordinator] case object Dead extends GroupState { val state: Byte = 4 }
 
 /**
-  * Group has no more members, but lingers until all offsets have expired
+  * Group has no more members, but lingers until all offsets have expired. This state
+  * also represents groups which use Kafka only for offset commits and have no members.
   *
   * action: respond normally to join group from new members
   *         respond to sync group with UNKNOWN_MEMBER_ID
@@ -94,6 +98,8 @@ private[coordinator] case object Dead extends GroupState { val state: Byte = 4 }
   *         allow offset fetch requests
   * transition: last offsets removed in periodic expiration task => Dead
   *             join group from a new member => PreparingRebalance
+  *             group is removed by partition emigration => Dead
+  *             group is removed by expiration => Dead
   */
 private[coordinator] case object Empty extends GroupState { val state: Byte = 5 }
 
@@ -140,7 +146,7 @@ private[coordinator] class GroupMetadata(val groupId: String) {
   private var state: GroupState = Empty
   private val members = new mutable.HashMap[String, MemberMetadata]
   private val offsets = new mutable.HashMap[TopicPartition, OffsetAndMetadata]
-  private val stagedOffsets = new mutable.HashMap[TopicPartition, OffsetAndMetadata]
+  private val pendingOffsetCommits = new mutable.HashMap[TopicPartition, OffsetAndMetadata]
 
   var protocolType: Option[String] = None
   var generationId = 0
@@ -152,11 +158,12 @@ private[coordinator] class GroupMetadata(val groupId: String) {
   def has(memberId: String) = members.contains(memberId)
   def get(memberId: String) = members(memberId)
 
-  def add(memberId: String, member: MemberMetadata, protocolType: String) {
+  def add(memberId: String, member: MemberMetadata) {
     if (isEmpty)
-      this.protocolType = Some(protocolType)
+      this.protocolType = Some(member.protocolType)
 
-    assert(this.protocolType.orNull == protocolType)
+    assert(groupId == member.groupId)
+    assert(this.protocolType.orNull == member.protocolType)
     assert(supportsProtocols(member.protocols))
 
     if (leaderId == null)
@@ -192,7 +199,7 @@ private[coordinator] class GroupMetadata(val groupId: String) {
   // TODO: decide if ids should be predictable or random
   def generateMemberIdSuffix = UUID.randomUUID().toString
 
-  def canRebalance = state == Stable || state == AwaitingSync || state == Empty
+  def canRebalance = GroupMetadata.validPreviousStates(PreparingRebalance).contains(state)
 
   def transitionTo(groupState: GroupState) {
     assertValidTransition(groupState)
@@ -260,21 +267,28 @@ private[coordinator] class GroupMetadata(val groupId: String) {
     GroupOverview(groupId, protocolType.getOrElse(""))
   }
 
-  def writeOffset(topicPartition: TopicPartition, offset: OffsetAndMetadata) {
+  def completePendingOffsetWrite(topicPartition: TopicPartition, offset: OffsetAndMetadata) {
     offsets.put(topicPartition, offset)
-    stagedOffsets.get(topicPartition) match {
-      case None =>
-      case Some(stagedOffset) if offset == stagedOffset => stagedOffsets.remove(topicPartition)
+    pendingOffsetCommits.get(topicPartition) match {
+      case Some(stagedOffset) if offset == stagedOffset => pendingOffsetCommits.remove(topicPartition)
+      case _ =>
+    }
+  }
+
+  def failPendingOffsetWrite(topicPartition: TopicPartition, offset: OffsetAndMetadata): Unit = {
+    pendingOffsetCommits.get(topicPartition) match {
+      case Some(pendingOffset) if offset == pendingOffset => pendingOffsetCommits.remove(topicPartition)
+      case _ =>
     }
   }
 
   def prepareOffsetCommit(offsets: Map[TopicPartition, OffsetAndMetadata]) {
-    stagedOffsets ++= offsets
+    pendingOffsetCommits ++= offsets
   }
 
   def removeExpiredOffsets(startMs: Long) = {
     val expiredOffsets = offsets.filter {
-      case (topicPartition, offset) => offset.expireTimestamp < startMs && !stagedOffsets.contains(topicPartition)
+      case (topicPartition, offset) => offset.expireTimestamp < startMs && !pendingOffsetCommits.contains(topicPartition)
     }
     offsets --= expiredOffsets.keySet
     expiredOffsets
@@ -286,7 +300,7 @@ private[coordinator] class GroupMetadata(val groupId: String) {
 
   def numOffsets = offsets.size
 
-  def hasOffsets = offsets.nonEmpty || stagedOffsets.nonEmpty
+  def hasOffsets = offsets.nonEmpty || pendingOffsetCommits.nonEmpty
 
   private def assertValidTransition(targetState: GroupState) {
     if (!GroupMetadata.validPreviousStates(targetState).contains(state))

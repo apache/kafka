@@ -137,14 +137,15 @@ class GroupMetadataManager(val brokerId: Int,
   }
 
   /**
-   * Remove all metadata associated with the group
-    *
-    * @param group
+   * Remove the group from the cache and delete all metadata associated with it. This should be
+   * called only after all offsets for the group have expired and no members are remaining (i.e.
+   * it is in the Empty state).
    */
-  private def removeGroup(group: GroupMetadata) {
+  private def evictGroupAndDeleteMetadata(group: GroupMetadata) {
     // guard this removal in case of concurrent access (e.g. if a delayed join completes with no members
-    // while the group is being removed due to coordinator emigration)
-    if (groupMetadataCache.remove(group.groupId, group)) {
+    // while the group is being removed due to coordinator emigration). We also avoid writing the tombstone
+    // when the generationId is 0, since this group is only using Kafka for offset storage.
+    if (groupMetadataCache.remove(group.groupId, group) && group.generationId > 0) {
       // Append the tombstone messages to the partition. It is okay if the replicas don't receive these (say,
       // if we crash or leaders move) since the new leaders will still expire the consumers with heartbeat and
       // retry removing this group.
@@ -234,14 +235,14 @@ class GroupMetadataManager(val brokerId: Int,
     DelayedStore(groupMetadataMessageSet, putCacheCallback)
   }
 
-  def store(delayedAppend: DelayedStore) {
+  def store(delayedStore: DelayedStore) {
     // call replica manager to append the group message
     replicaManager.appendMessages(
       config.offsetCommitTimeoutMs.toLong,
       config.offsetCommitRequiredAcks,
       true, // allow appending to internal offset topic
-      delayedAppend.messageSet,
-      delayedAppend.callback)
+      delayedStore.messageSet,
+      delayedStore.callback)
   }
 
   /**
@@ -284,37 +285,43 @@ class GroupMetadataManager(val brokerId: Int,
       // the offset and metadata to cache if the append status has no error
       val status = responseStatus(offsetTopicPartition)
 
+      val group = groupMetadataCache.get(groupId)
+
+      // it shouldn't be possible for the group to be evicted with a pending offset commit
+      if (group == null)
+        throw new IllegalStateException("Group removed prior to offset commit completion")
+
       val responseCode =
-        if (status.errorCode == Errors.NONE.code) {
-          val group = groupMetadataCache.get(groupId)
-
-          // it shouldn't be possible for the group to be evicted with a pending offset commit
-          if (group == null)
-            throw new IllegalStateException("Group removed prior to offset commit completion")
-
-          group synchronized {
+        group synchronized {
+          if (status.errorCode == Errors.NONE.code) {
             if (!group.is(Dead)) {
               filteredOffsetMetadata.foreach { case (topicAndPartition, offsetAndMetadata) =>
-                group.writeOffset(topicAndPartition, offsetAndMetadata)
+                group.completePendingOffsetWrite(topicAndPartition, offsetAndMetadata)
               }
             }
-          }
-          Errors.NONE.code
-        } else {
-          debug("Offset commit %s from group %s consumer %s with generation %d failed when appending to log due to %s"
-            .format(filteredOffsetMetadata, groupId, consumerId, generationId, Errors.forCode(status.errorCode).exceptionName))
+            Errors.NONE.code
+          } else {
+            if (!group.is(Dead)) {
+              filteredOffsetMetadata.foreach { case (topicAndPartition, offsetAndMetadata) =>
+                group.failPendingOffsetWrite(topicAndPartition, offsetAndMetadata)
+              }
+            }
 
-          // transform the log append error code to the corresponding the commit status error code
-          if (status.errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
-            Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code
-          else if (status.errorCode == Errors.NOT_LEADER_FOR_PARTITION.code)
-            Errors.NOT_COORDINATOR_FOR_GROUP.code
-          else if (status.errorCode == Errors.MESSAGE_TOO_LARGE.code
-            || status.errorCode == Errors.RECORD_LIST_TOO_LARGE.code
-            || status.errorCode == Errors.INVALID_FETCH_SIZE.code)
-            Errors.INVALID_COMMIT_OFFSET_SIZE.code
-          else
-            status.errorCode
+            debug("Offset commit %s from group %s consumer %s with generation %d failed when appending to log due to %s"
+              .format(filteredOffsetMetadata, groupId, consumerId, generationId, Errors.forCode(status.errorCode).exceptionName))
+
+            // transform the log append error code to the corresponding the commit status error code
+            if (status.errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
+              Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code
+            else if (status.errorCode == Errors.NOT_LEADER_FOR_PARTITION.code)
+              Errors.NOT_COORDINATOR_FOR_GROUP.code
+            else if (status.errorCode == Errors.MESSAGE_TOO_LARGE.code
+              || status.errorCode == Errors.RECORD_LIST_TOO_LARGE.code
+              || status.errorCode == Errors.INVALID_FETCH_SIZE.code)
+              Errors.INVALID_COMMIT_OFFSET_SIZE.code
+            else
+              status.errorCode
+          }
         }
 
       // compute the final error codes for the commit response
@@ -340,41 +347,34 @@ class GroupMetadataManager(val brokerId: Int,
    */
   def getOffsets(groupId: String, topicPartitions: Seq[TopicPartition]): Map[TopicPartition, OffsetFetchResponse.PartitionData] = {
     trace("Getting offsets %s for group %s.".format(topicPartitions, groupId))
-    if (isGroupLocal(groupId)) {
-      val group = groupMetadataCache.get(groupId)
-      if (group == null) {
-        topicPartitions.map { topicPartition =>
-          (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NONE.code))
-        }.toMap
-      } else {
-        group synchronized {
-          if (group.is(Dead)) {
-            topicPartitions.map { topicPartition =>
-              (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NONE.code))
-            }.toMap
-          } else {
-              if (topicPartitions.isEmpty) {
-                // Return offsets for all partitions owned by this consumer group. (this only applies to consumers that commit offsets to Kafka.)
-                group.allOffsets.map { case (topicPartition, offsetAndMetadata) =>
-                  (topicPartition, new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset, offsetAndMetadata.metadata, Errors.NONE.code))
-                }
-              } else {
-                topicPartitions.map { topicPartition =>
-                  group.offset(topicPartition) match {
-                    case None => (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NONE.code))
-                    case Some(offsetAndMetadata) =>
-                      (topicPartition, new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset, offsetAndMetadata.metadata, Errors.NONE.code))
-                  }
-                }.toMap
+    val group = groupMetadataCache.get(groupId)
+    if (group == null) {
+      topicPartitions.map { topicPartition =>
+        (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NONE.code))
+      }.toMap
+    } else {
+      group synchronized {
+        if (group.is(Dead)) {
+          topicPartitions.map { topicPartition =>
+            (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NONE.code))
+          }.toMap
+        } else {
+            if (topicPartitions.isEmpty) {
+              // Return offsets for all partitions owned by this consumer group. (this only applies to consumers that commit offsets to Kafka.)
+              group.allOffsets.map { case (topicPartition, offsetAndMetadata) =>
+                (topicPartition, new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset, offsetAndMetadata.metadata, Errors.NONE.code))
               }
-          }
+            } else {
+              topicPartitions.map { topicPartition =>
+                group.offset(topicPartition) match {
+                  case None => (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NONE.code))
+                  case Some(offsetAndMetadata) =>
+                    (topicPartition, new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset, offsetAndMetadata.metadata, Errors.NONE.code))
+                }
+              }.toMap
+            }
         }
       }
-    } else {
-      debug("Could not fetch offsets for group %s (not offset coordinator).".format(groupId))
-      topicPartitions.map { topicPartition =>
-        (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NOT_COORDINATOR_FOR_GROUP.code))
-      }.toMap
     }
   }
 
@@ -426,8 +426,6 @@ class GroupMetadataManager(val brokerId: Int,
                     loadedOffsets.remove(key)
                     removedOffsets.add(key)
                   } else {
-                    // special handling for version 0:
-                    // set the expiration time stamp as commit time stamp + server default retention time
                     val value = GroupMetadataManager.readOffsetMessageValue(msgAndOffset.message.payload)
                     loadedOffsets.put(key, value)
                     removedOffsets.remove(key)
@@ -504,6 +502,8 @@ class GroupMetadataManager(val brokerId: Int,
         case (topicPartition, offsetAndMetadata) => {
           val offset = offsetAndMetadata.copy (
             expireTimestamp = {
+              // special handling for version 0:
+              // set the expiration time stamp as commit time stamp + server default retention time
               if (offsetAndMetadata.expireTimestamp == org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP)
                 offsetAndMetadata.commitTimestamp + config.offsetsRetentionMs
               else
@@ -511,7 +511,7 @@ class GroupMetadataManager(val brokerId: Int,
             }
           )
           trace("Loaded offset %s for %s.".format(offset, topicPartition))
-          group.writeOffset(topicPartition, offset)
+          group.completePendingOffsetWrite(topicPartition, offset)
         }
       }
     }
@@ -560,7 +560,8 @@ class GroupMetadataManager(val brokerId: Int,
     }
   }
 
-  private def cleanupGroupMetadata() {
+  // visible for testing
+  private[coordinator] def cleanupGroupMetadata() {
     val startMs = time.milliseconds()
     var offsetsRemoved = 0
 
@@ -597,7 +598,7 @@ class GroupMetadataManager(val brokerId: Int,
 
           if (group.is(Empty) && !group.hasOffsets) {
             group.transitionTo(Dead)
-            removeGroup(group)
+            evictGroupAndDeleteMetadata(group)
             info("Group %s generation %s is dead and removed".format(group.groupId, group.generationId))
           }
         }
@@ -973,11 +974,11 @@ object GroupMetadataManager {
             val subscription = Utils.toArray(memberMetadata.get(MEMBER_METADATA_SUBSCRIPTION_V0).asInstanceOf[ByteBuffer])
 
             val member = new MemberMetadata(memberId, groupId, clientId, clientHost, sessionTimeout,
-              List((group.protocol, subscription)))
+              protocolType, List((group.protocol, subscription)))
 
             member.assignment = Utils.toArray(memberMetadata.get(MEMBER_METADATA_ASSIGNMENT_V0).asInstanceOf[ByteBuffer])
 
-            group.add(memberId, member, protocolType)
+            group.add(memberId, member)
         }
 
         group
