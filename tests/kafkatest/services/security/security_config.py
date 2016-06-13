@@ -15,7 +15,8 @@
 
 import os
 import subprocess
-import uuid
+from tempfile import mkdtemp
+from shutil import rmtree
 from ducktape.template import TemplateRenderer
 from kafkatest.services.security.minikdc import MiniKdc
 import itertools
@@ -50,25 +51,24 @@ class SslStores(object):
 
         self.runcmd("keytool -importcert -alias ca -file %s -keystore %s -storepass %s -storetype JKS -noprompt" % (self.ca_crt_path, self.truststore_path, self.truststore_passwd))
 
-    def generate_keystore(self, node):
+    def generate_and_copy_keystore(self, node):
         """
         Generate JKS keystore with certificate signed by the test CA.
         The generated certificate has the node's hostname as a DNS SubjectAlternativeName.
         """
 
-        prefix = str(uuid.uuid4().get_hex())
-        ks_path = "/tmp/" + prefix + "-test.keystore.jks"
-        csr_path = "/tmp/" + prefix + "-test.kafka.csr"
-        crt_path = "/tmp/" + prefix + "-test.kafka.crt"
+        ks_dir = mkdtemp(dir="/tmp")
+        ks_path = os.path.join(ks_dir, "test.keystore.jks")
+        csr_path = os.path.join(ks_dir, "test.kafka.csr")
+        crt_path = os.path.join(ks_dir, "test.kafka.crt")
 
 	self.runcmd("keytool -genkeypair -alias kafka -keyalg RSA -keysize 2048 -keystore %s -storepass %s -keypass %s -dname CN=systemtest -ext SAN=DNS:%s" % (ks_path, self.keystore_passwd, self.key_passwd, self.hostname(node)))
 	self.runcmd("keytool -certreq -keystore %s -storepass %s -keypass %s -alias kafka -file %s" % (ks_path, self.keystore_passwd, self.key_passwd, csr_path))
 	self.runcmd("keytool -gencert -keystore %s -storepass %s -alias ca -infile %s -outfile %s -dname CN=systemtest -ext SAN=DNS:%s" % (self.ca_jks_path, self.ca_passwd, csr_path, crt_path, self.hostname(node)))
 	self.runcmd("keytool -importcert -keystore %s -storepass %s -alias ca -file %s -noprompt" % (ks_path, self.keystore_passwd, self.ca_crt_path))
 	self.runcmd("keytool -importcert -keystore %s -storepass %s -keypass %s -alias kafka -file %s -noprompt" % (ks_path, self.keystore_passwd, self.key_passwd, crt_path))
-        os.remove(crt_path)
-        os.remove(csr_path)
-        return ks_path
+        node.account.scp_to(ks_path, SecurityConfig.KEYSTORE_PATH)
+        rmtree(ks_dir)
 
     def hostname(self, node):
         """ Hostname which may be overridden for testing validation failures
@@ -143,11 +143,9 @@ class SecurityConfig(TemplateRenderer):
         return SecurityConfig(self.security_protocol, client_sasl_mechanism=self.client_sasl_mechanism, template_props=template_props)
 
     def setup_ssl(self, node):
-        keystore_path = SecurityConfig.ssl_stores.generate_keystore(node)
         node.account.ssh("mkdir -p %s" % SecurityConfig.CONFIG_DIR, allow_fail=False)
-        node.account.scp_to(keystore_path, SecurityConfig.KEYSTORE_PATH)
         node.account.scp_to(SecurityConfig.ssl_stores.truststore_path, SecurityConfig.TRUSTSTORE_PATH)
-        os.remove(keystore_path)
+        SecurityConfig.ssl_stores.generate_and_copy_keystore(node)
 
     def setup_sasl(self, node):
         node.account.ssh("mkdir -p %s" % SecurityConfig.CONFIG_DIR, allow_fail=False)

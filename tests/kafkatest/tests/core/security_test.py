@@ -49,10 +49,9 @@ class SecurityTest(ProduceConsumeValidateTest):
 
         self.topic = "test_topic"
         self.zk = ZookeeperService(test_context, num_nodes=1)
-        self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk, topics={self.topic: {
+        self.kafka = KafkaService(test_context, num_nodes=1, zk=self.zk, topics={self.topic: {
                                                                     "partitions": 2,
-                                                                    "replication-factor": 3,
-                                                                    'configs': {"min.insync.replicas": 2}}
+                                                                    "replication-factor": 1}
                                                                 })
         self.num_partitions = 2
         self.timeout_sec = 10000
