@@ -81,8 +81,9 @@ class GroupMetadataManager(val brokerId: Int,
 
   newGauge("NumOffsets",
     new Gauge[Int] {
-      // FIXME: this is probably not safe
-      def value = groupMetadataCache.values.map(_.numOffsets).sum
+      def value = groupMetadataCache.values.map(group => {
+        group synchronized { group.numOffsets }
+      }).sum
     }
   )
 
