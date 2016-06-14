@@ -22,7 +22,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.junit.Test;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 
 public class WindowStoreUtilsTest {
     protected StateSerdes<String, String> serdes = new StateSerdes<>("dummy", new Serdes.StringSerde(), new Serdes.StringSerde());
