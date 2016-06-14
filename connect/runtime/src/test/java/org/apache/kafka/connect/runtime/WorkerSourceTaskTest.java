@@ -407,6 +407,30 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     @Test
+    public void testSendRecordsTaskCommitRecordFail() throws Exception {
+        createWorkerTask();
+
+        // Differentiate only by Kafka partition so we can reuse conversion expectations
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, "topic", 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, "topic", 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, "topic", 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        // Source task commit record failure will not cause the task to abort
+        expectSendRecordOnce(false);
+        expectSendRecordTaskCommitRecordFail(false, false);
+        expectSendRecordOnce(false);
+
+        PowerMock.replayAll();
+
+        Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2, record3));
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+        assertEquals(false, Whitebox.getInternalState(workerTask, "lastSendFailed"));
+        assertNull(Whitebox.getInternalState(workerTask, "toSend"));
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
     public void testSlowTaskStart() throws Exception {
         final CountDownLatch startupLatch = new CountDownLatch(1);
 
@@ -482,14 +506,22 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordAnyTimes() throws InterruptedException {
-        return expectSendRecord(true, false);
+        return expectSendRecordTaskCommitRecordSucceed(true, false);
     }
 
     private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordOnce(boolean isRetry) throws InterruptedException {
-        return expectSendRecord(false, isRetry);
+        return expectSendRecordTaskCommitRecordSucceed(false, isRetry);
     }
 
-    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecord(boolean anyTimes, boolean isRetry) throws InterruptedException {
+    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordTaskCommitRecordSucceed(boolean anyTimes, boolean isRetry) throws InterruptedException {
+        return expectSendRecord(anyTimes, isRetry, true);
+    }
+
+    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordTaskCommitRecordFail(boolean anyTimes, boolean isRetry) throws InterruptedException {
+        return expectSendRecord(anyTimes, isRetry, false);
+    }
+
+    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecord(boolean anyTimes, boolean isRetry, boolean succeed) throws InterruptedException {
         expectConvertKeyValue(anyTimes);
 
         Capture<ProducerRecord<byte[], byte[]>> sent = EasyMock.newCapture();
@@ -526,7 +558,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             expect.andAnswer(expectResponse);
 
         // 3. As a result of a successful producer send callback, we'll notify the source task of the record commit
-        expectTaskCommitRecord(anyTimes);
+        expectTaskCommitRecord(anyTimes, succeed);
 
         return sent;
     }
@@ -544,10 +576,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             convertValueExpect.andReturn(SERIALIZED_RECORD);
     }
 
-    private void expectTaskCommitRecord(boolean anyTimes) throws InterruptedException {
+    private void expectTaskCommitRecord(boolean anyTimes, boolean succeed) throws InterruptedException {
         sourceTask.commitRecord(EasyMock.anyObject(SourceRecord.class));
         IExpectationSetters<Void> expect = EasyMock.expectLastCall();
-        boolean succeed = random.nextBoolean();
         if (!succeed) {
             expect = expect.andThrow(new InterruptException("Error committing record in source task"));
         }
