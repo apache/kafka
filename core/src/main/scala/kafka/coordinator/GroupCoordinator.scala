@@ -70,7 +70,8 @@ class GroupCoordinator(val brokerId: Int,
    */
   def startup(enableMetadataExpiration: Boolean = true) {
     info("Starting up.")
-    groupManager.start(enableMetadataExpiration)
+    if (enableMetadataExpiration)
+      groupManager.enableMetadataExpiration()
     isActive.set(true)
     info("Startup complete.")
   }

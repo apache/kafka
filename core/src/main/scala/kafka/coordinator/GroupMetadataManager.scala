@@ -93,15 +93,13 @@ class GroupMetadataManager(val brokerId: Int,
     }
   )
 
-  def start(enableExpiration: Boolean = true) {
-    if (enableExpiration) {
-      scheduler.startup()
+  def enableMetadataExpiration() {
+    scheduler.startup()
 
-      scheduler.schedule(name = "delete-expired-group-metadata",
-        fun = cleanupGroupMetadata,
-        period = config.offsetsRetentionCheckIntervalMs,
-        unit = TimeUnit.MILLISECONDS)
-    }
+    scheduler.schedule(name = "delete-expired-group-metadata",
+      fun = cleanupGroupMetadata,
+      period = config.offsetsRetentionCheckIntervalMs,
+      unit = TimeUnit.MILLISECONDS)
   }
 
   def currentGroups(): Iterable[GroupMetadata] = groupMetadataCache.values
