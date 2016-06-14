@@ -87,7 +87,6 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
     inLock(lock) {
       this.numLogCleanRuns = this.numLogCleanRuns + 1
       this.logCleanLastRun = System.currentTimeMillis
-      info("Number of log cleaner runs: %s. Log cleaner time %s".format(this.numLogCleanRuns, this.logCleanLastRun))
       val lastClean = allCleanerCheckpoints()
       val dirtyLogs = logs.filter {
         case (topicAndPartition, log) => log.config.compact  // skip any logs marked for delete rather than dedupe
