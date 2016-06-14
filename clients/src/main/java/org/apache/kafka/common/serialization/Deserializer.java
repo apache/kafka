@@ -32,10 +32,10 @@ public interface Deserializer<T> extends Closeable {
     public void configure(Map<String, ?> configs, boolean isKey);
     
     /**
-     *
+     * Deserialize a record value from a bytearray into a value or object.
      * @param topic topic associated with the data
-     * @param data serialized bytes
-     * @return deserialized typed data
+     * @param data serialized bytes; may be null. If null, implementations should return null.
+     * @return deserialized typed data; may be null
      */
     public T deserialize(String topic, byte[] data);
 
