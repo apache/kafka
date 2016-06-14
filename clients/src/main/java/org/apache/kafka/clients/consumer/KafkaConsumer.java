@@ -58,7 +58,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
@@ -500,7 +499,7 @@ import java.util.regex.Pattern;
 public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaConsumer.class);
-    private static final long NO_CURRENT_THREAD = -1L;
+    private static final Thread NO_CURRENT_THREAD = null;
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.consumer";
 
@@ -520,9 +519,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final long requestTimeoutMs;
     private boolean closed = false;
 
-    // currentThread holds the threadId of the current thread accessing KafkaConsumer
+    // currentThread holds the current thread accessing KafkaConsumer
     // and is used to prevent multi-threaded access
-    private final AtomicLong currentThread = new AtomicLong(NO_CURRENT_THREAD);
+    private final AtomicReference<Thread> currentThread = new AtomicReference<Thread>(NO_CURRENT_THREAD);
     // refcount is used to allow reentrant access by the thread who has acquired currentThread
     private final AtomicInteger refcount = new AtomicInteger(0);
 
@@ -1426,8 +1425,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private void acquire() {
         ensureNotClosed();
         long threadId = Thread.currentThread().getId();
-        if (threadId != currentThread.get() && !currentThread.compareAndSet(NO_CURRENT_THREAD, threadId))
-            throw new ConcurrentModificationException("KafkaConsumer is not safe for multi-threaded access");
+
+        if (!currentThread.compareAndSet(NO_CURRENT_THREAD, Thread.currentThread()) && currentThread.get().getId() != Thread.currentThread().getId())
+            throw new ConcurrentModificationException("KafkaConsumer is not safe for multi-threaded access. Request accessing thread is " + Thread.currentThread().getName() + " and it is already being accessed by " + currentThread.get().getName());
         refcount.incrementAndGet();
     }
 
