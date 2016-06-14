@@ -1427,7 +1427,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         ensureNotClosed();
         long threadId = Thread.currentThread().getId();
         if (threadId != currentThread.get() && !currentThread.compareAndSet(NO_CURRENT_THREAD, threadId))
-            throw new ConcurrentModificationException("KafkaConsumer is not safe for multi-threaded access");
+            throw new ConcurrentModificationException("KafkaConsumer is not safe for multi-threaded access. Request accessing thread is " +threadId + " and it is already being accessed by "+currentThread.get());
         refcount.incrementAndGet();
     }
 
