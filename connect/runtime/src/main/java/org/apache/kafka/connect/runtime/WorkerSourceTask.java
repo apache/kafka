@@ -243,6 +243,8 @@ class WorkerSourceTask extends WorkerTask {
             task.commitRecord(record);
         } catch (InterruptedException e) {
             log.error("Exception thrown", e);
+        } catch (Throwable t) {
+            log.error("Exception thrown while calling task.commitRecord()", t);
         }
     }
 
@@ -366,8 +368,8 @@ class WorkerSourceTask extends WorkerTask {
             this.task.commit();
         } catch (InterruptedException ex) {
             log.warn("Commit interrupted", ex);
-        } catch (Throwable ex) {
-            log.error("Exception thrown while calling task.commit()", ex);
+        } catch (Throwable t) {
+            log.error("Exception thrown while calling task.commit()", t);
         }
     }
 
