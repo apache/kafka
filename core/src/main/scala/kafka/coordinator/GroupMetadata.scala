@@ -159,7 +159,7 @@ private[coordinator] class GroupMetadata(val groupId: String) {
   def get(memberId: String) = members(memberId)
 
   def add(memberId: String, member: MemberMetadata) {
-    if (isEmpty)
+    if (members.isEmpty)
       this.protocolType = Some(member.protocolType)
 
     assert(groupId == member.groupId)
@@ -183,8 +183,6 @@ private[coordinator] class GroupMetadata(val groupId: String) {
   }
 
   def currentState = state
-
-  def isEmpty = members.isEmpty
 
   def notYetRejoinedMembers = members.values.filter(_.awaitingJoinCallback == null).toList
 
@@ -231,12 +229,12 @@ private[coordinator] class GroupMetadata(val groupId: String) {
   }
 
   def supportsProtocols(memberProtocols: Set[String]) = {
-    isEmpty || (memberProtocols & candidateProtocols).nonEmpty
+    members.isEmpty || (memberProtocols & candidateProtocols).nonEmpty
   }
 
   def initNextGeneration() = {
     assert(notYetRejoinedMembers == List.empty[MemberMetadata])
-    if (!isEmpty) {
+    if (members.nonEmpty) {
       generationId += 1
       protocol = selectProtocol
       transitionTo(AwaitingSync)

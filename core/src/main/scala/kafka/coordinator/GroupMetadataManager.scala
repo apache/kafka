@@ -121,8 +121,8 @@ class GroupMetadataManager(val brokerId: Int,
   /**
    * Get the group associated with the given groupId, or null if not found
    */
-  def getGroup(groupId: String): GroupMetadata = {
-      groupMetadataCache.get(groupId)
+  def getGroup(groupId: String): Option[GroupMetadata] = {
+    Option(groupMetadataCache.get(groupId))
   }
 
   /**
@@ -249,7 +249,7 @@ class GroupMetadataManager(val brokerId: Int,
   /**
    * Store offsets by appending it to the replicated log and then inserting to cache
    */
-  def prepareStoreOffsets(groupId: String,
+  def prepareStoreOffsets(group: GroupMetadata,
                           consumerId: String,
                           generationId: Int,
                           offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
@@ -261,16 +261,16 @@ class GroupMetadataManager(val brokerId: Int,
 
     // construct the message set to append
     val messages = filteredOffsetMetadata.map { case (topicAndPartition, offsetAndMetadata) =>
-      val (magicValue, timestamp) = getMessageFormatVersionAndTimestamp(partitionFor(groupId))
+      val (magicValue, timestamp) = getMessageFormatVersionAndTimestamp(partitionFor(group.groupId))
       new Message(
-        key = GroupMetadataManager.offsetCommitKey(groupId, topicAndPartition.topic, topicAndPartition.partition),
+        key = GroupMetadataManager.offsetCommitKey(group.groupId, topicAndPartition.topic, topicAndPartition.partition),
         bytes = GroupMetadataManager.offsetCommitValue(offsetAndMetadata),
         timestamp = timestamp,
         magicValue = magicValue
       )
     }.toSeq
 
-    val offsetTopicPartition = new TopicPartition(TopicConstants.GROUP_METADATA_TOPIC_NAME, partitionFor(groupId))
+    val offsetTopicPartition = new TopicPartition(TopicConstants.GROUP_METADATA_TOPIC_NAME, partitionFor(group.groupId))
 
     val offsetsAndMetadataMessageSet = Map(offsetTopicPartition ->
       new ByteBufferMessageSet(config.offsetsTopicCompressionCodec, messages:_*))
@@ -285,12 +285,6 @@ class GroupMetadataManager(val brokerId: Int,
       // construct the commit response status and insert
       // the offset and metadata to cache if the append status has no error
       val status = responseStatus(offsetTopicPartition)
-
-      val group = groupMetadataCache.get(groupId)
-
-      // it shouldn't be possible for the group to be evicted with a pending offset commit
-      if (group == null)
-        throw new IllegalStateException("Group removed prior to offset commit completion")
 
       val responseCode =
         group synchronized {
@@ -309,7 +303,7 @@ class GroupMetadataManager(val brokerId: Int,
             }
 
             debug("Offset commit %s from group %s consumer %s with generation %d failed when appending to log due to %s"
-              .format(filteredOffsetMetadata, groupId, consumerId, generationId, Errors.forCode(status.errorCode).exceptionName))
+              .format(filteredOffsetMetadata, group.groupId, consumerId, generationId, Errors.forCode(status.errorCode).exceptionName))
 
             // transform the log append error code to the corresponding the commit status error code
             if (status.errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
@@ -337,8 +331,10 @@ class GroupMetadataManager(val brokerId: Int,
       responseCallback(commitStatus)
     }
 
-    val group = groupMetadataCache.get(groupId)
-    group.prepareOffsetCommit(offsetMetadata)
+    group synchronized {
+      group.prepareOffsetCommit(offsetMetadata)
+    }
+
     DelayedStore(offsetsAndMetadataMessageSet, putCacheCallback)
   }
 

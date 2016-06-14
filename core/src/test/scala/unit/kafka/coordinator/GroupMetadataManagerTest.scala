@@ -162,7 +162,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    val delayedStore = groupMetadataManager.prepareStoreOffsets(groupId, memberId, generationId, offsets, callback)
+    val delayedStore = groupMetadataManager.prepareStoreOffsets(group, memberId, generationId, offsets, callback)
     assertTrue(group.hasOffsets)
 
     groupMetadataManager.store(delayedStore)
@@ -203,7 +203,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    val delayedStore = groupMetadataManager.prepareStoreOffsets(groupId, memberId, generationId, offsets, callback)
+    val delayedStore = groupMetadataManager.prepareStoreOffsets(group, memberId, generationId, offsets, callback)
     assertTrue(group.hasOffsets)
 
     groupMetadataManager.store(delayedStore)
@@ -245,7 +245,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    val delayedStore = groupMetadataManager.prepareStoreOffsets(groupId, memberId, generationId, offsets, callback)
+    val delayedStore = groupMetadataManager.prepareStoreOffsets(group, memberId, generationId, offsets, callback)
     assertTrue(group.hasOffsets)
 
     groupMetadataManager.store(delayedStore)
@@ -262,7 +262,7 @@ class GroupMetadataManagerTest {
 
     groupMetadataManager.cleanupGroupMetadata()
 
-    assertEquals(group, groupMetadataManager.getGroup(groupId))
+    assertEquals(Some(group), groupMetadataManager.getGroup(groupId))
     assertEquals(None, group.offset(topicPartition1))
     assertEquals(Some(offset), group.offset(topicPartition2).map(_.offset))
 
@@ -299,7 +299,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    val delayedStore = groupMetadataManager.prepareStoreOffsets(groupId, memberId, generationId, offsets, callback)
+    val delayedStore = groupMetadataManager.prepareStoreOffsets(group, memberId, generationId, offsets, callback)
     assertTrue(group.hasOffsets)
 
     groupMetadataManager.store(delayedStore)
@@ -318,7 +318,7 @@ class GroupMetadataManagerTest {
     groupMetadataManager.cleanupGroupMetadata()
 
     // the full group should be gone since all offsets were removed
-    assertNull(groupMetadataManager.getGroup(groupId))
+    assertEquals(None, groupMetadataManager.getGroup(groupId))
     val cachedOffsets = groupMetadataManager.getOffsets(groupId, Seq(topicPartition1, topicPartition2))
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition1).map(_.offset))
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition2).map(_.offset))
@@ -360,7 +360,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    val delayedStore = groupMetadataManager.prepareStoreOffsets(groupId, memberId, group.generationId, offsets, callback)
+    val delayedStore = groupMetadataManager.prepareStoreOffsets(group, memberId, group.generationId, offsets, callback)
     assertTrue(group.hasOffsets)
 
     groupMetadataManager.store(delayedStore)
@@ -379,7 +379,7 @@ class GroupMetadataManagerTest {
     groupMetadataManager.cleanupGroupMetadata()
 
     // group should still be there, but the offsets should be gone
-    assertEquals(group, groupMetadataManager.getGroup(groupId))
+    assertEquals(Some(group), groupMetadataManager.getGroup(groupId))
     assertEquals(None, group.offset(topicPartition1))
     assertEquals(None, group.offset(topicPartition2))
 
