@@ -18,7 +18,7 @@
 #
 
 #
-# Clean-up script to reset a Kafka Streams (v0.10.0.0) application for reprocessing from very beginning
+# Clean-up script to reset a Kafka Streams (v0.10.0.0) application for reprocessing from the very beginning
 #
 # resets topic offsets to zero
 # deletes content of intermediate and result topics (user topics); via kafka-streams-cleanup.sh
@@ -65,7 +65,7 @@ if __name__ == '__main__':
     idx += 1
     group  = sys.argv[idx] # in Kafka-Stream: application-id == group
     idx += 1
-    source_topics = sys.argv[++idx].split(',')
+    source_topics = sys.argv[idx].split(',')
 
     state_dir = '/tmp/kafka-streams'
 
@@ -144,7 +144,7 @@ if __name__ == '__main__':
 
 
 
-    print '>>> Deleting internal changle-log topics:', changelog_topics
+    print '>>> Deleting internal changlelog topics:', changelog_topics
     for topic in changelog_topics:
         cmd = './bin/kafka-topics.sh --zookeeper ' + zookeeper + ' --delete --topic ' + topic
         print(cmd)
