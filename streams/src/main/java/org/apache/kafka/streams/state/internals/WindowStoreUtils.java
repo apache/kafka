@@ -62,4 +62,8 @@ public class WindowStoreUtils {
     public static long timestampFromBinaryKey(byte[] binaryKey) {
         return ByteBuffer.wrap(binaryKey).getLong(binaryKey.length - TIMESTAMP_SIZE - SEQNUM_SIZE);
     }
+
+    public static int sequenceNumberFromBinaryKey(byte[] binaryKey) {
+        return ByteBuffer.wrap(binaryKey).getInt(binaryKey.length - SEQNUM_SIZE);
+    }
 }
