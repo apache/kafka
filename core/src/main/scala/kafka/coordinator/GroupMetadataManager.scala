@@ -953,13 +953,16 @@ object GroupMetadataManager {
       if (version == 0) {
         val protocolType = value.get(GROUP_METADATA_PROTOCOL_TYPE_V0).asInstanceOf[String]
 
-        val group = new GroupMetadata(groupId)
+        val memberMetadataArray = value.getArray(GROUP_METADATA_MEMBERS_V0)
+        val initialState = if (memberMetadataArray.isEmpty) Empty else Stable
+
+        val group = new GroupMetadata(groupId, initialState)
 
         group.generationId = value.get(GROUP_METADATA_GENERATION_V0).asInstanceOf[Int]
         group.leaderId = value.get(GROUP_METADATA_LEADER_V0).asInstanceOf[String]
         group.protocol = value.get(GROUP_METADATA_PROTOCOL_V0).asInstanceOf[String]
 
-        value.getArray(GROUP_METADATA_MEMBERS_V0).foreach {
+        memberMetadataArray.foreach {
           case memberMetadataObj =>
             val memberMetadata = memberMetadataObj.asInstanceOf[Struct]
             val memberId = memberMetadata.get(MEMBER_METADATA_MEMBER_ID_V0).asInstanceOf[String]

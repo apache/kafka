@@ -141,9 +141,9 @@ case class GroupSummary(state: String,
  *  3. leader id
  */
 @nonthreadsafe
-private[coordinator] class GroupMetadata(val groupId: String) {
+private[coordinator] class GroupMetadata(val groupId: String, initialState: GroupState = Empty) {
 
-  private var state: GroupState = Empty
+  private var state: GroupState = initialState
   private val members = new mutable.HashMap[String, MemberMetadata]
   private val offsets = new mutable.HashMap[TopicPartition, OffsetAndMetadata]
   private val pendingOffsetCommits = new mutable.HashMap[TopicPartition, OffsetAndMetadata]
