@@ -103,41 +103,24 @@ public class KafkaProducerTest {
         config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         config.put(ProducerConfig.SEND_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
         config.put(ProducerConfig.RECEIVE_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
-        config.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
-        config.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
-        KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(config);
+        KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(
+                config, new ByteArraySerializer(), new ByteArraySerializer());
         producer.close();
     }
 
-    @Test
+    @Test(expected = KafkaException.class)
     public void testInvalidSocketSendBufferSize() throws Exception {
         Map<String, Object> config = new HashMap<>();
         config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         config.put(ProducerConfig.SEND_BUFFER_CONFIG, -2);
-        config.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
-        config.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
-        try {
-            new KafkaProducer<byte[], byte[]>(config);
-        } catch (KafkaException e) {
-            Assert.assertEquals("Invalid value -2 for configuration send.buffer.bytes: Value must be at least -1", e.getMessage());
-            return;
-        }
-        Assert.fail("should have caught an exception and returned");
+        new KafkaProducer<>(config, new ByteArraySerializer(), new ByteArraySerializer());
     }
 
-    @Test
+    @Test(expected = KafkaException.class)
     public void testInvalidSocketReceiveBufferSize() throws Exception {
         Map<String, Object> config = new HashMap<>();
         config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         config.put(ProducerConfig.RECEIVE_BUFFER_CONFIG, -2);
-        config.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
-        config.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
-        try {
-            new KafkaProducer<byte[], byte[]>(config);
-        } catch (KafkaException e) {
-            Assert.assertEquals("Invalid value -2 for configuration receive.buffer.bytes: Value must be at least -1", e.getMessage());
-            return;
-        }
-        Assert.fail("should have caught an exception and returned");
+        new KafkaProducer<>(config, new ByteArraySerializer(), new ByteArraySerializer());
     }
 }
