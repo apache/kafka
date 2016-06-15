@@ -518,6 +518,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final Metadata metadata;
     private final long retryBackoffMs;
     private final long requestTimeoutMs;
+    private final boolean autoCommitEnabled;
     private boolean closed = false;
 
     // currentThread holds the threadId of the current thread accessing KafkaConsumer
@@ -643,6 +644,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             List<ConsumerInterceptor<K, V>> interceptorList = (List) (new ConsumerConfig(userProvidedConfigs)).getConfiguredInstances(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
                     ConsumerInterceptor.class);
             this.interceptors = interceptorList.isEmpty() ? null : new ConsumerInterceptors<>(interceptorList);
+            this.autoCommitEnabled = config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
             this.coordinator = new ConsumerCoordinator(this.client,
                     config.getString(ConsumerConfig.GROUP_ID_CONFIG),
                     config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG),
@@ -655,7 +657,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     this.time,
                     retryBackoffMs,
                     new ConsumerCoordinator.DefaultOffsetCommitCallback(),
-                    config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG),
+                    this.autoCommitEnabled,
                     config.getLong(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
                     this.interceptors,
                     config.getBoolean(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG));
@@ -716,6 +718,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                   SubscriptionState subscriptions,
                   Metadata metadata,
                   long retryBackoffMs,
+                  boolean autoCommitEnabled,
                   long requestTimeoutMs) {
         this.clientId = clientId;
         this.coordinator = coordinator;
@@ -729,6 +732,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.subscriptions = subscriptions;
         this.metadata = metadata;
         this.retryBackoffMs = retryBackoffMs;
+        this.autoCommitEnabled = autoCommitEnabled;
         this.requestTimeoutMs = requestTimeoutMs;
     }
 
@@ -799,6 +803,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 // treat subscribing to empty topic list as the same as unsubscribing
                 this.unsubscribe();
             } else {
+                if (this.autoCommitEnabled)
+                    // make sure the offsets of topic partitions the consumer is unsubscribing from are committed
+                    // since these partitions will not be included in the revocation callback of the next rebalance
+                    commitAsync();
                 log.debug("Subscribed to topic(s): {}", Utils.join(topics, ", "));
                 this.subscriptions.subscribe(topics, listener);
                 metadata.setTopics(subscriptions.groupSubscription());
@@ -850,6 +858,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
         acquire();
         try {
+            if (this.autoCommitEnabled)
+                // make sure the offsets of topic partitions the consumer is unsubscribing from are committed
+                // since these partitions will not be included in the revocation callback of the next rebalance
+                commitAsync();
             log.debug("Subscribed to pattern: {}", pattern);
             this.subscriptions.subscribe(pattern, listener);
             this.metadata.needMetadataForAllTopics(true);
@@ -865,6 +877,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void unsubscribe() {
         acquire();
         try {
+            if (this.autoCommitEnabled)
+                // make sure the offsets of topic partitions the consumer is unsubscribing from are committed
+                // since these partitions will not be included in the revocation callback of the next rebalance
+                commitAsync();
             log.debug("Unsubscribed all topics or patterns and assigned partitions");
             this.subscriptions.unsubscribe();
             this.coordinator.maybeLeaveGroup();
