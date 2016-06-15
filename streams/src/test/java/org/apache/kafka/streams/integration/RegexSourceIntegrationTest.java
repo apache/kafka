@@ -39,6 +39,8 @@ import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -69,7 +71,6 @@ public class RegexSourceIntegrationTest {
 
     private static final String TOPIC_1 = "topic-1";
     private static final String TOPIC_2 = "topic-2";
-    private static final String TOPIC_3 = "topic-3";
     private static final String TOPIC_A = "topic-A";
     private static final String TOPIC_C = "topic-C";
     private static final String TOPIC_Y = "topic-Y";
@@ -81,6 +82,8 @@ public class RegexSourceIntegrationTest {
     private static final int SECOND_UPDATE = 1;
 
     private static final String DEFAULT_OUTPUT_TOPIC = "outputTopic";
+    private Properties streamsConfiguration;
+
 
     @BeforeClass
     public static void startKafkaCluster() throws Exception {
@@ -95,12 +98,22 @@ public class RegexSourceIntegrationTest {
 
     }
 
+    @Before
+    public void setUp() {
+        streamsConfiguration = getStreamsConfig();
+    }
+
+    @After
+    public void tearDown() throws Exception {
+        // Remove any state from previous test runs
+        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
+    }
+
     @Test
     public void testRegexMatchesTopicsAWhenCreated() throws Exception {
 
         final Serde<String> stringSerde = Serdes.String();
 
-        Properties streamsConfiguration = getStreamsConfig();
         StreamsConfig streamsConfig = new StreamsConfig(streamsConfiguration);
 
         CLUSTER.createTopic("TEST-TOPIC-1");
@@ -110,9 +123,6 @@ public class RegexSourceIntegrationTest {
         KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-\\d"));
 
         pattern1Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
-
-        // Remove any state from previous test runs
-        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
 
         KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
 
@@ -127,10 +137,12 @@ public class RegexSourceIntegrationTest {
 
         streamThreads[0] = testStreamThread;
         streams.start();
-        Thread.sleep(1000);
+        testStreamThread.waitUntilTasksUpdated();
+
         CLUSTER.createTopic("TEST-TOPIC-2");
-        //pause to let metadata update
-        Thread.sleep(1000);
+
+        testStreamThread.waitUntilTasksUpdated();
+
         streams.close();
 
         List<String> expectedFirstAssignment = Arrays.asList("TEST-TOPIC-1");
@@ -145,7 +157,6 @@ public class RegexSourceIntegrationTest {
 
         final Serde<String> stringSerde = Serdes.String();
 
-        Properties streamsConfiguration = getStreamsConfig();
         StreamsConfig streamsConfig = new StreamsConfig(streamsConfiguration);
 
         CLUSTER.createTopic("TEST-TOPIC-A");
@@ -156,9 +167,6 @@ public class RegexSourceIntegrationTest {
         KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-[A-Z]"));
 
         pattern1Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
-
-        // Remove any state from previous test runs
-        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
 
         KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
 
@@ -173,10 +181,13 @@ public class RegexSourceIntegrationTest {
 
         streamThreads[0] = testStreamThread;
         streams.start();
-        Thread.sleep(1000);
+
+        testStreamThread.waitUntilTasksUpdated();
+
         CLUSTER.deleteTopic("TEST-TOPIC-A");
-        //pause to let metadata update
-        Thread.sleep(1000);
+
+        testStreamThread.waitUntilTasksUpdated();
+
         streams.close();
 
         List<String> expectedFirstAssignment = Arrays.asList("TEST-TOPIC-A", "TEST-TOPIC-B");
@@ -200,8 +211,6 @@ public class RegexSourceIntegrationTest {
 
         final Serde<String> stringSerde = Serdes.String();
 
-        Properties streamsConfiguration = getStreamsConfig();
-
         KStreamBuilder builder = new KStreamBuilder();
 
         KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("topic-\\d"));
@@ -212,20 +221,17 @@ public class RegexSourceIntegrationTest {
         pattern2Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
         namedTopicsStream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
 
-        // Remove any state from previous test runs
-        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
-
         KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
         streams.start();
 
         Properties producerConfig = getProducerConfig();
 
-        produceMessage(TOPIC_1, Arrays.asList(topic1TestMessage), producerConfig);
-        produceMessage(TOPIC_2, Arrays.asList(topic2TestMessage), producerConfig);
-        produceMessage(TOPIC_A, Arrays.asList(topicATestMessage), producerConfig);
-        produceMessage(TOPIC_C, Arrays.asList(topicCTestMessage), producerConfig);
-        produceMessage(TOPIC_Y, Arrays.asList(topicYTestMessage), producerConfig);
-        produceMessage(TOPIC_Z, Arrays.asList(topicZTestMessage), producerConfig);
+        IntegrationTestUtils.produceValuesSynchronously(TOPIC_1, Arrays.asList(topic1TestMessage), producerConfig);
+        IntegrationTestUtils.produceValuesSynchronously(TOPIC_2, Arrays.asList(topic2TestMessage), producerConfig);
+        IntegrationTestUtils.produceValuesSynchronously(TOPIC_A, Arrays.asList(topicATestMessage), producerConfig);
+        IntegrationTestUtils.produceValuesSynchronously(TOPIC_C, Arrays.asList(topicCTestMessage), producerConfig);
+        IntegrationTestUtils.produceValuesSynchronously(TOPIC_Y, Arrays.asList(topicYTestMessage), producerConfig);
+        IntegrationTestUtils.produceValuesSynchronously(TOPIC_Z, Arrays.asList(topicZTestMessage), producerConfig);
 
         Properties consumerConfig = getConsumerConfig();
 
@@ -243,6 +249,7 @@ public class RegexSourceIntegrationTest {
         assertThat(actualValues, equalTo(expectedReceivedValues));
     }
 
+    //TODO should be updated to expected = TopologyBuilderException after KAFKA-3708
     @Test(expected = AssertionError.class)
     public void testNoMessagesSentExceptionFromOverlappingPatterns() throws Exception {
 
@@ -251,8 +258,6 @@ public class RegexSourceIntegrationTest {
 
 
         final Serde<String> stringSerde = Serdes.String();
-
-        Properties streamsConfiguration = getStreamsConfig();
 
         KStreamBuilder builder = new KStreamBuilder();
 
@@ -276,8 +281,8 @@ public class RegexSourceIntegrationTest {
 
         Properties producerConfig = getProducerConfig();
 
-        produceMessage(FA_TOPIC, Arrays.asList(fMessage), producerConfig);
-        produceMessage(FOO_TOPIC, Arrays.asList(fooMessage), producerConfig);
+        IntegrationTestUtils.produceValuesSynchronously(FA_TOPIC, Arrays.asList(fMessage), producerConfig);
+        IntegrationTestUtils.produceValuesSynchronously(FOO_TOPIC, Arrays.asList(fooMessage), producerConfig);
 
         Properties consumerConfig = getConsumerConfig();
 
@@ -288,11 +293,6 @@ public class RegexSourceIntegrationTest {
         }
 
     }
-
-    private void produceMessage(String inputTopic, List<String> input, Properties producerConfig) throws Exception {
-        IntegrationTestUtils.produceValuesSynchronously(inputTopic, input, producerConfig);
-    }
-
 
     private Properties getProducerConfig() {
         Properties producerConfig = new Properties();
@@ -332,6 +332,7 @@ public class RegexSourceIntegrationTest {
 
         public Map<Integer, List<String>> assignedTopicPartitions = new HashMap<>();
         private int index =  0;
+        public volatile boolean streamTaskUpdated = false;
 
         public TestStreamThread(TopologyBuilder builder, StreamsConfig config, KafkaClientSupplier clientSupplier, String applicationId, String clientId, UUID processId, Metrics metrics, Time time) {
             super(builder, config, clientSupplier, applicationId, clientId, processId, metrics, time);
@@ -344,8 +345,17 @@ public class RegexSourceIntegrationTest {
                 assignedTopics.add(partition.topic());
             }
             Collections.sort(assignedTopics);
+            streamTaskUpdated = true;
             assignedTopicPartitions.put(index++, assignedTopics);
             return super.createStreamTask(id, partitions);
+        }
+
+
+        void waitUntilTasksUpdated() {
+            while (!streamTaskUpdated) {
+               //empty loop just waiting for update
+            }
+            streamTaskUpdated = false;
         }
 
     }
