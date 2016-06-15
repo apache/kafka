@@ -33,6 +33,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
@@ -59,7 +60,9 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -89,6 +92,50 @@ public class KafkaConsumerTest {
             assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());
             assertEquals(oldCloseCount + 1, MockMetricsReporter.CLOSE_COUNT.get());
             assertEquals("Failed to construct kafka consumer", e.getMessage());
+            return;
+        }
+        Assert.fail("should have caught an exception and returned");
+    }
+
+    @Test
+    public void testOsDefaultSocketBufferSizes() throws Exception {
+        Map<String, Object> config = new HashMap<>();
+        config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        config.put(ConsumerConfig.SEND_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
+        config.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
+        config.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        config.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(config);
+        consumer.close();
+    }
+
+    @Test
+    public void testInvalidSocketSendBufferSize() throws Exception {
+        Map<String, Object> config = new HashMap<>();
+        config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        config.put(ConsumerConfig.SEND_BUFFER_CONFIG, -2);
+        config.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        config.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        try {
+            new KafkaConsumer<byte[], byte[]>(config);
+        } catch (KafkaException e) {
+            Assert.assertEquals("Invalid value -2 for configuration send.buffer.bytes: Value must be at least -1", e.getMessage());
+            return;
+        }
+        Assert.fail("should have caught an exception and returned");
+    }
+
+    @Test
+    public void testInvalidSocketReceiveBufferSize() throws Exception {
+        Map<String, Object> config = new HashMap<>();
+        config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        config.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, -2);
+        config.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        config.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        try {
+            new KafkaConsumer<byte[], byte[]>(config);
+        } catch (KafkaException e) {
+            Assert.assertEquals("Invalid value -2 for configuration receive.buffer.bytes: Value must be at least -1", e.getMessage());
             return;
         }
         Assert.fail("should have caught an exception and returned");
