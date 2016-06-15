@@ -1430,7 +1430,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             throw new ConcurrentModificationException("KafkaConsumer is not safe for multi-threaded access. Request accessing thread is " + threadId + " and it is already being accessed by " + currentThread.get());
         refcount.incrementAndGet();
     }
-\
+
     /**
      * Release the light lock protecting the consumer from multi-threaded access.
      */
