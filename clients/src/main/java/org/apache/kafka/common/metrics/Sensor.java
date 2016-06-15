@@ -123,8 +123,8 @@ public final class Sensor {
                         throw new QuotaViolationException(String.format(
                             "(%s) violated quota. Actual: (%f), Threshold: (%f)",
                             metric.metricName(),
-                            quota.bound(),
-                            value));
+                            value,
+                            quota.bound()));
                     }
                 }
             }
