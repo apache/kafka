@@ -175,6 +175,6 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
         if (!repartitionRequired) {
             return this.name;
         }
-        return KStreamImpl.createReparitionedSourceForJoin(this, keySerde, valSerde);
+        return KStreamImpl.createReparitionedSource(this, keySerde, valSerde);
     }
 }

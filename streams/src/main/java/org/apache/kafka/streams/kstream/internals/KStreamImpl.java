@@ -440,14 +440,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     private KStreamImpl<K, V> repartitionForJoin(Serde<K> keySerde,
                                                  Serde<V> valSerde) {
 
-        String repartitionedSourceName = createReparitionedSourceForJoin(this, keySerde, valSerde);
+        String repartitionedSourceName = createReparitionedSource(this, keySerde, valSerde);
         return new KStreamImpl<>(topology, repartitionedSourceName, Collections
             .singleton(repartitionedSourceName), false);
     }
 
-    static <K1, V1> String createReparitionedSourceForJoin(AbstractStream<K1> stream,
-                                                         Serde<K1> keySerde,
-                                                         Serde<V1> valSerde) {
+    static <K1, V1> String createReparitionedSource(AbstractStream<K1> stream,
+                                                    Serde<K1> keySerde,
+                                                    Serde<V1> valSerde) {
         Serializer<K1> keySerializer = keySerde != null ? keySerde.serializer() : null;
         Serializer<V1> valSerializer = valSerde != null ? valSerde.serializer() : null;
         Deserializer<K1> keyDeserializer = keySerde != null ? keySerde.deserializer() : null;
