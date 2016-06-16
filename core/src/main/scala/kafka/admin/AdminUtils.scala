@@ -308,14 +308,18 @@ object AdminUtils extends Logging {
   }
 
   def deleteTopic(zkUtils: ZkUtils, topic: String) {
-    try {
-      zkUtils.createPersistentPath(getDeleteTopicPath(topic))
-    } catch {
-      case e1: ZkNodeExistsException => throw new TopicAlreadyMarkedForDeletionException(
-        "topic %s is already marked for deletion".format(topic))
-      case e2: Throwable => throw new AdminOperationException(e2.toString)
+      if(topicExists(zkUtils, topic)) {
+        try {
+          zkUtils.createPersistentPath(getDeleteTopicPath(topic))
+        } catch {
+          case e1: ZkNodeExistsException => throw new TopicAlreadyMarkedForDeletionException(
+            "topic %s is already marked for deletion".format(topic))
+          case e2: Throwable => throw new AdminOperationException(e2.toString)
+        }
+      } else {
+        throw new InvalidTopicException("topic %s does not exist".format(topic))
+      }
     }
-  }
 
   def isConsumerGroupActive(zkUtils: ZkUtils, group: String) = {
     zkUtils.getConsumersInGroup(group).nonEmpty
