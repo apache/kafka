@@ -37,6 +37,9 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
     <li> Upgrade the brokers. This can be done a broker at a time by simply bringing it down, updating the code, and restarting it. </li>
     <li> Once the entire cluster is upgraded, bump the protocol version by editing inter.broker.protocol.version and setting it to 0.10.0.0. </li>
     <li> Restart the brokers one by one for the new protocol version to take effect. </li>
+    <li> Once most consumers have been upgraded to 0.10.0 and if you followed the recommendation to set log.message.format.version=CURRENT_KAFKA_VERSION, change
+         log.message.format.version to 0.10.0 on each broker and restart them one by one.
+    </li>
 </ol>
 
 <p><b>Note:</b> If you are willing to accept downtime, you can simply take all the brokers down, update the code and start all of them. They will start with the new protocol by default.
