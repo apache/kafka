@@ -249,7 +249,7 @@ public class RegexSourceIntegrationTest {
         assertThat(actualValues, equalTo(expectedReceivedValues));
     }
 
-    //TODO should be updated to expected = TopologyBuilderException after KAFKA-3708
+    // todo should be updated to expected = TopologyBuilderException after KAFKA-3708
     @Test(expected = AssertionError.class)
     public void testNoMessagesSentExceptionFromOverlappingPatterns() throws Exception {
 
@@ -352,7 +352,9 @@ public class RegexSourceIntegrationTest {
 
 
         void waitUntilTasksUpdated() {
-            while (!streamTaskUpdated) {
+            long maxTimeMillis = 30000;
+            long startTime = System.currentTimeMillis();
+            while (!streamTaskUpdated && ((System.currentTimeMillis() - startTime) < maxTimeMillis)) {
                //empty loop just waiting for update
             }
             streamTaskUpdated = false;
