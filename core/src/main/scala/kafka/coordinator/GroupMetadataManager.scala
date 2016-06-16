@@ -515,8 +515,8 @@ class GroupMetadataManager(val brokerId: Int,
   /**
    * When this broker becomes a follower for an offsets topic partition clear out the cache for groups that belong to
    * that partition.
-    *
-    * @param offsetsPartition Groups belonging to this partition of the offsets topic will be deleted from the cache.
+   *
+   * @param offsetsPartition Groups belonging to this partition of the offsets topic will be deleted from the cache.
    */
   def removeGroupsForPartition(offsetsPartition: Int,
                                onGroupUnloaded: GroupMetadata => Unit) {
@@ -532,11 +532,6 @@ class GroupMetadataManager(val brokerId: Int,
         // to prevent coordinator's check-and-get-group race condition
         ownedPartitions.remove(offsetsPartition)
 
-        /**
-         * NOTE: we need to put this in the loading partition lock as well to prevent race condition of the leader-is-local check
-         * in getOffsets to protects against fetching from an empty/cleared offset cache (i.e., cleared due to a leader->follower
-         * transition right after the check and clear the cache), causing offset fetch return empty offsets with NONE error code
-         */
         for (group <- groupMetadataCache.values) {
           if (partitionFor(group.groupId) == offsetsPartition) {
             onGroupUnloaded(group)
