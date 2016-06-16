@@ -162,7 +162,7 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
   def testTruncateNotCalledIfSizeIsSameAsTargetSize() {
     val channelMock = EasyMock.createMock(classOf[FileChannel])
 
-    EasyMock.expect(channelMock.size()).andReturn(42L).times(3) // in constructor and method
+    EasyMock.expect(channelMock.size).andReturn(42L).times(3) // in constructor and method
     EasyMock.expect(channelMock.position(42L)).andReturn(null) // constructor
     EasyMock.replay(channelMock)
 
@@ -179,7 +179,7 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
   def testTruncateIfSizeIsDifferentToTargetSize() {
     val channelMock = EasyMock.createMock(classOf[FileChannel])
 
-    EasyMock.expect(channelMock.size()).andReturn(42L).times(3)
+    EasyMock.expect(channelMock.size).andReturn(42L).times(3)
     EasyMock.expect(channelMock.position(42L)).andReturn(null).once()
     EasyMock.expect(channelMock.truncate(23L)).andReturn(null).once()
     EasyMock.expect(channelMock.position(23L)).andReturn(null).once()
