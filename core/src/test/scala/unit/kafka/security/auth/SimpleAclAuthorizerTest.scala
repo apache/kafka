@@ -16,6 +16,7 @@
  */
 package kafka.security.auth
 
+import collection.JavaConverters._
 import java.net.InetAddress
 import java.util
 import java.util.UUID
@@ -28,6 +29,7 @@ import org.junit.Assert._
 import org.junit.{After, Assert, Before, Test}
 
 import scala.collection.JavaConversions._
+import scala.collection.mutable
 
 class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
@@ -214,8 +216,8 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     acls = changeAclAndVerify(acls, Set[Acl](acl5), Set.empty[Acl])
 
     //test get by principal name.
-    TestUtils.waitUntilTrue(() => Map(resource -> Set(acl1, acl2)) == simpleAclAuthorizer.acls(user1), "changes not propagated in timeout period")
-    TestUtils.waitUntilTrue(() => Map(resource -> Set(acl3, acl4, acl5)) == simpleAclAuthorizer.acls(user2), "changes not propagated in timeout period")
+    TestUtils.waitUntilTrue(() => Map(resource -> Set(acl1, acl2).asJava).asJava.equals(simpleAclAuthorizer.acls(user1)), "changes not propagated in timeout period")
+    TestUtils.waitUntilTrue(() => Map(resource -> Set(acl3, acl4, acl5).asJava).asJava.equals(simpleAclAuthorizer.acls(user2)), "changes not propagated in timeout period")
 
     val resourceToAcls = Map[Resource, Set[Acl]](
       new Resource(ResourceType.TOPIC, Resource.WILDCARD_RESOURCE) -> Set[Acl](new Acl(user2, PermissionType.ALLOW, Acl.WILDCARD_HOST, Operation.READ)),
@@ -225,7 +227,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     )
 
     resourceToAcls foreach { case (key, value) => changeAclAndVerify(Set.empty[Acl], value, Set.empty[Acl], key) }
-    TestUtils.waitUntilTrue(() => resourceToAcls + (resource -> acls) == simpleAclAuthorizer.acls(), "changes not propagated in timeout period.")
+    TestUtils.waitUntilTrue(() => (resourceToAcls + (resource -> acls)).map(x => x._1 -> x._2.asJava).asJava.equals(simpleAclAuthorizer.acls), "changes not propagated in timeout period.")
 
     //test remove acl from existing acls.
     acls = changeAclAndVerify(acls, Set.empty[Acl], Set(acl1, acl5))
@@ -260,7 +262,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     authorizer.configure(config.originals)
 
     assertEquals(acls, authorizer.acls(resource))
-    assertEquals(acls1, authorizer.acls(resource1))
+    assertEquals(acls1.asJava, authorizer.acls(resource1))
   }
 
   @Test
@@ -372,7 +374,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     val acl2 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), PermissionType.ALLOW, "*", Operation.READ)
     val acl3 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), PermissionType.DENY, "host1", Operation.READ)
 
-    val acls = Set[Acl](acl1, acl2, acl3)
+    val acls = mutable.Set[Acl](acl1, acl2, acl3)
     val jsonAcls = Json.encode(simpleAclAuthorizer.aclToJsonCompatibleMap(acls))
 
     Assert.assertEquals(acls, simpleAclAuthorizer.aclFromJson(jsonAcls))

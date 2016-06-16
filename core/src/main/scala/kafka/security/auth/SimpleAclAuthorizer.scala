@@ -31,6 +31,7 @@ import org.apache.kafka.common.security.auth._
 import scala.collection.JavaConverters._
 import org.apache.log4j.Logger
 
+import scala.collection.mutable
 import scala.util.Random
 
 object SimpleAclAuthorizer {
@@ -64,7 +65,7 @@ object SimpleAclAuthorizer {
   //prefix of all the change notification sequence node.
   val AclChangedPrefix = "acl_changes_"
 
-  private case class VersionedAcls(acls: Set[Acl], zkVersion: Int)
+  private case class VersionedAcls(acls: mutable.Set[Acl], zkVersion: Int)
 }
 
 class SimpleAclAuthorizer extends Authorizer with Logging {
@@ -200,7 +201,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   override def removeAcls(resource: Resource): Boolean = {
     inWriteLock(lock) {
       val result = zkUtils.deletePath(toResourcePath(resource))
-      updateCache(resource, VersionedAcls(Set(), 0))
+      updateCache(resource, VersionedAcls(mutable.Set(), 0))
       updateAclChangedFlag(resource)
       result
     }
@@ -208,7 +209,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   override def acls(resource: Resource): java.util.Set[Acl] = {
     inReadLock(lock) {
-      val scalaAcls: Set[Acl] = aclCache.get(resource).map(_.acls).getOrElse(Set.empty[Acl])
+      val scalaAcls: mutable.Set[Acl] = aclCache.get(resource).map(_.acls).getOrElse(mutable.Set.empty[Acl])
       scalaAcls.asJava
     }
   }
@@ -250,7 +251,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   def toResourcePath(resource: Resource): String = {
-    SimpleAclAuthorizer.AclZkPath + "/" + resource.getResourceType + "/" + resource.name
+    SimpleAclAuthorizer.AclZkPath + "/" + resource.getResourceType.name + "/" + resource.name
   }
 
   private def logAuditMessage(principal: KafkaPrincipal, authorized: Boolean, operation: Operation, resource: Resource, host: String) {
@@ -268,7 +269,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     * @param getNewAcls function to transform existing acls to new ACLs
     * @return boolean indicating if a change was made
     */
-  private def updateResourceAcls(resource: Resource)(getNewAcls: Set[Acl] => Set[Acl]): Boolean = {
+  private def updateResourceAcls(resource: Resource)(getNewAcls: mutable.Set[Acl] => mutable.Set[Acl]): Boolean = {
     val path = toResourcePath(resource)
 
     var currentVersionedAcls =
@@ -343,7 +344,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   private def getAclsFromZk(resource: Resource): VersionedAcls = {
     val (aclJson, stat) = zkUtils.readDataMaybeNull(toResourcePath(resource))
-    VersionedAcls(aclJson.map(aclFromJson).getOrElse(Set()), stat.getVersion)
+    VersionedAcls(aclJson.map(aclFromJson).getOrElse(mutable.Set()), stat.getVersion)
   }
 
   private def updateCache(resource: Resource, versionedAcls: VersionedAcls) {
@@ -381,7 +382,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   private val CurrentVersion = 1
   private val AclsKey = "acls"
 
-  private[auth] def aclToJsonCompatibleMap(acls: Set[Acl]): Map[String, Any] = {
+  private[auth] def aclToJsonCompatibleMap(acls: mutable.Set[Acl]): Map[String, Any] = {
     Map(VersionKey -> CurrentVersion, AclsKey -> acls.map(acl => aclToMap(acl)).toList)
   }
 
@@ -411,11 +412,11 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     * </p>
     * @return
     */
-  def aclFromJson(aclJson: String): Set[Acl] = {
+  def aclFromJson(aclJson: String): mutable.Set[Acl] = {
     if (aclJson == null || aclJson.isEmpty)
-      return collection.immutable.Set.empty[Acl]
+      return mutable.Set.empty[Acl]
 
-    var acls: collection.mutable.HashSet[Acl] = new collection.mutable.HashSet[Acl]()
+    var acls: mutable.HashSet[Acl] = new mutable.HashSet[Acl]()
     Json.parseFull(aclJson) match {
       case Some(m) =>
         val aclMap = m.asInstanceOf[Map[String, Any]]
@@ -431,6 +432,6 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
         })
       case None =>
     }
-    acls.toSet
+    acls
   }
 }
