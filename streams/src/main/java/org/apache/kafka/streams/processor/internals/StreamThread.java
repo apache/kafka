@@ -161,7 +161,7 @@ public class StreamThread extends Thread {
         this.applicationId = applicationId;
         this.config = config;
         this.builder = builder;
-        this.sourceTopics = builder.sourceTopics(applicationId);
+        this.sourceTopics = builder.sourceTopics();
         this.topicPattern = builder.sourceTopicPattern();
         this.clientId = clientId;
         this.processId = processId;

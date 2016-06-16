@@ -89,7 +89,7 @@ public class KStreamBuilder extends TopologyBuilder {
 
         addSource(name, keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topics);
 
-        return new KStreamImpl<>(this, name, Collections.singleton(name));
+        return new KStreamImpl<>(this, name, Collections.singleton(name), false);
     }
 
 
@@ -111,7 +111,7 @@ public class KStreamBuilder extends TopologyBuilder {
 
         addSource(name, keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topicPattern);
 
-        return new KStreamImpl<>(this, name, Collections.singleton(name));
+        return new KStreamImpl<>(this, name, Collections.singleton(name), false);
     }
 
     /**
