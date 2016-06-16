@@ -46,7 +46,9 @@ public interface StateStore {
     void flush();
 
     /**
-     * Close the storage engine
+     * Close the storage engine.
+     * Note that this function needs to be idempotent since it may be called
+     * several times on the same state store.
      */
     void close();
 

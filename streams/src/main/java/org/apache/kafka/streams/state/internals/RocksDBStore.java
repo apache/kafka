@@ -444,6 +444,10 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void flush() {
+        if (db == null) {
+            return;
+        }
+
         // flush of the cache entries if necessary
         flushCache();
 
@@ -464,6 +468,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void close() {
+
+        if (db == null) {
+            return;
+        }
+
         flush();
         options.dispose();
         wOptions.dispose();
