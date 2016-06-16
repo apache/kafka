@@ -28,12 +28,12 @@ import org.junit.{Before, Test}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.Utils
 
-case class MessageTestVal(val key: Array[Byte], 
-                          val payload: Array[Byte],
-                          val codec: CompressionCodec,
-                          val timestamp: Long,
-                          val magicValue: Byte,
-                          val message: Message)
+case class MessageTestVal(key: Array[Byte],
+                          payload: Array[Byte],
+                          codec: CompressionCodec,
+                          timestamp: Long,
+                          magicValue: Byte,
+                          message: Message)
 
 class MessageTest extends JUnitSuite {
 

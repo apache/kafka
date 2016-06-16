@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.network;
+package kafka.network
 
 import java.net._
 import javax.net.ssl._

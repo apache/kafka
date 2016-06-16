@@ -62,7 +62,7 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness {
     val partitionRequests = immutable.Map[TopicAndPartition, PartitionFetchInfo]()
     val request = new FetchRequest(requestInfo = partitionRequests)
     val fetched = consumer.fetch(request)
-    assertTrue(!fetched.hasError && fetched.data.size == 0)
+    assertTrue(!fetched.hasError && fetched.data.isEmpty)
   }
 
   @Test
@@ -152,7 +152,7 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness {
         response.data.values.foreach(pdata => ErrorMapping.maybeThrowException(pdata.error))
         fail("Expected exception when fetching message with invalid offset")
       } catch {
-        case e: OffsetOutOfRangeException => "this is good"
+        case e: OffsetOutOfRangeException => // This is good.
       }
     }
 
@@ -168,7 +168,7 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness {
         response.data.values.foreach(pdata => ErrorMapping.maybeThrowException(pdata.error))
         fail("Expected exception when fetching message with invalid partition")
       } catch {
-        case e: UnknownTopicOrPartitionException => "this is good"
+        case e: UnknownTopicOrPartitionException => // This is good.
       }
     }
 

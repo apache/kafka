@@ -13,8 +13,8 @@
 package org.apache.kafka.clients.producer.internals;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.util.Collections;
@@ -60,7 +60,7 @@ public class SenderTest {
     private MockTime time = new MockTime();
     private MockClient client = new MockClient(time);
     private int batchSize = 16 * 1024;
-    private Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+    private Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
     private Cluster cluster = TestUtils.singletonCluster("test", 1);
     private Metrics metrics = null;
     private RecordAccumulator accumulator = null;
@@ -226,7 +226,42 @@ public class SenderTest {
         } finally {
             m.close();
         }
+    }
 
+    /**
+     * Tests that topics are added to the metadata list when messages are available to send
+     * and expired if not used during a metadata refresh interval.
+     */
+    @Test
+    public void testMetadataTopicExpiry() throws Exception {
+        long offset = 0;
+        metadata.update(Cluster.empty(), time.milliseconds());
+
+        Future<RecordMetadata> future = accumulator.append(tp, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
+        sender.run(time.milliseconds());
+        assertTrue("Topic not added to metadata", metadata.containsTopic(tp.topic()));
+        metadata.update(cluster, time.milliseconds());
+        sender.run(time.milliseconds());  // send produce request
+        client.respond(produceResponse(tp, offset++, Errors.NONE.code(), 0));
+        sender.run(time.milliseconds());
+        assertEquals("Request completed.", 0, client.inFlightRequestCount());
+        sender.run(time.milliseconds());
+        assertTrue("Request should be completed", future.isDone());
+
+        assertTrue("Topic not retained in metadata list", metadata.containsTopic(tp.topic()));
+        time.sleep(Metadata.TOPIC_EXPIRY_MS);
+        metadata.update(Cluster.empty(), time.milliseconds());
+        assertFalse("Unused topic has not been expired", metadata.containsTopic(tp.topic()));
+        future = accumulator.append(tp, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
+        sender.run(time.milliseconds());
+        assertTrue("Topic not added to metadata", metadata.containsTopic(tp.topic()));
+        metadata.update(cluster, time.milliseconds());
+        sender.run(time.milliseconds());  // send produce request
+        client.respond(produceResponse(tp, offset++, Errors.NONE.code(), 0));
+        sender.run(time.milliseconds());
+        assertEquals("Request completed.", 0, client.inFlightRequestCount());
+        sender.run(time.milliseconds());
+        assertTrue("Request should be completed", future.isDone());
     }
 
     private void completedWithError(Future<RecordMetadata> future, Errors error) throws Exception {

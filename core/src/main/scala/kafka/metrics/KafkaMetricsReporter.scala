@@ -54,12 +54,14 @@ object KafkaMetricsReporter {
     ReporterStarted synchronized {
       if (!ReporterStarted.get()) {
         val metricsConfig = new KafkaMetricsConfig(verifiableProps)
-        if(metricsConfig.reporters.size > 0) {
+        if(metricsConfig.reporters.nonEmpty) {
           metricsConfig.reporters.foreach(reporterType => {
             val reporter = CoreUtils.createObject[KafkaMetricsReporter](reporterType)
             reporter.init(verifiableProps)
-            if (reporter.isInstanceOf[KafkaMetricsReporterMBean])
-              CoreUtils.registerMBean(reporter, reporter.asInstanceOf[KafkaMetricsReporterMBean].getMBeanName)
+            reporter match {
+              case bean: KafkaMetricsReporterMBean => CoreUtils.registerMBean(reporter, bean.getMBeanName)
+              case _ =>
+            }
           })
           ReporterStarted.set(true)
         }

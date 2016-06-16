@@ -56,6 +56,7 @@ private[coordinator] class MemberMetadata(val memberId: String,
                                           val clientId: String,
                                           val clientHost: String,
                                           val sessionTimeoutMs: Int,
+                                          val protocolType: String,
                                           var supportedProtocols: List[(String, Array[Byte])]) {
 
   var assignment: Array[Byte] = Array.empty[Byte]
@@ -90,7 +91,7 @@ private[coordinator] class MemberMetadata(val memberId: String,
       if (p1._1 != p2._1 || !util.Arrays.equals(p1._2, p2._2))
         return false
     }
-    return true
+    true
   }
 
   def summary(protocol: String): MemberSummary = {

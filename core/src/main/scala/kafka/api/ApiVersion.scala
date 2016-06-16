@@ -72,7 +72,7 @@ sealed trait ApiVersion extends Ordered[ApiVersion] {
   override def compare(that: ApiVersion): Int =
     ApiVersion.orderingByVersion.compare(this, that)
 
-  override def toString(): String = version
+  override def toString: String = version
 }
 
 // Keep the IDs in order of versions
