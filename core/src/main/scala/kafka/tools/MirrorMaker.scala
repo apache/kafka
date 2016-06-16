@@ -554,7 +554,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     override def receive() : BaseConsumerRecord = {
       if (recordIter == null || !recordIter.hasNext) {
-        recordIter = consumer.poll(1000).iterator
+        recordIter = consumer.poll(Long.MaxValue).iterator
         if (!recordIter.hasNext)
           throw new ConsumerTimeoutException
       }
