@@ -138,7 +138,7 @@ public class TopologyBuilderTest {
     @Test
     public void testSourceTopics() {
         final TopologyBuilder builder = new TopologyBuilder();
-
+        builder.setApplicationId("X");
         builder.addSource("source-1", "topic-1");
         builder.addSource("source-2", "topic-2");
         builder.addSource("source-3", "topic-3");
@@ -149,7 +149,7 @@ public class TopologyBuilderTest {
         expected.add("topic-2");
         expected.add("X-topic-3");
 
-        assertEquals(expected, builder.sourceTopics("X"));
+        assertEquals(expected, builder.sourceTopics());
     }
 
     @Test(expected = TopologyBuilderException.class)
@@ -218,7 +218,7 @@ public class TopologyBuilderTest {
 
         builder.addProcessor("processor-3", new MockProcessorSupplier(), "source-3", "source-4");
 
-        Map<Integer, TopicsInfo> topicGroups = builder.topicGroups("X");
+        Map<Integer, TopicsInfo> topicGroups = builder.topicGroups();
 
         Map<Integer, TopicsInfo> expectedTopicGroups = new HashMap<>();
         expectedTopicGroups.put(0, new TopicsInfo(Collections.<String>emptySet(), mkSet("topic-1", "topic-1x", "topic-2"), Collections.<String>emptySet(), Collections.<String>emptySet()));
@@ -228,7 +228,7 @@ public class TopologyBuilderTest {
         assertEquals(3, topicGroups.size());
         assertEquals(expectedTopicGroups, topicGroups);
 
-        Collection<Set<String>> copartitionGroups = builder.copartitionGroups("applicationId");
+        Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
 
         assertEquals(mkSet(mkSet("topic-1", "topic-1x", "topic-2")), new HashSet<>(copartitionGroups));
     }
@@ -236,7 +236,7 @@ public class TopologyBuilderTest {
     @Test
     public void testTopicGroupsByStateStore() {
         final TopologyBuilder builder = new TopologyBuilder();
-
+        builder.setApplicationId("X");
         builder.addSource("source-1", "topic-1", "topic-1x");
         builder.addSource("source-2", "topic-2");
         builder.addSource("source-3", "topic-3");
@@ -256,7 +256,7 @@ public class TopologyBuilderTest {
         builder.addStateStore(supplier);
         builder.connectProcessorAndStateStores("processor-5", "store-3");
 
-        Map<Integer, TopicsInfo> topicGroups = builder.topicGroups("X");
+        Map<Integer, TopicsInfo> topicGroups = builder.topicGroups();
 
         Map<Integer, TopicsInfo> expectedTopicGroups = new HashMap<>();
         expectedTopicGroups.put(0, new TopicsInfo(Collections.<String>emptySet(), mkSet("topic-1", "topic-1x", "topic-2"), Collections.<String>emptySet(), mkSet(ProcessorStateManager.storeChangelogTopic("X", "store-1"))));

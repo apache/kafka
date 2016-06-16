@@ -82,7 +82,7 @@ public class KStreamKStreamLeftJoinTest {
             .within(100), intSerde, stringSerde, stringSerde);
         joined.process(processor);
 
-        Collection<Set<String>> copartitionGroups = builder.copartitionGroups("applicationId");
+        Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
 
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
@@ -161,7 +161,7 @@ public class KStreamKStreamLeftJoinTest {
             .within(100), intSerde, stringSerde, stringSerde);
         joined.process(processor);
 
-        Collection<Set<String>> copartitionGroups = builder.copartitionGroups("applicationId");
+        Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
 
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());

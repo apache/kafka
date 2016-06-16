@@ -59,6 +59,9 @@ public class KStreamRepartitionJoinTest {
     private Properties streamsConfiguration;
     private KStream<Long, Integer> streamOne;
     private KStream<Integer, String> streamTwo;
+    private KStream<Integer, Integer> streamThree;
+    private KStream<Integer, String> streamFour;
+    private KTable<Integer, String> kTable;
     private ValueJoiner<Integer, String, String> valueJoiner;
     private KeyValueMapper<Long, Integer, KeyValue<Integer, Integer>>
         keyMapper;
@@ -68,21 +71,22 @@ public class KStreamRepartitionJoinTest {
     private KafkaStreams kafkaStreams;
     private String streamOneInput;
     private String streamTwoInput;
+    private String streamFourInput;
     private String tableInput;
     private String outputTopic;
     private String streamThreeInput;
-    private KStream<Integer, Integer> streamThree;
-    private KTable<Integer, String> kTable;
+
 
 
     @Before
     public void before() {
         testNo++;
+        String applicationId = "kstream-repartition-join-test" + testNo;
         builder = new KStreamBuilder();
         createTopics();
         streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG,
-                                 "kstream-repartition-join-test" + testNo);
+                                 applicationId);
         streamsConfiguration
             .put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
@@ -92,6 +96,7 @@ public class KStreamRepartitionJoinTest {
         streamOne = builder.stream(Serdes.Long(), Serdes.Integer(), streamOneInput);
         streamTwo = builder.stream(Serdes.Integer(), Serdes.String(), streamTwoInput);
         streamThree = builder.stream(Serdes.Integer(), Serdes.Integer(), streamThreeInput);
+        streamFour = builder.stream(Serdes.Integer(), Serdes.String(), streamFourInput);
 
         kTable = builder.table(Serdes.Integer(), Serdes.String(), tableInput);
 
@@ -119,7 +124,7 @@ public class KStreamRepartitionJoinTest {
     }
 
     @Test
-    public void shouldMapLhsAndJoin() throws ExecutionException, InterruptedException {
+    public void shouldMapStreamOneAndJoin() throws ExecutionException, InterruptedException {
         produceMessages();
         doJoin(streamOne.map(keyMapper), streamTwo);
         startStreams();
@@ -244,7 +249,7 @@ public class KStreamRepartitionJoinTest {
     }
 
     @Test
-    public void shouldMapLhsAndLeftJoin() throws ExecutionException, InterruptedException {
+    public void shouldMapStreamOneAndLeftJoin() throws ExecutionException, InterruptedException {
         produceMessages();
         doLeftJoin(streamOne.map(keyMapper), streamTwo);
         startStreams();
@@ -359,12 +364,80 @@ public class KStreamRepartitionJoinTest {
 
     }
 
+
+    @Test
+    public void shouldJoinTwoMappedStreamsOneThatHasBeenPreviouslyJoined() throws Exception {
+        produceMessages();
+
+        final KStream<Integer, Integer>
+            map1 =
+            streamOne.map(keyMapper);
+
+        final KeyValueMapper<Integer, String, KeyValue<Integer, String>>
+            kvMapper =
+            new KeyValueMapper<Integer, String, KeyValue<Integer, String>>() {
+                @Override
+                public KeyValue<Integer, String> apply(Integer key,
+                                                       String value) {
+                    return new KeyValue<>(key, value);
+                }
+            };
+
+        final KStream<Integer, String> map2 = streamTwo.map(kvMapper);
+
+        final KStream<Integer, String> join = map1.join(map2,
+                                                        valueJoiner,
+                                                        JoinWindows.of("the-join")
+                                                            .within(60 * 1000),
+                                                        Serdes.Integer(),
+                                                        Serdes.Integer(),
+                                                        Serdes.String());
+
+        ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
+            @Override
+            public String apply(final String value1, final String value2) {
+                return value1 + ":" + value2;
+            }
+        };
+        join.map(kvMapper)
+            .join(streamFour.map(kvMapper),
+                  joiner,
+                  JoinWindows.of("the-other-join").within(60 * 1000),
+                  Serdes.Integer(),
+                  Serdes.String(),
+                  Serdes.String())
+            .to(Serdes.Integer(), Serdes.String(), outputTopic);
+
+        startStreams();
+        verifyCorrectOutput(Arrays.asList("1:A:A", "2:B:B", "3:C:C", "4:D:D", "5:E:E"));
+    }
+
+    @Test
+    public void shouldFilterNullKeysWhenRepartionedOnJoin() throws Exception {
+        produceMessages();
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+            streamOneInput,
+            Collections.singleton(
+                new KeyValue<Long, Integer>(70L, null)),
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                LongSerializer.class,
+                IntegerSerializer.class,
+                new Properties()));
+
+        doJoin(streamOne.map(keyMapper), streamTwo);
+        startStreams();
+        verifyCorrectOutput(expectedStreamOneTwoJoin);
+    }
+
     private void produceMessages()
         throws ExecutionException, InterruptedException {
         produceToStreamOne();
         produceStreamTwoInputTo(streamTwoInput);
         produceToStreamThree();
         produceStreamTwoInputTo(tableInput);
+        produceStreamTwoInputTo(streamFourInput);
+
     }
 
     private void produceToStreamThree()
@@ -422,11 +495,13 @@ public class KStreamRepartitionJoinTest {
         streamOneInput = "stream-one-" + testNo;
         streamTwoInput = "stream-two-" + testNo;
         streamThreeInput = "stream-three-" + testNo;
+        streamFourInput = "stream-four-" + testNo;
         tableInput = "table-stream-two-" + testNo;
         outputTopic = "output-" + testNo;
-        CLUSTER.createTopic(streamOneInput, 2, 1);
+        CLUSTER.createTopic(streamOneInput);
         CLUSTER.createTopic(streamTwoInput, 2, 1);
         CLUSTER.createTopic(streamThreeInput, 2, 1);
+        CLUSTER.createTopic(streamFourInput);
         CLUSTER.createTopic(tableInput, 2, 1);
         CLUSTER.createTopic(outputTopic);
     }
@@ -454,7 +529,7 @@ public class KStreamRepartitionJoinTest {
         List<String> received = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(config,
                                                                                       outputTopic,
                                                                                       numMessages,
-                                                                                      5 * 60 *
+                                                                                      60 *
                                                                                       1000);
         Collections.sort(received);
         return received;

@@ -78,7 +78,7 @@ public class KStreamKTableLeftJoinTest {
         table = builder.table(intSerde, stringSerde, topic2);
         stream.leftJoin(table, MockValueJoiner.STRING_JOINER).process(processor);
 
-        Collection<Set<String>> copartitionGroups = builder.copartitionGroups("applicationId");
+        Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
 
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());

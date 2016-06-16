@@ -83,7 +83,7 @@ public class KTableKTableJoinTest {
         joined = table1.join(table2, MockValueJoiner.STRING_JOINER);
         joined.toStream().process(processor);
 
-        Collection<Set<String>> copartitionGroups = builder.copartitionGroups("applicationId");
+        Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
 
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());

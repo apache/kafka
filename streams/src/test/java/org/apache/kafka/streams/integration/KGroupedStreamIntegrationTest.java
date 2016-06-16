@@ -73,8 +73,9 @@ public class KGroupedStreamIntegrationTest {
         builder = new KStreamBuilder();
         createTopics();
         streamsConfiguration = new Properties();
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "kgrouped-stream-test-" +
-                                                                      testNo);
+        String applicationId = "kgrouped-stream-test-" +
+                       testNo;
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration
             .put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());

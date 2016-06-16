@@ -63,6 +63,8 @@ public class TopologyBuilder {
     private final List<Set<String>> copartitionSourceGroups = new ArrayList<>();
     private final HashMap<String, String[]> nodeToSourceTopics = new HashMap<>();
     private final HashMap<String, String> nodeToSinkTopic = new HashMap<>();
+
+    private String applicationId;
     private Map<Integer, Set<String>> nodeGroups = null;
 
     private static class StateStoreFactory {
@@ -501,8 +503,8 @@ public class TopologyBuilder {
      *
      * @return groups of topic names
      */
-    public Map<Integer, TopicsInfo> topicGroups(String applicationId) {
-        Map<Integer, TopicsInfo> topicGroups = new HashMap<>();
+    public Map<Integer, TopicsInfo> topicGroups() {
+        Map<Integer, TopicsInfo> topicGroups = new LinkedHashMap<>();
 
         if (nodeGroups == null)
             nodeGroups = makeNodeGroups();
@@ -519,6 +521,12 @@ public class TopologyBuilder {
                     // if some of the topics are internal, add them to the internal topics
                     for (String topic : topics) {
                         if (this.internalTopicNames.contains(topic)) {
+                            if (applicationId == null) {
+                                throw new TopologyBuilderException("There are internal topics and"
+                                                                   + " applicationId hasn't been "
+                                                                   + "set. Call setApplicationId "
+                                                                   + "first");
+                            }
                             // prefix the internal topic name with the application id
                             String internalTopic = applicationId + "-" + topic;
                             internalSourceTopics.add(internalTopic);
@@ -571,7 +579,7 @@ public class TopologyBuilder {
     }
 
     private Map<Integer, Set<String>> makeNodeGroups() {
-        HashMap<Integer, Set<String>> nodeGroups = new HashMap<>();
+        HashMap<Integer, Set<String>> nodeGroups = new LinkedHashMap<>();
         HashMap<String, Set<String>> rootToNodeGroup = new HashMap<>();
 
         int nodeGroupId = 0;
@@ -620,27 +628,31 @@ public class TopologyBuilder {
      * Returns the copartition groups.
      * A copartition group is a group of source topics that are required to be copartitioned.
      *
-     * @param applicationId
      * @return groups of topic names
      */
-    public Collection<Set<String>> copartitionGroups(final String applicationId) {
+    public Collection<Set<String>> copartitionGroups() {
         List<Set<String>> list = new ArrayList<>(copartitionSourceGroups.size());
         for (Set<String> nodeNames : copartitionSourceGroups) {
             Set<String> copartitionGroup = new HashSet<>();
             for (String node : nodeNames) {
                 String[] topics = nodeToSourceTopics.get(node);
                 if (topics != null)
-                    copartitionGroup.addAll(convertInternalTopicNames(topics, applicationId));
+                    copartitionGroup.addAll(convertInternalTopicNames(topics));
             }
             list.add(Collections.unmodifiableSet(copartitionGroup));
         }
         return Collections.unmodifiableList(list);
     }
 
-    private List<String> convertInternalTopicNames(String[] topics, String applicationId) {
+    private List<String> convertInternalTopicNames(String...topics) {
         final List<String> topicNames = new ArrayList<>();
         for (String topic : topics) {
             if (internalTopicNames.contains(topic)) {
+                if (applicationId == null) {
+                    throw new TopologyBuilderException("there are internal topics "
+                                                       + "and applicationId hasn't been set. Call "
+                                                       + "setApplicationId first");
+                }
                 topicNames.add(applicationId + "-" + topic);
             } else {
                 topicNames.add(topic);
@@ -715,15 +727,30 @@ public class TopologyBuilder {
      * Get the names of topics that are to be consumed by the source nodes created by this builder.
      * @return the unmodifiable set of topic names used by source nodes, which changes as new sources are added; never null
      */
-    public Set<String> sourceTopics(String applicationId) {
+    public Set<String> sourceTopics() {
         Set<String> topics = new HashSet<>();
         for (String topic : sourceTopicNames) {
             if (internalTopicNames.contains(topic)) {
+                if (applicationId == null) {
+                    throw new TopologyBuilderException("there are internal topics and "
+                                                       + "applicationId is null. Call "
+                                                       + "setApplicationId before sourceTopics");
+                }
                 topics.add(applicationId + "-" + topic);
             } else {
                 topics.add(topic);
             }
         }
         return Collections.unmodifiableSet(topics);
+    }
+
+    /**
+     * Set the applicationId. This is required before calling
+     * {@link #sourceTopics}, {@link #topicGroups} and {@link #copartitionSources}
+     * @param applicationId   the streams applicationId. Should be the same as set by
+     * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG}
+     */
+    public void setApplicationId(String applicationId) {
+        this.applicationId = applicationId;
     }
 }

@@ -12,25 +12,23 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
-package org.apache.kafka.streams.kstream;
+package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.kstream.internals.AbstractStream;
-import org.apache.kafka.streams.kstream.internals.KStreamAggProcessorSupplier;
-import org.apache.kafka.streams.kstream.internals.KStreamAggregate;
-import org.apache.kafka.streams.kstream.internals.KStreamImpl;
-import org.apache.kafka.streams.kstream.internals.KStreamReduce;
-import org.apache.kafka.streams.kstream.internals.KStreamWindowAggregate;
-import org.apache.kafka.streams.kstream.internals.KStreamWindowReduce;
-import org.apache.kafka.streams.kstream.internals.KTableImpl;
+import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.Initializer;
+import org.apache.kafka.streams.kstream.KGroupedStream;
+import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.kstream.Window;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.Stores;
 
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Set;
 
 public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStream<K, V> {
@@ -171,30 +169,12 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
     }
 
     /**
-     * If repartitioning is required then add a new co-partitioned internal topic and configure the
-     * source & sink.
-     *
      * @return the new sourceName if repartitioned. Otherwise the name of this stream
      */
     private String repartitionIfRequired() {
         if (!repartitionRequired) {
             return this.name;
         }
-
-        final Serializer<K> keySerializer = keySerde == null ? null : keySerde.serializer();
-        final Deserializer<K> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
-        final Serializer<V> valueSerializer = valSerde == null ? null : valSerde.serializer();
-        final Deserializer<V> valueDeserializer = valSerde == null ? null : valSerde.deserializer();
-
-        final String sinkName = topology.newName(KStreamImpl.SINK_NAME);
-        final String topic = this.name + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
-        final Set<String> allSourceNodes = new HashSet<>(sourceNodes);
-        final String sourceName = topology.newName(KStreamImpl.SOURCE_NAME);
-        allSourceNodes.add(sourceName);
-        topology.addInternalTopic(topic);
-        topology.addSink(sinkName, topic, keySerializer, valueSerializer, this.name);
-        topology.addSource(sourceName, keyDeserializer, valueDeserializer, topic);
-        topology.copartitionSources(allSourceNodes);
-        return sourceName;
+        return KStreamImpl.createReparitionedSourceForJoin(this, keySerde, valSerde);
     }
 }
