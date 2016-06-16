@@ -249,7 +249,7 @@ public class RegexSourceIntegrationTest {
         assertThat(actualValues, equalTo(expectedReceivedValues));
     }
 
-    // todo should be updated to expected = TopologyBuilderException after KAFKA-3708
+    //TODO should be updated to expected = TopologyBuilderException after KAFKA-3708
     @Test(expected = AssertionError.class)
     public void testNoMessagesSentExceptionFromOverlappingPatterns() throws Exception {
 
@@ -261,10 +261,10 @@ public class RegexSourceIntegrationTest {
 
         KStreamBuilder builder = new KStreamBuilder();
 
-        /*
-          overlapping patterns here, no messages should be sent as TopologyBuilderException
-          will be thrown when the processor topology is built.
-         */
+
+        //  overlapping patterns here, no messages should be sent as TopologyBuilderException
+        //  will be thrown when the processor topology is built.
+
         KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("foo.*"));
         KStream<String, String> pattern2Stream = builder.stream(Pattern.compile("f.*"));
 
