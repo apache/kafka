@@ -666,11 +666,13 @@ class GroupCoordinator(val brokerId: Int,
         group.initNextGeneration()
         if (group.is(Empty)) {
           info(s"Group ${group.groupId} with generation ${group.generationId} is now empty")
+
           delayedStore = Some(groupManager.prepareStoreGroup(group, Map.empty, errorCode => {
             if (errorCode != Errors.NONE.code) {
-              // we failed to persist the empty group. if we don't retry (which is how
-              // we handle the situation when a normal rebalance fails, then a coordinator
-              // change will cause the old generation to come back to life.
+              // we failed to write the empty group metadata. If the broker fails before another rebalance,
+              // the previous generation written to the log will become active again (and most likely timeout).
+              // This should be safe since there are no active members in an empty generation, so we just warn.
+              warn(s"Failed to write empty metadata for group ${group.groupId}: ${Errors.forCode(errorCode).message()}")
             }
           }))
         } else {
