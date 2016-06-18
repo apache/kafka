@@ -964,7 +964,7 @@ public class ConfigDef {
      * Get a list of configs sorted into "natural" order: listing required fields first, then
      * ordering by importance, and finally by name.
      */
-    private List<ConfigKey> sortedConfigs() {
+    public List<ConfigKey> sortedConfigs() {
         // sort first required fields, then by importance, then name
         List<ConfigKey> configs = new ArrayList<>(this.configKeys.values());
         Collections.sort(configs, new Comparator<ConfigKey>() {

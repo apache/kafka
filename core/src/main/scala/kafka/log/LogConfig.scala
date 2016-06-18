@@ -90,9 +90,6 @@ object LogConfig {
 
   def main(args: Array[String]) {
     println(configDef.toHtmlTable)
-    println("<p>The following table provides the equivalent default server configuration properties. A given server" +
-      " default config value only applies to a topic if it does not have an explicit topic config override.</p>")
-    println(configDef.serverDefaultConfigNamesToHtmlTable())
   }
 
   val Delete = "delete"
@@ -225,21 +222,56 @@ object LogConfig {
       this
     }
 
-    def serverDefaultConfigNamesToHtmlTable() = {
-      val sb = new StringBuilder
-      sb.append("<table class=\"data-table\"><tbody>\n")
-      sb.append("<tr>\n")
-      sb.append("<th>Topic config name</th>\n")
-      sb.append("<th>Server default config name</th>\n")
-      sb.append("</tr>\n")
-      serverDefaultConfigNames.foreach { case(logConfig, serverConfig) =>
-        sb.append("<tr>\n")
-        sb.append(s"<td>$logConfig</td><td>$serverConfig</td>\n")
-        sb.append("</tr>\n")
-      }
-      sb.append("</tbody></table>")
-      sb.toString()
+    override def toHtmlTable() = {
+        val configs = super.sortedConfigs
+        val b = new StringBuilder
+        b.append("<table class=\"data-table\"><tbody>\n")
+        b.append("<tr>\n")
+        b.append("<th>Name</th>\n")
+        b.append("<th>Description</th>\n")
+        b.append("<th>Type</th>\n")
+        b.append("<th>Default</th>\n")
+        b.append("<th>Valid Values</th>\n")
+        b.append("<th>Server Default Property</th>\n")
+        b.append("<th>Importance</th>\n");
+        b.append("</tr>\n");
+        for (config <- configs.asScala.toList) {
+            b.append("<tr>\n")
+            b.append("<td>")
+            b.append(config.name)
+            b.append("</td>")
+            b.append("<td>")
+            b.append(config.documentation)
+            b.append("</td>")
+            b.append("<td>")
+            b.append(config.`type`.toString().toLowerCase(Locale.ROOT))
+            b.append("</td>")
+            b.append("<td>")
+            if (config.hasDefault()) {
+                if (config.defaultValue == null)
+                    b.append("null")
+                else if (config.`type` == ConfigDef.Type.STRING && config.defaultValue.toString().isEmpty())
+                    b.append("\"\"")
+                else
+                    b.append(config.defaultValue)
+            } else
+                b.append("")
+            b.append("</td>")
+            b.append("<td>")
+            b.append(if (config.validator != null) config.validator.toString() else "")
+            b.append("</td>")
+            b.append("<td>")
+            b.append(serverDefaultConfigNames.get(config.name).get)
+            b.append("</td>")
+            b.append("<td>")
+            b.append(config.importance.toString().toLowerCase(Locale.ROOT))
+            b.append("</td>")
+            b.append("</tr>\n")
+        }
+        b.append("</tbody></table>")
+        b.toString
     }
+
   }
 
   private val configDef: LogConfigDef = {
