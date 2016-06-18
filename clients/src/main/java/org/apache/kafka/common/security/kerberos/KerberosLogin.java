@@ -60,19 +60,15 @@ public class KerberosLogin extends AbstractLogin {
     private String loginContextName;
     private String principal;
 
-    // LoginThread will sleep until 80% of time from last refresh to
-    // ticket's expiry has been reached, at which time it will wake
-    // and try to renew the ticket.
+    // The login thread will sleep until a factor (e.g. 0.8) of time from last refresh to ticket's expiry has been
+    // reached, at which time it will wake up and try to renew the ticket
     private double ticketRenewWindowFactor;
 
-    /**
-     * Percentage of random jitter added to the renewal time
-     */
+    // Percentage of random jitter added to the renewal time
     private double ticketRenewJitter;
 
-    // Regardless of ticketRenewWindowFactor setting above and the ticket expiry time,
-    // thread will not sleep between refresh attempts any less than 1 minute (60*1000 milliseconds = 1 minute).
-    // Change the '1' to e.g. 5, to change this to 5 minutes.
+    // Regardless of `ticketRenewWindowFactor`, the thread will not sleep between refresh attempts any less than the
+    // time specified by this variable unless doing so would allow the ticket to expire
     private long minTimeBeforeRelogin;
 
     private String kinitCmd;
@@ -83,16 +79,6 @@ public class KerberosLogin extends AbstractLogin {
     private String serviceName;
     private long lastLogin;
 
-    /**
-     * Login constructor. The constructor starts the thread used
-     * to periodically re-login to the Kerberos Ticket Granting Server.
-     * @param loginContextName
-     *               name of section in JAAS file that will be use to login.
-     *               Passed as first param to javax.security.auth.login.LoginContext().
-     * @param configs configure Login with the given key-value pairs.
-     * @throws javax.security.auth.login.LoginException
-     *               Thrown if authentication fails.
-     */
     public void configure(Map<String, ?> configs, final String loginContextName) {
         super.configure(configs, loginContextName);
         this.loginContextName = loginContextName;
@@ -103,6 +89,12 @@ public class KerberosLogin extends AbstractLogin {
         this.serviceName = getServiceName(configs, loginContextName);
     }
 
+    /**
+     * Performs login for each login module specified for the login context of this instance. This method starts the
+     * thread used to periodically re-login to the Kerberos Ticket Granting Server.
+     *
+     * @throws LoginException if authentication fails.
+     */
     @Override
     public LoginContext login() throws LoginException {
 
@@ -147,18 +139,17 @@ public class KerberosLogin extends AbstractLogin {
                 while (true) {  // renewal thread's main loop. if it exits from here, thread will exit.
                     KerberosTicket tgt = getTGT();
                     long now = currentWallTime();
+                    long minReloginMs = lastLogin + minTimeBeforeRelogin;
                     long nextRefresh;
-                    Date nextRefreshDate;
                     if (tgt == null) {
-                        nextRefresh = now + minTimeBeforeRelogin;
-                        nextRefreshDate = new Date(nextRefresh);
-                        log.warn("No TGT found: will try again at {}", nextRefreshDate);
+                        nextRefresh = minReloginMs;
+                        log.warn("No TGT found: will try again at {}", new Date(nextRefresh));
                     } else {
-                        nextRefresh = getRefreshTime(tgt);
                         long expiry = tgt.getEndTime().getTime();
                         Date expiryDate = new Date(expiry);
+
                         if (isUsingTicketCache && tgt.getRenewTill() != null && tgt.getRenewTill().getTime() < expiry) {
-                            log.error("The TGT cannot be renewed beyond the next expiry date: {}." +
+                            log.error("The TGT cannot be renewed beyond the next expiry date: {}. " +
                                     "This process will not be able to authenticate new SASL connections after that " +
                                     "time (for example, it will not be able to authenticate a new connection with a Kafka " +
                                     "Broker).  Ask your system administrator to either increase the " +
@@ -168,53 +159,55 @@ public class KerberosLogin extends AbstractLogin {
                                     expiryDate, principal, principal);
                             return;
                         }
-                        // determine how long to sleep from looking at ticket's expiry.
+
+                        // Determine how long to sleep from looking at ticket's expiry.
                         // We should not allow the ticket to expire, but we should take into consideration
                         // minTimeBeforeRelogin. Will not sleep less than minTimeBeforeRelogin, unless doing so
                         // would cause ticket expiration.
-                        if ((nextRefresh > expiry) || (now + minTimeBeforeRelogin > expiry)) {
-                            // expiry is before next scheduled refresh).
-                            log.info("Refreshing now because expiry is before next scheduled refresh time.");
-                            nextRefresh = now;
-                        } else {
-                            if (nextRefresh < (now + minTimeBeforeRelogin)) {
-                                // next scheduled refresh is sooner than (now + MIN_TIME_BEFORE_LOGIN).
-                                Date until = new Date(nextRefresh);
-                                Date newUntil = new Date(now + minTimeBeforeRelogin);
-                                log.warn("TGT refresh thread time adjusted from {} to {} since the former is sooner " +
-                                        "than the minimum refresh interval ({} seconds) from now.",
-                                        until, newUntil, minTimeBeforeRelogin / 1000);
-                            }
-                            nextRefresh = Math.max(nextRefresh, now + minTimeBeforeRelogin);
-                        }
-                        nextRefreshDate = new Date(nextRefresh);
+                        nextRefresh = getRefreshTime(tgt);
                         if (nextRefresh > expiry) {
-                            log.error("Next refresh: {} is later than expiry {}. This may indicate a clock skew problem." +
-                                    "Check that this host and the KDC hosts' clocks are in sync. Exiting refresh thread.",
-                                    nextRefreshDate, expiryDate);
-                            return;
+                            if (now > expiry) {
+                                log.error("Now: {} is later than expiry {}. This may indicate a clock skew problem. " +
+                                        "Check that this host and the KDC hosts' clocks are in sync. Exiting refresh thread.",
+                                        new Date(now), expiryDate);
+                                return;
+                            }
+                            long adjustedRefresh;
+                            if (minReloginMs > expiry || minReloginMs < now)
+                                adjustedRefresh = now;
+                            else
+                                adjustedRefresh = minReloginMs;
+                            log.info("TGT refresh thread time adjusted from {} to {} because expiry is before next scheduled " +
+                                    "refresh time.", new Date(nextRefresh), new Date(adjustedRefresh));
+                            nextRefresh = adjustedRefresh;
+                        } else if (nextRefresh < minReloginMs && minReloginMs <= expiry) {
+                            log.warn("TGT refresh thread time adjusted from {} to {} since the former is sooner " +
+                                    "than the minimum refresh interval ({} seconds) from now.",
+                                    new Date(nextRefresh), new Date(minReloginMs), minTimeBeforeRelogin / 1000);
+                            nextRefresh = minReloginMs;
                         }
                     }
+
                     if (now < nextRefresh) {
-                        Date until = new Date(nextRefresh);
-                        log.info("TGT refresh sleeping until: {}", until);
+                        log.info("TGT refresh sleeping until: {}", new Date(nextRefresh));
                         try {
                             Thread.sleep(nextRefresh - now);
                         } catch (InterruptedException ie) {
                             log.warn("TGT renewal thread has been interrupted and will exit.");
                             return;
                         }
-                    } else {
-                        log.error("NextRefresh: {} is in the past: exiting refresh thread. Check"
-                                + " clock sync between this host and KDC - (KDC's clock is likely ahead of this host)."
-                                + " Manual intervention will be required for this client to successfully authenticate."
-                                + " Exiting refresh thread.", nextRefreshDate);
+                    } else if (now > nextRefresh) {
+                        log.error("NextRefresh: {} is in the past: exiting refresh thread. Check " +
+                                "clock sync between this host and KDC - (KDC's clock is likely ahead of this host). " +
+                                "Manual intervention will be required for this client to successfully authenticate. " +
+                                "Exiting refresh thread.", new Date(nextRefresh));
                         return;
                     }
+
                     if (isUsingTicketCache) {
                         String kinitArgs = "-R";
                         int retry = 1;
-                        while (retry >= 0) {
+                        while (true) {
                             try {
                                 log.debug("Running ticket cache refresh command: {} {}", kinitCmd, kinitArgs);
                                 Shell.execCommand(kinitCmd, kinitArgs);
@@ -230,38 +223,37 @@ public class KerberosLogin extends AbstractLogin {
                                         return;
                                     }
                                 } else {
-                                    log.warn("Could not renew TGT due to problem running shell command: '" + kinitCmd
-                                            + " " + kinitArgs + "'" + "; exception was: " + e + ". Exiting refresh thread.", e);
+                                    log.warn("Could not renew TGT due to problem running shell command: '{} {}'. " +
+                                            "Exiting refresh thread.", kinitCmd, kinitArgs, e);
                                     return;
                                 }
                             }
                         }
                     }
-                    try {
-                        int retry = 1;
-                        while (retry >= 0) {
-                            try {
-                                reLogin();
-                                break;
-                            } catch (LoginException le) {
-                                if (retry > 0) {
-                                    --retry;
-                                    // sleep for 10 seconds.
-                                    try {
-                                        Thread.sleep(10 * 1000);
-                                    } catch (InterruptedException e) {
-                                        log.error("Interrupted during login retry after LoginException:", le);
-                                        throw le;
-                                    }
-                                } else {
-                                    log.error("Could not refresh TGT for principal: " + principal + ".", le);
+
+                    int retry = 1;
+                    while (true) {
+                        try {
+                            reLogin();
+                            break;
+                        } catch (LoginException le) {
+                            if (retry > 0) {
+                                --retry;
+                                // sleep for 10 seconds.
+                                try {
+                                    Thread.sleep(10 * 1000);
+                                } catch (InterruptedException e) {
+                                    log.error("Interrupted during login retry after LoginException. Failed to refresh " +
+                                            "TGT: refresh thread exiting now.", le);
+                                    return;
                                 }
+                            } else {
+                                log.error("Could not refresh TGT for principal: {}.", principal, le);
+                                break;
                             }
                         }
-                    } catch (LoginException le) {
-                        log.error("Failed to refresh TGT: refresh thread exiting now.", le);
-                        return;
                     }
+
                 }
             }
         }, true);
@@ -276,7 +268,7 @@ public class KerberosLogin extends AbstractLogin {
             try {
                 t.join();
             } catch (InterruptedException e) {
-                log.warn("Error while waiting for Login thread to shutdown: " + e, e);
+                log.warn("Error while waiting for Login thread to shutdown", e);
             }
         }
     }
@@ -313,7 +305,6 @@ public class KerberosLogin extends AbstractLogin {
         throw new IllegalArgumentException("No serviceName defined in either JAAS or Kafka config");
     }
 
-
     private long getRefreshTime(KerberosTicket tgt) {
         long start = tgt.getStartTime().getTime();
         long expires = tgt.getEndTime().getTime();
@@ -321,12 +312,7 @@ public class KerberosLogin extends AbstractLogin {
         log.info("TGT expires: {}", tgt.getEndTime());
         long proposedRefresh = start + (long) ((expires - start) *
                 (ticketRenewWindowFactor + (ticketRenewJitter * RNG.nextDouble())));
-
-        if (proposedRefresh > expires)
-            // proposedRefresh is too far in the future: it's after ticket expires: simply return now.
-            return currentWallTime();
-        else
-            return proposedRefresh;
+        return proposedRefresh;
     }
 
     private synchronized KerberosTicket getTGT() {
@@ -342,18 +328,8 @@ public class KerberosLogin extends AbstractLogin {
         return null;
     }
 
-    private boolean hasSufficientTimeElapsed() {
-        long now = currentElapsedTime();
-        if (now - lastLogin < minTimeBeforeRelogin) {
-            log.warn("Not attempting to re-login since the last re-login was attempted less than {} seconds before.",
-                    minTimeBeforeRelogin / 1000);
-            return false;
-        }
-        return true;
-    }
-
     /**
-     * Re-login a principal. This method assumes that {@link #login(String)} has happened already.
+     * Re-login a principal. This method assumes that {@link #login()} has happened already.
      * @throws javax.security.auth.login.LoginException on a failure
      */
     private synchronized void reLogin() throws LoginException {
@@ -362,9 +338,6 @@ public class KerberosLogin extends AbstractLogin {
         }
         if (loginContext == null) {
             throw new LoginException("Login must be done first");
-        }
-        if (!hasSufficientTimeElapsed()) {
-            return;
         }
         log.info("Initiating logout for {}", principal);
         synchronized (KerberosLogin.class) {
