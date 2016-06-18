@@ -29,6 +29,8 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.utils.Utils
 import java.util.Locale
 
+import scala.collection.mutable
+
 object Defaults {
   val SegmentSize = kafka.server.Defaults.LogSegmentBytes
   val SegmentMs = kafka.server.Defaults.LogRollHours * 60 * 60 * 1000L
@@ -89,7 +91,7 @@ object LogConfig {
   def main(args: Array[String]) {
     println(configDef.toHtmlTable)
     println("<p>The following table provides the equivalent default server configuration properties. A given server" +
-      " default configuration only applies to a topic if it does not have an explicit topic config override.</p>")
+      " default config value only applies to a topic if it does not have an explicit topic config override.</p>")
     println(configDef.serverDefaultConfigNamesToHtmlTable())
   }
 
@@ -188,10 +190,15 @@ object LogConfig {
     "standard compression codecs ('gzip', 'snappy', lz4). It additionally accepts 'uncompressed' which is equivalent to " +
     "no compression; and 'producer' which means retain the original compression codec set by the producer."
   val PreAllocateEnableDoc ="Should pre allocate file when create new segment?"
-  val MessageFormatVersionDoc = KafkaConfig.LogMessageFormatVersionDoc
-  val MessageTimestampTypeDoc = KafkaConfig.LogMessageTimestampTypeDoc
-  val MessageTimestampDifferenceMaxMsDoc = KafkaConfig.LogMessageTimestampDifferenceMaxMsDoc
-
+  val MessageFormatVersionDoc = "Specify the message format version the broker will use to append messages to the logs. The value should be a valid ApiVersion. " +
+    "Some examples are: 0.8.2, 0.9.0.0, 0.10.0, check ApiVersion for more details. By setting a particular message format version, the " +
+    "user is certifying that all the existing messages on disk are smaller or equal than the specified version. Setting this value incorrectly " +
+    "will cause consumers with older versions to break as they will receive messages with a format that they don't understand."
+  val MessageTimestampTypeDoc = "Define whether the timestamp in the message is message create time or log append time. The value should be either " +
+    "`CreateTime` or `LogAppendTime`"
+  val MessageTimestampDifferenceMaxMsDoc = "The maximum difference allowed between the timestamp when a broker receives " +
+    "a message and the timestamp specified in the message. If message.timestamp.type=CreateTime, a message will be rejected " +
+    "if the difference in timestamp exceeds this threshold. This configuration is ignored if message.timestamp.type=LogAppendTime."  
 
   private class LogConfigDef extends ConfigDef {
 
@@ -235,14 +242,14 @@ object LogConfig {
     }
   }
 
-  private val configDef = {
+  private val configDef: LogConfigDef = {
     import org.apache.kafka.common.config.ConfigDef.Importance._
     import org.apache.kafka.common.config.ConfigDef.Range._
     import org.apache.kafka.common.config.ConfigDef.Type._
     import org.apache.kafka.common.config.ConfigDef.ValidString._
 
     new LogConfigDef()
-      .define(SegmentBytesProp, INT, Int.box(Defaults.SegmentSize), atLeast(Message.MinHeaderSize), MEDIUM,
+      .define(SegmentBytesProp, INT, Int.box(Defaults.SegmentSize), atLeast(Message.MinMessageOverhead), MEDIUM,
         SegmentSizeDoc, KafkaConfig.LogSegmentBytesProp)
       .define(SegmentMsProp, LONG, Long.box(Defaults.SegmentMs), atLeast(0), MEDIUM, SegmentMsDoc,
         KafkaConfig.LogRollTimeHoursProp)
@@ -280,10 +287,12 @@ object LogConfig {
         MEDIUM, CompressionTypeDoc, KafkaConfig.CompressionTypeProp)
       .define(PreAllocateEnableProp, BOOLEAN, Boolean.box(Defaults.PreAllocateEnable), MEDIUM, PreAllocateEnableDoc,
         KafkaConfig.LogPreAllocateProp)
-      .define(MessageFormatVersionProp, STRING, Defaults.MessageFormatVersion, MEDIUM, MessageFormatVersionDoc)
-      .define(MessageTimestampTypeProp, STRING, Defaults.MessageTimestampType, MEDIUM, MessageTimestampTypeDoc)
-      .define(MessageTimestampDifferenceMaxMsProp, LONG, Defaults.MessageTimestampDifferenceMaxMs, atLeast(0), MEDIUM,
-        MessageTimestampDifferenceMaxMsDoc)
+      .define(MessageFormatVersionProp, STRING, Defaults.MessageFormatVersion, MEDIUM, MessageFormatVersionDoc,
+        KafkaConfig.LogMessageFormatVersionProp)
+      .define(MessageTimestampTypeProp, STRING, Defaults.MessageTimestampType, MEDIUM, MessageTimestampTypeDoc,
+        KafkaConfig.LogMessageTimestampTypeProp)
+      .define(MessageTimestampDifferenceMaxMsProp, LONG, Long.box(Defaults.MessageTimestampDifferenceMaxMs),
+        atLeast(0), MEDIUM, MessageTimestampDifferenceMaxMsDoc, KafkaConfig.LogMessageTimestampDifferenceMaxMsProp)
   }
 
   def apply(): LogConfig = LogConfig(new Properties())
