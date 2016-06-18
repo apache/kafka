@@ -56,7 +56,7 @@ object Defaults {
 case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfig.configDef, props, false) {
   /**
    * Important note: Any configuration parameter that is passed along from KafkaConfig to LogConfig
-   * should also go in copyKafkaConfigToLog.
+   * should also go in [[kafka.server.KafkaServer.copyKafkaConfigToLog]].
    */
   val segmentSize = getInt(LogConfig.SegmentBytesProp)
   val segmentMs = getLong(LogConfig.SegmentMsProp)
@@ -121,8 +121,8 @@ object LogConfig {
   val SegmentMsDoc = "This configuration controls the period of time after " +
     "which Kafka will force the log to roll even if the segment file isn't full " +
     "to ensure that retention can delete or compact old data."
-  val SegmentJitterMsDoc = "The maximum random jitter subtracted from segment.ms " +
-    "to avoid thundering herds of segment rolling"
+  val SegmentJitterMsDoc = "The maximum random jitter subtracted from the scheduled segment roll time to avoid" +
+    " thundering herds of segment rolling"
   val FlushIntervalDoc = "This setting allows specifying an interval at which we " +
     "will force an fsync of data written to the log. For example if this was set to 1 " +
     "we would fsync after every message; if it were 5 we would fsync after every five " +
@@ -145,9 +145,8 @@ object LogConfig {
   val MaxIndexSizeDoc = "This configuration controls the size of the index that maps " +
     "offsets to file positions. We preallocate this index file and shrink it only after log " +
     "rolls. You generally should not need to change this setting."
-  val MaxMessageSizeDoc = "This is largest message size Kafka will allow to be " +
-    "appended to this topic. Note that if you increase this size you must also increase " +
-    "your consumer's fetch size so they can fetch messages this large."
+  val MaxMessageSizeDoc = "This is largest message size Kafka will allow to be appended. Note that if you increase" +
+    " this size you must also increase your consumer's fetch size so they can fetch messages this large."
   val IndexIntervalDoc = "This setting controls how frequently Kafka adds an index " +
     "entry to it's offset index. The default setting ensures that we index a message " +
     "roughly every 4096 bytes. More indexing allows reads to jump closer to the exact " +
@@ -171,7 +170,8 @@ object LogConfig {
     "(\"delete\") will discard old segments when their retention time or size limit has " +
     "been reached. The \"compact\" setting will enable <a href=\"#compaction\">log " +
     "compaction</a> on the topic."
-  val UncleanLeaderElectionEnableDoc = "Indicates whether unclean leader election is enabled"
+  val UncleanLeaderElectionEnableDoc = "Indicates whether to enable replicas not in the ISR set to be elected as" +
+    " leader as a last resort, even though doing so may result in data loss"
   val MinInSyncReplicasDoc = "When a producer sets acks to \"all\" (or \"-1\"), " +
     "min.insync.replicas specifies the minimum number of replicas that must acknowledge " +
     "a write for the write to be considered successful. If this minimum cannot be met, " +
