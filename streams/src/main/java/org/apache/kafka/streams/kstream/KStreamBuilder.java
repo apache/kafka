@@ -77,6 +77,7 @@ public class KStreamBuilder extends TopologyBuilder {
 
     /**
      * Create a {@link KTable} instance for the specified topic.
+     * Record keys of the topic should never by null, otherwise an exception will be thrown at runtime.
      * The default deserializers specified in the config are used.
      *
      * @param topic     the topic name; cannot be null
@@ -88,6 +89,7 @@ public class KStreamBuilder extends TopologyBuilder {
 
     /**
      * Create a {@link KTable} instance for the specified topic.
+     * Record keys of the topic should never by null, otherwise an exception will be thrown at runtime.
      *
      * @param keySerde   key serde used to send key-value pairs,
      *                   if not specified the default key serde defined in the configuration will be used
