@@ -115,25 +115,72 @@ object LogConfig {
   val MessageTimestampTypeProp = "message.timestamp.type"
   val MessageTimestampDifferenceMaxMsProp = "message.timestamp.difference.max.ms"
 
-  val SegmentSizeDoc = "The hard maximum for the size of a segment file in the log"
-  val SegmentMsDoc = "The soft maximum on the amount of time before a new log segment is rolled"
-  val SegmentJitterMsDoc = "The maximum random jitter subtracted from segmentMs to avoid thundering herds of segment" +
-    " rolling"
-  val FlushIntervalDoc = "The number of messages that can be written to the log before a flush is forced"
-  val FlushMsDoc = "The amount of time the log can have dirty data before a flush is forced"
-  val RetentionSizeDoc = "The approximate total number of bytes this log can use"
-  val RetentionMsDoc = "The approximate maximum age of the last segment that is retained"
-  val MaxIndexSizeDoc = "The maximum size of an index file"
-  val MaxMessageSizeDoc = "The maximum size of a message"
-  val IndexIntervalDoc = "The approximate number of bytes between index entries"
+  val SegmentSizeDoc = "This configuration controls the segment file size for " +
+    "the log. Retention and cleaning is always done a file at a time so a larger " +
+    "segment size means fewer files but less granular control over retention."
+  val SegmentMsDoc = "This configuration controls the period of time after " +
+    "which Kafka will force the log to roll even if the segment file isn't full " +
+    "to ensure that retention can delete or compact old data."
+  val SegmentJitterMsDoc = "The maximum random jitter subtracted from segment.ms " +
+    "to avoid thundering herds of segment rolling"
+  val FlushIntervalDoc = "This setting allows specifying an interval at which we " +
+    "will force an fsync of data written to the log. For example if this was set to 1 " +
+    "we would fsync after every message; if it were 5 we would fsync after every five " +
+    "messages. In general we recommend you not set this and use replication for " +
+    "durability and allow the operating system's background flush capabilities as it " +
+    "is more efficient. This setting can be overridden on a per-topic basis (see <a " +
+    "href=\"#topic-config\">the per-topic configuration section</a>)."
+  val FlushMsDoc = "This setting allows specifying a time interval at which we will " +
+    "force an fsync of data written to the log. For example if this was set to 1000 " +
+    "we would fsync after 1000 ms had passed. In general we recommend you not set " +
+    "this and use replication for durability and allow the operating system's background " +
+    "flush capabilities as it is more efficient."
+  val RetentionSizeDoc = "This configuration controls the maximum size a log can grow " +
+    "to before we will discard old log segments to free up space if we are using the " +
+    "\"delete\" retention policy. By default there is no size limit only a time limit."
+  val RetentionMsDoc = "This configuration controls the maximum time we will retain a " +
+    "log before we will discard old log segments to free up space if we are using the " +
+    "\"delete\" retention policy. This represents an SLA on how soon consumers must read " +
+    "their data."
+  val MaxIndexSizeDoc = "This configuration controls the size of the index that maps " +
+    "offsets to file positions. We preallocate this index file and shrink it only after log " +
+    "rolls. You generally should not need to change this setting."
+  val MaxMessageSizeDoc = "This is largest message size Kafka will allow to be " +
+    "appended to this topic. Note that if you increase this size you must also increase " +
+    "your consumer's fetch size so they can fetch messages this large."
+  val IndexIntervalDoc = "This setting controls how frequently Kafka adds an index " +
+    "entry to it's offset index. The default setting ensures that we index a message " +
+    "roughly every 4096 bytes. More indexing allows reads to jump closer to the exact " +
+    "position in the log but makes the index larger. You probably don't need to change " +
+    "this."
   val FileDeleteDelayMsDoc = "The time to wait before deleting a file from the filesystem"
-  val DeleteRetentionMsDoc = "The time to retain delete markers in the log. Only applicable for logs that are being" +
-    " compacted."
-  val MinCleanableRatioDoc = "The ratio of bytes that are available for cleaning to the bytes already cleaned"
-  val CompactDoc = "Should old segments in this log be deleted or deduplicated?"
+  val DeleteRetentionMsDoc = "The amount of time to retain delete tombstone markers " +
+    "for <a href=\"#compaction\">log compacted</a> topics. This setting also gives a bound " +
+    "on the time in which a consumer must complete a read if they begin from offset 0 " +
+    "to ensure that they get a valid snapshot of the final stage (otherwise delete " +
+    "tombstones may be collected before they complete their scan)."
+  val MinCleanableRatioDoc = "This configuration controls how frequently the log " +
+    "compactor will attempt to clean the log (assuming <a href=\"#compaction\">log " +
+    "compaction</a> is enabled). By default we will avoid cleaning a log where more than " +
+    "50% of the log has been compacted. This ratio bounds the maximum space wasted in " +
+    "the log by duplicates (at 50% at most 50% of the log could be duplicates). A " +
+    "higher ratio will mean fewer, more efficient cleanings but will mean more wasted " +
+    "space in the log."
+  val CompactDoc = "A string that is either \"delete\" or \"compact\". This string " +
+    "designates the retention policy to use on old log segments. The default policy " +
+    "(\"delete\") will discard old segments when their retention time or size limit has " +
+    "been reached. The \"compact\" setting will enable <a href=\"#compaction\">log " +
+    "compaction</a> on the topic."
   val UncleanLeaderElectionEnableDoc = "Indicates whether unclean leader election is enabled"
-  val MinInSyncReplicasDoc = "If number of insync replicas drops below this number, we stop accepting writes with" +
-    " -1 (or all) required acks"
+  val MinInSyncReplicasDoc = "When a producer sets acks to \"all\" (or \"-1\"), " +
+    "min.insync.replicas specifies the minimum number of replicas that must acknowledge " +
+    "a write for the write to be considered successful. If this minimum cannot be met, " +
+    "then the producer will raise an exception (either NotEnoughReplicas or " +
+    "NotEnoughReplicasAfterAppend).<br>When used together, min.insync.replicas and acks " +
+    "allow you to enforce greater durability guarantees. A typical scenario would be to " +
+    "create a topic with a replication factor of 3, set min.insync.replicas to 2, and " +
+    "produce with acks of \"all\". This will ensure that the producer raises an exception " +
+    "if a majority of replicas do not receive a write."
   val CompressionTypeDoc = "Specify the final compression type for a given topic. This configuration accepts the " +
     "standard compression codecs ('gzip', 'snappy', lz4). It additionally accepts 'uncompressed' which is equivalent to " +
     "no compression; and 'producer' which means retain the original compression codec set by the producer."
