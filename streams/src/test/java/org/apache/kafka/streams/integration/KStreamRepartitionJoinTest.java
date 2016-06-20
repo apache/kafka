@@ -230,10 +230,12 @@ public class KStreamRepartitionJoinTest {
         streamTwo
             .join(streamOne.map(keyMapper),
                   joiner,
-                  JoinWindows.of("the-join").within(60 * 1000),
+                  JoinWindows.of().within(60 * 1000),
                   Serdes.Integer(),
                   Serdes.String(),
-                  Serdes.Integer())
+                  Serdes.Integer(),
+                  "the-join-this",
+                  "the-join-other")
             .to(Serdes.Integer(), Serdes.String(), outputTopic);
 
         startStreams();
@@ -298,10 +300,10 @@ public class KStreamRepartitionJoinTest {
         streamTwo
             .leftJoin(streamOne.map(keyMapper),
                       joiner,
-                      JoinWindows.of("the-join").within(60 * 1000),
+                      JoinWindows.of().within(60 * 1000),
                       Serdes.Integer(),
                       null,
-                      Serdes.Integer())
+                      Serdes.Integer(), "the-join-this", "the-join-other")
             .to(Serdes.Integer(), Serdes.String(), outputTopic);
 
         startStreams();
@@ -387,11 +389,13 @@ public class KStreamRepartitionJoinTest {
 
         final KStream<Integer, String> join = map1.join(map2,
                                                         valueJoiner,
-                                                        JoinWindows.of("the-join")
+                                                        JoinWindows.of()
                                                             .within(60 * 1000),
                                                         Serdes.Integer(),
                                                         Serdes.Integer(),
-                                                        Serdes.String());
+                                                        Serdes.String(),
+                                                        "the-join-this",
+                                                        "the-join-other");
 
         ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
             @Override
@@ -402,10 +406,12 @@ public class KStreamRepartitionJoinTest {
         join.map(kvMapper)
             .join(streamFour.map(kvMapper),
                   joiner,
-                  JoinWindows.of("the-other-join").within(60 * 1000),
+                  JoinWindows.of().within(60 * 1000),
                   Serdes.Integer(),
                   Serdes.String(),
-                  Serdes.String())
+                  Serdes.String(),
+                  "the-other-join-this",
+                  "the-other-join-other")
             .to(Serdes.Integer(), Serdes.String(), outputTopic);
 
         startStreams();
@@ -544,10 +550,12 @@ public class KStreamRepartitionJoinTest {
                         KStream<Integer, String> rhs) {
         lhs.join(rhs,
                  valueJoiner,
-                 JoinWindows.of("the-join").within(60 * 1000),
+                 JoinWindows.of().within(60 * 1000),
                  Serdes.Integer(),
                  Serdes.Integer(),
-                 Serdes.String())
+                 Serdes.String(),
+                 "the-join-this",
+                 "the-join-pther")
             .to(Serdes.Integer(), Serdes.String(), outputTopic);
     }
 
@@ -555,10 +563,12 @@ public class KStreamRepartitionJoinTest {
                             KStream<Integer, String> rhs) {
         lhs.leftJoin(rhs,
                      valueJoiner,
-                     JoinWindows.of("the-join").within(60 * 1000),
+                     JoinWindows.of().within(60 * 1000),
                      Serdes.Integer(),
                      Serdes.Integer(),
-                     Serdes.String())
+                     Serdes.String(),
+                     "the-join-this",
+                     "the-join-pther")
             .to(Serdes.Integer(), Serdes.String(), outputTopic);
     }
 

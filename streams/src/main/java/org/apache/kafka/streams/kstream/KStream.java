@@ -328,6 +328,8 @@ public interface KStream<K, V> {
      *                          if not specified the default serdes defined in the configs will be used
      * @param otherValueSerde   value serdes for materializing the other stream,
      *                          if not specified the default serdes defined in the configs will be used
+     * @param thisStoreName     name of materialized store for this stream
+     * @param otherStoreName    name of materialized store for other stream
      * @param <V1>              the value type of the other stream
      * @param <R>               the value type of the new stream
      *
@@ -340,7 +342,9 @@ public interface KStream<K, V> {
             JoinWindows windows,
             Serde<K> keySerde,
             Serde<V> thisValueSerde,
-            Serde<V1> otherValueSerde);
+            Serde<V1> otherValueSerde,
+            final String thisStoreName,
+            final String otherStoreName);
 
     /**
      * Combine element values of this stream with another {@link KStream}'s elements of the same key using windowed Inner Join
@@ -351,14 +355,17 @@ public interface KStream<K, V> {
      * @param windows       the specification of the {@link JoinWindows}
      * @param <V1>          the value type of the other stream
      * @param <R>           the value type of the new stream
-     *
+     * @param thisStoreName name of materialized store for this stream
+     * @param otherStoreName name of materialized store for other stream
      * @return a {@link KStream} that contains join-records for each key and values computed by the given {@link ValueJoiner},
      *         one for each matched record-pair with the same key and within the joining window intervals
      */
     <V1, R> KStream<K, R> join(
             KStream<K, V1> otherStream,
             ValueJoiner<V, V1, R> joiner,
-            JoinWindows windows);
+            JoinWindows windows,
+            final String thisStoreName,
+            final String otherStoreName);
 
     /**
      * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Outer Join.
@@ -373,6 +380,8 @@ public interface KStream<K, V> {
      *                          if not specified the default serdes defined in the configs will be used
      * @param otherValueSerde   value serdes for materializing the other stream,
      *                          if not specified the default serdes defined in the configs will be used
+     * @param thisStoreName     name of materialized store for this stream
+     * @param otherStoreName    name of materialized store for other stream
      * @param <V1>              the value type of the other stream
      * @param <R>               the value type of the new stream
      *
@@ -385,7 +394,9 @@ public interface KStream<K, V> {
             JoinWindows windows,
             Serde<K> keySerde,
             Serde<V> thisValueSerde,
-            Serde<V1> otherValueSerde);
+            Serde<V1> otherValueSerde,
+            final String thisStoreName,
+            final String otherStoreName);
 
     /**
      * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Outer Join
@@ -394,6 +405,8 @@ public interface KStream<K, V> {
      * @param otherStream   the instance of {@link KStream} joined with this stream
      * @param joiner        the instance of {@link ValueJoiner}
      * @param windows       the specification of the {@link JoinWindows}
+     * @param thisStoreName     name of materialized store for this stream
+     * @param otherStoreName    name of materialized store for other stream
      * @param <V1>          the value type of the other stream
      * @param <R>           the value type of the new stream
      *
@@ -403,7 +416,9 @@ public interface KStream<K, V> {
     <V1, R> KStream<K, R> outerJoin(
             KStream<K, V1> otherStream,
             ValueJoiner<V, V1, R> joiner,
-            JoinWindows windows);
+            JoinWindows windows,
+            final String thisStoreName,
+            final String otherStoreName);
 
     /**
      * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Left Join.
@@ -418,6 +433,8 @@ public interface KStream<K, V> {
      *                          if not specified the default serdes defined in the configs will be used
      * @param otherValueSerde   value serdes for materializing the other stream,
      *                          if not specified the default serdes defined in the configs will be used
+     * @param thisStoreName     name of materialized store for this stream
+     * @param otherStoreName    name of materialized store for other stream
      * @param <V1>              the value type of the other stream
      * @param <R>               the value type of the new stream
      *
@@ -430,7 +447,9 @@ public interface KStream<K, V> {
             JoinWindows windows,
             Serde<K> keySerde,
             Serde<V> thisValSerde,
-            Serde<V1> otherValueSerde);
+            Serde<V1> otherValueSerde,
+            final String thisStoreName,
+            final String otherStoreName);
 
     /**
      * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Left Join
@@ -439,6 +458,8 @@ public interface KStream<K, V> {
      * @param otherStream   the instance of {@link KStream} joined with this stream
      * @param joiner        the instance of {@link ValueJoiner}
      * @param windows       the specification of the {@link JoinWindows}
+     * @param thisStoreName     name of materialized store for this stream
+     * @param otherStoreName    name of materialized store for other stream
      * @param <V1>          the value type of the other stream
      * @param <R>           the value type of the new stream
      *
@@ -448,7 +469,9 @@ public interface KStream<K, V> {
     <V1, R> KStream<K, R> leftJoin(
             KStream<K, V1> otherStream,
             ValueJoiner<V, V1, R> joiner,
-            JoinWindows windows);
+            JoinWindows windows,
+            final String thisStoreName,
+            final String otherStoreName);
 
     /**
      * Combine values of this stream with {@link KTable}'s elements of the same key using non-windowed Left Join.

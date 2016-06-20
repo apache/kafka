@@ -346,18 +346,22 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             JoinWindows windows,
             Serde<K> keySerde,
             Serde<V> thisValueSerde,
-            Serde<V1> otherValueSerde) {
+            Serde<V1> otherValueSerde,
+            final String thisStoreName,
+            final String otherStoreName) {
 
-        return join(other, joiner, windows, keySerde, thisValueSerde, otherValueSerde, false);
+        return join(other, joiner, windows, keySerde, thisValueSerde, otherValueSerde, thisStoreName, otherStoreName, false);
     }
 
     @Override
     public <V1, R> KStream<K, R> join(
             KStream<K, V1> other,
             ValueJoiner<V, V1, R> joiner,
-            JoinWindows windows) {
+            JoinWindows windows,
+            final String thisStoreName,
+            final String otherStoreName) {
 
-        return join(other, joiner, windows, null, null, null, false);
+        return join(other, joiner, windows, null, null, null, thisStoreName, otherStoreName, false);
     }
 
     @Override
@@ -367,18 +371,22 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             JoinWindows windows,
             Serde<K> keySerde,
             Serde<V> thisValueSerde,
-            Serde<V1> otherValueSerde) {
+            Serde<V1> otherValueSerde,
+            final String thisStoreName,
+            final String otherStoreName) {
 
-        return join(other, joiner, windows, keySerde, thisValueSerde, otherValueSerde, true);
+        return join(other, joiner, windows, keySerde, thisValueSerde, otherValueSerde, thisStoreName, otherStoreName, true);
     }
 
     @Override
     public <V1, R> KStream<K, R> outerJoin(
             KStream<K, V1> other,
             ValueJoiner<V, V1, R> joiner,
-            JoinWindows windows) {
+            JoinWindows windows,
+            final String thisStoreName,
+            final String otherStoreName) {
 
-        return join(other, joiner, windows, null, null, null, true);
+        return join(other, joiner, windows, null, null, null, thisStoreName, otherStoreName, true);
     }
 
     @SuppressWarnings("unchecked")
@@ -389,15 +397,19 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             Serde<K> keySerde,
             Serde<V> thisValueSerde,
             Serde<V1> otherValueSerde,
+            final String lhsStoreName,
+            final String otherStoreName,
             boolean outer) {
 
         return doJoin(other,
-                      joiner,
-                      windows,
-                      keySerde,
-                      thisValueSerde,
-                      otherValueSerde,
-                      new DefaultJoin(outer));
+            joiner,
+            windows,
+            keySerde,
+            thisValueSerde,
+            otherValueSerde,
+            lhsStoreName,
+            otherStoreName,
+            new DefaultJoin(outer));
     }
 
     private <V1, R> KStream<K, R> doJoin(KStream<K, V1> other,
@@ -406,6 +418,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                          Serde<K> keySerde,
                                          Serde<V> thisValueSerde,
                                          Serde<V1> otherValueSerde,
+                                         final String lhsStoreName,
+                                         final String otherStoreName,
                                          KStreamImplJoin join) {
         KStreamImpl<K, V> joinThis = this;
         KStreamImpl<K, V1> joinOther = (KStreamImpl) other;
@@ -421,12 +435,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         joinThis.ensureJoinableWith(joinOther);
 
         return join.join(joinThis,
-                         joinOther,
-                         joiner,
-                         windows,
-                         keySerde,
-                         thisValueSerde,
-                         otherValueSerde);
+            joinOther,
+            joiner,
+            windows,
+            keySerde,
+            thisValueSerde,
+            otherValueSerde,
+            lhsStoreName,
+            otherStoreName);
     }
 
 
@@ -482,7 +498,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             JoinWindows windows,
             Serde<K> keySerde,
             Serde<V> thisValSerde,
-            Serde<V1> otherValueSerde) {
+            Serde<V1> otherValueSerde,
+            final String thisStoreName,
+            final String otherStoreName) {
 
         return doJoin(other,
                       joiner,
@@ -490,6 +508,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                       keySerde,
                       thisValSerde,
                       otherValueSerde,
+                      thisStoreName,
+                      otherStoreName,
                       new LeftJoin());
     }
 
@@ -497,9 +517,10 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public <V1, R> KStream<K, R> leftJoin(
             KStream<K, V1> other,
             ValueJoiner<V, V1, R> joiner,
-            JoinWindows windows) {
+            JoinWindows windows, final String thisStoreName,
+            final String otherStoreName) {
 
-        return leftJoin(other, joiner, windows, null, null, null);
+        return leftJoin(other, joiner, windows, null, null, null, thisStoreName, otherStoreName);
     }
 
     @SuppressWarnings("unchecked")
@@ -575,8 +596,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     private static <K, V> StateStoreSupplier createWindowedStateStore(final JoinWindows windows,
                                                                      final Serde<K> keySerde,
                                                                      final Serde<V> valueSerde,
-                                                                     final String nameSuffix) {
-        return Stores.create(windows.name() + nameSuffix)
+                                                                     final String storeName) {
+        return Stores.create(storeName)
             .withKeys(keySerde)
             .withValues(valueSerde)
             .persistent()
@@ -592,7 +613,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                             JoinWindows windows,
                                             Serde<K1> keySerde,
                                             Serde<V1> lhsValueSerde,
-                                            Serde<V2> otherValueSerde);
+                                            Serde<V2> otherValueSerde,
+                                            final String lhsStoreName,
+                                            final String otherStoreName);
     }
 
     private class DefaultJoin implements KStreamImplJoin {
@@ -610,13 +633,15 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                    JoinWindows windows,
                                                    Serde<K1> keySerde,
                                                    Serde<V1> lhsValueSerde,
-                                                   Serde<V2> otherValueSerde) {
+                                                   Serde<V2> otherValueSerde,
+                                                   final String lhsStoreName,
+                                                   final String otherStoreName) {
 
             StateStoreSupplier thisWindow =
-                createWindowedStateStore(windows, keySerde, lhsValueSerde, "-this");
+                createWindowedStateStore(windows, keySerde, lhsValueSerde, lhsStoreName);
 
             StateStoreSupplier otherWindow =
-                createWindowedStateStore(windows, keySerde, otherValueSerde, "-other");
+                createWindowedStateStore(windows, keySerde, otherValueSerde, otherStoreName);
 
 
             KStreamJoinWindow<K1, V1> thisWindowedStream = new KStreamJoinWindow<>(thisWindow.name(),
@@ -669,9 +694,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                    JoinWindows windows,
                                                    Serde<K1> keySerde,
                                                    Serde<V1> lhsValueSerde,
-                                                   Serde<V2> otherValueSerde) {
+                                                   Serde<V2> otherValueSerde,
+                                                   final String lhsStoreName,
+                                                   final String otherStoreName) {
             StateStoreSupplier otherWindow =
-                createWindowedStateStore(windows, keySerde, otherValueSerde, "-other");
+                createWindowedStateStore(windows, keySerde, otherValueSerde, otherStoreName);
 
             KStreamJoinWindow<K1, V1>
                 otherWindowedStream = new KStreamJoinWindow<>(otherWindow.name(), windows.before + windows.after + 1, windows.maintainMs());

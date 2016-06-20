@@ -123,8 +123,8 @@ public class SmokeTestClient extends SmokeTestUtil {
                         return (value < aggregate) ? value : aggregate;
                     }
                 },
-                UnlimitedWindows.of("uwin-min"),
-                intSerde
+                UnlimitedWindows.of(),
+                intSerde, "uwin-min"
         ).toStream().map(
                 new Unwindow<String, Integer>()
         ).to(stringSerde, intSerde, "min");
@@ -145,8 +145,8 @@ public class SmokeTestClient extends SmokeTestUtil {
                         return (value > aggregate) ? value : aggregate;
                     }
                 },
-                UnlimitedWindows.of("uwin-max"),
-                intSerde
+                UnlimitedWindows.of(),
+                intSerde, "uwin-max"
         ).toStream().map(
                 new Unwindow<String, Integer>()
         ).to(stringSerde, intSerde, "max");
@@ -167,8 +167,8 @@ public class SmokeTestClient extends SmokeTestUtil {
                         return (long) value + aggregate;
                     }
                 },
-                UnlimitedWindows.of("win-sum"),
-                longSerde
+                UnlimitedWindows.of(),
+                longSerde, "win-sum"
         ).toStream().map(
                 new Unwindow<String, Long>()
         ).to(stringSerde, longSerde, "sum");
@@ -178,7 +178,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         sumTable.toStream().process(SmokeTestUtil.<Long>printProcessorSupplier("sum"));
 
         // cnt
-        groupedData.count(UnlimitedWindows.of("uwin-cnt"))
+        groupedData.count(UnlimitedWindows.of(), "uwin-cnt")
             .toStream().map(
                 new Unwindow<String, Long>()
         ).to(stringSerde, longSerde, "cnt");
@@ -206,7 +206,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         ).to(stringSerde, doubleSerde, "avg");
 
         // windowed count
-        groupedData.count(TimeWindows.of("tumbling-win-cnt", WINDOW_SIZE))
+        groupedData.count(TimeWindows.of(WINDOW_SIZE), "tumbling-win-cnt")
             .toStream().map(
                 new KeyValueMapper<Windowed<String>, Long, KeyValue<String, Long>>() {
                     @Override

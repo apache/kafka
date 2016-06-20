@@ -52,12 +52,14 @@ public interface KGroupedStream<K, V> {
      *
      * @param reducer           the instance of {@link Reducer}
      * @param windows           the specification of the aggregation {@link Windows}
+     * @param storeName         the name of the state store created from this operation
      * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
      *         where each table contains records with unmodified keys and values
      *         that represent the latest (rolling) aggregate for each key within that window
      */
     <W extends Window> KTable<Windowed<K>, V> reduce(Reducer<V> reducer,
-                                                     Windows<W> windows);
+                                                     Windows<W> windows,
+                                                     final String storeName);
 
     /**
      * Aggregate values of this stream by key into a new instance of a {@link KTable}.
@@ -84,7 +86,7 @@ public interface KGroupedStream<K, V> {
      * @param aggValueSerde aggregate value serdes for materializing the aggregated table,
      *                      if not specified the default serdes defined in the configs will be used
      * @param <T>           the value type of the resulted {@link KTable}
-     *
+     * @param storeName     the name of the state store created from this operation
      * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
      *         where each table contains records with unmodified keys and values with type {@code T}
      *         that represent the latest (rolling) aggregate for each key within that window
@@ -92,28 +94,29 @@ public interface KGroupedStream<K, V> {
     <W extends Window, T> KTable<Windowed<K>, T> aggregate(Initializer<T> initializer,
                                                            Aggregator<K, V, T> aggregator,
                                                            Windows<W> windows,
-                                                           Serde<T> aggValueSerde);
+                                                           Serde<T> aggValueSerde,
+                                                           final String storeName);
 
 
     /**
      * Count number of records of this stream by key into a new instance of a {@link KTable}
      *
-     * @param name  the name of the resulted {@link KTable}
+     * @param storeName  the name of the resulted {@link KTable}
      *
      * @return a {@link KTable} that contains records with unmodified keys and values that represent the latest (rolling) count (i.e., number of records) for each key
      */
-    KTable<K, Long> count(String name);
+    KTable<K, Long> count(String storeName);
 
 
     /**
      * Count number of records of this stream by key on a window basis into a new instance of windowed {@link KTable}.
      *
      * @param windows   the specification of the aggregation {@link Windows}
-     *
+     * @param storeName the name of the state store created from this operation
      * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
      *         where each table contains records with unmodified keys and values
      *         that represent the latest (rolling) count (i.e., number of records) for each key within that window
      */
-    <W extends Window> KTable<Windowed<K>, Long> count(Windows<W> windows);
+    <W extends Window> KTable<Windowed<K>, Long> count(Windows<W> windows, final String storeName);
 
 }
