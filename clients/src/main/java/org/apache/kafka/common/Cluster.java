@@ -32,6 +32,7 @@ public final class Cluster {
     private final boolean isBootstrapConfigured;
     private final List<Node> nodes;
     private final Set<String> unauthorizedTopics;
+    private final Set<String> unknownTopics;
     private final Map<TopicPartition, PartitionInfo> partitionsByTopicPartition;
     private final Map<String, List<PartitionInfo>> partitionsByTopic;
     private final Map<String, List<PartitionInfo>> availablePartitionsByTopic;
@@ -43,16 +44,25 @@ public final class Cluster {
      * @param nodes The nodes in the cluster
      * @param partitions Information about a subset of the topic-partitions this cluster hosts
      */
+    @Deprecated
     public Cluster(Collection<Node> nodes,
                    Collection<PartitionInfo> partitions,
                    Set<String> unauthorizedTopics) {
-        this(false, nodes, partitions, unauthorizedTopics);
+        this(nodes, partitions, unauthorizedTopics, Collections.<String>emptySet());
+    }
+
+    public Cluster(Collection<Node> nodes,
+            Collection<PartitionInfo> partitions,
+            Set<String> unauthorizedTopics,
+            Set<String> unknownTopics) {
+        this(false, nodes, partitions, unauthorizedTopics, unknownTopics);
     }
 
     private Cluster(boolean isBootstrapConfigured,
                     Collection<Node> nodes,
                     Collection<PartitionInfo> partitions,
-                    Set<String> unauthorizedTopics) {
+                    Set<String> unauthorizedTopics,
+                    Set<String> unknownTopics) {
         this.isBootstrapConfigured = isBootstrapConfigured;
 
         // make a randomized, unmodifiable copy of the nodes
@@ -105,13 +115,14 @@ public final class Cluster {
             this.partitionsByNode.put(entry.getKey(), Collections.unmodifiableList(entry.getValue()));
 
         this.unauthorizedTopics = Collections.unmodifiableSet(unauthorizedTopics);
+        this.unknownTopics = Collections.unmodifiableSet(unknownTopics);
     }
 
     /**
      * Create an empty cluster instance with no nodes and no topic-partitions.
      */
     public static Cluster empty() {
-        return new Cluster(new ArrayList<Node>(0), new ArrayList<PartitionInfo>(0), Collections.<String>emptySet());
+        return new Cluster(new ArrayList<Node>(0), new ArrayList<PartitionInfo>(0), Collections.<String>emptySet(), Collections.<String>emptySet());
     }
 
     /**
@@ -124,7 +135,7 @@ public final class Cluster {
         int nodeId = -1;
         for (InetSocketAddress address : addresses)
             nodes.add(new Node(nodeId--, address.getHostString(), address.getPort()));
-        return new Cluster(true, nodes, new ArrayList<PartitionInfo>(0), Collections.<String>emptySet());
+        return new Cluster(true, nodes, new ArrayList<PartitionInfo>(0), Collections.<String>emptySet(), Collections.<String>emptySet());
     }
 
     /**
@@ -133,7 +144,7 @@ public final class Cluster {
     public Cluster withPartitions(Map<TopicPartition, PartitionInfo> partitions) {
         Map<TopicPartition, PartitionInfo> combinedPartitions = new HashMap<>(this.partitionsByTopicPartition);
         combinedPartitions.putAll(partitions);
-        return new Cluster(this.nodes, combinedPartitions.values(), new HashSet<>(this.unauthorizedTopics));
+        return new Cluster(this.nodes, combinedPartitions.values(), new HashSet<>(this.unauthorizedTopics), new HashSet<>(this.unknownTopics));
     }
 
     /**
@@ -225,6 +236,10 @@ public final class Cluster {
 
     public boolean isBootstrapConfigured() {
         return isBootstrapConfigured;
+    }
+
+    public Set<String> unknownTopics() {
+        return unknownTopics;
     }
 
     @Override

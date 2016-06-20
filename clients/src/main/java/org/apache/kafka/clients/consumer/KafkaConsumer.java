@@ -1375,6 +1375,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.client.wakeup();
     }
 
+    public void addListener(KafkaConsumerListener listener) {
+        fetcher.addListener(listener);
+    }
+    
     private void close(boolean swallowException) {
         log.trace("Closing the Kafka consumer.");
         AtomicReference<Throwable> firstException = new AtomicReference<>();

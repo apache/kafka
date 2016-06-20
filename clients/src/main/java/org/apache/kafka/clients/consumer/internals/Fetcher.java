@@ -16,6 +16,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.KafkaConsumerListener;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -30,6 +31,7 @@ import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -90,7 +92,11 @@ public class Fetcher<K, V> {
     private final Map<TopicPartition, Long> offsetOutOfRangePartitions;
     private final Set<String> unauthorizedTopics;
     private final Map<TopicPartition, Long> recordTooLargePartitions;
+    private final Set<TopicPartition> unknownTopicOrPartitions;
 
+    private final List<KafkaConsumerListener> listeners = new ArrayList<>();
+
+    
     public Fetcher(ConsumerNetworkClient client,
                    int minBytes,
                    int maxWaitMs,
@@ -123,6 +129,7 @@ public class Fetcher<K, V> {
         this.offsetOutOfRangePartitions = new HashMap<>();
         this.unauthorizedTopics = new HashSet<>();
         this.recordTooLargePartitions = new HashMap<>();
+        this.unknownTopicOrPartitions = new HashSet<>();
 
         this.sensors = new FetchManagerMetrics(metrics, metricGrpPrefix);
         this.retryBackoffMs = retryBackoffMs;
@@ -203,6 +210,7 @@ public class Fetcher<K, V> {
         do {
             RequestFuture<ClientResponse> future = sendMetadataRequest(request);
             client.poll(future, remaining);
+            fireListeners(future);
 
             if (future.failed() && !future.isRetriable())
                 throw future.exception();
@@ -308,8 +316,11 @@ public class Fetcher<K, V> {
     private long listOffset(TopicPartition partition, long timestamp) {
         while (true) {
             RequestFuture<Long> future = sendListOffsetRequest(partition, timestamp);
+            
             client.poll(future);
 
+            fireListeners(future);
+            
             if (future.succeeded())
                 return future.value();
 
@@ -379,6 +390,15 @@ public class Fetcher<K, V> {
                 copiedRecordTooLargePartitions);
     }
 
+    private void fireIfUnknownTopicOrPartition() throws UnknownTopicOrPartitionException  {
+        Set<TopicPartition> copiedUnknownTopicOrPartitions = new HashSet<>(this.unknownTopicOrPartitions);
+        this.unknownTopicOrPartitions.clear();
+
+        if (!copiedUnknownTopicOrPartitions.isEmpty()) {
+            fireListeners(new UnknownTopicOrPartitionException(copiedUnknownTopicOrPartitions));
+        }
+    }
+
     /**
      * Return the fetched records, empty the record buffer and update the consumed position.
      *
@@ -396,6 +416,7 @@ public class Fetcher<K, V> {
             throwIfOffsetOutOfRange();
             throwIfUnauthorizedTopics();
             throwIfRecordTooLarge();
+            fireIfUnknownTopicOrPartition();
 
             int maxRecords = maxPollRecords;
             Iterator<PartitionRecords<K, V>> iterator = records.iterator();
@@ -462,9 +483,23 @@ public class Fetcher<K, V> {
         partitions.put(topicPartition, new ListOffsetRequest.PartitionData(timestamp, 1));
         PartitionInfo info = metadata.fetch().partition(topicPartition);
         if (info == null) {
-            metadata.add(topicPartition.topic());
-            log.debug("Partition {} is unknown for fetching offset, wait for metadata refresh", topicPartition);
-            return RequestFuture.staleMetadata();
+            boolean partitionExists = false;
+            List<PartitionInfo> availablePartitionsForTopic = metadata.fetch().availablePartitionsForTopic(topicPartition.topic());
+            if (availablePartitionsForTopic != null) {
+                for (PartitionInfo partitionInfo : availablePartitionsForTopic) {
+                    if (partitionInfo.partition() == topicPartition.partition()) {
+                        partitionExists = true;
+                        break;
+                    }
+                }
+            }
+            if (metadata.fetch().unknownTopics().contains(topicPartition.topic()) || !partitionExists) {
+                return RequestFuture.failure(new UnknownTopicOrPartitionException(topicPartition));
+            } else {
+                metadata.add(topicPartition.topic());
+                log.debug("Partition {} is unknown for fetching offset, wait for metadata refresh", topicPartition);
+                return RequestFuture.staleMetadata();
+            }
         } else if (info.leader() == null) {
             log.debug("Leader for partition {} unavailable for fetching offset, wait for metadata refresh", topicPartition);
             return RequestFuture.leaderNotAvailable();
@@ -486,7 +521,7 @@ public class Fetcher<K, V> {
      * @param topicPartition The partition that was fetched
      * @param clientResponse The response from the server.
      */
-    private void handleListOffsetResponse(TopicPartition topicPartition,
+    private void handleListOffsetResponse(final TopicPartition topicPartition,
                                           ClientResponse clientResponse,
                                           RequestFuture<Long> future) {
         ListOffsetResponse lor = new ListOffsetResponse(clientResponse.responseBody());
@@ -499,11 +534,12 @@ public class Fetcher<K, V> {
             log.debug("Fetched offset {} for partition {}", offset, topicPartition);
 
             future.complete(offset);
-        } else if (errorCode == Errors.NOT_LEADER_FOR_PARTITION.code()
-                || errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code()) {
+        } else if (errorCode == Errors.NOT_LEADER_FOR_PARTITION.code()) {
             log.debug("Attempt to fetch offsets for partition {} failed due to obsolete leadership information, retrying.",
                     topicPartition);
             future.raise(Errors.forCode(errorCode));
+        } else if (errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code()) {
+            future.raise(new UnknownTopicOrPartitionException(topicPartition));
         } else {
             log.warn("Attempt to fetch offsets for partition {} failed due to: {}",
                     topicPartition, Errors.forCode(errorCode).message());
@@ -612,9 +648,11 @@ public class Fetcher<K, V> {
                 this.sensors.recordTopicFetchMetrics(tp.topic(), bytes, parsed.size());
                 totalBytes += bytes;
                 totalCount += parsed.size();
-            } else if (partition.errorCode == Errors.NOT_LEADER_FOR_PARTITION.code()
-                || partition.errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code()) {
+            } else if (partition.errorCode == Errors.NOT_LEADER_FOR_PARTITION.code()) {
                 this.metadata.requestUpdate();
+            } else if (partition.errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code()) {
+                this.metadata.requestUpdate();
+                unknownTopicOrPartitions.add(tp);
             } else if (partition.errorCode == Errors.OFFSET_OUT_OF_RANGE.code()) {
                 long fetchOffset = request.fetchData().get(tp).offset;
                 if (subscriptions.hasDefaultOffsetResetPolicy())
@@ -813,4 +851,21 @@ public class Fetcher<K, V> {
             recordsFetched.record(records);
         }
     }
+
+    private <T> void fireListeners(RequestFuture<T> future) {
+        if (future.exception() != null)
+            fireListeners(future.exception());
+    }
+
+    private <T> void fireListeners(Exception e) {
+        for (KafkaConsumerListener listener : listeners)
+            listener.onException(e);
+    }
+
+    public void addListener(KafkaConsumerListener listener) {
+        this.listeners.add(listener);
+        //potentially we could go lower-level eg connection refused ..
+        //this.client.add(listener);
+    }
+
 }

@@ -12,6 +12,12 @@
  */
 package org.apache.kafka.common.errors;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+
+import org.apache.kafka.common.TopicPartition;
+
 /**
  * This topic/partition doesn't exist
  */
@@ -19,19 +25,20 @@ public class UnknownTopicOrPartitionException extends InvalidMetadataException {
 
     private static final long serialVersionUID = 1L;
 
-    public UnknownTopicOrPartitionException() {
-    }
-
-    public UnknownTopicOrPartitionException(String message) {
+    public UnknownTopicOrPartitionException(final String message) {
         super(message);
     }
 
-    public UnknownTopicOrPartitionException(Throwable throwable) {
-        super(throwable);
+    public UnknownTopicOrPartitionException(TopicPartition unknownTopicOrPartition) {
+        this(new HashSet<TopicPartition>(Arrays.asList(unknownTopicOrPartition)));
     }
 
-    public UnknownTopicOrPartitionException(String message, Throwable throwable) {
-        super(message, throwable);
+    public UnknownTopicOrPartitionException(Set<TopicPartition> unknownTopicOrPartitions) {
+        this(unknownTopicOrPartitions, null);
+    }
+
+    public UnknownTopicOrPartitionException(Set<TopicPartition> unknownTopicOrPartitions, Throwable throwable) {
+        super(org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION.message() + unknownTopicOrPartitions.toString(), throwable);
     }
 
 }

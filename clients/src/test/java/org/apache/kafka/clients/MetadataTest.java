@@ -134,7 +134,7 @@ public class MetadataTest {
                 Arrays.asList(
                     new PartitionInfo("topic", 0, null, null, null),
                     new PartitionInfo("topic1", 0, null, null, null)),
-                Collections.<String>emptySet()),
+                Collections.<String>emptySet(), Collections.<String>emptySet()),
             100);
 
         assertArrayEquals("Metadata got updated with wrong set of topics.",
@@ -161,7 +161,7 @@ public class MetadataTest {
                 Arrays.asList(
                     new PartitionInfo("topic", 0, null, null, null),
                     new PartitionInfo("topic1", 0, null, null, null)),
-                Collections.<String>emptySet()),
+                Collections.<String>emptySet(), Collections.<String>emptySet()),
             100);
 
         assertEquals("Listener did not update topics list correctly",
@@ -187,7 +187,7 @@ public class MetadataTest {
                 Arrays.asList(
                     new PartitionInfo("topic", 0, null, null, null),
                     new PartitionInfo("topic1", 0, null, null, null)),
-                Collections.<String>emptySet()),
+                Collections.<String>emptySet(), Collections.<String>emptySet()),
             100);
 
         metadata.removeListener(listener);
@@ -197,7 +197,7 @@ public class MetadataTest {
                 Arrays.asList(
                     new PartitionInfo("topic2", 0, null, null, null),
                     new PartitionInfo("topic3", 0, null, null, null)),
-                Collections.<String>emptySet()),
+                Collections.<String>emptySet(), Collections.<String>emptySet()),
             100);
 
         assertEquals("Listener did not update topics list correctly",

@@ -42,6 +42,7 @@ import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.MetricName;
@@ -533,6 +534,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
             if (metadata.fetch().unauthorizedTopics().contains(topic))
                 throw new TopicAuthorizationException(topic);
+            if (metadata.fetch().unknownTopics().contains(topic)) {
+                //topic does not exist, we can ignore the partition and just use the topic name
+                throw new UnknownTopicOrPartitionException(topic);
+            }
             remainingWaitMs = maxWaitMs - elapsed;
         }
         return time.milliseconds() - begin;

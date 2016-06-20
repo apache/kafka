@@ -74,7 +74,7 @@ public class TestUtils {
             for (int i = 0; i < partitions; i++)
                 parts.add(new PartitionInfo(topic, i, ns[i % ns.length], ns, ns));
         }
-        return new Cluster(asList(ns), parts, Collections.<String>emptySet());
+        return new Cluster(asList(ns), parts, Collections.<String>emptySet(), Collections.<String>emptySet());
     }
 
     public static Cluster clusterWith(int nodes, String topic, int partitions) {

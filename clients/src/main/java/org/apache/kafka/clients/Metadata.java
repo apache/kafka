@@ -285,11 +285,15 @@ public final class Metadata {
 
     private Cluster getClusterForCurrentTopics(Cluster cluster) {
         Set<String> unauthorizedTopics = new HashSet<>();
+        Set<String> unknownTopics = new HashSet<>();
         Collection<PartitionInfo> partitionInfos = new ArrayList<>();
         List<Node> nodes = Collections.emptyList();
         if (cluster != null) {
             unauthorizedTopics.addAll(cluster.unauthorizedTopics());
             unauthorizedTopics.retainAll(this.topics.keySet());
+            
+            unknownTopics.addAll(cluster.unknownTopics());
+            unknownTopics.retainAll(this.topics.keySet());
 
             for (String topic : this.topics.keySet()) {
                 List<PartitionInfo> partitionInfoList = cluster.partitionsForTopic(topic);
@@ -299,6 +303,6 @@ public final class Metadata {
             }
             nodes = cluster.nodes();
         }
-        return new Cluster(nodes, partitionInfos, unauthorizedTopics);
+        return new Cluster(nodes, partitionInfos, unauthorizedTopics, unknownTopics);
     }
 }
