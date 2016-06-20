@@ -284,7 +284,7 @@ object LogConfig {
       .define(SegmentBytesProp, INT, Int.box(Defaults.SegmentSize), atLeast(Message.MinMessageOverhead), MEDIUM,
         SegmentSizeDoc, KafkaConfig.LogSegmentBytesProp)
       .define(SegmentMsProp, LONG, Long.box(Defaults.SegmentMs), atLeast(0), MEDIUM, SegmentMsDoc,
-        KafkaConfig.LogRollTimeHoursProp)
+        KafkaConfig.LogRollTimeMillisProp)
       .define(SegmentJitterMsProp, LONG, Long.box(Defaults.SegmentJitterMs), atLeast(0), MEDIUM, SegmentJitterMsDoc,
         KafkaConfig.LogRollTimeJitterMillisProp)
       .define(SegmentIndexBytesProp, INT, Int.box(Defaults.MaxIndexSize), atLeast(0), MEDIUM, MaxIndexSizeDoc,
