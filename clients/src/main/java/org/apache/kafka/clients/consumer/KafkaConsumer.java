@@ -984,19 +984,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         long now = time.milliseconds();
 
         // execute delayed tasks (e.g. autocommits and heartbeats) prior to fetching records.
-        // this is crucial to ensure at least once delivery when auto commit is enabled. the
-        // consumed positions tracked in subscription state are updated when the fetcher returns
-        // fetched records, which happens after the offsets are committed with the already consumed
-        // positions.
+        // It is crucial for "at least once" delivery semantics to ensure that offset commits can
+        // only be sent prior to updating the position in Fetcher's fetchedRecords method.
         client.executeDelayedTasks(now);
 
         // if data is available already, e.g. from a previous network client poll() call to commit,
-        // then just return it immediately
+        // then just return it immediately to avoid blocking in poll.
         Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
         if (!records.isEmpty())
             return records;
 
-        // init any new fetches (won't resend pending fetches)
+        // send new fetches to any brokers which don't already have a request in flight.
         fetcher.sendFetches();
         client.poll(timeout, now);
         return fetcher.fetchedRecords();
