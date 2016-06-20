@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Mock sink implementation which deletates to {@link MockConnector}.
+ * Mock sink implementation which delegates to {@link MockConnector}.
  */
 public class MockSinkConnector extends SinkConnector {
 

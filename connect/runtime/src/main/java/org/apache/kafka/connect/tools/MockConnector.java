@@ -20,7 +20,6 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
-import org.apache.kafka.connect.sink.SinkConnector;
 
 import java.util.Collections;
 import java.util.List;
@@ -93,8 +92,16 @@ public class MockConnector extends Connector {
 
     @Override
     public void stop() {
-        if (executor != null)
+        if (executor != null) {
             executor.shutdownNow();
+
+            try {
+                if (!executor.awaitTermination(20, TimeUnit.SECONDS))
+                    throw new RuntimeException("Failed timely termination of scheduler");
+            } catch (InterruptedException e) {
+                throw new RuntimeException("Task was interrupted during shutdown");
+            }
+        }
     }
 
     @Override

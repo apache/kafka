@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Mock source implementation which deletates to {@link MockConnector}.
+ * Mock source implementation which delegates to {@link MockConnector}.
  */
 public class MockSourceConnector extends SourceConnector {
 
