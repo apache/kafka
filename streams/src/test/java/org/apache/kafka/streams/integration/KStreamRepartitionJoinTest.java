@@ -226,7 +226,7 @@ public class KStreamRepartitionJoinTest {
         streamTwo
             .join(streamOne.map(keyMapper),
                   joiner,
-                  JoinWindows.of(output).within(60 * 1000),
+                  JoinWindows.of(output, 60 * 1000),
                   Serdes.Integer(),
                   Serdes.String(),
                   Serdes.Integer())
@@ -253,7 +253,7 @@ public class KStreamRepartitionJoinTest {
         String outputTopic = "left-join";
         map1.leftJoin(map2,
                       valueJoiner,
-                      JoinWindows.of("the-left-join").within(60 * 1000),
+                      JoinWindows.of("the-left-join", 60 * 1000),
                       Serdes.Integer(),
                       Serdes.Integer(),
                       Serdes.String())
@@ -282,8 +282,7 @@ public class KStreamRepartitionJoinTest {
 
         final KStream<Integer, String> join = map1.join(map2,
                                                         valueJoiner,
-                                                        JoinWindows.of("join-one")
-                                                            .within(60 * 1000),
+                                                        JoinWindows.of("join-one", 60 * 1000),
                                                         Serdes.Integer(),
                                                         Serdes.Integer(),
                                                         Serdes.String());
@@ -298,7 +297,7 @@ public class KStreamRepartitionJoinTest {
         join.map(kvMapper)
             .join(streamFour.map(kvMapper),
                   joiner,
-                  JoinWindows.of("the-other-join").within(60 * 1000),
+                  JoinWindows.of("the-other-join", 60 * 1000),
                   Serdes.Integer(),
                   Serdes.String(),
                   Serdes.String())
@@ -433,7 +432,7 @@ public class KStreamRepartitionJoinTest {
         CLUSTER.createTopic(outputTopic);
         lhs.join(rhs,
                  valueJoiner,
-                 JoinWindows.of(joinName).within(60 * 1000),
+                 JoinWindows.of(joinName, 60 * 1000),
                  Serdes.Integer(),
                  Serdes.Integer(),
                  Serdes.String())
