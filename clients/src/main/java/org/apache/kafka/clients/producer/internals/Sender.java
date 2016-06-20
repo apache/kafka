@@ -14,6 +14,7 @@ package org.apache.kafka.clients.producer.internals;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -457,14 +458,13 @@ public class Sender implements Runnable {
             });
         }
 
-        public void maybeRegisterTopicMetrics(String topic) {
+        private void maybeRegisterTopicMetrics(String topic) {
             // if one sensor of the metrics has been registered for the topic,
             // then all other sensors should have been registered; and vice versa
             String topicRecordsCountName = "topic." + topic + ".records-per-batch";
             Sensor topicRecordCount = this.metrics.getSensor(topicRecordsCountName);
             if (topicRecordCount == null) {
-                Map<String, String> metricTags = new LinkedHashMap<String, String>();
-                metricTags.put("topic", topic);
+                Map<String, String> metricTags = Collections.singletonMap("topic", topic);
                 String metricGrpName = "producer-topic-metrics";
 
                 topicRecordCount = this.metrics.sensor(topicRecordsCountName);

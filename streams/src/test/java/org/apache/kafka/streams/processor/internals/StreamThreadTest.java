@@ -304,14 +304,14 @@ public class StreamThreadTest {
 
             List<TopicPartition> revokedPartitions;
             List<TopicPartition> assignedPartitions;
-            Map<Integer, StreamTask> prevTasks;
+            Map<TaskId, StreamTask> prevTasks;
 
             //
             // Assign t1p1 and t1p2. This should create task1 & task2
             //
             revokedPartitions = Collections.emptyList();
             assignedPartitions = Arrays.asList(t1p1, t1p2);
-            prevTasks = new HashMap(thread.tasks());
+            prevTasks = new HashMap<>(thread.tasks());
 
             rebalanceListener.onPartitionsRevoked(revokedPartitions);
             rebalanceListener.onPartitionsAssigned(assignedPartitions);
@@ -343,7 +343,7 @@ public class StreamThreadTest {
             //
             revokedPartitions = assignedPartitions;
             assignedPartitions = Collections.emptyList();
-            prevTasks = new HashMap(thread.tasks());
+            prevTasks = new HashMap<>(thread.tasks());
 
             rebalanceListener.onPartitionsRevoked(revokedPartitions);
             rebalanceListener.onPartitionsAssigned(assignedPartitions);
@@ -397,8 +397,8 @@ public class StreamThreadTest {
 
             StreamThread thread = new StreamThread(builder, config, new MockClientSupplier(), applicationId, clientId,  processId, new Metrics(), mockTime) {
                 @Override
-                public void maybeCommit() {
-                    super.maybeCommit();
+                public void maybeCommit(long now) {
+                    super.maybeCommit(now);
                 }
 
                 @Override
@@ -428,14 +428,14 @@ public class StreamThreadTest {
 
             // no task is committed before the commit interval
             mockTime.sleep(commitInterval - 10L);
-            thread.maybeCommit();
+            thread.maybeCommit(mockTime.milliseconds());
             for (StreamTask task : thread.tasks().values()) {
                 assertFalse(((TestStreamTask) task).committed);
             }
 
             // all tasks are committed after the commit interval
             mockTime.sleep(11L);
-            thread.maybeCommit();
+            thread.maybeCommit(mockTime.milliseconds());
             for (StreamTask task : thread.tasks().values()) {
                 assertTrue(((TestStreamTask) task).committed);
                 ((TestStreamTask) task).committed = false;
@@ -443,14 +443,14 @@ public class StreamThreadTest {
 
             // no task is committed before the commit interval, again
             mockTime.sleep(commitInterval - 10L);
-            thread.maybeCommit();
+            thread.maybeCommit(mockTime.milliseconds());
             for (StreamTask task : thread.tasks().values()) {
                 assertFalse(((TestStreamTask) task).committed);
             }
 
             // all tasks are committed after the commit interval, again
             mockTime.sleep(11L);
-            thread.maybeCommit();
+            thread.maybeCommit(mockTime.milliseconds());
             for (StreamTask task : thread.tasks().values()) {
                 assertTrue(((TestStreamTask) task).committed);
                 ((TestStreamTask) task).committed = false;

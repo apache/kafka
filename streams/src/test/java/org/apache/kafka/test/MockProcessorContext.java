@@ -125,7 +125,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
                 return null;
             }
             @Override
-            public void recordLatency(Sensor sensor, long startNs, long endNs) {
+            public void recordLatencyNs(Sensor sensor, long startNs, long endNs) {
             }
         };
     }
