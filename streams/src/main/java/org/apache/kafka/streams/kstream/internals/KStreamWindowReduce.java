@@ -68,7 +68,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
 
         @Override
         public void process(K key, V value) {
-            // if the key is null, we do not need proceed aggregating the record
+            // if the key is null, we do not need proceed aggregating
             // the record with the table
             if (key == null)
                 return;
@@ -135,13 +135,13 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
         return new KTableValueGetterSupplier<Windowed<K>, V>() {
 
             public KTableValueGetter<Windowed<K>, V> get() {
-                return new KStreamAggregateValueGetter();
+                return new KStreamWindowReduceValueGetter();
             }
 
         };
     }
 
-    private class KStreamAggregateValueGetter implements KTableValueGetter<Windowed<K>, V> {
+    private class KStreamWindowReduceValueGetter implements KTableValueGetter<Windowed<K>, V> {
 
         private WindowStore<K, V> windowStore;
 
@@ -159,7 +159,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
 
             // this iterator should only contain one element
             try (WindowStoreIterator<V> iter = windowStore.fetch(key, window.start(), window.start())) {
-                return iter.next().value;
+                return iter.hasNext() ? iter.next().value : null;
             }
         }
     }

@@ -154,6 +154,11 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
+    public long approximateNumEntries() {
+        return this.map.size();
+    }
+
+    @Override
     public void flush() {
         // do-nothing since it is in-memory
     }

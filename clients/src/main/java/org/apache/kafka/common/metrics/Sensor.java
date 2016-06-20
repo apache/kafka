@@ -121,10 +121,10 @@ public final class Sensor {
                     double value = metric.value(timeMs);
                     if (!quota.acceptable(value)) {
                         throw new QuotaViolationException(String.format(
-                            "(%s) violated quota. Actual: (%f), Threshold: (%f)",
+                            "'%s' violated quota. Actual: %f, Threshold: %f",
                             metric.metricName(),
-                            quota.bound(),
-                            value));
+                            value,
+                            quota.bound()));
                     }
                 }
             }

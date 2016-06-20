@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -54,6 +55,10 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
     private class KTableSourceProcessor extends AbstractProcessor<K, V> {
         @Override
         public void process(K key, V value) {
+            // the keys should never be null
+            if (key == null)
+                throw new StreamsException("Record key for the source KTable from topic " + topic + " should not be null.");
+
             context().forward(key, new Change<>(value, null));
         }
     }
@@ -71,11 +76,14 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
 
         @Override
         public void process(K key, V value) {
+            // the keys should never be null
+            if (key == null)
+                throw new StreamsException("Record key for the source KTable from topic " + topic + " should not be null.");
+
             V oldValue = sendOldValues ? store.get(key) : null;
             store.put(key, value);
 
             context().forward(key, new Change<>(value, oldValue));
         }
     }
-
 }

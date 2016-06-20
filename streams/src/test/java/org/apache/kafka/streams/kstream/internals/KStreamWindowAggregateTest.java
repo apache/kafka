@@ -71,10 +71,12 @@ public class KStreamWindowAggregateTest {
 
             KStream<String, String> stream1 = builder.stream(strSerde, strSerde, topic1);
             KTable<Windowed<String>, String> table2 =
-                stream1.aggregateByKey(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER,
-                    TimeWindows.of("topic1-Canonized", 10).advanceBy(5),
-                    strSerde,
-                    strSerde);
+                stream1.groupByKey(strSerde,
+                                   strSerde)
+                    .aggregate(MockInitializer.STRING_INIT,
+                               MockAggregator.STRING_ADDER,
+                               TimeWindows.of("topic1-Canonized", 10).advanceBy(5),
+                               strSerde);
 
             MockProcessorSupplier<Windowed<String>, String> proc2 = new MockProcessorSupplier<>();
             table2.toStream().process(proc2);
@@ -149,20 +151,22 @@ public class KStreamWindowAggregateTest {
 
             KStream<String, String> stream1 = builder.stream(strSerde, strSerde, topic1);
             KTable<Windowed<String>, String> table1 =
-                stream1.aggregateByKey(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER,
-                    TimeWindows.of("topic1-Canonized", 10).advanceBy(5),
-                    strSerde,
-                    strSerde);
+                stream1.groupByKey(strSerde, strSerde)
+                    .aggregate(MockInitializer.STRING_INIT,
+                               MockAggregator.STRING_ADDER,
+                               TimeWindows.of("topic1-Canonized", 10).advanceBy(5),
+                               strSerde);
 
             MockProcessorSupplier<Windowed<String>, String> proc1 = new MockProcessorSupplier<>();
             table1.toStream().process(proc1);
 
             KStream<String, String> stream2 = builder.stream(strSerde, strSerde, topic2);
             KTable<Windowed<String>, String> table2 =
-                stream2.aggregateByKey(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER,
-                    TimeWindows.of("topic2-Canonized", 10).advanceBy(5),
-                    strSerde,
-                    strSerde);
+                stream2.groupByKey(strSerde, strSerde)
+                    .aggregate(MockInitializer.STRING_INIT,
+                               MockAggregator.STRING_ADDER,
+                               TimeWindows.of("topic2-Canonized", 10).advanceBy(5),
+                               strSerde);
 
             MockProcessorSupplier<Windowed<String>, String> proc2 = new MockProcessorSupplier<>();
             table2.toStream().process(proc2);

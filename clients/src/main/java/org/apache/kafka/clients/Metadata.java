@@ -12,6 +12,13 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -21,13 +28,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.errors.TimeoutException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * A class encapsulating some of the logic around metadata.
@@ -292,7 +292,10 @@ public final class Metadata {
             unauthorizedTopics.retainAll(this.topics.keySet());
 
             for (String topic : this.topics.keySet()) {
-                partitionInfos.addAll(cluster.partitionsForTopic(topic));
+                List<PartitionInfo> partitionInfoList = cluster.partitionsForTopic(topic);
+                if (partitionInfoList != null) {
+                    partitionInfos.addAll(partitionInfoList);
+                }
             }
             nodes = cluster.nodes();
         }

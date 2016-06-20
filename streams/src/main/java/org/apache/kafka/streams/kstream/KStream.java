@@ -317,6 +317,7 @@ public interface KStream<K, V> {
 
     /**
      * Combine element values of this stream with another {@link KStream}'s elements of the same key using windowed Inner Join.
+     * If a record key is null it will not included in the resulting {@link KStream}
      *
      * @param otherStream       the instance of {@link KStream} joined with this stream
      * @param joiner            the instance of {@link ValueJoiner}
@@ -343,7 +344,7 @@ public interface KStream<K, V> {
 
     /**
      * Combine element values of this stream with another {@link KStream}'s elements of the same key using windowed Inner Join
-     * with default serializers and deserializers.
+     * with default serializers and deserializers. If a record key is null it will not included in the resulting {@link KStream}
      *
      * @param otherStream   the instance of {@link KStream} joined with this stream
      * @param joiner        the instance of {@link ValueJoiner}
@@ -361,6 +362,7 @@ public interface KStream<K, V> {
 
     /**
      * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Outer Join.
+     * If a record key is null it will not included in the resulting {@link KStream}
      *
      * @param otherStream       the instance of {@link KStream} joined with this stream
      * @param joiner            the instance of {@link ValueJoiner}
@@ -387,7 +389,7 @@ public interface KStream<K, V> {
 
     /**
      * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Outer Join
-     * with default serializers and deserializers.
+     * with default serializers and deserializers. If a record key is null it will not included in the resulting {@link KStream}
      *
      * @param otherStream   the instance of {@link KStream} joined with this stream
      * @param joiner        the instance of {@link ValueJoiner}
@@ -405,11 +407,14 @@ public interface KStream<K, V> {
 
     /**
      * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Left Join.
+     * If a record key is null it will not included in the resulting {@link KStream}
      *
      * @param otherStream       the instance of {@link KStream} joined with this stream
      * @param joiner            the instance of {@link ValueJoiner}
      * @param windows           the specification of the {@link JoinWindows}
      * @param keySerde          key serdes for materializing the other stream,
+     *                          if not specified the default serdes defined in the configs will be used
+     * @param thisValSerde    value serdes for materializing this stream,
      *                          if not specified the default serdes defined in the configs will be used
      * @param otherValueSerde   value serdes for materializing the other stream,
      *                          if not specified the default serdes defined in the configs will be used
@@ -424,11 +429,12 @@ public interface KStream<K, V> {
             ValueJoiner<V, V1, R> joiner,
             JoinWindows windows,
             Serde<K> keySerde,
+            Serde<V> thisValSerde,
             Serde<V1> otherValueSerde);
 
     /**
      * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Left Join
-     * with default serializers and deserializers.
+     * with default serializers and deserializers. If a record key is null it will not included in the resulting {@link KStream}
      *
      * @param otherStream   the instance of {@link KStream} joined with this stream
      * @param joiner        the instance of {@link ValueJoiner}
@@ -446,6 +452,7 @@ public interface KStream<K, V> {
 
     /**
      * Combine values of this stream with {@link KTable}'s elements of the same key using non-windowed Left Join.
+     * If a record key is null it will not included in the resulting {@link KStream}
      *
      * @param table     the instance of {@link KTable} joined with this stream
      * @param joiner    the instance of {@link ValueJoiner}
@@ -458,182 +465,76 @@ public interface KStream<K, V> {
     <V1, V2> KStream<K, V2> leftJoin(KTable<K, V1> table, ValueJoiner<V, V1, V2> joiner);
 
     /**
-     * Combine values of this stream by key on a window basis into a new instance of windowed {@link KTable}.
+     * Combine values of this stream with {@link KTable}'s elements of the same key using non-windowed Left Join.
+     * If a record key is null it will not included in the resulting {@link KStream}
      *
-     * @param reducer           the instance of {@link Reducer}
-     * @param windows           the specification of the aggregation {@link Windows}
-     * @param keySerde          key serdes for materializing the aggregated table,
-     *                          if not specified the default serdes defined in the configs will be used
-     * @param valueSerde        value serdes for materializing the aggregated table,
-     *                          if not specified the default serdes defined in the configs will be used
-     *
-     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
-     *         where each table contains records with unmodified keys and values
-     *         that represent the latest (rolling) aggregate for each key within that window
-     */
-    <W extends Window> KTable<Windowed<K>, V> reduceByKey(Reducer<V> reducer,
-                                                          Windows<W> windows,
-                                                          Serde<K> keySerde,
-                                                          Serde<V> valueSerde);
-
-    /**
-     * Combine values of this stream by key on a window basis into a new instance of windowed {@link KTable}
-     * with default serializers and deserializers.
-     *
-     * @param reducer the instance of {@link Reducer}
-     * @param windows the specification of the aggregation {@link Windows}
-     *
-     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
-     *         where each table contains records with unmodified keys and values
-     *         that represent the latest (rolling) aggregate for each key within that window
-     */
-    <W extends Window> KTable<Windowed<K>, V> reduceByKey(Reducer<V> reducer, Windows<W> windows);
-
-    /**
-     * Combine values of this stream by key into a new instance of ever-updating {@link KTable}.
-     *
-     * @param reducer           the instance of {@link Reducer}
-     * @param keySerde          key serdes for materializing the aggregated table,
-     *                          if not specified the default serdes defined in the configs will be used
-     * @param valueSerde        value serdes for materializing the aggregated table,
-     *                          if not specified the default serdes defined in the configs will be used
-     * @param name              the name of the resulted {@link KTable}
-     *
-     * @return a {@link KTable} that contains records with unmodified keys and values that represent the latest (rolling) aggregate for each key
-     */
-    KTable<K, V> reduceByKey(Reducer<V> reducer,
-                             Serde<K> keySerde,
-                             Serde<V> valueSerde,
-                             String name);
-
-    /**
-     * Combine values of this stream by key into a new instance of ever-updating {@link KTable} with default serializers and deserializers.
-     *
-     * @param reducer the instance of {@link Reducer}
-     * @param name    the name of the resulted {@link KTable}
-     *
-     * @return a {@link KTable} that contains records with unmodified keys and values that represent the latest (rolling) aggregate for each key
-     */
-    KTable<K, V> reduceByKey(Reducer<V> reducer, String name);
-
-    /**
-     * Aggregate values of this stream by key on a window basis into a new instance of windowed {@link KTable}.
-     *
-     * @param initializer   the instance of {@link Initializer}
-     * @param aggregator    the instance of {@link Aggregator}
-     * @param windows       the specification of the aggregation {@link Windows}
-     * @param keySerde      key serdes for materializing the aggregated table,
+     * @param table         the instance of {@link KTable} joined with this stream
+     * @param valueJoiner   the instance of {@link ValueJoiner}
+     * @param keySerde      key serdes for materializing this stream.
+     *                      If not specified the default serdes defined in the configs will be used
+     * @param valSerde      value serdes for materializing this stream,
      *                      if not specified the default serdes defined in the configs will be used
-     * @param aggValueSerde aggregate value serdes for materializing the aggregated table,
+     * @param <V1>          the value type of the table
+     * @param <V2>          the value type of the new stream
+     *
+     * @return a {@link KStream} that contains join-records for each key and values computed by the given {@link ValueJoiner},
+     *         one for each matched record-pair with the same key and within the joining window intervals
+     */
+    <V1, V2> KStream<K, V2> leftJoin(KTable<K, V1> table,
+                                     ValueJoiner<V, V1, V2> valueJoiner,
+                                     Serde<K> keySerde,
+                                     Serde<V> valSerde);
+    /**
+     * Group the records of this {@link KStream} using the provided {@link KeyValueMapper} and
+     * default serializers and deserializers. If a record key is null it will not included in
+     * the resulting {@link KGroupedStream}
+     *
+     * @param selector      select the grouping key and value to be aggregated
+     * @param <K1>          the key type of the {@link KGroupedStream}
+     * @param <V1>          the value type of the {@link KGroupedStream}
+     *
+     * @return a {@link KGroupedStream} that contains the the grouped records of the original {@link KStream}
+     */
+    <K1, V1> KGroupedStream<K1, V1> groupBy(KeyValueMapper<K, V, K1> selector);
+
+    /**
+     * Group the records of this {@link KStream} using the provided {@link KeyValueMapper}.
+     * If a record key is null it will not included in the resulting {@link KGroupedStream}
+     *
+     * @param selector      select the grouping key and value to be aggregated
+     * @param keySerde      key serdes for materializing this stream,
      *                      if not specified the default serdes defined in the configs will be used
-     * @param <T>           the value type of the resulted {@link KTable}
-     *
-     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
-     *         where each table contains records with unmodified keys and values with type {@code T}
-     *         that represent the latest (rolling) aggregate for each key within that window
-     */
-    <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Initializer<T> initializer,
-                                                                Aggregator<K, V, T> aggregator,
-                                                                Windows<W> windows,
-                                                                Serde<K> keySerde,
-                                                                Serde<T> aggValueSerde);
-
-    /**
-     * Aggregate values of this stream by key on a window basis into a new instance of windowed {@link KTable}
-     * with default serializers and deserializers.
-     *
-     * @param initializer   the instance of {@link Initializer}
-     * @param aggregator    the instance of {@link Aggregator}
-     * @param windows       the specification of the aggregation {@link Windows}
-     * @param <T>           the value type of the resulted {@link KTable}
-     *
-     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
-     *         where each table contains records with unmodified keys and values with type {@code T}
-     *         that represent the latest (rolling) aggregate for each key within that window
-     */
-    <T, W extends Window> KTable<Windowed<K>, T> aggregateByKey(Initializer<T> initializer,
-                                                                Aggregator<K, V, T> aggregator,
-                                                                Windows<W> windows);
-
-    /**
-     * Aggregate values of this stream by key into a new instance of ever-updating {@link KTable}.
-     *
-     * @param initializer   the class of {@link Initializer}
-     * @param aggregator    the class of {@link Aggregator}
-     * @param keySerde      key serdes for materializing the aggregated table,
+     * @param valSerde    value serdes for materializing this stream,
      *                      if not specified the default serdes defined in the configs will be used
-     * @param aggValueSerde aggregate value serdes for materializing the aggregated table,
+     * @param <K1>          the key type of the {@link KGroupedStream}
+     * @param <V1>          the value type of the {@link KGroupedStream}
+     *
+     * @return a {@link KGroupedStream} that contains the the grouped records of the original {@link KStream}
+     */
+    <K1, V1> KGroupedStream<K1, V1> groupBy(KeyValueMapper<K, V, K1> selector,
+                                            Serde<K1> keySerde,
+                                            Serde<V1> valSerde);
+
+    /**
+     * Group the records with the same key into a {@link KGroupedStream} while preserving the
+     * original values. If a record key is null it will not included in the resulting
+     * {@link KGroupedStream}
+     * Default Serdes will be used
+     * @return a {@link KGroupedStream}
+     */
+    KGroupedStream<K, V> groupByKey();
+
+    /**
+     * Group the records with the same key into a {@link KGroupedStream} while preserving the
+     * original values. If a record key is null it will not included in the resulting
+     * {@link KGroupedStream}
+     * @param keySerde      key serdes for materializing this stream,
      *                      if not specified the default serdes defined in the configs will be used
-     * @param name          the name of the resulted {@link KTable}
-     * @param <T>           the value type of the resulted {@link KTable}
-     *
-     * @return a {@link KTable} that contains records with unmodified keys and values (of different type) that represent the latest (rolling) aggregate for each key
-     */
-    <T> KTable<K, T> aggregateByKey(Initializer<T> initializer,
-                                    Aggregator<K, V, T> aggregator,
-                                    Serde<K> keySerde,
-                                    Serde<T> aggValueSerde,
-                                    String name);
-
-    /**
-     * Aggregate values of this stream by key into a new instance of ever-updating {@link KTable}
-     * with default serializers and deserializers.
-     *
-     * @param initializer   the class of {@link Initializer}
-     * @param aggregator    the class of {@link Aggregator}
-     * @param name          the name of the resulted {@link KTable}
-     * @param <T>           the value type of the resulted {@link KTable}
-     *
-     * @return a {@link KTable} that contains records with unmodified keys and values (of different type) that represent the latest (rolling) aggregate for each key
-     */
-    <T> KTable<K, T> aggregateByKey(Initializer<T> initializer,
-                                    Aggregator<K, V, T> aggregator,
-                                    String name);
-
-    /**
-     * Count number of records of this stream by key on a window basis into a new instance of windowed {@link KTable}.
-     *
-     * @param windows       the specification of the aggregation {@link Windows}
-     * @param keySerde      key serdes for materializing the counting table,
+     * @param valSerde    value serdes for materializing this stream,
      *                      if not specified the default serdes defined in the configs will be used
-     *
-     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
-     *         where each table contains records with unmodified keys and values
-     *         that represent the latest (rolling) count (i.e., number of records) for each key within that window
+     * @return a {@link KGroupedStream}
      */
-    <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows, Serde<K> keySerde);
-
-    /**
-     * Count number of records of this stream by key on a window basis into a new instance of windowed {@link KTable}
-     * with default serializers and deserializers.
-     *
-     * @param windows       the specification of the aggregation {@link Windows}
-     *
-     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
-     *         where each table contains records with unmodified keys and values
-     *         that represent the latest (rolling) count (i.e., number of records) for each key within that window
-     */
-    <W extends Window> KTable<Windowed<K>, Long> countByKey(Windows<W> windows);
-
-    /**
-     * Count number of records of this stream by key into a new instance of ever-updating {@link KTable}.
-     *
-     * @param keySerde      key serdes for materializing the counting table,
-     *                      if not specified the default serdes defined in the configs will be used
-     * @param name          the name of the resulted {@link KTable}
-     *
-     * @return a {@link KTable} that contains records with unmodified keys and values that represent the latest (rolling) count (i.e., number of records) for each key
-     */
-    KTable<K, Long> countByKey(Serde<K> keySerde, String name);
-
-    /**
-     * Count number of records of this stream by key into a new instance of ever-updating {@link KTable}
-     * with default serializers and deserializers.
-     *
-     * @param name          the name of the resulted {@link KTable}
-     *
-     * @return a {@link KTable} that contains records with unmodified keys and values that represent the latest (rolling) count (i.e., number of records) for each key
-     */
-    KTable<K, Long> countByKey(String name);
+    KGroupedStream<K, V> groupByKey(Serde<K> keySerde,
+                                    Serde<V> valSerde);
 
 }
