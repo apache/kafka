@@ -82,7 +82,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
 
-    private RocksDB db;
+    private volatile RocksDB db;
 
     // the following option objects will be created at constructor and disposed at close()
     private Options options;
@@ -231,6 +231,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     @Override
     public boolean persistent() {
         return true;
+    }
+
+    @Override
+    public boolean isOpen() {
+        return db != null;
     }
 
     @Override

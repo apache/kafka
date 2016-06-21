@@ -75,6 +75,7 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
         private final Serde<K> keySerde;
         private final Serde<V> valueSerde;
         private final NavigableMap<K, V> map;
+        private volatile boolean open = false;
 
         public MemoryStore(String name, Serde<K> keySerde, Serde<V> valueSerde) {
             this.name = name;
@@ -98,12 +99,17 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
         @Override
         @SuppressWarnings("unchecked")
         public void init(ProcessorContext context, StateStore root) {
-            // do nothing
+            this.open = true;
         }
 
         @Override
         public boolean persistent() {
             return false;
+        }
+
+        @Override
+        public boolean isOpen() {
+            return this.open;
         }
 
         @Override
@@ -158,7 +164,7 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
 
         @Override
         public void close() {
-            // do-nothing
+            this.open = false;
         }
 
         private static class MemoryStoreIterator<K, V> implements KeyValueIterator<K, V> {

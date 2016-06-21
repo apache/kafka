@@ -32,16 +32,7 @@ import java.util.List;
  * @param <V> The value type
  */
 @InterfaceStability.Unstable
-public interface KeyValueStore<K, V> extends StateStore {
-
-    /**
-     * Get the value corresponding to this key
-     *
-     * @param key The key to fetch
-     * @return The value or null if no value is found.
-     * @throws NullPointerException If null is used for key.
-     */
-    V get(K key);
+public interface KeyValueStore<K, V> extends StateStore, ReadOnlyKeyValueStore<K, V> {
 
     /**
      * Update the value associated with this key
