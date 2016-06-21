@@ -41,6 +41,8 @@ import java.util.Map;
  * </ul>
  * A join is symmetric in the sense, that a join specification on the first stream returns the same result record as
  * a join specification on the second stream with flipped before and after values.
+ * <p>
+ * Both values (before and after) must not be negative and not zero at the same time.
  */
 public class JoinWindows extends Windows<TimeWindow> {
 
