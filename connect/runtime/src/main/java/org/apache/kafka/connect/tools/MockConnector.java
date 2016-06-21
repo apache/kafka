@@ -41,7 +41,6 @@ import java.util.concurrent.TimeUnit;
  * @see MockSourceConnector
  */
 public class MockConnector extends Connector {
-
     public static final String MOCK_MODE_KEY = "mock_mode";
     public static final String DELAY_MS_KEY = "delay_ms";
 

@@ -16,7 +16,9 @@
  **/
 package org.apache.kafka.connect.tools;
 
+import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
 
@@ -29,6 +31,26 @@ import java.util.Map;
 public class MockSourceConnector extends SourceConnector {
 
     private MockConnector delegate = new MockConnector();
+
+    @Override
+    public void initialize(ConnectorContext ctx) {
+        delegate.initialize(ctx);
+    }
+
+    @Override
+    public void initialize(ConnectorContext ctx, List<Map<String, String>> taskConfigs) {
+        delegate.initialize(ctx, taskConfigs);
+    }
+
+    @Override
+    public void reconfigure(Map<String, String> props) {
+        delegate.reconfigure(props);
+    }
+
+    @Override
+    public Config validate(Map<String, String> connectorConfigs) {
+        return delegate.validate(connectorConfigs);
+    }
 
     @Override
     public String version() {
