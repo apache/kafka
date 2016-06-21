@@ -361,12 +361,12 @@ class MockSink(object):
 
 class MockSource(object):
 
-    def __init__(self, cc, topics, mode=None, delay_ms=10000, name="mock-source"):
+    def __init__(self, cc, topics, mode=None, delay_sec=10000, name="mock-source"):
         self.cc = cc
         self.logger = self.cc.logger
         self.name = name
         self.mode = mode
-        self.delay_ms = delay_ms
+        self.delay_sec = delay_sec
         self.topics = topics
 
     def start(self):
