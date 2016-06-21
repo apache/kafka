@@ -29,7 +29,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
+import java.util.UUID;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
@@ -38,6 +40,10 @@ import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.serialization.IntegerDeserializer;
+import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
 
 /**
@@ -178,4 +184,66 @@ public class TestUtils {
         properties.putAll(additional);
         return properties;
     }
+
+    // provides producer properties with default String serializers for keys and values
+    public static Properties producerConfigStringKeysValues(final String bootstrapServers) {
+        return producerConfig(bootstrapServers, StringSerializer.class, StringSerializer.class, new Properties());
+    }
+
+    // provides producer properties with default serializers for Integers keys and String values
+    public static Properties producerConfigIntKeysStringValues(final String bootstrapServers) {
+        return producerConfig(bootstrapServers, IntegerSerializer.class, StringSerializer.class, new Properties());
+    }
+
+    public static Properties consumerConfig(final String bootstrapServers,
+                                            final String groupId,
+                                            final Class keyDeserializer,
+                                            final Class valueDeserializer,
+                                            final Properties additional) {
+
+        final Properties consumerConfig = new Properties();
+        consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer);
+        consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer);
+        consumerConfig.putAll(additional);
+        return consumerConfig;
+    }
+
+    // returns consumer config with random UUID for the Group ID and default StringDeserializer for keys/values
+    public static Properties consumerConfigStringKeysValues(final String bootstrapServers) {
+        return consumerConfig(bootstrapServers,
+                              UUID.randomUUID().toString(),
+                              StringDeserializer.class,
+                              StringDeserializer.class,
+                              new Properties());
+    }
+
+    // returns consumer config with random UUID for the Group ID and default serializers
+    public static Properties consumerConfigIntKeysStringValues(final String bootstrapServers) {
+        return consumerConfig(bootstrapServers,
+                UUID.randomUUID().toString(),
+                IntegerDeserializer.class,
+                StringDeserializer.class,
+                new Properties());
+    }
+
+    // uses default value of 30 seconds for timeout
+    public static void waitForCondition(TestCondition testCondition) {
+        waitForCondition(testCondition, 30000);
+    }
+
+    /**
+     *  Used to wait for specific conditions/state to be me during a test
+     *  this is meant to be a replacement for using Thread.sleep
+     */
+    public static void waitForCondition(TestCondition testCondition, long maxTimeMillis) {
+        long startTime = System.currentTimeMillis();
+        while (!testCondition.conditionMet() && ((System.currentTimeMillis() - startTime) < maxTimeMillis)) {
+            //empty loop just waiting for update
+        }
+
+    }
+
 }
