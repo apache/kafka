@@ -67,22 +67,32 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
   var recordIter = consumer.poll(0).iterator
 
   def consumerInit() {
-    if (topic.isDefined)
-      if (partitionId.isDefined) {
-        val topicPartition = new TopicPartition(topic.get, partitionId.get)
-        consumer.assign(List(topicPartition))
-        offset.get match {
-          case OffsetRequest.EarliestTime => consumer.seekToBeginning(List(topicPartition))
-          case OffsetRequest.LatestTime => consumer.seekToEnd(List(topicPartition))
-          case _ => consumer.seek(topicPartition, offset.get)
-        }
-      }
-      else
-        consumer.subscribe(List(topic.get))
-    else if (whitelist.isDefined)
-      consumer.subscribe(Pattern.compile(whitelist.get), new NoOpConsumerRebalanceListener())
-    else
-      throw new IllegalArgumentException("Exactly one of topic or whitelist has to be provided.")
+    (topic, partitionId, offset, whitelist) match {
+      case (Some(topic), Some(partitionId), Some(offset), None) =>
+        seek(topic, partitionId, offset)
+      case (Some(topic), Some(partitionId), None, None) =>
+        // default to latest if no offset is provided
+        seek(topic, partitionId, OffsetRequest.LatestTime)
+      case (Some(topic), None, None, None) =>
+        consumer.subscribe(List(topic))
+      case (None, None, None, Some(whitelist)) =>
+        consumer.subscribe(Pattern.compile(whitelist), new NoOpConsumerRebalanceListener())
+      case _ =>
+        throw new IllegalArgumentException("An invalid combination of arguments is provided. " +
+            "Exactly one of 'topic' or 'whitelist' must be provided. " +
+            "If 'topic' is provided, an optional 'partition' may also be provided. " +
+            "If 'partition' is provided, an optional 'offset' may also be provided, otherwise, consumption starts from the end of the partition.")
+    }
+  }
+
+  def seek(topic: String, partitionId: Int, offset: Long) {
+    val topicPartition = new TopicPartition(topic, partitionId)
+    consumer.assign(List(topicPartition))
+    offset match {
+      case OffsetRequest.EarliestTime => consumer.seekToBeginning(List(topicPartition))
+      case OffsetRequest.LatestTime => consumer.seekToEnd(List(topicPartition))
+      case _ => consumer.seek(topicPartition, offset)
+    }
   }
 
   override def receive(): BaseConsumerRecord = {
