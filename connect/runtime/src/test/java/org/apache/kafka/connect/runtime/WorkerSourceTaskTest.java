@@ -21,9 +21,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.utils.SystemTime;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -53,7 +51,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -68,7 +65,6 @@ import static org.junit.Assert.assertTrue;
 
 @RunWith(PowerMockRunner.class)
 public class WorkerSourceTaskTest extends ThreadedTest {
-    private final Random random = new Random();
     private static final String TOPIC = "topic";
     private static final Map<String, byte[]> PARTITION = Collections.singletonMap("key", "partition".getBytes());
     private static final Map<String, Integer> OFFSET = Collections.singletonMap("key", 12);
@@ -163,10 +159,13 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);
-        executor.submit(workerTask);
+        Future<?> taskFuture = executor.submit(workerTask);
+
         assertTrue(startupLatch.await(5, TimeUnit.SECONDS));
         workerTask.stop();
         assertTrue(workerTask.awaitStop(1000));
+
+        taskFuture.get();
 
         PowerMock.verifyAll();
     }
@@ -199,8 +198,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);
-        executor.submit(workerTask);
-        awaitLatch(pollLatch);
+        Future<?> taskFuture = executor.submit(workerTask);
+        assertTrue(awaitLatch(pollLatch));
 
         workerTask.transitionTo(TargetState.PAUSED);
 
@@ -212,6 +211,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         workerTask.stop();
         assertTrue(workerTask.awaitStop(1000));
+
+        taskFuture.get();
 
         PowerMock.verifyAll();
     }
@@ -240,10 +241,13 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);
-        executor.submit(workerTask);
-        awaitLatch(pollLatch);
+        Future<?> taskFuture = executor.submit(workerTask);
+
+        assertTrue(awaitLatch(pollLatch));
         workerTask.stop();
         assertTrue(workerTask.awaitStop(1000));
+
+        taskFuture.get();
 
         PowerMock.verifyAll();
     }
@@ -259,9 +263,15 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         statusListener.onStartup(taskId);
         EasyMock.expectLastCall();
 
-        final CountDownLatch pollLatch = expectPolls(1);
-        RuntimeException exception = new RuntimeException();
-        EasyMock.expect(sourceTask.poll()).andThrow(exception);
+        final CountDownLatch pollLatch = new CountDownLatch(1);
+        final RuntimeException exception = new RuntimeException();
+        EasyMock.expect(sourceTask.poll()).andAnswer(new IAnswer<List<SourceRecord>>() {
+            @Override
+            public List<SourceRecord> answer() throws Throwable {
+                pollLatch.countDown();
+                throw exception;
+            }
+        });
 
         statusListener.onFailure(taskId, exception);
         EasyMock.expectLastCall();
@@ -273,10 +283,13 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);
-        executor.submit(workerTask);
-        awaitLatch(pollLatch);
+        Future<?> taskFuture = executor.submit(workerTask);
+
+        assertTrue(awaitLatch(pollLatch));
         workerTask.stop();
         assertTrue(workerTask.awaitStop(1000));
+
+        taskFuture.get();
 
         PowerMock.verifyAll();
     }
@@ -308,11 +321,14 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);
-        executor.submit(workerTask);
-        awaitLatch(pollLatch);
+        Future<?> taskFuture = executor.submit(workerTask);
+
+        assertTrue(awaitLatch(pollLatch));
         assertTrue(workerTask.commitOffsets());
         workerTask.stop();
         assertTrue(workerTask.awaitStop(1000));
+
+        taskFuture.get();
 
         PowerMock.verifyAll();
     }
@@ -343,11 +359,14 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);
-        executor.submit(workerTask);
-        awaitLatch(pollLatch);
+        Future<?> taskFuture = executor.submit(workerTask);
+
+        assertTrue(awaitLatch(pollLatch));
         assertTrue(workerTask.commitOffsets());
         workerTask.stop();
         assertTrue(workerTask.awaitStop(1000));
+
+        taskFuture.get();
 
         PowerMock.verifyAll();
     }
@@ -433,38 +452,46 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     @Test
     public void testSlowTaskStart() throws Exception {
         final CountDownLatch startupLatch = new CountDownLatch(1);
+        final CountDownLatch finishStartupLatch = new CountDownLatch(1);
 
         createWorkerTask();
 
         sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
         EasyMock.expectLastCall();
         sourceTask.start(TASK_PROPS);
-        EasyMock.expectLastCall();
-
-        statusListener.onStartup(taskId);
         EasyMock.expectLastCall().andAnswer(new IAnswer<Object>() {
             @Override
             public Object answer() throws Throwable {
                 startupLatch.countDown();
-                Utils.sleep(100);
+                assertTrue(awaitLatch(finishStartupLatch));
                 return null;
             }
         });
+
+        statusListener.onStartup(taskId);
+        EasyMock.expectLastCall();
 
         sourceTask.stop();
         EasyMock.expectLastCall();
         expectOffsetFlush(true);
 
+        statusListener.onShutdown(taskId);
+        EasyMock.expectLastCall();
+
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);
-        executor.submit(workerTask);
+        Future<?> workerTaskFuture = executor.submit(workerTask);
+
         // Stopping immediately while the other thread has work to do should result in no polling, no offset commits,
         // exiting the work thread immediately, and the stop() method will be invoked in the background thread since it
         // cannot be invoked immediately in the thread trying to stop the task.
-        awaitLatch(startupLatch);
+        assertTrue(awaitLatch(startupLatch));
         workerTask.stop();
+        finishStartupLatch.countDown();
         assertTrue(workerTask.awaitStop(1000));
+
+        workerTaskFuture.get();
 
         PowerMock.verifyAll();
     }
@@ -580,7 +607,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         sourceTask.commitRecord(EasyMock.anyObject(SourceRecord.class));
         IExpectationSetters<Void> expect = EasyMock.expectLastCall();
         if (!succeed) {
-            expect = expect.andThrow(new InterruptException("Error committing record in source task"));
+            expect = expect.andThrow(new RuntimeException("Error committing record in source task"));
         }
         if (anyTimes) {
             expect.anyTimes();
@@ -589,7 +616,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
     private boolean awaitLatch(CountDownLatch latch) {
         try {
-            return latch.await(1000, TimeUnit.MILLISECONDS);
+            return latch.await(5000, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             // ignore
         }
