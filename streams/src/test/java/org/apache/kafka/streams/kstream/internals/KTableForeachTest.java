@@ -78,7 +78,7 @@ public class KTableForeachTest {
 
         // When
         KStreamBuilder builder = new KStreamBuilder();
-        KTable<Integer, String> table = builder.table(intSerde, stringSerde, topicName);
+        KTable<Integer, String> table = builder.table(intSerde, stringSerde, topicName, "anyStoreName");
         table.foreach(action);
 
         // Then

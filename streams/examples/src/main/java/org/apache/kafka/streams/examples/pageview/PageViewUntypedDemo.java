@@ -73,7 +73,8 @@ public class PageViewUntypedDemo {
 
         KStream<String, JsonNode> views = builder.stream(Serdes.String(), jsonSerde, "streams-pageview-input");
 
-        KTable<String, JsonNode> users = builder.table(Serdes.String(), jsonSerde, "streams-userprofile-input");
+        KTable<String, JsonNode> users = builder.table(Serdes.String(), jsonSerde,
+            "streams-userprofile-input", "streams-userprofile-store-name");
 
         KTable<String, String> userRegions = users.mapValues(new ValueMapper<JsonNode, String>() {
             @Override

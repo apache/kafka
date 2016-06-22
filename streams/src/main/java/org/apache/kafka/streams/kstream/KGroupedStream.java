@@ -39,12 +39,12 @@ public interface KGroupedStream<K, V> {
      * {@link KTable}.
      *
      * @param reducer           the instance of {@link Reducer}
-     * @param name              the name of the resulted {@link KTable}
+     * @param storeName         the name of the underlying {@link KTable} state store
      *
      * @return a {@link KTable} that contains records with unmodified keys and values that represent the latest (rolling) aggregate for each key
      */
     KTable<K, V> reduce(Reducer<V> reducer,
-                        String name);
+                        final String storeName);
 
 
     /**
@@ -68,6 +68,7 @@ public interface KGroupedStream<K, V> {
      * @param aggregator    the instance of {@link Aggregator}
      * @param aggValueSerde aggregate value serdes for materializing the aggregated table,
      *                      if not specified the default serdes defined in the configs will be used
+     * @param storeName     the name of the state store created from this operation
      * @param <T>           the value type of the resulted {@link KTable}
      *
      * @return a {@link KTable} that represents the latest (rolling) aggregate for each key
@@ -75,7 +76,7 @@ public interface KGroupedStream<K, V> {
     <T> KTable<K, T> aggregate(Initializer<T> initializer,
                                Aggregator<K, V, T> aggregator,
                                Serde<T> aggValueSerde,
-                               String name);
+                               final String storeName);
 
     /**
      * Aggregate values of this stream by key on a window basis into a new instance of windowed {@link KTable}.
@@ -101,11 +102,11 @@ public interface KGroupedStream<K, V> {
     /**
      * Count number of records of this stream by key into a new instance of a {@link KTable}
      *
-     * @param storeName  the name of the resulted {@link KTable}
+     * @param storeName  the name of the underlying {@link KTable} state store
      *
      * @return a {@link KTable} that contains records with unmodified keys and values that represent the latest (rolling) count (i.e., number of records) for each key
      */
-    KTable<K, Long> count(String storeName);
+    KTable<K, Long> count(final String storeName);
 
 
     /**

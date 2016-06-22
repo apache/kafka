@@ -120,10 +120,11 @@ public class KStreamBuilder extends TopologyBuilder {
      * The default deserializers specified in the config are used.
      *
      * @param topic     the topic name; cannot be null
+     * @param storeName the state store name used if this KTable is materialized, can be null if materialization not expected
      * @return a {@link KTable} for the specified topics
      */
-    public <K, V> KTable<K, V> table(String topic) {
-        return table(null, null, topic);
+    public <K, V> KTable<K, V> table(String topic, final String storeName) {
+        return table(null, null, topic, storeName);
     }
 
     /**
@@ -135,9 +136,10 @@ public class KStreamBuilder extends TopologyBuilder {
      * @param valSerde   value serde used to send key-value pairs,
      *                   if not specified the default value serde defined in the configuration will be used
      * @param topic      the topic name; cannot be null
+     * @param storeName  the state store name used if this KTable is materialized, can be null if materialization not expected
      * @return a {@link KTable} for the specified topics
      */
-    public <K, V> KTable<K, V> table(Serde<K> keySerde, Serde<V> valSerde, String topic) {
+    public <K, V> KTable<K, V> table(Serde<K> keySerde, Serde<V> valSerde, String topic, final String storeName) {
         String source = newName(KStreamImpl.SOURCE_NAME);
         String name = newName(KTableImpl.SOURCE_NAME);
 
@@ -145,8 +147,8 @@ public class KStreamBuilder extends TopologyBuilder {
 
         ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(topic);
         addProcessor(name, processorSupplier, source);
-
-        return new KTableImpl<>(this, name, processorSupplier, Collections.singleton(source), keySerde, valSerde);
+        // TODO: do not use topic name, but storeName
+        return new KTableImpl<>(this, name, processorSupplier, Collections.singleton(source), keySerde, valSerde, topic);
     }
 
     /**

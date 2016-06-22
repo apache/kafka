@@ -129,7 +129,7 @@ public class SmokeTestClient extends SmokeTestUtil {
                 new Unwindow<String, Integer>()
         ).to(stringSerde, intSerde, "min");
 
-        KTable<String, Integer> minTable = builder.table(stringSerde, intSerde, "min");
+        KTable<String, Integer> minTable = builder.table(stringSerde, intSerde, "min", "minStoreName");
         minTable.toStream().process(SmokeTestUtil.<Integer>printProcessorSupplier("min"));
 
         // max
@@ -151,7 +151,7 @@ public class SmokeTestClient extends SmokeTestUtil {
                 new Unwindow<String, Integer>()
         ).to(stringSerde, intSerde, "max");
 
-        KTable<String, Integer> maxTable = builder.table(stringSerde, intSerde, "max");
+        KTable<String, Integer> maxTable = builder.table(stringSerde, intSerde, "max", "maxStoreName");
         maxTable.toStream().process(SmokeTestUtil.<Integer>printProcessorSupplier("max"));
 
         // sum
@@ -174,7 +174,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         ).to(stringSerde, longSerde, "sum");
 
 
-        KTable<String, Long> sumTable = builder.table(stringSerde, longSerde, "sum");
+        KTable<String, Long> sumTable = builder.table(stringSerde, longSerde, "sum", "sumStoreName");
         sumTable.toStream().process(SmokeTestUtil.<Long>printProcessorSupplier("sum"));
 
         // cnt
@@ -183,7 +183,7 @@ public class SmokeTestClient extends SmokeTestUtil {
                 new Unwindow<String, Long>()
         ).to(stringSerde, longSerde, "cnt");
 
-        KTable<String, Long> cntTable = builder.table(stringSerde, longSerde, "cnt");
+        KTable<String, Long> cntTable = builder.table(stringSerde, longSerde, "cnt", "cntStoreName");
         cntTable.toStream().process(SmokeTestUtil.<Long>printProcessorSupplier("cnt"));
 
         // dif

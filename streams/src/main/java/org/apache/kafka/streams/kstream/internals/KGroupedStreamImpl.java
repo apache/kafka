@@ -54,11 +54,11 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
 
     @Override
     public KTable<K, V> reduce(final Reducer<V> reducer,
-                               final String name) {
+                               final String storeName) {
         return doAggregate(
-            new KStreamReduce<K, V>(name, reducer),
+            new KStreamReduce<K, V>(storeName, reducer),
             REDUCE_NAME,
-            keyValueStore(valSerde, name));
+            keyValueStore(valSerde, storeName));
     }
 
 
@@ -144,8 +144,8 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
     }
 
     private <T> Stores.PersistentKeyValueFactory<K, T> storeFactory(final Serde<T> aggValueSerde,
-                                                                    final String name) {
-        return Stores.create(name)
+                                                                    final String storeName) {
+        return Stores.create(storeName)
             .withKeys(keySerde)
             .withValues(aggValueSerde)
             .persistent();
@@ -159,7 +159,7 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
 
         final String aggFunctionName = topology.newName(functionName);
 
-        final String sourceName = repartitionIfRequired();
+        final String sourceName = repartitionIfRequired(storeSupplier.name());
 
         topology.addProcessor(aggFunctionName, aggregateSupplier, sourceName);
         topology.addStateStore(storeSupplier, aggFunctionName);
@@ -168,16 +168,17 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
                                 aggFunctionName,
                                 aggregateSupplier,
                                 sourceName.equals(this.name) ? sourceNodes
-                                                             : Collections.singleton(sourceName));
+                                                             : Collections.singleton(sourceName),
+                                storeSupplier.name());
     }
 
     /**
      * @return the new sourceName if repartitioned. Otherwise the name of this stream
      */
-    private String repartitionIfRequired() {
+    private String repartitionIfRequired(final String storeName) {
         if (!repartitionRequired) {
             return this.name;
         }
-        return KStreamImpl.createReparitionedSource(this, keySerde, valSerde);
+        return KStreamImpl.createReparitionedSource(this, keySerde, valSerde, storeName);
     }
 }

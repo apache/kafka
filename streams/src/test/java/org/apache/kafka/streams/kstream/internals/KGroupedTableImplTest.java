@@ -51,7 +51,7 @@ public class KGroupedTableImplTest {
         final String input = "count-test-input";
         final MockProcessorSupplier processorSupplier = new MockProcessorSupplier<>();
 
-        builder.table(Serdes.String(), Serdes.String(), input)
+        builder.table(Serdes.String(), Serdes.String(), input, "anyStoreName")
                 .groupBy(new KeyValueMapper<String, String, KeyValue<String, String>>() {
                     @Override
                     public KeyValue<String, String> apply(final String key, final String value) {

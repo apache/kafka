@@ -55,7 +55,7 @@ public class KTableMapKeysTest {
 
         String topic1 = "topic_map_keys";
 
-        KTable<Integer, String> table1 = builder.table(integerSerde, stringSerde, topic1);
+        KTable<Integer, String> table1 = builder.table(integerSerde, stringSerde, topic1, "anyStoreName");
 
         final Map<Integer, String> keyMap = new HashMap<>();
         keyMap.put(1, "ONE");

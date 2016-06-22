@@ -38,13 +38,13 @@ public interface KGroupedTable<K, V> {
      *
      * @param adder         the instance of {@link Reducer} for addition
      * @param subtractor    the instance of {@link Reducer} for subtraction
-     * @param name          the name of the resulted {@link KTable}
+     * @param storeName     the name of the underlying {@link KTable} state store
      * @return a {@link KTable} with the same key and value types as this {@link KGroupedTable},
      *         containing aggregated values for each key
      */
     KTable<K, V> reduce(Reducer<V> adder,
                         Reducer<V> subtractor,
-                        String name);
+                        String storeName);
 
     /**
      * Aggregate updating values of this stream by the selected key into a new instance of {@link KTable}.
@@ -54,7 +54,7 @@ public interface KGroupedTable<K, V> {
      * @param substractor   the instance of {@link Aggregator} for subtraction
      * @param aggValueSerde value serdes for materializing the aggregated table,
      *                      if not specified the default serdes defined in the configs will be used
-     * @param name          the name of the resulted table
+     * @param storeName     the name of the underlying {@link KTable} state store
      * @param <T>           the value type of the aggregated {@link KTable}
      * @return a {@link KTable} with same key and aggregated value type {@code T},
      *         containing aggregated values for each key
@@ -63,7 +63,7 @@ public interface KGroupedTable<K, V> {
                                Aggregator<K, V, T> adder,
                                Aggregator<K, V, T> substractor,
                                Serde<T> aggValueSerde,
-                               String name);
+                               String storeName);
 
     /**
      * Aggregate updating values of this stream by the selected key into a new instance of {@link KTable}
@@ -72,7 +72,7 @@ public interface KGroupedTable<K, V> {
      * @param initializer   the instance of {@link Initializer}
      * @param adder         the instance of {@link Aggregator} for addition
      * @param substractor   the instance of {@link Aggregator} for subtraction
-     * @param name          the name of the resulted {@link KTable}
+     * @param storeName     the name of the underlying {@link KTable} state store
      * @param <T>           the value type of the aggregated {@link KTable}
      * @return a {@link KTable} with same key and aggregated value type {@code T},
      *         containing aggregated values for each key
@@ -80,15 +80,15 @@ public interface KGroupedTable<K, V> {
     <T> KTable<K, T> aggregate(Initializer<T> initializer,
                                Aggregator<K, V, T> adder,
                                Aggregator<K, V, T> substractor,
-                               String name);
+                               String storeName);
 
     /**
      * Count number of records of this stream by the selected key into a new instance of {@link KTable}.
      *
-     * @param name          the name of the resulted {@link KTable}
+     * @param storeName     the name of the underlying {@link KTable} state store
      * @return a {@link KTable} with same key and {@link Long} value type as this {@link KGroupedTable},
      *         containing the number of values for each key
      */
-    KTable<K, Long> count(String name);
+    KTable<K, Long> count(String storeName);
 
 }

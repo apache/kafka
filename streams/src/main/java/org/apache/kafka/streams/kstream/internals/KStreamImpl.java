@@ -425,11 +425,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         KStreamImpl<K, V1> joinOther = (KStreamImpl) other;
 
         if (joinThis.repartitionRequired) {
-            joinThis = joinThis.repartitionForJoin(keySerde, thisValueSerde);
+            joinThis = joinThis.repartitionForJoin(keySerde, thisValueSerde, lhsStoreName);
         }
 
         if (joinOther.repartitionRequired) {
-            joinOther = joinOther.repartitionForJoin(keySerde, otherValueSerde);
+            joinOther = joinOther.repartitionForJoin(keySerde, otherValueSerde, otherStoreName);
         }
 
         joinThis.ensureJoinableWith(joinOther);
@@ -451,25 +451,28 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
      * an operation that changes the key, i.e, selectKey, map(..), flatMap(..).
      * @param keySerde      Serdes for serializing the keys
      * @param valSerde      Serdes for serilaizing the values
+     * @param storeName     state store name for source to be repartitioned
      * @return a new {@link KStreamImpl}
      */
     private KStreamImpl<K, V> repartitionForJoin(Serde<K> keySerde,
-                                                 Serde<V> valSerde) {
+                                                 Serde<V> valSerde,
+                                                 final String storeName) {
 
-        String repartitionedSourceName = createReparitionedSource(this, keySerde, valSerde);
+        String repartitionedSourceName = createReparitionedSource(this, keySerde, valSerde, storeName);
         return new KStreamImpl<>(topology, repartitionedSourceName, Collections
             .singleton(repartitionedSourceName), false);
     }
 
     static <K1, V1> String createReparitionedSource(AbstractStream<K1> stream,
                                                     Serde<K1> keySerde,
-                                                    Serde<V1> valSerde) {
+                                                    Serde<V1> valSerde,
+                                                    final String storeName) {
         Serializer<K1> keySerializer = keySerde != null ? keySerde.serializer() : null;
         Serializer<V1> valSerializer = valSerde != null ? valSerde.serializer() : null;
         Deserializer<K1> keyDeserializer = keySerde != null ? keySerde.deserializer() : null;
         Deserializer<V1> valDeserializer = valSerde != null ? valSerde.deserializer() : null;
 
-        String repartitionTopic = stream.name + REPARTITION_TOPIC_SUFFIX;
+        String repartitionTopic = storeName + REPARTITION_TOPIC_SUFFIX;
         String sinkName = stream.topology.newName(SINK_NAME);
         String filterName = stream.topology.newName(FILTER_NAME);
         String sourceName = stream.topology.newName(SOURCE_NAME);
@@ -537,7 +540,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         if (repartitionRequired) {
             KStreamImpl<K, V> thisStreamRepartitioned = this.repartitionForJoin(keySerde,
-                                                                                valueSerde
+                                                                                valueSerde, other.getStoreName()
             );
             return thisStreamRepartitioned.doStreamTableLeftJoin(other, joiner);
         } else {

@@ -98,7 +98,7 @@ public class KStreamRepartitionJoinTest {
         streamThree = builder.stream(Serdes.Integer(), Serdes.Integer(), streamThreeInput);
         streamFour = builder.stream(Serdes.Integer(), Serdes.String(), streamFourInput);
 
-        kTable = builder.table(Serdes.Integer(), Serdes.String(), tableInput);
+        kTable = builder.table(Serdes.Integer(), Serdes.String(), tableInput, "anyStoreName");
 
         valueJoiner = new ValueJoiner<Integer, String, String>() {
             @Override
@@ -555,7 +555,7 @@ public class KStreamRepartitionJoinTest {
                  Serdes.Integer(),
                  Serdes.String(),
                  "the-join-this",
-                 "the-join-pther")
+                 "the-join-other")
             .to(Serdes.Integer(), Serdes.String(), outputTopic);
     }
 
@@ -568,7 +568,7 @@ public class KStreamRepartitionJoinTest {
                      Serdes.Integer(),
                      Serdes.String(),
                      "the-join-this",
-                     "the-join-pther")
+                     "the-join-other")
             .to(Serdes.Integer(), Serdes.String(), outputTopic);
     }
 
