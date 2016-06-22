@@ -90,7 +90,7 @@ public class MetadataTest {
             partitionInfos.addAll(topic.availablePartitionsForTopic(topic.topics().iterator().next()));
         }
 
-        metadata.update(new Cluster(nodes, partitionInfos, new HashSet<>()), 0);
+        metadata.update(new Cluster(nodes, partitionInfos, new HashSet<String>()), 0);
 
         assertEquals(2, metadata.fetch().topics().size());
         assertNull(metadata.fetch().partitionsForTopic("bar"));
