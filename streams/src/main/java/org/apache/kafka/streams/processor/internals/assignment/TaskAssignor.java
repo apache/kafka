@@ -40,10 +40,14 @@ public class TaskAssignor<C, T extends Comparable<T>> {
         }
 
         TaskAssignor<C, T> assignor = new TaskAssignor<>(states, tasks, seed);
+        log.info("Assign: sameTopology: {}, states: {}, tasks: {}, replicas: {}",
+            assignor.sameTopology, states, tasks, numStandbyReplicas);
+
         assignor.assignTasks();
         if (numStandbyReplicas > 0)
             assignor.assignStandbyTasks(numStandbyReplicas);
 
+        log.info("Assigned states: " + assignor.states);
         return assignor.states;
     }
 
@@ -52,12 +56,30 @@ public class TaskAssignor<C, T extends Comparable<T>> {
     private final Set<TaskPair<T>> taskPairs;
     private final int maxNumTaskPairs;
     private final ArrayList<T> tasks;
+    private boolean sameTopology = true;
 
     private TaskAssignor(Map<C, ClientState<T>> states, Set<T> tasks, long randomSeed) {
         this.rand = new Random(randomSeed);
         this.states = new HashMap<>();
+        int avgNumTasks = tasks.size() / states.size();
+        Set<T> existingTasks = new HashSet<>();
         for (Map.Entry<C, ClientState<T>> entry : states.entrySet()) {
             this.states.put(entry.getKey(), entry.getValue().copy());
+            Set<T> oldTasks = entry.getValue().prevAssignedTasks;
+            if (oldTasks.size() > 2 * avgNumTasks || oldTasks.size() < avgNumTasks / 2) {
+                sameTopology = false;
+            } else {
+                for (T task : oldTasks) {
+                    if (existingTasks.contains(task)) {
+                        sameTopology = false;
+                        break;
+                    }
+                }
+            }
+            existingTasks.addAll(oldTasks);
+        }
+        if (sameTopology && !existingTasks.equals(tasks)) {
+            sameTopology = false;
         }
         this.tasks = new ArrayList<>(tasks);
 
@@ -112,6 +134,9 @@ public class TaskAssignor<C, T extends Comparable<T>> {
         double candidateAdditionCost = 0d;
 
         for (ClientState<T> state : states.values()) {
+            if (sameTopology && state.prevAssignedTasks.contains(task)) {
+                return state;
+            }
             if (!state.assignedTasks.contains(task)) {
                 // if checkTaskPairs flag is on, skip this client if this task doesn't introduce a new task combination
                 if (checkTaskPairs && !state.assignedTasks.isEmpty() && !hasNewTaskPair(task, state))
