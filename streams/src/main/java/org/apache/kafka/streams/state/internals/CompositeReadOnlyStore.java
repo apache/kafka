@@ -14,9 +14,14 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
+import java.util.NoSuchElementException;
 
 public class CompositeReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V> {
 
@@ -44,5 +49,86 @@ public class CompositeReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>
         return null;
     }
 
+    @Override
+    public KeyValueIterator<K, V> range(final K from, final K to) {
+        final NextIteratorFunction<K, V> nextIteratorFunction = new NextIteratorFunction<K, V>() {
+            @Override
+            public KeyValueIterator<K, V> apply(final ReadOnlyKeyValueStore<K, V> store) {
+                return store.range(from, to);
+            }
+        };
+        return new CompositeKeyValueIterator(allStores().iterator(), nextIteratorFunction);
+    }
+
+    private List<ReadOnlyKeyValueStore<K, V>> allStores() {
+        final List<ReadOnlyKeyValueStore<K, V>> allStores = new ArrayList<>();
+        for (ReadOnlyStoreProvider provider : storeProviders) {
+            final List<ReadOnlyKeyValueStore<K, V>> stores = provider.getStores(storeName);
+            allStores.addAll(stores);
+        }
+        return allStores;
+    }
+
+    @Override
+    public KeyValueIterator<K, V> all() {
+        final NextIteratorFunction<K, V> nextIteratorFunction = new NextIteratorFunction<K, V>() {
+            @Override
+            public KeyValueIterator<K, V> apply(final ReadOnlyKeyValueStore<K, V> store) {
+                return store.all();
+            }
+        };
+        return new CompositeKeyValueIterator(allStores().iterator(), nextIteratorFunction);
+    }
+
+    interface NextIteratorFunction<K, V> {
+        KeyValueIterator<K, V> apply(final ReadOnlyKeyValueStore<K, V> store);
+    }
+
+
+    private class CompositeKeyValueIterator implements KeyValueIterator<K, V> {
+
+        private final Iterator<ReadOnlyKeyValueStore<K, V>> storeIterator;
+        private final NextIteratorFunction<K, V> nextIteratorFunction;
+
+        private KeyValueIterator<K, V> current;
+
+        CompositeKeyValueIterator(final Iterator<ReadOnlyKeyValueStore<K, V>> underlying,
+                                  final NextIteratorFunction<K, V> nextIteratorFunction) {
+            this.storeIterator = underlying;
+            this.nextIteratorFunction = nextIteratorFunction;
+        }
+
+        @Override
+        public void close() {
+            if (current != null) {
+                current.close();
+                current = null;
+            }
+        }
+
+        @Override
+        public boolean hasNext() {
+            while ((current == null || !current.hasNext())
+                   && storeIterator.hasNext()) {
+                close();
+                current = nextIteratorFunction.apply(storeIterator.next());
+            }
+            return current != null && current.hasNext();
+        }
+
+
+        @Override
+        public KeyValue<K, V> next() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            return current.next();
+        }
+
+        @Override
+        public void remove() {
+            throw new UnsupportedOperationException("Remove not supported");
+        }
+    }
 }
 

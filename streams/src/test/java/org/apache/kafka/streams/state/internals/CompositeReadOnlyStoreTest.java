@@ -14,37 +14,40 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.List;
 
+import static org.apache.kafka.streams.state.internals.CompositeReadOnlyWindowStoreTest.toList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class CompositeReadOnlyStoreTest {
 
     private final String storeName = "my-store";
     private ReadOnlyStoreProviderStub stubProviderTwo;
-    private ReadOnlyStoreProviderStub stubProviderOne;
-    private MemoryLRUCache<String, String> stubOneUnderlying;
+    private KeyValueStore<String, String> stubOneUnderlying;
     private CompositeReadOnlyStore<String, String> theStore;
-    private MemoryLRUCache<Object, Object>
+    private KeyValueStore<String, String>
         otherUnderlyingStore;
 
     @Before
     public void before() {
-        stubProviderOne = new ReadOnlyStoreProviderStub();
+        final ReadOnlyStoreProviderStub stubProviderOne = new ReadOnlyStoreProviderStub();
         stubProviderTwo = new ReadOnlyStoreProviderStub();
 
-        stubOneUnderlying = new MemoryLRUCache<>(storeName, 10);
+        stubOneUnderlying = new TestKeyValueStore<>(storeName);
         stubProviderOne.addKeyValueStore(storeName, stubOneUnderlying);
-        otherUnderlyingStore = new MemoryLRUCache<>("other-store", 10);
+        otherUnderlyingStore = new TestKeyValueStore<>(storeName);
         stubProviderOne.addKeyValueStore("other-store", otherUnderlyingStore);
 
         theStore = new CompositeReadOnlyStore<>(
-            Arrays.<ReadOnlyStoreProvider>asList(stubProviderOne,
-                                                 stubProviderTwo),
+            Arrays.<ReadOnlyStoreProvider>asList(stubProviderOne, stubProviderTwo),
             storeName);
     }
 
@@ -67,9 +70,9 @@ public class CompositeReadOnlyStoreTest {
 
     @Test
     public void shouldFindValueForKeyWhenMultiStores() throws Exception {
-        final MemoryLRUCache<String, String>
+        final KeyValueStore<String, String>
             cache =
-            new MemoryLRUCache<>(storeName, 10);
+            new TestKeyValueStore<>(storeName);
         stubProviderTwo.addKeyValueStore(storeName, cache);
 
         cache.put("key-two", "key-two-value");
@@ -79,4 +82,63 @@ public class CompositeReadOnlyStoreTest {
         assertEquals("key-one-value", theStore.get("key-one"));
     }
 
+    @Test
+    public void shouldSupportRange() throws Exception {
+        stubOneUnderlying.put("a", "a");
+        stubOneUnderlying.put("b", "b");
+        stubOneUnderlying.put("c", "c");
+
+        final List<KeyValue<String, String>> results = toList(theStore.range("a", "c"));
+        assertTrue(results.contains(new KeyValue<>("a", "a")));
+        assertTrue(results.contains(new KeyValue<>("b", "b")));
+        assertEquals(2, results.size());
+    }
+
+    @Test
+    public void shouldSupportRangeAcrossMultipleKVStores() throws Exception {
+        final KeyValueStore<String, String>
+            cache =
+            new TestKeyValueStore<>(storeName);
+        stubProviderTwo.addKeyValueStore(storeName, cache);
+
+        stubOneUnderlying.put("a", "a");
+        stubOneUnderlying.put("b", "b");
+        stubOneUnderlying.put("z", "z");
+
+        cache.put("c", "c");
+        cache.put("d", "d");
+        cache.put("x", "x");
+
+        final List<KeyValue<String, String>> results = toList(theStore.range("a", "e"));
+        assertTrue(results.contains(new KeyValue<>("a", "a")));
+        assertTrue(results.contains(new KeyValue<>("b", "b")));
+        assertTrue(results.contains(new KeyValue<>("c", "c")));
+        assertTrue(results.contains(new KeyValue<>("d", "d")));
+        assertEquals(4, results.size());
+    }
+
+    @Test
+    public void shouldSupportAllAcrossMultipleStores() throws Exception {
+        final KeyValueStore<String, String>
+            cache =
+            new TestKeyValueStore<>(storeName);
+        stubProviderTwo.addKeyValueStore(storeName, cache);
+
+        stubOneUnderlying.put("a", "a");
+        stubOneUnderlying.put("b", "b");
+        stubOneUnderlying.put("z", "z");
+
+        cache.put("c", "c");
+        cache.put("d", "d");
+        cache.put("x", "x");
+
+        final List<KeyValue<String, String>> results = toList(theStore.all());
+        assertTrue(results.contains(new KeyValue<>("a", "a")));
+        assertTrue(results.contains(new KeyValue<>("b", "b")));
+        assertTrue(results.contains(new KeyValue<>("c", "c")));
+        assertTrue(results.contains(new KeyValue<>("d", "d")));
+        assertTrue(results.contains(new KeyValue<>("x", "x")));
+        assertTrue(results.contains(new KeyValue<>("z", "z")));
+        assertEquals(6, results.size());
+    }
 }

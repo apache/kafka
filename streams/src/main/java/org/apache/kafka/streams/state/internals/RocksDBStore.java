@@ -477,17 +477,16 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         if (db == null) {
             return;
         }
-
         flush();
+        db.close();
+        db = null;
         options.dispose();
         wOptions.dispose();
         fOptions.dispose();
-        db.close();
-
         options = null;
         wOptions = null;
         fOptions = null;
-        db = null;
+
     }
 
     private static class RocksDbIterator<K, V> implements KeyValueIterator<K, V> {

@@ -22,6 +22,7 @@ import org.junit.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -98,8 +99,8 @@ public class CompositeReadOnlyWindowStoreTest {
         assertEquals(Collections.singletonList(new KeyValue<>(1L, "my-value")), results);
     }
 
-    private List<KeyValue<Long, String>> toList(final WindowStoreIterator<String> iterator) {
-        final List<KeyValue<Long, String>> results = new ArrayList<>();
+    static <K, V> List<KeyValue<K, V>> toList(final Iterator<KeyValue<K, V>> iterator) {
+        final List<KeyValue<K, V>> results = new ArrayList<>();
 
         while (iterator.hasNext()) {
             results.add(iterator.next());

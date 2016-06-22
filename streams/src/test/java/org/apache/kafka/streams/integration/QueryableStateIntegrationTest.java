@@ -27,6 +27,7 @@ import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -61,11 +62,13 @@ public class QueryableStateIntegrationTest {
     private Properties streamsConfiguration;
     private KStreamBuilder builder;
     private KafkaStreams kafkaStreams;
+    private Comparator<KeyValue<String, String>> stringComparator;
+    private Comparator<KeyValue<String, Long>> stringLongComparator;
 
     @BeforeClass
     public static void createTopics() {
-        CLUSTER.createTopic(STREAM_ONE, 2, 1);
-        CLUSTER.createTopic(STREAM_TWO, 2, 1);
+        CLUSTER.createTopic(STREAM_ONE);
+        CLUSTER.createTopic(STREAM_TWO);
         CLUSTER.createTopic(OUTPUT_TOPIC);
     }
 
@@ -86,6 +89,22 @@ public class QueryableStateIntegrationTest {
         streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration
             .put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        stringComparator = new Comparator<KeyValue<String, String>>() {
+
+            @Override
+            public int compare(final KeyValue<String, String> o1,
+                               final KeyValue<String, String> o2) {
+                return o1.key.compareTo(o2.key);
+            }
+        };
+        stringLongComparator = new Comparator<KeyValue<String, Long>>() {
+
+            @Override
+            public int compare(final KeyValue<String, Long> o1,
+                               final KeyValue<String, Long> o2) {
+                return o1.key.compareTo(o2.key);
+            }
+        };
     }
 
     @After
@@ -99,27 +118,6 @@ public class QueryableStateIntegrationTest {
     @Test
     public void shouldBeAbleToQueryState() throws Exception {
         final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};
-        final Comparator<KeyValue<String, String>>
-            stringComparator =
-            new Comparator<KeyValue<String, String>>() {
-
-                @Override
-                public int compare(final KeyValue<String, String> o1,
-                                   final KeyValue<String, String> o2) {
-                    return o1.key.compareTo(o2.key);
-                }
-            };
-
-        final Comparator<KeyValue<String, Long>>
-            stringLongComparator =
-            new Comparator<KeyValue<String, Long>>() {
-
-                @Override
-                public int compare(final KeyValue<String, Long> o1,
-                                   final KeyValue<String, Long> o2) {
-                    return o1.key.compareTo(o2.key);
-                }
-            };
 
         final Set<KeyValue<String, String>> expectedJoinThis = new TreeSet<>(stringComparator);
         expectedJoinThis.addAll(Arrays.asList(
@@ -193,9 +191,58 @@ public class QueryableStateIntegrationTest {
         final ReadOnlyKeyValueStore<String, Long>
             myCount = kafkaStreams.getStore("my-count");
 
+        verifyCanGetByKey(keys, expectedJoinThis,
+                          expectedJoinOther,
+                          expectedCount,
+                          joinThis,
+                          joinOther,
+                          myCount);
+
+        verifyRangeAndAll(expectedCount, myCount);
+
+    }
+
+    private void verifyRangeAndAll(final Set<KeyValue<String, Long>> expectedCount,
+                                   final ReadOnlyKeyValueStore<String, Long> myCount) {
+        final Set<KeyValue<String, Long>> countRangeResults = new TreeSet<>(stringLongComparator);
+        final Set<KeyValue<String, Long>> countAllResults = new TreeSet<>(stringLongComparator);
+        final Set<KeyValue<String, Long>>
+            expectedRangeResults =
+            new TreeSet<>(stringLongComparator);
+
+        expectedRangeResults.addAll(Arrays.asList(
+            new KeyValue<>("hello", 1L),
+            new KeyValue<>("go", 1L),
+            new KeyValue<>("goodbye", 1L),
+            new KeyValue<>("kafka", 1L)
+        ));
+
+        try (final KeyValueIterator<String, Long> range = myCount.range("go", "kafka")) {
+            while (range.hasNext()) {
+                countRangeResults.add(range.next());
+            }
+        }
+
+        try (final KeyValueIterator<String, Long> all = myCount.all()) {
+            while (all.hasNext()) {
+                countAllResults.add(all.next());
+            }
+        }
+
+        assertThat(countRangeResults, equalTo(expectedRangeResults));
+        assertThat(countAllResults, equalTo(expectedCount));
+    }
+
+    private void verifyCanGetByKey(final String[] keys,
+                                   final Set<KeyValue<String, String>> expectedJoinThis,
+                                   final Set<KeyValue<String, String>> expectedJoinOther,
+                                   final Set<KeyValue<String, Long>> expectedCount,
+                                   final ReadOnlyWindowStore<String, String> joinThis,
+                                   final ReadOnlyWindowStore<String, String> joinOther,
+                                   final ReadOnlyKeyValueStore<String, Long> myCount)
+        throws InterruptedException {
         final Set<KeyValue<String, String>> joinThisState = new TreeSet<>(stringComparator);
         final Set<KeyValue<String, String>> joinOtherState = new TreeSet<>(stringComparator);
-
         final Set<KeyValue<String, Long>> countState = new TreeSet<>(stringLongComparator);
 
         final long timeout = System.currentTimeMillis() + 30000;
@@ -213,7 +260,6 @@ public class QueryableStateIntegrationTest {
                 }
             }
         }
-
         assertThat(joinThisState, equalTo(expectedJoinThis));
         assertThat(joinOtherState, equalTo(expectedJoinOther));
         assertThat(countState, equalTo(expectedCount));

@@ -72,23 +72,6 @@ public interface KeyValueStore<K, V> extends StateStore, ReadOnlyKeyValueStore<K
     V delete(K key);
 
     /**
-     * Get an iterator over a given range of keys. This iterator MUST be closed after use.
-     *
-     * @param from The first key that could be in the range
-     * @param to The last key that could be in the range
-     * @return The iterator for this range.
-     * @throws NullPointerException If null is used for from or to.
-     */
-    KeyValueIterator<K, V> range(K from, K to);
-
-    /**
-     * Return an iterator over all keys in the database. This iterator MUST be closed after use.
-     *
-     * @return An iterator of all key/value pairs in the store.
-     */
-    KeyValueIterator<K, V> all();
-
-    /**
      * Return an approximate count of key-value mappings in this store.
      *
      * The count is not guaranteed to be exact in order to accommodate stores

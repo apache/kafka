@@ -15,6 +15,7 @@
 package org.apache.kafka.streams;
 
 
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -84,7 +85,17 @@ public class CompositeReadOnlyStoreProviderTest {
         }
 
         @Override
+        public KeyValueIterator<K, V> range(final K from, final K to) {
+            return null;
+        }
+
+        @Override
         public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
+            return null;
+        }
+
+        @Override
+        public KeyValueIterator<K, V> all() {
             return null;
         }
     }
