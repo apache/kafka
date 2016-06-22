@@ -28,6 +28,7 @@ import java.util.Set;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Time;
@@ -66,6 +67,7 @@ public class MockClient implements KafkaClient {
     private final Queue<ClientRequest> requests = new ArrayDeque<>();
     private final Queue<ClientResponse> responses = new ArrayDeque<>();
     private final Queue<FutureResponse> futureResponses = new ArrayDeque<>();
+    private final List<ClientListener> listeners = new ArrayList<>();
 
     public MockClient(Time time) {
         this.time = time;
@@ -285,4 +287,12 @@ public class MockClient implements KafkaClient {
         boolean matches(ClientRequest request);
     }
 
+    private <T> void fireListeners(Map<String, Errors> errors) {
+        for (ClientListener listener : listeners)
+            listener.onMetadataErrors(errors);
+    }
+
+    public void addListener(ClientListener listener) {
+        this.listeners.add(listener);
+    }
 }

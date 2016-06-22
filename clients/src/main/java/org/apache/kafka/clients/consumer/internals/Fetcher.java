@@ -13,6 +13,7 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ClientListener;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -30,6 +31,7 @@ import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -90,6 +92,8 @@ public class Fetcher<K, V> {
     private final Map<TopicPartition, Long> offsetOutOfRangePartitions;
     private final Set<String> unauthorizedTopics;
     private final Map<TopicPartition, Long> recordTooLargePartitions;
+
+    private final List<ClientListener> listeners = new ArrayList<>();
 
     public Fetcher(ConsumerNetworkClient client,
                    int minBytes,
@@ -309,9 +313,11 @@ public class Fetcher<K, V> {
         while (true) {
             RequestFuture<Long> future = sendListOffsetRequest(partition, timestamp);
             client.poll(future);
-
+            
             if (future.succeeded())
                 return future.value();
+            else 
+                fireListeners(future.exception());
 
             if (!future.isRetriable())
                 throw future.exception();
@@ -462,9 +468,14 @@ public class Fetcher<K, V> {
         partitions.put(topicPartition, new ListOffsetRequest.PartitionData(timestamp, 1));
         PartitionInfo info = metadata.fetch().partition(topicPartition);
         if (info == null) {
-            metadata.add(topicPartition.topic());
-            log.debug("Partition {} is unknown for fetching offset, wait for metadata refresh", topicPartition);
-            return RequestFuture.staleMetadata();
+            if (metadata.fetch().topics().contains(topicPartition.topic())) {
+                log.debug("Partition {} does not exist", topicPartition);
+                return RequestFuture.failure(new UnknownTopicOrPartitionException(topicPartition.toString()));
+            } else {
+                metadata.add(topicPartition.topic());
+                log.debug("Partition {} is unknown for fetching offset, wait for metadata refresh", topicPartition);
+                return RequestFuture.staleMetadata();
+            }
         } else if (info.leader() == null) {
             log.debug("Leader for partition {} unavailable for fetching offset, wait for metadata refresh", topicPartition);
             return RequestFuture.leaderNotAvailable();
@@ -813,4 +824,15 @@ public class Fetcher<K, V> {
             recordsFetched.record(records);
         }
     }
+    
+    private void fireListeners(Exception e) {
+        for (ClientListener listener : this.listeners)
+            listener.onClientException(e);
+    }
+
+    public void addListener(ClientListener listener) {
+        this.listeners.add(listener);
+        this.client.addListener(listener);
+    }
+    
 }

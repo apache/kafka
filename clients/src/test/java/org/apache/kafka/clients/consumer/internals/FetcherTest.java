@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ClientListener;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
@@ -33,6 +34,7 @@ import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
@@ -438,6 +440,35 @@ public class FetcherTest {
         assertFalse(subscriptions.isOffsetResetNeeded(tp));
         assertTrue(subscriptions.isFetchable(tp));
         assertEquals(5, (long) subscriptions.position(tp));
+    }
+
+    
+    @Test(expected = UnknownTopicOrPartitionException.class)
+    public void testUpdateFetchPositionUnknownTopic() {
+        
+        ClientListener listener = new ClientListener() {
+            @Override
+            public void onMetadataErrors(Map<String, Errors> topicErrors) {
+                if (topicErrors.containsValue(Errors.UNKNOWN_TOPIC_OR_PARTITION)) 
+                    throw new UnknownTopicOrPartitionException();
+            }
+
+            @Override
+            public void onClientException(Exception e) {
+                if (e instanceof UnknownTopicOrPartitionException) 
+                    throw (UnknownTopicOrPartitionException) e;
+            }
+        };
+        
+        fetcher.addListener(listener);
+        
+        subscriptions.assignFromUser(Arrays.asList(tp));
+        subscriptions.needOffsetReset(tp, OffsetResetStrategy.LATEST);
+
+        client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
+                               listOffsetResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION, Collections.<Long>emptyList()), false);
+
+        fetcher.updateFetchPositions(Collections.singleton(tp));
     }
 
     @Test

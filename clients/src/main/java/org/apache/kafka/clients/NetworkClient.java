@@ -35,6 +35,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -78,6 +79,9 @@ public class NetworkClient implements KafkaClient {
     private final int requestTimeoutMs;
 
     private final Time time;
+
+    private final List<ClientListener> listeners = new ArrayList<>();
+
 
     public NetworkClient(Selectable selector,
                          Metadata metadata,
@@ -596,9 +600,10 @@ public class NetworkClient implements KafkaClient {
             Cluster cluster = response.cluster();
             // check if any topics metadata failed to get updated
             Map<String, Errors> errors = response.errors();
-            if (!errors.isEmpty())
+            if (!errors.isEmpty()) {
                 log.warn("Error while fetching metadata with correlation id {} : {}", header.correlationId(), errors);
-
+                fireListeners(Collections.unmodifiableMap(errors));
+            }
             // don't update the cluster if there are no valid nodes...the topic we want may still be in the process of being
             // created which means we will get errors and no nodes until it exists
             if (cluster.nodes().size() > 0) {
@@ -654,6 +659,15 @@ public class NetworkClient implements KafkaClient {
             }
         }
 
+    }
+
+    private <T> void fireListeners(Map<String, Errors> errors) {
+        for (ClientListener listener : listeners)
+            listener.onMetadataErrors(errors);
+    }
+
+    public void addListener(ClientListener listener) {
+        this.listeners.add(listener);
     }
 
 }

@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ClientListener;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
@@ -426,5 +427,9 @@ public class ConsumerNetworkClient implements Closeable {
                 complete(response);
             }
         }
+    }
+
+    public void addListener(ClientListener clientListener) {
+        client.addListener(clientListener);
     }
 }

@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.ClientListener;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
@@ -1437,5 +1438,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private void release() {
         if (refcount.decrementAndGet() == 0)
             currentThread.set(NO_CURRENT_THREAD);
+    }
+
+    public void addListener(ClientListener clientListener) {
+        fetcher.addListener(clientListener);
     }
 }

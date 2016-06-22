@@ -133,4 +133,6 @@ public interface KafkaClient extends Closeable {
      */
     public void wakeup();
 
+    public void addListener(ClientListener clientListener);
+
 }
