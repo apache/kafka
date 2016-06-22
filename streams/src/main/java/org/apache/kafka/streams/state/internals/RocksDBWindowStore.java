@@ -47,6 +47,8 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
     private static final long USE_CURRENT_TIMESTAMP = -1L;
 
+    private volatile boolean open = false;
+
     // use the Bytes wrapper for underlying rocksDB keys since they are used for hashing data structures
     private static class Segment extends RocksDBStore<Bytes, byte[]> {
         public final long id;
@@ -192,6 +194,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         });
 
         flush();
+        open = true;
     }
 
     private void openExistingSegments() {
@@ -228,6 +231,11 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     }
 
     @Override
+    public boolean isOpen() {
+        return open;
+    }
+
+    @Override
     public void flush() {
         for (Segment segment : segments) {
             if (segment != null)
@@ -240,6 +248,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
     @Override
     public void close() {
+        open = false;
         flush();
         for (Segment segment : segments) {
             if (segment != null)
