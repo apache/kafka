@@ -24,6 +24,7 @@ object BrokerCommand {
     val zkUrl = brokerCommandOptions.options.valueOf(brokerCommandOptions.zkConnectOpt)
     val zkUtils = ZkUtils(zkUrl, ZKTIMEOUT, SESSIONTIMEOUT, JaasUtils.isZkSecurityEnabled)
     val allBrokers = getAllBrokers(zkUtils)
+
     // Note that "filter" here applies only retain those brokers that are specified in the command line.
     // If none specified then include all.
     val filteredBrokers = applyBrokerFilter(
@@ -33,9 +34,11 @@ object BrokerCommand {
           brokerCommandOptions),
         brokerCommandOptions),
       brokerCommandOptions)
+
     val allTopicMetadata = getAllTopicMetadata(zkUtils)
     // Like brokers, only retain topics specified inn the command line. If none specified then include all.
     val filteredTopicMetadata = applyTopicFilter(allTopicMetadata, brokerCommandOptions)
+
     // This is where the "magic" happens. It aligns the topic/partition data by broker.
     val merged = mergeBrokerTopicMetadata(filteredBrokers, filteredTopicMetadata)
     val output = printInfo(merged, brokerCommandOptions)
@@ -68,9 +71,9 @@ object BrokerCommand {
     val mergedSortedBrokerIds = SortedMap[Int, BrokerWithTopicPartitions](merged.toArray:_*)
 
     var output:String = ""
-    mergedSortedBrokerIds.values.foreach(brokerWithTopicPartitions => {
-      val broker = brokerWithTopicPartitions.broker
-      val topicPartitions = brokerWithTopicPartitions.topicPartitions
+    mergedSortedBrokerIds.values.foreach(brokersWithTopicPartitions => {
+      val broker = brokersWithTopicPartitions.broker
+      val topicPartitions = brokersWithTopicPartitions.topicPartitions
       output += BROKERID + KV_SEPERATOR + broker.id + FIELD_SEPERATOR
       val host = getAllHostsForBroker(broker).mkString(", ")
       output += HOSTNAME + KV_SEPERATOR + host + FIELD_SEPERATOR
@@ -130,14 +133,15 @@ object BrokerCommand {
    */
   def mergeBrokerTopicMetadata(brokers: Set[Broker], 
                                topicMetadata: Set[TopicMetadata]): Map[Int, BrokerWithTopicPartitions] = {
-    val brokerWithTopicPartitions = scala.collection.mutable.Map[Int, BrokerWithTopicPartitions]()
+    val brokersWithTopicPartitions = scala.collection.mutable.Map[Int, BrokerWithTopicPartitions]()
     val brokerIds = brokers.map(_.id)
     for (b <- brokers) {
-      brokerWithTopicPartitions(b.id) = new BrokerWithTopicPartitions(b,
+      brokersWithTopicPartitions(b.id) = new BrokerWithTopicPartitions(b,
         scala.collection.mutable.Map[String, scala.collection.mutable.ArrayBuffer[PartitionWithStatus]]())
     }
 
-    for (topicData <- topicMetadata.filter(t => t.error() == Errors.NONE)) { // Iterate through each topic
+    //for (topicData <- topicMetadata.filter(t => t.error() == Errors.NONE)) { // Iterate through each topic
+    for (topicData <- topicMetadata) { // Iterate through each topic
       val topicName = topicData.topic()
       val partitions = topicData.partitionMetadata()
 
@@ -149,19 +153,19 @@ object BrokerCommand {
 
         for (brokerId <- replicas if brokerIds.contains(brokerId)) { // And process the replica list of each partition AND process a brokerId ONLY if it is contained in the input broker set
           // First time seed for a topic for a broker
-          if (!brokerWithTopicPartitions(brokerId).topicPartitions.contains(topicName)) {
-            brokerWithTopicPartitions(brokerId).topicPartitions(topicName) = scala.collection.mutable.ArrayBuffer[PartitionWithStatus]()
+          if (!brokersWithTopicPartitions(brokerId).topicPartitions.contains(topicName)) {
+            brokersWithTopicPartitions(brokerId).topicPartitions(topicName) = scala.collection.mutable.ArrayBuffer[PartitionWithStatus]()
           }
           val partitionWithStatus = if (brokerId == leader)
             LeaderPartition(partition)
           else if (isr.contains(brokerId))
             InSyncPartition(partition)
           else TrailingPartition(partition)
-          brokerWithTopicPartitions(brokerId).topicPartitions(topicName).+=:(partitionWithStatus)
+          brokersWithTopicPartitions(brokerId).topicPartitions(topicName).+=:(partitionWithStatus)
         }
       }
     }
-    brokerWithTopicPartitions
+    brokersWithTopicPartitions
   }
 
   def applyBrokerFilter(allBrokers: Set[Broker],
@@ -169,8 +173,9 @@ object BrokerCommand {
     val filterBrokers = brokerCommandOptions.options.valuesOf(brokerCommandOptions.brokerOpt)
     if (filterBrokers.size() == 0) {
       allBrokers
+    } else {
+      allBrokers.filter(b => filterBrokers.contains(b.id))
     }
-    allBrokers.filter(b => filterBrokers.contains(b.id))
   }
 
     /**
