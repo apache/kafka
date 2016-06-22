@@ -209,8 +209,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   override def acls(resource: Resource): java.util.Set[Acl] = {
     inReadLock(lock) {
-      val scalaAcls: mutable.Set[Acl] = aclCache.get(resource).map(_.acls).getOrElse(mutable.Set.empty[Acl])
-      scalaAcls.asJava
+      new util.HashSet[Acl](aclCache.get(resource).map(_.acls).getOrElse(mutable.Set.empty[Acl]).asJava)
     }
   }
 
