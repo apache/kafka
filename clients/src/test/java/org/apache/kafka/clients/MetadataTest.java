@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.clients;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -51,6 +52,7 @@ public class MetadataTest {
         time += refreshBackoffMs;
         assertTrue("Update needed now that backoff time expired", metadata.timeToNextUpdate(time) == 0);
         String topic = "my-topic";
+        metadata.add(topic);
         Thread t1 = asyncFetch(topic);
         Thread t2 = asyncFetch(topic);
         assertTrue("Awaiting update", t1.isAlive());
@@ -69,6 +71,30 @@ public class MetadataTest {
         assertFalse("No update needed.", metadata.timeToNextUpdate(time) == 0);
         time += metadataExpireMs;
         assertTrue("Update needed due to stale metadata.", metadata.timeToNextUpdate(time) == 0);
+    }
+
+    @Test
+    public void testUpdateDiscardsExtraData() {
+        metadata.add("foo");
+        metadata.add("baz");
+        List<Cluster> topics = new ArrayList<>();
+        topics.add(TestUtils.singletonCluster("foo", 2));
+        topics.add(TestUtils.singletonCluster("bar", 3));
+        topics.add(TestUtils.singletonCluster("baz", 5));
+        topics.add(TestUtils.singletonCluster("qux", 7));
+
+        List<Node> nodes = new ArrayList<>();
+        List<PartitionInfo> partitionInfos = new ArrayList<>();
+        for (Cluster topic : topics) {
+            nodes.addAll(topic.nodes());
+            partitionInfos.addAll(topic.availablePartitionsForTopic(topic.topics().iterator().next()));
+        }
+
+        metadata.update(new Cluster(nodes, partitionInfos, new HashSet<>()), 0);
+
+        assertEquals(2, metadata.fetch().topics().size());
+        assertNull(metadata.fetch().partitionsForTopic("bar"));
+        assertNull(metadata.fetch().partitionsForTopic("qux"));
     }
 
     /**

@@ -75,6 +75,7 @@ public class SenderTest {
 
     @Before
     public void setup() {
+        metadata.add(tp.topic());
         metadata.update(cluster, time.milliseconds());
         metricTags.put("client-id", CLIENT_ID);
     }
