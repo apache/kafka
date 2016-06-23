@@ -32,14 +32,14 @@ package kafka.server
  *                +-----+-----+  | +----+------------+
  *                      |        +>+RecoveringFrom   |
  *                      v          |UncleanShutdown  |
- * +----------+     +-----+-----+  +-------+---------+
- * |RunningAs |     |RunningAs  |            |
- * |Controller+<--->+Broker     +<-----------+
- * +----------+     +-----+-----+
- *        |              |
- *        |              v
- *        |       +-----+------------+
- *        |-----> |PendingControlled |
+ *                  +-----+-----+  +-------+---------+
+ *                  |RunningAs  |            |
+ *                  +  Broker   +<-----------+
+ *                  +-----+-----+
+ *                       |
+ *                       v
+ *                +-----+------------+
+ *                |PendingControlled |
  *                |Shutdown          |
  *                +-----+------------+
  *                      |
@@ -61,7 +61,6 @@ case object NotRunning extends BrokerStates { val state: Byte = 0 }
 case object Starting extends BrokerStates { val state: Byte = 1 }
 case object RecoveringFromUncleanShutdown extends BrokerStates { val state: Byte = 2 }
 case object RunningAsBroker extends BrokerStates { val state: Byte = 3 }
-case object RunningAsController extends BrokerStates { val state: Byte = 4 }
 case object PendingControlledShutdown extends BrokerStates { val state: Byte = 6 }
 case object BrokerShuttingDown extends BrokerStates { val state: Byte = 7 }
 
