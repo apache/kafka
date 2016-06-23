@@ -37,13 +37,10 @@ public class CompositeReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>
     @SuppressWarnings("unchecked")
     @Override
     public V get(final K key) {
-        for (ReadOnlyStoreProvider provider : storeProviders) {
-            List<ReadOnlyKeyValueStore<K, V>> stores = provider.getStores(storeName);
-            for (ReadOnlyKeyValueStore<K, V> store : stores) {
-                V result = store.get(key);
-                if (result != null) {
-                    return result;
-                }
+        for (ReadOnlyKeyValueStore<K, V> store : allStores()) {
+            V result = store.get(key);
+            if (result != null) {
+                return result;
             }
         }
         return null;
@@ -66,6 +63,10 @@ public class CompositeReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>
             final List<ReadOnlyKeyValueStore<K, V>> stores = provider.getStores(storeName);
             allStores.addAll(stores);
         }
+        if (allStores.isEmpty()) {
+            throw new InvalidStateStoreException("Store " + storeName + " is currently "
+                                                 + "unavailable");
+        }
         return allStores;
     }
 
@@ -81,6 +82,7 @@ public class CompositeReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>
     }
 
     interface NextIteratorFunction<K, V> {
+
         KeyValueIterator<K, V> apply(final ReadOnlyKeyValueStore<K, V> store);
     }
 

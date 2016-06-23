@@ -46,6 +46,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * A persistent key-value store based on RocksDB.
@@ -82,7 +83,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
 
-    private volatile RocksDB db;
+    private RocksDB db;
 
     // the following option objects will be created at constructor and disposed at close()
     private Options options;
@@ -96,6 +97,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private MemoryLRUCache<K, RocksDBCacheEntry> cache;
     private StoreChangeLogger<Bytes, byte[]> changeLogger;
     private StoreChangeLogger.ValueGetter<Bytes, byte[]> getter;
+
+    private final AtomicLong readers = new AtomicLong(-1);
 
     public KeyValueStore<K, V> enableLogging() {
         loggingEnabled = true;
@@ -164,6 +167,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         this.dbDir = new File(new File(context.stateDir(), parentDir), this.name);
         this.db = openDB(this.dbDir, this.options, TTL_SECONDS);
+        readers.set(0);
     }
 
     public void init(ProcessorContext context, StateStore root) {
@@ -235,24 +239,31 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public boolean isOpen() {
-        return db != null;
+        return readers.get() >= 0;
     }
 
     @Override
     public V get(K key) {
-        if (cache != null) {
-            RocksDBCacheEntry entry = cache.get(key);
+        if (readers.getAndIncrement() == -1) {
+            throw new InvalidStateStoreException("Store " + this.name + " is currently not open");
+        }
+        try {
+            if (cache != null) {
+                RocksDBCacheEntry entry = cache.get(key);
 
-            if (entry == null) {
-                V value = serdes.valueFrom(getInternal(serdes.rawKey(key)));
-                cache.put(key, new RocksDBCacheEntry(value));
+                if (entry == null) {
+                    V value = serdes.valueFrom(getInternal(serdes.rawKey(key)));
+                    cache.put(key, new RocksDBCacheEntry(value));
 
-                return value;
+                    return value;
+                } else {
+                    return entry.value;
+                }
             } else {
-                return entry.value;
+                return serdes.valueFrom(getInternal(serdes.rawKey(key)));
             }
-        } else {
-            return serdes.valueFrom(getInternal(serdes.rawKey(key)));
+        } finally {
+            readers.getAndDecrement();
         }
     }
 
@@ -341,22 +352,37 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public KeyValueIterator<K, V> range(K from, K to) {
-        // we need to flush the cache if necessary before returning the iterator
-        if (cache != null)
-            flushCache();
+        if (readers.getAndIncrement() == -1) {
+            throw new InvalidStateStoreException("Store " + this.name + " is currently not open");
+        }
+        try {
+            // we need to flush the cache if necessary before returning the iterator
+            if (cache != null)
+                flushCache();
 
-        return new RocksDBRangeIterator<>(db.newIterator(), serdes, from, to);
+            return new RocksDBRangeIterator<>(db.newIterator(), serdes, from, to);
+        } finally {
+            readers.getAndDecrement();
+        }
     }
 
     @Override
     public KeyValueIterator<K, V> all() {
-        // we need to flush the cache if necessary before returning the iterator
-        if (cache != null)
-            flushCache();
+        if (readers.getAndIncrement() == -1) {
+            throw new InvalidStateStoreException("Store " + this.name + " is currently not open");
+        }
 
-        RocksIterator innerIter = db.newIterator();
-        innerIter.seekToFirst();
-        return new RocksDbIterator<>(innerIter, serdes);
+        try {
+            // we need to flush the cache if necessary before returning the iterator
+            if (cache != null)
+                flushCache();
+
+            RocksIterator innerIter = db.newIterator();
+            innerIter.seekToFirst();
+            return new RocksDbIterator<>(innerIter, serdes);
+        } finally {
+            readers.getAndDecrement();
+        }
     }
 
     /**
@@ -473,7 +499,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void close() {
-
+        while (true) {
+            if (readers.compareAndSet(0, -1)) {
+                break;
+            }
+        }
         if (db == null) {
             return;
         }

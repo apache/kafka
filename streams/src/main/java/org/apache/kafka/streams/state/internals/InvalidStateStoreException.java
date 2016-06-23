@@ -14,9 +14,9 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-class InvalidStoreException extends RuntimeException {
+class InvalidStateStoreException extends RuntimeException {
 
-    InvalidStoreException(final String message) {
+    InvalidStateStoreException(final String message) {
         super(message);
     }
 }

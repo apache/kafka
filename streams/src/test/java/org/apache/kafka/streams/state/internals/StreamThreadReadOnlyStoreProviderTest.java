@@ -119,13 +119,13 @@ public class StreamThreadReadOnlyStoreProviderTest {
         assertEquals(2, windowStores.size());
     }
 
-    @Test(expected = InvalidStoreException.class)
+    @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfWindowStoreClosed() throws Exception {
         taskOne.getStore("window-store").close();
         provider.getWindowStores("window-store");
     }
 
-    @Test(expected = InvalidStoreException.class)
+    @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfKVStoreClosed() throws Exception {
         taskOne.getStore("kv-store").close();
         provider.getStores("kv-store");

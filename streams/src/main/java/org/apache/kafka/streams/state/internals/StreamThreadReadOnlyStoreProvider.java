@@ -36,29 +36,37 @@ public class StreamThreadReadOnlyStoreProvider implements ReadOnlyStoreProvider 
 
     @Override
     public <K, V> List<ReadOnlyKeyValueStore<K, V>> getStores(final String storeName) {
-        final List<ReadOnlyKeyValueStore<K, V>> stores = new ArrayList<>();
-        for (StreamTask task : streamThread.tasks().values()) {
-            final StateStore store = task.getStore(storeName);
-            if (store instanceof ReadOnlyKeyValueStore) {
-                if (!store.isOpen()) {
-                    throw new InvalidStoreException("Store: " + storeName + " isn't open");
-                }
-                stores.add((ReadOnlyKeyValueStore<K, V>) store);
+        return findStores(storeName, new StoreTypeCheck() {
+            @Override
+            public boolean apply(final StateStore store) {
+                return store instanceof ReadOnlyKeyValueStore;
             }
-        }
-        return stores;
+        });
     }
 
     @Override
     public <K, V> List<ReadOnlyWindowStore<K, V>> getWindowStores(final String storeName) {
-        final List<ReadOnlyWindowStore<K, V>> stores = new ArrayList<>();
+        return findStores(storeName, new StoreTypeCheck() {
+            @Override
+            public boolean apply(final StateStore store) {
+                return store instanceof ReadOnlyWindowStore;
+            }
+        });
+    }
+
+    interface StoreTypeCheck {
+        boolean apply(final StateStore store);
+    }
+
+    private <T> List<T> findStores(final String storeName, final StoreTypeCheck storeTypeCheck) {
+        final List<T> stores = new ArrayList<>();
         for (StreamTask streamTask : streamThread.tasks().values()) {
             final StateStore store = streamTask.getStore(storeName);
-            if (store instanceof  ReadOnlyWindowStore) {
+            if (storeTypeCheck.apply(store)) {
                 if (!store.isOpen()) {
-                    throw new InvalidStoreException("Store: " + storeName + " isn't open");
+                    throw new InvalidStateStoreException("Store: " + storeName + " isn't open");
                 }
-                stores.add((ReadOnlyWindowStore<K, V>) store);
+                stores.add((T) store);
             }
         }
         return stores;

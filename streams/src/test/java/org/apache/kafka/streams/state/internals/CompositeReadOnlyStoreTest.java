@@ -20,6 +20,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.apache.kafka.streams.state.internals.CompositeReadOnlyWindowStoreTest.toList;
@@ -140,5 +141,23 @@ public class CompositeReadOnlyStoreTest {
         assertTrue(results.contains(new KeyValue<>("x", "x")));
         assertTrue(results.contains(new KeyValue<>("z", "z")));
         assertEquals(6, results.size());
+    }
+
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowInvalidStoreExceptionIfNoStoresExistOnGet() throws Exception {
+        new CompositeReadOnlyStore<>(Collections.<ReadOnlyStoreProvider>emptyList(), "store")
+            .get("anything");
+    }
+
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowInvalidStoreExceptionIfNoStoresExistOnRange() throws Exception {
+        new CompositeReadOnlyStore<>(Collections.<ReadOnlyStoreProvider>emptyList(), "store")
+            .range("anything", "something");
+    }
+
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowInvalidStoreExceptionIfNoStoresExistOnAll() throws Exception {
+        new CompositeReadOnlyStore<>(Collections.<ReadOnlyStoreProvider>emptyList(), "store")
+            .all();
     }
 }
