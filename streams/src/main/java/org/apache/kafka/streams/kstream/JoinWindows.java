@@ -41,6 +41,8 @@ import java.util.Map;
  * </ul>
  * A join is symmetric in the sense, that a join specification on the first stream returns the same result record as
  * a join specification on the second stream with flipped before and after values.
+ * <p>
+ * Both values (before and after) must not be negative and not zero at the same time.
  */
 public class JoinWindows extends Windows<TimeWindow> {
 
@@ -52,12 +54,18 @@ public class JoinWindows extends Windows<TimeWindow> {
     private JoinWindows(String name, long before, long after) {
         super(name);
 
+        if (before < 0) {
+            throw new IllegalArgumentException("window size must be > 0 (you provided before as " + before + ")");
+        }
+        if (after < 0) {
+            throw new IllegalArgumentException("window size must be > 0 (you provided after as " + after + ")");
+        }
+        if (before == 0 && after == 0) {
+            throw new IllegalArgumentException("window size must be > 0 (you provided 0)");
+        }
+
         this.after = after;
         this.before = before;
-    }
-
-    public static JoinWindows of(String name) {
-        return new JoinWindows(name, 0L, 0L);
     }
 
     /**
@@ -65,8 +73,8 @@ public class JoinWindows extends Windows<TimeWindow> {
      *
      * @param timeDifference    join window interval
      */
-    public JoinWindows within(long timeDifference) {
-        return new JoinWindows(this.name, timeDifference, timeDifference);
+    public static JoinWindows of(String name, long timeDifference) {
+        return new JoinWindows(name, timeDifference, timeDifference);
     }
 
     /**
