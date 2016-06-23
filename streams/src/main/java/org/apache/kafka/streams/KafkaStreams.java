@@ -27,10 +27,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamThread;
-import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
-import org.apache.kafka.streams.state.ReadOnlyWindowStore;
-import org.apache.kafka.streams.state.internals.ReadOnlyStoreProvider;
-import org.apache.kafka.streams.state.internals.StreamThreadReadOnlyStoreProvider;
+import org.apache.kafka.streams.state.QueryableStoreType;
+import org.apache.kafka.streams.state.internals.ReadOnlyStoresProvider;
+import org.apache.kafka.streams.state.internals.StreamThreadReadOnlyStoresProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -95,7 +94,7 @@ public class KafkaStreams {
 
     private final StreamThread[] threads;
     private final Metrics metrics;
-    private final CompositeReadOnlyStoreProvider compositeReadOnlyStoreProvider;
+    private final QueryableStoreProvider queryableStoreProvider;
 
     // processId is expected to be unique across JVMs and to be used
     // in userData of the subscription request to allow assignor be aware
@@ -157,13 +156,13 @@ public class KafkaStreams {
         this.metrics = new Metrics(metricConfig, reporters, time);
 
         this.threads = new StreamThread[config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG)];
-        final ArrayList<ReadOnlyStoreProvider> storeProviders = new ArrayList<>();
+        final ArrayList<ReadOnlyStoresProvider> storeProviders = new ArrayList<>();
         for (int i = 0; i < this.threads.length; i++) {
             this.threads[i] = new StreamThread(builder, config, clientSupplier, applicationId, clientId, processId, metrics, time);
-            storeProviders.add(new StreamThreadReadOnlyStoreProvider(threads[i]));
+            storeProviders.add(new StreamThreadReadOnlyStoresProvider(threads[i]));
         }
 
-        this.compositeReadOnlyStoreProvider = new CompositeReadOnlyStoreProvider(storeProviders);
+        this.queryableStoreProvider = new QueryableStoreProvider(storeProviders);
     }
 
     /**
@@ -227,29 +226,8 @@ public class KafkaStreams {
             thread.setUncaughtExceptionHandler(eh);
     }
 
-    /**
-     * Get access to the {@link ReadOnlyKeyValueStore} with the supplied storeName.
-     *
-     * @param storeName     name of the store
-     * @param <K>           key type of store
-     * @param <V>           value type of store
-     * @return  The store or null if a {@link ReadOnlyKeyValueStore} named storeName doesn't exist
-     */
-    public <K, V> ReadOnlyKeyValueStore<K, V> getStore(final String storeName) {
-        return compositeReadOnlyStoreProvider.getStore(storeName);
-    }
-
-
-    /**
-     * Get access to the {@link ReadOnlyWindowStore} with the supplied storeName.
-     *
-     * @param storeName     name of the store
-     * @param <K>           key type of store
-     * @param <V>           value type of store
-     * @return  The store or null if a {@link ReadOnlyWindowStore} named storeName doesn't exist
-     */
-    public <K, V> ReadOnlyWindowStore<K, V> getWindowedStore(final String storeName) {
-        return compositeReadOnlyStoreProvider.getWindowedStore(storeName);
+    public <T> T getStore(final String storeName, final QueryableStoreType<T> queryableStoreType) {
+        return queryableStoreProvider.getStore(storeName, queryableStoreType);
     }
 
 }

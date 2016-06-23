@@ -16,6 +16,8 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.state.UnderlyingStoreProvider;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -31,7 +33,7 @@ import static org.junit.Assert.assertTrue;
 public class CompositeReadOnlyStoreTest {
 
     private final String storeName = "my-store";
-    private ReadOnlyStoreProviderStub stubProviderTwo;
+    private ReadOnlyStoresProviderStub stubProviderTwo;
     private KeyValueStore<String, String> stubOneUnderlying;
     private CompositeReadOnlyStore<String, String> theStore;
     private KeyValueStore<String, String>
@@ -39,16 +41,18 @@ public class CompositeReadOnlyStoreTest {
 
     @Before
     public void before() {
-        final ReadOnlyStoreProviderStub stubProviderOne = new ReadOnlyStoreProviderStub();
-        stubProviderTwo = new ReadOnlyStoreProviderStub();
+        final ReadOnlyStoresProviderStub stubProviderOne = new ReadOnlyStoresProviderStub();
+        stubProviderTwo = new ReadOnlyStoresProviderStub();
 
         stubOneUnderlying = new TestKeyValueStore<>(storeName);
-        stubProviderOne.addKeyValueStore(storeName, stubOneUnderlying);
+        stubProviderOne.addStore(storeName, stubOneUnderlying);
         otherUnderlyingStore = new TestKeyValueStore<>(storeName);
-        stubProviderOne.addKeyValueStore("other-store", otherUnderlyingStore);
+        stubProviderOne.addStore("other-store", otherUnderlyingStore);
 
         theStore = new CompositeReadOnlyStore<>(
-            Arrays.<ReadOnlyStoreProvider>asList(stubProviderOne, stubProviderTwo),
+            new UnderlyingStoreProvider<>(
+                Arrays.<ReadOnlyStoresProvider>asList(stubProviderOne, stubProviderTwo),
+                QueryableStoreTypes.<String, String>keyValueStore()),
             storeName);
     }
 
@@ -74,7 +78,7 @@ public class CompositeReadOnlyStoreTest {
         final KeyValueStore<String, String>
             cache =
             new TestKeyValueStore<>(storeName);
-        stubProviderTwo.addKeyValueStore(storeName, cache);
+        stubProviderTwo.addStore(storeName, cache);
 
         cache.put("key-two", "key-two-value");
         stubOneUnderlying.put("key-one", "key-one-value");
@@ -100,7 +104,7 @@ public class CompositeReadOnlyStoreTest {
         final KeyValueStore<String, String>
             cache =
             new TestKeyValueStore<>(storeName);
-        stubProviderTwo.addKeyValueStore(storeName, cache);
+        stubProviderTwo.addStore(storeName, cache);
 
         stubOneUnderlying.put("a", "a");
         stubOneUnderlying.put("b", "b");
@@ -123,7 +127,7 @@ public class CompositeReadOnlyStoreTest {
         final KeyValueStore<String, String>
             cache =
             new TestKeyValueStore<>(storeName);
-        stubProviderTwo.addKeyValueStore(storeName, cache);
+        stubProviderTwo.addStore(storeName, cache);
 
         stubOneUnderlying.put("a", "a");
         stubOneUnderlying.put("b", "b");
@@ -145,19 +149,25 @@ public class CompositeReadOnlyStoreTest {
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfNoStoresExistOnGet() throws Exception {
-        new CompositeReadOnlyStore<>(Collections.<ReadOnlyStoreProvider>emptyList(), "store")
-            .get("anything");
+        noStores().get("anything");
     }
+
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfNoStoresExistOnRange() throws Exception {
-        new CompositeReadOnlyStore<>(Collections.<ReadOnlyStoreProvider>emptyList(), "store")
-            .range("anything", "something");
+        noStores().range("anything", "something");
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfNoStoresExistOnAll() throws Exception {
-        new CompositeReadOnlyStore<>(Collections.<ReadOnlyStoreProvider>emptyList(), "store")
-            .all();
+        noStores().all();
+    }
+
+    private CompositeReadOnlyStore<Object, Object> noStores() {
+        return new CompositeReadOnlyStore<>(
+            new UnderlyingStoreProvider<>(
+                Collections.<ReadOnlyStoresProvider>emptyList(),
+                QueryableStoreTypes.keyValueStore()),
+            storeName);
     }
 }

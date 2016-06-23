@@ -28,6 +28,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -182,14 +183,14 @@ public class QueryableStateIntegrationTest {
 
         final ReadOnlyWindowStore<String, String>
             joinThis =
-            kafkaStreams.getWindowedStore("join-this");
+            kafkaStreams.getStore("join-this", QueryableStoreTypes.<String, String>windowStore());
 
         final ReadOnlyWindowStore<String, String>
             joinOther =
-            kafkaStreams.getWindowedStore("join-other");
+            kafkaStreams.getStore("join-other", QueryableStoreTypes.<String, String>windowStore());
 
         final ReadOnlyKeyValueStore<String, Long>
-            myCount = kafkaStreams.getStore("my-count");
+            myCount = kafkaStreams.getStore("my-count", QueryableStoreTypes.<String, Long>keyValueStore());
 
         verifyCanGetByKey(keys, expectedJoinThis,
                           expectedJoinOther,

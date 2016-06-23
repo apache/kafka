@@ -15,7 +15,9 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.UnderlyingStoreProvider;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -25,13 +27,14 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
+import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 
 public class CompositeReadOnlyWindowStoreTest {
 
     private final String storeName = "window-store";
-    private ReadOnlyStoreProviderStub stubProviderOne;
-    private ReadOnlyStoreProviderStub stubProviderTwo;
+    private ReadOnlyStoresProviderStub stubProviderOne;
+    private ReadOnlyStoresProviderStub stubProviderTwo;
     private CompositeReadOnlyWindowStore<String, String>
         windowStore;
     private ReadOnlyWindowStoreStub<String, String> undelyingWindowStore;
@@ -40,16 +43,18 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Before
     public void before() {
-        stubProviderOne = new ReadOnlyStoreProviderStub();
-        stubProviderTwo = new ReadOnlyStoreProviderStub();
+        stubProviderOne = new ReadOnlyStoresProviderStub();
+        stubProviderTwo = new ReadOnlyStoresProviderStub();
         undelyingWindowStore = new ReadOnlyWindowStoreStub<>();
-        stubProviderOne.addWindowStore(storeName, undelyingWindowStore);
+        stubProviderOne.addStore(storeName, undelyingWindowStore);
 
         otherUnderylingStore = new ReadOnlyWindowStoreStub<>();
-        stubProviderOne.addWindowStore("other-window-store", otherUnderylingStore);
+        stubProviderOne.addStore("other-window-store", otherUnderylingStore);
+
 
         windowStore = new CompositeReadOnlyWindowStore<>(
-            Arrays.<ReadOnlyStoreProvider>asList(stubProviderOne, stubProviderTwo),
+            new UnderlyingStoreProvider<>(Arrays.<ReadOnlyStoresProvider>asList(stubProviderOne, stubProviderTwo),
+                                          QueryableStoreTypes.<String, String>windowStore()),
             storeName);
     }
 
@@ -61,8 +66,8 @@ public class CompositeReadOnlyWindowStoreTest {
         final WindowStoreIterator<String> iterator = windowStore.fetch("my-key", 0L, 25L);
         final List<KeyValue<Long, String>> results = toList(iterator);
 
-        assertEquals(Arrays.asList(new KeyValue<>(0L, "my-value"),
-                                   new KeyValue<>(10L, "my-later-value")),
+        assertEquals(asList(new KeyValue<>(0L, "my-value"),
+                            new KeyValue<>(10L, "my-later-value")),
                      results);
     }
 
@@ -76,7 +81,7 @@ public class CompositeReadOnlyWindowStoreTest {
     public void shouldFindValueForKeyWhenMultiStores() throws Exception {
         final ReadOnlyWindowStoreStub<String, String> secondUnderlying = new
             ReadOnlyWindowStoreStub<>();
-        stubProviderTwo.addWindowStore(storeName, secondUnderlying);
+        stubProviderTwo.addStore(storeName, secondUnderlying);
 
         undelyingWindowStore.put("key-one", "value-one", 0L);
         secondUnderlying.put("key-two", "value-two", 10L);

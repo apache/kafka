@@ -14,12 +14,15 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 /**
  * A window store that only supports read operations
  *
  * @param <K> Type of keys
  * @param <V> Type of values
  */
+@InterfaceStability.Unstable
 public interface ReadOnlyWindowStore<K, V> {
 
     /**

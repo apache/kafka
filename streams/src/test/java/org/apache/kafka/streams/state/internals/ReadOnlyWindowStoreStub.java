@@ -15,6 +15,8 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
@@ -27,7 +29,7 @@ import java.util.Map;
 /**
  * A very simple window store stub for testing purposes.
  */
-public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V> {
+public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>, StateStore {
 
     private final Map<Long, Map<K, V>> data = new HashMap<>();
 
@@ -48,6 +50,36 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V> 
             data.put(timestamp, new HashMap<K, V>());
         }
         data.get(timestamp).put(key, value);
+    }
+
+    @Override
+    public String name() {
+        return null;
+    }
+
+    @Override
+    public void init(final ProcessorContext context, final StateStore root) {
+
+    }
+
+    @Override
+    public void flush() {
+
+    }
+
+    @Override
+    public void close() {
+
+    }
+
+    @Override
+    public boolean persistent() {
+        return false;
+    }
+
+    @Override
+    public boolean isOpen() {
+        return false;
     }
 
     private class TheWindowStoreIterator<E> implements WindowStoreIterator<E> {

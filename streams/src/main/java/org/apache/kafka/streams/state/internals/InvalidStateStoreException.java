@@ -14,9 +14,14 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-class InvalidStateStoreException extends RuntimeException {
+/**
+ * Indicates that there was a problem when trying to access
+ * a {@link org.apache.kafka.streams.processor.StateStore}, i.e, the Store is no longer valid because it is closed
+ * or doesn't exist any more due to a rebalance.
+ */
+public class InvalidStateStoreException extends RuntimeException {
 
-    InvalidStateStoreException(final String message) {
+    public InvalidStateStoreException(final String message) {
         super(message);
     }
 }

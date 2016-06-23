@@ -27,6 +27,7 @@ import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.Stores;
@@ -46,14 +47,15 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 
+import static org.apache.kafka.streams.state.QueryableStoreTypes.windowStore;
 import static org.junit.Assert.assertEquals;
 
-public class StreamThreadReadOnlyStoreProviderTest {
+public class StreamThreadReadOnlyStoresProviderTest {
 
     private StreamThread thread;
     private StreamTask taskOne;
     private StreamTask taskTwo;
-    private StreamThreadReadOnlyStoreProvider provider;
+    private StreamThreadReadOnlyStoresProvider provider;
 
     @Before
     public void before() throws IOException {
@@ -102,12 +104,13 @@ public class StreamThreadReadOnlyStoreProviderTest {
                 return tasks;
             }
         };
-        provider = new StreamThreadReadOnlyStoreProvider(thread);
+        provider = new StreamThreadReadOnlyStoresProvider(thread);
     }
 
     @Test
     public void shouldFindKeyValueStores() throws Exception {
-        List<ReadOnlyKeyValueStore<String, String>> kvStores = provider.getStores("kv-store");
+        List<ReadOnlyKeyValueStore<String, String>> kvStores =
+            provider.getStores("kv-store", QueryableStoreTypes.<String, String>keyValueStore());
         assertEquals(2, kvStores.size());
     }
 
@@ -115,40 +118,33 @@ public class StreamThreadReadOnlyStoreProviderTest {
     public void shouldFindWindowStores() throws Exception {
         final List<ReadOnlyWindowStore<Object, Object>>
             windowStores =
-            provider.getWindowStores("window-store");
+            provider.getStores("window-store", windowStore());
         assertEquals(2, windowStores.size());
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfWindowStoreClosed() throws Exception {
         taskOne.getStore("window-store").close();
-        provider.getWindowStores("window-store");
+        provider.getStores("window-store", QueryableStoreTypes.windowStore());
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfKVStoreClosed() throws Exception {
         taskOne.getStore("kv-store").close();
-        provider.getStores("kv-store");
+        provider.getStores("kv-store", QueryableStoreTypes.keyValueStore());
     }
 
     @Test
     public void shouldReturnEmptyListIfNoStoresFoundWithName() throws Exception {
-        assertEquals(Collections.emptyList(), provider.getStores("not-a-store"));
+        assertEquals(Collections.emptyList(), provider.getStores("not-a-store", QueryableStoreTypes
+            .keyValueStore()));
     }
 
-    @Test
-    public void shouldReturnEmptyListIfNoWindowStoresFoundWithName() throws Exception {
-        assertEquals(Collections.emptyList(), provider.getWindowStores("not-a-store"));
-    }
 
     @Test
-    public void shouldReturnEmptyListIfStoreExistsButIsNotKeyValueStore() throws Exception {
-        assertEquals(Collections.emptyList(), provider.getStores("window-store"));
-    }
-
-    @Test
-    public void shouldReturnEmptyListIfStoreExistsButIsNotAWindowValueStore() throws Exception {
-        assertEquals(Collections.emptyList(), provider.getWindowStores("kv-store"));
+    public void shouldReturnEmptyListIfStoreExistsButIsNotOfTypeValueStore() throws Exception {
+        assertEquals(Collections.emptyList(), provider.getStores("window-store",
+                                                                 QueryableStoreTypes.keyValueStore()));
     }
 
     private StreamTask createStreamsTask(final String applicationId,

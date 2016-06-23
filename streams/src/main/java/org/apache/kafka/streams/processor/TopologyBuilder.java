@@ -143,7 +143,7 @@ public class TopologyBuilder {
             for (String update : subscribedTopics) {
                 if (this.pattern == topicToPatterns.get(update)) {
                     matchedTopics.add(update);
-                    //not same pattern instance,but still matches not allowed
+                    //not same pattern instance,but still accepts not allowed
                 } else if (topicToPatterns.containsKey(update) && isMatch(update)) {
                     throw new TopologyBuilderException("Topic " + update + " already matched check for overlapping regex patterns");
                 } else if (isMatch(update)) {
@@ -286,7 +286,7 @@ public class TopologyBuilder {
 
             for (Pattern pattern : nodeToSourcePatterns.values()) {
                 if (pattern.matcher(topic).matches()) {
-                    throw new TopologyBuilderException("Topic " + topic + " matches a Pattern already registered by another source.");
+                    throw new TopologyBuilderException("Topic " + topic + " accepts a Pattern already registered by another source.");
                 }
             }
 

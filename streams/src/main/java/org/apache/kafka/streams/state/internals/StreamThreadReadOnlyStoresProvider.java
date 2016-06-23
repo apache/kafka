@@ -17,52 +17,30 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
-import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
-import org.apache.kafka.streams.state.ReadOnlyWindowStore;
+import org.apache.kafka.streams.state.QueryableStoreType;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Wrapper over StreamThread that implements ReadOnlyStoreProvider
+ * Wrapper over StreamThread that implements ReadOnlyStoresProvider
  */
-public class StreamThreadReadOnlyStoreProvider implements ReadOnlyStoreProvider {
+public class StreamThreadReadOnlyStoresProvider implements ReadOnlyStoresProvider {
 
     private final StreamThread streamThread;
 
-    public StreamThreadReadOnlyStoreProvider(final StreamThread streamThread) {
+    public StreamThreadReadOnlyStoresProvider(final StreamThread streamThread) {
         this.streamThread = streamThread;
     }
 
+
+    @SuppressWarnings("unchecked")
     @Override
-    public <K, V> List<ReadOnlyKeyValueStore<K, V>> getStores(final String storeName) {
-        return findStores(storeName, new StoreTypeCheck() {
-            @Override
-            public boolean apply(final StateStore store) {
-                return store instanceof ReadOnlyKeyValueStore;
-            }
-        });
-    }
-
-    @Override
-    public <K, V> List<ReadOnlyWindowStore<K, V>> getWindowStores(final String storeName) {
-        return findStores(storeName, new StoreTypeCheck() {
-            @Override
-            public boolean apply(final StateStore store) {
-                return store instanceof ReadOnlyWindowStore;
-            }
-        });
-    }
-
-    interface StoreTypeCheck {
-        boolean apply(final StateStore store);
-    }
-
-    private <T> List<T> findStores(final String storeName, final StoreTypeCheck storeTypeCheck) {
+    public <T> List<T> getStores(final String storeName, final QueryableStoreType<T> queryableStoreType) {
         final List<T> stores = new ArrayList<>();
         for (StreamTask streamTask : streamThread.tasks().values()) {
             final StateStore store = streamTask.getStore(storeName);
-            if (storeTypeCheck.apply(store)) {
+            if (store != null && queryableStoreType.accepts(store)) {
                 if (!store.isOpen()) {
                     throw new InvalidStateStoreException("Store: " + storeName + " isn't open");
                 }
@@ -71,4 +49,5 @@ public class StreamThreadReadOnlyStoreProvider implements ReadOnlyStoreProvider 
         }
         return stores;
     }
+
 }

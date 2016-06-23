@@ -17,35 +17,36 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.UnderlyingStoreProvider;
 
 import java.util.List;
 import java.util.NoSuchElementException;
 
+/**
+ * Wrapper over the underlying {@link ReadOnlyWindowStore}s found in a {@link
+ * org.apache.kafka.streams.processor.internals.ProcessorTopology}
+ */
 public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K, V> {
 
-    private final List<ReadOnlyStoreProvider> storeProviders;
     private final String storeName;
+    private final UnderlyingStoreProvider<ReadOnlyWindowStore<K, V>> provider;
 
-    public CompositeReadOnlyWindowStore(final List<ReadOnlyStoreProvider> storeProviders,
-                                        final String storeName) {
-
-        this.storeProviders = storeProviders;
+    public CompositeReadOnlyWindowStore(
+        final UnderlyingStoreProvider<ReadOnlyWindowStore<K, V>> provider,
+        final String storeName) {
+        this.provider = provider;
         this.storeName = storeName;
     }
 
     @Override
     public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
-        for (ReadOnlyStoreProvider storeProvider : storeProviders) {
-            final List<ReadOnlyWindowStore<K, V>>
-                windowStores =
-                storeProvider.getWindowStores(storeName);
-            for (ReadOnlyWindowStore<K, V> windowStore : windowStores) {
-                WindowStoreIterator<V> result = windowStore.fetch(key, timeFrom, timeTo);
-                if (!result.hasNext()) {
-                    result.close();
-                } else {
-                    return result;
-                }
+        final List<ReadOnlyWindowStore<K, V>> stores = provider.getStores(storeName);
+        for (ReadOnlyWindowStore<K, V> windowStore : stores) {
+            final WindowStoreIterator<V> result = windowStore.fetch(key, timeFrom, timeTo);
+            if (!result.hasNext()) {
+                result.close();
+            } else {
+                return result;
             }
         }
         return new WindowStoreIterator<V>() {

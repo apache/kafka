@@ -17,27 +17,35 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.UnderlyingStoreProvider;
 
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 
+/**
+ * A wrapper over the underlying {@link ReadOnlyKeyValueStore}s found in a {@link
+ * org.apache.kafka.streams.processor.internals.ProcessorTopology}
+ *
+ * @param <K> key type
+ * @param <V> value type
+ */
 public class CompositeReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V> {
 
-    private final List<ReadOnlyStoreProvider> storeProviders;
+    private final UnderlyingStoreProvider<ReadOnlyKeyValueStore<K, V>> storeProvider;
     private final String storeName;
 
-    public CompositeReadOnlyStore(final List<ReadOnlyStoreProvider> storeProviders,
-                                  final String storeName) {
-        this.storeProviders = storeProviders;
+    public CompositeReadOnlyStore(
+        final UnderlyingStoreProvider<ReadOnlyKeyValueStore<K, V>> storeProvider,
+        final String storeName) {
+        this.storeProvider = storeProvider;
         this.storeName = storeName;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public V get(final K key) {
-        for (ReadOnlyKeyValueStore<K, V> store : allStores()) {
+        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.getStores(storeName);
+        for (ReadOnlyKeyValueStore<K, V> store : stores) {
             V result = store.get(key);
             if (result != null) {
                 return result;
@@ -54,20 +62,8 @@ public class CompositeReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>
                 return store.range(from, to);
             }
         };
-        return new CompositeKeyValueIterator(allStores().iterator(), nextIteratorFunction);
-    }
-
-    private List<ReadOnlyKeyValueStore<K, V>> allStores() {
-        final List<ReadOnlyKeyValueStore<K, V>> allStores = new ArrayList<>();
-        for (ReadOnlyStoreProvider provider : storeProviders) {
-            final List<ReadOnlyKeyValueStore<K, V>> stores = provider.getStores(storeName);
-            allStores.addAll(stores);
-        }
-        if (allStores.isEmpty()) {
-            throw new InvalidStateStoreException("Store " + storeName + " is currently "
-                                                 + "unavailable");
-        }
-        return allStores;
+        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.getStores(storeName);
+        return new CompositeKeyValueIterator(stores.iterator(), nextIteratorFunction);
     }
 
     @Override
@@ -78,7 +74,8 @@ public class CompositeReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>
                 return store.all();
             }
         };
-        return new CompositeKeyValueIterator(allStores().iterator(), nextIteratorFunction);
+        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.getStores(storeName);
+        return new CompositeKeyValueIterator(stores.iterator(), nextIteratorFunction);
     }
 
     interface NextIteratorFunction<K, V> {
