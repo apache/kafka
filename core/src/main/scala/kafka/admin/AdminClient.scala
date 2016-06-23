@@ -67,12 +67,16 @@ class AdminClient(val time: Time,
     throw new RuntimeException(s"Request $api failed on brokers $bootstrapBrokers")
   }
 
-  private def findCoordinator(groupId: String): Node = {
+  private def findCoordinator(groupId: String): Option[Node] = {
     val request = new GroupCoordinatorRequest(groupId)
     val responseBody = sendAnyNode(ApiKeys.GROUP_COORDINATOR, request)
     val response = new GroupCoordinatorResponse(responseBody)
-    Errors.forCode(response.errorCode()).maybeThrow()
-    response.node()
+    Errors.forCode(response.errorCode()) match {
+      case Errors.GROUP_COORDINATOR_NOT_AVAILABLE => None
+      case error: Errors =>
+        error.maybeThrow()
+        Some(response.node())
+    }
   }
 
   def listGroups(node: Node): List[GroupOverview] = {
@@ -122,20 +126,24 @@ class AdminClient(val time: Time,
   }
 
   def describeGroup(groupId: String): GroupSummary = {
-    val coordinator = findCoordinator(groupId)
-    val responseBody = send(coordinator, ApiKeys.DESCRIBE_GROUPS, new DescribeGroupsRequest(List(groupId).asJava))
-    val response = new DescribeGroupsResponse(responseBody)
-    val metadata = response.groups().get(groupId)
-    if (metadata == null)
-      throw new KafkaException(s"Response from broker contained no metadata for group $groupId")
-
-    Errors.forCode(metadata.errorCode()).maybeThrow()
-    val members = metadata.members().map { member =>
-      val metadata = Utils.readBytes(member.memberMetadata())
-      val assignment = Utils.readBytes(member.memberAssignment())
-      MemberSummary(member.memberId(), member.clientId(), member.clientHost(), metadata, assignment)
-    }.toList
-    GroupSummary(metadata.state(), metadata.protocolType(), metadata.protocol(), members)
+    findCoordinator(groupId) match {
+      case None => 
+        throw new KafkaException(s"Offfsets topic is unavailable as it takes little time to be created on a new cluster")
+      case Some(coordinator) =>
+        val responseBody = send(coordinator, ApiKeys.DESCRIBE_GROUPS, new DescribeGroupsRequest(List(groupId).asJava))
+        val response = new DescribeGroupsResponse(responseBody)
+        val metadata = response.groups().get(groupId)
+        if (metadata == null)
+          throw new KafkaException(s"Response from broker contained no metadata for group $groupId")
+    
+        Errors.forCode(metadata.errorCode()).maybeThrow()
+        val members = metadata.members().map { member =>
+          val metadata = Utils.readBytes(member.memberMetadata())
+          val assignment = Utils.readBytes(member.memberAssignment())
+          MemberSummary(member.memberId(), member.clientId(), member.clientHost(), metadata, assignment)
+        }.toList
+        GroupSummary(metadata.state(), metadata.protocolType(), metadata.protocol(), members)
+    }
   }
 
   case class ConsumerSummary(memberId: String,
