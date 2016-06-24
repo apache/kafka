@@ -118,10 +118,10 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
     <li> The new consumer API has been marked stable. </li>
 </ul>
 
-<h5><a id="upgrade_101_notable" href="#upgrade_101_notable">Notable changes in 0.10.0.1</a></h5>
+<h5><a id="upgrade_1010_notable" href="#upgrade_1010_notable">Notable changes in 0.10.1.0</a></h5>
 
 <ul>
-    <li> The BrokerState value 4, called "RunningAsController", has been removed. Broker states are exposed via the kafka.server:type=KafkaServer,name=BrokerState metric. Metric consumers should be unaffected as this state was never used. </li>
+    <li> The BrokerState "RunningAsController" (value 4) has been removed. Due to a bug, a broker would only be in this state briefly before transitioning out of it and hence the impact of the removal should be minimal. The recommended way to detect if a given broker is the controller is via the kafka.controller:type=KafkaController,name=ActiveControllerCount metric. </li>
 </ul>
 
 <h4><a id="upgrade_9" href="#upgrade_9">Upgrading from 0.8.0, 0.8.1.X or 0.8.2.X to 0.9.0.0</a></h4>
