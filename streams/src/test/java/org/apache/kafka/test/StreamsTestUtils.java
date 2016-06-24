@@ -16,7 +16,6 @@ package org.apache.kafka.test;
 
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsConfig;
 
 import java.util.Properties;
@@ -45,25 +44,13 @@ public class StreamsTestUtils {
 
     /**
      * Streams configuration with a random generated UUID for the application id
-     * and default Serdes for String keys and values.
      */
-    public static Properties getStreamsConfigStringKeysValues(String bootstrapServer) {
+    public static Properties getStreamsConfig(String bootstrapServer, String keySerdeClassName, String valueSerdeClassName) {
         return getStreamsConfig(UUID.randomUUID().toString(),
                 bootstrapServer,
-                Serdes.String().getClass().getName(),
-                Serdes.String().getClass().getName(),
+                keySerdeClassName,
+                valueSerdeClassName,
                 new Properties());
     }
 
-    /**
-     * Streams configuration with a random generated UUID for the application id
-     * and default Serdes for Integer keys and String values.
-     */
-    public static Properties getStreamsConfigIntKeysStringValues(String bootstrapServer) {
-        return getStreamsConfig(UUID.randomUUID().toString(),
-                bootstrapServer,
-                Serdes.Integer().getClass().getName(),
-                Serdes.String().getClass().getName(),
-                new Properties());
-    }
 }

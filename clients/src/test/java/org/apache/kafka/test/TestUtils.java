@@ -40,10 +40,6 @@ import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.serialization.IntegerDeserializer;
-import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
 
 /**
@@ -132,6 +128,18 @@ public class TestUtils {
     }
 
     /**
+     * Create a temporary directory named "test" under /temp
+     * @return  the temporary directory just created.
+     */
+    public static File tempDir() {
+        try {
+            return tempDirectory(new File("/tmp").toPath(), "test");
+        } catch (IOException ex) {
+            throw new RuntimeException("Failed to create a temp dir", ex);
+        }
+    }
+
+    /**
      * Create a temporary relative directory in the specified parent directory with the given prefix.
      *
      * @param parent The parent folder path name, if null using the default temporary-file directory
@@ -185,14 +193,8 @@ public class TestUtils {
         return properties;
     }
 
-    // provides producer properties with default String serializers for keys and values
-    public static Properties producerConfigStringKeysValues(final String bootstrapServers) {
-        return producerConfig(bootstrapServers, StringSerializer.class, StringSerializer.class, new Properties());
-    }
-
-    // provides producer properties with default serializers for Integers keys and String values
-    public static Properties producerConfigIntKeysStringValues(final String bootstrapServers) {
-        return producerConfig(bootstrapServers, IntegerSerializer.class, StringSerializer.class, new Properties());
+    public static Properties producerConfig(final String bootstrapServers, Class keySerializer, Class valueSerializer) {
+        return producerConfig(bootstrapServers, keySerializer, valueSerializer, new Properties());
     }
 
     public static Properties consumerConfig(final String bootstrapServers,
@@ -211,26 +213,21 @@ public class TestUtils {
         return consumerConfig;
     }
 
-    // returns consumer config with random UUID for the Group ID and default StringDeserializer for keys/values
-    public static Properties consumerConfigStringKeysValues(final String bootstrapServers) {
+    /**
+     * returns consumer config with random UUID for the Group ID
+     */
+    public static Properties consumerConfig(final String bootstrapServers, Class keyDeserializer, Class valueDeserializer) {
         return consumerConfig(bootstrapServers,
                               UUID.randomUUID().toString(),
-                              StringDeserializer.class,
-                              StringDeserializer.class,
+                              keyDeserializer,
+                              valueDeserializer,
                               new Properties());
     }
 
-    // returns consumer config with random UUID for the Group ID and default serializers
-    public static Properties consumerConfigIntKeysStringValues(final String bootstrapServers) {
-        return consumerConfig(bootstrapServers,
-                UUID.randomUUID().toString(),
-                IntegerDeserializer.class,
-                StringDeserializer.class,
-                new Properties());
-    }
-
-    // uses default value of 30 seconds for timeout
-    public static void waitForCondition(TestCondition testCondition) {
+    /**
+     *  uses default value of 30 seconds for timeout
+     */
+    public static void waitForCondition(TestCondition testCondition) throws InterruptedException {
         waitForCondition(testCondition, 30000);
     }
 
@@ -238,12 +235,12 @@ public class TestUtils {
      *  Used to wait for specific conditions/state to be me during a test
      *  this is meant to be a replacement for using Thread.sleep
      */
-    public static void waitForCondition(TestCondition testCondition, long maxTimeMillis) {
+    public static void waitForCondition(TestCondition testCondition, long maxTimeMillis) throws InterruptedException {
         long startTime = System.currentTimeMillis();
-        while (!testCondition.conditionMet() && ((System.currentTimeMillis() - startTime) < maxTimeMillis)) {
-            //empty loop just waiting for update
-        }
 
+        while (!testCondition.conditionMet() && ((System.currentTimeMillis() - startTime) < maxTimeMillis)) {
+            Thread.sleep(Math.min(maxTimeMillis, 100L));
+        }
     }
 
 }
