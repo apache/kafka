@@ -16,21 +16,37 @@
  */
 package org.apache.kafka.clients.producer;
 
+import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockProducerInterceptor;
 import org.apache.kafka.test.MockSerializer;
+import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.powermock.api.easymock.PowerMock;
+import org.powermock.api.support.membermodification.MemberModifier;
+import org.powermock.core.classloader.annotations.PowerMockIgnore;
+import org.powermock.core.classloader.annotations.PrepareOnlyThisForTest;
+import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.util.Properties;
 import java.util.Map;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 
+@RunWith(PowerMockRunner.class)
+@PowerMockIgnore("javax.management.*")
 public class KafkaProducerTest {
 
     @Test
@@ -122,5 +138,49 @@ public class KafkaProducerTest {
         config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         config.put(ProducerConfig.RECEIVE_BUFFER_CONFIG, -2);
         new KafkaProducer<>(config, new ByteArraySerializer(), new ByteArraySerializer());
+    }
+
+    @PrepareOnlyThisForTest(Metadata.class)
+    @Test
+    public void testMetadataFetch() throws Exception {
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        KafkaProducer<String, String> producer = new KafkaProducer<String, String>(
+                props, new StringSerializer(), new StringSerializer());
+        Metadata metadata = PowerMock.createNiceMock(Metadata.class);
+        MemberModifier.field(KafkaProducer.class, "metadata").set(producer, metadata);
+
+        String topic = "topic";
+        ProducerRecord<String, String> record = new ProducerRecord<String, String>(topic, "value");
+        Collection<Node> nodes = Collections.singletonList(new Node(0, "host1", 1000));
+        final Cluster emptyCluster = new Cluster(nodes,
+                Collections.<PartitionInfo>emptySet(),
+                Collections.<String>emptySet());
+        final Cluster cluster = new Cluster(
+                Collections.singletonList(new Node(0, "host1", 1000)),
+                Arrays.asList(new PartitionInfo(topic, 0, null, null, null)),
+                Collections.<String>emptySet());
+
+        // Expect exactly one fetch for each attempt to refresh while topic metadata is not available
+        final int refreshAttempts = 5;
+        EasyMock.expect(metadata.fetch()).andReturn(emptyCluster).times(refreshAttempts - 1);
+        EasyMock.expect(metadata.fetch()).andReturn(cluster).once();
+        PowerMock.replay(metadata);
+        producer.send(record);
+        PowerMock.verify(metadata);
+
+        // Expect exactly one fetch if topic metadata is available
+        PowerMock.reset(metadata);
+        EasyMock.expect(metadata.fetch()).andReturn(cluster).once();
+        PowerMock.replay(metadata);
+        producer.send(record, null);
+        PowerMock.verify(metadata);
+
+        // Expect exactly one fetch if topic metadata is available
+        PowerMock.reset(metadata);
+        EasyMock.expect(metadata.fetch()).andReturn(cluster).once();
+        PowerMock.replay(metadata);
+        producer.partitionsFor(topic);
+        PowerMock.verify(metadata);
     }
 }
