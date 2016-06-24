@@ -123,7 +123,6 @@ public class KStreamRepartitionJoinTest {
         final ExpectedOutputOnTopic flatMapJoin = flatMapJoin();
         final ExpectedOutputOnTopic mapRhs = joinMappedRhsStream();
         final ExpectedOutputOnTopic mapJoinJoin = joinTwoMappedStreamsOneThatHasBeenPreviouslyJoined();
-        final ExpectedOutputOnTopic leftJoin = mapBothStreamsAndLeftJoin();
 
         startStreams();
 
@@ -134,7 +133,6 @@ public class KStreamRepartitionJoinTest {
         verifyCorrectOutput(flatMapJoin);
         verifyCorrectOutput(mapRhs);
         verifyCorrectOutput(mapJoinJoin);
-        verifyLeftJoin(leftJoin);
     }
 
     private ExpectedOutputOnTopic mapStreamOneAndJoin() {
@@ -235,33 +233,7 @@ public class KStreamRepartitionJoinTest {
         return new ExpectedOutputOnTopic(Arrays.asList("A:1", "B:2", "C:3", "D:4", "E:5"),
                             output);
     }
-
-    public ExpectedOutputOnTopic mapBothStreamsAndLeftJoin() throws Exception {
-        final KStream<Integer, Integer>
-            map1 =
-            streamOne.map(keyMapper);
-
-        final KStream<Integer, String> map2 = streamTwo.map(
-            new KeyValueMapper<Integer, String, KeyValue<Integer, String>>() {
-                @Override
-                public KeyValue<Integer, String> apply(Integer key,
-                                                       String value) {
-                    return new KeyValue<>(key, value);
-                }
-            });
-
-        String outputTopic = "left-join";
-        map1.leftJoin(map2,
-                      valueJoiner,
-                      JoinWindows.of("the-left-join", 60 * 1000),
-                      Serdes.Integer(),
-                      Serdes.Integer(),
-                      Serdes.String())
-            .to(Serdes.Integer(), Serdes.String(), outputTopic);
-
-        return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
-    }
-
+    
     private ExpectedOutputOnTopic joinTwoMappedStreamsOneThatHasBeenPreviouslyJoined() throws
                                                                                    Exception {
         final KStream<Integer, Integer>
