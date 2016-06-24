@@ -16,8 +16,6 @@
 
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
@@ -39,6 +37,9 @@ import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.apache.kafka.test.TestCondition;
+import org.apache.kafka.test.StreamsTestUtils;
+import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -59,6 +60,7 @@ import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 /**
  * End-to-end integration test based on using regex and named topics for creating sources, using
@@ -82,6 +84,7 @@ public class RegexSourceIntegrationTest {
     private static final int SECOND_UPDATE = 1;
 
     private static final String DEFAULT_OUTPUT_TOPIC = "outputTopic";
+    private static final String STRING_SERDE_CLASSNAME = Serdes.String().getClass().getName();
     private Properties streamsConfiguration;
 
 
@@ -100,7 +103,10 @@ public class RegexSourceIntegrationTest {
 
     @Before
     public void setUp() {
-        streamsConfiguration = getStreamsConfig();
+
+        streamsConfiguration = StreamsTestUtils.getStreamsConfig(CLUSTER.bootstrapServers(),
+                                                                 STRING_SERDE_CLASSNAME,
+                                                                 STRING_SERDE_CLASSNAME);
     }
 
     @After
@@ -135,13 +141,16 @@ public class RegexSourceIntegrationTest {
                                            new DefaultKafkaClientSupplier(),
                                            originalThread.applicationId, originalThread.clientId, originalThread.processId, new Metrics(), new SystemTime());
 
+        TestCondition tasksUpdated = createTasksUpdatedCondition(testStreamThread);
+
         streamThreads[0] = testStreamThread;
         streams.start();
-        testStreamThread.waitUntilTasksUpdated();
+
+        TestUtils.waitForCondition(tasksUpdated);
 
         CLUSTER.createTopic("TEST-TOPIC-2");
 
-        testStreamThread.waitUntilTasksUpdated();
+        TestUtils.waitForCondition(tasksUpdated);
 
         streams.close();
 
@@ -180,13 +189,15 @@ public class RegexSourceIntegrationTest {
                 originalThread.applicationId, originalThread.clientId, originalThread.processId, new Metrics(), new SystemTime());
 
         streamThreads[0] = testStreamThread;
+        TestCondition tasksUpdated = createTasksUpdatedCondition(testStreamThread);
+
         streams.start();
 
-        testStreamThread.waitUntilTasksUpdated();
+        TestUtils.waitForCondition(tasksUpdated);
 
         CLUSTER.deleteTopic("TEST-TOPIC-A");
 
-        testStreamThread.waitUntilTasksUpdated();
+        TestUtils.waitForCondition(tasksUpdated);
 
         streams.close();
 
@@ -224,7 +235,7 @@ public class RegexSourceIntegrationTest {
         KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
         streams.start();
 
-        Properties producerConfig = getProducerConfig();
+        Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class);
 
         IntegrationTestUtils.produceValuesSynchronously(TOPIC_1, Arrays.asList(topic1TestMessage), producerConfig);
         IntegrationTestUtils.produceValuesSynchronously(TOPIC_2, Arrays.asList(topic2TestMessage), producerConfig);
@@ -233,7 +244,7 @@ public class RegexSourceIntegrationTest {
         IntegrationTestUtils.produceValuesSynchronously(TOPIC_Y, Arrays.asList(topicYTestMessage), producerConfig);
         IntegrationTestUtils.produceValuesSynchronously(TOPIC_Z, Arrays.asList(topicZTestMessage), producerConfig);
 
-        Properties consumerConfig = getConsumerConfig();
+        Properties consumerConfig = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class);
 
         List<String> expectedReceivedValues = Arrays.asList(topicATestMessage, topic1TestMessage, topic2TestMessage, topicCTestMessage, topicYTestMessage, topicZTestMessage);
         List<KeyValue<String, String>> receivedKeyValues = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, DEFAULT_OUTPUT_TOPIC, 6);
@@ -272,59 +283,23 @@ public class RegexSourceIntegrationTest {
         pattern1Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
         pattern2Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
 
-
-        // Remove any state from previous test runs
-        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
-
         KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
         streams.start();
 
-        Properties producerConfig = getProducerConfig();
+        Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class);
 
         IntegrationTestUtils.produceValuesSynchronously(FA_TOPIC, Arrays.asList(fMessage), producerConfig);
         IntegrationTestUtils.produceValuesSynchronously(FOO_TOPIC, Arrays.asList(fooMessage), producerConfig);
 
-        Properties consumerConfig = getConsumerConfig();
+        Properties consumerConfig = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class);
 
         try {
             IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, DEFAULT_OUTPUT_TOPIC, 2, 5000);
+            fail("Should not get here");
         } finally {
             streams.close();
         }
 
-    }
-
-    private Properties getProducerConfig() {
-        Properties producerConfig = new Properties();
-        producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        producerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
-        producerConfig.put(ProducerConfig.RETRIES_CONFIG, 0);
-        producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        return producerConfig;
-    }
-
-    private Properties getStreamsConfig() {
-        Properties streamsConfiguration = new Properties();
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "regex-source-integration-test");
-        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
-        streamsConfiguration.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1000");
-        streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        return streamsConfiguration;
-    }
-
-    private Properties getConsumerConfig() {
-        Properties consumerConfig = new Properties();
-        consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "regex-source-integration-consumer");
-        consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-
-        return consumerConfig;
     }
 
     private class TestStreamThread extends StreamThread {
@@ -349,16 +324,21 @@ public class RegexSourceIntegrationTest {
             return super.createStreamTask(id, partitions);
         }
 
+    }
 
-        void waitUntilTasksUpdated() {
-            long maxTimeMillis = 30000;
-            long startTime = System.currentTimeMillis();
-            while (!streamTaskUpdated && ((System.currentTimeMillis() - startTime) < maxTimeMillis)) {
-               //empty loop just waiting for update
+
+    private TestCondition createTasksUpdatedCondition(final TestStreamThread testStreamThread) {
+        return new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                if (testStreamThread.streamTaskUpdated) {
+                    testStreamThread.streamTaskUpdated = false;
+                    return true;
+                } else {
+                    return false;
+                }
             }
-            streamTaskUpdated = false;
-        }
-
+        };
     }
 
 }
