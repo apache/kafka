@@ -35,8 +35,13 @@ public interface PartitionGrouper {
 
     /**
      * Returns a map of task ids to groups of partitions. A partition group forms a task, thus, partitions that are
-     * expected to be processed together must be in the same group. DefaultPartitionGrouper implements this
-     * interface. See {@link DefaultPartitionGrouper} for more information.
+     * expected to be processed together must be in the same group.
+     *
+     * Note that the grouping of partitions need to be <b>sticky</b> such that for a given partition, its assigned
+     * task should always be the same regardless of the input parameters to this function.
+     *
+     * The default partition grouper implements this interface by assigning all partitions across different topics with the same
+     * partition id into the same task. See {@link DefaultPartitionGrouper} for more information.
      *
      * @param topicGroups The map from the {@link TopologyBuilder#topicGroups()} topic group} id to topics
      * @param metadata Metadata of the consuming cluster
