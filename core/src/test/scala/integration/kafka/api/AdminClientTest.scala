@@ -85,12 +85,12 @@ class AdminClientTest extends IntegrationTestHarness with Logging {
     }, "Expected non-empty assignment")
 
     val group = client.describeGroup(groupId)
-    assertEquals("consumer", group.protocolType)
-    assertEquals("range", group.protocol)
-    assertEquals("Stable", group.state)
-    assertFalse(group.members.isEmpty)
+    assertEquals("consumer", group.get.protocolType)
+    assertEquals("range", group.get.protocol)
+    assertEquals("Stable", group.get.state)
+    assertFalse(group.get.members.isEmpty)
 
-    val member = group.members.head
+    val member = group.get.members.head
     assertEquals(clientId, member.clientId)
     assertFalse(member.clientHost.isEmpty)
     assertFalse(member.memberId.isEmpty)
