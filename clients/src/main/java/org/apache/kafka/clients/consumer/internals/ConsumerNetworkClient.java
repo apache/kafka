@@ -22,6 +22,7 @@ import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestSend;
@@ -104,12 +105,20 @@ public class ConsumerNetworkClient implements Closeable {
     public RequestFuture<ClientResponse> send(Node node,
                                               ApiKeys api,
                                               AbstractRequest request) {
+        return send(node, api, ProtoUtils.latestVersion(api.id), request);
+    }
+
+    public RequestFuture<ClientResponse> send(Node node,
+                                              ApiKeys api,
+                                              short version,
+                                              AbstractRequest request) {
         long now = time.milliseconds();
         RequestFutureCompletionHandler future = new RequestFutureCompletionHandler();
-        RequestHeader header = client.nextRequestHeader(api);
+        RequestHeader header = client.nextRequestHeader(api, version);
         RequestSend send = new RequestSend(node.idString(), header, request.toStruct());
         put(node, new ClientRequest(now, true, send, future));
         return future;
+
     }
 
     private void put(Node node, ClientRequest request) {
