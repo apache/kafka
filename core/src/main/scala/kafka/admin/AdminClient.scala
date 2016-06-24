@@ -125,10 +125,11 @@ class AdminClient(val time: Time,
     listAllGroupsFlattened.filter(_.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
   }
 
-  def describeGroup(groupId: String): GroupSummary = {
+  def describeGroup(groupId: String): Option[GroupSummary] = {
     findCoordinator(groupId) match {
       case None => 
-        throw new KafkaException(s"Offfsets topic is unavailable as it takes little time to be created on a new cluster")
+        println("Could not find coordinator for group %s, which implies that one of the consumer offsets partitions may be offline or in the process of being created if this is a new cluster.".format(groupId))
+        None
       case Some(coordinator) =>
         val responseBody = send(coordinator, ApiKeys.DESCRIBE_GROUPS, new DescribeGroupsRequest(List(groupId).asJava))
         val response = new DescribeGroupsResponse(responseBody)
@@ -142,7 +143,7 @@ class AdminClient(val time: Time,
           val assignment = Utils.readBytes(member.memberAssignment())
           MemberSummary(member.memberId(), member.clientId(), member.clientHost(), metadata, assignment)
         }.toList
-        GroupSummary(metadata.state(), metadata.protocolType(), metadata.protocol(), members)
+        Some(GroupSummary(metadata.state(), metadata.protocolType(), metadata.protocol(), members))
     }
   }
 
@@ -153,14 +154,14 @@ class AdminClient(val time: Time,
 
   def describeConsumerGroup(groupId: String): Option[List[ConsumerSummary]] = {
     val group = describeGroup(groupId)
-    if (group.state == "Dead")
+    if (group.get.state == "Dead")
       return None
 
-    if (group.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
-      throw new IllegalArgumentException(s"Group $groupId with protocol type '${group.protocolType}' is not a valid consumer group")
+    if (group.get.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
+      throw new IllegalArgumentException(s"Group $groupId with protocol type '${group.get.protocolType}' is not a valid consumer group")
 
-    if (group.state == "Stable") {
-      Some(group.members.map { member =>
+    if (group.get.state == "Stable") {
+      Some(group.get.members.map { member =>
         val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment))
         new ConsumerSummary(member.memberId, member.clientId, member.clientHost, assignment.partitions().asScala.toList)
       })
