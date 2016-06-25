@@ -17,6 +17,12 @@
 
 <h3><a id="upgrade" href="#upgrade">1.5 Upgrading From Previous Versions</a></h3>
 
+<h5><a id="upgrade_101_notable" href="#upgrade_101_notable">Notable changes in 0.10.1.0</a></h5>
+
+<ul>
+    <li> The default value for <code>ssl.endpoint.identification.algorithm</code> was changed to <code>https</code>, which performs hostname verification (man-in-the-middle attacks are possible otherwise). Set <code>ssl.endpoint.identification.algorithm</code> to an empty string to restore the previous behaviour. </li>
+</ul>
+
 <h4><a id="upgrade_10" href="#upgrade_10">Upgrading from 0.8.x or 0.9.x to 0.10.0.0</a></h4>
 0.10.0.0 has <a href="#upgrade_10_breaking">potential breaking changes</a> (please review before upgrading) and
 there may be a <a href="#upgrade_10_performance_impact">performance impact during the upgrade</a>. Because new protocols
