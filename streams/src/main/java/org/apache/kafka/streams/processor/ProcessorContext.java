@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
 
 import java.io.File;
+import java.util.Map;
 
 /**
  * Processor context interface.
@@ -160,4 +161,27 @@ public interface ProcessorContext {
      * @return the timestamp
      */
     long timestamp();
+
+    /**
+     * Returns all the application config properties as key/value pairs.
+     *
+     * The config properties are defined in the {@link org.apache.kafka.streams.StreamsConfig}
+     * object and associated to the ProcessorContext.
+     *
+     * @return all the key/values from the StreamsConfig properties
+     */
+    Map<String, Object> appConfigs();
+
+    /**
+     * Returns all the application config properties with the given key prefix, as key/value pairs
+     * stripping the prefix.
+     *
+     * The config properties are defined in the {@link org.apache.kafka.streams.StreamsConfig}
+     * object and associated to the ProcessorContext.
+     *
+     * @param prefix the properties prefix
+     * @return the key/values matching the given prefix from the StreamsConfig properties.
+     *
+     */
+    Map<String, Object> appConfigsWithPrefix(String prefix);
 }

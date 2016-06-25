@@ -251,6 +251,16 @@ public class KeyValueStoreTestDriver<K, V> {
             public File stateDir() {
                 return stateDir;
             }
+
+            @Override
+            public Map<String, Object> appConfigs() {
+                return null;
+            }
+
+            @Override
+            public Map<String, Object> appConfigsWithPrefix(String prefix) {
+                return null;
+            }
         };
     }
 
