@@ -147,6 +147,7 @@ public class RegexSourceIntegrationTest {
         streams.start();
 
         TestUtils.waitForCondition(tasksUpdated);
+        testStreamThread.streamTaskUpdated = false;
 
         CLUSTER.createTopic("TEST-TOPIC-2");
 
@@ -194,6 +195,8 @@ public class RegexSourceIntegrationTest {
         streams.start();
 
         TestUtils.waitForCondition(tasksUpdated);
+        //reset
+        testStreamThread.streamTaskUpdated = false;
 
         CLUSTER.deleteTopic("TEST-TOPIC-A");
 
@@ -331,12 +334,7 @@ public class RegexSourceIntegrationTest {
         return new TestCondition() {
             @Override
             public boolean conditionMet() {
-                if (testStreamThread.streamTaskUpdated) {
-                    testStreamThread.streamTaskUpdated = false;
-                    return true;
-                } else {
-                    return false;
-                }
+                return testStreamThread.streamTaskUpdated;
             }
         };
     }

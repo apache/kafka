@@ -200,13 +200,10 @@ public class IntegrationTestUtils {
             }
         };
 
-        TestUtils.waitForCondition(valuesRead, waitTime);
+        String errorMessage = "Did not receive expected " + expectedNumRecords +
+                " number of records before timeout " + waitTime + " ms";
 
-        if (accumData.size() < expectedNumRecords) {
-            throw new AssertionError("Expected " + expectedNumRecords +
-                    " but received only " + accumData.size() +
-                    " records before timeout " + waitTime + " ms");
-        }
+        TestUtils.waitForCondition(valuesRead, waitTime, errorMessage);
 
         return accumData;
     }
@@ -243,16 +240,12 @@ public class IntegrationTestUtils {
             }
         };
 
-        TestUtils.waitForCondition(valuesRead, waitTime);
+        String errorMessage = "Did not receive expected " + expectedNumRecords +
+                              " number of records before timeout " + waitTime + " ms";
 
-        if (accumData.size() < expectedNumRecords) {
-            throw new AssertionError("Expected " + expectedNumRecords +
-                    " but received only " + accumData.size() +
-                    " records before timeout " + waitTime + " ms");
-        }
+        TestUtils.waitForCondition(valuesRead, waitTime, errorMessage);
 
         return accumData;
-
     }
 
 }
