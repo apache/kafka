@@ -28,7 +28,7 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
     private final Predicate<K, V> predicate;
     private final boolean filterNot;
 
-    private boolean sendOldValues = false;
+    private boolean sendOldValues = true;
 
     public KTableFilter(KTableImpl<K, ?, V> parent, Predicate<K, V> predicate, boolean filterNot) {
         this.parent = parent;
