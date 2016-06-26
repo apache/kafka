@@ -254,24 +254,24 @@ public class KTableFilterTest {
         driver.process(topic1, "C", 1);
 
         proc1.checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
-        proc2.checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)", "C:(null<-null)");
+        proc2.checkEmpty(); // we got nothing since all inputs are odd or filtered out
 
         driver.process(topic1, "A", 2);
         driver.process(topic1, "B", 2);
 
         proc1.checkAndClearProcessResult("A:(2<-1)", "B:(2<-1)");
-        proc2.checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
+        proc2.checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)"); // we are informed of 2 making it in for both A and B
 
         driver.process(topic1, "A", 3);
 
         proc1.checkAndClearProcessResult("A:(3<-2)");
-        proc2.checkAndClearProcessResult("A:(null<-2)");
+        proc2.checkAndClearProcessResult("A:(null<-2)"); // no change for B but A is deleted
 
         driver.process(topic1, "A", null);
         driver.process(topic1, "B", null);
 
         proc1.checkAndClearProcessResult("A:(null<-3)", "B:(null<-2)");
-        proc2.checkAndClearProcessResult("A:(null<-null)", "B:(null<-2)");
+        proc2.checkAndClearProcessResult("B:(null<-2)");  // B is deleted from source Table1
     }
 
 }
