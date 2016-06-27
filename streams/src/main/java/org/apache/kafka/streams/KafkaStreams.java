@@ -24,6 +24,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamThread;
@@ -226,6 +227,15 @@ public class KafkaStreams {
             thread.setUncaughtExceptionHandler(eh);
     }
 
+    /**
+     * Get a facade wrapping the {@link org.apache.kafka.streams.processor.StateStore} instances
+     * with the provided storeName and accepted by {@link QueryableStoreType#accepts(StateStore)}.
+     * The returned object can be used to query the {@link org.apache.kafka.streams.processor.StateStore} instances
+     * @param storeName             name of the store to find
+     * @param queryableStoreType    accept only stores that are accepted by {@link QueryableStoreType#accepts(StateStore)}
+     * @param <T>                   return type
+     * @return  A facade wrapping the {@link org.apache.kafka.streams.processor.StateStore} instances
+     */
     public <T> T getStore(final String storeName, final QueryableStoreType<T> queryableStoreType) {
         return queryableStoreProvider.getStore(storeName, queryableStoreType);
     }

@@ -18,12 +18,29 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlyStore;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlyWindowStore;
 
+/**
+ * Provides access to the {@link QueryableStoreType}s provided with KafkaStreams. These
+ * can be used with {@link org.apache.kafka.streams.KafkaStreams#getStore(String, QueryableStoreType)}
+ * To access and query the {@link StateStore}s that are port of a Topology
+ */
 public class QueryableStoreTypes {
 
+    /**
+     * A {@link QueryableStoreType} that accepts {@link ReadOnlyKeyValueStore}
+     * @param <K>   key type of the store
+     * @param <V>   value type of the store
+     * @return  {@link KeyValueStoreType}
+     */
     public static <K, V> QueryableStoreType<ReadOnlyKeyValueStore<K, V>> keyValueStore() {
         return new KeyValueStoreType<>();
     }
 
+    /**
+     * A {@link QueryableStoreType} that accepts {@link ReadOnlyWindowStore}
+     * @param <K>   key type of the store
+     * @param <V>   value type of the store
+     * @return  {@link WindowStoreType}
+     */
     public static <K, V> QueryableStoreType<ReadOnlyWindowStore<K, V>> windowStore() {
         return new WindowStoreType<>();
     }

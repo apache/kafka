@@ -20,6 +20,11 @@ import org.apache.kafka.streams.state.internals.ReadOnlyStoresProvider;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Provides access to {@link org.apache.kafka.streams.processor.StateStore}s as
+ * defined by {@link QueryableStoreType}
+ * @param <T>
+ */
 public class UnderlyingStoreProvider<T> {
 
     private final List<ReadOnlyStoresProvider> storeProviders;
