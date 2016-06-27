@@ -399,7 +399,9 @@ object TopicCommand extends Logging {
     "\n\n" +
       "*****************************************************************************************************\n" +
       "*** WARNING: you are creating a topic where the max.message.bytes is greater than the broker's    ***\n" +
-      "*** default max.message.bytes. This operation is dangerous. There are two potential side effects: ***\n" +
+      "*** default max.message.bytes (on server it is message.max.bytes and here is checked and print    ***\n" +
+      "*** only DEFAULT, not actual value). This operation is dangerous. There are two potential side    ***\n" +
+      "*** effects:                                                                                      ***\n" +
       "*** - Consumers will get failures if their fetch.message.max.bytes (old consumer) or              ***\n" +
       s"***   ${NewConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG} (new consumer) < the value you are using                          ***\n" +
       "*** - Producer requests larger than replica.fetch.max.bytes will not replicate and hence have     ***\n" +
@@ -407,9 +409,9 @@ object TopicCommand extends Logging {
       "*** You should ensure both of these settings are greater than the value set here before using     ***\n" +
       "*** this topic.                                                                                   ***\n" +
       "*****************************************************************************************************\n" +
-      s"- value set here: $maxMessageBytes\n" +
+      s"- value set here (max.message.bytes): $maxMessageBytes\n" +
       s"- Default Broker replica.fetch.max.bytes: ${kafka.server.Defaults.ReplicaFetchMaxBytes}\n" +
-      s"- Default Broker max.message.bytes: ${kafka.server.Defaults.MessageMaxBytes}\n" +
+      s"- Default Broker message.max.bytes: ${kafka.server.Defaults.MessageMaxBytes}\n" +
       s"- Default Old Consumer fetch.message.max.bytes: ${OldConsumerConfig.FetchSize}\n" +
       s"- Default New Consumer ${NewConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG}: ${NewConsumerConfig.DEFAULT_MAX_PARTITION_FETCH_BYTES}\n\n"
   }
