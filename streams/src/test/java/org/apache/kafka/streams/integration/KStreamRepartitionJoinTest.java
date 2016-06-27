@@ -41,6 +41,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
@@ -50,6 +51,8 @@ public class KStreamRepartitionJoinTest {
     @ClassRule
     public static final EmbeddedSingleNodeKafkaCluster CLUSTER =
         new EmbeddedSingleNodeKafkaCluster();
+
+    private static final long WINDOW_SIZE = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
 
     private KStreamBuilder builder;
     private Properties streamsConfiguration;
@@ -123,6 +126,7 @@ public class KStreamRepartitionJoinTest {
         final ExpectedOutputOnTopic flatMapJoin = flatMapJoin();
         final ExpectedOutputOnTopic mapRhs = joinMappedRhsStream();
         final ExpectedOutputOnTopic mapJoinJoin = joinTwoMappedStreamsOneThatHasBeenPreviouslyJoined();
+        final ExpectedOutputOnTopic leftJoin = mapBothStreamsAndLeftJoin();
 
         startStreams();
 
@@ -133,6 +137,7 @@ public class KStreamRepartitionJoinTest {
         verifyCorrectOutput(flatMapJoin);
         verifyCorrectOutput(mapRhs);
         verifyCorrectOutput(mapJoinJoin);
+        verifyLeftJoin(leftJoin);
     }
 
     private ExpectedOutputOnTopic mapStreamOneAndJoin() {
@@ -224,7 +229,7 @@ public class KStreamRepartitionJoinTest {
         streamTwo
             .join(streamOne.map(keyMapper),
                   joiner,
-                  JoinWindows.of(output, 60 * 1000),
+                  getJoinWindow(output),
                   Serdes.Integer(),
                   Serdes.String(),
                   Serdes.Integer())
@@ -233,7 +238,33 @@ public class KStreamRepartitionJoinTest {
         return new ExpectedOutputOnTopic(Arrays.asList("A:1", "B:2", "C:3", "D:4", "E:5"),
                             output);
     }
-    
+
+    public ExpectedOutputOnTopic mapBothStreamsAndLeftJoin() throws Exception {
+        final KStream<Integer, Integer>
+            map1 =
+            streamOne.map(keyMapper);
+
+        final KStream<Integer, String> map2 = streamTwo.map(
+            new KeyValueMapper<Integer, String, KeyValue<Integer, String>>() {
+                @Override
+                public KeyValue<Integer, String> apply(Integer key,
+                                                       String value) {
+                    return new KeyValue<>(key, value);
+                }
+            });
+
+        String outputTopic = "left-join";
+        map1.leftJoin(map2,
+                      valueJoiner,
+                      getJoinWindow("the-left-join"),
+                      Serdes.Integer(),
+                      Serdes.Integer(),
+                      Serdes.String())
+            .to(Serdes.Integer(), Serdes.String(), outputTopic);
+
+        return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
+    }
+
     private ExpectedOutputOnTopic joinTwoMappedStreamsOneThatHasBeenPreviouslyJoined() throws
                                                                                    Exception {
         final KStream<Integer, Integer>
@@ -254,7 +285,7 @@ public class KStreamRepartitionJoinTest {
 
         final KStream<Integer, String> join = map1.join(map2,
                                                         valueJoiner,
-                                                        JoinWindows.of("join-one", 60 * 1000),
+                                                        getJoinWindow("join-one"),
                                                         Serdes.Integer(),
                                                         Serdes.Integer(),
                                                         Serdes.String());
@@ -269,7 +300,7 @@ public class KStreamRepartitionJoinTest {
         join.map(kvMapper)
             .join(streamFour.map(kvMapper),
                   joiner,
-                  JoinWindows.of("the-other-join", 60 * 1000),
+                  getJoinWindow("the-other-join"),
                   Serdes.Integer(),
                   Serdes.String(),
                   Serdes.String())
@@ -278,6 +309,10 @@ public class KStreamRepartitionJoinTest {
 
         return new ExpectedOutputOnTopic(Arrays.asList("1:A:A", "2:B:B", "3:C:C", "4:D:D", "5:E:E"),
                             topic);
+    }
+
+    private JoinWindows getJoinWindow(String name) {
+        return (JoinWindows) JoinWindows.of(name, WINDOW_SIZE).until(3 * WINDOW_SIZE);
     }
 
 
@@ -404,7 +439,7 @@ public class KStreamRepartitionJoinTest {
         CLUSTER.createTopic(outputTopic);
         lhs.join(rhs,
                  valueJoiner,
-                 JoinWindows.of(joinName, 60 * 1000),
+                 getJoinWindow(joinName),
                  Serdes.Integer(),
                  Serdes.Integer(),
                  Serdes.String())
