@@ -62,6 +62,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
 
 import static java.util.Collections.singleton;
 
@@ -78,6 +79,7 @@ public class StreamThread extends Thread {
     protected final StreamsConfig config;
     protected final TopologyBuilder builder;
     protected final Set<String> sourceTopics;
+    protected final Pattern topicPattern;
     protected final Producer<byte[], byte[]> producer;
     protected final Consumer<byte[], byte[]> consumer;
     protected final Consumer<byte[], byte[]> restoreConsumer;
@@ -159,7 +161,8 @@ public class StreamThread extends Thread {
         this.applicationId = applicationId;
         this.config = config;
         this.builder = builder;
-        this.sourceTopics = builder.sourceTopics(applicationId);
+        this.sourceTopics = builder.sourceTopics();
+        this.topicPattern = builder.sourceTopicPattern();
         this.clientId = clientId;
         this.processId = processId;
         this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
@@ -283,7 +286,12 @@ public class StreamThread extends Thread {
         long lastPoll = 0L;
         boolean requiresPoll = true;
 
-        consumer.subscribe(new ArrayList<>(sourceTopics), rebalanceListener);
+        if (topicPattern != null) {
+            consumer.subscribe(topicPattern, rebalanceListener);
+        } else {
+            consumer.subscribe(new ArrayList<>(sourceTopics), rebalanceListener);
+        }
+
 
         while (stillRunning()) {
             // try to fetch some records if necessary

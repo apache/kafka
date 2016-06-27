@@ -224,7 +224,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     AclCommand.main(groupAclArgs)
     servers.foreach(s => {
       TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl, s.apis.authorizer.get, topicResource)
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, servers.head.apis.authorizer.get, groupResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, groupResource)
     })
     //Produce records
     debug("Starting to send records")

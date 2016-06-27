@@ -17,14 +17,12 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.test.KStreamTestDriver;
-import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.TestUtils;
@@ -144,19 +142,5 @@ public class KStreamKTableLeftJoinTest {
         processor.checkAndClearProcessResult("0:XX0+null", "1:XX1+null", "2:XX2+YY2", "3:XX3+YY3");
     }
 
-    @Test(expected = KafkaException.class)
-    public void testNotJoinable() {
-        KStreamBuilder builder = new KStreamBuilder();
-
-        KStream<Integer, String> stream;
-        KTable<Integer, String> table;
-        MockProcessorSupplier<Integer, String> processor;
-
-        processor = new MockProcessorSupplier<>();
-        stream = builder.stream(intSerde, stringSerde, topic1).map(MockKeyValueMapper.<Integer, String>NoOpKeyValueMapper());
-        table = builder.table(intSerde, stringSerde, topic2);
-
-        stream.leftJoin(table, MockValueJoiner.STRING_JOINER).process(processor);
-    }
 
 }

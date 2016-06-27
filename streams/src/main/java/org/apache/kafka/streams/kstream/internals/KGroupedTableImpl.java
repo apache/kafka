@@ -45,8 +45,6 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
     private static final String REDUCE_NAME = "KTABLE-REDUCE-";
 
-    private static final String REPARTITION_TOPIC_SUFFIX = "-repartition";
-
     protected final Serde<K> keySerde;
     protected final Serde<V> valSerde;
 
@@ -88,7 +86,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         String sourceName = topology.newName(KStreamImpl.SOURCE_NAME);
         String funcName = topology.newName(functionName);
 
-        String topic = name + REPARTITION_TOPIC_SUFFIX;
+        String topic = name + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
 
         Serializer<K> keySerializer = keySerde == null ? null : keySerde.serializer();
         Deserializer<K> keyDeserializer = keySerde == null ? null : keySerde.deserializer();

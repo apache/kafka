@@ -18,10 +18,10 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.streams.errors.TopologyBuilderException;
+import org.apache.kafka.streams.processor.TopologyBuilder.TopicsInfo;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
-import org.apache.kafka.streams.processor.TopologyBuilder.TopicsInfo;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.junit.Test;
@@ -33,6 +33,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import static org.apache.kafka.common.utils.Utils.mkList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -138,7 +139,7 @@ public class TopologyBuilderTest {
     @Test
     public void testSourceTopics() {
         final TopologyBuilder builder = new TopologyBuilder();
-
+        builder.setApplicationId("X");
         builder.addSource("source-1", "topic-1");
         builder.addSource("source-2", "topic-2");
         builder.addSource("source-3", "topic-3");
@@ -149,7 +150,47 @@ public class TopologyBuilderTest {
         expected.add("topic-2");
         expected.add("X-topic-3");
 
-        assertEquals(expected, builder.sourceTopics("X"));
+        assertEquals(expected, builder.sourceTopics());
+    }
+
+    @Test
+    public void testPatternSourceTopic() {
+        final TopologyBuilder builder = new TopologyBuilder();
+        Pattern expectedPattern = Pattern.compile("topic-\\d");
+        builder.addSource("source-1", expectedPattern);
+        assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
+    }
+
+    @Test
+    public void testAddMoreThanOnePatternSourceNode() {
+        final TopologyBuilder builder = new TopologyBuilder();
+        Pattern expectedPattern = Pattern.compile("topics[A-Z]|.*-\\d");
+        builder.addSource("source-1", Pattern.compile("topics[A-Z]"));
+        builder.addSource("source-2", Pattern.compile(".*-\\d"));
+        assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
+    }
+
+    @Test
+    public void testSubscribeTopicNameAndPattern() {
+        final TopologyBuilder builder = new TopologyBuilder();
+        Pattern expectedPattern = Pattern.compile(".*-\\d|topic-foo|topic-bar");
+        builder.addSource("source-1", "topic-foo", "topic-bar");
+        builder.addSource("source-2", Pattern.compile(".*-\\d"));
+        assertEquals(expectedPattern.pattern(), builder.sourceTopicPattern().pattern());
+    }
+
+    @Test(expected = TopologyBuilderException.class)
+    public void testPatternMatchesAlreadyProvidedTopicSource() {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.addSource("source-1", "foo");
+        builder.addSource("source-2", Pattern.compile("f.*"));
+    }
+
+    @Test(expected = TopologyBuilderException.class)
+    public void testNamedTopicMatchesAlreadyProvidedPattern() {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.addSource("source-1", Pattern.compile("f.*"));
+        builder.addSource("source-2", "foo");
     }
 
     @Test(expected = TopologyBuilderException.class)
@@ -218,7 +259,7 @@ public class TopologyBuilderTest {
 
         builder.addProcessor("processor-3", new MockProcessorSupplier(), "source-3", "source-4");
 
-        Map<Integer, TopicsInfo> topicGroups = builder.topicGroups("X");
+        Map<Integer, TopicsInfo> topicGroups = builder.topicGroups();
 
         Map<Integer, TopicsInfo> expectedTopicGroups = new HashMap<>();
         expectedTopicGroups.put(0, new TopicsInfo(Collections.<String>emptySet(), mkSet("topic-1", "topic-1x", "topic-2"), Collections.<String>emptySet(), Collections.<String>emptySet()));
@@ -236,7 +277,7 @@ public class TopologyBuilderTest {
     @Test
     public void testTopicGroupsByStateStore() {
         final TopologyBuilder builder = new TopologyBuilder();
-
+        builder.setApplicationId("X");
         builder.addSource("source-1", "topic-1", "topic-1x");
         builder.addSource("source-2", "topic-2");
         builder.addSource("source-3", "topic-3");
@@ -256,7 +297,7 @@ public class TopologyBuilderTest {
         builder.addStateStore(supplier);
         builder.connectProcessorAndStateStores("processor-5", "store-3");
 
-        Map<Integer, TopicsInfo> topicGroups = builder.topicGroups("X");
+        Map<Integer, TopicsInfo> topicGroups = builder.topicGroups();
 
         Map<Integer, TopicsInfo> expectedTopicGroups = new HashMap<>();
         expectedTopicGroups.put(0, new TopicsInfo(Collections.<String>emptySet(), mkSet("topic-1", "topic-1x", "topic-2"), Collections.<String>emptySet(), mkSet(ProcessorStateManager.storeChangelogTopic("X", "store-1"))));

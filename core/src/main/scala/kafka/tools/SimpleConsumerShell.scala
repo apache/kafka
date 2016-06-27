@@ -101,7 +101,7 @@ object SimpleConsumerShell extends Logging {
       CommandLineUtils.printUsageAndDie(parser, "A low-level tool for fetching data directly from a particular replica.")
 
     val options = parser.parse(args : _*)
-    CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt, topicOpt, partitionIdOpt)
+    CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt, topicOpt)
 
     val topic = options.valueOf(topicOpt)
     val partitionId = options.valueOf(partitionIdOpt).intValue()

@@ -186,4 +186,19 @@ public class KafkaEmbedded {
         AdminUtils.createTopic(zkUtils, topic, partitions, replication, topicConfig, RackAwareMode.Enforced$.MODULE$);
         zkClient.close();
     }
+
+    public void deleteTopic(String topic) {
+        log.debug("Deleting topic { name: {} }", topic);
+
+        ZkClient zkClient = new ZkClient(
+                zookeeperConnect(),
+                DEFAULT_ZK_SESSION_TIMEOUT_MS,
+                DEFAULT_ZK_CONNECTION_TIMEOUT_MS,
+                ZKStringSerializer$.MODULE$);
+        boolean isSecure = false;
+        ZkUtils zkUtils = new ZkUtils(zkClient, new ZkConnection(zookeeperConnect()), isSecure);
+        AdminUtils.deleteTopic(zkUtils, topic);
+        zkClient.close();
+    }
+
 }
