@@ -21,8 +21,9 @@ import org.apache.zookeeper.server.ZooKeeperServer
 import org.apache.zookeeper.server.NIOServerCnxnFactory
 import kafka.utils.TestUtils
 import java.net.InetSocketAddress
+
 import kafka.utils.CoreUtils
-import org.apache.kafka.common.utils.Utils.getPort
+import org.apache.kafka.common.utils.Utils
 
 class EmbeddedZookeeper() {
   val snapshotDir = TestUtils.tempDir()
@@ -38,8 +39,18 @@ class EmbeddedZookeeper() {
   def shutdown() {
     CoreUtils.swallow(zookeeper.shutdown())
     CoreUtils.swallow(factory.shutdown())
-    CoreUtils.rm(logDir)
-    CoreUtils.rm(snapshotDir)
+
+    def isDown(): Boolean = {
+      try {
+        ZkFourLetterWords.sendStat("127.0.0.1", port, 3000)
+        false
+      } catch { case _: Throwable => true }
+    }
+
+    Iterator.continually(isDown()).exists(identity)
+
+    Utils.delete(logDir)
+    Utils.delete(snapshotDir)
   }
   
 }

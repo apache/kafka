@@ -16,6 +16,8 @@ import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -24,19 +26,19 @@ import java.util.Map;
 final class InFlightRequests {
 
     private final int maxInFlightRequestsPerConnection;
-    private final Map<Integer, Deque<ClientRequest>> requests = new HashMap<Integer, Deque<ClientRequest>>();
+    private final Map<String, Deque<ClientRequest>> requests = new HashMap<String, Deque<ClientRequest>>();
 
     public InFlightRequests(int maxInFlightRequestsPerConnection) {
         this.maxInFlightRequestsPerConnection = maxInFlightRequestsPerConnection;
     }
 
     /**
-     * Add the given request to the queue for the node it was directed to
+     * Add the given request to the queue for the connection it was directed to
      */
     public void add(ClientRequest request) {
         Deque<ClientRequest> reqs = this.requests.get(request.request().destination());
         if (reqs == null) {
-            reqs = new ArrayDeque<ClientRequest>();
+            reqs = new ArrayDeque<>();
             this.requests.put(request.request().destination(), reqs);
         }
         reqs.addFirst(request);
@@ -45,7 +47,7 @@ final class InFlightRequests {
     /**
      * Get the request queue for the given node
      */
-    private Deque<ClientRequest> requestQueue(int node) {
+    private Deque<ClientRequest> requestQueue(String node) {
         Deque<ClientRequest> reqs = requests.get(node);
         if (reqs == null || reqs.isEmpty())
             throw new IllegalStateException("Response from server for which there are no in-flight requests.");
@@ -55,7 +57,7 @@ final class InFlightRequests {
     /**
      * Get the oldest request (the one that that will be completed next) for the given node
      */
-    public ClientRequest completeNext(int node) {
+    public ClientRequest completeNext(String node) {
         return requestQueue(node).pollLast();
     }
 
@@ -63,7 +65,7 @@ final class InFlightRequests {
      * Get the last request we sent to the given node (but don't remove it from the queue)
      * @param node The node id
      */
-    public ClientRequest lastSent(int node) {
+    public ClientRequest lastSent(String node) {
         return requestQueue(node).peekFirst();
     }
 
@@ -72,7 +74,7 @@ final class InFlightRequests {
      * @param node The node the request was sent to
      * @return The request
      */
-    public ClientRequest completeLastSent(int node) {
+    public ClientRequest completeLastSent(String node) {
         return requestQueue(node).pollFirst();
     }
 
@@ -82,7 +84,7 @@ final class InFlightRequests {
      * @param node Node in question
      * @return true iff we have no requests still being sent to the given node
      */
-    public boolean canSendMore(int node) {
+    public boolean canSendMore(String node) {
         Deque<ClientRequest> queue = requests.get(node);
         return queue == null || queue.isEmpty() ||
                (queue.peekFirst().request().completed() && queue.size() < this.maxInFlightRequestsPerConnection);
@@ -93,7 +95,7 @@ final class InFlightRequests {
      * @param node The node
      * @return The request count.
      */
-    public int inFlightRequestCount(int node) {
+    public int inFlightRequestCount(String node) {
         Deque<ClientRequest> queue = requests.get(node);
         return queue == null ? 0 : queue.size();
     }
@@ -114,7 +116,7 @@ final class InFlightRequests {
      * @param node The node
      * @return All the in-flight requests for that node that have been removed
      */
-    public Iterable<ClientRequest> clearAll(int node) {
+    public Iterable<ClientRequest> clearAll(String node) {
         Deque<ClientRequest> reqs = requests.get(node);
         if (reqs == null) {
             return Collections.emptyList();
@@ -123,4 +125,25 @@ final class InFlightRequests {
         }
     }
 
+    /**
+     * Returns a list of nodes with pending inflight request, that need to be timed out
+     *
+     * @param now current time in milliseconds
+     * @param requestTimeout max time to wait for the request to be completed
+     * @return list of nodes
+     */
+    public List<String> getNodesWithTimedOutRequests(long now, int requestTimeout) {
+        List<String> nodeIds = new LinkedList<String>();
+        for (String nodeId : requests.keySet()) {
+            if (inFlightRequestCount(nodeId) > 0) {
+                ClientRequest request = requests.get(nodeId).peekLast();
+                long timeSinceSend = now - request.sendTimeMs();
+                if (timeSinceSend > requestTimeout) {
+                    nodeIds.add(nodeId);
+                }
+            }
+        }
+
+        return nodeIds;
+    }
 }

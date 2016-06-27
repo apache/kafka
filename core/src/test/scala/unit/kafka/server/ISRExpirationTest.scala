@@ -18,7 +18,8 @@ package kafka.server
 
 import java.util.Properties
 
-import org.scalatest.junit.JUnit3Suite
+import org.apache.kafka.common.metrics.Metrics
+import org.junit.{Test, Before, After}
 import collection.mutable.HashMap
 import collection.mutable.Map
 import kafka.cluster.{Partition, Replica}
@@ -28,9 +29,10 @@ import org.junit.Assert._
 import kafka.utils._
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.message.MessageSet
+import org.apache.kafka.common.utils.{MockTime => JMockTime}
 
 
-class IsrExpirationTest extends JUnit3Suite {
+class IsrExpirationTest {
 
   var topicPartitionIsr: Map[(String, Int), Seq[Int]] = new HashMap[(String, Int), Seq[Int]]()
   val replicaLagTimeMaxMs = 100L
@@ -43,22 +45,26 @@ class IsrExpirationTest extends JUnit3Suite {
   val topic = "foo"
 
   val time = new MockTime
+  val jTime = new JMockTime
+  val metrics = new Metrics
 
   var replicaManager: ReplicaManager = null
 
-  override def setUp() {
-    super.setUp()
-    replicaManager = new ReplicaManager(configs.head, time, null, null, null, new AtomicBoolean(false))
+  @Before
+  def setUp() {
+    replicaManager = new ReplicaManager(configs.head, metrics, time, jTime, null, null, null, new AtomicBoolean(false))
   }
 
-  override def tearDown() {
+  @After
+  def tearDown() {
     replicaManager.shutdown(false)
-    super.tearDown()
+    metrics.close()
   }
 
   /*
    * Test the case where a follower is caught up but stops making requests to the leader. Once beyond the configured time limit, it should fall out of ISR
    */
+  @Test
   def testIsrExpirationForStuckFollowers() {
     val log = getLogWithLogEndOffset(15L, 2) // set logEndOffset for leader to 15L
 
@@ -89,6 +95,7 @@ class IsrExpirationTest extends JUnit3Suite {
   /*
    * Test the case where a follower never makes a fetch request. It should fall out of ISR because it will be declared stuck
    */
+  @Test
   def testIsrExpirationIfNoFetchRequestMade() {
     val log = getLogWithLogEndOffset(15L, 1) // set logEndOffset for leader to 15L
 
@@ -109,6 +116,7 @@ class IsrExpirationTest extends JUnit3Suite {
    * Test the case where a follower continually makes fetch requests but is unable to catch up. It should fall out of the ISR
    * However, any time it makes a request to the LogEndOffset it should be back in the ISR
    */
+  @Test
   def testIsrExpirationForSlowFollowers() {
     // create leader replica
     val log = getLogWithLogEndOffset(15L, 4)

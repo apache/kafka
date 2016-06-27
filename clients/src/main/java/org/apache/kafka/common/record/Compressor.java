@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
+import java.lang.reflect.Constructor;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.Utils;
 
@@ -46,6 +47,40 @@ public class Compressor {
         }
     }
 
+    // dynamically load the snappy and lz4 classes to avoid runtime dependency if we are not using compression
+    // caching constructors to avoid invoking of Class.forName method for each batch
+    private static MemoizingConstructorSupplier snappyOutputStreamSupplier = new MemoizingConstructorSupplier(new ConstructorSupplier() {
+        @Override
+        public Constructor get() throws ClassNotFoundException, NoSuchMethodException {
+            return Class.forName("org.xerial.snappy.SnappyOutputStream")
+                .getConstructor(OutputStream.class, Integer.TYPE);
+        }
+    });
+
+    private static MemoizingConstructorSupplier lz4OutputStreamSupplier = new MemoizingConstructorSupplier(new ConstructorSupplier() {
+        @Override
+        public Constructor get() throws ClassNotFoundException, NoSuchMethodException {
+            return Class.forName("org.apache.kafka.common.record.KafkaLZ4BlockOutputStream")
+                .getConstructor(OutputStream.class);
+        }
+    });
+
+    private static MemoizingConstructorSupplier snappyInputStreamSupplier = new MemoizingConstructorSupplier(new ConstructorSupplier() {
+        @Override
+        public Constructor get() throws ClassNotFoundException, NoSuchMethodException {
+            return Class.forName("org.xerial.snappy.SnappyInputStream")
+                .getConstructor(InputStream.class);
+        }
+    });
+
+    private static MemoizingConstructorSupplier lz4InputStreamSupplier = new MemoizingConstructorSupplier(new ConstructorSupplier() {
+        @Override
+        public Constructor get() throws ClassNotFoundException, NoSuchMethodException {
+            return Class.forName("org.apache.kafka.common.record.KafkaLZ4BlockInputStream")
+                .getConstructor(InputStream.class, Boolean.TYPE);
+        }
+    });
+
     private final CompressionType type;
     private final DataOutputStream appendStream;
     private final ByteBufferOutputStream bufferStream;
@@ -53,13 +88,17 @@ public class Compressor {
 
     public long writtenUncompressed;
     public long numRecords;
+    public float compressionRate;
+    public long maxTimestamp;
 
-    public Compressor(ByteBuffer buffer, CompressionType type, int blockSize) {
+    public Compressor(ByteBuffer buffer, CompressionType type) {
         this.type = type;
         this.initPos = buffer.position();
 
         this.numRecords = 0;
         this.writtenUncompressed = 0;
+        this.compressionRate = 1;
+        this.maxTimestamp = Record.NO_TIMESTAMP;
 
         if (type != CompressionType.NONE) {
             // for compressed records, leave space for the header and the shallow message metadata
@@ -69,23 +108,15 @@ public class Compressor {
 
         // create the stream
         bufferStream = new ByteBufferOutputStream(buffer);
-        appendStream = wrapForOutput(bufferStream, type, blockSize);
-    }
-
-    public Compressor(ByteBuffer buffer, CompressionType type) {
-        this(buffer, type, COMPRESSION_DEFAULT_BUFFER_SIZE);
+        appendStream = wrapForOutput(bufferStream, type, COMPRESSION_DEFAULT_BUFFER_SIZE);
     }
 
     public ByteBuffer buffer() {
         return bufferStream.buffer();
     }
-    
+
     public double compressionRate() {
-        ByteBuffer buffer = bufferStream.buffer();
-        if (this.writtenUncompressed == 0)
-            return 1.0;
-        else
-            return (double) buffer.position() / this.writtenUncompressed;
+        return compressionRate;
     }
 
     public void close() {
@@ -103,10 +134,10 @@ public class Compressor {
             buffer.putLong(numRecords - 1);
             buffer.putInt(pos - initPos - Records.LOG_OVERHEAD);
             // write the shallow message (the crc and value size are not correct yet)
-            Record.write(buffer, null, null, type, 0, -1);
+            Record.write(buffer, maxTimestamp, null, null, type, 0, -1);
             // compute the fill the value size
             int valueSize = pos - initPos - Records.LOG_OVERHEAD - Record.RECORD_OVERHEAD;
-            buffer.putInt(initPos + Records.LOG_OVERHEAD + Record.KEY_OFFSET, valueSize);
+            buffer.putInt(initPos + Records.LOG_OVERHEAD + Record.KEY_OFFSET_V1, valueSize);
             // compute and fill the crc at the beginning of the message
             long crc = Record.computeChecksum(buffer,
                 initPos + Records.LOG_OVERHEAD + Record.MAGIC_OFFSET,
@@ -116,7 +147,7 @@ public class Compressor {
             buffer.position(pos);
 
             // update the compression ratio
-            float compressionRate = (float) buffer.position() / this.writtenUncompressed;
+            this.compressionRate = (float) buffer.position() / this.writtenUncompressed;
             TYPE_TO_RATE[type.id] = TYPE_TO_RATE[type.id] * COMPRESSION_RATE_DAMPING_FACTOR +
                 compressionRate * (1 - COMPRESSION_RATE_DAMPING_FACTOR);
         }
@@ -166,24 +197,38 @@ public class Compressor {
         }
     }
 
-    public void putRecord(byte[] key, byte[] value, CompressionType type, int valueOffset, int valueSize) {
+    /**
+     * @return CRC of the record
+     */
+    public long putRecord(long timestamp, byte[] key, byte[] value, CompressionType type,
+                          int valueOffset, int valueSize) {
         // put a record as un-compressed into the underlying stream
-        long crc = Record.computeChecksum(key, value, type, valueOffset, valueSize);
+        long crc = Record.computeChecksum(timestamp, key, value, type, valueOffset, valueSize);
         byte attributes = Record.computeAttributes(type);
-        putRecord(crc, attributes, key, value, valueOffset, valueSize);
+        putRecord(crc, attributes, timestamp, key, value, valueOffset, valueSize);
+        return crc;
     }
 
-    public void putRecord(byte[] key, byte[] value) {
-        putRecord(key, value, CompressionType.NONE, 0, -1);
+    /**
+     * Put a record as uncompressed into the underlying stream
+     * @return CRC of the record
+     */
+    public long putRecord(long timestamp, byte[] key, byte[] value) {
+        return putRecord(timestamp, key, value, CompressionType.NONE, 0, -1);
     }
 
-    private void putRecord(final long crc, final byte attributes, final byte[] key, final byte[] value, final int valueOffset, final int valueSize) {
-        Record.write(this, crc, attributes, key, value, valueOffset, valueSize);
+    private void putRecord(final long crc, final byte attributes, final long timestamp, final byte[] key, final byte[] value, final int valueOffset, final int valueSize) {
+        maxTimestamp = Math.max(maxTimestamp, timestamp);
+        Record.write(this, crc, attributes, timestamp, key, value, valueOffset, valueSize);
     }
 
     public void recordWritten(int size) {
         numRecords += 1;
         writtenUncompressed += size;
+    }
+
+    public long numRecordsWritten() {
+        return numRecords;
     }
 
     public long estimatedBytesWritten() {
@@ -205,21 +250,15 @@ public class Compressor {
                 case GZIP:
                     return new DataOutputStream(new GZIPOutputStream(buffer, bufferSize));
                 case SNAPPY:
-                    // dynamically load the snappy class to avoid runtime dependency
-                    // on snappy if we are not using it
                     try {
-                        Class<?> outputStreamClass = Class.forName("org.xerial.snappy.SnappyOutputStream");
-                        OutputStream stream = (OutputStream) outputStreamClass.getConstructor(OutputStream.class, Integer.TYPE)
-                            .newInstance(buffer, bufferSize);
+                        OutputStream stream = (OutputStream) snappyOutputStreamSupplier.get().newInstance(buffer, bufferSize);
                         return new DataOutputStream(stream);
                     } catch (Exception e) {
                         throw new KafkaException(e);
                     }
                 case LZ4:
                     try {
-                        Class<?> outputStreamClass = Class.forName("org.apache.kafka.common.record.KafkaLZ4BlockOutputStream");
-                        OutputStream stream = (OutputStream) outputStreamClass.getConstructor(OutputStream.class)
-                            .newInstance(buffer);
+                        OutputStream stream = (OutputStream) lz4OutputStreamSupplier.get().newInstance(buffer);
                         return new DataOutputStream(stream);
                     } catch (Exception e) {
                         throw new KafkaException(e);
@@ -232,7 +271,7 @@ public class Compressor {
         }
     }
 
-    static public DataInputStream wrapForInput(ByteBufferInputStream buffer, CompressionType type) {
+    static public DataInputStream wrapForInput(ByteBufferInputStream buffer, CompressionType type, byte messageVersion) {
         try {
             switch (type) {
                 case NONE:
@@ -240,22 +279,16 @@ public class Compressor {
                 case GZIP:
                     return new DataInputStream(new GZIPInputStream(buffer));
                 case SNAPPY:
-                    // dynamically load the snappy class to avoid runtime dependency
-                    // on snappy if we are not using it
                     try {
-                        Class<?> inputStreamClass = Class.forName("org.xerial.snappy.SnappyInputStream");
-                        InputStream stream = (InputStream) inputStreamClass.getConstructor(InputStream.class)
-                            .newInstance(buffer);
+                        InputStream stream = (InputStream) snappyInputStreamSupplier.get().newInstance(buffer);
                         return new DataInputStream(stream);
                     } catch (Exception e) {
                         throw new KafkaException(e);
                     }
                 case LZ4:
-                    // dynamically load LZ4 class to avoid runtime dependency
                     try {
-                        Class<?> inputStreamClass = Class.forName("org.apache.kafka.common.record.KafkaLZ4BlockInputStream");
-                        InputStream stream = (InputStream) inputStreamClass.getConstructor(InputStream.class)
-                            .newInstance(buffer);
+                        InputStream stream = (InputStream) lz4InputStreamSupplier.get().newInstance(buffer,
+                                messageVersion == Record.MAGIC_VALUE_V0);
                         return new DataInputStream(stream);
                     } catch (Exception e) {
                         throw new KafkaException(e);
@@ -265,6 +298,35 @@ public class Compressor {
             }
         } catch (IOException e) {
             throw new KafkaException(e);
+        }
+    }
+
+    private interface ConstructorSupplier {
+        Constructor get() throws ClassNotFoundException, NoSuchMethodException;
+    }
+
+    // this code is based on Guava's @see{com.google.common.base.Suppliers.MemoizingSupplier}
+    private static class MemoizingConstructorSupplier {
+        final ConstructorSupplier delegate;
+        transient volatile boolean initialized;
+        transient Constructor value;
+
+        public MemoizingConstructorSupplier(ConstructorSupplier delegate) {
+            this.delegate = delegate;
+        }
+
+        public Constructor get() throws NoSuchMethodException, ClassNotFoundException {
+            if (!initialized) {
+                synchronized (this) {
+                    if (!initialized) {
+                        Constructor constructor = delegate.get();
+                        value = constructor;
+                        initialized = true;
+                        return constructor;
+                    }
+                }
+            }
+            return value;
         }
     }
 }

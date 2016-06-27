@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -36,16 +36,16 @@ class DefaultDecoder(props: VerifiableProperties = null) extends Decoder[Array[B
 }
 
 /**
- * The string encoder translates strings into bytes. It uses UTF8 by default but takes
+ * The string decoder translates bytes into strings. It uses UTF8 by default but takes
  * an optional property serializer.encoding to control this.
  */
 class StringDecoder(props: VerifiableProperties = null) extends Decoder[String] {
-  val encoding = 
+  val encoding =
     if(props == null)
-      "UTF8" 
+      "UTF8"
     else
       props.getString("serializer.encoding", "UTF8")
-      
+
   def fromBytes(bytes: Array[Byte]): String = {
     new String(bytes, encoding)
   }

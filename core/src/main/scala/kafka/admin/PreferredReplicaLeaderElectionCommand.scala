@@ -23,6 +23,7 @@ import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import kafka.common.{TopicAndPartition, AdminCommandFailedException}
 import collection._
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.security.JaasUtils
 
 object PreferredReplicaLeaderElectionCommand extends Logging {
 
@@ -51,15 +52,19 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
 
     val zkConnect = options.valueOf(zkConnectOpt)
     var zkClient: ZkClient = null
-
+    var zkUtils: ZkUtils = null
     try {
-      zkClient = new ZkClient(zkConnect, 30000, 30000, ZKStringSerializer)
+      zkClient = ZkUtils.createZkClient(zkConnect, 30000, 30000)
+      zkUtils = ZkUtils(zkConnect, 
+                        30000,
+                        30000,
+                        JaasUtils.isZkSecurityEnabled())
       val partitionsForPreferredReplicaElection =
         if (!options.has(jsonFileOpt))
-          ZkUtils.getAllPartitions(zkClient)
+          zkUtils.getAllPartitions()
         else
           parsePreferredReplicaElectionData(Utils.readFileAsString(options.valueOf(jsonFileOpt)))
-      val preferredReplicaElectionCommand = new PreferredReplicaLeaderElectionCommand(zkClient, partitionsForPreferredReplicaElection)
+      val preferredReplicaElectionCommand = new PreferredReplicaLeaderElectionCommand(zkUtils, partitionsForPreferredReplicaElection)
 
       preferredReplicaElectionCommand.moveLeaderToPreferredReplica()
       println("Successfully started preferred replica election for partitions %s".format(partitionsForPreferredReplicaElection))
@@ -95,18 +100,18 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
     }
   }
 
-  def writePreferredReplicaElectionData(zkClient: ZkClient,
+  def writePreferredReplicaElectionData(zkUtils: ZkUtils,
                                         partitionsUndergoingPreferredReplicaElection: scala.collection.Set[TopicAndPartition]) {
     val zkPath = ZkUtils.PreferredReplicaLeaderElectionPath
     val partitionsList = partitionsUndergoingPreferredReplicaElection.map(e => Map("topic" -> e.topic, "partition" -> e.partition))
     val jsonData = Json.encode(Map("version" -> 1, "partitions" -> partitionsList))
     try {
-      ZkUtils.createPersistentPath(zkClient, zkPath, jsonData)
+      zkUtils.createPersistentPath(zkPath, jsonData)
       info("Created preferred replica election path with %s".format(jsonData))
     } catch {
       case nee: ZkNodeExistsException =>
         val partitionsUndergoingPreferredReplicaElection =
-          PreferredReplicaLeaderElectionCommand.parsePreferredReplicaElectionData(ZkUtils.readData(zkClient, zkPath)._1)
+          PreferredReplicaLeaderElectionCommand.parsePreferredReplicaElectionData(zkUtils.readData(zkPath)._1)
         throw new AdminOperationException("Preferred replica leader election currently in progress for " +
           "%s. Aborting operation".format(partitionsUndergoingPreferredReplicaElection))
       case e2: Throwable => throw new AdminOperationException(e2.toString)
@@ -114,20 +119,20 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
   }
 }
 
-class PreferredReplicaLeaderElectionCommand(zkClient: ZkClient, partitions: scala.collection.Set[TopicAndPartition])
+class PreferredReplicaLeaderElectionCommand(zkUtils: ZkUtils, partitions: scala.collection.Set[TopicAndPartition])
   extends Logging {
   def moveLeaderToPreferredReplica() = {
     try {
-      val validPartitions = partitions.filter(p => validatePartition(zkClient, p.topic, p.partition))
-      PreferredReplicaLeaderElectionCommand.writePreferredReplicaElectionData(zkClient, validPartitions)
+      val validPartitions = partitions.filter(p => validatePartition(zkUtils, p.topic, p.partition))
+      PreferredReplicaLeaderElectionCommand.writePreferredReplicaElectionData(zkUtils, validPartitions)
     } catch {
       case e: Throwable => throw new AdminCommandFailedException("Admin command failed", e)
     }
   }
 
-  def validatePartition(zkClient: ZkClient, topic: String, partition: Int): Boolean = {
+  def validatePartition(zkUtils: ZkUtils, topic: String, partition: Int): Boolean = {
     // check if partition exists
-    val partitionsOpt = ZkUtils.getPartitionsForTopics(zkClient, List(topic)).get(topic)
+    val partitionsOpt = zkUtils.getPartitionsForTopics(List(topic)).get(topic)
     partitionsOpt match {
       case Some(partitions) =>
         if(partitions.contains(partition)) {

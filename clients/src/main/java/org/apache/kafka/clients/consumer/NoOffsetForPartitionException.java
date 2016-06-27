@@ -13,17 +13,32 @@
 
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
+
+import java.util.Collections;
+import java.util.Set;
 
 /**
- * Indicates that there is no stored offset and no defined offset reset policy
+ * Indicates that there is no stored offset for a partition and no defined offset
+ * reset policy.
  */
-public class NoOffsetForPartitionException extends KafkaException {
+public class NoOffsetForPartitionException extends InvalidOffsetException {
 
     private static final long serialVersionUID = 1L;
 
-    public NoOffsetForPartitionException(String message) {
-        super(message);
+    private final TopicPartition partition;
+
+    public NoOffsetForPartitionException(TopicPartition partition) {
+        super("Undefined offset with no reset policy for partition: " + partition);
+        this.partition = partition;
+    }
+
+    public TopicPartition partition() {
+        return partition;
+    }
+
+    public Set<TopicPartition> partitions() {
+        return Collections.singleton(partition);
     }
 
 }

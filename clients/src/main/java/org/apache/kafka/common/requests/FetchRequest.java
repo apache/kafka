@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -27,7 +27,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
 
 public class FetchRequest extends AbstractRequest {
-    
+
     public static final int CONSUMER_REPLICA_ID = -1;
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.FETCH.id);
     private static final String REPLICA_ID_KEY_NAME = "replica_id";
@@ -120,17 +120,25 @@ public class FetchRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractRequestResponse getErrorResponse(Throwable e) {
+    public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
         Map<TopicPartition, FetchResponse.PartitionData> responseData = new HashMap<TopicPartition, FetchResponse.PartitionData>();
 
         for (Map.Entry<TopicPartition, PartitionData> entry: fetchData.entrySet()) {
             FetchResponse.PartitionData partitionResponse = new FetchResponse.PartitionData(Errors.forException(e).code(),
-                                                                                            FetchResponse.INVALID_HIGHWATERMARK,
-                                                                                            FetchResponse.EMPTY_RECORD_SET);
+                    FetchResponse.INVALID_HIGHWATERMARK,
+                    FetchResponse.EMPTY_RECORD_SET);
             responseData.put(entry.getKey(), partitionResponse);
         }
 
-        return new FetchResponse(responseData);
+        switch (versionId) {
+            case 0:
+                return new FetchResponse(responseData);
+            case 1:
+                return new FetchResponse(responseData, 0);
+            default:
+                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
+                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.FETCH.id)));
+        }
     }
 
     public int replicaId() {
@@ -149,7 +157,11 @@ public class FetchRequest extends AbstractRequest {
         return fetchData;
     }
 
+    public static FetchRequest parse(ByteBuffer buffer, int versionId) {
+        return new FetchRequest(ProtoUtils.parseRequest(ApiKeys.FETCH.id, versionId, buffer));
+    }
+
     public static FetchRequest parse(ByteBuffer buffer) {
-        return new FetchRequest((Struct) CURRENT_SCHEMA.read(buffer));
+        return new FetchRequest(CURRENT_SCHEMA.read(buffer));
     }
 }

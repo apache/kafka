@@ -17,31 +17,39 @@
 
 package kafka.log
 
-import junit.framework.Assert._
-import org.scalatest.junit.JUnitSuite
-import org.junit.{After, Test}
-import java.nio._
 import java.io.File
-import scala.collection._
+import java.nio._
+import java.nio.file.Paths
+import java.util.Properties
+
 import kafka.common._
-import kafka.utils._
 import kafka.message._
-import java.util.concurrent.atomic.AtomicLong
+import kafka.utils._
 import org.apache.kafka.common.utils.Utils
+import org.junit.Assert._
+import org.junit.{After, Test}
+import org.scalatest.junit.JUnitSuite
+
+import scala.collection._
 
 /**
  * Unit tests for the log cleaning logic
  */
 class CleanerTest extends JUnitSuite {
   
-  val dir = TestUtils.tempDir()
-  val logConfig = LogConfig(segmentSize=1024, maxIndexSize=1024, compact=true)
+  val tmpdir = TestUtils.tempDir()
+  val dir = TestUtils.randomPartitionLogDir(tmpdir)
+  val logProps = new Properties()
+  logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+  logProps.put(LogConfig.SegmentIndexBytesProp, 1024: java.lang.Integer)
+  logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
+  val logConfig = LogConfig(logProps)
   val time = new MockTime()
   val throttler = new Throttler(desiredRatePerSec = Double.MaxValue, checkIntervalMs = Long.MaxValue, time = time)
   
   @After
   def teardown() {
-    CoreUtils.rm(dir)
+    Utils.delete(tmpdir)
   }
   
   /**
@@ -50,8 +58,11 @@ class CleanerTest extends JUnitSuite {
   @Test
   def testCleanSegments() {
     val cleaner = makeCleaner(Int.MaxValue)
-    val log = makeLog(config = logConfig.copy(segmentSize = 1024))
-    
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
     // append messages to the log until we have four segments
     while(log.numberOfSegments < 4)
       log.append(message(log.logEndOffset.toInt, log.logEndOffset.toInt))
@@ -72,7 +83,10 @@ class CleanerTest extends JUnitSuite {
   @Test
   def testCleaningWithDeletes() {
     val cleaner = makeCleaner(Int.MaxValue)
-    val log = makeLog(config = logConfig.copy(segmentSize = 1024))
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
     
     // append messages with the keys 0 through N
     while(log.numberOfSegments < 2)
@@ -94,11 +108,33 @@ class CleanerTest extends JUnitSuite {
   }
 
   @Test
+  def testLogToClean: Unit = {
+    // create a log with small segment size
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 100: java.lang.Integer)
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    // create 6 segments with only one message in each segment
+    val messageSet = TestUtils.singleMessageSet(payload = Array.fill[Byte](50)(0), key = 1.toString.getBytes)
+    for (i <- 0 until 6)
+      log.append(messageSet, assignOffsets = true)
+
+    val logToClean = LogToClean(TopicAndPartition("test", 0), log, log.activeSegment.baseOffset)
+
+    assertEquals("Total bytes of LogToClean should equal size of all segments excluding the active segment",
+      logToClean.totalBytes, log.size - log.activeSegment.size)
+  }
+
+  @Test
   def testCleaningWithUnkeyedMessages {
     val cleaner = makeCleaner(Int.MaxValue)
 
     // create a log with compaction turned off so we can append unkeyed messages
-    val log = makeLog(config = logConfig.copy(segmentSize = 1024, compact = false))
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Delete)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     // append unkeyed messages
     while(log.numberOfSegments < 2)
@@ -112,9 +148,6 @@ class CleanerTest extends JUnitSuite {
       log.append(message(log.logEndOffset.toInt, log.logEndOffset.toInt))
 
     val expectedSizeAfterCleaning = log.size - sizeWithUnkeyedMessages
-
-    // turn on compaction and compact the log
-    val compactedLog = makeLog(config = logConfig.copy(segmentSize = 1024))
     cleaner.clean(LogToClean(TopicAndPartition("test", 0), log, 0))
 
     assertEquals("Log should only contain keyed messages after cleaning.", 0, unkeyedMessageCountInLog(log))
@@ -139,7 +172,10 @@ class CleanerTest extends JUnitSuite {
   @Test
   def testCleanSegmentsWithAbort() {
     val cleaner = makeCleaner(Int.MaxValue, abortCheckDone)
-    val log = makeLog(config = logConfig.copy(segmentSize = 1024))
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     // append messages to the log until we have four segments
     while(log.numberOfSegments < 4)
@@ -159,7 +195,11 @@ class CleanerTest extends JUnitSuite {
   @Test
   def testSegmentGrouping() {
     val cleaner = makeCleaner(Int.MaxValue)
-    val log = makeLog(config = logConfig.copy(segmentSize = 300, indexInterval = 1))
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 300: java.lang.Integer)
+    logProps.put(LogConfig.IndexIntervalBytesProp, 1: java.lang.Integer)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
     
     // append some messages to the log
     var i = 0
@@ -208,14 +248,20 @@ class CleanerTest extends JUnitSuite {
   @Test
   def testSegmentGroupingWithSparseOffsets() {
     val cleaner = makeCleaner(Int.MaxValue)
-    val log = makeLog(config = logConfig.copy(segmentSize = 1024, indexInterval = 1))
+
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 300: java.lang.Integer)
+    logProps.put(LogConfig.IndexIntervalBytesProp, 1: java.lang.Integer)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
        
     // fill up first segment
     while (log.numberOfSegments == 1)
       log.append(TestUtils.singleMessageSet(payload = "hello".getBytes, key = "hello".getBytes))
     
     // forward offset and append message to next segment at offset Int.MaxValue
-    val messageSet = new ByteBufferMessageSet(NoCompressionCodec, new AtomicLong(Int.MaxValue-1), new Message("hello".getBytes, "hello".getBytes))
+    val messageSet = new ByteBufferMessageSet(NoCompressionCodec, new LongRef(Int.MaxValue - 1),
+      new Message("hello".getBytes, "hello".getBytes, Message.NoTimestamp, Message.MagicValue_V1))
     log.append(messageSet, assignOffsets = false)
     log.append(TestUtils.singleMessageSet(payload = "hello".getBytes, key = "hello".getBytes))
     assertEquals(Int.MaxValue, log.activeSegment.index.lastOffset)
@@ -237,7 +283,7 @@ class CleanerTest extends JUnitSuite {
       log.append(TestUtils.singleMessageSet(payload = "hello".getBytes, key = "hello".getBytes))
 
     groups = cleaner.groupSegmentsBySize(log.logSegments, maxSize = Int.MaxValue, maxIndexSize = Int.MaxValue)
-    assertEquals(log.numberOfSegments-1, groups.size)
+    assertEquals(log.numberOfSegments - 1, groups.size)
     for (group <- groups)
       assertTrue("Relative offset greater than Int.MaxValue", group.last.index.lastOffset - group.head.index.baseOffset <= Int.MaxValue)
     checkSegmentOrder(groups)
@@ -266,7 +312,7 @@ class CleanerTest extends JUnitSuite {
       assertEquals("Should have the expected number of messages in the map.", end-start, map.size)
       for(i <- start until end)
         assertEquals("Should find all the keys", i.toLong, map.get(key(i)))
-      assertEquals("Should not find a value too small", -1L, map.get(key(start-1)))
+      assertEquals("Should not find a value too small", -1L, map.get(key(start - 1)))
       assertEquals("Should not find a value too large", -1L, map.get(key(end)))
     }
     val segments = log.logSegments.toSeq
@@ -288,7 +334,12 @@ class CleanerTest extends JUnitSuite {
   @Test
   def testRecoveryAfterCrash() {
     val cleaner = makeCleaner(Int.MaxValue)
-    val config = logConfig.copy(segmentSize = 300, indexInterval = 1, fileDeleteDelayMs = 10)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 300: java.lang.Integer)
+    logProps.put(LogConfig.IndexIntervalBytesProp, 1: java.lang.Integer)
+    logProps.put(LogConfig.FileDeleteDelayMsProp, 10: java.lang.Integer)
+
+    val config = LogConfig.fromProps(logConfig.originals, logProps)
       
     def recoverAndCheck(config: LogConfig, expectedKeys : Iterable[Int]) : Log = {   
       // Recover log file and check that after recovery, keys are as expected
@@ -326,7 +377,7 @@ class CleanerTest extends JUnitSuite {
     //    On recovery, clean operation is aborted. All messages should be present in the log
     log.logSegments.head.changeFileSuffixes("", Log.CleanedFileSuffix)
     for (file <- dir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix)) {
-      file.renameTo(new File(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
+      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
     }
     log = recoverAndCheck(config, allKeys)
     
@@ -338,7 +389,7 @@ class CleanerTest extends JUnitSuite {
     //    renamed to .deleted. Clean operation is resumed during recovery. 
     log.logSegments.head.changeFileSuffixes("", Log.SwapFileSuffix)
     for (file <- dir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix)) {
-      file.renameTo(new File(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
+      Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
     }   
     log = recoverAndCheck(config, cleanedKeys)
     
@@ -372,6 +423,39 @@ class CleanerTest extends JUnitSuite {
     recoverAndCheck(config, cleanedKeys)
     
   }
+
+  @Test
+  def testBuildOffsetMapFakeLarge() {
+    val map = new FakeOffsetMap(1000)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 72: java.lang.Integer)
+    logProps.put(LogConfig.SegmentIndexBytesProp, 72: java.lang.Integer)
+    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
+    val logConfig = LogConfig(logProps)
+    val log = makeLog(config = logConfig)
+    val cleaner = makeCleaner(Int.MaxValue)
+    val start = 0
+    val end = 2
+    val offsetSeq = Seq(0L, 7206178L)
+    val offsets = writeToLog(log, (start until end) zip (start until end), offsetSeq)
+    val endOffset = cleaner.buildOffsetMap(log, start, end, map)
+    assertEquals("Last offset should be the end offset.", 7206178L, endOffset)
+    assertEquals("Should have the expected number of messages in the map.", end - start, map.size)
+    assertEquals("Map should contain first value", 0L, map.get(key(0)))
+    assertEquals("Map should contain second value", 7206178L, map.get(key(1)))
+  }
+
+  private def writeToLog(log: Log, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
+    for(((key, value), offset) <- keysAndValues.zip(offsetSeq))
+      yield log.append(messageWithOffset(key, value, offset), assignOffsets = false).firstOffset
+  }
+
+  private def messageWithOffset(key: Int, value: Int, offset: Long) =
+    new ByteBufferMessageSet(NoCompressionCodec, Seq(offset),
+                             new Message(key = key.toString.getBytes,
+                                         bytes = value.toString.getBytes,
+                                         timestamp = Message.NoTimestamp,
+                                         magicValue = Message.MagicValue_V1))
   
   
   def makeLog(dir: File = dir, config: LogConfig = logConfig) =
@@ -397,13 +481,19 @@ class CleanerTest extends JUnitSuite {
   def key(id: Int) = ByteBuffer.wrap(id.toString.getBytes)
   
   def message(key: Int, value: Int) = 
-    new ByteBufferMessageSet(new Message(key=key.toString.getBytes, bytes=value.toString.getBytes))
+    new ByteBufferMessageSet(new Message(key = key.toString.getBytes,
+                                         bytes = value.toString.getBytes,
+                                         timestamp = Message.NoTimestamp,
+                                         magicValue = Message.MagicValue_V1))
 
   def unkeyedMessage(value: Int) =
-    new ByteBufferMessageSet(new Message(bytes=value.toString.getBytes))
+    new ByteBufferMessageSet(new Message(bytes = value.toString.getBytes))
 
   def deleteMessage(key: Int) =
-    new ByteBufferMessageSet(new Message(key=key.toString.getBytes, bytes=null))
+    new ByteBufferMessageSet(new Message(key = key.toString.getBytes,
+                                         bytes = null,
+                                         timestamp = Message.NoTimestamp,
+                                         magicValue = Message.MagicValue_V1))
   
 }
 

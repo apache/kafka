@@ -20,7 +20,6 @@ package kafka.javaapi.consumer
 import java.util.Properties
 
 import kafka.server._
-import kafka.message._
 import kafka.serializer._
 import kafka.integration.KafkaServerTestHarness
 import kafka.producer.KeyedMessage
@@ -30,15 +29,15 @@ import kafka.utils.{Logging, TestUtils}
 import kafka.consumer.{KafkaStream, ConsumerConfig}
 import kafka.zk.ZooKeeperTestHarness
 import kafka.common.MessageStreamsExistException
+import org.junit.Test
 
 import scala.collection.JavaConversions
 
-import org.scalatest.junit.JUnit3Suite
 import org.apache.log4j.{Level, Logger}
-import junit.framework.Assert._
+import org.junit.Assert._
 
-
-class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHarness with ZooKeeperTestHarness with Logging {
+@deprecated("This test has been deprecated and it will be removed in a future release", "0.10.0.0")
+class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging {
   val numNodes = 2
   val numParts = 2
   val topic = "topic1"
@@ -52,12 +51,13 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
   val consumer1 = "consumer1"
   val nMessages = 2
 
+  @Test
   def testBasic() {
     val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
     requestHandlerLogger.setLevel(Level.FATAL)
 
     // create the topic
-    TestUtils.createTopic(zkClient, topic, numParts, 1, servers)
+    TestUtils.createTopic(zkUtils, topic, numParts, 1, servers)
 
     // send some messages to each broker
     val sentMessages1 = sendMessages(servers, nMessages, "batch1")

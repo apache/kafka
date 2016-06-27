@@ -18,11 +18,15 @@
 package kafka.api
 
 import java.nio.ByteBuffer
+import kafka.message.Message
+import org.apache.kafka.common.protocol.Errors
+
 import scala.collection.Map
-import kafka.common.{TopicAndPartition, ErrorMapping}
+import kafka.common.TopicAndPartition
 import kafka.api.ApiUtils._
 
 object ProducerResponse {
+  // readFrom assumes that the response is written using V2 format
   def readFrom(buffer: ByteBuffer): ProducerResponse = {
     val correlationId = buffer.getInt
     val topicCount = buffer.getInt
@@ -33,17 +37,22 @@ object ProducerResponse {
         val partition = buffer.getInt
         val error = buffer.getShort
         val offset = buffer.getLong
-        (TopicAndPartition(topic, partition), ProducerResponseStatus(error, offset))
+        val timestamp = buffer.getLong
+        (TopicAndPartition(topic, partition), ProducerResponseStatus(error, offset, timestamp))
       })
     })
 
-    ProducerResponse(correlationId, Map(statusPairs:_*))
+    val throttleTime = buffer.getInt
+    ProducerResponse(correlationId, Map(statusPairs:_*), ProducerRequest.CurrentVersion, throttleTime)
   }
 }
 
-case class ProducerResponseStatus(var error: Short, offset: Long)
+case class ProducerResponseStatus(var error: Short, offset: Long, timestamp: Long = Message.NoTimestamp)
 
-case class ProducerResponse(correlationId: Int, status: Map[TopicAndPartition, ProducerResponseStatus])
+case class ProducerResponse(correlationId: Int,
+                            status: Map[TopicAndPartition, ProducerResponseStatus],
+                            requestVersion: Int = 0,
+                            throttleTime: Int = 0)
     extends RequestOrResponse() {
 
   /**
@@ -51,9 +60,10 @@ case class ProducerResponse(correlationId: Int, status: Map[TopicAndPartition, P
    */
   private lazy val statusGroupedByTopic = status.groupBy(_._1.topic)
 
-  def hasError = status.values.exists(_.error != ErrorMapping.NoError)
+  def hasError = status.values.exists(_.error != Errors.NONE.code)
 
   val sizeInBytes = {
+    val throttleTimeSize = if (requestVersion > 0) 4 else 0
     val groupedStatus = statusGroupedByTopic
     4 + /* correlation id */
     4 + /* topic count */
@@ -64,9 +74,11 @@ case class ProducerResponse(correlationId: Int, status: Map[TopicAndPartition, P
       currTopic._2.size * {
         4 + /* partition id */
         2 + /* error code */
-        8 /* offset */
+        8 + /* offset */
+        8 /* timestamp */
       }
-    })
+    }) +
+    throttleTimeSize
   }
 
   def writeTo(buffer: ByteBuffer) {
@@ -79,12 +91,16 @@ case class ProducerResponse(correlationId: Int, status: Map[TopicAndPartition, P
       writeShortString(buffer, topic)
       buffer.putInt(errorsAndOffsets.size) // partition count
       errorsAndOffsets.foreach {
-        case((TopicAndPartition(_, partition), ProducerResponseStatus(error, nextOffset))) =>
+        case((TopicAndPartition(_, partition), ProducerResponseStatus(error, nextOffset, timestamp))) =>
           buffer.putInt(partition)
           buffer.putShort(error)
           buffer.putLong(nextOffset)
+          buffer.putLong(timestamp)
       }
     })
+    // Throttle time is only supported on V1 style requests
+    if (requestVersion > 0)
+      buffer.putInt(throttleTime)
   }
 
   override def describe(details: Boolean):String = { toString }

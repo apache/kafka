@@ -19,12 +19,51 @@ package org.apache.kafka.common.protocol;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.apache.kafka.common.errors.*;
+import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.BrokerNotAvailableException;
+import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.ControllerMovedException;
+import org.apache.kafka.common.errors.CorruptRecordException;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.GroupCoordinatorNotAvailableException;
+import org.apache.kafka.common.errors.GroupLoadInProgressException;
+import org.apache.kafka.common.errors.IllegalGenerationException;
+import org.apache.kafka.common.errors.IllegalSaslStateException;
+import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
+import org.apache.kafka.common.errors.InvalidCommitOffsetSizeException;
+import org.apache.kafka.common.errors.InvalidFetchSizeException;
+import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.InvalidRequiredAcksException;
+import org.apache.kafka.common.errors.InvalidSessionTimeoutException;
+import org.apache.kafka.common.errors.InvalidTimestampException;
+import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
+import org.apache.kafka.common.errors.NetworkException;
+import org.apache.kafka.common.errors.NotCoordinatorForGroupException;
+import org.apache.kafka.common.errors.NotEnoughReplicasAfterAppendException;
+import org.apache.kafka.common.errors.NotEnoughReplicasException;
+import org.apache.kafka.common.errors.NotLeaderForPartitionException;
+import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
+import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.common.errors.RebalanceInProgressException;
+import org.apache.kafka.common.errors.RecordBatchTooLargeException;
+import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.ReplicaNotAvailableException;
+import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This class contains all the client-server errors--those errors that must be sent from the server to the client. These
  * are thus part of the protocol. The names can be changed but the error code cannot.
- * 
+ *
  * Do not add exceptions that occur only on the client or only on the server here.
  */
 public enum Errors {
@@ -33,31 +72,35 @@ public enum Errors {
     OFFSET_OUT_OF_RANGE(1,
             new OffsetOutOfRangeException("The requested offset is not within the range of offsets maintained by the server.")),
     CORRUPT_MESSAGE(2,
-            new CorruptRecordException("The message contents does not match the message CRC or the message is otherwise corrupt.")),
+            new CorruptRecordException("This message has failed its CRC checksum, exceeds the valid size, or is otherwise corrupt.")),
     UNKNOWN_TOPIC_OR_PARTITION(3,
             new UnknownTopicOrPartitionException("This server does not host this topic-partition.")),
-    // TODO: errorCode 4 for InvalidFetchSize
+    INVALID_FETCH_SIZE(4,
+            new InvalidFetchSizeException("The requested fetch size is invalid.")),
     LEADER_NOT_AVAILABLE(5,
             new LeaderNotAvailableException("There is no leader for this topic-partition as we are in the middle of a leadership election.")),
     NOT_LEADER_FOR_PARTITION(6,
             new NotLeaderForPartitionException("This server is not the leader for that topic-partition.")),
     REQUEST_TIMED_OUT(7,
             new TimeoutException("The request timed out.")),
-    // TODO: errorCode 8 for BrokerNotAvailable
+    BROKER_NOT_AVAILABLE(8,
+            new BrokerNotAvailableException("The broker is not available.")),
     REPLICA_NOT_AVAILABLE(9,
-            new ApiException("The replica is not available for the requested topic-partition")),
+            new ReplicaNotAvailableException("The replica is not available for the requested topic-partition")),
     MESSAGE_TOO_LARGE(10,
             new RecordTooLargeException("The request included a message larger than the max message size the server will accept.")),
+    STALE_CONTROLLER_EPOCH(11,
+            new ControllerMovedException("The controller moved to another broker.")),
     OFFSET_METADATA_TOO_LARGE(12,
             new OffsetMetadataTooLarge("The metadata field of the offset request was too large.")),
     NETWORK_EXCEPTION(13,
             new NetworkException("The server disconnected before a response was received.")),
-    OFFSET_LOAD_IN_PROGRESS(14,
-            new ApiException("The coordinator is loading offsets and can't process requests.")),
-    CONSUMER_COORDINATOR_NOT_AVAILABLE(15,
-            new ApiException("The coordinator is not available.")),
-    NOT_COORDINATOR_FOR_CONSUMER(16,
-            new ApiException("This is not the correct co-ordinator for this consumer.")),
+    GROUP_LOAD_IN_PROGRESS(14,
+            new GroupLoadInProgressException("The coordinator is loading and hence can't process requests for this group.")),
+    GROUP_COORDINATOR_NOT_AVAILABLE(15,
+            new GroupCoordinatorNotAvailableException("The group coordinator is not available.")),
+    NOT_COORDINATOR_FOR_GROUP(16,
+            new NotCoordinatorForGroupException("This is not the correct coordinator for this group.")),
     INVALID_TOPIC_EXCEPTION(17,
             new InvalidTopicException("The request attempted to perform an operation on an invalid topic.")),
     RECORD_LIST_TOO_LARGE(18,
@@ -69,7 +112,36 @@ public enum Errors {
     INVALID_REQUIRED_ACKS(21,
             new InvalidRequiredAcksException("Produce request specified an invalid value for required acks.")),
     ILLEGAL_GENERATION(22,
-            new ApiException("Specified consumer generation id is not valid."));
+            new IllegalGenerationException("Specified group generation id is not valid.")),
+    INCONSISTENT_GROUP_PROTOCOL(23,
+            new InconsistentGroupProtocolException("The group member's supported protocols are incompatible with those of existing members.")),
+    INVALID_GROUP_ID(24,
+            new InvalidGroupIdException("The configured groupId is invalid")),
+    UNKNOWN_MEMBER_ID(25,
+            new UnknownMemberIdException("The coordinator is not aware of this member.")),
+    INVALID_SESSION_TIMEOUT(26,
+            new InvalidSessionTimeoutException("The session timeout is not within the range allowed by the broker " +
+                    "(as configured by group.min.session.timeout.ms and group.max.session.timeout.ms).")),
+    REBALANCE_IN_PROGRESS(27,
+            new RebalanceInProgressException("The group is rebalancing, so a rejoin is needed.")),
+    INVALID_COMMIT_OFFSET_SIZE(28,
+            new InvalidCommitOffsetSizeException("The committing offset data size is not valid")),
+    TOPIC_AUTHORIZATION_FAILED(29,
+            new TopicAuthorizationException("Topic authorization failed.")),
+    GROUP_AUTHORIZATION_FAILED(30,
+            new GroupAuthorizationException("Group authorization failed.")),
+    CLUSTER_AUTHORIZATION_FAILED(31,
+            new ClusterAuthorizationException("Cluster authorization failed.")),
+    INVALID_TIMESTAMP(32,
+            new InvalidTimestampException("The timestamp of the message is out of acceptable range.")),
+    UNSUPPORTED_SASL_MECHANISM(33,
+            new UnsupportedSaslMechanismException("The broker does not support the requested SASL mechanism.")),
+    ILLEGAL_SASL_STATE(34,
+            new IllegalSaslStateException("Request is not valid given the current SASL state.")),
+    UNSUPPORTED_VERSION(35,
+            new UnsupportedVersionException("The version of API is not supported."));
+
+    private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
     private static Map<Class<?>, Errors> classToError = new HashMap<Class<?>, Errors>();
     private static Map<Short, Errors> codeToError = new HashMap<Short, Errors>();
@@ -98,6 +170,13 @@ public enum Errors {
     }
 
     /**
+     * Returns the class name of the exception or null if this is {@code Errors.NONE}.
+     */
+    public String exceptionName() {
+        return exception == null ? null : exception.getClass().getName();
+    }
+
+    /**
      * The error code for the exception
      */
     public short code() {
@@ -114,18 +193,73 @@ public enum Errors {
     }
 
     /**
+     * Get a friendly description of the error (if one is available).
+     * @return the error message
+     */
+    public String message() {
+        if (exception != null)
+            return exception.getMessage();
+        return toString();
+    }
+
+    /**
      * Throw the exception if there is one
      */
     public static Errors forCode(short code) {
         Errors error = codeToError.get(code);
-        return error == null ? UNKNOWN : error;
+        if (error != null) {
+            return error;
+        } else {
+            log.warn("Unexpected error code: {}.", code);
+            return UNKNOWN;
+        }
     }
 
     /**
-     * Return the error instance associated with this exception (or UKNOWN if there is none)
+     * Return the error instance associated with this exception or any of its superclasses (or UNKNOWN if there is none).
+     * If there are multiple matches in the class hierarchy, the first match starting from the bottom is used.
      */
     public static Errors forException(Throwable t) {
-        Errors error = classToError.get(t.getClass());
-        return error == null ? UNKNOWN : error;
+        Class clazz = t.getClass();
+        while (clazz != null) {
+            Errors error = classToError.get(clazz);
+            if (error != null)
+                return error;
+            clazz = clazz.getSuperclass();
+        }
+        return UNKNOWN;
+    }
+
+    private static String toHtml() {
+        final StringBuilder b = new StringBuilder();
+        b.append("<table class=\"data-table\"><tbody>\n");
+        b.append("<tr>");
+        b.append("<th>Error</th>\n");
+        b.append("<th>Code</th>\n");
+        b.append("<th>Retriable</th>\n");
+        b.append("<th>Description</th>\n");
+        b.append("</tr>\n");
+        for (Errors error : Errors.values()) {
+            b.append("<tr>");
+            b.append("<td>");
+            b.append(error.name());
+            b.append("</td>");
+            b.append("<td>");
+            b.append(error.code());
+            b.append("</td>");
+            b.append("<td>");
+            b.append(error.exception() != null && error.exception() instanceof RetriableException ? "True" : "False");
+            b.append("</td>");
+            b.append("<td>");
+            b.append(error.exception() != null ? error.exception().getMessage() : "");
+            b.append("</td>");
+            b.append("</tr>\n");
+        }
+        b.append("</table>\n");
+        return b.toString();
+    }
+
+    public static void main(String[] args) {
+        System.out.println(toHtml());
     }
 }

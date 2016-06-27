@@ -17,21 +17,18 @@
 
 package kafka.log
 
-import kafka.common._
-import kafka.message._
-import kafka.utils._
-import kafka.metrics.KafkaMetricsGroup
-
-import scala.collection._
-import scala.math
+import java.io.{DataOutputStream, File}
 import java.nio._
 import java.util.Date
-import java.io.File
-import java.lang.IllegalStateException
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import com.yammer.metrics.core.Gauge
+import kafka.common._
+import kafka.message._
+import kafka.metrics.KafkaMetricsGroup
+import kafka.utils._
+
+import scala.collection._
 
 /**
  * The cleaner is responsible for removing obsolete records from logs which have the dedupe retention strategy.
@@ -137,6 +134,13 @@ class LogCleaner(val config: CleanerConfig,
   }
 
   /**
+   * Truncate cleaner offset checkpoint for the given partition if its checkpointed offset is larger than the given offset
+   */
+  def maybeTruncateCheckpoint(dataDir: File, topicAndPartition: TopicAndPartition, offset: Long) {
+    cleanerManager.maybeTruncateCheckpoint(dataDir, topicAndPartition, offset)
+  }
+
+  /**
    *  Abort the cleaning of a particular partition if it's in progress, and pause any future cleaning of this partition.
    *  This call blocks until the cleaning of the partition is aborted and paused.
    */
@@ -152,12 +156,25 @@ class LogCleaner(val config: CleanerConfig,
   }
 
   /**
-   * For testing, a way to know when work has completed. This method blocks until the
+   * For testing, a way to know when work has completed. This method waits until the
    * cleaner has processed up to the given offset on the specified topic/partition
+   *
+   * @param topic The Topic to be cleaned
+   * @param part The partition of the topic to be cleaned
+   * @param offset The first dirty offset that the cleaner doesn't have to clean
+   * @param maxWaitMs The maximum time in ms to wait for cleaner
+   *
+   * @return A boolean indicating whether the work has completed before timeout
    */
-  def awaitCleaned(topic: String, part: Int, offset: Long, timeout: Long = 30000L): Unit = {
-    while(!cleanerManager.allCleanerCheckpoints.contains(TopicAndPartition(topic, part)))
-      Thread.sleep(10)
+  def awaitCleaned(topic: String, part: Int, offset: Long, maxWaitMs: Long = 60000L): Boolean = {
+    def isCleaned = cleanerManager.allCleanerCheckpoints.get(TopicAndPartition(topic, part)).fold(false)(_ >= offset)
+    var remainingWaitMs = maxWaitMs
+    while (!isCleaned && remainingWaitMs > 0) {
+      val sleepTime = math.min(100, remainingWaitMs)
+      Thread.sleep(sleepTime)
+      remainingWaitMs -= sleepTime
+    }
+    isCleaned
   }
   
   /**
@@ -264,9 +281,12 @@ class LogCleaner(val config: CleanerConfig,
  * This class holds the actual logic for cleaning a log
  * @param id An identifier used for logging
  * @param offsetMap The map used for deduplication
- * @param bufferSize The size of the buffers to use. Memory usage will be 2x this number as there is a read and write buffer.
+ * @param ioBufferSize The size of the buffers to use. Memory usage will be 2x this number as there is a read and write buffer.
+ * @param maxIoBufferSize The maximum size of a message that can appear in the log
+ * @param dupBufferLoadFactor The maximum percent full for the deduplication buffer
  * @param throttler The throttler instance to use for limiting I/O rate.
  * @param time The time instance
+ * @param checkDone Check if the cleaning for a partition is finished or aborted.
  */
 private[log] class Cleaner(val id: Int,
                            val offsetMap: OffsetMap,
@@ -347,7 +367,7 @@ private[log] class Cleaner(val id: Int,
     logFile.delete()
     val indexFile = new File(segments.head.index.file.getPath + Log.CleanedFileSuffix)
     indexFile.delete()
-    val messages = new FileMessageSet(logFile)
+    val messages = new FileMessageSet(logFile, fileAlreadyExists = false, initFileSize = log.initFileSize(), preallocate = log.config.preallocate)
     val index = new OffsetIndex(indexFile, segments.head.baseOffset, segments.head.index.maxIndexSize)
     val cleaned = new LogSegment(messages, index, segments.head.baseOffset, segments.head.indexIntervalBytes, log.config.randomSegmentJitter, time)
 
@@ -357,7 +377,7 @@ private[log] class Cleaner(val id: Int,
         val retainDeletes = old.lastModified > deleteHorizonMs
         info("Cleaning segment %s in log %s (last modified %s) into %s, %s deletes."
             .format(old.baseOffset, log.name, new Date(old.lastModified), cleaned.baseOffset, if(retainDeletes) "retaining" else "discarding"))
-        cleanInto(log.topicAndPartition, old, cleaned, map, retainDeletes)
+        cleanInto(log.topicAndPartition, old, cleaned, map, retainDeletes, log.config.messageFormatVersion.messageFormatVersion)
       }
 
       // trim excess index
@@ -388,11 +408,14 @@ private[log] class Cleaner(val id: Int,
    * @param dest The cleaned log segment
    * @param map The key=>offset mapping
    * @param retainDeletes Should delete tombstones be retained while cleaning this segment
-   *
-   * TODO: Implement proper compression support
+   * @param messageFormatVersion the message format version to use after compaction
    */
-  private[log] def cleanInto(topicAndPartition: TopicAndPartition, source: LogSegment,
-                             dest: LogSegment, map: OffsetMap, retainDeletes: Boolean) {
+  private[log] def cleanInto(topicAndPartition: TopicAndPartition,
+                             source: LogSegment,
+                             dest: LogSegment,
+                             map: OffsetMap,
+                             retainDeletes: Boolean,
+                             messageFormatVersion: Byte) {
     var position = 0
     while (position < source.log.sizeInBytes) {
       checkDone(topicAndPartition)
@@ -403,30 +426,47 @@ private[log] class Cleaner(val id: Int,
       throttler.maybeThrottle(messages.sizeInBytes)
       // check each message to see if it is to be retained
       var messagesRead = 0
-      for (entry <- messages) {
-        messagesRead += 1
+      for (entry <- messages.shallowIterator) {
         val size = MessageSet.entrySize(entry.message)
-        position += size
         stats.readMessage(size)
-        val key = entry.message.key
-        if (key != null) {
-          val foundOffset = map.get(key)
-          /* two cases in which we can get rid of a message:
-           *   1) if there exists a message with the same key but higher offset
-           *   2) if the message is a delete "tombstone" marker and enough time has passed
-           */
-          val redundant = foundOffset >= 0 && entry.offset < foundOffset
-          val obsoleteDelete = !retainDeletes && entry.message.isNull
-          if (!redundant && !obsoleteDelete) {
-            ByteBufferMessageSet.writeMessage(writeBuffer, entry.message, entry.offset)
+        if (entry.message.compressionCodec == NoCompressionCodec) {
+          if (shouldRetainMessage(source, map, retainDeletes, entry)) {
+            val convertedMessage = entry.message.toFormatVersion(messageFormatVersion)
+            ByteBufferMessageSet.writeMessage(writeBuffer, convertedMessage, entry.offset)
             stats.recopyMessage(size)
           }
+          messagesRead += 1
         } else {
-          stats.invalidMessage()
+          // We use the absolute offset to decide whether to retain the message or not. This is handled by the
+          // deep iterator.
+          val messages = ByteBufferMessageSet.deepIterator(entry)
+          var writeOriginalMessageSet = true
+          val retainedMessages = new mutable.ArrayBuffer[MessageAndOffset]
+          messages.foreach { messageAndOffset =>
+            messagesRead += 1
+            if (shouldRetainMessage(source, map, retainDeletes, messageAndOffset)) {
+              retainedMessages += {
+                if (messageAndOffset.message.magic != messageFormatVersion) {
+                  writeOriginalMessageSet = false
+                  new MessageAndOffset(messageAndOffset.message.toFormatVersion(messageFormatVersion), messageAndOffset.offset)
+                }
+                else messageAndOffset
+              }
+            }
+            else writeOriginalMessageSet = false
+          }
+
+          // There are no messages compacted out and no message format conversion, write the original message set back
+          if (writeOriginalMessageSet)
+            ByteBufferMessageSet.writeMessage(writeBuffer, entry.message, entry.offset)
+          else if (retainedMessages.nonEmpty)
+            compressMessages(writeBuffer, entry.message.compressionCodec, messageFormatVersion, retainedMessages)
         }
       }
+
+      position += messages.validBytes
       // if any messages are to be retained, write them out
-      if(writeBuffer.position > 0) {
+      if (writeBuffer.position > 0) {
         writeBuffer.flip()
         val retained = new ByteBufferMessageSet(writeBuffer)
         dest.append(retained.head.offset, retained)
@@ -434,12 +474,74 @@ private[log] class Cleaner(val id: Int,
       }
       
       // if we read bytes but didn't get even one complete message, our I/O buffer is too small, grow it and try again
-      if(readBuffer.limit > 0 && messagesRead == 0)
+      if (readBuffer.limit > 0 && messagesRead == 0)
         growBuffers()
     }
     restoreBuffers()
   }
-  
+
+  private def compressMessages(buffer: ByteBuffer,
+                               compressionCodec: CompressionCodec,
+                               messageFormatVersion: Byte,
+                               messageAndOffsets: Seq[MessageAndOffset]) {
+    val messages = messageAndOffsets.map(_.message)
+    if (messageAndOffsets.isEmpty) {
+      MessageSet.Empty.sizeInBytes
+    } else if (compressionCodec == NoCompressionCodec) {
+      for (messageOffset <- messageAndOffsets)
+        ByteBufferMessageSet.writeMessage(buffer, messageOffset.message, messageOffset.offset)
+      MessageSet.messageSetSize(messages)
+    } else {
+      val magicAndTimestamp = MessageSet.magicAndLargestTimestamp(messages)
+      val firstMessageOffset = messageAndOffsets.head
+      val firstAbsoluteOffset = firstMessageOffset.offset
+      var offset = -1L
+      val timestampType = firstMessageOffset.message.timestampType
+      val messageWriter = new MessageWriter(math.min(math.max(MessageSet.messageSetSize(messages) / 2, 1024), 1 << 16))
+      messageWriter.write(codec = compressionCodec, timestamp = magicAndTimestamp.timestamp, timestampType = timestampType, magicValue = messageFormatVersion) { outputStream =>
+        val output = new DataOutputStream(CompressionFactory(compressionCodec, messageFormatVersion, outputStream))
+        try {
+          for (messageOffset <- messageAndOffsets) {
+            val message = messageOffset.message
+            offset = messageOffset.offset
+            if (messageFormatVersion > Message.MagicValue_V0) {
+              // The offset of the messages are absolute offset, compute the inner offset.
+              val innerOffset = messageOffset.offset - firstAbsoluteOffset
+              output.writeLong(innerOffset)
+            } else
+              output.writeLong(offset)
+            output.writeInt(message.size)
+            output.write(message.buffer.array, message.buffer.arrayOffset, message.buffer.limit)
+          }
+        } finally {
+          output.close()
+        }
+      }
+      ByteBufferMessageSet.writeMessage(buffer, messageWriter, offset)
+      stats.recopyMessage(messageWriter.size + MessageSet.LogOverhead)
+    }
+  }
+
+  private def shouldRetainMessage(source: kafka.log.LogSegment,
+                                  map: kafka.log.OffsetMap,
+                                  retainDeletes: Boolean,
+                                  entry: kafka.message.MessageAndOffset): Boolean = {
+    val key = entry.message.key
+    if (key != null) {
+      val foundOffset = map.get(key)
+      /* two cases in which we can get rid of a message:
+       *   1) if there exists a message with the same key but higher offset
+       *   2) if the message is a delete "tombstone" marker and enough time has passed
+       */
+      val redundant = foundOffset >= 0 && entry.offset < foundOffset
+      val obsoleteDelete = !retainDeletes && entry.message.isNull
+      !redundant && !obsoleteDelete
+    } else {
+      stats.invalidMessage()
+      false
+    }
+  }
+
   /**
    * Double the I/O buffer capacity
    */
@@ -482,8 +584,8 @@ private[log] class Cleaner(val id: Int,
       var indexSize = segs.head.index.sizeInBytes
       segs = segs.tail
       while(!segs.isEmpty &&
-            logSize + segs.head.size < maxSize &&
-            indexSize + segs.head.index.sizeInBytes < maxIndexSize &&
+            logSize + segs.head.size <= maxSize &&
+            indexSize + segs.head.index.sizeInBytes <= maxIndexSize &&
             segs.head.index.lastOffset - group.last.index.baseOffset <= Int.MaxValue) {
         group = segs.head :: group
         logSize += segs.head.size
@@ -513,11 +615,19 @@ private[log] class Cleaner(val id: Int,
     // but we may be able to fit more (if there is lots of duplication in the dirty section of the log)
     var offset = dirty.head.baseOffset
     require(offset == start, "Last clean offset is %d but segment base offset is %d for log %s.".format(start, offset, log.name))
-    val minStopOffset = (start + map.slots * this.dupBufferLoadFactor).toLong
-    for (segment <- dirty) {
+    var full = false
+    for (segment <- dirty if !full) {
       checkDone(log.topicAndPartition)
-      if(segment.baseOffset <= minStopOffset || map.utilization < this.dupBufferLoadFactor)
-        offset = buildOffsetMapForSegment(log.topicAndPartition, segment, map)
+
+      val newOffset = buildOffsetMapForSegment(log.topicAndPartition, segment, map)
+      if (newOffset > -1L)
+        offset = newOffset
+      else {
+        // If not even one segment can fit in the map, compaction cannot happen
+        require(offset > start, "Unable to build the offset map for segment %s/%s. You can increase log.cleaner.dedupe.buffer.size or decrease log.cleaner.threads".format(log.name, segment.log.file.getName))
+        debug("Offset map is full, %d segments fully mapped, segment with base offset %d is partially mapped".format(dirty.indexOf(segment), segment.baseOffset))
+        full = true
+      }
     }
     info("Offset map for log %s complete.".format(log.name))
     offset
@@ -529,11 +639,12 @@ private[log] class Cleaner(val id: Int,
    * @param segment The segment to index
    * @param map The map in which to store the key=>offset mapping
    *
-   * @return The final offset covered by the map
+   * @return The final offset covered by the map or -1 if the map is full
    */
   private def buildOffsetMapForSegment(topicAndPartition: TopicAndPartition, segment: LogSegment, map: OffsetMap): Long = {
     var position = 0
     var offset = segment.baseOffset
+    val maxDesiredMapSize = (map.slots * this.dupBufferLoadFactor).toInt
     while (position < segment.log.sizeInBytes) {
       checkDone(topicAndPartition)
       readBuffer.clear()
@@ -542,13 +653,20 @@ private[log] class Cleaner(val id: Int,
       val startPosition = position
       for (entry <- messages) {
         val message = entry.message
-        val size = MessageSet.entrySize(message)
-        position += size
-        if (message.hasKey)
-          map.put(message.key, entry.offset)
+        if (message.hasKey) {
+          if (map.size < maxDesiredMapSize)
+            map.put(message.key, entry.offset)
+          else {
+            // The map is full, stop looping and return
+            return -1L
+          }
+        }
         offset = entry.offset
-        stats.indexMessage(size)
+        stats.indexMessagesRead(1)
       }
+      position += messages.validBytes
+      stats.indexBytesRead(messages.validBytes)
+
       // if we didn't read even one complete message, our read buffer may be too small
       if(position == startPosition)
         growBuffers()
@@ -580,16 +698,19 @@ private case class CleanerStats(time: Time = SystemTime) {
     messagesWritten += 1
     bytesWritten += size
   }
-  
-  def indexMessage(size: Int) {
-    mapMessagesRead += 1
+
+  def indexMessagesRead(size: Int) {
+    mapMessagesRead += size
+  }
+
+  def indexBytesRead(size: Int) {
     mapBytesRead += size
   }
-  
+
   def indexDone() {
     mapCompleteTime = time.milliseconds
   }
-  
+
   def allDone() {
     endTime = time.milliseconds
   }
@@ -617,7 +738,7 @@ private case class CleanerStats(time: Time = SystemTime) {
  * Helper class for a log, its topic/partition, and the last clean position
  */
 private case class LogToClean(topicPartition: TopicAndPartition, log: Log, firstDirtyOffset: Long) extends Ordered[LogToClean] {
-  val cleanBytes = log.logSegments(-1, firstDirtyOffset-1).map(_.size).sum
+  val cleanBytes = log.logSegments(-1, firstDirtyOffset).map(_.size).sum
   val dirtyBytes = log.logSegments(firstDirtyOffset, math.max(firstDirtyOffset, log.activeSegment.baseOffset)).map(_.size).sum
   val cleanableRatio = dirtyBytes / totalBytes.toDouble
   def totalBytes = cleanBytes + dirtyBytes

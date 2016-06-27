@@ -15,17 +15,15 @@
  * limitations under the License.
  */
 
-package kafka.consumer
+package kafka.metrics
 
 import java.util.Properties
-
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.MetricPredicate
-import org.junit.Test
-import junit.framework.Assert._
+import org.junit.{After, Test}
+import org.junit.Assert._
 import kafka.integration.KafkaServerTestHarness
 import kafka.server._
-import kafka.message._
 import kafka.serializer._
 import kafka.utils._
 import kafka.admin.AdminUtils
@@ -33,9 +31,9 @@ import kafka.utils.TestUtils._
 import scala.collection._
 import scala.collection.JavaConversions._
 import scala.util.matching.Regex
-import org.scalatest.junit.JUnit3Suite
+import kafka.consumer.{ConsumerConfig, ZookeeperConsumerConnector}
 
-class MetricsTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
+class MetricsTest extends KafkaServerTestHarness with Logging {
   val numNodes = 2
   val numParts = 2
   val topic = "topic1"
@@ -48,16 +46,21 @@ class MetricsTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
 
   val nMessages = 2
 
+  @After
   override def tearDown() {
     super.tearDown()
   }
 
   @Test
+  @deprecated("This test has been deprecated and it will be removed in a future release", "0.10.0.0")
   def testMetricsLeak() {
     // create topic topic1 with 1 partition on broker 0
-    createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 1, servers = servers)
+    createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 1, servers = servers)
     // force creation not client's specific metrics.
     createAndShutdownStep("group0", "consumer0", "producer0")
+
+    //this assertion is only used for creating the metrics for DelayedFetchMetrics, it should never fail, but should not be removed
+    assertNotNull(DelayedFetchMetrics)
 
     val countOfStaticMetrics = Metrics.defaultRegistry().allMetrics().keySet().size
 
@@ -70,19 +73,31 @@ class MetricsTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
   @Test
   def testMetricsReporterAfterDeletingTopic() {
     val topic = "test-topic-metric"
-    AdminUtils.createTopic(zkClient, topic, 1, 1)
-    AdminUtils.deleteTopic(zkClient, topic)
-    TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
+    AdminUtils.createTopic(zkUtils, topic, 1, 1)
+    AdminUtils.deleteTopic(zkUtils, topic)
+    TestUtils.verifyTopicDeletion(zkUtils, topic, 1, servers)
     assertFalse("Topic metrics exists after deleteTopic", checkTopicMetricsExists(topic))
   }
 
+  @Test
+  def testBrokerTopicMetricsUnregisteredAfterDeletingTopic() {
+    val topic = "test-broker-topic-metric"
+    AdminUtils.createTopic(zkUtils, topic, 2, 1)
+    createAndShutdownStep("group0", "consumer0", "producer0")
+    assertNotNull(BrokerTopicStats.getBrokerTopicStats(topic))
+    AdminUtils.deleteTopic(zkUtils, topic)
+    TestUtils.verifyTopicDeletion(zkUtils, topic, 1, servers)
+    assertFalse("Topic metrics exists after deleteTopic", checkTopicMetricsExists(topic))
+  }
+
+  @deprecated("This test has been deprecated and it will be removed in a future release", "0.10.0.0")
   def createAndShutdownStep(group: String, consumerId: String, producerId: String): Unit = {
-    val sentMessages1 = sendMessages(servers, topic, nMessages)
+    sendMessages(servers, topic, nMessages)
     // create a consumer
     val consumerConfig1 = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumerId))
     val zkConsumerConnector1 = new ZookeeperConsumerConnector(consumerConfig1, true)
     val topicMessageStreams1 = zkConsumerConnector1.createMessageStreams(Map(topic -> 1), new StringDecoder(), new StringDecoder())
-    val receivedMessages1 = getMessages(topicMessageStreams1, nMessages)
+    getMessages(topicMessageStreams1, nMessages)
 
     zkConsumerConnector1.shutdown()
   }

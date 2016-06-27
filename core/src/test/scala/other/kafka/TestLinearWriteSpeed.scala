@@ -20,12 +20,15 @@ package kafka
 import java.io._
 import java.nio._
 import java.nio.channels._
-import java.util.Random
+import java.util.{Properties, Random}
+
 import kafka.log._
 import kafka.utils._
 import kafka.message._
+
 import scala.math._
 import joptsimple._
+import org.apache.kafka.common.utils.Utils
 
 /**
  * This test does linear writes using either a kafka log or a file and measures throughput and latency.
@@ -110,7 +113,10 @@ object TestLinearWriteSpeed {
         writables(i) = new ChannelWritable(new File(dir, "kafka-test-" + i + ".dat"), buffer)
       } else if(options.has(logOpt)) {
         val segmentSize = rand.nextInt(512)*1024*1024 + 64*1024*1024 // vary size to avoid herd effect
-        writables(i) = new LogWritable(new File(dir, "kafka-test-" + i), new LogConfig(segmentSize=segmentSize, flushInterval = flushInterval), scheduler, messageSet)
+        val logProperties = new Properties()
+        logProperties.put(LogConfig.SegmentBytesProp, segmentSize: java.lang.Integer)
+        logProperties.put(LogConfig.FlushMessagesProp, flushInterval: java.lang.Long)
+        writables(i) = new LogWritable(new File(dir, "kafka-test-" + i), new LogConfig(logProperties), scheduler, messageSet)
       } else {
         System.err.println("Must specify what to write to with one of --log, --channel, or --mmap") 
         System.exit(1)
@@ -193,7 +199,7 @@ object TestLinearWriteSpeed {
   }
   
   class LogWritable(val dir: File, config: LogConfig, scheduler: Scheduler, val messages: ByteBufferMessageSet) extends Writable {
-    CoreUtils.rm(dir)
+    Utils.delete(dir)
     val log = new Log(dir, config, 0L, scheduler, SystemTime)
     def write(): Int = {
       log.append(messages, true)
@@ -201,7 +207,7 @@ object TestLinearWriteSpeed {
     }
     def close() {
       log.close()
-      CoreUtils.rm(log.dir)
+      Utils.delete(log.dir)
     }
   }
   

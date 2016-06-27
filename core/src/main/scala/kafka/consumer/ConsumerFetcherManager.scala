@@ -26,7 +26,7 @@ import collection.mutable.HashMap
 import scala.collection.mutable
 import java.util.concurrent.locks.ReentrantLock
 import kafka.utils.CoreUtils.inLock
-import kafka.utils.ZkUtils._
+import kafka.utils.ZkUtils
 import kafka.utils.{ShutdownableThread, SystemTime}
 import kafka.common.TopicAndPartition
 import kafka.client.ClientUtils
@@ -39,7 +39,7 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 class ConsumerFetcherManager(private val consumerIdString: String,
                              private val config: ConsumerConfig,
-                             private val zkClient : ZkClient)
+                             private val zkUtils : ZkUtils)
         extends AbstractFetcherManager("ConsumerFetcherManager-%d".format(SystemTime.milliseconds),
                                        config.clientId, config.numConsumerFetchers) {
   private var partitionMap: immutable.Map[TopicAndPartition, PartitionTopicInfo] = null
@@ -62,7 +62,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
         }
 
         trace("Partitions without leader %s".format(noLeaderPartitionSet))
-        val brokers = getAllBrokerEndPointsForChannel(zkClient, SecurityProtocol.PLAINTEXT)
+        val brokers = zkUtils.getAllBrokerEndPointsForChannel(SecurityProtocol.PLAINTEXT)
         val topicsMetadata = ClientUtils.fetchTopicMetadata(noLeaderPartitionSet.map(m => m.topic).toSet,
                                                             brokers,
                                                             config.clientId,

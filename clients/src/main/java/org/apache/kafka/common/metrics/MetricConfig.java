@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.metrics;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -27,7 +29,7 @@ public class MetricConfig {
     private int samples;
     private long eventWindow;
     private long timeWindowMs;
-    private TimeUnit unit;
+    private Map<String, String> tags;
 
     public MetricConfig() {
         super();
@@ -35,7 +37,7 @@ public class MetricConfig {
         this.samples = 2;
         this.eventWindow = Long.MAX_VALUE;
         this.timeWindowMs = TimeUnit.MILLISECONDS.convert(30, TimeUnit.SECONDS);
-        this.unit = TimeUnit.SECONDS;
+        this.tags = new LinkedHashMap<>();
     }
 
     public Quota quota() {
@@ -65,6 +67,15 @@ public class MetricConfig {
         return this;
     }
 
+    public Map<String, String> tags() {
+        return this.tags;
+    }
+
+    public MetricConfig tags(Map<String, String> tags) {
+        this.tags = tags;
+        return this;
+    }
+
     public int samples() {
         return this.samples;
     }
@@ -73,15 +84,6 @@ public class MetricConfig {
         if (samples < 1)
             throw new IllegalArgumentException("The number of samples must be at least 1.");
         this.samples = samples;
-        return this;
-    }
-
-    public TimeUnit timeUnit() {
-        return unit;
-    }
-
-    public MetricConfig timeUnit(TimeUnit unit) {
-        this.unit = unit;
         return this;
     }
 }

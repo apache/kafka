@@ -17,19 +17,17 @@
 
 package kafka.api
 
-import kafka.api.ApiUtils._
-import kafka.utils.Logging
-import kafka.network.{BoundedByteBufferSend, RequestChannel}
-import kafka.common._
-import kafka.common.TopicAndPartition
-import kafka.network.RequestChannel.Response
-
-import scala.Some
-
 import java.nio.ByteBuffer
 
+import kafka.api.ApiUtils._
+import kafka.common.{TopicAndPartition, _}
+import kafka.network.{RequestOrResponseSend, RequestChannel}
+import kafka.network.RequestChannel.Response
+import kafka.utils.Logging
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+
 object OffsetFetchRequest extends Logging {
-  val CurrentVersion: Short = 0
+  val CurrentVersion: Short = 1
   val DefaultClientId = ""
 
   def readFrom(buffer: ByteBuffer): OffsetFetchRequest = {
@@ -58,7 +56,7 @@ case class OffsetFetchRequest(groupId: String,
                               versionId: Short = OffsetFetchRequest.CurrentVersion,
                               correlationId: Int = 0,
                               clientId: String = OffsetFetchRequest.DefaultClientId)
-    extends RequestOrResponse(Some(RequestKeys.OffsetFetchKey)) {
+    extends RequestOrResponse(Some(ApiKeys.OFFSET_FETCH.id)) {
 
   lazy val requestInfoGroupedByTopic = requestInfo.groupBy(_.topic)
   
@@ -95,11 +93,11 @@ case class OffsetFetchRequest(groupId: String,
   override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
     val responseMap = requestInfo.map {
       case (topicAndPartition) => (topicAndPartition, OffsetMetadataAndError(
-        ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]])
+        Errors.forException(e).code
       ))
     }.toMap
     val errorResponse = OffsetFetchResponse(requestInfo=responseMap, correlationId=correlationId)
-    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
+    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
   }
 
   override def describe(details: Boolean): String = {

@@ -25,9 +25,14 @@ public class HeartbeatResponse extends AbstractRequestResponse {
     private static final String ERROR_CODE_KEY_NAME = "error_code";
 
     /**
-     * Possible error code:
+     * Possible error codes:
      *
-     * TODO
+     * GROUP_COORDINATOR_NOT_AVAILABLE (15)
+     * NOT_COORDINATOR_FOR_GROUP (16)
+     * ILLEGAL_GENERATION (22)
+     * UNKNOWN_MEMBER_ID (25)
+     * REBALANCE_IN_PROGRESS (27)
+     * GROUP_AUTHORIZATION_FAILED (30)
      */
 
     private final short errorCode;
@@ -47,6 +52,6 @@ public class HeartbeatResponse extends AbstractRequestResponse {
     }
 
     public static HeartbeatResponse parse(ByteBuffer buffer) {
-        return new HeartbeatResponse((Struct) CURRENT_SCHEMA.read(buffer));
+        return new HeartbeatResponse(CURRENT_SCHEMA.read(buffer));
     }
 }

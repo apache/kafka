@@ -12,26 +12,38 @@
  */
 package org.apache.kafka.clients;
 
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Test;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class MetadataTest {
 
     private long refreshBackoffMs = 100;
     private long metadataExpireMs = 1000;
     private Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs);
-    private AtomicBoolean backgroundError = new AtomicBoolean(false);
-    
+    private AtomicReference<String> backgroundError = new AtomicReference<String>();
+
     @After
     public void tearDown() {
-        assertFalse(backgroundError.get());
+        assertNull("Exception in background thread : " + backgroundError.get(), backgroundError.get());
     }
 
     @Test
@@ -48,7 +60,15 @@ public class MetadataTest {
         Thread t2 = asyncFetch(topic);
         assertTrue("Awaiting update", t1.isAlive());
         assertTrue("Awaiting update", t2.isAlive());
-        metadata.update(TestUtils.singletonCluster(topic, 1), time);
+        // Perform metadata update when an update is requested on the async fetch thread
+        // This simulates the metadata update sequence in KafkaProducer
+        while (t1.isAlive() || t2.isAlive()) {
+            if (metadata.timeToNextUpdate(time) == 0) {
+                metadata.update(TestUtils.singletonCluster(topic, 1), time);
+                time += refreshBackoffMs;
+            }
+            Thread.sleep(1);
+        }
         t1.join();
         t2.join();
         assertFalse("No update needed.", metadata.timeToNextUpdate(time) == 0);
@@ -85,6 +105,105 @@ public class MetadataTest {
         }
     }
 
+    @Test
+    public void testFailedUpdate() {
+        long time = 100;
+        metadata.update(Cluster.empty(), time);
+
+        assertEquals(100, metadata.timeToNextUpdate(1000));
+        metadata.failedUpdate(1100);
+
+        assertEquals(100, metadata.timeToNextUpdate(1100));
+        assertEquals(100, metadata.lastSuccessfulUpdate());
+
+        metadata.needMetadataForAllTopics(true);
+        metadata.update(null, time);
+        assertEquals(100, metadata.timeToNextUpdate(1000));
+    }
+
+    @Test
+    public void testUpdateWithNeedMetadataForAllTopics() {
+        long time = 0;
+        metadata.update(Cluster.empty(), time);
+        metadata.needMetadataForAllTopics(true);
+
+        final List<String> expectedTopics = Collections.singletonList("topic");
+        metadata.setTopics(expectedTopics);
+        metadata.update(new Cluster(
+                Collections.singletonList(new Node(0, "host1", 1000)),
+                Arrays.asList(
+                    new PartitionInfo("topic", 0, null, null, null),
+                    new PartitionInfo("topic1", 0, null, null, null)),
+                Collections.<String>emptySet()),
+            100);
+
+        assertArrayEquals("Metadata got updated with wrong set of topics.",
+            expectedTopics.toArray(), metadata.topics().toArray());
+
+        metadata.needMetadataForAllTopics(false);
+    }
+
+    @Test
+    public void testListenerGetsNotifiedOfUpdate() {
+        long time = 0;
+        final Set<String> topics = new HashSet<>();
+        metadata.update(Cluster.empty(), time);
+        metadata.addListener(new Metadata.Listener() {
+            @Override
+            public void onMetadataUpdate(Cluster cluster) {
+                topics.clear();
+                topics.addAll(cluster.topics());
+            }
+        });
+
+        metadata.update(new Cluster(
+                Arrays.asList(new Node(0, "host1", 1000)),
+                Arrays.asList(
+                    new PartitionInfo("topic", 0, null, null, null),
+                    new PartitionInfo("topic1", 0, null, null, null)),
+                Collections.<String>emptySet()),
+            100);
+
+        assertEquals("Listener did not update topics list correctly",
+            new HashSet<>(Arrays.asList("topic", "topic1")), topics);
+    }
+
+    @Test
+    public void testListenerCanUnregister() {
+        long time = 0;
+        final Set<String> topics = new HashSet<>();
+        metadata.update(Cluster.empty(), time);
+        final Metadata.Listener listener = new Metadata.Listener() {
+            @Override
+            public void onMetadataUpdate(Cluster cluster) {
+                topics.clear();
+                topics.addAll(cluster.topics());
+            }
+        };
+        metadata.addListener(listener);
+
+        metadata.update(new Cluster(
+                Collections.singletonList(new Node(0, "host1", 1000)),
+                Arrays.asList(
+                    new PartitionInfo("topic", 0, null, null, null),
+                    new PartitionInfo("topic1", 0, null, null, null)),
+                Collections.<String>emptySet()),
+            100);
+
+        metadata.removeListener(listener);
+
+        metadata.update(new Cluster(
+                Arrays.asList(new Node(0, "host1", 1000)),
+                Arrays.asList(
+                    new PartitionInfo("topic2", 0, null, null, null),
+                    new PartitionInfo("topic3", 0, null, null, null)),
+                Collections.<String>emptySet()),
+            100);
+
+        assertEquals("Listener did not update topics list correctly",
+            new HashSet<>(Arrays.asList("topic", "topic1")), topics);
+    }
+
     private Thread asyncFetch(final String topic) {
         Thread thread = new Thread() {
             public void run() {
@@ -92,7 +211,7 @@ public class MetadataTest {
                     try {
                         metadata.awaitUpdate(metadata.requestUpdate(), refreshBackoffMs);
                     } catch (Exception e) {
-                        backgroundError.set(true);
+                        backgroundError.set(e.toString());
                     }
                 }
             }

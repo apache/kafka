@@ -17,22 +17,21 @@
 
 package kafka.server
 
-import org.junit.Test
-import org.scalatest.junit.JUnit3Suite
-import junit.framework.Assert._
+import org.junit.{After, Before, Test}
+import org.junit.Assert._
 
-class DelayedOperationTest extends JUnit3Suite {
+class DelayedOperationTest {
 
   var purgatory: DelayedOperationPurgatory[MockDelayedOperation] = null
 
-  override def setUp() {
-    super.setUp()
-    purgatory = new DelayedOperationPurgatory[MockDelayedOperation](purgatoryName = "mock")
+  @Before
+  def setUp() {
+    purgatory = DelayedOperationPurgatory[MockDelayedOperation](purgatoryName = "mock")
   }
 
-  override def tearDown() {
+  @After
+  def tearDown() {
     purgatory.shutdown()
-    super.tearDown()
   }
 
   @Test

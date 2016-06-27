@@ -19,8 +19,9 @@ package kafka.tools
 
 import java.io.FileWriter
 import joptsimple._
-import kafka.utils.{Logging, ZkUtils, ZKStringSerializer, ZKGroupTopicDirs, CommandLineUtils}
+import kafka.utils.{Logging, ZkUtils, ZKGroupTopicDirs, CommandLineUtils}
 import org.I0Itec.zkclient.ZkClient
+import org.apache.kafka.common.security.JaasUtils
 
 
 /**
@@ -72,16 +73,19 @@ object ExportZkOffsets extends Logging {
     val groups     = options.valuesOf(groupOpt)
     val outfile    = options.valueOf(outFileOpt)
 
-    var zkClient   : ZkClient    = null
+    var zkUtils   : ZkUtils    = null
     val fileWriter : FileWriter  = new FileWriter(outfile)
     
     try {
-      zkClient = new ZkClient(zkConnect, 30000, 30000, ZKStringSerializer)
+      zkUtils = ZkUtils(zkConnect,
+                        30000,
+                        30000,
+                        JaasUtils.isZkSecurityEnabled())
       
       var consumerGroups: Seq[String] = null
 
       if (groups.size == 0) {
-        consumerGroups = ZkUtils.getChildren(zkClient, ZkUtils.ConsumersPath).toList
+        consumerGroups = zkUtils.getChildren(ZkUtils.ConsumersPath).toList
       }
       else {
         import scala.collection.JavaConversions._
@@ -89,15 +93,15 @@ object ExportZkOffsets extends Logging {
       }
       
       for (consumerGrp <- consumerGroups) {
-        val topicsList = getTopicsList(zkClient, consumerGrp)
+        val topicsList = getTopicsList(zkUtils, consumerGrp)
         
         for (topic <- topicsList) {
-          val bidPidList = getBrokeridPartition(zkClient, consumerGrp, topic)
+          val bidPidList = getBrokeridPartition(zkUtils, consumerGrp, topic)
           
           for (bidPid <- bidPidList) {
             val zkGrpTpDir = new ZKGroupTopicDirs(consumerGrp,topic)
             val offsetPath = zkGrpTpDir.consumerOffsetDir + "/" + bidPid
-            ZkUtils.readDataMaybeNull(zkClient, offsetPath)._1 match {
+            zkUtils.readDataMaybeNull(offsetPath)._1 match {
               case Some(offsetVal) =>
                 fileWriter.write(offsetPath + ":" + offsetVal + "\n")
                 debug(offsetPath + " => " + offsetVal)
@@ -114,10 +118,10 @@ object ExportZkOffsets extends Logging {
     }
   }
 
-  private def getBrokeridPartition(zkClient: ZkClient, consumerGroup: String, topic: String): List[String] =
-    ZkUtils.getChildrenParentMayNotExist(zkClient, "/consumers/%s/offsets/%s".format(consumerGroup, topic)).toList
+  private def getBrokeridPartition(zkUtils: ZkUtils, consumerGroup: String, topic: String): List[String] =
+    zkUtils.getChildrenParentMayNotExist("/consumers/%s/offsets/%s".format(consumerGroup, topic)).toList
   
-  private def getTopicsList(zkClient: ZkClient, consumerGroup: String): List[String] =
-    ZkUtils.getChildren(zkClient, "/consumers/%s/offsets".format(consumerGroup)).toList
+  private def getTopicsList(zkUtils: ZkUtils, consumerGroup: String): List[String] =
+    zkUtils.getChildren("/consumers/%s/offsets".format(consumerGroup)).toList
 
 }

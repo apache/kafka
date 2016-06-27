@@ -39,4 +39,6 @@ public interface Deserializer<T> extends Closeable {
      */
     public T deserialize(String topic, byte[] data);
 
+    @Override
+    public void close();
 }

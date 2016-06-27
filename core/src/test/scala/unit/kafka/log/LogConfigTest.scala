@@ -15,79 +15,62 @@
  * limitations under the License.
  */
 
-package unit.kafka.log
+package kafka.log
 
 import java.util.Properties
 
-import kafka.log.{Defaults, LogConfig}
+import kafka.server.KafkaConfig
+import kafka.server.KafkaServer
+import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigException
 import org.junit.{Assert, Test}
-import org.scalatest.junit.JUnit3Suite
+import org.junit.Assert._
+import org.scalatest.Assertions._
 
-class LogConfigTest extends JUnit3Suite {
+class LogConfigTest {
 
   @Test
-  def testFromPropsDefaults() {
-    val defaults = new Properties()
-    defaults.put(LogConfig.SegmentBytesProp, "4242")
-    val props = new Properties(defaults)
+  def testKafkaConfigToProps() {
+    val millisInHour = 60L * 60L * 1000L
+    val kafkaProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
+    kafkaProps.put(KafkaConfig.LogRollTimeHoursProp, "2")
+    kafkaProps.put(KafkaConfig.LogRollTimeJitterHoursProp, "2")
+    kafkaProps.put(KafkaConfig.LogRetentionTimeHoursProp, "2")
 
-    val config = LogConfig.fromProps(props)
-
-    Assert.assertEquals(4242, config.segmentSize)
-    Assert.assertEquals("LogConfig defaults should be retained", Defaults.MaxMessageSize, config.maxMessageSize)
-    Assert.assertEquals("producer", config.compressionType)
+    val kafkaConfig = KafkaConfig.fromProps(kafkaProps)
+    val logProps = KafkaServer.copyKafkaConfigToLog(kafkaConfig)
+    assertEquals(2 * millisInHour, logProps.get(LogConfig.SegmentMsProp))
+    assertEquals(2 * millisInHour, logProps.get(LogConfig.SegmentJitterMsProp))
+    assertEquals(2 * millisInHour, logProps.get(LogConfig.RetentionMsProp))
   }
 
   @Test
   def testFromPropsEmpty() {
     val p = new Properties()
-    val config = LogConfig.fromProps(p)
+    val config = LogConfig(p)
     Assert.assertEquals(LogConfig(), config)
   }
 
   @Test
-  def testFromPropsToProps() {
-    import scala.util.Random._
-    val expected = new Properties()
-    LogConfig.configNames().foreach((name) => {
-      name match {
-        case LogConfig.UncleanLeaderElectionEnableProp => expected.setProperty(name, randFrom("true", "false"))
-        case LogConfig.CompressionTypeProp => expected.setProperty(name, randFrom("producer", "uncompressed", "gzip"))
-        case LogConfig.CleanupPolicyProp => expected.setProperty(name, randFrom(LogConfig.Compact, LogConfig.Delete))
-        case LogConfig.MinCleanableDirtyRatioProp => expected.setProperty(name, "%.1f".format(nextDouble * .9 + .1))
-        case LogConfig.MinInSyncReplicasProp => expected.setProperty(name, (nextInt(Int.MaxValue - 1) + 1).toString)
-        case LogConfig.RetentionBytesProp => expected.setProperty(name, nextInt().toString)
-        case LogConfig.RetentionMsProp => expected.setProperty(name, nextLong().toString)
-        case positiveIntProperty => expected.setProperty(name, nextInt(Int.MaxValue).toString)
-      }
-    })
-
-    val actual = LogConfig.fromProps(expected).toProps
-    Assert.assertEquals(expected, actual)
-  }
-
-  @Test
   def testFromPropsInvalid() {
-    LogConfig.configNames().foreach((name) => {
-      name match {
-        case LogConfig.UncleanLeaderElectionEnableProp  => return
-        case LogConfig.RetentionBytesProp => assertPropertyInvalid(name, "not_a_number")
-        case LogConfig.RetentionMsProp => assertPropertyInvalid(name, "not_a_number" )
-        case LogConfig.CleanupPolicyProp => assertPropertyInvalid(name, "true", "foobar");
-        case LogConfig.MinCleanableDirtyRatioProp => assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2")
-        case LogConfig.MinInSyncReplicasProp => assertPropertyInvalid(name, "not_a_number", "0", "-1")
-        case positiveIntProperty => assertPropertyInvalid(name, "not_a_number", "-1")
-      }
+    LogConfig.configNames.foreach(name => name match {
+      case LogConfig.UncleanLeaderElectionEnableProp => assertPropertyInvalid(name, "not a boolean")
+      case LogConfig.RetentionBytesProp => assertPropertyInvalid(name, "not_a_number")
+      case LogConfig.RetentionMsProp => assertPropertyInvalid(name, "not_a_number" )
+      case LogConfig.CleanupPolicyProp => assertPropertyInvalid(name, "true", "foobar");
+      case LogConfig.MinCleanableDirtyRatioProp => assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2")
+      case LogConfig.MinInSyncReplicasProp => assertPropertyInvalid(name, "not_a_number", "0", "-1")
+      case LogConfig.MessageFormatVersionProp => assertPropertyInvalid(name, "")
+      case positiveIntProperty => assertPropertyInvalid(name, "not_a_number", "-1")
     })
-   }
+  }
 
   private def assertPropertyInvalid(name: String, values: AnyRef*) {
     values.foreach((value) => {
       val props = new Properties
       props.setProperty(name, value.toString)
-      intercept[ConfigException] {
-        LogConfig.fromProps(props)
+      intercept[Exception] {
+        LogConfig(props)
       }
     })
   }

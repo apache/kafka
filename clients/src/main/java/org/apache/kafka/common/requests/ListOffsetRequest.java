@@ -31,7 +31,13 @@ import java.util.List;
 import java.util.Map;
 
 public class ListOffsetRequest extends AbstractRequest {
-    
+
+    public static final long EARLIEST_TIMESTAMP = -2L;
+    public static final long LATEST_TIMESTAMP = -1L;
+
+    public static final int CONSUMER_REPLICA_ID = -1;
+    public static final int DEBUGGING_REPLICA_ID = -2;
+
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.LIST_OFFSETS.id);
     private static final String REPLICA_ID_KEY_NAME = "replica_id";
     private static final String TOPICS_KEY_NAME = "topics";
@@ -57,9 +63,9 @@ public class ListOffsetRequest extends AbstractRequest {
             this.maxNumOffsets = maxNumOffsets;
         }
     }
-    
+
     public ListOffsetRequest(Map<TopicPartition, PartitionData> offsetData) {
-        this(-1, offsetData);
+        this(CONSUMER_REPLICA_ID, offsetData);
     }
 
     public ListOffsetRequest(int replicaId, Map<TopicPartition, PartitionData> offsetData) {
@@ -107,7 +113,7 @@ public class ListOffsetRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractRequestResponse getErrorResponse(Throwable e) {
+    public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
         Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<TopicPartition, ListOffsetResponse.PartitionData>();
 
         for (Map.Entry<TopicPartition, PartitionData> entry: offsetData.entrySet()) {
@@ -115,7 +121,13 @@ public class ListOffsetRequest extends AbstractRequest {
             responseData.put(entry.getKey(), partitionResponse);
         }
 
-        return new ListOffsetResponse(responseData);
+        switch (versionId) {
+            case 0:
+                return new ListOffsetResponse(responseData);
+            default:
+                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
+                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.LIST_OFFSETS.id)));
+        }
     }
 
     public int replicaId() {
@@ -126,7 +138,11 @@ public class ListOffsetRequest extends AbstractRequest {
         return offsetData;
     }
 
+    public static ListOffsetRequest parse(ByteBuffer buffer, int versionId) {
+        return new ListOffsetRequest(ProtoUtils.parseRequest(ApiKeys.LIST_OFFSETS.id, versionId, buffer));
+    }
+
     public static ListOffsetRequest parse(ByteBuffer buffer) {
-        return new ListOffsetRequest((Struct) CURRENT_SCHEMA.read(buffer));
+        return new ListOffsetRequest(CURRENT_SCHEMA.read(buffer));
     }
 }

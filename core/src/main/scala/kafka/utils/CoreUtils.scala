@@ -19,7 +19,6 @@ package kafka.utils
 
 import java.io._
 import java.nio._
-import charset.Charset
 import java.nio.channels._
 import java.util.concurrent.locks.{ReadWriteLock, Lock}
 import java.lang.management._
@@ -29,10 +28,7 @@ import org.apache.kafka.common.protocol.SecurityProtocol
 
 import scala.collection._
 import scala.collection.mutable
-import java.util.Properties
 import kafka.cluster.EndPoint
-import kafka.common.KafkaException
-import kafka.common.KafkaStorageException
 import org.apache.kafka.common.utils.Crc32
 import org.apache.kafka.common.utils.Utils
 
@@ -61,23 +57,14 @@ object CoreUtils extends Logging {
     }
 
   /**
-   * Create a daemon thread
-   * @param name The name of the thread
-   * @param fun The runction to execute in the thread
-   * @return The unstarted thread
-   */
-  def daemonThread(name: String, fun: () => Unit): Thread =
-    Utils.daemonThread(name, runnable(fun))
-
-  /**
-   * Open a channel for the given file
-   */
-  def openChannel(file: File, mutable: Boolean): FileChannel = {
-    if(mutable)
-      new RandomAccessFile(file, "rw").getChannel()
-    else
-      new FileInputStream(file).getChannel()
-  }
+    * Create a thread
+    * @param name The name of the thread
+    * @param daemon Whether the thread should block JVM shutdown
+    * @param fun The function to execute in the thread
+    * @return The unstarted thread
+    */
+  def newThread(name: String, daemon: Boolean)(fun: => Unit): Thread =
+    Utils.newThread(name, runnable(fun), daemon)
 
   /**
    * Do the given action and log any exceptions thrown without rethrowing them
@@ -93,35 +80,10 @@ object CoreUtils extends Logging {
   }
 
   /**
-   * Recursively delete the given file/directory and any subfiles (if any exist)
-   * @param file The root file at which to begin deleting
-   */
-  def rm(file: String): Unit = rm(new File(file))
-
-  /**
    * Recursively delete the list of files/directories and any subfiles (if any exist)
    * @param files sequence of files to be deleted
    */
-  def rm(files: Seq[String]): Unit = files.foreach(f => rm(new File(f)))
-
-  /**
-   * Recursively delete the given file/directory and any subfiles (if any exist)
-   * @param file The root file at which to begin deleting
-   */
-  def rm(file: File) {
-	  if(file == null) {
-	    return
-	  } else if(file.isDirectory) {
-	    val files = file.listFiles()
-	    if(files != null) {
-	      for(f <- files)
-	        rm(f)
-	    }
-	    file.delete()
-	  } else {
-	    file.delete()
-	  }
-  }
+  def delete(files: Seq[String]): Unit = files.foreach(f => Utils.delete(new File(f)))
 
   /**
    * Register the given mbean with the platform mbean server,
@@ -172,7 +134,7 @@ object CoreUtils extends Logging {
   def crc32(bytes: Array[Byte]): Long = crc32(bytes, 0, bytes.length)
 
   /**
-   * Compute the CRC32 of the segment of the byte array given by the specificed size and offset
+   * Compute the CRC32 of the segment of the byte array given by the specified size and offset
    * @param bytes The bytes to checksum
    * @param offset the offset at which to begin checksumming
    * @param size the number of bytes to checksum
@@ -207,7 +169,7 @@ object CoreUtils extends Logging {
       return map
     val keyVals = str.split("\\s*,\\s*").map(s => {
       val lio = s.lastIndexOf(":")
-      Pair(s.substring(0,lio).trim, s.substring(lio + 1).trim)
+      (s.substring(0,lio).trim, s.substring(lio + 1).trim)
     })
     keyVals.toMap
   }
@@ -228,7 +190,7 @@ object CoreUtils extends Logging {
    * Create an instance of the class with the given class name
    */
   def createObject[T<:AnyRef](className: String, args: AnyRef*): T = {
-    val klass = Class.forName(className).asInstanceOf[Class[T]]
+    val klass = Class.forName(className, true, Utils.getContextOrKafkaClassLoader()).asInstanceOf[Class[T]]
     val constructor = klass.getConstructor(args.map(_.getClass): _*)
     constructor.newInstance(args: _*)
   }
@@ -238,11 +200,8 @@ object CoreUtils extends Logging {
    * @param coll An iterable over the underlying collection.
    * @return A circular iterator over the collection.
    */
-  def circularIterator[T](coll: Iterable[T]) = {
-    val stream: Stream[T] =
-      for (forever <- Stream.continually(1); t <- coll) yield t
-    stream.iterator
-  }
+  def circularIterator[T](coll: Iterable[T]) =
+    for (_ <- Iterator.continually(1); t <- coll) yield t
 
   /**
    * Replace the given string suffix with the new suffix. If the string doesn't end with the given suffix throw an exception.
@@ -251,32 +210,6 @@ object CoreUtils extends Logging {
     if(!s.endsWith(oldSuffix))
       throw new IllegalArgumentException("Expected string to end with '%s' but string is '%s'".format(oldSuffix, s))
     s.substring(0, s.length - oldSuffix.length) + newSuffix
-  }
-
-  /**
-   * Turn {@linkplain java.util.Properties} with default values into a {@linkplain java.util.Map}. Following example
-   * illustrates difference from the cast
-   * <pre>
-   * val defaults = new Properties()
-   * defaults.put("foo", "bar")
-   * val props = new Properties(defaults)
-   *
-   * props.getProperty("foo") // "bar"
-   * props.get("foo") // null
-   * evaluateDefaults(props).get("foo") // "bar"
-   * </pre>
-   *
-   * @param props properties to evaluate
-   * @return new java.util.Map instance
-   */
-  def evaluateDefaults(props: Properties): java.util.Map[String, String] = {
-    import java.util._
-    import JavaConversions.asScalaSet
-    val evaluated = new HashMap[String, String]()
-    for (name <- props.stringPropertyNames()) {
-      evaluated.put(name, props.getProperty(name))
-    }
-    evaluated
   }
 
   /**

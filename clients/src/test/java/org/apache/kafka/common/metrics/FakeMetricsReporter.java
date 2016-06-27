@@ -27,6 +27,9 @@ public class FakeMetricsReporter implements MetricsReporter {
     public void metricChange(KafkaMetric metric) {}
 
     @Override
+    public void metricRemoval(KafkaMetric metric) {}
+
+    @Override
     public void close() {}
 
 }

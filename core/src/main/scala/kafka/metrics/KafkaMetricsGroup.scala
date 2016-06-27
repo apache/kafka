@@ -123,6 +123,7 @@ object KafkaMetricsGroup extends KafkaMetricsGroup with Logging {
     // kafka.consumer.FetchRequestAndResponseStats <-- kafka.consumer.SimpleConsumer
     new MetricName("kafka.consumer", "FetchRequestAndResponseMetrics", "FetchResponseSize"),
     new MetricName("kafka.consumer", "FetchRequestAndResponseMetrics", "FetchRequestRateAndTimeMs"),
+    new MetricName("kafka.consumer", "FetchRequestAndResponseMetrics", "FetchRequestThrottleRateAndTimeMs"),
 
     /**
      * ProducerRequestStats <-- SyncProducer
@@ -148,7 +149,8 @@ object KafkaMetricsGroup extends KafkaMetricsGroup with Logging {
 
     // kafka.producer.ProducerRequestStats <-- SyncProducer
     new MetricName("kafka.producer", "ProducerRequestMetrics", "ProducerRequestRateAndTimeMs"),
-    new MetricName("kafka.producer", "ProducerRequestMetrics", "ProducerRequestSize")
+    new MetricName("kafka.producer", "ProducerRequestMetrics", "ProducerRequestSize"),
+    new MetricName("kafka.producer", "ProducerRequestMetrics", "ProducerRequestThrottleRateAndTimeMs")
   )
 
   private def toMBeanName(tags: collection.Map[String, String]): Option[String] = {
@@ -190,6 +192,7 @@ object KafkaMetricsGroup extends KafkaMetricsGroup with Logging {
     removeAllMetricsInList(KafkaMetricsGroup.consumerMetricNameList, clientId)
   }
 
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.10.0.0")
   def removeAllProducerMetrics(clientId: String) {
     ProducerRequestStatsRegistry.removeProducerRequestStats(clientId)
     ProducerTopicStatsRegistry.removeProducerTopicStats(clientId)

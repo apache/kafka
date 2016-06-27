@@ -21,6 +21,7 @@ import java.util.Properties
 import kafka.api.OffsetRequest
 import kafka.utils._
 import kafka.common.{InvalidConfigException, Config}
+import java.util.Locale
 
 object ConsumerConfig extends Config {
   val RefreshMetadataBackoffMs = 200
@@ -58,6 +59,7 @@ object ConsumerConfig extends Config {
     validateGroupId(config.groupId)
     validateAutoOffsetReset(config.autoOffsetReset)
     validateOffsetsStorage(config.offsetsStorage)
+    validatePartitionAssignmentStrategy(config.partitionAssignmentStrategy)
   }
 
   def validateClientId(clientId: String) {
@@ -85,6 +87,15 @@ object ConsumerConfig extends Config {
                                                  "Valid values are 'zookeeper' and 'kafka'")
     }
   }
+
+  def validatePartitionAssignmentStrategy(strategy: String) {
+    strategy match {
+      case "range" =>
+      case "roundrobin" =>
+      case _ => throw new InvalidConfigException("Wrong value " + strategy + " of partition.assignment.strategy in consumer config; " +
+        "Valid values are 'range' and 'roundrobin'")
+    }
+  }
 }
 
 class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(props) {
@@ -104,13 +115,11 @@ class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(
 
   /** the socket timeout for network requests. Its value should be at least fetch.wait.max.ms. */
   val socketTimeoutMs = props.getInt("socket.timeout.ms", SocketTimeout)
-  require(fetchWaitMaxMs <= socketTimeoutMs, "socket.timeout.ms should always be at least fetch.wait.max.ms" +
-    " to prevent unnecessary socket timeouts")
   
   /** the socket receive buffer for network requests */
   val socketReceiveBufferBytes = props.getInt("socket.receive.buffer.bytes", SocketBufferSize)
   
-  /** the number of byes of messages to attempt to fetch */
+  /** the number of bytes of messages to attempt to fetch */
   val fetchMessageMaxBytes = props.getInt("fetch.message.max.bytes", FetchSize)
 
   /** the number threads used to fetch data */
@@ -133,6 +142,8 @@ class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(
   
   /** the maximum amount of time the server will block before answering the fetch request if there isn't sufficient data to immediately satisfy fetch.min.bytes */
   val fetchWaitMaxMs = props.getInt("fetch.wait.max.ms", MaxFetchWaitMs)
+  require(fetchWaitMaxMs <= socketTimeoutMs, "socket.timeout.ms should always be at least fetch.wait.max.ms" +
+    " to prevent unnecessary socket timeouts")
   
   /** backoff time between retries during rebalance */
   val rebalanceBackoffMs = props.getInt("rebalance.backoff.ms", zkSyncTimeMs)
@@ -153,7 +164,7 @@ class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(
   val offsetsCommitMaxRetries = props.getInt("offsets.commit.max.retries", OffsetsCommitMaxRetries)
 
   /** Specify whether offsets should be committed to "zookeeper" (default) or "kafka" */
-  val offsetsStorage = props.getString("offsets.storage", OffsetsStorage).toLowerCase
+  val offsetsStorage = props.getString("offsets.storage", OffsetsStorage).toLowerCase(Locale.ROOT)
 
   /** If you are using "kafka" as offsets.storage, you can dual commit offsets to ZooKeeper (in addition to Kafka). This
     * is required during migration from zookeeper-based offset storage to kafka-based offset storage. With respect to any

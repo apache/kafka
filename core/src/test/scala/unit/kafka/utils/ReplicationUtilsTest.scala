@@ -22,13 +22,12 @@ import kafka.server.{ReplicaFetcherManager, KafkaConfig}
 import kafka.api.LeaderAndIsr
 import kafka.zk.ZooKeeperTestHarness
 import kafka.common.TopicAndPartition
-import org.scalatest.junit.JUnit3Suite
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.{Before, Test}
 import org.easymock.EasyMock
 
 
-class ReplicationUtilsTest extends JUnit3Suite with ZooKeeperTestHarness {
+class ReplicationUtilsTest extends ZooKeeperTestHarness {
   val topic = "my-topic-test"
   val partitionId = 0
   val brokerId = 1
@@ -45,10 +44,10 @@ class ReplicationUtilsTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   val topicDataLeaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(1,leaderEpoch,List(1,2),0), controllerEpoch)
 
-
+  @Before
   override def setUp() {
     super.setUp()
-    ZkUtils.createPersistentPath(zkClient,topicPath,topicData)
+    zkUtils.createPersistentPath(topicPath, topicData)
   }
 
   @Test
@@ -67,21 +66,23 @@ class ReplicationUtilsTest extends JUnit3Suite with ZooKeeperTestHarness {
     EasyMock.expect(replicaManager.config).andReturn(configs.head)
     EasyMock.expect(replicaManager.logManager).andReturn(logManager)
     EasyMock.expect(replicaManager.replicaFetcherManager).andReturn(EasyMock.createMock(classOf[ReplicaFetcherManager]))
-    EasyMock.expect(replicaManager.zkClient).andReturn(zkClient)
+    EasyMock.expect(replicaManager.zkUtils).andReturn(zkUtils)
     EasyMock.replay(replicaManager)
+
+    zkUtils.makeSurePersistentPathExists(ZkUtils.IsrChangeNotificationPath)
 
     val replicas = List(0,1)
 
     // regular update
     val newLeaderAndIsr1 = new LeaderAndIsr(brokerId, leaderEpoch, replicas, 0)
-    val (updateSucceeded1,newZkVersion1) = ReplicationUtils.updateLeaderAndIsr(zkClient,
+    val (updateSucceeded1,newZkVersion1) = ReplicationUtils.updateLeaderAndIsr(zkUtils,
       "my-topic-test", partitionId, newLeaderAndIsr1, controllerEpoch, 0)
     assertTrue(updateSucceeded1)
     assertEquals(newZkVersion1, 1)
 
     // mismatched zkVersion with the same data
     val newLeaderAndIsr2 = new LeaderAndIsr(brokerId, leaderEpoch, replicas, zkVersion + 1)
-    val (updateSucceeded2,newZkVersion2) = ReplicationUtils.updateLeaderAndIsr(zkClient,
+    val (updateSucceeded2,newZkVersion2) = ReplicationUtils.updateLeaderAndIsr(zkUtils,
       "my-topic-test", partitionId, newLeaderAndIsr2, controllerEpoch, zkVersion + 1)
     assertTrue(updateSucceeded2)
     // returns true with existing zkVersion
@@ -89,7 +90,7 @@ class ReplicationUtilsTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // mismatched zkVersion and leaderEpoch
     val newLeaderAndIsr3 = new LeaderAndIsr(brokerId, leaderEpoch + 1, replicas, zkVersion + 1)
-    val (updateSucceeded3,newZkVersion3) = ReplicationUtils.updateLeaderAndIsr(zkClient,
+    val (updateSucceeded3,newZkVersion3) = ReplicationUtils.updateLeaderAndIsr(zkUtils,
       "my-topic-test", partitionId, newLeaderAndIsr3, controllerEpoch, zkVersion + 1)
     assertFalse(updateSucceeded3)
     assertEquals(newZkVersion3,-1)
@@ -97,9 +98,9 @@ class ReplicationUtilsTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   @Test
   def testGetLeaderIsrAndEpochForPartition() {
-    val leaderIsrAndControllerEpoch = ReplicationUtils.getLeaderIsrAndEpochForPartition(zkClient, topic, partitionId)
+    val leaderIsrAndControllerEpoch = ReplicationUtils.getLeaderIsrAndEpochForPartition(zkUtils, topic, partitionId)
     assertEquals(topicDataLeaderIsrAndControllerEpoch, leaderIsrAndControllerEpoch.get)
-    assertEquals(None, ReplicationUtils.getLeaderIsrAndEpochForPartition(zkClient, topic, partitionId + 1))
+    assertEquals(None, ReplicationUtils.getLeaderIsrAndEpochForPartition(zkUtils, topic, partitionId + 1))
   }
 
 }

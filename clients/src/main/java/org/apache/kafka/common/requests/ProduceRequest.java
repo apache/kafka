@@ -19,6 +19,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
@@ -27,7 +28,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class ProduceRequest  extends AbstractRequest {
+public class ProduceRequest extends AbstractRequest {
     
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.PRODUCE.id);
     private static final String ACKS_KEY_NAME = "acks";
@@ -90,19 +91,27 @@ public class ProduceRequest  extends AbstractRequest {
     }
 
     @Override
-    public AbstractRequestResponse getErrorResponse(Throwable e) {
-
+    public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
         /* In case the producer doesn't actually want any response */
         if (acks == 0)
             return null;
 
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseMap = new HashMap<TopicPartition, ProduceResponse.PartitionResponse>();
 
-        for (Map.Entry<TopicPartition, ByteBuffer> entry: partitionRecords.entrySet()) {
-            responseMap.put(entry.getKey(), new ProduceResponse.PartitionResponse(Errors.forException(e).code(), ProduceResponse.INVALID_OFFSET));
+        for (Map.Entry<TopicPartition, ByteBuffer> entry : partitionRecords.entrySet()) {
+            responseMap.put(entry.getKey(), new ProduceResponse.PartitionResponse(Errors.forException(e).code(), ProduceResponse.INVALID_OFFSET, Record.NO_TIMESTAMP));
         }
 
-        return new ProduceResponse(responseMap);
+        switch (versionId) {
+            case 0:
+                return new ProduceResponse(responseMap);
+            case 1:
+            case 2:
+                return new ProduceResponse(responseMap, ProduceResponse.DEFAULT_THROTTLE_TIME, versionId);
+            default:
+                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
+                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.PRODUCE.id)));
+        }
     }
 
     public short acks() {
@@ -117,7 +126,15 @@ public class ProduceRequest  extends AbstractRequest {
         return partitionRecords;
     }
 
+    public void clearPartitionRecords() {
+        partitionRecords.clear();
+    }
+
+    public static ProduceRequest parse(ByteBuffer buffer, int versionId) {
+        return new ProduceRequest(ProtoUtils.parseRequest(ApiKeys.PRODUCE.id, versionId, buffer));
+    }
+
     public static ProduceRequest parse(ByteBuffer buffer) {
-        return new ProduceRequest((Struct) CURRENT_SCHEMA.read(buffer));
+        return new ProduceRequest(CURRENT_SCHEMA.read(buffer));
     }
 }

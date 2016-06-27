@@ -22,7 +22,11 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -41,18 +45,16 @@ public class MemoryRecordsTest {
     public void testIterator() {
         MemoryRecords recs1 = MemoryRecords.emptyRecords(ByteBuffer.allocate(1024), compression);
         MemoryRecords recs2 = MemoryRecords.emptyRecords(ByteBuffer.allocate(1024), compression);
-        List<Record> list = Arrays.asList(new Record("a".getBytes(), "1".getBytes()),
-                                          new Record("b".getBytes(), "2".getBytes()),
-                                          new Record("c".getBytes(), "3".getBytes()));
+        List<Record> list = Arrays.asList(new Record(0L, "a".getBytes(), "1".getBytes()),
+                                          new Record(0L, "b".getBytes(), "2".getBytes()),
+                                          new Record(0L, "c".getBytes(), "3".getBytes()));
         for (int i = 0; i < list.size(); i++) {
             Record r = list.get(i);
             recs1.append(i, r);
-            recs2.append(i, toArray(r.key()), toArray(r.value()));
+            recs2.append(i, 0L, toArray(r.key()), toArray(r.value()));
         }
         recs1.close();
-        recs1.flip();
         recs2.close();
-        recs2.flip();
 
         for (int iteration = 0; iteration < 2; iteration++) {
             for (MemoryRecords recs : Arrays.asList(recs1, recs2)) {
@@ -67,6 +69,17 @@ public class MemoryRecordsTest {
                 assertFalse(iter.hasNext());
             }
         }
+    }
+
+    @Test
+    public void testHasRoomForMethod() {
+        MemoryRecords recs1 = MemoryRecords.emptyRecords(ByteBuffer.allocate(1024), compression);
+        recs1.append(0, new Record(0L, "a".getBytes(), "1".getBytes()));
+
+        assertTrue(recs1.hasRoomFor("b".getBytes(), "2".getBytes()));
+        recs1.close();
+        assertFalse(recs1.hasRoomFor("b".getBytes(), "2".getBytes()));
+
     }
 
     @Parameterized.Parameters

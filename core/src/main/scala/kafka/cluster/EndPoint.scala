@@ -26,6 +26,8 @@ import org.apache.kafka.common.utils.Utils
 
 object EndPoint {
 
+  private val uriParseExp = """^(.*)://\[?([0-9a-zA-Z\-%.:]*)\]?:(-?[0-9]+)""".r
+
   def readFrom(buffer: ByteBuffer): EndPoint = {
     val port = buffer.getInt()
     val host = readShortString(buffer)
@@ -42,10 +44,9 @@ object EndPoint {
    * @return
    */
   def createEndPoint(connectionString: String): EndPoint = {
-    val uriParseExp = """^(.*)://\[?([0-9a-z\-.:]*)\]?:(-?[0-9]+)""".r
     connectionString match {
-      case uriParseExp(protocol, "", port) => new EndPoint(null, port.toInt, SecurityProtocol.valueOf(protocol))
-      case uriParseExp(protocol, host, port) => new EndPoint(host, port.toInt, SecurityProtocol.valueOf(protocol))
+      case uriParseExp(protocol, "", port) => new EndPoint(null, port.toInt, SecurityProtocol.forName(protocol))
+      case uriParseExp(protocol, host, port) => new EndPoint(host, port.toInt, SecurityProtocol.forName(protocol))
       case _ => throw new KafkaException("Unable to parse " + connectionString + " to a broker endpoint")
     }
   }

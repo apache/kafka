@@ -17,18 +17,24 @@
 
 package kafka.server
 
-import junit.framework.Assert._
-import kafka.api._
-import kafka.utils.{TestUtils, ZkUtils, CoreUtils}
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.requests.LeaderAndIsrRequest.PartitionState
+
+import scala.collection.JavaConverters._
+import kafka.api.LeaderAndIsr
+import org.apache.kafka.common.requests.{AbstractRequestResponse, LeaderAndIsrRequest, LeaderAndIsrResponse}
+import org.junit.Assert._
+import kafka.utils.{CoreUtils, TestUtils}
 import kafka.cluster.Broker
-import kafka.common.ErrorMapping
-import kafka.controller.{ControllerChannelManager, ControllerContext, LeaderIsrAndControllerEpoch}
+import kafka.controller.{ControllerChannelManager, ControllerContext}
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.common.protocol.SecurityProtocol
-import org.scalatest.junit.JUnit3Suite
+import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
+import org.apache.kafka.common.utils.SystemTime
+import org.junit.{After, Before, Test}
 
-class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
+class LeaderElectionTest extends ZooKeeperTestHarness {
   val brokerId1 = 0
   val brokerId2 = 1
 
@@ -36,6 +42,7 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   var staleControllerEpochDetected = false
 
+  @Before
   override def setUp() {
     super.setUp()
 
@@ -48,21 +55,23 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     servers ++= List(server1, server2)
   }
 
+  @After
   override def tearDown() {
     servers.foreach(_.shutdown())
-    servers.foreach(server => CoreUtils.rm(server.config.logDirs))
+    servers.foreach(server => CoreUtils.delete(server.config.logDirs))
     super.tearDown()
   }
 
+  @Test
   def testLeaderElectionAndEpoch {
     // start 2 brokers
     val topic = "new-topic"
     val partitionId = 0
 
     // create topic with 1 partition, 2 replicas, one on each broker
-    val leader1 = createTopic(zkClient, topic, partitionReplicaAssignment = Map(0 -> Seq(0, 1)), servers = servers)(0)
+    val leader1 = createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0 -> Seq(0, 1)), servers = servers)(0)
 
-    val leaderEpoch1 = ZkUtils.getEpochForPartition(zkClient, topic, partitionId)
+    val leaderEpoch1 = zkUtils.getEpochForPartition(topic, partitionId)
     debug("leader Epoc: " + leaderEpoch1)
     debug("Leader is elected to be: %s".format(leader1.getOrElse(-1)))
     assertTrue("Leader should get elected", leader1.isDefined)
@@ -73,9 +82,9 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     // kill the server hosting the preferred replica
     servers.last.shutdown()
     // check if leader moves to the other server
-    val leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId,
+    val leader2 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId,
                                                     oldLeaderOpt = if(leader1.get == 0) None else leader1)
-    val leaderEpoch2 = ZkUtils.getEpochForPartition(zkClient, topic, partitionId)
+    val leaderEpoch2 = zkUtils.getEpochForPartition(topic, partitionId)
     debug("Leader is elected to be: %s".format(leader1.getOrElse(-1)))
     debug("leader Epoc: " + leaderEpoch2)
     assertEquals("Leader must move to broker 0", 0, leader2.getOrElse(-1))
@@ -87,9 +96,9 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     servers.last.startup()
     servers.head.shutdown()
     Thread.sleep(zookeeper.tickTime)
-    val leader3 = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId,
+    val leader3 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId,
                                                     oldLeaderOpt = if(leader2.get == 1) None else leader2)
-    val leaderEpoch3 = ZkUtils.getEpochForPartition(zkClient, topic, partitionId)
+    val leaderEpoch3 = zkUtils.getEpochForPartition(topic, partitionId)
     debug("leader Epoc: " + leaderEpoch3)
     debug("Leader is elected to be: %s".format(leader3.getOrElse(-1)))
     assertEquals("Leader must return to 1", 1, leader3.getOrElse(-1))
@@ -99,15 +108,16 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
       assertEquals("Second epoch value should be %d".format(leaderEpoch2+1) , leaderEpoch2+1, leaderEpoch3)
   }
 
+  @Test
   def testLeaderElectionWithStaleControllerEpoch() {
     // start 2 brokers
     val topic = "new-topic"
     val partitionId = 0
 
     // create topic with 1 partition, 2 replicas, one on each broker
-    val leader1 = createTopic(zkClient, topic, partitionReplicaAssignment = Map(0 -> Seq(0, 1)), servers = servers)(0)
+    val leader1 = createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0 -> Seq(0, 1)), servers = servers)(0)
 
-    val leaderEpoch1 = ZkUtils.getEpochForPartition(zkClient, topic, partitionId)
+    val leaderEpoch1 = zkUtils.getEpochForPartition(topic, partitionId)
     debug("leader Epoc: " + leaderEpoch1)
     debug("Leader is elected to be: %s".format(leader1.getOrElse(-1)))
     assertTrue("Leader should get elected", leader1.isDefined)
@@ -120,32 +130,38 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     val controllerConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(controllerId, zkConnect))
     val brokers = servers.map(s => new Broker(s.config.brokerId, "localhost", s.boundPort()))
-    val brokerEndPoints = brokers.map(b => b.getBrokerEndPoint(SecurityProtocol.PLAINTEXT))
+    val nodes = brokers.map(_.getNode(SecurityProtocol.PLAINTEXT))
 
-    val controllerContext = new ControllerContext(zkClient, 6000)
+    val controllerContext = new ControllerContext(zkUtils, 6000)
     controllerContext.liveBrokers = brokers.toSet
-    val controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig)
+    val metrics = new Metrics
+    val controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, new SystemTime, metrics)
     controllerChannelManager.startup()
-    val staleControllerEpoch = 0
-    val leaderAndIsr = new collection.mutable.HashMap[(String, Int), LeaderIsrAndControllerEpoch]
-    leaderAndIsr.put((topic, partitionId),
-      new LeaderIsrAndControllerEpoch(new LeaderAndIsr(brokerId2, List(brokerId1, brokerId2)), 2))
-    val partitionStateInfo = leaderAndIsr.mapValues(l => new PartitionStateInfo(l, Set(0,1))).toMap
-    val leaderAndIsrRequest = new LeaderAndIsrRequest(partitionStateInfo, brokerEndPoints.toSet, controllerId,
-                                                      staleControllerEpoch, 0, "")
+    try {
+      val staleControllerEpoch = 0
+      val partitionStates = Map(
+        new TopicPartition(topic, partitionId) -> new PartitionState(2, brokerId2, LeaderAndIsr.initialLeaderEpoch,
+          Seq(brokerId1, brokerId2).map(Integer.valueOf).asJava, LeaderAndIsr.initialZKVersion,
+          Set(0, 1).map(Integer.valueOf).asJava)
+      )
+      val leaderAndIsrRequest = new LeaderAndIsrRequest(controllerId, staleControllerEpoch, partitionStates.asJava,
+        nodes.toSet.asJava)
 
-    controllerChannelManager.sendRequest(brokerId2, leaderAndIsrRequest, staleControllerEpochCallback)
-    TestUtils.waitUntilTrue(() => staleControllerEpochDetected == true,
-                            "Controller epoch should be stale")
-    assertTrue("Stale controller epoch not detected by the broker", staleControllerEpochDetected)
-
-    controllerChannelManager.shutdown()
+      controllerChannelManager.sendRequest(brokerId2, ApiKeys.LEADER_AND_ISR, None, leaderAndIsrRequest,
+        staleControllerEpochCallback)
+      TestUtils.waitUntilTrue(() => staleControllerEpochDetected == true,
+        "Controller epoch should be stale")
+      assertTrue("Stale controller epoch not detected by the broker", staleControllerEpochDetected)
+    } finally {
+      controllerChannelManager.shutdown()
+      metrics.close()
+    }
   }
 
-  private def staleControllerEpochCallback(response: RequestOrResponse): Unit = {
+  private def staleControllerEpochCallback(response: AbstractRequestResponse): Unit = {
     val leaderAndIsrResponse = response.asInstanceOf[LeaderAndIsrResponse]
-    staleControllerEpochDetected = leaderAndIsrResponse.errorCode match {
-      case ErrorMapping.StaleControllerEpochCode => true
+    staleControllerEpochDetected = Errors.forCode(leaderAndIsrResponse.errorCode) match {
+      case Errors.STALE_CONTROLLER_EPOCH => true
       case _ => false
     }
   }
