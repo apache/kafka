@@ -58,7 +58,7 @@ import java.util.Set;
  * <pre>
  * // Create the test driver ...
  * KeyValueStoreTestDriver&lt;Integer, String> driver = KeyValueStoreTestDriver.create();
- * KeyValueStoreType&lt;Integer, String> store = Stores.create("my-store", driver.context())
+ * KeyValueStore&lt;Integer, String> store = Stores.create("my-store", driver.context())
  *                                              .withIntegerKeys().withStringKeys()
  *                                              .inMemory().build();
  *
@@ -114,7 +114,7 @@ import java.util.Set;
  *
  * // Create the store, which should register with the context and automatically
  * // receive the restore entries ...
- * KeyValueStoreType&lt;Integer, String> store = Stores.create("my-store", driver.context())
+ * KeyValueStore&lt;Integer, String> store = Stores.create("my-store", driver.context())
  *                                              .withIntegerKeys().withStringKeys()
  *                                              .inMemory().build();
  *
@@ -291,7 +291,7 @@ public class KeyValueStoreTestDriver<K, V> {
      *
      * // Create the store using the driver's context ...
      * ProcessorContext context = driver.context();
-     * KeyValueStoreType&lt;Integer, String> store = ...
+     * KeyValueStore&lt;Integer, String> store = ...
      *
      * // Verify that the store's contents were properly restored from the log ...
      * assertEquals(0, driver.checkForRestoredEntries(store));
@@ -324,7 +324,7 @@ public class KeyValueStoreTestDriver<K, V> {
     }
 
     /**
-     * Get the entries that are restored to a KeyValueStoreType when it is constructed with this driver's {@link #context()
+     * Get the entries that are restored to a KeyValueStore when it is constructed with this driver's {@link #context()
      * ProcessorContext}.
      *
      * @return the restore entries; never null but possibly a null iterator
