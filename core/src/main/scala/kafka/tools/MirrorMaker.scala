@@ -257,8 +257,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
           numStreams,
           options.valueOf(consumerConfigOpt),
           customRebalanceListener,
-          Option(options.valueOf(whitelistOpt)),
-          offsetCommitIntervalMs)
+          Option(options.valueOf(whitelistOpt)))
       }
 
       // Create mirror maker threads.
@@ -326,8 +325,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   def createNewConsumers(numStreams: Int,
                          consumerConfigPath: String,
                          customRebalanceListener: Option[org.apache.kafka.clients.consumer.ConsumerRebalanceListener],
-                         whitelist: Option[String],
-                         offsetCommitIntervalMs: Int) : Seq[MirrorMakerBaseConsumer] = {
+                         whitelist: Option[String]) : Seq[MirrorMakerBaseConsumer] = {
     // Create consumer connector
     val consumerConfigProps = Utils.loadProps(consumerConfigPath)
     // Disable consumer auto offsets commit to prevent data loss.
@@ -342,7 +340,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       new KafkaConsumer[Array[Byte], Array[Byte]](consumerConfigProps)
     }
     whitelist.getOrElse(throw new IllegalArgumentException("White list cannot be empty for new consumer"))
-    consumers.map(consumer => new MirrorMakerNewConsumer(consumer, customRebalanceListener, whitelist, offsetCommitIntervalMs))
+    consumers.map(consumer => new MirrorMakerNewConsumer(consumer, customRebalanceListener, whitelist))
   }
 
   def commitOffsets(mirrorMakerConsumer: MirrorMakerBaseConsumer) {
@@ -528,8 +526,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
   private class MirrorMakerNewConsumer(consumer: Consumer[Array[Byte], Array[Byte]],
                                        customRebalanceListener: Option[org.apache.kafka.clients.consumer.ConsumerRebalanceListener],
-                                       whitelistOpt: Option[String],
-                                       offsetCommitIntervalMs: Int)
+                                       whitelistOpt: Option[String])
     extends MirrorMakerBaseConsumer {
     val regex = whitelistOpt.getOrElse(throw new IllegalArgumentException("New consumer only supports whitelist."))
     var recordIter: java.util.Iterator[ConsumerRecord[Array[Byte], Array[Byte]]] = null
@@ -557,9 +554,12 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     override def receive() : BaseConsumerRecord = {
       if (recordIter == null || !recordIter.hasNext) {
-        // Use offsetCommitIntervalMs as consumer's poll timeout to avoid delaying offset commit
-        // for any uncommitted record since last poll.
-        recordIter = consumer.poll(offsetCommitIntervalMs).iterator
+        // In scenarios where data does not arrive within offsetCommitIntervalMs and
+        // offsetCommitIntervalMs is less than poll's timeout, offset commit will be delayed for any
+        // uncommitted record since last poll. Using one second as poll's timeout ensures that
+        // offsetCommitIntervalMs, of value greater than 1 second, does not see delays in offset
+        // commit.
+        recordIter = consumer.poll(1000).iterator
         if (!recordIter.hasNext)
           throw new ConsumerTimeoutException
       }
