@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.data;
 
+
 import org.junit.Test;
 
 import java.math.BigDecimal;
@@ -25,6 +26,7 @@ import java.util.Collections;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 public class DecimalTest {
     private static final int TEST_SCALE = 2;
@@ -60,4 +62,20 @@ public class DecimalTest {
         converted = Decimal.toLogical(schema, TEST_BYTES_NEGATIVE);
         assertEquals(TEST_DECIMAL_NEGATIVE, converted);
     }
+
+    @Test
+    public void testFromLogicalNull() {
+        Schema schema = Decimal.builder(2).optional().build();
+        byte[] actual = Decimal.fromLogical(schema, null);
+        assertNull("actual should be null.", actual);
+    }
+
+    @Test
+    public void testToLogicalNull() {
+        Schema schema = Decimal.builder(2).optional().build();
+        BigDecimal actual = Decimal.toLogical(schema, null);
+        assertNull("actual should be null.", actual);
+    }
+
+
 }

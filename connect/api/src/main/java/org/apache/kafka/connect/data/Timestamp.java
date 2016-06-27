@@ -50,13 +50,13 @@ public class Timestamp {
      * @param value the logical value
      * @return the encoded value
      */
-    public static long fromLogical(Schema schema, java.util.Date value) {
+    public static Long fromLogical(Schema schema, java.util.Date value) {
         if (schema.name() == null || !(schema.name().equals(LOGICAL_NAME)))
             throw new DataException("Requested conversion of Timestamp object but the schema does not match.");
         return value.getTime();
     }
 
-    public static java.util.Date toLogical(Schema schema, long value) {
+    public static java.util.Date toLogical(Schema schema, Long value) {
         if (schema.name() == null || !(schema.name().equals(LOGICAL_NAME)))
             throw new DataException("Requested conversion of Timestamp object but the schema does not match.");
         return new java.util.Date(value);

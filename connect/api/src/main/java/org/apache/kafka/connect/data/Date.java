@@ -55,7 +55,7 @@ public class Date {
      * @param value the logical value
      * @return the encoded value
      */
-    public static int fromLogical(Schema schema, java.util.Date value) {
+    public static Integer fromLogical(Schema schema, java.util.Date value) {
         if (schema.name() == null || !(schema.name().equals(LOGICAL_NAME)))
             throw new DataException("Requested conversion of Date object but the schema does not match.");
         Calendar calendar = Calendar.getInstance(UTC);
@@ -68,7 +68,7 @@ public class Date {
         return (int) (unixMillis / MILLIS_PER_DAY);
     }
 
-    public static java.util.Date toLogical(Schema schema, int value) {
+    public static java.util.Date toLogical(Schema schema, Integer value) {
         if (schema.name() == null || !(schema.name().equals(LOGICAL_NAME)))
             throw new DataException("Requested conversion of Date object but the schema does not match.");
         return new java.util.Date(value * MILLIS_PER_DAY);
