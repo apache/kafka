@@ -15,7 +15,7 @@ package org.apache.kafka.common.errors;
 /**
  * This topic/partition doesn't exist
  */
-public class UnknownTopicOrPartitionException extends RetriableException {
+public class UnknownTopicOrPartitionException extends InvalidMetadataException {
 
     private static final long serialVersionUID = 1L;
 

@@ -17,11 +17,9 @@
 
 package kafka.common
 
-import java.net.URL
-import java.util.jar.{Attributes, Manifest}
-
 import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
+import org.apache.kafka.common.utils.AppInfoParser
 
 object AppInfo extends KafkaMetricsGroup {
   private var isRegistered = false
@@ -34,33 +32,23 @@ object AppInfo extends KafkaMetricsGroup {
       }
     }
 
-    try {
-      val clazz = AppInfo.getClass
-      val className = clazz.getSimpleName + ".class"
-      val classPath = clazz.getResource(className).toString
-      if (!classPath.startsWith("jar")) {
-        // Class not from JAR
-        return
-      }
-      val manifestPath = classPath.substring(0, classPath.lastIndexOf("!") + 1) + "/META-INF/MANIFEST.MF"
+    newGauge("Version",
+      new Gauge[String] {
+        def value = {
+          AppInfoParser.getVersion()
+        }
+      })
 
-      val mf = new Manifest
-      mf.read(new URL(manifestPath).openStream())
-      val version = mf.getMainAttributes.get(new Attributes.Name("Version")).toString
+    newGauge("CommitID",
+      new Gauge[String] {
+        def value = {
+          AppInfoParser.getCommitId();
+        }
+      })
 
-      newGauge("Version",
-        new Gauge[String] {
-          def value = {
-            version
-          }
-        })
-
-      lock.synchronized {
-        isRegistered = true
-      }
-    } catch {
-      case e: Exception =>
-        warn("Can't read Kafka version from MANIFEST.MF. Possible cause: %s".format(e))
+    lock.synchronized {
+      isRegistered = true
     }
+
   }
 }

@@ -16,19 +16,18 @@
  */
  package kafka.log
 
-import junit.framework.Assert._
+import org.junit.Assert._
 import java.util.concurrent.atomic._
-import java.io.File
-import java.io.RandomAccessFile
-import java.util.Random
-import org.junit.{Test, After}
-import org.scalatest.junit.JUnit3Suite
+
+import kafka.common.LongRef
+import org.junit.{After, Test}
 import kafka.utils.TestUtils
 import kafka.message._
 import kafka.utils.SystemTime
+
 import scala.collection._
 
-class LogSegmentTest extends JUnit3Suite {
+class LogSegmentTest {
   
   val segments = mutable.ArrayBuffer[LogSegment]()
   
@@ -47,7 +46,7 @@ class LogSegmentTest extends JUnit3Suite {
   /* create a ByteBufferMessageSet for the given messages starting from the given offset */
   def messages(offset: Long, messages: String*): ByteBufferMessageSet = {
     new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, 
-                             offsetCounter = new AtomicLong(offset), 
+                             offsetCounter = new LongRef(offset),
                              messages = messages.map(s => new Message(s.getBytes)):_*)
   }
   
@@ -226,5 +225,57 @@ class LogSegmentTest extends JUnit3Suite {
       seg.delete()
     }
   }
-  
+
+  /* create a segment with   pre allocate */
+  def createSegment(offset: Long, fileAlreadyExists: Boolean = false, initFileSize: Int = 0, preallocate: Boolean = false): LogSegment = {
+    val tempDir = TestUtils.tempDir()
+    val seg = new LogSegment(tempDir, offset, 10, 1000, 0, SystemTime, fileAlreadyExists = fileAlreadyExists, initFileSize = initFileSize, preallocate = preallocate)
+    segments += seg
+    seg
+  }
+
+  /* create a segment with   pre allocate, put message to it and verify */
+  @Test
+  def testCreateWithInitFileSizeAppendMessage() {
+    val seg = createSegment(40, false, 512*1024*1024, true)
+    val ms = messages(50, "hello", "there")
+    seg.append(50, ms)
+    val ms2 = messages(60, "alpha", "beta")
+    seg.append(60, ms2)
+    val read = seg.read(startOffset = 55, maxSize = 200, maxOffset = None)
+    assertEquals(ms2.toList, read.messageSet.toList)
+  }
+
+  /* create a segment with   pre allocate and clearly shut down*/
+  @Test
+  def testCreateWithInitFileSizeClearShutdown() {
+    val tempDir = TestUtils.tempDir()
+    val seg = new LogSegment(tempDir, 40, 10, 1000, 0, SystemTime, false, 512*1024*1024, true)
+
+    val ms = messages(50, "hello", "there")
+    seg.append(50, ms)
+    val ms2 = messages(60, "alpha", "beta")
+    seg.append(60, ms2)
+    val read = seg.read(startOffset = 55, maxSize = 200, maxOffset = None)
+    assertEquals(ms2.toList, read.messageSet.toList)
+    val oldSize = seg.log.sizeInBytes()
+    val oldPosition = seg.log.channel.position
+    val oldFileSize = seg.log.file.length
+    assertEquals(512*1024*1024, oldFileSize)
+    seg.close()
+    //After close, file should be trimmed
+    assertEquals(oldSize, seg.log.file.length)
+
+    val segReopen = new LogSegment(tempDir, 40, 10, 1000, 0, SystemTime, true,  512*1024*1024, true)
+    segments += segReopen
+
+    val readAgain = segReopen.read(startOffset = 55, maxSize = 200, maxOffset = None)
+    assertEquals(ms2.toList, readAgain.messageSet.toList)
+    val size = segReopen.log.sizeInBytes()
+    val position = segReopen.log.channel.position
+    val fileSize = segReopen.log.file.length
+    assertEquals(oldPosition, position)
+    assertEquals(oldSize, size)
+    assertEquals(size, fileSize)
+  }
 }

@@ -1,13 +1,29 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package other.kafka
 
-import org.I0Itec.zkclient.ZkClient
 import kafka.api._
-import kafka.utils.{ShutdownableThread, ZKStringSerializer}
-import org.apache.kafka.common.protocol.SecurityProtocol
+import kafka.utils.{ZkUtils, ShutdownableThread}
+import org.apache.kafka.common.protocol.Errors
 import scala.collection._
 import kafka.client.ClientUtils
 import joptsimple.OptionParser
-import kafka.common.{ErrorMapping, OffsetAndMetadata, TopicAndPartition}
+import kafka.common.{OffsetAndMetadata, TopicAndPartition}
 import kafka.network.BlockingChannel
 import scala.util.Random
 import java.io.IOException
@@ -46,13 +62,13 @@ object TestOffsetManager {
 
   }
 
-  class CommitThread(id: Int, partitionCount: Int, commitIntervalMs: Long, zkClient: ZkClient)
+  class CommitThread(id: Int, partitionCount: Int, commitIntervalMs: Long, zkUtils: ZkUtils)
         extends ShutdownableThread("commit-thread")
         with KafkaMetricsGroup {
 
     private val groupId = "group-" + id
     private val metadata = "Metadata from commit thread " + id
-    private var offsetsChannel = ClientUtils.channelToOffsetManager(groupId, zkClient, SocketTimeoutMs)
+    private var offsetsChannel = ClientUtils.channelToOffsetManager(groupId, zkUtils, SocketTimeoutMs)
     private var offset = 0L
     val numErrors = new AtomicInteger(0)
     val numCommits = new AtomicInteger(0)
@@ -62,7 +78,7 @@ object TestOffsetManager {
 
     private def ensureConnected() {
       if (!offsetsChannel.isConnected)
-        offsetsChannel = ClientUtils.channelToOffsetManager(groupId, zkClient, SocketTimeoutMs)
+        offsetsChannel = ClientUtils.channelToOffsetManager(groupId, zkUtils, SocketTimeoutMs)
     }
 
     override def doWork() {
@@ -72,8 +88,8 @@ object TestOffsetManager {
         offsetsChannel.send(commitRequest)
         numCommits.getAndIncrement
         commitTimer.time {
-          val response = OffsetCommitResponse.readFrom(offsetsChannel.receive().buffer)
-          if (response.commitStatus.exists(_._2 != ErrorMapping.NoError)) numErrors.getAndIncrement
+          val response = OffsetCommitResponse.readFrom(offsetsChannel.receive().payload())
+          if (response.commitStatus.exists(_._2 != Errors.NONE.code)) numErrors.getAndIncrement
         }
         offset += 1
       }
@@ -102,7 +118,7 @@ object TestOffsetManager {
     }
   }
 
-  class FetchThread(numGroups: Int, fetchIntervalMs: Long, zkClient: ZkClient)
+  class FetchThread(numGroups: Int, fetchIntervalMs: Long, zkUtils: ZkUtils)
         extends ShutdownableThread("fetch-thread")
         with KafkaMetricsGroup {
 
@@ -110,7 +126,7 @@ object TestOffsetManager {
     private val fetchTimer = new KafkaTimer(timer)
 
     private val channels = mutable.Map[Int, BlockingChannel]()
-    private var metadataChannel = ClientUtils.channelToAnyBroker(zkClient, SocketTimeoutMs)
+    private var metadataChannel = ClientUtils.channelToAnyBroker(zkUtils, SocketTimeoutMs)
 
     private val numErrors = new AtomicInteger(0)
 
@@ -118,13 +134,13 @@ object TestOffsetManager {
       val id = random.nextInt().abs % numGroups
       val group = "group-" + id
       try {
-        metadataChannel.send(ConsumerMetadataRequest(group))
-        val coordinatorId = ConsumerMetadataResponse.readFrom(metadataChannel.receive().buffer).coordinatorOpt.map(_.id).getOrElse(-1)
+        metadataChannel.send(GroupCoordinatorRequest(group))
+        val coordinatorId = GroupCoordinatorResponse.readFrom(metadataChannel.receive().payload()).coordinatorOpt.map(_.id).getOrElse(-1)
 
         val channel = if (channels.contains(coordinatorId))
           channels(coordinatorId)
         else {
-          val newChannel = ClientUtils.channelToOffsetManager(group, zkClient, SocketTimeoutMs)
+          val newChannel = ClientUtils.channelToOffsetManager(group, zkUtils, SocketTimeoutMs)
           channels.put(coordinatorId, newChannel)
           newChannel
         }
@@ -135,8 +151,8 @@ object TestOffsetManager {
           channel.send(fetchRequest)
 
           fetchTimer.time {
-            val response = OffsetFetchResponse.readFrom(channel.receive().buffer)
-            if (response.requestInfo.exists(_._2.error != ErrorMapping.NoError)) {
+            val response = OffsetFetchResponse.readFrom(channel.receive().payload())
+            if (response.requestInfo.exists(_._2.error != Errors.NONE.code)) {
               numErrors.getAndIncrement
             }
           }
@@ -156,7 +172,7 @@ object TestOffsetManager {
           println("Error while querying %s:%d - shutting down query channel.".format(metadataChannel.host, metadataChannel.port))
           metadataChannel.disconnect()
           println("Creating new query channel.")
-          metadataChannel = ClientUtils.channelToAnyBroker(zkClient, SocketTimeoutMs)
+          metadataChannel = ClientUtils.channelToAnyBroker(zkUtils, SocketTimeoutMs)
       }
       finally {
         Thread.sleep(fetchIntervalMs)
@@ -233,17 +249,17 @@ object TestOffsetManager {
     println("Commit thread count: %d; Partition count: %d, Commit interval: %d ms; Fetch interval: %d ms; Reporting interval: %d ms"
             .format(threadCount, partitionCount, commitIntervalMs, fetchIntervalMs, reportingIntervalMs))
 
-    var zkClient: ZkClient = null
+    var zkUtils: ZkUtils = null
     var commitThreads: Seq[CommitThread] = Seq()
     var fetchThread: FetchThread = null
     var statsThread: StatsThread = null
     try {
-      zkClient = new ZkClient(zookeeper, 6000, 2000, ZKStringSerializer)
+      zkUtils = ZkUtils(zookeeper, 6000, 2000, false)
       commitThreads = (0 to (threadCount-1)).map { threadId =>
-        new CommitThread(threadId, partitionCount, commitIntervalMs, zkClient)
+        new CommitThread(threadId, partitionCount, commitIntervalMs, zkUtils)
       }
 
-      fetchThread = new FetchThread(threadCount, fetchIntervalMs, zkClient)
+      fetchThread = new FetchThread(threadCount, fetchIntervalMs, zkUtils)
 
       val statsThread = new StatsThread(reportingIntervalMs, commitThreads, fetchThread)
 
@@ -283,7 +299,7 @@ object TestOffsetManager {
         statsThread.shutdown()
         statsThread.join()
       }
-      zkClient.close()
+      zkUtils.close()
     }
 
   }

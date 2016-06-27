@@ -100,14 +100,19 @@ class ConsumerIterator[K, V](private val channel: BlockingQueue[FetchedDataChunk
 
     item.message.ensureValid() // validate checksum of message to ensure it is valid
 
-    new MessageAndMetadata(currentTopicInfo.topic, currentTopicInfo.partitionId, item.message, item.offset, keyDecoder, valueDecoder)
+    new MessageAndMetadata(currentTopicInfo.topic,
+                           currentTopicInfo.partitionId,
+                           item.message,
+                           item.offset,
+                           keyDecoder,
+                           valueDecoder,
+                           item.message.timestamp,
+                           item.message.timestampType)
   }
 
   def clearCurrentChunk() {
-    try {
-      debug("Clearing the current data chunk for this consumer iterator")
-      current.set(null)
-    }
+    debug("Clearing the current data chunk for this consumer iterator")
+    current.set(null)
   }
 }
 

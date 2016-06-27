@@ -19,7 +19,7 @@ package kafka.api
 
 import org.junit._
 import org.scalatest.junit.JUnitSuite
-import junit.framework.Assert._
+import org.junit.Assert._
 import scala.util.Random
 import java.nio.ByteBuffer
 import kafka.common.KafkaException

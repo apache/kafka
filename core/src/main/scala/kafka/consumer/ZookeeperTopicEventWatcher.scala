@@ -18,11 +18,11 @@
 package kafka.consumer
 
 import scala.collection.JavaConversions._
-import kafka.utils.{ZkUtils, ZKStringSerializer, Logging}
+import kafka.utils.{ZkUtils, Logging}
 import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener, ZkClient}
 import org.apache.zookeeper.Watcher.Event.KeeperState
 
-class ZookeeperTopicEventWatcher(val zkClient: ZkClient,
+class ZookeeperTopicEventWatcher(val zkUtils: ZkUtils,
     val eventHandler: TopicEventHandler[String]) extends Logging {
 
   val lock = new Object()
@@ -31,24 +31,24 @@ class ZookeeperTopicEventWatcher(val zkClient: ZkClient,
 
   private def startWatchingTopicEvents() {
     val topicEventListener = new ZkTopicEventListener()
-    ZkUtils.makeSurePersistentPathExists(zkClient, ZkUtils.BrokerTopicsPath)
+    zkUtils.makeSurePersistentPathExists(ZkUtils.BrokerTopicsPath)
 
-    zkClient.subscribeStateChanges(
+    zkUtils.zkClient.subscribeStateChanges(
       new ZkSessionExpireListener(topicEventListener))
 
-    val topics = zkClient.subscribeChildChanges(
+    val topics = zkUtils.zkClient.subscribeChildChanges(
       ZkUtils.BrokerTopicsPath, topicEventListener).toList
 
     // call to bootstrap topic list
     topicEventListener.handleChildChange(ZkUtils.BrokerTopicsPath, topics)
   }
 
-  private def stopWatchingTopicEvents() { zkClient.unsubscribeAll() }
+  private def stopWatchingTopicEvents() { zkUtils.zkClient.unsubscribeAll() }
 
   def shutdown() {
     lock.synchronized {
       info("Shutting down topic event watcher.")
-      if (zkClient != null) {
+      if (zkUtils != null) {
         stopWatchingTopicEvents()
       }
       else {
@@ -63,8 +63,8 @@ class ZookeeperTopicEventWatcher(val zkClient: ZkClient,
     def handleChildChange(parent: String, children: java.util.List[String]) {
       lock.synchronized {
         try {
-          if (zkClient != null) {
-            val latestTopics = zkClient.getChildren(ZkUtils.BrokerTopicsPath).toList
+          if (zkUtils != null) {
+            val latestTopics = zkUtils.zkClient.getChildren(ZkUtils.BrokerTopicsPath).toList
             debug("all topics: %s".format(latestTopics))
             eventHandler.handleTopicEvent(latestTopics)
           }
@@ -87,11 +87,15 @@ class ZookeeperTopicEventWatcher(val zkClient: ZkClient,
     @throws(classOf[Exception])
     def handleNewSession() {
       lock.synchronized {
-        if (zkClient != null) {
+        if (zkUtils != null) {
           info("ZK expired: resubscribing topic event listener to topic registry")
-          zkClient.subscribeChildChanges(ZkUtils.BrokerTopicsPath, topicEventListener)
+          zkUtils.zkClient.subscribeChildChanges(ZkUtils.BrokerTopicsPath, topicEventListener)
         }
       }
+    }
+
+    override def handleSessionEstablishmentError(error: Throwable): Unit = {
+      //no-op ZookeeperConsumerConnector should log error.
     }
   }
 }

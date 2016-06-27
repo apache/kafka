@@ -19,7 +19,6 @@ package kafka.api.test
 
 import java.util.{Properties, Collection, ArrayList}
 
-import org.scalatest.junit.JUnit3Suite
 import org.junit.runners.Parameterized
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized.Parameters
@@ -36,7 +35,7 @@ import kafka.utils.{CoreUtils, TestUtils}
 
 
 @RunWith(value = classOf[Parameterized])
-class ProducerCompressionTest(compression: String) extends JUnit3Suite with ZooKeeperTestHarness {
+class ProducerCompressionTest(compression: String) extends ZooKeeperTestHarness {
   private val brokerId = 0
   private var server: KafkaServer = null
 
@@ -56,7 +55,7 @@ class ProducerCompressionTest(compression: String) extends JUnit3Suite with ZooK
   @After
   override def tearDown() {
     server.shutdown
-    CoreUtils.rm(server.config.logDirs)
+    CoreUtils.delete(server.config.logDirs)
     super.tearDown()
   }
 
@@ -80,7 +79,7 @@ class ProducerCompressionTest(compression: String) extends JUnit3Suite with ZooK
 
     try {
       // create topic
-      TestUtils.createTopic(zkClient, topic, 1, 1, List(server))
+      TestUtils.createTopic(zkUtils, topic, 1, 1, List(server))
       val partition = 0
 
       // prepare the messages
@@ -88,8 +87,9 @@ class ProducerCompressionTest(compression: String) extends JUnit3Suite with ZooK
         yield ("value" + i).getBytes
 
       // make sure the returned messages are correct
+      val now = System.currentTimeMillis()
       val responses = for (message <- messages)
-        yield producer.send(new ProducerRecord[Array[Byte],Array[Byte]](topic, null, null, message))
+        yield producer.send(new ProducerRecord[Array[Byte],Array[Byte]](topic, null, now, null, message))
       val futures = responses.toList
       for ((future, offset) <- futures zip (0 until numRecords)) {
         assertEquals(offset.toLong, future.get.offset)
@@ -102,7 +102,7 @@ class ProducerCompressionTest(compression: String) extends JUnit3Suite with ZooK
 
       var index = 0
       for (message <- messages) {
-        assertEquals(new Message(bytes = message), messageSet(index).message)
+        assertEquals(new Message(bytes = message, now, Message.MagicValue_V1), messageSet(index).message)
         assertEquals(index.toLong, messageSet(index).offset)
         index += 1
       }

@@ -28,35 +28,57 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
     }
 
     /**
-     * Get an error response for a request
+     * Get an error response for a request for a given api version
      */
-    public abstract AbstractRequestResponse getErrorResponse(Throwable e);
+    public abstract AbstractRequestResponse getErrorResponse(int versionId, Throwable e);
 
     /**
      * Factory method for getting a request object based on ApiKey ID and a buffer
      */
-    public static AbstractRequest getRequest(int requestId, ByteBuffer buffer) {
-        switch (ApiKeys.forId(requestId)) {
+    public static AbstractRequest getRequest(int requestId, int versionId, ByteBuffer buffer) {
+        ApiKeys apiKey = ApiKeys.forId(requestId);
+        switch (apiKey) {
             case PRODUCE:
-                return ProduceRequest.parse(buffer);
+                return ProduceRequest.parse(buffer, versionId);
             case FETCH:
-                return FetchRequest.parse(buffer);
+                return FetchRequest.parse(buffer, versionId);
             case LIST_OFFSETS:
-                return ListOffsetRequest.parse(buffer);
+                return ListOffsetRequest.parse(buffer, versionId);
             case METADATA:
-                return MetadataRequest.parse(buffer);
+                return MetadataRequest.parse(buffer, versionId);
             case OFFSET_COMMIT:
-                return OffsetCommitRequest.parse(buffer);
+                return OffsetCommitRequest.parse(buffer, versionId);
             case OFFSET_FETCH:
-                return OffsetFetchRequest.parse(buffer);
-            case CONSUMER_METADATA:
-                return ConsumerMetadataRequest.parse(buffer);
+                return OffsetFetchRequest.parse(buffer, versionId);
+            case GROUP_COORDINATOR:
+                return GroupCoordinatorRequest.parse(buffer, versionId);
             case JOIN_GROUP:
-                return JoinGroupRequest.parse(buffer);
+                return JoinGroupRequest.parse(buffer, versionId);
             case HEARTBEAT:
-                return HeartbeatRequest.parse(buffer);
+                return HeartbeatRequest.parse(buffer, versionId);
+            case LEAVE_GROUP:
+                return LeaveGroupRequest.parse(buffer, versionId);
+            case SYNC_GROUP:
+                return SyncGroupRequest.parse(buffer, versionId);
+            case STOP_REPLICA:
+                return StopReplicaRequest.parse(buffer, versionId);
+            case CONTROLLED_SHUTDOWN_KEY:
+                return ControlledShutdownRequest.parse(buffer, versionId);
+            case UPDATE_METADATA_KEY:
+                return UpdateMetadataRequest.parse(buffer, versionId);
+            case LEADER_AND_ISR:
+                return LeaderAndIsrRequest.parse(buffer, versionId);
+            case DESCRIBE_GROUPS:
+                return DescribeGroupsRequest.parse(buffer, versionId);
+            case LIST_GROUPS:
+                return ListGroupsRequest.parse(buffer, versionId);
+            case SASL_HANDSHAKE:
+                return SaslHandshakeRequest.parse(buffer, versionId);
+            case API_VERSIONS:
+                return ApiVersionsRequest.parse(buffer, versionId);
             default:
-                return null;
+                throw new AssertionError(String.format("ApiKey %s is not currently handled in `getRequest`, the " +
+                        "code should be updated to do so.", apiKey));
         }
     }
 }

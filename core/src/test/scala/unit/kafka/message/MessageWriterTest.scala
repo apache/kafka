@@ -20,7 +20,8 @@ package kafka.message
 import java.io.{InputStream, ByteArrayInputStream, ByteArrayOutputStream}
 import java.nio.ByteBuffer
 import java.util.Random
-import junit.framework.Assert._
+import org.apache.kafka.common.record.TimestampType
+import org.junit.Assert._
 import org.junit.Test
 import org.scalatest.junit.JUnitSuite
 
@@ -34,8 +35,8 @@ class MessageWriterTest extends JUnitSuite {
 
   private def mkMessageWithWriter(key: Array[Byte] = null, bytes: Array[Byte], codec: CompressionCodec): Message = {
     val writer = new MessageWriter(100)
-    writer.write(key = key, codec = codec) { output =>
-      val out = if (codec == NoCompressionCodec) output else CompressionFactory(codec, output)
+    writer.write(key = key, codec = codec, timestamp = Message.NoTimestamp, timestampType = TimestampType.CREATE_TIME, magicValue = Message.MagicValue_V1) { output =>
+      val out = if (codec == NoCompressionCodec) output else CompressionFactory(codec, Message.MagicValue_V1, output)
       try {
         val p = rnd.nextInt(bytes.length)
         out.write(bytes, 0, p)
@@ -52,14 +53,14 @@ class MessageWriterTest extends JUnitSuite {
 
   private def compress(bytes: Array[Byte], codec: CompressionCodec): Array[Byte] = {
     val baos = new ByteArrayOutputStream()
-    val out = CompressionFactory(codec, baos)
+    val out = CompressionFactory(codec, Message.MagicValue_V1, baos)
     out.write(bytes)
     out.close()
     baos.toByteArray
   }
 
   private def decompress(compressed: Array[Byte], codec: CompressionCodec): Array[Byte] = {
-    toArray(CompressionFactory(codec, new ByteArrayInputStream(compressed)))
+    toArray(CompressionFactory(codec, Message.MagicValue_V1, new ByteArrayInputStream(compressed)))
   }
 
   private def toArray(in: InputStream): Array[Byte] = {
@@ -101,7 +102,7 @@ class MessageWriterTest extends JUnitSuite {
   def testWithNoCompressionAttribute(): Unit = {
     val bytes = mkRandomArray(4096)
     val actual = mkMessageWithWriter(bytes = bytes, codec = NoCompressionCodec)
-    val expected = new Message(bytes, NoCompressionCodec)
+    val expected = new Message(bytes, Message.NoTimestamp, NoCompressionCodec, Message.MagicValue_V1)
     assertEquals(expected.buffer, actual.buffer)
   }
 
@@ -109,7 +110,7 @@ class MessageWriterTest extends JUnitSuite {
   def testWithCompressionAttribute(): Unit = {
     val bytes = mkRandomArray(4096)
     val actual = mkMessageWithWriter(bytes = bytes, codec = SnappyCompressionCodec)
-    val expected = new Message(compress(bytes, SnappyCompressionCodec), SnappyCompressionCodec)
+    val expected = new Message(compress(bytes, SnappyCompressionCodec), Message.NoTimestamp, SnappyCompressionCodec, Message.MagicValue_V1)
 
     assertEquals(
       decompress(toArray(expected.payload), SnappyCompressionCodec).toSeq,
@@ -122,7 +123,7 @@ class MessageWriterTest extends JUnitSuite {
     val key = mkRandomArray(123)
     val bytes = mkRandomArray(4096)
     val actual = mkMessageWithWriter(bytes = bytes, key = key, codec = NoCompressionCodec)
-    val expected = new Message(bytes = bytes, key = key, codec = NoCompressionCodec)
+    val expected = new Message(bytes = bytes, key = key, timestamp = Message.NoTimestamp, codec = NoCompressionCodec, magicValue = Message.MagicValue_V1)
 
     assertEquals(expected.buffer, actual.buffer)
   }

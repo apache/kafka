@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -16,16 +16,14 @@
  */
 package kafka.examples;
 
-public class KafkaConsumerProducerDemo implements KafkaProperties
-{
-  public static void main(String[] args)
-  {
-    final boolean isAsync = args.length > 0 ? !args[0].trim().toLowerCase().equals("sync") : true;
-    Producer producerThread = new Producer(KafkaProperties.topic, isAsync);
-    producerThread.start();
+public class KafkaConsumerProducerDemo {
+    public static void main(String[] args) {
+        boolean isAsync = args.length == 0 || !args[0].trim().equalsIgnoreCase("sync");
+        Producer producerThread = new Producer(KafkaProperties.TOPIC, isAsync);
+        producerThread.start();
 
-    Consumer consumerThread = new Consumer(KafkaProperties.topic);
-    consumerThread.start();
-    
-  }
+        Consumer consumerThread = new Consumer(KafkaProperties.TOPIC);
+        consumerThread.start();
+
+    }
 }

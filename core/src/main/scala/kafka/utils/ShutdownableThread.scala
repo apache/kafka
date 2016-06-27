@@ -51,6 +51,9 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
     info("Shutdown completed")
   }
 
+  /**
+   * This method is repeatedly invoked until the thread shuts down or this method throws an exception
+   */
   def doWork(): Unit
 
   override def run(): Unit = {

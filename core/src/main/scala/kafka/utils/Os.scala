@@ -17,7 +17,9 @@
 
 package kafka.utils
 
+import java.util.Locale
+
 object Os {
-  val name = System.getProperty("os.name").toLowerCase
+  val name = System.getProperty("os.name").toLowerCase(Locale.ROOT)
   val isWindows = name.startsWith("windows")
 }

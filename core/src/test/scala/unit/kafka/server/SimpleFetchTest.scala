@@ -22,18 +22,19 @@ import kafka.cluster.Replica
 import kafka.common.TopicAndPartition
 import kafka.log.Log
 import kafka.message.{MessageSet, ByteBufferMessageSet, Message}
+import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.utils.{MockTime => JMockTime}
+import org.junit.{Test, After, Before}
 
-import scala.Some
 import java.util.{Properties, Collections}
 import java.util.concurrent.atomic.AtomicBoolean
 import collection.JavaConversions._
 
 import org.easymock.EasyMock
 import org.I0Itec.zkclient.ZkClient
-import org.scalatest.junit.JUnit3Suite
-import junit.framework.Assert._
+import org.junit.Assert._
 
-class SimpleFetchTest extends JUnit3Suite {
+class SimpleFetchTest {
 
   val replicaLagTimeMaxMs = 100L
   val replicaFetchWaitMaxMs = 100
@@ -47,6 +48,8 @@ class SimpleFetchTest extends JUnit3Suite {
 
   // set the replica manager with the partition
   val time = new MockTime
+  val jTime = new JMockTime
+  val metrics = new Metrics
   val leaderLEO = 20L
   val followerLEO = 15L
   val partitionHW = 5
@@ -63,12 +66,11 @@ class SimpleFetchTest extends JUnit3Suite {
 
   var replicaManager: ReplicaManager = null
 
-  override def setUp() {
-    super.setUp()
-
+  @Before
+  def setUp() {
     // create nice mock since we don't particularly care about zkclient calls
-    val zkClient = EasyMock.createNiceMock(classOf[ZkClient])
-    EasyMock.replay(zkClient)
+    val zkUtils = EasyMock.createNiceMock(classOf[ZkUtils])
+    EasyMock.replay(zkUtils)
 
     // create nice mock since we don't particularly care about scheduler calls
     val scheduler = EasyMock.createNiceMock(classOf[KafkaScheduler])
@@ -96,7 +98,8 @@ class SimpleFetchTest extends JUnit3Suite {
     EasyMock.replay(logManager)
 
     // create the replica manager
-    replicaManager = new ReplicaManager(configs.head, time, zkClient, scheduler, logManager, new AtomicBoolean(false))
+    replicaManager = new ReplicaManager(configs.head, metrics, time, jTime, zkUtils, scheduler, logManager,
+      new AtomicBoolean(false))
 
     // add the partition with two replicas, both in ISR
     val partition = replicaManager.getOrCreatePartition(topic, partitionId)
@@ -117,9 +120,10 @@ class SimpleFetchTest extends JUnit3Suite {
     partition.inSyncReplicas = allReplicas.toSet
   }
 
-  override def tearDown() {
+  @After
+  def tearDown() {
     replicaManager.shutdown(false)
-    super.tearDown()
+    metrics.close()
   }
 
   /**
@@ -138,6 +142,7 @@ class SimpleFetchTest extends JUnit3Suite {
    *
    * This test also verifies counts of fetch requests recorded by the ReplicaManager
    */
+  @Test
   def testReadFromLog() {
     val initialTopicCount = BrokerTopicStats.getBrokerTopicStats(topic).totalFetchRequestRate.count();
     val initialAllTopicsCount = BrokerTopicStats.getBrokerAllTopicsStats().totalFetchRequestRate.count();

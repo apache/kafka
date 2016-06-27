@@ -17,18 +17,19 @@
 
 package kafka.server
 
-import junit.framework.Assert._
+import org.junit.Assert._
 import kafka.utils.{TestUtils, CoreUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.scalatest.junit.JUnit3Suite
+import org.junit.{Test, After, Before}
 
-class AdvertiseBrokerTest extends JUnit3Suite with ZooKeeperTestHarness {
+class AdvertiseBrokerTest extends ZooKeeperTestHarness {
   var server : KafkaServer = null
   val brokerId = 0
   val advertisedHostName = "routable-host"
   val advertisedPort = 1234
 
+  @Before
   override def setUp() {
     super.setUp()
 
@@ -39,14 +40,16 @@ class AdvertiseBrokerTest extends JUnit3Suite with ZooKeeperTestHarness {
     server = TestUtils.createServer(KafkaConfig.fromProps(props))
   }
 
+  @After
   override def tearDown() {
     server.shutdown()
-    CoreUtils.rm(server.config.logDirs)
+    CoreUtils.delete(server.config.logDirs)
     super.tearDown()
   }
-  
+
+  @Test
   def testBrokerAdvertiseToZK {
-    val brokerInfo = ZkUtils.getBrokerInfo(zkClient, brokerId)
+    val brokerInfo = zkUtils.getBrokerInfo(brokerId)
     val endpoint = brokerInfo.get.endPoints.get(SecurityProtocol.PLAINTEXT).get
     assertEquals(advertisedHostName, endpoint.host)
     assertEquals(advertisedPort, endpoint.port)

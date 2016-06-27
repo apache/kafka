@@ -21,15 +21,17 @@ set -e
 
 ZKID=$1
 NUM_ZK=$2
+JMX_PORT=$3
 
-cd /opt/kafka
+kafka_dir=/opt/kafka-trunk
+cd $kafka_dir
 
-cp /opt/kafka/config/zookeeper.properties /opt/kafka/config/zookeeper-$ZKID.properties
-echo "initLimit=5" >> /opt/kafka/config/zookeeper-$ZKID.properties
-echo "syncLimit=2" >> /opt/kafka/config/zookeeper-$ZKID.properties
-echo "quorumListenOnAllIPs=true" >> /opt/kafka/config/zookeeper-$ZKID.properties
+cp $kafka_dir/config/zookeeper.properties $kafka_dir/config/zookeeper-$ZKID.properties
+echo "initLimit=5" >> $kafka_dir/config/zookeeper-$ZKID.properties
+echo "syncLimit=2" >> $kafka_dir/config/zookeeper-$ZKID.properties
+echo "quorumListenOnAllIPs=true" >> $kafka_dir/config/zookeeper-$ZKID.properties
 for i in `seq 1 $NUM_ZK`; do
-    echo "server.${i}=zk${i}:2888:3888" >> /opt/kafka/config/zookeeper-$ZKID.properties
+    echo "server.${i}=zk${i}:2888:3888" >> $kafka_dir/config/zookeeper-$ZKID.properties
 done
 
 mkdir -p /tmp/zookeeper
@@ -37,6 +39,10 @@ echo "$ZKID" > /tmp/zookeeper/myid
 
 echo "Killing ZooKeeper"
 bin/zookeeper-server-stop.sh || true
-sleep 5 # Because kafka-server-stop.sh doesn't actually wait
+sleep 5 # Because zookeeper-server-stop.sh doesn't actually wait
 echo "Starting ZooKeeper"
+if [[  -n $JMX_PORT ]]; then
+  export JMX_PORT=$JMX_PORT
+  export KAFKA_JMX_OPTS="-Djava.rmi.server.hostname=zk$ZKID -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false  -Dcom.sun.management.jmxremote.ssl=false "
+fi
 bin/zookeeper-server-start.sh config/zookeeper-$ZKID.properties 1>> /tmp/zk.log 2>> /tmp/zk.log &

@@ -17,26 +17,28 @@
 
 package kafka.producer
 
-import org.scalatest.TestFailedException
-import org.scalatest.junit.JUnit3Suite
+import java.nio.ByteBuffer
+import java.util
+import java.util.Properties
+
+import kafka.admin.AdminUtils
+import kafka.api.FetchRequestBuilder
+import kafka.common.FailedToSendMessageException
 import kafka.consumer.SimpleConsumer
 import kafka.message.Message
-import kafka.server.{KafkaConfig, KafkaRequestHandler, KafkaServer}
-import kafka.zk.ZooKeeperTestHarness
-import org.apache.log4j.{Level, Logger}
-import org.junit.Test
-import kafka.utils._
-import java.util
-import kafka.admin.AdminUtils
-import util.Properties
-import kafka.api.FetchRequestBuilder
-import org.junit.Assert.assertTrue
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertEquals
-import kafka.common.{ErrorMapping, FailedToSendMessageException}
 import kafka.serializer.StringEncoder
+import kafka.server.{KafkaConfig, KafkaRequestHandler, KafkaServer}
+import kafka.utils._
+import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.record.TimestampType
+import org.apache.log4j.{Level, Logger}
+import org.junit.Assert._
+import org.junit.{After, Before, Test}
+import org.scalatest.exceptions.TestFailedException
 
-class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
+@deprecated("This test has been deprecated and it will be removed in a future release.", "0.10.0.0")
+class ProducerTest extends ZooKeeperTestHarness with Logging{
   private val brokerId1 = 0
   private val brokerId2 = 1
   private var server1: KafkaServer = null
@@ -60,6 +62,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     consumer2
   }
 
+  @Before
   override def setUp() {
     super.setUp()
     // set up 2 brokers with 4 partitions each
@@ -81,6 +84,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     requestHandlerLogger.setLevel(Level.FATAL)
   }
 
+  @After
   override def tearDown() {
     // restore set request handler logger to a higher level
     requestHandlerLogger.setLevel(Level.ERROR)
@@ -92,15 +96,15 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
 
     server1.shutdown
     server2.shutdown
-    CoreUtils.rm(server1.config.logDirs)
-    CoreUtils.rm(server2.config.logDirs)
+    CoreUtils.delete(server1.config.logDirs)
+    CoreUtils.delete(server2.config.logDirs)
     super.tearDown()
   }
 
   @Test
   def testUpdateBrokerPartitionInfo() {
     val topic = "new-topic"
-    TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 2, servers = servers)
+    TestUtils.createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 2, servers = servers)
 
     val props = new Properties()
     // no need to retry since the send will always fail
@@ -155,7 +159,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
 
     val topic = "new-topic"
     // create topic with 1 partition and await leadership
-    TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 2, servers = servers)
+    TestUtils.createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 2, servers = servers)
 
     val producer1 = TestUtils.createProducer[String, String](
       brokerList = TestUtils.getBrokerListStrFromServers(Seq(server1, server2)),
@@ -163,12 +167,13 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
       keyEncoder = classOf[StringEncoder].getName,
       partitioner = classOf[StaticPartitioner].getName,
       producerProps = props1)
-
+    val startTime = System.currentTimeMillis()
     // Available partition ids should be 0.
     producer1.send(new KeyedMessage[String, String](topic, "test", "test1"))
     producer1.send(new KeyedMessage[String, String](topic, "test", "test2"))
+    val endTime = System.currentTimeMillis()
     // get the leader
-    val leaderOpt = ZkUtils.getLeaderForPartition(zkClient, topic, 0)
+    val leaderOpt = zkUtils.getLeaderForPartition(topic, 0)
     assertTrue("Leader for topic new-topic partition 0 should exist", leaderOpt.isDefined)
     val leader = leaderOpt.get
 
@@ -180,8 +185,19 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
       response2.messageSet("new-topic", 0).iterator.toBuffer
     }
     assertEquals("Should have fetched 2 messages", 2, messageSet.size)
-    assertEquals(new Message(bytes = "test1".getBytes, key = "test".getBytes), messageSet(0).message)
-    assertEquals(new Message(bytes = "test2".getBytes, key = "test".getBytes), messageSet(1).message)
+    // Message 1
+    assertTrue(ByteBuffer.wrap("test1".getBytes).equals(messageSet(0).message.payload))
+    assertTrue(ByteBuffer.wrap("test".getBytes).equals(messageSet(0).message.key))
+    assertTrue(messageSet(0).message.timestamp >= startTime && messageSet(0).message.timestamp < endTime)
+    assertEquals(TimestampType.CREATE_TIME, messageSet(0).message.timestampType)
+    assertEquals(Message.MagicValue_V1, messageSet(0).message.magic)
+
+    // Message 2
+    assertTrue(ByteBuffer.wrap("test2".getBytes).equals(messageSet(1).message.payload))
+    assertTrue(ByteBuffer.wrap("test".getBytes).equals(messageSet(1).message.key))
+    assertTrue(messageSet(1).message.timestamp >= startTime && messageSet(1).message.timestamp < endTime)
+    assertEquals(TimestampType.CREATE_TIME, messageSet(1).message.timestampType)
+    assertEquals(Message.MagicValue_V1, messageSet(1).message.magic)
     producer1.close()
 
     val props2 = new util.Properties()
@@ -217,7 +233,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
 
     val topic = "new-topic"
     // create topic
-    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = Map(0->Seq(0), 1->Seq(0), 2->Seq(0), 3->Seq(0)),
+    TestUtils.createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0->Seq(0), 1->Seq(0), 2->Seq(0), 3->Seq(0)),
                           servers = servers)
 
     val producer = TestUtils.createProducer[String, String](
@@ -226,7 +242,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
       keyEncoder = classOf[StringEncoder].getName,
       partitioner = classOf[StaticPartitioner].getName,
       producerProps = props)
-
+    val startTime = System.currentTimeMillis()
     try {
       // Available partition ids should be 0, 1, 2 and 3, all lead and hosted only
       // on broker 0
@@ -234,7 +250,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     } catch {
       case e: Throwable => fail("Unexpected exception: " + e)
     }
-
+    val endTime = System.currentTimeMillis()
     // kill the broker
     server1.shutdown
     server1.awaitShutdown()
@@ -250,15 +266,21 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
 
     // restart server 1
     server1.startup()
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
+    TestUtils.waitUntilLeaderIsKnown(servers, topic, 0)
 
     try {
       // cross check if broker 1 got the messages
       val response1 = getConsumer1().fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
       val messageSet1 = response1.messageSet(topic, 0).iterator
       assertTrue("Message set should have 1 message", messageSet1.hasNext)
-      assertEquals(new Message(bytes = "test1".getBytes, key = "test".getBytes), messageSet1.next.message)
+      val message = messageSet1.next.message
+      assertTrue(ByteBuffer.wrap("test1".getBytes).equals(message.payload))
+      assertTrue(ByteBuffer.wrap("test".getBytes).equals(message.key))
+      assertTrue(message.timestamp >= startTime && message.timestamp < endTime)
+      assertEquals(TimestampType.CREATE_TIME, message.timestampType)
+      assertEquals(Message.MagicValue_V1, message.magic)
       assertFalse("Message set should have another message", messageSet1.hasNext)
     } catch {
       case e: Exception => fail("Not expected", e)
@@ -283,7 +305,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
 
     val topic = "new-topic"
     // create topics in ZK
-    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = Map(0->Seq(0,1)), servers = servers)
+    TestUtils.createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0->Seq(0,1)), servers = servers)
 
     // do a simple test to make sure plumbing is okay
     try {
@@ -330,12 +352,12 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     try {
 
       // create topic
-      AdminUtils.createTopic(zkClient, "new-topic", 2, 1)
+      AdminUtils.createTopic(zkUtils, "new-topic", 2, 1)
       TestUtils.waitUntilTrue(() =>
-        AdminUtils.fetchTopicMetadataFromZk("new-topic", zkClient).errorCode != ErrorMapping.UnknownTopicOrPartitionCode,
+        AdminUtils.fetchTopicMetadataFromZk("new-topic", zkUtils).error != Errors.UNKNOWN_TOPIC_OR_PARTITION,
         "Topic new-topic not created after timeout",
         waitTime = zookeeper.tickTime)
-      TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 0)
+      TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, "new-topic", 0)
 
       producer.send(new KeyedMessage[String, String]("new-topic", "key", null))
     } finally {

@@ -23,15 +23,27 @@ import kafka.common.KafkaException
 import org.apache.kafka.common.utils.Utils._
 
 object BrokerEndPoint {
-  def createBrokerEndPoint(brokerId: Int, connectionString: String): BrokerEndPoint = {
 
-    // BrokerEndPoint URI is host:port or [ipv6_host]:port
-    // Note that unlike EndPoint (or listener) this URI has no security information.
-    val uriParseExp = """\[?([0-9a-z\-.:]*)\]?:([0-9]+)""".r
+  private val uriParseExp = """\[?([0-9a-zA-Z\-%.:]*)\]?:([0-9]+)""".r
 
+  /**
+   * BrokerEndPoint URI is host:port or [ipv6_host]:port
+   * Note that unlike EndPoint (or listener) this URI has no security information.
+   */
+  def parseHostPort(connectionString: String): Option[(String, Int)] = {
     connectionString match {
-      case uriParseExp(host, port) => new BrokerEndPoint(brokerId, host, port.toInt)
-      case _ => throw new KafkaException("Unable to parse " + connectionString + " to a broker endpoint")
+      case uriParseExp(host, port) => try Some(host, port.toInt) catch { case e: NumberFormatException => None }
+      case _ => None
+    }
+  }
+  
+  /**
+   * BrokerEndPoint URI is host:port or [ipv6_host]:port
+   * Note that unlike EndPoint (or listener) this URI has no security information.
+   */
+  def createBrokerEndPoint(brokerId: Int, connectionString: String): BrokerEndPoint = {
+    parseHostPort(connectionString).map { case (host, port) => new BrokerEndPoint(brokerId, host, port) }.getOrElse {
+      throw new KafkaException("Unable to parse " + connectionString + " to a broker endpoint")
     }
   }
 

@@ -15,13 +15,12 @@
  * limitations under the License.
  */
 
-package unit.kafka.utils
+package kafka.utils
 
 import java.util.concurrent.TimeUnit
 
-import junit.framework.Assert._
-import org.junit.{Test}
-import kafka.utils.ByteBoundedBlockingQueue
+import org.junit.Assert._
+import org.junit.Test
 
 class ByteBoundedBlockingQueueTest {
   val sizeFunction = (a: String) => a.length

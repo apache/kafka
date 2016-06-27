@@ -52,6 +52,11 @@ object TestLogCleaning {
                                .describedAs("count")
                                .ofType(classOf[java.lang.Long])
                                .defaultsTo(Long.MaxValue)
+    val messageCompressionOpt = parser.accepts("compression-type", "message compression type")
+                               .withOptionalArg()
+                               .describedAs("compressionType")
+                               .ofType(classOf[java.lang.String])
+                               .defaultsTo("none")
     val numDupsOpt = parser.accepts("duplicates", "The number of duplicates for each key.")
                            .withRequiredArg
                            .describedAs("count")
@@ -84,38 +89,39 @@ object TestLogCleaning {
                         .withRequiredArg
                         .describedAs("directory")
                         .ofType(classOf[String])
-    
+
     val options = parser.parse(args:_*)
-    
+
     if(args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "An integration test for log cleaning.")
-    
+
     if(options.has(dumpOpt)) {
       dumpLog(new File(options.valueOf(dumpOpt)))
       System.exit(0)
     }
-    
+
     CommandLineUtils.checkRequiredArgs(parser, options, brokerOpt, zkConnectOpt, numMessagesOpt)
-    
+
     // parse options
     val messages = options.valueOf(numMessagesOpt).longValue
+    val compressionType = options.valueOf(messageCompressionOpt)
     val percentDeletes = options.valueOf(percentDeletesOpt).intValue
     val dups = options.valueOf(numDupsOpt).intValue
     val brokerUrl = options.valueOf(brokerOpt)
     val topicCount = options.valueOf(topicsOpt).intValue
     val zkUrl = options.valueOf(zkConnectOpt)
     val sleepSecs = options.valueOf(sleepSecsOpt).intValue
-    
+
     val testId = new Random().nextInt(Int.MaxValue)
     val topics = (0 until topicCount).map("log-cleaner-test-" + testId + "-" + _).toArray
-    
+
     println("Producing %d messages...".format(messages))
-    val producedDataFile = produceMessages(brokerUrl, topics, messages, dups, percentDeletes)
+    val producedDataFile = produceMessages(brokerUrl, topics, messages, compressionType, dups, percentDeletes)
     println("Sleeping for %d seconds...".format(sleepSecs))
     Thread.sleep(sleepSecs * 1000)
     println("Consuming messages...")
     val consumedDataFile = consumeMessages(zkUrl, topics)
-    
+
     val producedLines = lineCount(producedDataFile)
     val consumedLines = lineCount(consumedDataFile)
     val reduction = 1.0 - consumedLines.toDouble/producedLines.toDouble
@@ -169,9 +175,9 @@ object TestLogCleaning {
     }
     producedDeduped.close()
     consumedDeduped.close()
+    println("Validated " + total + " values, " + mismatched + " mismatches.")
     require(!produced.hasNext, "Additional values produced not found in consumer log.")
     require(!consumed.hasNext, "Additional values consumed not found in producer log.")
-    println("Validated " + total + " values, " + mismatched + " mismatches.")
     require(mismatched == 0, "Non-zero number of row mismatches.")
     // if all the checks worked out we can delete the deduped files
     producedDedupedFile.delete()
@@ -233,17 +239,19 @@ object TestLogCleaning {
     }.start()
     new BufferedReader(new InputStreamReader(process.getInputStream()), 10*1024*1024)
   }
-  
-  def produceMessages(brokerUrl: String, 
-                      topics: Array[String], 
-                      messages: Long, 
+
+  def produceMessages(brokerUrl: String,
+                      topics: Array[String],
+                      messages: Long,
+                      compressionType: String,
                       dups: Int,
                       percentDeletes: Int): File = {
     val producerProps = new Properties
-    producerProps.setProperty(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG, "true")
+    producerProps.setProperty(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.MaxValue.toString)
     producerProps.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+    producerProps.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType)
     val producer = new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
     val rand = new Random(1)
     val keyCount = (messages / dups).toInt

@@ -17,16 +17,17 @@
 
 package kafka.server
 
-import org.scalatest.junit.JUnit3Suite
 import kafka.utils.ZkUtils
 import kafka.utils.CoreUtils
 import kafka.utils.TestUtils
 
 import kafka.zk.ZooKeeperTestHarness
-import junit.framework.Assert._
+import org.junit.Assert._
+import org.junit.Test
 
-class ServerStartupTest extends JUnit3Suite with ZooKeeperTestHarness {
+class ServerStartupTest extends ZooKeeperTestHarness {
 
+  @Test
   def testBrokerCreatesZKChroot {
     val brokerId = 0
     val zookeeperChroot = "/kafka-chroot-for-unittest"
@@ -35,13 +36,14 @@ class ServerStartupTest extends JUnit3Suite with ZooKeeperTestHarness {
     props.put("zookeeper.connect", zooKeeperConnect + zookeeperChroot)
     val server = TestUtils.createServer(KafkaConfig.fromProps(props))
 
-    val pathExists = ZkUtils.pathExists(zkClient, zookeeperChroot)
+    val pathExists = zkUtils.pathExists(zookeeperChroot)
     assertTrue(pathExists)
 
     server.shutdown()
-    CoreUtils.rm(server.config.logDirs)
+    CoreUtils.delete(server.config.logDirs)
   }
 
+  @Test
   def testConflictBrokerRegistration {
     // Try starting a broker with the a conflicting broker id.
     // This shouldn't affect the existing broker registration.
@@ -49,7 +51,7 @@ class ServerStartupTest extends JUnit3Suite with ZooKeeperTestHarness {
     val brokerId = 0
     val props1 = TestUtils.createBrokerConfig(brokerId, zkConnect)
     val server1 = TestUtils.createServer(KafkaConfig.fromProps(props1))
-    val brokerRegistration = ZkUtils.readData(zkClient, ZkUtils.BrokerIdsPath + "/" + brokerId)._1
+    val brokerRegistration = zkUtils.readData(ZkUtils.BrokerIdsPath + "/" + brokerId)._1
 
     val props2 = TestUtils.createBrokerConfig(brokerId, zkConnect)
     try {
@@ -61,9 +63,23 @@ class ServerStartupTest extends JUnit3Suite with ZooKeeperTestHarness {
     }
 
     // broker registration shouldn't change
-    assertEquals(brokerRegistration, ZkUtils.readData(zkClient, ZkUtils.BrokerIdsPath + "/" + brokerId)._1)
+    assertEquals(brokerRegistration, zkUtils.readData(ZkUtils.BrokerIdsPath + "/" + brokerId)._1)
 
     server1.shutdown()
-    CoreUtils.rm(server1.config.logDirs)
+    CoreUtils.delete(server1.config.logDirs)
+  }
+
+  @Test
+  def testBrokerSelfAware {
+    val brokerId = 0
+    val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
+    val server = TestUtils.createServer(KafkaConfig.fromProps(props))
+
+    TestUtils.waitUntilTrue(() => server.metadataCache.getAliveBrokers.nonEmpty, "Wait for cache to update")
+    assertEquals(1, server.metadataCache.getAliveBrokers.size)
+    assertEquals(brokerId, server.metadataCache.getAliveBrokers.head.id)
+
+    server.shutdown()
+    CoreUtils.delete(server.config.logDirs)
   }
 }

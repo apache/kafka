@@ -24,6 +24,7 @@ import kafka.producer.KeyedMessage
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.10.0.0")
 class ProducerSendThread[K,V](val threadName: String,
                               val queue: BlockingQueue[KeyedMessage[K,V]],
                               val handler: EventHandler[K,V],
@@ -63,7 +64,7 @@ class ProducerSendThread[K,V](val threadName: String,
     var full: Boolean = false
 
     // drain the queue until you get a shutdown command
-    Stream.continually(queue.poll(scala.math.max(0, (lastSend + queueTime) - SystemTime.milliseconds), TimeUnit.MILLISECONDS))
+    Iterator.continually(queue.poll(scala.math.max(0, (lastSend + queueTime) - SystemTime.milliseconds), TimeUnit.MILLISECONDS))
                       .takeWhile(item => if(item != null) item ne shutdownCommand else true).foreach {
       currentQueueItem =>
         val elapsed = (SystemTime.milliseconds - lastSend)

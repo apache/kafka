@@ -14,14 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package unit.kafka
+package kafka
 
 import java.io.{FileOutputStream, File}
 import java.security.Permission
 
-import kafka.Kafka
+import kafka.server.KafkaConfig
+import org.apache.kafka.common.config.SslConfigs
+import org.apache.kafka.common.config.types.Password
 import org.junit.{After, Before, Test}
-import junit.framework.Assert._
+import org.junit.Assert._
 
 class KafkaTest {
 
@@ -57,20 +59,20 @@ class KafkaTest {
     val propertiesFile = prepareDefaultConfig()
 
     // We should load configuration file without any arguments
-    val config1 = Kafka.getKafkaConfigFromArgs(Array(propertiesFile))
+    val config1 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile)))
     assertEquals(1, config1.brokerId)
 
     // We should be able to override given property on command line
-    val config2 = Kafka.getKafkaConfigFromArgs(Array(propertiesFile, "--override", "broker.id=2"))
+    val config2 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "broker.id=2")))
     assertEquals(2, config2.brokerId)
 
     // We should be also able to set completely new property
-    val config3 = Kafka.getKafkaConfigFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact"))
+    val config3 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact")))
     assertEquals(1, config3.brokerId)
     assertEquals("compact", config3.logCleanupPolicy)
 
     // We should be also able to set several properties
-    val config4 = Kafka.getKafkaConfigFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact", "--override", "broker.id=2"))
+    val config4 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact", "--override", "broker.id=2")))
     assertEquals(2, config4.brokerId)
     assertEquals("compact", config4.logCleanupPolicy)
   }
@@ -78,25 +80,40 @@ class KafkaTest {
   @Test(expected = classOf[ExitCalled])
   def testGetKafkaConfigFromArgsWrongSetValue(): Unit = {
     val propertiesFile = prepareDefaultConfig()
-    Kafka.getKafkaConfigFromArgs(Array(propertiesFile, "--override", "a=b=c"))
+    KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "a=b=c")))
   }
 
   @Test(expected = classOf[ExitCalled])
   def testGetKafkaConfigFromArgsNonArgsAtTheEnd(): Unit = {
     val propertiesFile = prepareDefaultConfig()
-    Kafka.getKafkaConfigFromArgs(Array(propertiesFile, "--override", "broker.id=1", "broker.id=2"))
+    KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "broker.id=1", "broker.id=2")))
   }
 
   @Test(expected = classOf[ExitCalled])
   def testGetKafkaConfigFromArgsNonArgsOnly(): Unit = {
     val propertiesFile = prepareDefaultConfig()
-    Kafka.getKafkaConfigFromArgs(Array(propertiesFile, "broker.id=1", "broker.id=2"))
+    KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "broker.id=1", "broker.id=2")))
   }
 
   @Test(expected = classOf[ExitCalled])
   def testGetKafkaConfigFromArgsNonArgsAtTheBegging(): Unit = {
     val propertiesFile = prepareDefaultConfig()
-    Kafka.getKafkaConfigFromArgs(Array(propertiesFile, "broker.id=1", "--override", "broker.id=2"))
+    KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "broker.id=1", "--override", "broker.id=2")))
+  }
+
+  @Test
+  def testKafkaSslPasswords(): Unit = {
+    val propertiesFile = prepareDefaultConfig()
+    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "ssl.keystore.password=keystore_password",
+                                                                                    "--override", "ssl.key.password=key_password",
+                                                                                    "--override", "ssl.truststore.password=truststore_password")))
+    assertEquals(Password.HIDDEN, config.sslKeyPassword.toString)
+    assertEquals(Password.HIDDEN, config.sslKeystorePassword.toString)
+    assertEquals(Password.HIDDEN, config.sslTruststorePassword.toString)
+
+    assertEquals("key_password", config.sslKeyPassword.value)
+    assertEquals("keystore_password", config.sslKeystorePassword.value)
+    assertEquals("truststore_password", config.sslTruststorePassword.value)
   }
 
   def prepareDefaultConfig(): String = {

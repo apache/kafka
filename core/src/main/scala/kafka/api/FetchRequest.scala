@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,19 +19,21 @@ package kafka.api
 
 import kafka.utils.nonthreadsafe
 import kafka.api.ApiUtils._
-import kafka.common.{ErrorMapping, TopicAndPartition}
+import kafka.common.TopicAndPartition
 import kafka.consumer.ConsumerConfig
 import kafka.network.RequestChannel
 import kafka.message.MessageSet
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.nio.ByteBuffer
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+
 import scala.collection.immutable.Map
 
 case class PartitionFetchInfo(offset: Long, fetchSize: Int)
 
 object FetchRequest {
-  val CurrentVersion = 0.shortValue
+  val CurrentVersion = 2.shortValue
   val DefaultMaxWait = 0
   val DefaultMinBytes = 0
   val DefaultCorrelationId = 0
@@ -65,7 +67,7 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
                         maxWait: Int = FetchRequest.DefaultMaxWait,
                         minBytes: Int = FetchRequest.DefaultMinBytes,
                         requestInfo: Map[TopicAndPartition, PartitionFetchInfo])
-        extends RequestOrResponse(Some(RequestKeys.FetchKey)) {
+        extends RequestOrResponse(Some(ApiKeys.FETCH.id)) {
 
   /**
    * Partitions the request info into a map of maps (one for each topic).
@@ -146,10 +148,12 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
   override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
     val fetchResponsePartitionData = requestInfo.map {
       case (topicAndPartition, data) =>
-        (topicAndPartition, FetchResponsePartitionData(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), -1, MessageSet.Empty))
+        (topicAndPartition, FetchResponsePartitionData(Errors.forException(e).code, -1, MessageSet.Empty))
     }
-    val errorResponse = FetchResponse(correlationId, fetchResponsePartitionData)
-    requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(errorResponse)))
+    val fetchRequest = request.requestObj.asInstanceOf[FetchRequest]
+    val errorResponse = FetchResponse(correlationId, fetchResponsePartitionData, fetchRequest.versionId)
+    // Magic value does not matter here because the message set is empty
+    requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(request.connectionId, errorResponse)))
   }
 
   override def describe(details: Boolean): String = {
@@ -170,7 +174,7 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
 @nonthreadsafe
 class FetchRequestBuilder() {
   private val correlationId = new AtomicInteger(0)
-  private val versionId = FetchRequest.CurrentVersion
+  private var versionId = FetchRequest.CurrentVersion
   private var clientId = ConsumerConfig.DefaultClientId
   private var replicaId = Request.OrdinaryConsumerId
   private var maxWait = FetchRequest.DefaultMaxWait
@@ -202,6 +206,11 @@ class FetchRequestBuilder() {
 
   def minBytes(minBytes: Int): FetchRequestBuilder = {
     this.minBytes = minBytes
+    this
+  }
+
+  def requestVersion(versionId: Short): FetchRequestBuilder = {
+    this.versionId = versionId
     this
   }
 

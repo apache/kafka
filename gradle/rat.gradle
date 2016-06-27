@@ -1,0 +1,115 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+import org.gradle.api.Plugin
+import org.gradle.api.Project
+import org.gradle.api.Task
+import org.gradle.api.internal.project.IsolatedAntBuilder
+
+apply plugin: RatPlugin
+
+class RatTask extends DefaultTask {
+  @Input
+  List<String> excludes
+
+  def reportPath = 'build/rat'
+  def stylesheet = 'gradle/resources/rat-output-to-html.xsl'
+  def xmlReport = reportPath + '/rat-report.xml'
+  def htmlReport = reportPath + '/rat-report.html'
+
+  def generateXmlReport(File reportDir) {
+    def antBuilder = services.get(IsolatedAntBuilder)
+    def ratClasspath = project.configurations.rat
+    antBuilder.withClasspath(ratClasspath).execute {
+      ant.taskdef(resource: 'org/apache/rat/anttasks/antlib.xml')
+      ant.report(format: 'xml', reportFile: xmlReport) {
+        fileset(dir: ".") {
+          patternset {
+            excludes.each {
+              exclude(name: it)
+            }
+          }
+        }
+      }
+    }
+  }
+
+  def printUnknownFiles() {
+    def ratXml = new XmlParser().parse(xmlReport)
+    def unknownLicenses = 0
+    ratXml.resource.each { resource ->
+      if (resource.'license-approval'.@name[0] == "false") {
+        println('Unknown license: ' + resource.@name)
+        unknownLicenses++
+      }
+    }
+    if (unknownLicenses > 0) {
+      throw new GradleException("Found " + unknownLicenses + " files with " +
+                                "unknown licenses.")
+    }
+  }
+
+  def generateHtmlReport() {
+    def antBuilder = services.get(IsolatedAntBuilder)
+    def ratClasspath = project.configurations.rat
+    antBuilder.withClasspath(ratClasspath).execute {
+      ant.xslt(
+          in: xmlReport,
+          style: stylesheet,
+          out: htmlReport,
+          classpath: ratClasspath)
+    }
+    println('Rat report: ' + htmlReport)
+  }
+
+  @TaskAction
+  def rat() {
+    File reportDir = new File(reportPath)
+    if (!reportDir.exists()) {
+      reportDir.mkdirs()
+    }
+    generateXmlReport(reportDir)
+    printUnknownFiles()
+    generateHtmlReport()
+  }
+}
+
+class RatPlugin implements Plugin<Project> {
+  void apply(Project project) {
+    configureDependencies(project)
+    project.plugins.apply(JavaPlugin);
+    Task ratTask = project.task("rat",
+        type: RatTask,
+        group: 'Build',
+        description: 'Runs Apache Rat checks.')
+    project.tasks[JavaPlugin.TEST_TASK_NAME].dependsOn ratTask
+  }
+
+  void configureDependencies(final Project project) {
+    project.configurations {
+      rat
+    }
+    project.repositories {
+      mavenCentral()
+    }
+    project.dependencies {
+      rat 'org.apache.rat:apache-rat-tasks:0.11'
+    }
+  }
+}

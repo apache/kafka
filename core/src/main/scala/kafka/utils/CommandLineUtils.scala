@@ -18,7 +18,7 @@
 
 import joptsimple.{OptionSpec, OptionSet, OptionParser}
 import scala.collection.Set
- import java.util.Properties
+import java.util.Properties
 
  /**
  * Helper functions for dealing with command line utilities
@@ -50,21 +50,24 @@ object CommandLineUtils extends Logging {
   /**
    * Print usage and exit
    */
-  def printUsageAndDie(parser: OptionParser, message: String) {
+  def printUsageAndDie(parser: OptionParser, message: String): Nothing = {
     System.err.println(message)
     parser.printHelpOn(System.err)
-    System.exit(1)
+    sys.exit(1)
   }
 
   /**
    * Parse key-value pairs in the form key=value
    */
-  def parseKeyValueArgs(args: Iterable[String]): Properties = {
+  def parseKeyValueArgs(args: Iterable[String], acceptMissingValue: Boolean = true): Properties = {
     val splits = args.map(_ split "=").filterNot(_.length == 0)
 
     val props = new Properties
     for(a <- splits) {
-      if (a.length == 1) props.put(a(0), "")
+      if (a.length == 1) {
+        if (acceptMissingValue) props.put(a(0), "")
+        else throw new IllegalArgumentException(s"Missing value for key ${a(0)}")
+      }
       else if (a.length == 2) props.put(a(0), a(1))
       else {
         System.err.println("Invalid command line properties: " + args.mkString(" "))

@@ -1,18 +1,15 @@
 /**
- * Copyright 2015 Confluent Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
+ * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
+ * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+ * License. You may obtain a copy of the License at
  *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- **/
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
 
 package kafka.api
 
@@ -25,7 +22,7 @@ import kafka.utils.{ShutdownableThread, TestUtils}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.{After, Before, Test}
 
 class ProducerBounceTest extends KafkaServerTestHarness {
   private val producerBufferSize = 30000
@@ -54,30 +51,26 @@ class ProducerBounceTest extends KafkaServerTestHarness {
       .map(KafkaConfig.fromProps(_, overridingProps))
   }
 
-  private var consumer1: SimpleConsumer = null
-  private var consumer2: SimpleConsumer = null
-
   private var producer1: KafkaProducer[Array[Byte],Array[Byte]] = null
   private var producer2: KafkaProducer[Array[Byte],Array[Byte]] = null
   private var producer3: KafkaProducer[Array[Byte],Array[Byte]] = null
-  private var producer4: KafkaProducer[Array[Byte],Array[Byte]] = null
 
   private val topic1 = "topic-1"
-  private val topic2 = "topic-2"
 
+  @Before
   override def setUp() {
     super.setUp()
 
-    producer1 = TestUtils.createNewProducer(brokerList, acks = 0, blockOnBufferFull = false, bufferSize = producerBufferSize)
-    producer2 = TestUtils.createNewProducer(brokerList, acks = 1, blockOnBufferFull = false, bufferSize = producerBufferSize)
-    producer3 = TestUtils.createNewProducer(brokerList, acks = -1, blockOnBufferFull = false, bufferSize = producerBufferSize)
+    producer1 = TestUtils.createNewProducer(brokerList, acks = 0, bufferSize = producerBufferSize)
+    producer2 = TestUtils.createNewProducer(brokerList, acks = 1, bufferSize = producerBufferSize)
+    producer3 = TestUtils.createNewProducer(brokerList, acks = -1, bufferSize = producerBufferSize)
   }
 
+  @After
   override def tearDown() {
     if (producer1 != null) producer1.close
     if (producer2 != null) producer2.close
     if (producer3 != null) producer3.close
-    if (producer4 != null) producer4.close
 
     super.tearDown()
   }
@@ -88,7 +81,7 @@ class ProducerBounceTest extends KafkaServerTestHarness {
   @Test
   def testBrokerFailure() {
     val numPartitions = 3
-    val leaders = TestUtils.createTopic(zkClient, topic1, numPartitions, numServers, servers)
+    val leaders = TestUtils.createTopic(zkUtils, topic1, numPartitions, numServers, servers)
     assertTrue("Leader of all partitions of the topic should exist", leaders.values.forall(leader => leader.isDefined))
 
     val scheduler = new ProducerScheduler()
@@ -103,19 +96,18 @@ class ProducerBounceTest extends KafkaServerTestHarness {
         Thread.sleep(2000)
       }
 
-      // Make sure the producer do not see any exception
-      // in returned metadata due to broker failures
-      assertTrue(scheduler.failed == false)
+      // Make sure the producer do not see any exception in returned metadata due to broker failures
+      assertFalse(scheduler.failed)
 
       // Make sure the leader still exists after bouncing brokers
-      (0 until numPartitions).foreach(partition => TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic1, partition))
+      (0 until numPartitions).foreach(partition => TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic1, partition))
     }
 
     scheduler.shutdown
 
     // Make sure the producer do not see any exception
     // when draining the left messages on shutdown
-    assertTrue(scheduler.failed == false)
+    assertFalse(scheduler.failed)
 
     // double check that the leader info has been propagated after consecutive bounces
     val newLeaders = (0 until numPartitions).map(i => TestUtils.waitUntilMetadataIsPropagated(servers, topic1, i))
@@ -133,8 +125,7 @@ class ProducerBounceTest extends KafkaServerTestHarness {
     assertEquals("Should have fetched " + scheduler.sent + " unique messages", scheduler.sent, uniqueMessageSize)
   }
 
-  private class ProducerScheduler extends ShutdownableThread("daemon-producer", false)
-  {
+  private class ProducerScheduler extends ShutdownableThread("daemon-producer", false) {
     val numRecords = 1000
     var sent = 0
     var failed = false

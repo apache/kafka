@@ -27,8 +27,10 @@ public class ProtoUtils {
         if (apiKey < 0 || apiKey > schemas.length)
             throw new IllegalArgumentException("Invalid api key: " + apiKey);
         Schema[] versions = schemas[apiKey];
-        if (version < 0 || version > versions.length)
+        if (version < 0 || version > latestVersion(apiKey))
             throw new IllegalArgumentException("Invalid version for API key " + apiKey + ": " + version);
+        if (versions[version] == null)
+            throw new IllegalArgumentException("Unsupported version for API key " + apiKey + ": " + version);
         return versions[version];
     }
 
@@ -55,11 +57,15 @@ public class ProtoUtils {
     }
 
     public static Struct parseRequest(int apiKey, int version, ByteBuffer buffer) {
-        return (Struct) requestSchema(apiKey, version).read(buffer);
+        return requestSchema(apiKey, version).read(buffer);
     }
 
     public static Struct parseResponse(int apiKey, ByteBuffer buffer) {
-        return (Struct) currentResponseSchema(apiKey).read(buffer);
+        return currentResponseSchema(apiKey).read(buffer);
+    }
+
+    public static Struct parseResponse(int apiKey, int version, ByteBuffer buffer) {
+        return responseSchema(apiKey, version).read(buffer);
     }
 
 }

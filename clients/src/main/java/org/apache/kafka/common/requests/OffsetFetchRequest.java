@@ -42,9 +42,6 @@ public class OffsetFetchRequest extends AbstractRequest {
     // partition level field names
     private static final String PARTITION_KEY_NAME = "partition";
 
-    public static final int DEFAULT_GENERATION_ID = -1;
-    public static final String DEFAULT_CONSUMER_ID = "";
-
     private final String groupId;
     private final List<TopicPartition> partitions;
 
@@ -88,16 +85,24 @@ public class OffsetFetchRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractRequestResponse getErrorResponse(Throwable e) {
+    public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
         Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = new HashMap<TopicPartition, OffsetFetchResponse.PartitionData>();
 
         for (TopicPartition partition: partitions) {
             responseData.put(partition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,
-                                                                              OffsetFetchResponse.NO_METADATA,
-                                                                              Errors.forException(e).code()));
+                    OffsetFetchResponse.NO_METADATA,
+                    Errors.forException(e).code()));
         }
 
-        return new OffsetFetchResponse(responseData);
+        switch (versionId) {
+            // OffsetFetchResponseV0 == OffsetFetchResponseV1
+            case 0:
+            case 1:
+                return new OffsetFetchResponse(responseData);
+            default:
+                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
+                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.OFFSET_FETCH.id)));
+        }
     }
 
     public String groupId() {
@@ -108,7 +113,11 @@ public class OffsetFetchRequest extends AbstractRequest {
         return partitions;
     }
 
+    public static OffsetFetchRequest parse(ByteBuffer buffer, int versionId) {
+        return new OffsetFetchRequest(ProtoUtils.parseRequest(ApiKeys.OFFSET_FETCH.id, versionId, buffer));
+    }
+
     public static OffsetFetchRequest parse(ByteBuffer buffer) {
-        return new OffsetFetchRequest((Struct) CURRENT_SCHEMA.read(buffer));
+        return new OffsetFetchRequest(CURRENT_SCHEMA.read(buffer));
     }
 }

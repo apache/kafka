@@ -18,13 +18,13 @@
 package kafka.integration
 
 import java.nio.ByteBuffer
-import junit.framework.Assert._
+import org.junit.Assert._
 import kafka.api.{PartitionFetchInfo, FetchRequest, FetchRequestBuilder}
 import kafka.server.{KafkaRequestHandler, KafkaConfig}
 import kafka.producer.{KeyedMessage, Producer}
 import org.apache.log4j.{Level, Logger}
 import kafka.zk.ZooKeeperTestHarness
-import org.scalatest.junit.JUnit3Suite
+import org.junit.Test
 import scala.collection._
 import kafka.common.{TopicAndPartition, ErrorMapping, UnknownTopicOrPartitionException, OffsetOutOfRangeException}
 import kafka.utils.{StaticPartitioner, TestUtils, CoreUtils}
@@ -34,11 +34,13 @@ import java.util.Properties
 /**
  * End to end tests of the primitive apis against a local server
  */
-class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with ZooKeeperTestHarness {
+@deprecated("This test has been deprecated and it will be removed in a future release", "0.10.0.0")
+class PrimitiveApiTest extends ProducerConsumerTestHarness {
   val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
 
   def generateConfigs() = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
 
+  @Test
   def testFetchRequestCanProperlySerialize() {
     val request = new FetchRequestBuilder()
       .clientId("test-client")
@@ -55,6 +57,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     assertEquals(request, deserializedRequest)
   }
 
+  @Test
   def testEmptyFetchRequest() {
     val partitionRequests = immutable.Map[TopicAndPartition, PartitionFetchInfo]()
     val request = new FetchRequest(requestInfo = partitionRequests)
@@ -62,6 +65,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     assertTrue(!fetched.hasError && fetched.data.size == 0)
   }
 
+  @Test
   def testDefaultEncoderProducerAndFetch() {
     val topic = "test-topic"
 
@@ -85,6 +89,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     assertEquals("test-message", TestUtils.readString(fetchedMessageAndOffset.message.payload, "UTF-8"))
   }
 
+  @Test
   def testDefaultEncoderProducerAndFetchWithCompression() {
     val topic = "test-topic"
     val props = new Properties()
@@ -109,7 +114,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
 
   private def produceAndMultiFetch(producer: Producer[String, String]) {
     for(topic <- List("test1", "test2", "test3", "test4"))
-      TestUtils.createTopic(zkClient, topic, servers = servers)
+      TestUtils.createTopic(zkUtils, topic, servers = servers)
 
     // send some messages
     val topics = List(("test4", 0), ("test1", 0), ("test2", 0), ("test3", 0));
@@ -171,13 +176,14 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     requestHandlerLogger.setLevel(Level.ERROR)
   }
 
+  @Test
   def testProduceAndMultiFetch() {
     produceAndMultiFetch(producer)
   }
 
   private def multiProduce(producer: Producer[String, String]) {
     val topics = Map("test4" -> 0, "test1" -> 0, "test2" -> 0, "test3" -> 0)
-    topics.keys.map(topic => TestUtils.createTopic(zkClient, topic, servers = servers))
+    topics.keys.map(topic => TestUtils.createTopic(zkUtils, topic, servers = servers))
 
     val messages = new mutable.HashMap[String, Seq[String]]
     val builder = new FetchRequestBuilder()
@@ -197,21 +203,24 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     }
   }
 
+  @Test
   def testMultiProduce() {
     multiProduce(producer)
   }
 
+  @Test
   def testConsumerEmptyTopic() {
     val newTopic = "new-topic"
-    TestUtils.createTopic(zkClient, newTopic, numPartitions = 1, replicationFactor = 1, servers = servers)
+    TestUtils.createTopic(zkUtils, newTopic, numPartitions = 1, replicationFactor = 1, servers = servers)
 
     val fetchResponse = consumer.fetch(new FetchRequestBuilder().addFetch(newTopic, 0, 0, 10000).build())
     assertFalse(fetchResponse.messageSet(newTopic, 0).iterator.hasNext)
   }
 
+  @Test
   def testPipelinedProduceRequests() {
     val topics = Map("test4" -> 0, "test1" -> 0, "test2" -> 0, "test3" -> 0)
-    topics.keys.map(topic => TestUtils.createTopic(zkClient, topic, servers = servers))
+    topics.keys.map(topic => TestUtils.createTopic(zkUtils, topic, servers = servers))
     val props = new Properties()
     props.put("request.required.acks", "0")
     val pipelinedProducer: Producer[String, String] =

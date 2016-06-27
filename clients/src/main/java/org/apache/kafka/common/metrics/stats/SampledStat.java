@@ -20,8 +20,8 @@ import org.apache.kafka.common.metrics.MetricConfig;
 
 /**
  * A SampledStat records a single scalar value measured over one or more samples. Each sample is recorded over a
- * configurable window. The window can be defined by number of events or ellapsed time (or both, if both are given the
- * window is complete when <i>either</i> the event count or ellapsed time criterion is met).
+ * configurable window. The window can be defined by number of events or elapsed time (or both, if both are given the
+ * window is complete when <i>either</i> the event count or elapsed time criterion is met).
  * <p>
  * All the samples are combined to produce the measurement. When a window is complete the oldest sample is cleared and
  * recycled to begin recording the next sample.

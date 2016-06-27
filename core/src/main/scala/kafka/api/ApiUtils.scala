@@ -14,10 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package kafka.api
+package kafka.api
 
 import java.nio._
+import java.nio.channels.GatheringByteChannel
 import kafka.common._
+import org.apache.kafka.common.network.TransportLayer
 
 /**
  * Helper functions specific to parsing or serializing requests and responses
@@ -106,6 +108,11 @@ object ApiUtils {
     if(value < range._1 || value > range._2)
       throw new KafkaException(name + " has value " + value + " which is not in the range " + range + ".")
     else value
+  }
+
+  private[api] def hasPendingWrites(channel: GatheringByteChannel): Boolean = channel match {
+    case t: TransportLayer => t.hasPendingWrites
+    case _ => false
   }
   
 }
