@@ -53,12 +53,34 @@ public class Timestamp {
     public static Long fromLogical(Schema schema, java.util.Date value) {
         if (schema.name() == null || !(schema.name().equals(LOGICAL_NAME)))
             throw new DataException("Requested conversion of Timestamp object but the schema does not match.");
-        return value.getTime();
+        if (!schema.isOptional() && null == value)
+            throw new DataException("Requested conversion of Timestamp object but the schema is not nullable and a null was supplied.");
+
+        Long result;
+
+        if (schema.isOptional() && null == value) {
+            result = null;
+        } else {
+            result = value.getTime();
+        }
+
+        return result;
     }
 
     public static java.util.Date toLogical(Schema schema, Long value) {
         if (schema.name() == null || !(schema.name().equals(LOGICAL_NAME)))
             throw new DataException("Requested conversion of Timestamp object but the schema does not match.");
-        return new java.util.Date(value);
+        if (!schema.isOptional() && null == value)
+            throw new DataException("Requested conversion of Timestamp object but the schema is not nullable and a null was supplied.");
+
+        java.util.Date result;
+
+        if (schema.isOptional() && null == value) {
+            result = null;
+        } else {
+            result = new java.util.Date(value);
+        }
+
+        return result;
     }
 }

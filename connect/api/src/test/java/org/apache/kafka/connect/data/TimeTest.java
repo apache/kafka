@@ -80,15 +80,29 @@ public class TimeTest {
     }
 
     @Test
-    public void testFromLogicalNull() {
-        Schema schema = Timestamp.builder().optional().build();
+    public void testFromLogicalNullValue() {
+        Schema schema = Time.builder().optional().build();
+        Integer actual = Time.fromLogical(schema, null);
+        assertNull("actual should be null.", actual);
+    }
+
+    @Test(expected = DataException.class)
+    public void testFromLogicalNullValueNonOptionalSchema() {
+        Schema schema = Time.builder().build();
         Integer actual = Time.fromLogical(schema, null);
         assertNull("actual should be null.", actual);
     }
 
     @Test
-    public void testToLogicalNull() {
-        Schema schema = Timestamp.builder().optional().build();
+    public void testToLogicalNullValue() {
+        Schema schema = Time.builder().optional().build();
+        java.util.Date actual = Time.toLogical(schema, null);
+        assertNull("actual should be null.", actual);
+    }
+
+    @Test(expected = DataException.class)
+    public void testToLogicalNullValueNonOptionalSchema() {
+        Schema schema = Time.builder().build();
         java.util.Date actual = Time.toLogical(schema, null);
         assertNull("actual should be null.", actual);
     }

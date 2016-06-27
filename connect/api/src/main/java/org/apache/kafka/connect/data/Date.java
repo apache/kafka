@@ -58,19 +58,41 @@ public class Date {
     public static Integer fromLogical(Schema schema, java.util.Date value) {
         if (schema.name() == null || !(schema.name().equals(LOGICAL_NAME)))
             throw new DataException("Requested conversion of Date object but the schema does not match.");
-        Calendar calendar = Calendar.getInstance(UTC);
-        calendar.setTime(value);
-        if (calendar.get(Calendar.HOUR_OF_DAY) != 0 || calendar.get(Calendar.MINUTE) != 0 ||
+        if (!schema.isOptional() && null == value)
+            throw new DataException("Requested conversion of Date object but the schema is not nullable and a null was supplied.");
+
+        Integer result;
+
+        if (schema.isOptional() && null == value) {
+            result = null;
+        } else {
+            Calendar calendar = Calendar.getInstance(UTC);
+            calendar.setTime(value);
+            if (calendar.get(Calendar.HOUR_OF_DAY) != 0 || calendar.get(Calendar.MINUTE) != 0 ||
                 calendar.get(Calendar.SECOND) != 0 || calendar.get(Calendar.MILLISECOND) != 0) {
-            throw new DataException("Kafka Connect Date type should not have any time fields set to non-zero values.");
+                throw new DataException("Kafka Connect Date type should not have any time fields set to non-zero values.");
+            }
+            long unixMillis = calendar.getTimeInMillis();
+            result = (int) (unixMillis / MILLIS_PER_DAY);
         }
-        long unixMillis = calendar.getTimeInMillis();
-        return (int) (unixMillis / MILLIS_PER_DAY);
+
+        return result;
     }
 
     public static java.util.Date toLogical(Schema schema, Integer value) {
         if (schema.name() == null || !(schema.name().equals(LOGICAL_NAME)))
             throw new DataException("Requested conversion of Date object but the schema does not match.");
-        return new java.util.Date(value * MILLIS_PER_DAY);
+        if (!schema.isOptional() && null == value)
+            throw new DataException("Requested conversion of Date object but the schema is not nullable and a null was supplied.");
+
+        java.util.Date result;
+
+        if (schema.isOptional() && null == value) {
+            result = null;
+        } else {
+            result = new java.util.Date(value * MILLIS_PER_DAY);
+        }
+
+        return result;
     }
 }

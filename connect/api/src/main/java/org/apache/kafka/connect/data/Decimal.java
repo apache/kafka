@@ -65,13 +65,35 @@ public class Decimal {
      * @return the encoded value
      */
     public static byte[] fromLogical(Schema schema, BigDecimal value) {
-        if (value.scale() != scale(schema))
-            throw new DataException("BigDecimal has mismatching scale value for given Decimal schema");
-        return value.unscaledValue().toByteArray();
+        if (!schema.isOptional() && null == value)
+            throw new DataException("Requested conversion of Decimal object but the schema is not nullable and a null was supplied.");
+
+        byte[] result;
+
+        if (schema.isOptional() && null == value) {
+            result = null;
+        } else {
+            if (value.scale() != scale(schema))
+                throw new DataException("BigDecimal has mismatching scale value for given Decimal schema");
+            result = value.unscaledValue().toByteArray();
+        }
+
+        return result;
     }
 
     public static BigDecimal toLogical(Schema schema, byte[] value) {
-        return new BigDecimal(new BigInteger(value), scale(schema));
+        if (!schema.isOptional() && null == value)
+            throw new DataException("Requested conversion of Decimal object but the schema is not nullable and a null was supplied.");
+
+        BigDecimal result;
+
+        if (schema.isOptional() && null == value) {
+            result = null;
+        } else {
+            result = new BigDecimal(new BigInteger(value), scale(schema));
+        }
+
+        return result;
     }
 
     private static int scale(Schema schema) {

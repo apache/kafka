@@ -78,15 +78,29 @@ public class DateTest {
     }
 
     @Test
-    public void testToLogicalNull() {
+    public void testToLogicalNullValue() {
         Schema nullableSchema = Date.builder().optional().build();
         java.util.Date actual = Date.toLogical(nullableSchema, null);
         assertNull("actual should be null.", actual);
     }
 
+    @Test(expected = DataException.class)
+    public void testToLogicalNullValueNonOptionalSchema() {
+        Schema nullableSchema = Date.builder().build();
+        java.util.Date actual = Date.toLogical(nullableSchema, null);
+        assertNull("actual should be null.", actual);
+    }
+
     @Test
-    public void testFromLogicalNull() {
+    public void testFromLogicalNullValue() {
         Schema nullableSchema = Date.builder().optional().build();
+        Integer actual = Date.fromLogical(nullableSchema, null);
+        assertNull("actual should be null.", actual);
+    }
+
+    @Test(expected = DataException.class)
+    public void testFromLogicalNullValueNonOptionalSchema() {
+        Schema nullableSchema = Date.builder().build();
         Integer actual = Date.fromLogical(nullableSchema, null);
         assertNull("actual should be null.", actual);
     }

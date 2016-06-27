@@ -58,20 +58,42 @@ public class Time {
     public static Integer fromLogical(Schema schema, java.util.Date value) {
         if (schema.name() == null || !(schema.name().equals(LOGICAL_NAME)))
             throw new DataException("Requested conversion of Time object but the schema does not match.");
-        Calendar calendar = Calendar.getInstance(UTC);
-        calendar.setTime(value);
-        long unixMillis = calendar.getTimeInMillis();
-        if (unixMillis < 0 || unixMillis > MILLIS_PER_DAY) {
-            throw new DataException("Kafka Connect Time type should not have any date fields set to non-zero values.");
+        if (!schema.isOptional() && null == value)
+            throw new DataException("Requested conversion of Time object but the schema is not nullable and a null was supplied.");
+
+        Integer result;
+
+        if (schema.isOptional() && null == value) {
+            result = null;
+        } else {
+            Calendar calendar = Calendar.getInstance(UTC);
+            calendar.setTime(value);
+            long unixMillis = calendar.getTimeInMillis();
+            if (unixMillis < 0 || unixMillis > MILLIS_PER_DAY) {
+                throw new DataException("Kafka Connect Time type should not have any date fields set to non-zero values.");
+            }
+            result = (int) unixMillis;
         }
-        return (int) unixMillis;
+
+        return result;
     }
 
     public static java.util.Date toLogical(Schema schema, Integer value) {
         if (schema.name() == null || !(schema.name().equals(LOGICAL_NAME)))
             throw new DataException("Requested conversion of Date object but the schema does not match.");
-        if (value  < 0 || value > MILLIS_PER_DAY)
-            throw new DataException("Time values must use number of milliseconds greater than 0 and less than 86400000");
-        return new java.util.Date(value);
+        if (!schema.isOptional() && null == value)
+            throw new DataException("Requested conversion of Date object but the schema is not nullable and a null was supplied.");
+
+        java.util.Date result;
+
+        if (schema.isOptional() && null == value) {
+            result = null;
+        } else {
+            if (value  < 0 || value > MILLIS_PER_DAY)
+                throw new DataException("Time values must use number of milliseconds greater than 0 and less than 86400000");
+            result = new java.util.Date(value);
+        }
+
+        return result;
     }
 }

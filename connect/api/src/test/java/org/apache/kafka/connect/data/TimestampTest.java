@@ -81,6 +81,13 @@ public class TimestampTest {
         assertNull("actual should be null.", actual);
     }
 
+    @Test(expected = DataException.class)
+    public void testFromLogicalNullNonOptionalSchema() {
+        Schema schema = Timestamp.builder().build();
+        Long actual = Timestamp.fromLogical(schema, null);
+        assertNull("actual should be null.", actual);
+    }
+
     @Test
     public void testToLogicalNull() {
         Schema schema = Timestamp.builder().optional().build();
@@ -88,4 +95,10 @@ public class TimestampTest {
         assertNull("actual should be null.", actual);
     }
 
+    @Test(expected = DataException.class)
+    public void testToLogicalNullNonOptionalSchema() {
+        Schema schema = Timestamp.builder().build();
+        java.util.Date actual = Timestamp.toLogical(schema, null);
+        assertNull("actual should be null.", actual);
+    }
 }

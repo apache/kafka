@@ -18,6 +18,7 @@
 package org.apache.kafka.connect.data;
 
 
+import org.apache.kafka.connect.errors.DataException;
 import org.junit.Test;
 
 import java.math.BigDecimal;
@@ -64,18 +65,30 @@ public class DecimalTest {
     }
 
     @Test
-    public void testFromLogicalNull() {
+    public void testFromLogicalNullValue() {
         Schema schema = Decimal.builder(2).optional().build();
         byte[] actual = Decimal.fromLogical(schema, null);
         assertNull("actual should be null.", actual);
     }
 
+    @Test(expected = DataException.class)
+    public void testFromLogicalNullValueNonOptionalSchema() {
+        Schema schema = Decimal.builder(2).build();
+        byte[] actual = Decimal.fromLogical(schema, null);
+        assertNull("actual should be null.", actual);
+    }
+
     @Test
-    public void testToLogicalNull() {
+    public void testToLogicalNullValue() {
         Schema schema = Decimal.builder(2).optional().build();
         BigDecimal actual = Decimal.toLogical(schema, null);
         assertNull("actual should be null.", actual);
     }
 
-
+    @Test(expected = DataException.class)
+    public void testToLogicalNullValueNonOptionalSchema() {
+        Schema schema = Decimal.builder(2).build();
+        BigDecimal actual = Decimal.toLogical(schema, null);
+        assertNull("actual should be null.", actual);
+    }
 }
