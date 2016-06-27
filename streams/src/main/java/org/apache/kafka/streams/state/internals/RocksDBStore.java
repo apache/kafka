@@ -212,7 +212,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         try {
             if (ttl == TTL_NOT_USED) {
                 dir.getParentFile().mkdirs();
-                return RocksDB.open(options, dir.toString());
+                return RocksDB.open(options, dir.getAbsolutePath());
             } else {
                 throw new UnsupportedOperationException("Change log is not supported for store " + this.name + " since it is TTL based.");
                 // TODO: support TTL with change log?
@@ -444,6 +444,10 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void flush() {
+        if (db == null) {
+            return;
+        }
+
         // flush of the cache entries if necessary
         flushCache();
 
@@ -464,6 +468,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void close() {
+
+        if (db == null) {
+            return;
+        }
+
         flush();
         options.dispose();
         wOptions.dispose();

@@ -19,9 +19,9 @@ package kafka.tools
 
 import java.io.PrintStream
 import java.util.concurrent.CountDownLatch
-import java.util.{Properties, Random}
-
+import java.util.{Locale, Properties, Random}
 import joptsimple._
+import kafka.api.OffsetRequest
 import kafka.common.{MessageFormatter, StreamEndException}
 import kafka.consumer._
 import kafka.message._
@@ -33,7 +33,6 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.serialization.Deserializer
 import org.apache.kafka.common.utils.Utils
 import org.apache.log4j.Logger
-
 import scala.collection.JavaConverters._
 
 /**
@@ -61,7 +60,10 @@ object ConsoleConsumer extends Logging {
     val consumer =
       if (conf.useNewConsumer) {
         val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs else Long.MaxValue
-        new NewShinyConsumer(Option(conf.topicArg), Option(conf.whitelistArg), getNewConsumerProps(conf), timeoutMs)
+        if (conf.partitionArg.isDefined)
+          new NewShinyConsumer(Option(conf.topicArg), conf.partitionArg, Option(conf.offsetArg), None, getNewConsumerProps(conf), timeoutMs)
+        else
+          new NewShinyConsumer(Option(conf.topicArg), None, None, Option(conf.whitelistArg), getNewConsumerProps(conf), timeoutMs)
       } else {
         checkZk(conf)
         new OldConsumer(conf.filterSpec, getOldConsumerProps(conf))
@@ -213,6 +215,15 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("blacklist")
       .ofType(classOf[String])
+    val partitionIdOpt = parser.accepts("partition", "The partition to consume from.")
+      .withRequiredArg
+      .describedAs("partition")
+      .ofType(classOf[java.lang.Integer])
+    val offsetOpt = parser.accepts("offset", "The offset id to consume from (a non-negative number), or 'earliest' which means from beginning, or 'latest' which means from end")
+      .withRequiredArg
+      .describedAs("consume offset")
+      .ofType(classOf[String])
+      .defaultsTo("latest")
     val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the form host:port. " +
       "Multiple URLS can be given to allow fail-over.")
       .withRequiredArg
@@ -284,6 +295,25 @@ object ConsoleConsumer extends Logging {
     var topicArg: String = null
     var whitelistArg: String = null
     var filterSpec: TopicFilter = null
+    val extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt).asScala)
+    val consumerProps = if (options.has(consumerConfigOpt))
+      Utils.loadProps(options.valueOf(consumerConfigOpt))
+    else
+      new Properties()
+    val zkConnectionStr = options.valueOf(zkConnectOpt)
+    val fromBeginning = options.has(resetBeginningOpt)
+    val partitionArg = if (options.has(partitionIdOpt)) Some(options.valueOf(partitionIdOpt).intValue) else None
+    val skipMessageOnError = if (options.has(skipMessageOnErrorOpt)) true else false
+    val messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt))
+    val formatterArgs = CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt).asScala)
+    val maxMessages = if (options.has(maxMessagesOpt)) options.valueOf(maxMessagesOpt).intValue else -1
+    val timeoutMs = if (options.has(timeoutMsOpt)) options.valueOf(timeoutMsOpt).intValue else -1
+    val bootstrapServer = options.valueOf(bootstrapServerOpt)
+    val keyDeserializer = options.valueOf(keyDeserializerOpt)
+    val valueDeserializer = options.valueOf(valueDeserializerOpt)
+    val formatter: MessageFormatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
+    formatter.init(formatterArgs)
+
     if (useNewConsumer) {
       val topicOrFilterOpt = List(topicIdOpt, whitelistOpt).filter(options.has)
       if (topicOrFilterOpt.size != 1)
@@ -297,23 +327,39 @@ object ConsoleConsumer extends Logging {
       topicArg = options.valueOf(topicOrFilterOpt.head)
       filterSpec = if (options.has(blacklistOpt)) new Blacklist(topicArg) else new Whitelist(topicArg)
     }
-    val extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt).asScala)
-    val consumerProps = if (options.has(consumerConfigOpt))
-      Utils.loadProps(options.valueOf(consumerConfigOpt))
-    else
-      new Properties()
-    val zkConnectionStr = options.valueOf(zkConnectOpt)
-    val fromBeginning = options.has(resetBeginningOpt)
-    val skipMessageOnError = if (options.has(skipMessageOnErrorOpt)) true else false
-    val messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt))
-    val formatterArgs = CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt).asScala)
-    val maxMessages = if (options.has(maxMessagesOpt)) options.valueOf(maxMessagesOpt).intValue else -1
-    val timeoutMs = if (options.has(timeoutMsOpt)) options.valueOf(timeoutMsOpt).intValue else -1
-    val bootstrapServer = options.valueOf(bootstrapServerOpt)
-    val keyDeserializer = options.valueOf(keyDeserializerOpt)
-    val valueDeserializer = options.valueOf(valueDeserializerOpt)
-    val formatter: MessageFormatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
-    formatter.init(formatterArgs)
+
+    if (!useNewConsumer && (partitionArg.isDefined || options.has(offsetOpt)))
+      CommandLineUtils.printUsageAndDie(parser, "Partition-offset based consumption is supported in the new consumer only.")
+
+    if (partitionArg.isDefined) {
+      if (!options.has(topicIdOpt))
+        CommandLineUtils.printUsageAndDie(parser, "The topic is required when partition is specified.")
+      if (fromBeginning && options.has(offsetOpt))
+        CommandLineUtils.printUsageAndDie(parser, "Options from-beginning and offset cannot be specified together.")
+    } else if (options.has(offsetOpt))
+      CommandLineUtils.printUsageAndDie(parser, "The partition is required when offset is specified.")
+
+    def invalidOffset(offset: String): Nothing =
+      CommandLineUtils.printUsageAndDie(parser, s"The provided offset value '$offset' is incorrect. Valid values are " +
+        "'earliest', 'latest', or a non-negative long.")
+
+    val offsetArg =
+      if (options.has(offsetOpt)) {
+        options.valueOf(offsetOpt).toLowerCase(Locale.ROOT) match {
+          case "earliest" => OffsetRequest.EarliestTime
+          case "latest" => OffsetRequest.LatestTime
+          case offsetString =>
+            val offset =
+              try offsetString.toLong
+              catch {
+                case e: NumberFormatException => invalidOffset(offsetString)
+              }
+            if (offset < 0) invalidOffset(offsetString)
+            offset
+        }
+      }
+      else if (fromBeginning) OffsetRequest.EarliestTime
+      else OffsetRequest.LatestTime
 
     CommandLineUtils.checkRequiredArgs(parser, options, if (useNewConsumer) bootstrapServerOpt else zkConnectOpt)
 

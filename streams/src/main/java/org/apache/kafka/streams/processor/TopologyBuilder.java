@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -27,6 +27,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.QuickUnion;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
+import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor.SubscriptionUpdates;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -39,6 +40,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * A component that is used to build a {@link ProcessorTopology}. A topology contains an acyclic graph of sources, processors,
@@ -62,8 +64,16 @@ public class TopologyBuilder {
     private final QuickUnion<String> nodeGrouper = new QuickUnion<>();
     private final List<Set<String>> copartitionSourceGroups = new ArrayList<>();
     private final HashMap<String, String[]> nodeToSourceTopics = new HashMap<>();
+    private final HashMap<String, Pattern> nodeToSourcePatterns = new LinkedHashMap<>();
+    private final HashMap<String, Pattern> topicToPatterns = new HashMap<>();
     private final HashMap<String, String> nodeToSinkTopic = new HashMap<>();
+    private SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
+    private String applicationId;
+
     private Map<Integer, Set<String>> nodeGroups = null;
+    private Pattern topicPattern;
+
+
 
     private static class StateStoreFactory {
         public final Set<String> users;
@@ -110,22 +120,48 @@ public class TopologyBuilder {
         }
     }
 
-    private static class SourceNodeFactory extends NodeFactory {
-        public final String[] topics;
+    private class SourceNodeFactory extends NodeFactory {
+        private final String[] topics;
+        public final Pattern pattern;
         private Deserializer keyDeserializer;
         private Deserializer valDeserializer;
 
-        private SourceNodeFactory(String name, String[] topics, Deserializer keyDeserializer, Deserializer valDeserializer) {
+        private SourceNodeFactory(String name, String[] topics, Pattern pattern, Deserializer keyDeserializer, Deserializer valDeserializer) {
             super(name);
-            this.topics = topics.clone();
+            this.topics = topics != null ? topics.clone() : null;
+            this.pattern = pattern;
             this.keyDeserializer = keyDeserializer;
             this.valDeserializer = valDeserializer;
+        }
+
+        public String[] getTopics() {
+            return topics;
+        }
+
+        public String[] getTopics(Collection<String> subscribedTopics) {
+            List<String> matchedTopics = new ArrayList<>();
+            for (String update : subscribedTopics) {
+                if (this.pattern == topicToPatterns.get(update)) {
+                    matchedTopics.add(update);
+                    //not same pattern instance,but still matches not allowed
+                } else if (topicToPatterns.containsKey(update) && isMatch(update)) {
+                    throw new TopologyBuilderException("Topic " + update + " already matched check for overlapping regex patterns");
+                } else if (isMatch(update)) {
+                    topicToPatterns.put(update, this.pattern);
+                    matchedTopics.add(update);
+                }
+            }
+            return matchedTopics.toArray(new String[matchedTopics.size()]);
         }
 
         @SuppressWarnings("unchecked")
         @Override
         public ProcessorNode build(String applicationId) {
             return new SourceNode(name, keyDeserializer, valDeserializer);
+        }
+
+        private boolean isMatch(String topic) {
+            return this.pattern.matcher(topic).matches();
         }
     }
 
@@ -193,7 +229,7 @@ public class TopologyBuilder {
     public TopologyBuilder() {}
 
     /**
-     * Add a new source that consumes the named topics and forwards the records to child processor and/or sink nodes.
+     * Add a new source that consumes the named topics and forward the records to child processor and/or sink nodes.
      * The source will use the {@link org.apache.kafka.streams.StreamsConfig#KEY_SERDE_CLASS_CONFIG default key deserializer} and
      * {@link org.apache.kafka.streams.StreamsConfig#VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
      * {@link org.apache.kafka.streams.StreamsConfig stream configuration}.
@@ -205,6 +241,23 @@ public class TopologyBuilder {
      */
     public final TopologyBuilder addSource(String name, String... topics) {
         return addSource(name, (Deserializer) null, (Deserializer) null, topics);
+    }
+
+
+    /**
+     * Add a new source that consumes from topics matching the given pattern
+     * and forward the records to child processor and/or sink nodes.
+     * The source will use the {@link org.apache.kafka.streams.StreamsConfig#KEY_SERDE_CLASS_CONFIG default key deserializer} and
+     * {@link org.apache.kafka.streams.StreamsConfig#VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig stream configuration}.
+     *
+     * @param name the unique name of the source used to reference this node when
+     * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
+     * @param topicPattern regular expression pattern to match Kafka topics that this source is to consume
+     * @return this builder instance so methods can be chained together; never null
+     */
+    public final TopologyBuilder addSource(String name, Pattern topicPattern) {
+        return addSource(name, (Deserializer) null, (Deserializer) null, topicPattern);
     }
 
     /**
@@ -231,11 +284,60 @@ public class TopologyBuilder {
             if (sourceTopicNames.contains(topic))
                 throw new TopologyBuilderException("Topic " + topic + " has already been registered by another source.");
 
+            for (Pattern pattern : nodeToSourcePatterns.values()) {
+                if (pattern.matcher(topic).matches()) {
+                    throw new TopologyBuilderException("Topic " + topic + " matches a Pattern already registered by another source.");
+                }
+            }
+
             sourceTopicNames.add(topic);
         }
 
-        nodeFactories.put(name, new SourceNodeFactory(name, topics, keyDeserializer, valDeserializer));
+        nodeFactories.put(name, new SourceNodeFactory(name, topics, null, keyDeserializer, valDeserializer));
         nodeToSourceTopics.put(name, topics.clone());
+        nodeGrouper.add(name);
+
+        return this;
+    }
+
+    /**
+     * Add a new source that consumes from topics matching the given pattern
+     * and forwards the records to child processor and/or sink nodes.
+     * The source will use the specified key and value deserializers. The provided
+     * de-/serializers will be used for all matched topics, so care should be taken to specify patterns for
+     * topics that share the same key-value data format.
+     *
+     * @param name the unique name of the source used to reference this node when
+     * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
+     * @param keyDeserializer the {@link Deserializer key deserializer} used when consuming records; may be null if the source
+     * should use the {@link org.apache.kafka.streams.StreamsConfig#KEY_SERDE_CLASS_CONFIG default key deserializer} specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
+     * @param valDeserializer the {@link Deserializer value deserializer} used when consuming records; may be null if the source
+     * should use the {@link org.apache.kafka.streams.StreamsConfig#VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
+     * @param topicPattern regular expression pattern to match Kafka topics that this source is to consume
+     * @return this builder instance so methods can be chained together; never null
+     * @throws TopologyBuilderException if processor is already added or if topics have already been registered by name
+     */
+
+    public final TopologyBuilder addSource(String name, Deserializer keyDeserializer, Deserializer valDeserializer, Pattern topicPattern) {
+
+        if (topicPattern == null) {
+            throw new TopologyBuilderException("Pattern can't be null");
+        }
+
+        if (nodeFactories.containsKey(name)) {
+            throw new TopologyBuilderException("Processor " + name + " is already added.");
+        }
+
+        for (String sourceTopicName : sourceTopicNames) {
+            if (topicPattern.matcher(sourceTopicName).matches()) {
+                throw new TopologyBuilderException("Pattern  " + topicPattern + " will match a topic that has already been registered by another source.");
+            }
+        }
+
+        nodeToSourcePatterns.put(name, topicPattern);
+        nodeFactories.put(name, new SourceNodeFactory(name, null, topicPattern, keyDeserializer, valDeserializer));
         nodeGrouper.add(name);
 
         return this;
@@ -501,11 +603,21 @@ public class TopologyBuilder {
      *
      * @return groups of topic names
      */
-    public Map<Integer, TopicsInfo> topicGroups(String applicationId) {
-        Map<Integer, TopicsInfo> topicGroups = new HashMap<>();
+    public Map<Integer, TopicsInfo> topicGroups() {
+        Map<Integer, TopicsInfo> topicGroups = new LinkedHashMap<>();
+
+
+        if (subscriptionUpdates.hasUpdates()) {
+            for (Map.Entry<String, Pattern> stringPatternEntry : nodeToSourcePatterns.entrySet()) {
+                SourceNodeFactory sourceNode = (SourceNodeFactory) nodeFactories.get(stringPatternEntry.getKey());
+                //need to update nodeToSourceTopics with topics matched from given regex
+                nodeToSourceTopics.put(stringPatternEntry.getKey(), sourceNode.getTopics(subscriptionUpdates.getUpdates()));
+            }
+        }
 
         if (nodeGroups == null)
             nodeGroups = makeNodeGroups();
+
 
         for (Map.Entry<Integer, Set<String>> entry : nodeGroups.entrySet()) {
             Set<String> sinkTopics = new HashSet<>();
@@ -519,6 +631,12 @@ public class TopologyBuilder {
                     // if some of the topics are internal, add them to the internal topics
                     for (String topic : topics) {
                         if (this.internalTopicNames.contains(topic)) {
+                            if (applicationId == null) {
+                                throw new TopologyBuilderException("There are internal topics and"
+                                                                   + " applicationId hasn't been "
+                                                                   + "set. Call setApplicationId "
+                                                                   + "first");
+                            }
                             // prefix the internal topic name with the application id
                             String internalTopic = applicationId + "-" + topic;
                             internalSourceTopics.add(internalTopic);
@@ -571,7 +689,7 @@ public class TopologyBuilder {
     }
 
     private Map<Integer, Set<String>> makeNodeGroups() {
-        HashMap<Integer, Set<String>> nodeGroups = new HashMap<>();
+        HashMap<Integer, Set<String>> nodeGroups = new LinkedHashMap<>();
         HashMap<String, Set<String>> rootToNodeGroup = new HashMap<>();
 
         int nodeGroupId = 0;
@@ -629,11 +747,28 @@ public class TopologyBuilder {
             for (String node : nodeNames) {
                 String[] topics = nodeToSourceTopics.get(node);
                 if (topics != null)
-                    copartitionGroup.addAll(Arrays.asList(topics));
+                    copartitionGroup.addAll(convertInternalTopicNames(topics));
             }
             list.add(Collections.unmodifiableSet(copartitionGroup));
         }
         return Collections.unmodifiableList(list);
+    }
+
+    private List<String> convertInternalTopicNames(String...topics) {
+        final List<String> topicNames = new ArrayList<>();
+        for (String topic : topics) {
+            if (internalTopicNames.contains(topic)) {
+                if (applicationId == null) {
+                    throw new TopologyBuilderException("there are internal topics "
+                                                       + "and applicationId hasn't been set. Call "
+                                                       + "setApplicationId first");
+                }
+                topicNames.add(applicationId + "-" + topic);
+            } else {
+                topicNames.add(topic);
+            }
+        }
+        return topicNames;
     }
 
     /**
@@ -677,7 +812,9 @@ public class TopologyBuilder {
                         }
                     }
                 } else if (factory instanceof SourceNodeFactory) {
-                    for (String topic : ((SourceNodeFactory) factory).topics) {
+                    SourceNodeFactory sourceNodeFactory = (SourceNodeFactory) factory;
+                    String[] topics = (sourceNodeFactory.pattern != null) ? sourceNodeFactory.getTopics(subscriptionUpdates.getUpdates()) : sourceNodeFactory.getTopics();
+                    for (String topic : topics) {
                         if (internalTopicNames.contains(topic)) {
                             // prefix the internal topic name with the application id
                             topicSourceMap.put(applicationId + "-" + topic, (SourceNode) node);
@@ -702,15 +839,54 @@ public class TopologyBuilder {
      * Get the names of topics that are to be consumed by the source nodes created by this builder.
      * @return the unmodifiable set of topic names used by source nodes, which changes as new sources are added; never null
      */
-    public Set<String> sourceTopics(String applicationId) {
+    public Set<String> sourceTopics() {
         Set<String> topics = new HashSet<>();
         for (String topic : sourceTopicNames) {
             if (internalTopicNames.contains(topic)) {
+                if (applicationId == null) {
+                    throw new TopologyBuilderException("there are internal topics and "
+                                                       + "applicationId is null. Call "
+                                                       + "setApplicationId before sourceTopics");
+                }
                 topics.add(applicationId + "-" + topic);
             } else {
                 topics.add(topic);
             }
         }
         return Collections.unmodifiableSet(topics);
+    }
+
+    public Pattern sourceTopicPattern() {
+        if (this.topicPattern == null && !nodeToSourcePatterns.isEmpty()) {
+            StringBuilder builder = new StringBuilder();
+            for (Pattern pattern : nodeToSourcePatterns.values()) {
+                builder.append(pattern.pattern()).append("|");
+            }
+            if (!nodeToSourceTopics.isEmpty()) {
+                for (String[] topics : nodeToSourceTopics.values()) {
+                    for (String topic : topics) {
+                        builder.append(topic).append("|");
+                    }
+                }
+            }
+
+            builder.setLength(builder.length() - 1);
+            this.topicPattern = Pattern.compile(builder.toString());
+        }
+        return this.topicPattern;
+    }
+
+    public void updateSubscriptions(SubscriptionUpdates subscriptionUpdates) {
+        this.subscriptionUpdates = subscriptionUpdates;
+    }
+
+    /**
+     * Set the applicationId. This is required before calling
+     * {@link #sourceTopics}, {@link #topicGroups} and {@link #copartitionSources}
+     * @param applicationId   the streams applicationId. Should be the same as set by
+     * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG}
+     */
+    public void setApplicationId(String applicationId) {
+        this.applicationId = applicationId;
     }
 }

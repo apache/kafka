@@ -229,7 +229,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             }
         }), this.name);
 
-        return new KStreamImpl<>(topology, name, sourceNodes);
+        return new KStreamImpl<>(topology, name, sourceNodes, false);
     }
 
     @Override

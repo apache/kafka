@@ -522,7 +522,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             log.trace("Requesting metadata update for topic {}.", topic);
             int version = metadata.requestUpdate();
             sender.wakeup();
-            metadata.awaitUpdate(version, remainingWaitMs);
+            try {
+                metadata.awaitUpdate(version, remainingWaitMs);
+            } catch (TimeoutException ex) {
+                // Rethrow with original maxWaitMs to prevent logging exception with remainingWaitMs
+                throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
+            }
             long elapsed = time.milliseconds() - begin;
             if (elapsed >= maxWaitMs)
                 throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
