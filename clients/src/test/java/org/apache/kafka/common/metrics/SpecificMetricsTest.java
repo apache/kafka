@@ -177,74 +177,77 @@ public class SpecificMetricsTest {
     public void testRemoveSensor() {
         int size = metrics.metrics().size();
         Sensor parent1 = metrics.sensor("test.parent1");
-        parent1.add(metrics.metricName("test.parent1.count", "grp1"), new Count());
+        parent1.add(metrics.metricInstance(SampleMetrics.REMOVE_SENSOR_PARENT1_COUNT), new Count());
         Sensor parent2 = metrics.sensor("test.parent2");
-        parent2.add(metrics.metricName("test.parent2.count", "grp1"), new Count());
+        parent2.add(metrics.metricInstance(SampleMetrics.REMOVE_SENSOR_PARENT2_COUNT), new Count());
         Sensor child1 = metrics.sensor("test.child1", parent1, parent2);
-        child1.add(metrics.metricName("test.child1.count", "grp1"), new Count());
+        child1.add(metrics.metricInstance(SampleMetrics.REMOVE_SENSOR_CHILD1_COUNT), new Count());
         Sensor child2 = metrics.sensor("test.child2", parent2);
-        child2.add(metrics.metricName("test.child2.count", "grp1"), new Count());
+        child2.add(metrics.metricInstance(SampleMetrics.REMOVE_SENSOR_CHILD2_COUNT), new Count());
         Sensor grandChild1 = metrics.sensor("test.gchild2", child2);
-        grandChild1.add(metrics.metricName("test.gchild2.count", "grp1"), new Count());
+        grandChild1.add(metrics.metricInstance(SampleMetrics.REMOVE_SENSOR_GCHILD2_COUNT), new Count());
 
         Sensor sensor = metrics.getSensor("test.parent1");
         assertNotNull(sensor);
         metrics.removeSensor("test.parent1");
         assertNull(metrics.getSensor("test.parent1"));
-        assertNull(metrics.metrics().get(metrics.metricName("test.parent1.count", "grp1")));
+        assertNull(metrics.metrics().get(metrics.metricInstance(SampleMetrics.REMOVE_SENSOR_PARENT1_COUNT)));
         assertNull(metrics.getSensor("test.child1"));
         assertNull(metrics.childrenSensors().get(sensor));
-        assertNull(metrics.metrics().get(metrics.metricName("test.child1.count", "grp1")));
+        assertNull(metrics.metrics().get(metrics.metricInstance(SampleMetrics.REMOVE_SENSOR_CHILD1_COUNT)));
 
         sensor = metrics.getSensor("test.gchild2");
         assertNotNull(sensor);
         metrics.removeSensor("test.gchild2");
         assertNull(metrics.getSensor("test.gchild2"));
         assertNull(metrics.childrenSensors().get(sensor));
-        assertNull(metrics.metrics().get(metrics.metricName("test.gchild2.count", "grp1")));
+        assertNull(metrics.metrics().get(metrics.metricInstance(SampleMetrics.REMOVE_SENSOR_GCHILD2_COUNT)));
 
         sensor = metrics.getSensor("test.child2");
         assertNotNull(sensor);
         metrics.removeSensor("test.child2");
         assertNull(metrics.getSensor("test.child2"));
         assertNull(metrics.childrenSensors().get(sensor));
-        assertNull(metrics.metrics().get(metrics.metricName("test.child2.count", "grp1")));
+        assertNull(metrics.metrics().get(metrics.metricInstance(SampleMetrics.REMOVE_SENSOR_CHILD2_COUNT)));
 
         sensor = metrics.getSensor("test.parent2");
         assertNotNull(sensor);
         metrics.removeSensor("test.parent2");
         assertNull(metrics.getSensor("test.parent2"));
         assertNull(metrics.childrenSensors().get(sensor));
-        assertNull(metrics.metrics().get(metrics.metricName("test.parent2.count", "grp1")));
+        assertNull(metrics.metrics().get(metrics.metricInstance(SampleMetrics.REMOVE_SENSOR_PARENT2_COUNT)));
 
         assertEquals(size, metrics.metrics().size());
     }
 
     @Test
     public void testRemoveInactiveMetrics() {
+        final MetricName s1CountMetric = metrics.metricInstance(SampleMetrics.REMOVE_INACTIVE_S1_COUNT);
+        final MetricName s2CountMetric = metrics.metricInstance(SampleMetrics.REMOVE_INACTIVE_S2_COUNT);
+
         Sensor s1 = metrics.sensor("test.s1", null, 1);
-        s1.add(metrics.metricName("test.s1.count", "grp1"), new Count());
+        s1.add(s1CountMetric, new Count());
 
         Sensor s2 = metrics.sensor("test.s2", null, 3);
-        s2.add(metrics.metricName("test.s2.count", "grp1"), new Count());
+        s2.add(s2CountMetric, new Count());
 
         Metrics.ExpireSensorTask purger = metrics.new ExpireSensorTask();
         purger.run();
         assertNotNull("Sensor test.s1 must be present", metrics.getSensor("test.s1"));
         assertNotNull("MetricName test.s1.count must be present",
-                metrics.metrics().get(metrics.metricName("test.s1.count", "grp1")));
+                metrics.metrics().get(s1CountMetric));
         assertNotNull("Sensor test.s2 must be present", metrics.getSensor("test.s2"));
         assertNotNull("MetricName test.s2.count must be present",
-                metrics.metrics().get(metrics.metricName("test.s2.count", "grp1")));
+                metrics.metrics().get(s2CountMetric));
 
         time.sleep(1001);
         purger.run();
         assertNull("Sensor test.s1 should have been purged", metrics.getSensor("test.s1"));
         assertNull("MetricName test.s1.count should have been purged",
-                metrics.metrics().get(metrics.metricName("test.s1.count", "grp1")));
+                metrics.metrics().get(s1CountMetric));
         assertNotNull("Sensor test.s2 must be present", metrics.getSensor("test.s2"));
         assertNotNull("MetricName test.s2.count must be present",
-                metrics.metrics().get(metrics.metricName("test.s2.count", "grp1")));
+                metrics.metrics().get(s2CountMetric));
 
         // record a value in sensor s2. This should reset the clock for that sensor.
         // It should not get purged at the 3 second mark after creation
@@ -253,35 +256,38 @@ public class SpecificMetricsTest {
         purger.run();
         assertNotNull("Sensor test.s2 must be present", metrics.getSensor("test.s2"));
         assertNotNull("MetricName test.s2.count must be present",
-                metrics.metrics().get(metrics.metricName("test.s2.count", "grp1")));
+                metrics.metrics().get(s2CountMetric));
 
         // After another 1 second sleep, the metric should be purged
         time.sleep(1000);
         purger.run();
         assertNull("Sensor test.s2 should have been purged", metrics.getSensor("test.s1"));
         assertNull("MetricName test.s2.count should have been purged",
-                metrics.metrics().get(metrics.metricName("test.s1.count", "grp1")));
+                metrics.metrics().get(s1CountMetric));
 
         // After purging, it should be possible to recreate a metric
         s1 = metrics.sensor("test.s1", null, 1);
-        s1.add(metrics.metricName("test.s1.count", "grp1"), new Count());
+        s1.add(s1CountMetric, new Count());
         assertNotNull("Sensor test.s1 must be present", metrics.getSensor("test.s1"));
         assertNotNull("MetricName test.s1.count must be present",
-                metrics.metrics().get(metrics.metricName("test.s1.count", "grp1")));
+                metrics.metrics().get(s1CountMetric));
     }
 
     @Test
     public void testRemoveMetric() {
+        final MetricName test1Metric = metrics.metricInstance(SampleMetrics.REMOVE_METRIC_TEST1);
+        final MetricName test2Metric = metrics.metricInstance(SampleMetrics.REMOVE_METRIC_TEST2);
+
         int size = metrics.metrics().size();
-        metrics.addMetric(metrics.metricName("test1", "grp1"), new Count());
-        metrics.addMetric(metrics.metricName("test2", "grp1"), new Count());
+        metrics.addMetric(test1Metric, new Count());
+        metrics.addMetric(test2Metric, new Count());
 
-        assertNotNull(metrics.removeMetric(metrics.metricName("test1", "grp1")));
-        assertNull(metrics.metrics().get(metrics.metricName("test1", "grp1")));
-        assertNotNull(metrics.metrics().get(metrics.metricName("test2", "grp1")));
+        assertNotNull(metrics.removeMetric(test1Metric));
+        assertNull(metrics.metrics().get(test1Metric));
+        assertNotNull(metrics.metrics().get(test2Metric));
 
-        assertNotNull(metrics.removeMetric(metrics.metricName("test2", "grp1")));
-        assertNull(metrics.metrics().get(metrics.metricName("test2", "grp1")));
+        assertNotNull(metrics.removeMetric(test2Metric));
+        assertNull(metrics.metrics().get(test2Metric));
 
         assertEquals(size, metrics.metrics().size());
     }
@@ -323,15 +329,20 @@ public class SpecificMetricsTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testDuplicateMetricName() {
-        metrics.sensor("test").add(metrics.metricName("test", "grp1"), new Avg());
-        metrics.sensor("test2").add(metrics.metricName("test", "grp1"), new Total());
+        final MetricName metricName = metrics.metricInstance(SampleMetrics.TEST_DUPLICATE);
+        
+        metrics.sensor("test").add(metricName, new Avg());
+        metrics.sensor("test2").add(metricName, new Total());
     }
 
     @Test
     public void testQuotas() {
+        final MetricName test1Metric = metrics.metricInstance(SampleMetrics.QUOTAS1);
+        final MetricName test2Metric = metrics.metricInstance(SampleMetrics.QUOTAS2);
+
         Sensor sensor = metrics.sensor("test");
-        sensor.add(metrics.metricName("test1.total", "grp1"), new Total(), new MetricConfig().quota(Quota.upperBound(5.0)));
-        sensor.add(metrics.metricName("test2.total", "grp1"), new Total(), new MetricConfig().quota(Quota.lowerBound(0.0)));
+        sensor.add(test1Metric, new Total(), new MetricConfig().quota(Quota.upperBound(5.0)));
+        sensor.add(test2Metric, new Total(), new MetricConfig().quota(Quota.lowerBound(0.0)));
         sensor.record(5.0);
         try {
             sensor.record(1.0);
@@ -339,7 +350,7 @@ public class SpecificMetricsTest {
         } catch (QuotaViolationException e) {
             // this is good
         }
-        assertEquals(6.0, metrics.metrics().get(metrics.metricName("test1.total", "grp1")).value(), EPS);
+        assertEquals(6.0, metrics.metrics().get(test1Metric).value(), EPS);
         sensor.record(-6.0);
         try {
             sensor.record(-1.0);
@@ -363,20 +374,24 @@ public class SpecificMetricsTest {
 
     @Test
     public void testPercentiles() {
+        final MetricName p25Metric = metrics.metricInstance(SampleMetrics.P25);
+        final MetricName p50Metric = metrics.metricInstance(SampleMetrics.P50);
+        final MetricName p75Metric = metrics.metricInstance(SampleMetrics.P75);
+        
         int buckets = 100;
         Percentiles percs = new Percentiles(4 * buckets,
                                             0.0,
                                             100.0,
                                             BucketSizing.CONSTANT,
-                                            new Percentile(metrics.metricName("test.p25", "grp1"), 25),
-                                            new Percentile(metrics.metricName("test.p50", "grp1"), 50),
-                                            new Percentile(metrics.metricName("test.p75", "grp1"), 75));
+                                            new Percentile(p25Metric, 25),
+                                            new Percentile(p50Metric, 50),
+                                            new Percentile(p75Metric, 75));
         MetricConfig config = new MetricConfig().eventWindow(50).samples(2);
         Sensor sensor = metrics.sensor("test", config);
         sensor.add(percs);
-        Metric p25 = this.metrics.metrics().get(metrics.metricName("test.p25", "grp1"));
-        Metric p50 = this.metrics.metrics().get(metrics.metricName("test.p50", "grp1"));
-        Metric p75 = this.metrics.metrics().get(metrics.metricName("test.p75", "grp1"));
+        Metric p25 = this.metrics.metrics().get(p25Metric);
+        Metric p50 = this.metrics.metrics().get(p50Metric);
+        Metric p75 = this.metrics.metrics().get(p75Metric);
 
         // record two windows worth of sequential values
         for (int i = 0; i < buckets; i++)
@@ -396,10 +411,12 @@ public class SpecificMetricsTest {
 
     @Test
     public void testRateWindowing() throws Exception {
+        final MetricName metricName = metrics.metricInstance(SampleMetrics.RATE);
+
         // Use the default time window. Set 3 samples
         MetricConfig cfg = new MetricConfig().samples(3);
         Sensor s = metrics.sensor("test.sensor", cfg);
-        s.add(metrics.metricName("test.rate", "grp1"), new Rate(TimeUnit.SECONDS));
+        s.add(metricName, new Rate(TimeUnit.SECONDS));
 
         int sum = 0;
         int count = cfg.samples() - 1;
@@ -416,7 +433,7 @@ public class SpecificMetricsTest {
         // prior to any time passing
         double elapsedSecs = (cfg.timeWindowMs() * (cfg.samples() - 1) + cfg.timeWindowMs() / 2) / 1000.0;
 
-        KafkaMetric km = metrics.metrics().get(metrics.metricName("test.rate", "grp1"));
+        KafkaMetric km = metrics.metrics().get(metricName);
         assertEquals("Rate(0...2) = 2.666", sum / elapsedSecs, km.value(), EPS);
         assertEquals("Elapsed Time = 75 seconds", elapsedSecs,
                 ((Rate) km.measurable()).windowSize(cfg, time.milliseconds()) / 1000, EPS);
