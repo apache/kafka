@@ -15,6 +15,7 @@ package org.apache.kafka.common.config;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.metrics.FakeMetricsReporter;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.junit.Test;
 
@@ -22,6 +23,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assert.assertEquals;
 
@@ -44,9 +47,30 @@ public class AbstractConfigTest {
         props.put("foo.bar", "abc");
         props.put("setting", "def");
         TestConfig config = new TestConfig(props);
+        Map<String, Object> originalsWithPrefix = config.originalsWithPrefix("foo.");
+
+        assertTrue(config.unused().contains("foo.bar"));
+        originalsWithPrefix.get("bar");
+        assertFalse(config.unused().contains("foo.bar"));
+
         Map<String, Object> expected = new HashMap<>();
         expected.put("bar", "abc");
-        assertEquals(expected, config.originalsWithPrefix("foo."));
+        assertEquals(expected, originalsWithPrefix);
+    }
+
+    @Test
+    public void testUnused() {
+        Properties props = new Properties();
+        String configValue = "org.apache.kafka.common.config.AbstractConfigTest$ConfiguredFakeMetricsReporter";
+        props.put(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, configValue);
+        props.put(FakeMetricsReporterConfig.EXTRA_CONFIG, "my_value");
+        TestConfig config = new TestConfig(props);
+
+        assertTrue("metric.extra_config should be marked unused before getConfiguredInstances is called",
+            config.unused().contains(FakeMetricsReporterConfig.EXTRA_CONFIG));
+
+        config.getConfiguredInstances(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
+        assertTrue("All defined configurations should be marked as used", config.unused().isEmpty());
     }
 
     private void testValidInputs(String configValue) {
@@ -91,4 +115,32 @@ public class AbstractConfigTest {
             super(CONFIG, props);
         }
     }
+
+    public static class ConfiguredFakeMetricsReporter extends FakeMetricsReporter {
+        @Override
+        public void configure(Map<String, ?> configs) {
+            FakeMetricsReporterConfig config = new FakeMetricsReporterConfig(configs);
+
+            // Calling getString() should have the side effect of marking that config as used.
+            config.getString(FakeMetricsReporterConfig.EXTRA_CONFIG);
+        }
+    }
+
+    public static class FakeMetricsReporterConfig extends AbstractConfig {
+        private static final ConfigDef CONFIG;
+
+        public static final String EXTRA_CONFIG = "metric.extra_config";
+        private static final String EXTRA_CONFIG_DOC = "An extraneous configuration string.";
+
+        static {
+            CONFIG = new ConfigDef().define(
+                EXTRA_CONFIG, ConfigDef.Type.STRING, "",
+                ConfigDef.Importance.LOW, EXTRA_CONFIG_DOC);
+        }
+
+        public FakeMetricsReporterConfig(Map<?, ?> props) {
+            super(CONFIG, props);
+        }
+    }
+
 }

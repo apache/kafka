@@ -114,6 +114,47 @@
 
 <p>Currently all versions are baselined at 0, as we evolve these APIs we will indicate the format for each version individually.</p>
 
+<h5><a id="api_versions" href="#api_versions">Retrieving Supported API versions</a></h5>
+<p>In order for a client to successfully talk to a broker, it must use request versions supported by the broker. Clients
+    may work against multiple broker versions, however to do so the clients need to know what versions of various APIs a
+    broker supports. Starting from 0.10.0.0, brokers provide information on various versions of APIs they support. Details
+    of this new capability can be found <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-35+-+Retrieving+protocol+version">here</a>.
+    Clients may use the supported API versions information to take appropriate actions such as propagating an unsupported
+    API version error to application or choose an API request/response version supported by both the client and broker.
+    The following sequence maybe used by a client to obtain supported API versions from a broker.</p>
+<ol>
+    <li>Client sends <code>ApiVersionsRequest</code> to a broker after connection has been established with the broker. If SSL is enabled,
+        this happens after SSL connection has been established.</li>
+    <li>On receiving <code>ApiVersionsRequest</code>, a broker returns its full list of supported ApiKeys and
+        versions regardless of current authentication state (e.g., before SASL authentication on an SASL listener, do note that no
+        Kafka protocol requests may take place on a SSL listener before the SSL handshake is finished). If this is considered to
+        leak information about the broker version a workaround is to use SSL with client authentication which is performed at an
+        earlier stage of the connection where the <code>ApiVersionRequest</code> is not available. Also, note that broker versions older
+        than 0.10.0.0 do not support this API and will either ignore the request or close connection in response to the request.</li>
+    <li>If multiple versions of an API are supported by broker and client, clients are recommended to use the latest version supported
+        by the broker and itself.</li>
+    <li>Deprecation of a protocol version is done by marking an API version as deprecated in protocol documentation.</li>
+    <li>Supported API versions obtained from a broker, is valid only for current connection on which that information is obtained.
+        In the event of disconnection, the client should obtain the information from broker again, as the broker might have
+        upgraded/downgraded in the mean time.</li>
+</ol>
+
+
+<h5><a id="sasl_handshake" href="#sasl_handshake">SASL Authentication Sequence</a></h5>
+<p>The following sequence is used for SASL authentication:
+<ol>
+  <li>Kafka <code>ApiVersionsRequest</code> may be sent by the client to obtain the version ranges of requests supported by the broker. This is optional.</li>
+  <li>Kafka <code>SaslHandshakeRequest</code> containing the SASL mechanism for authentication is sent by the client. If the requested mechanism is not enabled
+    in the server, the server responds with the list of supported mechanisms and closes the client connection. If the mechanism is enabled
+    in the server, the server sends a successful response and continues with SASL authentication.
+  <li>The actual SASL authentication is now performed. A series of SASL client and server tokens corresponding to the mechanism are sent as opaque
+    packets. These packets contain a 32-bit size followed by the token as defined by the protocol for the SASL mechanism.
+  <li>If authentication succeeds, subsequent packets are handled as Kafka API requests. Otherwise, the client connection is closed.
+</ol>
+<p>For interoperability with 0.9.0.x clients, the first packet received by the server is handled as a SASL/GSSAPI client token if it is not a valid
+Kafka request. SASL/GSSAPI authentication is performed starting with this packet, skipping the first two steps above.</p>
+
+
 <h4><a id="protocol_details" href="#protocol_details">The Protocol</a></h4>
 
 <h5><a id="protocol_types" href="#protocol_types">Protocol Primitive Types</a></h5>

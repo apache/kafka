@@ -76,7 +76,8 @@ class WorkerSourceTask extends WorkerTask {
 
     public WorkerSourceTask(ConnectorTaskId id,
                             SourceTask task,
-                            TaskStatus.Listener lifecycleListener,
+                            TaskStatus.Listener statusListener,
+                            TargetState initialState,
                             Converter keyConverter,
                             Converter valueConverter,
                             KafkaProducer<byte[], byte[]> producer,
@@ -84,7 +85,7 @@ class WorkerSourceTask extends WorkerTask {
                             OffsetStorageWriter offsetWriter,
                             WorkerConfig workerConfig,
                             Time time) {
-        super(id, lifecycleListener);
+        super(id, statusListener, initialState);
 
         this.workerConfig = workerConfig;
         this.task = task;
@@ -104,8 +105,13 @@ class WorkerSourceTask extends WorkerTask {
     }
 
     @Override
-    public void initialize(Map<String, String> config) {
-        this.taskConfig = config;
+    public void initialize(TaskConfig taskConfig) {
+        try {
+            this.taskConfig = taskConfig.originalsStrings();
+        } catch (Throwable t) {
+            log.error("Task {} failed initialization and will not be started.", t);
+            onFailure(t);
+        }
     }
 
     protected void close() {
@@ -139,6 +145,11 @@ class WorkerSourceTask extends WorkerTask {
             }
 
             while (!isStopping()) {
+                if (shouldPause()) {
+                    awaitUnpause();
+                    continue;
+                }
+
                 if (toSend == null) {
                     log.debug("Nothing to send to Kafka. Polling source for additional records");
                     toSend = task.poll();
@@ -232,6 +243,8 @@ class WorkerSourceTask extends WorkerTask {
             task.commitRecord(record);
         } catch (InterruptedException e) {
             log.error("Exception thrown", e);
+        } catch (Throwable t) {
+            log.error("Exception thrown while calling task.commitRecord()", t);
         }
     }
 
@@ -275,9 +288,7 @@ class WorkerSourceTask extends WorkerTask {
                 try {
                     long timeoutMs = timeout - time.milliseconds();
                     if (timeoutMs <= 0) {
-                        log.error(
-                                "Failed to flush {}, timed out while waiting for producer to flush outstanding "
-                                        + "messages, {} left ({})", this, outstandingMessages.size(), outstandingMessages);
+                        log.error("Failed to flush {}, timed out while waiting for producer to flush outstanding {} messages", this, outstandingMessages.size());
                         finishFailedFlush();
                         return false;
                     }
@@ -357,8 +368,8 @@ class WorkerSourceTask extends WorkerTask {
             this.task.commit();
         } catch (InterruptedException ex) {
             log.warn("Commit interrupted", ex);
-        } catch (Throwable ex) {
-            log.error("Exception thrown while calling task.commit()", ex);
+        } catch (Throwable t) {
+            log.error("Exception thrown while calling task.commit()", t);
         }
     }
 

@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -123,7 +123,7 @@ case class Broker(id: Int, endPoints: collection.Map[SecurityProtocol, EndPoint]
   def getNode(protocolType: SecurityProtocol): Node = {
     val endpoint = endPoints.getOrElse(protocolType,
       throw new BrokerEndPointNotAvailableException(s"End point with security protocol $protocolType not found for broker $id"))
-    new Node(id, endpoint.host, endpoint.port)
+    new Node(id, endpoint.host, endpoint.port, rack.orNull)
   }
 
   def getBrokerEndPoint(protocolType: SecurityProtocol): BrokerEndPoint = {

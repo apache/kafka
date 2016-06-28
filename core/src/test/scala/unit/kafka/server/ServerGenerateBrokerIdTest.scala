@@ -177,8 +177,8 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
 
   def verifyBrokerMetadata(logDirs: Seq[String], brokerId: Int): Boolean = {
     for(logDir <- logDirs) {
-      val brokerMetadataOpt = (new BrokerMetadataCheckpoint(
-        new File(logDir + File.separator + brokerMetaPropsFile))).read()
+      val brokerMetadataOpt = new BrokerMetadataCheckpoint(
+        new File(logDir + File.separator + brokerMetaPropsFile)).read()
       brokerMetadataOpt match {
         case Some(brokerMetadata: BrokerMetadata) =>
           if (brokerMetadata.brokerId != brokerId)  return false
@@ -186,5 +186,13 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
       }
     }
     true
+  }
+
+  @Test
+  def testGetSequenceIdMethod() {
+    val path = "/test/seqid"
+    (1 to 10).foreach { seqid =>
+      assertEquals(seqid, zkUtils.getSequenceId(path))
+    }
   }
 }

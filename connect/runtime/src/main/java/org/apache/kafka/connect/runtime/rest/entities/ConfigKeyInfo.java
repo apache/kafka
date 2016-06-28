@@ -28,7 +28,7 @@ public class ConfigKeyInfo {
     private final String name;
     private final String type;
     private final boolean required;
-    private final Object defaultValue;
+    private final String defaultValue;
     private final String importance;
     private final String documentation;
     private final String group;
@@ -41,7 +41,7 @@ public class ConfigKeyInfo {
     public ConfigKeyInfo(@JsonProperty("name") String name,
                          @JsonProperty("type") String type,
                          @JsonProperty("required") boolean required,
-                         @JsonProperty("default_value") Object defaultValue,
+                         @JsonProperty("default_value") String defaultValue,
                          @JsonProperty("importance") String importance,
                          @JsonProperty("documentation") String documentation,
                          @JsonProperty("group") String group,
@@ -78,7 +78,7 @@ public class ConfigKeyInfo {
     }
 
     @JsonProperty("default_value")
-    public Object defaultValue() {
+    public String defaultValue() {
         return defaultValue;
     }
 

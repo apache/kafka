@@ -20,7 +20,7 @@ import org.apache.kafka.common.security.JaasUtils;
 
 /**
  * The type of the login context, it should be SERVER for the broker and CLIENT for the clients (i.e. consumer and
- * producer). It provides the the login context name which defines the section of the JAAS configuration file to be used
+ * producer). It provides the login context name which defines the section of the JAAS configuration file to be used
  * for login.
  */
 public enum LoginType {

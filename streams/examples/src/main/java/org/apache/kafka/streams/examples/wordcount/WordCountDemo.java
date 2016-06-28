@@ -29,6 +29,7 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapper;
 
 import java.util.Arrays;
+import java.util.Locale;
 import java.util.Properties;
 
 /**
@@ -63,15 +64,16 @@ public class WordCountDemo {
                 .flatMapValues(new ValueMapper<String, Iterable<String>>() {
                     @Override
                     public Iterable<String> apply(String value) {
-                        return Arrays.asList(value.toLowerCase().split(" "));
+                        return Arrays.asList(value.toLowerCase(Locale.getDefault()).split(" "));
                     }
                 }).map(new KeyValueMapper<String, String, KeyValue<String, String>>() {
                     @Override
                     public KeyValue<String, String> apply(String key, String value) {
-                        return new KeyValue<String, String>(value, value);
+                        return new KeyValue<>(value, value);
                     }
                 })
-                .countByKey("Counts");
+                .groupByKey()
+                .count("Counts");
 
         // need to override value serde to Long type
         counts.to(Serdes.String(), Serdes.Long(), "streams-wordcount-output");

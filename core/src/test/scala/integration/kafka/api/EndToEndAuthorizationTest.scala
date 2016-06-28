@@ -61,12 +61,11 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override val producerCount = 1
   override val consumerCount = 2
   override val serverCount = 3
-  override val setClusterAcl = Some { () =>
+
+  override def setAclsBeforeServersStart() {
     AclCommand.main(clusterAclArgs)
-    servers.foreach(s =>
-      TestUtils.waitAndVerifyAcls(ClusterActionAcl, s.apis.authorizer.get, clusterResource)
-    )
   }
+
   val numRecords = 1
   val group = "group"
   val topic = "e2etopic"
@@ -78,6 +77,9 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   val kafkaPrincipal: String
 
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
+  protected def kafkaClientSaslMechanism = "GSSAPI"
+  protected def kafkaServerSaslMechanisms = List("GSSAPI")
+  override protected val saslProperties = Some(kafkaSaslProperties(kafkaClientSaslMechanism, Some(kafkaServerSaslMechanisms)))
 
   val topicResource = new Resource(Topic, topic)
   val groupResource = new Resource(Group, group)
@@ -130,7 +132,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[SimpleAclAuthorizer].getName)
   // Some needed configuration for brokers, producers, and consumers
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
+  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "3")
   this.serverConfig.setProperty(KafkaConfig.MinInSyncReplicasProp, "3")
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group")
 
@@ -141,9 +143,9 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   override def setUp {
     securityProtocol match {
       case SecurityProtocol.SSL =>
-        startSasl(ZkSasl)
+        startSasl(ZkSasl, null, null)
       case _ =>
-        startSasl(Both)
+        startSasl(Both, List(kafkaClientSaslMechanism), kafkaServerSaslMechanisms)
     }
     super.setUp
     AclCommand.main(topicBrokerReadAclArgs)
@@ -167,7 +169,22 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     * Tests the ability of producing and consuming with the appropriate ACLs set.
     */
   @Test
-  def testProduceConsume {
+  def testProduceConsumeViaAssign {
+    setAclsAndProduce()
+    consumers.head.assign(List(tp).asJava)
+    consumeRecords(this.consumers.head, numRecords)
+    debug("Finished consuming")
+  }
+
+  @Test
+  def testProduceConsumeViaSubscribe {
+    setAclsAndProduce()
+    consumers.head.subscribe(List(topic).asJava)
+    consumeRecords(this.consumers.head, numRecords)
+    debug("Finished consuming")
+  }
+
+  private def setAclsAndProduce() {
     AclCommand.main(produceAclArgs)
     AclCommand.main(consumeAclArgs)
     servers.foreach(s => {
@@ -179,9 +196,6 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     sendRecords(numRecords, tp)
     //Consume records
     debug("Finished sending and starting to consume records")
-    consumers.head.assign(List(tp).asJava)
-    consumeRecords(this.consumers.head, numRecords)
-    debug("Finished consuming")
   }
 
   /**
@@ -210,7 +224,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     AclCommand.main(groupAclArgs)
     servers.foreach(s => {
       TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl, s.apis.authorizer.get, topicResource)
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, servers.head.apis.authorizer.get, groupResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, groupResource)
     })
     //Produce records
     debug("Starting to send records")

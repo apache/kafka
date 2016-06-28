@@ -28,12 +28,15 @@ class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V> {
 
     private final String windowName;
 
+    /**
+     * @throws TopologyBuilderException if retention period of the join window is less than expected
+     */
     KStreamJoinWindow(String windowName, long windowSizeMs, long retentionPeriodMs) {
         this.windowName = windowName;
 
-        if (windowSizeMs * 2 > retentionPeriodMs)
+        if (windowSizeMs > retentionPeriodMs)
             throw new TopologyBuilderException("The retention period of the join window "
-                    + windowName + " must at least two times its window size.");
+                    + windowName + " must be no smaller than its window size.");
     }
 
     @Override
@@ -55,8 +58,12 @@ class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V> {
 
         @Override
         public void process(K key, V value) {
-            context().forward(key, value);
-            window.put(key, value);
+            // if the key is null, we do not need to put the record into window store
+            // since it will never be considered for join operations
+            if (key != null) {
+                context().forward(key, value);
+                window.put(key, value);
+            }
         }
     }
 

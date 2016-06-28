@@ -98,7 +98,7 @@ class Replica(val brokerId: Int,
   }
 
   override def equals(that: Any): Boolean = {
-    if(!(that.isInstanceOf[Replica]))
+    if(!that.isInstanceOf[Replica])
       return false
     val other = that.asInstanceOf[Replica]
     if(topic.equals(other.topic) && brokerId == other.brokerId && partition.equals(other.partition))
@@ -111,7 +111,7 @@ class Replica(val brokerId: Int,
   }
 
 
-  override def toString(): String = {
+  override def toString: String = {
     val replicaString = new StringBuilder
     replicaString.append("ReplicaId: " + brokerId)
     replicaString.append("; Topic: " + topic)

@@ -256,12 +256,14 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     }
 
     private static abstract class ConsumerEvent {
+        private final long timestamp = System.currentTimeMillis();
+
         @JsonProperty
         public abstract String name();
 
-        @JsonProperty("class")
-        public String clazz() {
-            return VerifiableConsumer.class.getName();
+        @JsonProperty
+        public long timestamp() {
+            return timestamp;
         }
     }
 

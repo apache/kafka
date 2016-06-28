@@ -137,9 +137,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     public V delete(K key) {
         long startNs = time.nanoseconds();
         try {
-            V value = this.inner.delete(key);
-
-            return value;
+            return this.inner.delete(key);
         } finally {
             this.metrics.recordLatency(this.deleteTime, startNs, time.nanoseconds());
         }
@@ -147,12 +145,17 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public KeyValueIterator<K, V> range(K from, K to) {
-        return new MeteredKeyValueIterator<K, V>(this.inner.range(from, to), this.rangeTime);
+        return new MeteredKeyValueIterator<>(this.inner.range(from, to), this.rangeTime);
     }
 
     @Override
     public KeyValueIterator<K, V> all() {
-        return new MeteredKeyValueIterator<K, V>(this.inner.all(), this.allTime);
+        return new MeteredKeyValueIterator<>(this.inner.all(), this.allTime);
+    }
+
+    @Override
+    public long approximateNumEntries() {
+        return this.inner.approximateNumEntries();
     }
 
     @Override

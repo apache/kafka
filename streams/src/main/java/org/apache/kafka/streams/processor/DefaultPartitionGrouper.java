@@ -69,6 +69,9 @@ public class DefaultPartitionGrouper implements PartitionGrouper {
         return Collections.unmodifiableMap(groups);
     }
 
+    /**
+     * @throws StreamsException if no metadata can be received for a topic
+     */
     protected int maxNumPartitions(Cluster metadata, Set<String> topics) {
         int maxNumPartitions = 0;
         for (String topic : topics) {

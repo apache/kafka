@@ -24,13 +24,23 @@ import org.apache.kafka.common.serialization.Serializer;
 /**
  * Factory for creating serializers / deserializers for state stores in Kafka Streams.
  *
- * @param <K> key type of serdes
- * @param <V> value type of serdes
+ * @param <K> key type of serde
+ * @param <V> value type of serde
  */
 public final class StateSerdes<K, V> {
 
-    public static <K, V> StateSerdes<K, V> withBuiltinTypes(String topic, Class<K> keyClass, Class<V> valueClass) {
-        return new StateSerdes<>(topic, Serdes.serdeFrom(keyClass), Serdes.serdeFrom(valueClass));
+    /**
+     * Create a new instance of {@link StateSerdes} for the given state name and key-/value-type classes.
+     *
+     * @param stateName   the name of the state
+     * @param keyClass    the class of the key type
+     * @param valueClass  the class of the value type
+     * @param <K>         the key type
+     * @param <V>         the value type
+     * @return            a new instance of {@link StateSerdes}
+     */
+    public static <K, V> StateSerdes<K, V> withBuiltinTypes(String stateName, Class<K> keyClass, Class<V> valueClass) {
+        return new StateSerdes<>(stateName, Serdes.serdeFrom(keyClass), Serdes.serdeFrom(valueClass));
     }
 
     private final String stateName;
@@ -46,6 +56,7 @@ public final class StateSerdes<K, V> {
      * @param stateName     the name of the state
      * @param keySerde      the serde for keys; cannot be null
      * @param valueSerde    the serde for values; cannot be null
+     * @throws IllegalArgumentException if key or value serde is null
      */
     @SuppressWarnings("unchecked")
     public StateSerdes(String stateName,
@@ -62,46 +73,105 @@ public final class StateSerdes<K, V> {
         this.valueSerde = valueSerde;
     }
 
+    /**
+     * Return the key serde.
+     *
+     * @return the key serde
+     */
     public Serde<K> keySerde() {
         return keySerde;
     }
 
+    /**
+     * Return the value serde.
+     *
+     * @return the value serde
+     */
     public Serde<V> valueSerde() {
         return valueSerde;
     }
 
+    /**
+     * Return the key deserializer.
+     *
+     * @return the key deserializer
+     */
     public Deserializer<K> keyDeserializer() {
         return keySerde.deserializer();
     }
 
+    /**
+     * Return the key serializer.
+     *
+     * @return the key serializer
+     */
     public Serializer<K> keySerializer() {
         return keySerde.serializer();
     }
 
+    /**
+     * Return the value deserializer.
+     *
+     * @return the value deserializer
+     */
     public Deserializer<V> valueDeserializer() {
         return valueSerde.deserializer();
     }
 
+    /**
+     * Return the value serializer.
+     *
+     * @return the value serializer
+     */
     public Serializer<V> valueSerializer() {
         return valueSerde.serializer();
     }
 
-    public String topic() {
+    /**
+     * Return the name of the state.
+     *
+     * @return the name of the state
+     */
+    public String stateName() {
         return stateName;
     }
 
+    /**
+     * Deserialize the key from raw bytes.
+     *
+     * @param rawKey  the key as raw bytes
+     * @return        the key as typed object
+     */
     public K keyFrom(byte[] rawKey) {
         return keySerde.deserializer().deserialize(stateName, rawKey);
     }
 
+    /**
+     * Deserialize the value from raw bytes.
+     *
+     * @param rawValue  the value as raw bytes
+     * @return          the value as typed object
+     */
     public V valueFrom(byte[] rawValue) {
         return valueSerde.deserializer().deserialize(stateName, rawValue);
     }
 
+    /**
+     * Serialize the given key.
+     *
+     * @param key  the key to be serialized
+     * @return     the serialized key
+     */
     public byte[] rawKey(K key) {
         return keySerde.serializer().serialize(stateName, key);
     }
 
+    /**
+     * Serialize the given value.
+     *
+     * @param value  the value to be serialized
+     * @return       the serialized value
+     */
     public byte[] rawValue(V value) {
         return valueSerde.serializer().serialize(stateName, value);
     }

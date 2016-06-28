@@ -222,33 +222,42 @@ class LogTest extends JUnitSuite {
     // now manually truncate off all but one message from the first segment to create a gap in the messages
     log.logSegments.head.truncateTo(1)
 
-    assertEquals("A read should now return the last message in the log", log.logEndOffset-1, log.read(1, 200, None).messageSet.head.offset)
+    assertEquals("A read should now return the last message in the log", log.logEndOffset - 1, log.read(1, 200, None).messageSet.head.offset)
   }
 
   /**
    * Test reading at the boundary of the log, specifically
    * - reading from the logEndOffset should give an empty message set
+   * - reading from the maxOffset should give an empty message set
    * - reading beyond the log end offset should throw an OffsetOutOfRangeException
    */
   @Test
   def testReadOutOfRange() {
     createEmptyLogs(logDir, 1024)
     val logProps = new Properties()
+
+    // set up replica log starting with offset 1024 and with one message (at offset 1024)
     logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
     val log = new Log(logDir, LogConfig(logProps), recoveryPoint = 0L, time.scheduler, time = time)
-    assertEquals("Reading just beyond end of log should produce 0 byte read.", 0, log.read(1024, 1000).messageSet.sizeInBytes)
+    log.append(new ByteBufferMessageSet(NoCompressionCodec, messages = new Message("42".getBytes)))
+
+    assertEquals("Reading at the log end offset should produce 0 byte read.", 0, log.read(1025, 1000).messageSet.sizeInBytes)
+
     try {
-      log.read(0, 1024)
-      fail("Expected exception on invalid read.")
-    } catch {
-      case e: OffsetOutOfRangeException => "This is good."
-    }
-    try {
-      log.read(1025, 1000)
-      fail("Expected exception on invalid read.")
+      log.read(0, 1000)
+      fail("Reading below the log start offset should throw OffsetOutOfRangeException")
     } catch {
       case e: OffsetOutOfRangeException => // This is good.
     }
+
+    try {
+      log.read(1026, 1000)
+      fail("Reading at beyond the log end offset should throw OffsetOutOfRangeException")
+    } catch {
+      case e: OffsetOutOfRangeException => // This is good.
+    }
+
+    assertEquals("Reading from below the specified maxOffset should produce 0 byte read.", 0, log.read(1025, 1000, Some(1024)).messageSet.sizeInBytes)
   }
 
   /**
@@ -608,10 +617,10 @@ class LogTest extends JUnitSuite {
     for (i<- 1 to msgPerSeg)
       log.append(set)
     assertEquals("There should be exactly 2 segment.", 2, log.numberOfSegments)
-    assertEquals("The index of the first segment should be trimmed to empty", 0, log.logSegments.toList(0).index.maxEntries)
+    assertEquals("The index of the first segment should be trimmed to empty", 0, log.logSegments.toList.head.index.maxEntries)
     log.truncateTo(0)
     assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)
-    assertEquals("The index of segment 1 should be resized to maxIndexSize", log.config.maxIndexSize/8, log.logSegments.toList(0).index.maxEntries)
+    assertEquals("The index of segment 1 should be resized to maxIndexSize", log.config.maxIndexSize/8, log.logSegments.toList.head.index.maxEntries)
     for (i<- 1 to msgPerSeg)
       log.append(set)
     assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)
@@ -921,4 +930,32 @@ class LogTest extends JUnitSuite {
   def topicPartitionName(topic: String, partition: String): String =
     File.separator + topic + "-" + partition
 
+  @Test
+  def testDeleteOldSegmentsMethod() {
+    val set = TestUtils.singleMessageSet("test".getBytes)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, set.sizeInBytes * 5: java.lang.Integer)
+    logProps.put(LogConfig.SegmentIndexBytesProp, 1000: java.lang.Integer)
+    val config = LogConfig(logProps)
+    val log = new Log(logDir,
+      config,
+      recoveryPoint = 0L,
+      time.scheduler,
+      time)
+
+    // append some messages to create some segments
+    for (i <- 0 until 100)
+      log.append(set)
+
+    log.deleteOldSegments(_ => true)
+    assertEquals("The deleted segments should be gone.", 1, log.numberOfSegments)
+
+    // append some messages to create some segments
+    for (i <- 0 until 100)
+      log.append(set)
+
+    log.delete()
+    assertEquals("The number of segments should be 0", 0, log.numberOfSegments)
+    assertEquals("The number of deleted segments shoud be zero.", 0, log.deleteOldSegments(_ => true))
+  }
 }

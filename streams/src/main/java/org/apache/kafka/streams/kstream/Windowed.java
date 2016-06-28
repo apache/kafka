@@ -22,30 +22,40 @@ package org.apache.kafka.streams.kstream;
  * i.e. {@link KStream#aggregateByKey(Initializer, Aggregator, Windows, org.apache.kafka.common.serialization.Serde,
  * org.apache.kafka.common.serialization.Serde)}
  *
- * @param <T> Type of the key
+ * @param <K> Type of the key
  */
-public class Windowed<T> {
+public class Windowed<K> {
 
-    private T value;
+    private K key;
 
     private Window window;
 
-    public Windowed(T value, Window window) {
-        this.value = value;
+    public Windowed(K key, Window window) {
+        this.key = key;
         this.window = window;
     }
 
-    public T value() {
-        return value;
+    /**
+     * Return the key of the window.
+     *
+     * @return the key of the window
+     */
+    public K key() {
+        return key;
     }
 
+    /**
+     * Return the window containing the values associated with this key.
+     *
+     * @return  the window containing the values
+     */
     public Window window() {
         return window;
     }
 
     @Override
     public String toString() {
-        return "[" + value + "@" + window.start() + "]";
+        return "[" + key + "@" + window.start() + "]";
     }
 
     @Override
@@ -58,12 +68,12 @@ public class Windowed<T> {
 
         Windowed<?> that = (Windowed) obj;
 
-        return this.window.equals(that.window) && this.value.equals(that.value);
+        return this.window.equals(that.window) && this.key.equals(that.key);
     }
 
     @Override
     public int hashCode() {
-        long n = ((long) window.hashCode() << 32) | value.hashCode();
+        long n = ((long) window.hashCode() << 32) | key.hashCode();
         return (int) (n % 0xFFFFFFFFL);
     }
 }

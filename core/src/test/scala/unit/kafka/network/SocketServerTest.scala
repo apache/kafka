@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.network;
+package kafka.network
 
 import java.net._
 import javax.net.ssl._
@@ -150,8 +150,13 @@ class SocketServerTest extends JUnitSuite {
     val tooManyBytes = new Array[Byte](server.config.socketRequestMaxBytes + 1)
     new Random().nextBytes(tooManyBytes)
     val socket = connect()
-    sendRequest(socket, tooManyBytes, Some(0))
+    val outgoing = new DataOutputStream(socket.getOutputStream)
+    outgoing.writeInt(tooManyBytes.length)
     try {
+      // Server closes client connection when it processes the request length because
+      // it is too big. The write of request body may fail if the connection has been closed.
+      outgoing.write(tooManyBytes)
+      outgoing.flush()
       receiveResponse(socket)
     } catch {
       case e: IOException => // thats fine

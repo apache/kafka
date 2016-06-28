@@ -18,6 +18,7 @@
 package org.apache.kafka.connect.data;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -48,7 +49,7 @@ public interface Schema {
         private String name;
 
         Type() {
-            this.name = this.name().toLowerCase();
+            this.name = this.name().toLowerCase(Locale.ROOT);
         }
 
         public String getName() {

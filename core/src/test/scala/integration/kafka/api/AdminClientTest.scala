@@ -63,34 +63,34 @@ class AdminClientTest extends IntegrationTestHarness with Logging {
 
   @Test
   def testListGroups() {
-    consumers(0).subscribe(List(topic))
+    consumers.head.subscribe(List(topic))
     TestUtils.waitUntilTrue(() => {
-      consumers(0).poll(0)
-      !consumers(0).assignment().isEmpty
+      consumers.head.poll(0)
+      !consumers.head.assignment().isEmpty
     }, "Expected non-empty assignment")
 
     val groups = client.listAllGroupsFlattened
     assertFalse(groups.isEmpty)
-    val group = groups(0)
+    val group = groups.head
     assertEquals(groupId, group.groupId)
     assertEquals("consumer", group.protocolType)
   }
 
   @Test
   def testDescribeGroup() {
-    consumers(0).subscribe(List(topic))
+    consumers.head.subscribe(List(topic))
     TestUtils.waitUntilTrue(() => {
-      consumers(0).poll(0)
-      !consumers(0).assignment().isEmpty
+      consumers.head.poll(0)
+      !consumers.head.assignment().isEmpty
     }, "Expected non-empty assignment")
 
-    val group= client.describeGroup(groupId)
+    val group = client.describeGroup(groupId)
     assertEquals("consumer", group.protocolType)
     assertEquals("range", group.protocol)
     assertEquals("Stable", group.state)
     assertFalse(group.members.isEmpty)
 
-    val member = group.members(0)
+    val member = group.members.head
     assertEquals(clientId, member.clientId)
     assertFalse(member.clientHost.isEmpty)
     assertFalse(member.memberId.isEmpty)
@@ -98,15 +98,15 @@ class AdminClientTest extends IntegrationTestHarness with Logging {
 
   @Test
   def testDescribeConsumerGroup() {
-    consumers(0).subscribe(List(topic))
+    consumers.head.subscribe(List(topic))
     TestUtils.waitUntilTrue(() => {
-      consumers(0).poll(0)
-      !consumers(0).assignment().isEmpty
+      consumers.head.poll(0)
+      !consumers.head.assignment().isEmpty
     }, "Expected non-empty assignment")
 
     val consumerSummaries = client.describeConsumerGroup(groupId)
     assertEquals(1, consumerSummaries.size)
-    assertEquals(Set(tp, tp2), consumerSummaries.head.assignment.toSet)
+    assertEquals(Some(Set(tp, tp2)), consumerSummaries.map(_.head.assignment.toSet))
   }
 
   @Test

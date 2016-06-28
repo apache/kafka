@@ -26,6 +26,7 @@ import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.junit.After;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -35,6 +36,16 @@ public class KStreamTransformValuesTest {
     private String topicName = "topic";
 
     final private Serde<Integer> intSerde = Serdes.Integer();
+
+    private KStreamTestDriver driver;
+
+    @After
+    public void cleanup() {
+        if (driver != null) {
+            driver.close();
+        }
+        driver = null;
+    }
 
     @Test
     public void testTransform() {
@@ -58,7 +69,8 @@ public class KStreamTransformValuesTest {
                         }
 
                         @Override
-                        public void punctuate(long timestamp) {
+                        public Integer punctuate(long timestamp) {
+                            return (int) timestamp;
                         }
 
                         @Override
@@ -75,14 +87,17 @@ public class KStreamTransformValuesTest {
         stream = builder.stream(intSerde, intSerde, topicName);
         stream.transformValues(valueTransformerSupplier).process(processor);
 
-        KStreamTestDriver driver = new KStreamTestDriver(builder);
+        driver = new KStreamTestDriver(builder);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topicName, expectedKeys[i], expectedKeys[i] * 10);
         }
 
         assertEquals(4, processor.processed.size());
 
-        String[] expected = {"1:10", "10:110", "100:1110", "1000:11110"};
+        driver.punctuate(2);
+        driver.punctuate(3);
+
+        String[] expected = {"1:10", "10:110", "100:1110", "1000:11110", "null:2", "null:3"};
 
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processor.processed.get(i));

@@ -19,8 +19,6 @@ package kafka.tools
 
 import java.util
 
-import org.apache.kafka.common.TopicPartition
-
 import scala.collection.JavaConversions._
 import java.util.concurrent.atomic.AtomicLong
 import java.nio.channels.ClosedByInterruptException
@@ -85,16 +83,15 @@ object ConsumerPerformance {
         thread.start
       for (thread <- threadList)
         thread.join
-      if(consumerTimeout.get())
-	endMs = System.currentTimeMillis - consumerConfig.consumerTimeoutMs
-      else
-	endMs = System.currentTimeMillis
+      endMs =
+        if (consumerTimeout.get()) System.currentTimeMillis - consumerConfig.consumerTimeoutMs
+        else System.currentTimeMillis
       consumerConnector.shutdown()
     }
     val elapsedSecs = (endMs - startMs) / 1000.0
     if (!config.showDetailedStats) {
       val totalMBRead = (totalBytesRead.get * 1.0) / (1024 * 1024)
-      println(("%s, %s, %.4f, %.4f, %d, %.4f").format(config.dateFormat.format(startMs), config.dateFormat.format(endMs),
+      println("%s, %s, %.4f, %.4f, %d, %.4f".format(config.dateFormat.format(startMs), config.dateFormat.format(endMs),
         totalMBRead, totalMBRead / elapsedSecs, totalMessagesRead.get, totalMessagesRead.get / elapsedSecs))
     }
   }
@@ -159,7 +156,7 @@ object ConsumerPerformance {
     val elapsedMs: Double = endMs - startMs
     val totalMBRead = (bytesRead * 1.0) / (1024 * 1024)
     val mbRead = ((bytesRead - lastBytesRead) * 1.0) / (1024 * 1024)
-    println(("%s, %d, %.4f, %.4f, %d, %.4f").format(dateFormat.format(endMs), id, totalMBRead,
+    println("%s, %d, %.4f, %.4f, %d, %.4f".format(dateFormat.format(endMs), id, totalMBRead,
         1000.0 * (mbRead / elapsedMs), messagesRead, ((messagesRead - lastMessagesRead) / elapsedMs) * 1000.0))
   }
 
@@ -279,9 +276,8 @@ object ConsumerPerformance {
       } catch {
         case _: InterruptedException =>
         case _: ClosedByInterruptException =>
-        case _: ConsumerTimeoutException => {
-          consumerTimeout.set(true);
-        }
+        case _: ConsumerTimeoutException =>
+          consumerTimeout.set(true)
         case e: Throwable => e.printStackTrace()
       }
       totalMessagesRead.addAndGet(messagesRead)

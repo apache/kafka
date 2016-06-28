@@ -295,11 +295,11 @@ object ConsoleProducer {
     override def init(inputStream: InputStream, props: Properties) {
       topic = props.getProperty("topic")
       if (props.containsKey("parse.key"))
-        parseKey = props.getProperty("parse.key").trim.toLowerCase.equals("true")
+        parseKey = props.getProperty("parse.key").trim.equalsIgnoreCase("true")
       if (props.containsKey("key.separator"))
         keySeparator = props.getProperty("key.separator")
       if (props.containsKey("ignore.error"))
-        ignoreError = props.getProperty("ignore.error").trim.toLowerCase.equals("true")
+        ignoreError = props.getProperty("ignore.error").trim.equalsIgnoreCase("true")
       reader = new BufferedReader(new InputStreamReader(inputStream))
     }
 
@@ -311,7 +311,7 @@ object ConsoleProducer {
           line.indexOf(keySeparator) match {
             case -1 =>
               if (ignoreError) new ProducerRecord(topic, line.getBytes)
-              else throw new KafkaException(s"No key found on line ${lineNumber}: $line")
+              else throw new KafkaException(s"No key found on line $lineNumber: $line")
             case n =>
               val value = (if (n + keySeparator.size > line.size) "" else line.substring(n + keySeparator.size)).getBytes
               new ProducerRecord(topic, line.substring(0, n).getBytes, value)

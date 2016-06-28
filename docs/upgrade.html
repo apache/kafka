@@ -31,12 +31,15 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
 
 <ol>
     <li> Update server.properties file on all brokers and add the following property: inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. 0.8.2 or 0.9.0.0).
-         We recommend that users set log.message.format.version=CURRENT_KAFKA_VERSION as well to avoid a performance regression
-         during upgrade. See <a href="#upgrade_10_performance_impact">potential performance impact during upgrade</a> for the details.
+         We recommend that users set log.message.format.version=CURRENT_KAFKA_VERSION as well to ensure that performance of 0.8 and 0.9 consumers is not affected
+         during the upgrade. See <a href="#upgrade_10_performance_impact">potential performance impact during upgrade</a> for the details.
     </li>
     <li> Upgrade the brokers. This can be done a broker at a time by simply bringing it down, updating the code, and restarting it. </li>
     <li> Once the entire cluster is upgraded, bump the protocol version by editing inter.broker.protocol.version and setting it to 0.10.0.0. </li>
     <li> Restart the brokers one by one for the new protocol version to take effect. </li>
+    <li> Once most consumers have been upgraded to 0.10.0 and if you followed the recommendation to set log.message.format.version=CURRENT_KAFKA_VERSION, change
+         log.message.format.version to 0.10.0 on each broker and restart them one by one.
+    </li>
 </ol>
 
 <p><b>Note:</b> If you are willing to accept downtime, you can simply take all the brokers down, update the code and start all of them. They will start with the new protocol by default.
@@ -63,6 +66,24 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
     message format version. Otherwise consumers before 0.10.0.0 might break. In particular, after the message format
     is set to 0.10.0, one should not change it back to an earlier format as it may break consumers on versions before 0.10.0.0.
 </p>
+<p>
+    <b>Note:</b> Due to the additional timestamp introduced in each message, producers sending small messages may see a
+    message throughput degradation because of the increased overhead.
+    Likewise, replication now transmits an additional 8 bytes per message.
+    If you're running close to the network capacity of your cluster, it's possible that you'll overwhelm the network cards
+    and see failures and performance issues due to the overload.
+</p>
+    <b>Note:</b> If you have enabled compression on producers, you may notice reduced producer throughput and/or
+    lower compression rate on the broker in some cases. When receiving compressed messages, 0.10.0
+    brokers avoid recompressing the messages, which in general reduces the latency and improves the throughput. In
+    certain cases, however, this may reduce the batching size on the producer, which could lead to worse throughput. If this
+    happens, users can tune linger.ms and batch.size of the producer for better throughput. In addition, the producer buffer
+    used for compressing messages with snappy is smaller than the one used by the broker, which may have a negative
+    impact on the compression ratio for the messages on disk. We intend to make this configurable in a future Kafka
+    release.
+<p>
+
+</p>
 
 <h5><a id="upgrade_10_breaking" href="#upgrade_10_breaking">Potential breaking changes in 0.10.0.0</a></h5>
 <ul>
@@ -80,11 +101,17 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
     <li> MirrorMakerMessageHandler no longer exposes the <code>handle(record: MessageAndMetadata[Array[Byte], Array[Byte]])</code> method as it was never called. </li>
     <li> The 0.7 KafkaMigrationTool is no longer packaged with Kafka. If you need to migrate from 0.7 to 0.10.0, please migrate to 0.8 first and then follow the documented upgrade process to upgrade from 0.8 to 0.10.0. </li>
     <li> The new consumer has standardized its APIs to accept <code>java.util.Collection</code> as the sequence type for method parameters. Existing code may have to be updated to work with the 0.10.0 client library. </li>
+    <li> LZ4-compressed message handling was changed to use an interoperable framing specification (LZ4f v1.5.1).
+         To maintain compatibility with old clients, this change only applies to Message format 0.10.0 and later.
+         Clients that Produce/Fetch LZ4-compressed messages using v0/v1 (Message format 0.9.0) should continue
+         to use the 0.9.0 framing implementation. Clients that use Produce/Fetch protocols v2 or later
+         should use interoperable LZ4f framing. A list of interoperable LZ4 libraries is available at http://www.lz4.org/
 </ul>
 
 <h5><a id="upgrade_10_notable" href="#upgrade_10_notable">Notable changes in 0.10.0.0</a></h5>
 
 <ul>
+    <li> Starting from Kafka 0.10.0.0, a new client library named <b>Kafka Streams</b> is available for stream processing on data stored in Kafka topics. This new client library only works with 0.10.x and upward versioned brokers due to message format changes mentioned above. For more information please read <a href="#streams_overview">this section</a>.</li>
     <li> The default value of the configuration parameter <code>receive.buffer.bytes</code> is now 64K for the new consumer.</li>
     <li> The new consumer now exposes the configuration parameter <code>exclude.internal.topics</code> to restrict internal topics (such as the consumer offsets topic) from accidentally being included in regular expression subscriptions. By default, it is enabled.</li>
     <li> The old Scala producer has been deprecated. Users should migrate their code to the Java producer included in the kafka-clients JAR as soon as possible. </li>
@@ -140,6 +167,7 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
     <li> Altering topic configuration from the kafka-topics.sh script (kafka.admin.TopicCommand) has been deprecated. Going forward, please use the kafka-configs.sh script (kafka.admin.ConfigCommand) for this functionality. </li>
     <li> The kafka-consumer-offset-checker.sh (kafka.tools.ConsumerOffsetChecker) has been deprecated. Going forward, please use kafka-consumer-groups.sh (kafka.admin.ConsumerGroupCommand) for this functionality. </li>
     <li> The kafka.tools.ProducerPerformance class has been deprecated. Going forward, please use org.apache.kafka.tools.ProducerPerformance for this functionality (kafka-producer-perf-test.sh will also be changed to use the new class). </li>
+    <li> The producer config block.on.buffer.full has been deprecated and will be removed in future release. Currently its default value has been changed to false. The KafkaProducer will no longer throw BufferExhaustedException but instead will use max.block.ms value to block, after which it will throw a TimeoutException. If block.on.buffer.full property is set to true explicitly, it will set the max.block.ms to Long.MAX_VALUE and metadata.fetch.timeout.ms will not be honoured</li>
 </ul>
 
 <h4><a id="upgrade_82" href="#upgrade_82">Upgrading from 0.8.1 to 0.8.2</a></h4>

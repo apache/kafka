@@ -40,6 +40,6 @@ private[kafka] class Cluster {
   
   def size = brokers.size
   
-  override def toString(): String = 
+  override def toString: String =
     "Cluster(" + brokers.values.mkString(", ") + ")"  
 }

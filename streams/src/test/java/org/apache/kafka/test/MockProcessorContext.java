@@ -143,7 +143,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     @Override
     public void schedule(long interval) {
-        throw new UnsupportedOperationException("schedule() not supported");
+        throw new UnsupportedOperationException("schedule() not supported.");
     }
 
     @Override
@@ -171,17 +171,17 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     @Override
     public String topic() {
-        throw new UnsupportedOperationException("topic() not supported.");
+        return null;
     }
 
     @Override
     public int partition() {
-        throw new UnsupportedOperationException("partition() not supported.");
+        return -1;
     }
 
     @Override
     public long offset() {
-        throw new UnsupportedOperationException("offset() not supported.");
+        return -1L;
     }
 
     @Override

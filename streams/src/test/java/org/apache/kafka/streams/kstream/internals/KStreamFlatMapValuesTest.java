@@ -23,15 +23,27 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.junit.After;
 import org.junit.Test;
 
 import java.util.ArrayList;
+import java.util.Locale;
 
 import static org.junit.Assert.assertEquals;
 
 public class KStreamFlatMapValuesTest {
 
     private String topicName = "topic";
+
+    private KStreamTestDriver driver = null;
+
+    @After
+    public void cleanup() {
+        if (driver != null) {
+            driver.close();
+        }
+        driver = null;
+    }
 
     @Test
     public void testFlatMapValues() {
@@ -42,7 +54,7 @@ public class KStreamFlatMapValuesTest {
                 @Override
                 public Iterable<String> apply(String value) {
                     ArrayList<String> result = new ArrayList<String>();
-                    result.add(value.toLowerCase());
+                    result.add(value.toLowerCase(Locale.ROOT));
                     result.add(value);
                     return result;
                 }
@@ -57,7 +69,7 @@ public class KStreamFlatMapValuesTest {
         stream = builder.stream(Serdes.Integer(), Serdes.String(), topicName);
         stream.flatMapValues(mapper).process(processor);
 
-        KStreamTestDriver driver = new KStreamTestDriver(builder);
+        driver = new KStreamTestDriver(builder);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topicName, expectedKeys[i], "V" + expectedKeys[i]);
         }

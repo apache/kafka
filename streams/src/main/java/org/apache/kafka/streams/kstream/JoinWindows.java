@@ -17,76 +17,114 @@
 
 package org.apache.kafka.streams.kstream;
 
-
-import org.apache.kafka.streams.kstream.internals.TumblingWindow;
+import org.apache.kafka.streams.kstream.internals.TimeWindow;
 
 import java.util.Map;
 
 /**
  * The window specifications used for joins.
+ * <p>
+ * A {@link JoinWindows} instance defines a join over two stream on the same key and a maximum time difference.
+ * In SQL-style you would express this join as
+ * <pre>
+ *     SELECT * FROM stream1, stream2
+ *     WHERE
+ *       stream1.key = stream2.key
+ *       AND
+ *       stream2.ts - before <= stream1.ts <= stream2.ts + after
+ * </pre>
+ * There are three different window configuration supported:
+ * <ul>
+ *     <li>before = after = time-difference</li>
+ *     <li>before = 0 and after = time-difference</li>
+ *     <li>before = time-difference and after = 0</li>
+ * </ul>
+ * A join is symmetric in the sense, that a join specification on the first stream returns the same result record as
+ * a join specification on the second stream with flipped before and after values.
+ * <p>
+ * Both values (before and after) must not be negative and not zero at the same time.
  */
-public class JoinWindows extends Windows<TumblingWindow> {
+public class JoinWindows extends Windows<TimeWindow> {
 
+    /** Maximum time difference for tuples that are before the join tuple. */
     public final long before;
+    /** Maximum time difference for tuples that are after the join tuple. */
     public final long after;
 
     private JoinWindows(String name, long before, long after) {
         super(name);
 
+        if (before < 0) {
+            throw new IllegalArgumentException("window size must be > 0 (you provided before as " + before + ")");
+        }
+        if (after < 0) {
+            throw new IllegalArgumentException("window size must be > 0 (you provided after as " + after + ")");
+        }
+        if (before == 0 && after == 0) {
+            throw new IllegalArgumentException("window size must be > 0 (you provided 0)");
+        }
+
         this.after = after;
         this.before = before;
     }
 
-    public static JoinWindows of(String name) {
-        return new JoinWindows(name, 0L, 0L);
-    }
-
     /**
-     * Specifies that records of the same key are joinable if their timestamp stamps are within
-     * timeDifference.
+     * Specifies that records of the same key are joinable if their timestamps are within {@code timeDifference}.
      *
-     * @param timeDifference    join window interval in milliseconds
+     * @param timeDifference    join window interval
      */
-    public JoinWindows within(long timeDifference) {
-        return new JoinWindows(this.name, timeDifference, timeDifference);
+    public static JoinWindows of(String name, long timeDifference) {
+        return new JoinWindows(name, timeDifference, timeDifference);
     }
 
     /**
-     * Specifies that records of the same key are joinable if their timestamp stamps are within
+     * Specifies that records of the same key are joinable if their timestamps are within
      * the join window interval, and if the timestamp of a record from the secondary stream is
      * earlier than or equal to the timestamp of a record from the first stream.
      *
-     * @param timeDifference    join window interval in milliseconds
+     * @param timeDifference    join window interval
      */
     public JoinWindows before(long timeDifference) {
         return new JoinWindows(this.name, timeDifference, this.after);
     }
 
     /**
-     * Specifies that records of the same key are joinable if their timestamp stamps are within
+     * Specifies that records of the same key are joinable if their timestamps are within
      * the join window interval, and if the timestamp of a record from the secondary stream
      * is later than or equal to the timestamp of a record from the first stream.
      *
-     * @param timeDifference    join window interval in milliseconds
+     * @param timeDifference    join window interval
      */
     public JoinWindows after(long timeDifference) {
         return new JoinWindows(this.name, this.before, timeDifference);
     }
 
+    /**
+     * Not supported by {@link JoinWindows}. Throws {@link UnsupportedOperationException}.
+     */
     @Override
-    public Map<Long, TumblingWindow> windowsFor(long timestamp) {
-        // this function should never be called
+    public Map<Long, TimeWindow> windowsFor(long timestamp) {
         throw new UnsupportedOperationException("windowsFor() is not supported in JoinWindows");
     }
 
     @Override
-    public boolean equalTo(Windows other) {
-        if (!other.getClass().equals(JoinWindows.class))
+    public final boolean equals(Object o) {
+        if (o == this) {
+            return true;
+        }
+        if (!(o instanceof JoinWindows)) {
             return false;
+        }
 
-        JoinWindows otherWindows = (JoinWindows) other;
+        JoinWindows other = (JoinWindows) o;
+        return this.before == other.before && this.after == other.after;
+    }
 
-        return this.before == otherWindows.before && this.after == otherWindows.after;
+    @Override
+    public int hashCode() {
+        int result = (int) (before ^ (before >>> 32));
+        result = 31 * result + (int) (after ^ (after >>> 32));
+        return result;
     }
 
 }

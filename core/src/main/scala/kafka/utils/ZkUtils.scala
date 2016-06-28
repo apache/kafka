@@ -20,7 +20,7 @@ package kafka.utils
 import java.util.concurrent.CountDownLatch
 
 import kafka.admin._
-import kafka.api.{ApiVersion, KAFKA_0_10_0_IV0, LeaderAndIsr}
+import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
 import kafka.cluster._
 import kafka.common.{KafkaException, NoEpochForPartitionException, TopicAndPartition}
 import kafka.consumer.{ConsumerThreadId, TopicCount}
@@ -277,7 +277,7 @@ class ZkUtils(val zkClient: ZkClient,
     val brokerIdPath = BrokerIdsPath + "/" + id
     val timestamp = SystemTime.milliseconds.toString
 
-    val version = if (apiVersion >= KAFKA_0_10_0_IV0) 3 else 2
+    val version = if (apiVersion >= KAFKA_0_10_0_IV1) 3 else 2
     var jsonMap = Map("version" -> version,
                       "host" -> host,
                       "port" -> port,
@@ -515,14 +515,14 @@ class ZkUtils(val zkClient: ZkClient,
 
   /**
     * Conditional delete the persistent path data, return true if it succeeds,
-    * otherwise (the current version is not the expected version)
+    * false otherwise (the current version is not the expected version)
     */
    def conditionalDeletePath(path: String, expectedVersion: Int): Boolean = {
     try {
       zkClient.delete(path, expectedVersion)
       true
     } catch {
-      case e: KeeperException.BadVersionException => false
+      case e: ZkBadVersionException => false
     }
   }
 
@@ -653,7 +653,7 @@ class ZkUtils(val zkClient: ZkClient,
       val topic = topicAndPartitionMap._1
       val partitionMap = topicAndPartitionMap._2
       debug("partition assignment of /brokers/topics/%s is %s".format(topic, partitionMap))
-      (topic -> partitionMap.keys.toSeq.sortWith((s,t) => s < t))
+      topic -> partitionMap.keys.toSeq.sortWith((s, t) => s < t)
     }
   }
 
@@ -663,12 +663,12 @@ class ZkUtils(val zkClient: ZkClient,
     jsonPartitionMapOpt match {
       case Some(jsonPartitionMap) =>
         val reassignedPartitions = parsePartitionReassignmentData(jsonPartitionMap)
-        reassignedPartitions.map(p => (p._1 -> new ReassignedPartitionsContext(p._2)))
+        reassignedPartitions.map(p => p._1 -> new ReassignedPartitionsContext(p._2))
       case None => Map.empty[TopicAndPartition, ReassignedPartitionsContext]
     }
   }
 
-  // Parses without deduplicating keys so the the data can be checked before allowing reassignment to proceed
+  // Parses without deduplicating keys so the data can be checked before allowing reassignment to proceed
   def parsePartitionReassignmentDataWithoutDedup(jsonData: String): Seq[(TopicAndPartition, Seq[Int])] = {
     Json.parseFull(jsonData) match {
       case Some(m) =>
@@ -710,7 +710,7 @@ class ZkUtils(val zkClient: ZkClient,
     topics
   }
 
-  def getPartitionReassignmentZkData(partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]]): String = {
+  def formatAsReassignmentJson(partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]]): String = {
     Json.encode(Map("version" -> 1, "partitions" -> partitionsToBeReassigned.map(e => Map("topic" -> e._1.topic, "partition" -> e._1.partition,
                                                                                           "replicas" -> e._2))))
   }
@@ -722,7 +722,7 @@ class ZkUtils(val zkClient: ZkClient,
         deletePath(zkPath)
         info("No more partitions need to be reassigned. Deleting zk path %s".format(zkPath))
       case _ =>
-        val jsonData = getPartitionReassignmentZkData(partitionsToBeReassigned)
+        val jsonData = formatAsReassignmentJson(partitionsToBeReassigned)
         try {
           updatePersistentPath(zkPath, jsonData)
           debug("Updated partition reassignment path with %s".format(jsonData))
@@ -792,24 +792,16 @@ class ZkUtils(val zkClient: ZkClient,
   /**
     * This API produces a sequence number by creating / updating given path in zookeeper
     * It uses the stat returned by the zookeeper and return the version. Every time
-    * client updates the path stat.version gets incremented
+    * client updates the path stat.version gets incremented. Starting value of sequence number is 1.
     */
   def getSequenceId(path: String, acls: java.util.List[ACL] = DefaultAcls): Int = {
+    def writeToZk: Int = zkClient.writeDataReturnStat(path, "", -1).getVersion
     try {
-      val stat = zkClient.writeDataReturnStat(path, "", -1)
-      stat.getVersion
+      writeToZk
     } catch {
-      case e: ZkNoNodeException => {
-        createParentPath(BrokerSequenceIdPath, acls)
-        try {
-          zkClient.createPersistent(BrokerSequenceIdPath, "", acls)
-          0
-        } catch {
-          case e: ZkNodeExistsException =>
-            val stat = zkClient.writeDataReturnStat(BrokerSequenceIdPath, "", -1)
-            stat.getVersion
-        }
-      }
+      case e1: ZkNoNodeException =>
+        makeSurePersistentPathExists(path)
+        writeToZk
     }
   }
 
@@ -836,9 +828,9 @@ class ZkUtils(val zkClient: ZkClient,
     val topics = getChildrenParentMayNotExist(BrokerTopicsPath)
     if(topics == null) Set.empty[TopicAndPartition]
     else {
-      topics.map { topic =>
+      topics.flatMap { topic =>
         getChildren(getTopicPartitionsPath(topic)).map(_.toInt).map(TopicAndPartition(topic, _))
-      }.flatten.toSet
+      }.toSet
     }
   }
 
@@ -924,7 +916,7 @@ object ZkPath {
     isNamespacePresent = true
   }
 
-  def resetNamespaceCheckedState {
+  def resetNamespaceCheckedState() {
     isNamespacePresent = false
   }
 

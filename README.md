@@ -22,12 +22,15 @@ Follow instructions in http://kafka.apache.org/documentation.html#quickstart
 ### Building source jar ###
     ./gradlew srcJar
 
-### Building javadocs and scaladocs ###
+### Building aggregated javadoc ###
+    ./gradlew aggregatedJavadoc
+
+### Building javadoc and scaladoc ###
     ./gradlew javadoc
-    ./gradlew javadocJar # builds a jar from the javadocs
+    ./gradlew javadocJar # builds a javadoc jar for each module
     ./gradlew scaladoc
-    ./gradlew scaladocJar # builds a jar from the scaladocs
-    ./gradlew docsJar # builds both javadoc and scaladoc jar
+    ./gradlew scaladocJar # builds a scaladoc jar for each module
+    ./gradlew docsJar # builds both (if applicable) javadoc and scaladoc jars for each module
 
 ### Running unit tests ###
     ./gradlew test
@@ -134,6 +137,7 @@ The following options should be set with a `-D` switch, for example `./gradlew -
 * `org.gradle.project.maxParallelForks`: limits the maximum number of processes for each task.
 * `org.gradle.project.showStandardStreams`: shows standard out and standard error of the test JVM(s) on the console.
 * `org.gradle.project.skipSigning`: skips signing of artifacts.
+* `org.gradle.project.testLoggingEvents`: unit test events to be logged, separated by comma. For example `./gradlew -Dorg.gradle.project.testLoggingEvents=started,passed,skipped,failed test`
 
 ### Running in Vagrant ###
 

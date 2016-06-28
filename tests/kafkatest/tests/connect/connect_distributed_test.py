@@ -17,19 +17,23 @@ from ducktape.tests.test import Test
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.connect import ConnectDistributedService, VerifiableSource, VerifiableSink
+from kafkatest.services.connect import ConnectDistributedService, VerifiableSource, VerifiableSink, ConnectRestError, MockSink, MockSource
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.security.security_config import SecurityConfig
 from ducktape.utils.util import wait_until
 from ducktape.mark import matrix
 import subprocess, itertools, time
 from collections import Counter
+import operator
 
 class ConnectDistributedTest(Test):
     """
     Simple test of Kafka Connect in distributed mode, producing data from files on one cluster and consuming it on
     another, validating the total output is identical to the input.
     """
+
+    FILE_SOURCE_CONNECTOR = 'org.apache.kafka.connect.file.FileStreamSourceConnector'
+    FILE_SINK_CONNECTOR = 'org.apache.kafka.connect.file.FileStreamSinkConnector'
 
     INPUT_FILE = "/mnt/connect.input"
     OUTPUT_FILE = "/mnt/connect.output"
@@ -73,6 +77,213 @@ class ConnectDistributedTest(Test):
         self.zk.start()
         self.kafka.start()
 
+    def _start_connector(self, config_file):
+        connector_props = self.render(config_file)
+        connector_config = dict([line.strip().split('=', 1) for line in connector_props.split('\n') if line.strip() and not line.strip().startswith('#')])
+        self.cc.create_connector(connector_config)
+            
+    def _connector_status(self, connector, node=None):
+        try:
+            return self.cc.get_connector_status(connector, node)
+        except ConnectRestError:
+            return None
+
+    def _connector_has_state(self, status, state):
+        return status is not None and status['connector']['state'] == state
+
+    def _task_has_state(self, task_id, status, state):
+        if not status:
+            return False
+
+        tasks = status['tasks']
+        if not tasks:
+            return False
+
+        for task in tasks:
+            if task['id'] == task_id:
+                return task['state'] == state
+
+        return False
+
+    def _all_tasks_have_state(self, status, task_count, state):
+        if status is None:
+            return False
+
+        tasks = status['tasks']
+        if len(tasks) != task_count:
+            return False
+
+        return reduce(operator.and_, [task['state'] == state for task in tasks], True)
+
+    def is_running(self, connector, node=None):
+        status = self._connector_status(connector.name, node)
+        return self._connector_has_state(status, 'RUNNING') and self._all_tasks_have_state(status, connector.tasks, 'RUNNING')
+
+    def is_paused(self, connector, node=None):
+        status = self._connector_status(connector.name, node)
+        return self._connector_has_state(status, 'PAUSED') and self._all_tasks_have_state(status, connector.tasks, 'PAUSED')
+
+    def connector_is_running(self, connector, node=None):
+        status = self._connector_status(connector.name, node)
+        return self._connector_has_state(status, 'RUNNING')
+
+    def connector_is_failed(self, connector, node=None):
+        status = self._connector_status(connector.name, node)
+        return self._connector_has_state(status, 'FAILED')
+
+    def task_is_failed(self, connector, task_id, node=None):
+        status = self._connector_status(connector.name, node)
+        return self._task_has_state(task_id, status, 'FAILED')
+
+    def task_is_running(self, connector, task_id, node=None):
+        status = self._connector_status(connector.name, node)
+        return self._task_has_state(task_id, status, 'RUNNING')
+
+    def test_restart_failed_connector(self):
+        self.setup_services()
+        self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
+        self.cc.start()
+
+        self.sink = MockSink(self.cc, self.topics.keys(), mode='connector-failure', delay_sec=5)
+        self.sink.start()
+
+        wait_until(lambda: self.connector_is_failed(self.sink), timeout_sec=15,
+                   err_msg="Failed to see connector transition to the FAILED state")
+
+        self.cc.restart_connector(self.sink.name)
+        
+        wait_until(lambda: self.connector_is_running(self.sink), timeout_sec=10,
+                   err_msg="Failed to see connector transition to the RUNNING state")
+
+    
+    @matrix(connector_type=["source", "sink"])
+    def test_restart_failed_task(self, connector_type):
+        self.setup_services()
+        self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
+        self.cc.start()
+
+        connector = None
+        if connector_type == "sink":
+            connector = MockSink(self.cc, self.topics.keys(), mode='task-failure', delay_sec=5)
+        else:
+            connector = MockSource(self.cc, self.topics.keys(), mode='task-failure', delay_sec=5)
+            
+        connector.start()
+
+        task_id = 0
+        wait_until(lambda: self.task_is_failed(connector, task_id), timeout_sec=15,
+                   err_msg="Failed to see task transition to the FAILED state")
+
+        self.cc.restart_task(connector.name, task_id)
+        
+        wait_until(lambda: self.task_is_running(connector, task_id), timeout_sec=10,
+                   err_msg="Failed to see task transition to the RUNNING state")
+
+
+    def test_pause_and_resume_source(self):
+        """
+        Verify that source connectors stop producing records when paused and begin again after
+        being resumed.
+        """
+
+        self.setup_services()
+        self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
+        self.cc.start()
+
+        self.source = VerifiableSource(self.cc)
+        self.source.start()
+
+        wait_until(lambda: self.is_running(self.source), timeout_sec=30,
+                   err_msg="Failed to see connector transition to the RUNNING state")
+        
+        self.cc.pause_connector(self.source.name)
+
+        # wait until all nodes report the paused transition
+        for node in self.cc.nodes:
+            wait_until(lambda: self.is_paused(self.source, node), timeout_sec=30,
+                       err_msg="Failed to see connector transition to the PAUSED state")
+
+        # verify that we do not produce new messages while paused
+        num_messages = len(self.source.messages())
+        time.sleep(10)
+        assert num_messages == len(self.source.messages()), "Paused source connector should not produce any messages"
+
+        self.cc.resume_connector(self.source.name)
+
+        for node in self.cc.nodes:
+            wait_until(lambda: self.is_running(self.source, node), timeout_sec=30,
+                       err_msg="Failed to see connector transition to the RUNNING state")
+
+        # after resuming, we should see records produced again
+        wait_until(lambda: len(self.source.messages()) > num_messages, timeout_sec=30,
+                   err_msg="Failed to produce messages after resuming source connector")
+
+    def test_pause_and_resume_sink(self):
+        """
+        Verify that sink connectors stop consuming records when paused and begin again after
+        being resumed.
+        """
+
+        self.setup_services()
+        self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
+        self.cc.start()
+
+        # use the verifiable source to produce a steady stream of messages
+        self.source = VerifiableSource(self.cc)
+        self.source.start()
+
+        self.sink = VerifiableSink(self.cc)
+        self.sink.start()
+
+        wait_until(lambda: self.is_running(self.sink), timeout_sec=30,
+                   err_msg="Failed to see connector transition to the RUNNING state")
+        
+        self.cc.pause_connector(self.sink.name)
+
+        # wait until all nodes report the paused transition
+        for node in self.cc.nodes:
+            wait_until(lambda: self.is_paused(self.sink, node), timeout_sec=30,
+                       err_msg="Failed to see connector transition to the PAUSED state")
+
+        # verify that we do not consume new messages while paused
+        num_messages = len(self.sink.received_messages())
+        time.sleep(10)
+        assert num_messages == len(self.sink.received_messages()), "Paused sink connector should not consume any messages"
+
+        self.cc.resume_connector(self.sink.name)
+
+        for node in self.cc.nodes:
+            wait_until(lambda: self.is_running(self.sink, node), timeout_sec=30,
+                       err_msg="Failed to see connector transition to the RUNNING state")
+
+        # after resuming, we should see records consumed again
+        wait_until(lambda: len(self.sink.received_messages()) > num_messages, timeout_sec=30,
+                   err_msg="Failed to consume messages after resuming source connector")
+
+
+    def test_pause_state_persistent(self):
+        """
+        Verify that paused state is preserved after a cluster restart.
+        """
+
+        self.setup_services()
+        self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
+        self.cc.start()
+
+        self.source = VerifiableSource(self.cc)
+        self.source.start()
+
+        wait_until(lambda: self.is_running(self.source), timeout_sec=30,
+                   err_msg="Failed to see connector transition to the RUNNING state")
+        
+        self.cc.pause_connector(self.source.name)
+
+        self.cc.restart()
+
+        # we should still be paused after restarting
+        for node in self.cc.nodes:
+            wait_until(lambda: self.is_paused(self.source, node), timeout_sec=30,
+                       err_msg="Failed to see connector startup in PAUSED state")
 
     @matrix(security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL])
     def test_file_source_and_sink(self, security_protocol):
@@ -87,10 +298,9 @@ class ConnectDistributedTest(Test):
         self.cc.start()
 
         self.logger.info("Creating connectors")
-        for connector_props in [self.render("connect-file-source.properties"), self.render("connect-file-sink.properties")]:
-            connector_config = dict([line.strip().split('=', 1) for line in connector_props.split('\n') if line.strip() and not line.strip().startswith('#')])
-            self.cc.create_connector(connector_config)
-
+        self._start_connector("connect-file-source.properties")
+        self._start_connector("connect-file-sink.properties")
+        
         # Generating data on the source node should generate new records and create new output on the sink node. Timeouts
         # here need to be more generous than they are for standalone mode because a) it takes longer to write configs,
         # do rebalancing of the group, etc, and b) without explicit leave group support, rebalancing takes awhile

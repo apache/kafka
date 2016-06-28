@@ -96,7 +96,7 @@ public final class Sensor {
      *         bound
      */
     public void record(double value, long timeMs) {
-        this.lastRecordTime = time.milliseconds();
+        this.lastRecordTime = timeMs;
         synchronized (this) {
             // increment all the stats
             for (int i = 0; i < this.stats.size(); i++)
@@ -121,10 +121,10 @@ public final class Sensor {
                     double value = metric.value(timeMs);
                     if (!quota.acceptable(value)) {
                         throw new QuotaViolationException(String.format(
-                            "(%s) violated quota. Actual: (%f), Threshold: (%f)",
+                            "'%s' violated quota. Actual: %f, Threshold: %f",
                             metric.metricName(),
-                            quota.bound(),
-                            value));
+                            value,
+                            quota.bound()));
                     }
                 }
             }

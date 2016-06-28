@@ -63,6 +63,8 @@ object ErrorMapping {
   val GroupAuthorizationCode: Short = 30
   val ClusterAuthorizationCode: Short = 31
   // 32: INVALID_TIMESTAMP
+  // 33: UNSUPPORTED_SASL_MECHANISM
+  // 34: ILLEGAL_SASL_STATE
 
   private val exceptionToCode =
     Map[Class[Throwable], Short](

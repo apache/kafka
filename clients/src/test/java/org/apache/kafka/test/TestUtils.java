@@ -20,15 +20,27 @@ import static java.util.Arrays.asList;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 import java.util.Random;
+import java.util.UUID;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
-
+import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.utils.Utils;
 
 /**
  * Helper functions for writing unit tests
@@ -45,18 +57,30 @@ public class TestUtils {
     public static final Random SEEDED_RANDOM = new Random(192348092834L);
     public static final Random RANDOM = new Random();
 
+    public static Cluster singletonCluster(Map<String, Integer> topicPartitionCounts) {
+        return clusterWith(1, topicPartitionCounts);
+    }
+
     public static Cluster singletonCluster(String topic, int partitions) {
         return clusterWith(1, topic, partitions);
     }
 
-    public static Cluster clusterWith(int nodes, String topic, int partitions) {
+    public static Cluster clusterWith(int nodes, Map<String, Integer> topicPartitionCounts) {
         Node[] ns = new Node[nodes];
         for (int i = 0; i < nodes; i++)
             ns[i] = new Node(i, "localhost", 1969);
-        List<PartitionInfo> parts = new ArrayList<PartitionInfo>();
-        for (int i = 0; i < partitions; i++)
-            parts.add(new PartitionInfo(topic, i, ns[i % ns.length], ns, ns));
+        List<PartitionInfo> parts = new ArrayList<>();
+        for (Map.Entry<String, Integer> topicPartition : topicPartitionCounts.entrySet()) {
+            String topic = topicPartition.getKey();
+            int partitions = topicPartition.getValue();
+            for (int i = 0; i < partitions; i++)
+                parts.add(new PartitionInfo(topic, i, ns[i % ns.length], ns, ns));
+        }
         return new Cluster(asList(ns), parts, Collections.<String>emptySet());
+    }
+
+    public static Cluster clusterWith(int nodes, String topic, int partitions) {
+        return clusterWith(nodes, Collections.singletonMap(topic, partitions));
     }
 
     /**
@@ -84,13 +108,139 @@ public class TestUtils {
     }
 
     /**
-     * Creates an empty file in the default temporary-file directory, using `kafka` as the prefix and `tmp` as the
+     * Create an empty file in the default temporary-file directory, using `kafka` as the prefix and `tmp` as the
      * suffix to generate its name.
      */
     public static File tempFile() throws IOException {
         File file = File.createTempFile("kafka", ".tmp");
         file.deleteOnExit();
+
         return file;
+    }
+
+    /**
+     * Create a temporary relative directory in the default temporary-file directory with the given prefix.
+     *
+     * @param prefix The prefix of the temporary directory, if null using "kafka-" as default prefix
+     */
+    public static File tempDirectory(String prefix) throws IOException {
+        return tempDirectory(null, prefix);
+    }
+
+    /**
+     * Create a temporary directory named "test" under /temp
+     * @return  the temporary directory just created.
+     */
+    public static File tempDir() {
+        try {
+            return tempDirectory(new File("/tmp").toPath(), "test");
+        } catch (IOException ex) {
+            throw new RuntimeException("Failed to create a temp dir", ex);
+        }
+    }
+
+    /**
+     * Create a temporary relative directory in the specified parent directory with the given prefix.
+     *
+     * @param parent The parent folder path name, if null using the default temporary-file directory
+     * @param prefix The prefix of the temporary directory, if null using "kafka-" as default prefix
+     */
+    public static File tempDirectory(Path parent, String prefix) throws IOException {
+        final File file = parent == null ?
+                Files.createTempDirectory(prefix == null ? "kafka-" : prefix).toFile() :
+                Files.createTempDirectory(parent, prefix == null ? "kafka-" : prefix).toFile();
+        file.deleteOnExit();
+
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            @Override
+            public void run() {
+                Utils.delete(file);
+            }
+        });
+
+        return file;
+    }
+
+    /**
+     * Create a records buffer including the offset and message size at the start, which is required if the buffer is to
+     * be sent as part of `ProduceRequest`. This is the reason why we can't use
+     * `Record(long timestamp, byte[] key, byte[] value, CompressionType type, int valueOffset, int valueSize)` as this
+     * constructor does not include either of these fields.
+     */
+    public static ByteBuffer partitionRecordsBuffer(long offset, CompressionType compressionType, Record... records) {
+        int bufferSize = 0;
+        for (Record record : records)
+            bufferSize += Records.LOG_OVERHEAD + record.size();
+        ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
+        MemoryRecords memoryRecords = MemoryRecords.emptyRecords(buffer, compressionType);
+        for (Record record : records)
+            memoryRecords.append(offset, record);
+        memoryRecords.close();
+        return memoryRecords.buffer();
+    }
+
+    public static Properties producerConfig(final String bootstrapServers,
+                                            final Class keySerializer,
+                                            final Class valueSerializer,
+                                            final Properties additional) {
+        final Properties properties = new Properties();
+        properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        properties.put(ProducerConfig.ACKS_CONFIG, "all");
+        properties.put(ProducerConfig.RETRIES_CONFIG, 0);
+        properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializer);
+        properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializer);
+        properties.putAll(additional);
+        return properties;
+    }
+
+    public static Properties producerConfig(final String bootstrapServers, Class keySerializer, Class valueSerializer) {
+        return producerConfig(bootstrapServers, keySerializer, valueSerializer, new Properties());
+    }
+
+    public static Properties consumerConfig(final String bootstrapServers,
+                                            final String groupId,
+                                            final Class keyDeserializer,
+                                            final Class valueDeserializer,
+                                            final Properties additional) {
+
+        final Properties consumerConfig = new Properties();
+        consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer);
+        consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer);
+        consumerConfig.putAll(additional);
+        return consumerConfig;
+    }
+
+    /**
+     * returns consumer config with random UUID for the Group ID
+     */
+    public static Properties consumerConfig(final String bootstrapServers, Class keyDeserializer, Class valueDeserializer) {
+        return consumerConfig(bootstrapServers,
+                              UUID.randomUUID().toString(),
+                              keyDeserializer,
+                              valueDeserializer,
+                              new Properties());
+    }
+
+    /**
+     *  uses default value of 30 seconds for timeout
+     */
+    public static void waitForCondition(TestCondition testCondition) throws InterruptedException {
+        waitForCondition(testCondition, 30000);
+    }
+
+    /**
+     *  Used to wait for specific conditions/state to be me during a test
+     *  this is meant to be a replacement for using Thread.sleep
+     */
+    public static void waitForCondition(TestCondition testCondition, long maxTimeMillis) throws InterruptedException {
+        long startTime = System.currentTimeMillis();
+
+        while (!testCondition.conditionMet() && ((System.currentTimeMillis() - startTime) < maxTimeMillis)) {
+            Thread.sleep(Math.min(maxTimeMillis, 100L));
+        }
     }
 
 }

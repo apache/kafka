@@ -28,8 +28,8 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{Logging, SystemTime}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.Send
-import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
-import org.apache.kafka.common.requests.{RequestSend, ProduceRequest, AbstractRequest, RequestHeader}
+import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol, Protocol}
+import org.apache.kafka.common.requests.{RequestSend, ProduceRequest, AbstractRequest, RequestHeader, ApiVersionsRequest}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.log4j.Logger
 
@@ -84,8 +84,13 @@ object RequestChannel extends Logging {
         null
     val body: AbstractRequest =
       if (requestObj == null)
-        try AbstractRequest.getRequest(header.apiKey, header.apiVersion, buffer)
-        catch {
+        try {
+          // For unsupported version of ApiVersionsRequest, create a dummy request to enable an error response to be returned later
+          if (header.apiKey == ApiKeys.API_VERSIONS.id && !Protocol.apiVersionSupported(header.apiKey, header.apiVersion))
+            new ApiVersionsRequest
+          else
+            AbstractRequest.getRequest(header.apiKey, header.apiVersion, buffer)
+        } catch {
           case ex: Throwable =>
             throw new InvalidRequestException(s"Error getting request for apiKey: ${header.apiKey} and apiVersion: ${header.apiVersion}", ex)
         }
@@ -95,7 +100,7 @@ object RequestChannel extends Logging {
     buffer = null
     private val requestLogger = Logger.getLogger("kafka.request.logger")
 
-    private def requestDesc(details: Boolean): String = {
+    def requestDesc(details: Boolean): String = {
       if (requestObj != null)
         requestObj.describe(details)
       else

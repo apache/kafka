@@ -383,7 +383,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
   
   /* check that offsets are assigned based on byte offset from the given base offset */
   def checkOffsets(messages: ByteBufferMessageSet, baseOffset: Long) {
-    assertTrue("Message set should not be empty", messages.size > 0)
+    assertTrue("Message set should not be empty", messages.nonEmpty)
     var offset = baseOffset
     for(entry <- messages) {
       assertEquals("Unexpected offset in message set iterator", offset, entry.offset)

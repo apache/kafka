@@ -22,7 +22,6 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.SystemTime;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -58,6 +57,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -94,7 +94,12 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
     private Capture<org.apache.kafka.clients.producer.Callback> producerCallbacks;
 
-    private static final Map<String, String> EMPTY_TASK_PROPS = Collections.emptyMap();
+    private static final Map<String, String> TASK_PROPS = new HashMap<>();
+    static {
+        TASK_PROPS.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
+    }
+    private static final TaskConfig TASK_CONFIG = new TaskConfig(TASK_PROPS);
+
     private static final List<SourceRecord> RECORDS = Arrays.asList(
             new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD)
     );
@@ -115,8 +120,101 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     private void createWorkerTask() {
-        workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, keyConverter, valueConverter, producer,
-                offsetReader, offsetWriter, config, new SystemTime());
+        createWorkerTask(TargetState.STARTED);
+    }
+
+    private void createWorkerTask(TargetState initialState) {
+        workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter,
+                valueConverter, producer, offsetReader, offsetWriter, config, new SystemTime());
+    }
+
+    @Test
+    public void testStartPaused() throws Exception {
+        final CountDownLatch startupLatch = new CountDownLatch(1);
+
+        createWorkerTask(TargetState.PAUSED);
+
+        sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
+        EasyMock.expectLastCall();
+        sourceTask.start(TASK_PROPS);
+        EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
+            @Override
+            public Void answer() throws Throwable {
+                startupLatch.countDown();
+                return null;
+            }
+        });
+        statusListener.onPause(taskId);
+        EasyMock.expectLastCall();
+
+        // we shouldn't get any calls to poll()
+
+        sourceTask.stop();
+        EasyMock.expectLastCall();
+        expectOffsetFlush(true);
+
+        statusListener.onShutdown(taskId);
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        Future<?> taskFuture = executor.submit(workerTask);
+
+        assertTrue(startupLatch.await(5, TimeUnit.SECONDS));
+        workerTask.stop();
+        assertTrue(workerTask.awaitStop(1000));
+
+        taskFuture.get();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testPause() throws Exception {
+        createWorkerTask();
+
+        sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
+        EasyMock.expectLastCall();
+        sourceTask.start(TASK_PROPS);
+        EasyMock.expectLastCall();
+        statusListener.onStartup(taskId);
+        EasyMock.expectLastCall();
+
+        AtomicInteger count = new AtomicInteger(0);
+        CountDownLatch pollLatch = expectPolls(10, count);
+        // In this test, we don't flush, so nothing goes any further than the offset writer
+
+        statusListener.onPause(taskId);
+        EasyMock.expectLastCall();
+
+        sourceTask.stop();
+        EasyMock.expectLastCall();
+        expectOffsetFlush(true);
+
+        statusListener.onShutdown(taskId);
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        Future<?> taskFuture = executor.submit(workerTask);
+        assertTrue(awaitLatch(pollLatch));
+
+        workerTask.transitionTo(TargetState.PAUSED);
+
+        int priorCount = count.get();
+        Thread.sleep(100);
+
+        // since the transition is observed asynchronously, the count could be off by one loop iteration
+        assertTrue(count.get() - priorCount <= 1);
+
+        workerTask.stop();
+        assertTrue(workerTask.awaitStop(1000));
+
+        taskFuture.get();
+
+        PowerMock.verifyAll();
     }
 
     @Test
@@ -125,7 +223,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
         EasyMock.expectLastCall();
-        sourceTask.start(EMPTY_TASK_PROPS);
+        sourceTask.start(TASK_PROPS);
         EasyMock.expectLastCall();
         statusListener.onStartup(taskId);
         EasyMock.expectLastCall();
@@ -142,11 +240,14 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        workerTask.initialize(EMPTY_TASK_PROPS);
-        executor.submit(workerTask);
-        awaitPolls(pollLatch);
+        workerTask.initialize(TASK_CONFIG);
+        Future<?> taskFuture = executor.submit(workerTask);
+
+        assertTrue(awaitLatch(pollLatch));
         workerTask.stop();
         assertTrue(workerTask.awaitStop(1000));
+
+        taskFuture.get();
 
         PowerMock.verifyAll();
     }
@@ -157,14 +258,20 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
         EasyMock.expectLastCall();
-        sourceTask.start(EMPTY_TASK_PROPS);
+        sourceTask.start(TASK_PROPS);
         EasyMock.expectLastCall();
         statusListener.onStartup(taskId);
         EasyMock.expectLastCall();
 
-        final CountDownLatch pollLatch = expectPolls(1);
-        RuntimeException exception = new RuntimeException();
-        EasyMock.expect(sourceTask.poll()).andThrow(exception);
+        final CountDownLatch pollLatch = new CountDownLatch(1);
+        final RuntimeException exception = new RuntimeException();
+        EasyMock.expect(sourceTask.poll()).andAnswer(new IAnswer<List<SourceRecord>>() {
+            @Override
+            public List<SourceRecord> answer() throws Throwable {
+                pollLatch.countDown();
+                throw exception;
+            }
+        });
 
         statusListener.onFailure(taskId, exception);
         EasyMock.expectLastCall();
@@ -175,11 +282,14 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        workerTask.initialize(EMPTY_TASK_PROPS);
-        executor.submit(workerTask);
-        awaitPolls(pollLatch);
+        workerTask.initialize(TASK_CONFIG);
+        Future<?> taskFuture = executor.submit(workerTask);
+
+        assertTrue(awaitLatch(pollLatch));
         workerTask.stop();
         assertTrue(workerTask.awaitStop(1000));
+
+        taskFuture.get();
 
         PowerMock.verifyAll();
     }
@@ -191,7 +301,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
         EasyMock.expectLastCall();
-        sourceTask.start(EMPTY_TASK_PROPS);
+        sourceTask.start(TASK_PROPS);
         EasyMock.expectLastCall();
         statusListener.onStartup(taskId);
         EasyMock.expectLastCall();
@@ -210,12 +320,15 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        workerTask.initialize(EMPTY_TASK_PROPS);
-        executor.submit(workerTask);
-        awaitPolls(pollLatch);
+        workerTask.initialize(TASK_CONFIG);
+        Future<?> taskFuture = executor.submit(workerTask);
+
+        assertTrue(awaitLatch(pollLatch));
         assertTrue(workerTask.commitOffsets());
         workerTask.stop();
         assertTrue(workerTask.awaitStop(1000));
+
+        taskFuture.get();
 
         PowerMock.verifyAll();
     }
@@ -227,7 +340,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
         EasyMock.expectLastCall();
-        sourceTask.start(EMPTY_TASK_PROPS);
+        sourceTask.start(TASK_PROPS);
         EasyMock.expectLastCall();
         statusListener.onStartup(taskId);
         EasyMock.expectLastCall();
@@ -245,12 +358,15 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        workerTask.initialize(EMPTY_TASK_PROPS);
-        executor.submit(workerTask);
-        awaitPolls(pollLatch);
+        workerTask.initialize(TASK_CONFIG);
+        Future<?> taskFuture = executor.submit(workerTask);
+
+        assertTrue(awaitLatch(pollLatch));
         assertTrue(workerTask.commitOffsets());
         workerTask.stop();
         assertTrue(workerTask.awaitStop(1000));
+
+        taskFuture.get();
 
         PowerMock.verifyAll();
     }
@@ -310,46 +426,78 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     @Test
+    public void testSendRecordsTaskCommitRecordFail() throws Exception {
+        createWorkerTask();
+
+        // Differentiate only by Kafka partition so we can reuse conversion expectations
+        SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, "topic", 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, "topic", 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+        SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, "topic", 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        // Source task commit record failure will not cause the task to abort
+        expectSendRecordOnce(false);
+        expectSendRecordTaskCommitRecordFail(false, false);
+        expectSendRecordOnce(false);
+
+        PowerMock.replayAll();
+
+        Whitebox.setInternalState(workerTask, "toSend", Arrays.asList(record1, record2, record3));
+        Whitebox.invokeMethod(workerTask, "sendRecords");
+        assertEquals(false, Whitebox.getInternalState(workerTask, "lastSendFailed"));
+        assertNull(Whitebox.getInternalState(workerTask, "toSend"));
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
     public void testSlowTaskStart() throws Exception {
         final CountDownLatch startupLatch = new CountDownLatch(1);
+        final CountDownLatch finishStartupLatch = new CountDownLatch(1);
 
         createWorkerTask();
 
         sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
         EasyMock.expectLastCall();
-        sourceTask.start(EMPTY_TASK_PROPS);
-        EasyMock.expectLastCall();
-
-        statusListener.onStartup(taskId);
+        sourceTask.start(TASK_PROPS);
         EasyMock.expectLastCall().andAnswer(new IAnswer<Object>() {
             @Override
             public Object answer() throws Throwable {
                 startupLatch.countDown();
-                Utils.sleep(100);
+                assertTrue(awaitLatch(finishStartupLatch));
                 return null;
             }
         });
+
+        statusListener.onStartup(taskId);
+        EasyMock.expectLastCall();
 
         sourceTask.stop();
         EasyMock.expectLastCall();
         expectOffsetFlush(true);
 
+        statusListener.onShutdown(taskId);
+        EasyMock.expectLastCall();
+
         PowerMock.replayAll();
 
-        workerTask.initialize(EMPTY_TASK_PROPS);
-        executor.submit(workerTask);
+        workerTask.initialize(TASK_CONFIG);
+        Future<?> workerTaskFuture = executor.submit(workerTask);
+
         // Stopping immediately while the other thread has work to do should result in no polling, no offset commits,
         // exiting the work thread immediately, and the stop() method will be invoked in the background thread since it
         // cannot be invoked immediately in the thread trying to stop the task.
-        startupLatch.await(1000, TimeUnit.MILLISECONDS);
+        assertTrue(awaitLatch(startupLatch));
         workerTask.stop();
+        finishStartupLatch.countDown();
         assertTrue(workerTask.awaitStop(1000));
+
+        workerTaskFuture.get();
 
         PowerMock.verifyAll();
     }
 
-    private CountDownLatch expectPolls(int count) throws InterruptedException {
-        final CountDownLatch latch = new CountDownLatch(count);
+    private CountDownLatch expectPolls(int minimum, final AtomicInteger count) throws InterruptedException {
+        final CountDownLatch latch = new CountDownLatch(minimum);
         // Note that we stub these to allow any number of calls because the thread will continue to
         // run. The count passed in + latch returned just makes sure we get *at least* that number of
         // calls
@@ -357,6 +505,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
                 .andStubAnswer(new IAnswer<List<SourceRecord>>() {
                     @Override
                     public List<SourceRecord> answer() throws Throwable {
+                        count.incrementAndGet();
                         latch.countDown();
                         return RECORDS;
                     }
@@ -364,6 +513,10 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         // Fallout of the poll() call
         expectSendRecordAnyTimes();
         return latch;
+    }
+
+    private CountDownLatch expectPolls(int count) throws InterruptedException {
+        return expectPolls(count, new AtomicInteger());
     }
 
     @SuppressWarnings("unchecked")
@@ -380,14 +533,22 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordAnyTimes() throws InterruptedException {
-        return expectSendRecord(true, false);
+        return expectSendRecordTaskCommitRecordSucceed(true, false);
     }
 
     private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordOnce(boolean isRetry) throws InterruptedException {
-        return expectSendRecord(false, isRetry);
+        return expectSendRecordTaskCommitRecordSucceed(false, isRetry);
     }
 
-    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecord(boolean anyTimes, boolean isRetry) throws InterruptedException {
+    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordTaskCommitRecordSucceed(boolean anyTimes, boolean isRetry) throws InterruptedException {
+        return expectSendRecord(anyTimes, isRetry, true);
+    }
+
+    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordTaskCommitRecordFail(boolean anyTimes, boolean isRetry) throws InterruptedException {
+        return expectSendRecord(anyTimes, isRetry, false);
+    }
+
+    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecord(boolean anyTimes, boolean isRetry, boolean succeed) throws InterruptedException {
         expectConvertKeyValue(anyTimes);
 
         Capture<ProducerRecord<byte[], byte[]>> sent = EasyMock.newCapture();
@@ -424,11 +585,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             expect.andAnswer(expectResponse);
 
         // 3. As a result of a successful producer send callback, we'll notify the source task of the record commit
-        sourceTask.commitRecord(EasyMock.anyObject(SourceRecord.class));
-        if (anyTimes)
-            EasyMock.expectLastCall().anyTimes();
-        else
-            EasyMock.expectLastCall();
+        expectTaskCommitRecord(anyTimes, succeed);
 
         return sent;
     }
@@ -446,8 +603,24 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             convertValueExpect.andReturn(SERIALIZED_RECORD);
     }
 
-    private void awaitPolls(CountDownLatch latch) throws InterruptedException {
-        latch.await(1000, TimeUnit.MILLISECONDS);
+    private void expectTaskCommitRecord(boolean anyTimes, boolean succeed) throws InterruptedException {
+        sourceTask.commitRecord(EasyMock.anyObject(SourceRecord.class));
+        IExpectationSetters<Void> expect = EasyMock.expectLastCall();
+        if (!succeed) {
+            expect = expect.andThrow(new RuntimeException("Error committing record in source task"));
+        }
+        if (anyTimes) {
+            expect.anyTimes();
+        }
+    }
+
+    private boolean awaitLatch(CountDownLatch latch) {
+        try {
+            return latch.await(5000, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            // ignore
+        }
+        return false;
     }
 
     @SuppressWarnings("unchecked")
@@ -467,6 +640,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             offsetWriter.cancelFlush();
             PowerMock.expectLastCall();
         }
+    }
+
+    private abstract static class TestSourceTask extends SourceTask {
     }
 
 }

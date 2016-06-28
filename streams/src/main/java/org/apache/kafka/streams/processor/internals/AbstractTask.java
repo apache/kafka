@@ -44,6 +44,9 @@ public abstract class AbstractTask {
     protected final Set<TopicPartition> partitions;
     protected ProcessorContext processorContext;
 
+    /**
+     * @throws ProcessorStateException if the state manager cannot be created
+     */
     protected AbstractTask(TaskId id,
                            String applicationId,
                            Collection<TopicPartition> partitions,
@@ -101,6 +104,9 @@ public abstract class AbstractTask {
 
     public abstract void commit();
 
+    /**
+     * @throws ProcessorStateException if there is an error while closing the state manager
+     */
     public void close() {
         try {
             stateMgr.close(recordCollectorOffsets());

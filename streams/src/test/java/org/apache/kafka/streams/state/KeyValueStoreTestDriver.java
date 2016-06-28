@@ -35,6 +35,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.MockTimestampExtractor;
+import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
 import java.util.HashMap;
@@ -198,19 +199,8 @@ public class KeyValueStoreTestDriver<K, V> {
             public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
                 // for byte arrays we need to wrap it for comparison
 
-                K key;
-                if (record.key() instanceof byte[]) {
-                    key = serdes.keyFrom((byte[]) record.key());
-                } else {
-                    key = (K) record.key();
-                }
-
-                V value;
-                if (record.key() instanceof byte[]) {
-                    value = serdes.valueFrom((byte[]) record.value());
-                } else {
-                    value = (V) record.value();
-                }
+                K key = serdes.keyFrom(keySerializer.serialize(record.topic(), record.key()));
+                V value = serdes.valueFrom(valueSerializer.serialize(record.topic(), record.value()));
 
                 recordFlushed(key, value);
             }
@@ -221,7 +211,7 @@ public class KeyValueStoreTestDriver<K, V> {
                 send(record, keySerializer, valueSerializer);
             }
         };
-        this.stateDir = StateTestUtils.tempDir();
+        this.stateDir = TestUtils.tempDir();
         this.stateDir.mkdirs();
 
         Properties props = new Properties();
@@ -373,9 +363,11 @@ public class KeyValueStoreTestDriver<K, V> {
      */
     public int sizeOf(KeyValueStore<K, V> store) {
         int size = 0;
-        for (KeyValueIterator<K, V> iterator = store.all(); iterator.hasNext();) {
-            iterator.next();
-            ++size;
+        try (KeyValueIterator<K, V> iterator = store.all()) {
+            while (iterator.hasNext()) {
+                iterator.next();
+                ++size;
+            }
         }
         return size;
     }

@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -46,6 +47,18 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Set;
 
+/**
+ * A persistent key-value store based on RocksDB.
+ *
+ * Note that the use of array-typed keys is discouraged because they result in incorrect caching behavior.
+ * If you intend to work on byte arrays as key, for example, you may want to wrap them with the {@code Bytes} class,
+ * i.e. use {@code RocksDBStore<Bytes, ...>} rather than {@code RocksDBStore<byte[], ...>}.
+ *
+ * @param <K> The key type
+ * @param <V> The value type
+ *
+ * @see org.apache.kafka.streams.state.Stores#create(String)
+ */
 public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     private static final int TTL_NOT_USED = -1;
@@ -64,24 +77,25 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private final String name;
     private final String parentDir;
 
-    private final Options options;
-    private final WriteOptions wOptions;
-    private final FlushOptions fOptions;
-
+    protected File dbDir;
+    private StateSerdes<K, V> serdes;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
 
-    private StateSerdes<K, V> serdes;
-    protected File dbDir;
     private RocksDB db;
+
+    // the following option objects will be created at constructor and disposed at close()
+    private Options options;
+    private WriteOptions wOptions;
+    private FlushOptions fOptions;
 
     private boolean loggingEnabled = false;
     private int cacheSize = DEFAULT_UNENCODED_CACHE_SIZE;
 
     private Set<K> cacheDirtyKeys;
     private MemoryLRUCache<K, RocksDBCacheEntry> cache;
-    private StoreChangeLogger<byte[], byte[]> changeLogger;
-    private StoreChangeLogger.ValueGetter<byte[], byte[]> getter;
+    private StoreChangeLogger<Bytes, byte[]> changeLogger;
+    private StoreChangeLogger.ValueGetter<Bytes, byte[]> getter;
 
     public KeyValueStore<K, V> enableLogging() {
         loggingEnabled = true;
@@ -156,7 +170,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         // open the DB dir
         openDB(context);
 
-        this.changeLogger = this.loggingEnabled ? new RawStoreChangeLogger(name, context) : null;
+        this.changeLogger = this.loggingEnabled ? new StoreChangeLogger<>(name, context, WindowStoreUtils.INNER_SERDES) : null;
 
         if (this.cacheSize > 0) {
             this.cache = new MemoryLRUCache<K, RocksDBCacheEntry>(name, cacheSize)
@@ -170,7 +184,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                         }
                     });
 
-
             this.cacheDirtyKeys = new HashSet<>();
         } else {
             this.cache = null;
@@ -179,10 +192,10 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
-        this.getter = new StoreChangeLogger.ValueGetter<byte[], byte[]>() {
+        this.getter = new StoreChangeLogger.ValueGetter<Bytes, byte[]>() {
             @Override
-            public byte[] get(byte[] key) {
-                return getInternal(key);
+            public byte[] get(Bytes key) {
+                return getInternal(key.get());
             }
         };
 
@@ -199,7 +212,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         try {
             if (ttl == TTL_NOT_USED) {
                 dir.getParentFile().mkdirs();
-                return RocksDB.open(options, dir.toString());
+                return RocksDB.open(options, dir.getAbsolutePath());
             } else {
                 throw new UnsupportedOperationException("Change log is not supported for store " + this.name + " since it is TTL based.");
                 // TODO: support TTL with change log?
@@ -258,7 +271,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             putInternal(rawKey, rawValue);
 
             if (loggingEnabled) {
-                changeLogger.add(rawKey);
+                changeLogger.add(Bytes.wrap(rawKey));
                 changeLogger.maybeLogChange(this.getter);
             }
         }
@@ -301,14 +314,16 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private void putAllInternal(List<KeyValue<byte[], byte[]>> entries) {
         WriteBatch batch = new WriteBatch();
 
-        for (KeyValue<byte[], byte[]> entry : entries) {
-            batch.put(entry.key, entry.value);
-        }
-
         try {
+            for (KeyValue<byte[], byte[]> entry : entries) {
+                batch.put(entry.key, entry.value);
+            }
+
             db.write(wOptions, batch);
         } catch (RocksDBException e) {
             throw new ProcessorStateException("Error while batch writing to store " + this.name, e);
+        } finally {
+            batch.dispose();
         }
     }
 
@@ -325,7 +340,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         if (cache != null)
             flushCache();
 
-        return new RocksDBRangeIterator<K, V>(db.newIterator(), serdes, from, to);
+        return new RocksDBRangeIterator<>(db.newIterator(), serdes, from, to);
     }
 
     @Override
@@ -336,7 +351,44 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         RocksIterator innerIter = db.newIterator();
         innerIter.seekToFirst();
-        return new RocksDbIterator<K, V>(innerIter, serdes);
+        return new RocksDbIterator<>(innerIter, serdes);
+    }
+
+    /**
+     * Return an approximate count of key-value mappings in this store.
+     *
+     * <code>RocksDB</code> cannot return an exact entry count without doing a
+     * full scan, so this method relies on the <code>rocksdb.estimate-num-keys</code>
+     * property to get an approximate count. The returned size also includes
+     * a count of dirty keys in the store's in-memory cache, which may lead to some
+     * double-counting of entries and inflate the estimate.
+     *
+     * @return an approximate count of key-value mappings in the store.
+     */
+    @Override
+    public long approximateNumEntries() {
+        long value;
+        try {
+            value = this.db.getLongProperty("rocksdb.estimate-num-keys");
+        } catch (RocksDBException e) {
+            throw new ProcessorStateException("Error fetching property from store " + this.name, e);
+        }
+        if (isOverflowing(value)) {
+            return Long.MAX_VALUE;
+        }
+        if (this.cacheDirtyKeys != null) {
+            value += this.cacheDirtyKeys.size();
+        }
+        if (isOverflowing(value)) {
+            return Long.MAX_VALUE;
+        }
+        return value;
+    }
+
+    private boolean isOverflowing(long value) {
+        // RocksDB returns an unsigned 8-byte integer, which could overflow long
+        // and manifest as a negative value.
+        return value < 0;
     }
 
     private void flushCache() {
@@ -348,14 +400,16 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             for (K key : cacheDirtyKeys) {
                 RocksDBCacheEntry entry = cache.get(key);
 
-                entry.isDirty = false;
+                if (entry != null) {
+                    entry.isDirty = false;
 
-                byte[] rawKey = serdes.rawKey(key);
+                    byte[] rawKey = serdes.rawKey(key);
 
-                if (entry.value != null) {
-                    putBatch.add(new KeyValue<>(rawKey, serdes.rawValue(entry.value)));
-                } else {
-                    deleteBatch.add(rawKey);
+                    if (entry.value != null) {
+                        putBatch.add(new KeyValue<>(rawKey, serdes.rawValue(entry.value)));
+                    } else {
+                        deleteBatch.add(rawKey);
+                    }
                 }
             }
 
@@ -363,7 +417,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
             if (loggingEnabled) {
                 for (KeyValue<byte[], byte[]> kv : putBatch)
-                    changeLogger.add(kv.key);
+                    changeLogger.add(Bytes.wrap(kv.key));
             }
 
             // check all removed entries and remove them in rocksDB
@@ -376,7 +430,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                 }
 
                 if (loggingEnabled) {
-                    changeLogger.delete(removedKey);
+                    changeLogger.delete(Bytes.wrap(removedKey));
                 }
             }
 
@@ -390,6 +444,10 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void flush() {
+        if (db == null) {
+            return;
+        }
+
         // flush of the cache entries if necessary
         flushCache();
 
@@ -397,6 +455,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         flushInternal();
     }
 
+    /**
+     * @throws ProcessorStateException if flushing failed because of any internal store exceptions
+     */
     public void flushInternal() {
         try {
             db.flush(fOptions);
@@ -407,8 +468,21 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void close() {
+
+        if (db == null) {
+            return;
+        }
+
         flush();
+        options.dispose();
+        wOptions.dispose();
+        fOptions.dispose();
         db.close();
+
+        options = null;
+        wOptions = null;
+        fOptions = null;
+        db = null;
     }
 
     private static class RocksDbIterator<K, V> implements KeyValueIterator<K, V> {
@@ -433,6 +507,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             return iter.isValid();
         }
 
+        /**
+         * @throws NoSuchElementException if no next element exist
+         */
         @Override
         public KeyValue<K, V> next() {
             if (!hasNext())
@@ -443,6 +520,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             return entry;
         }
 
+        /**
+         * @throws UnsupportedOperationException
+         */
         @Override
         public void remove() {
             throw new UnsupportedOperationException("RocksDB iterator does not support remove");
@@ -455,30 +535,14 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     }
 
-    private static class LexicographicComparator implements Comparator<byte[]> {
-
-        @Override
-        public int compare(byte[] left, byte[] right) {
-            for (int i = 0, j = 0; i < left.length && j < right.length; i++, j++) {
-                int leftByte = left[i] & 0xff;
-                int rightByte = right[j] & 0xff;
-                if (leftByte != rightByte) {
-                    return leftByte - rightByte;
-                }
-            }
-            return left.length - right.length;
-        }
-    }
-
     private static class RocksDBRangeIterator<K, V> extends RocksDbIterator<K, V> {
         // RocksDB's JNI interface does not expose getters/setters that allow the
         // comparator to be pluggable, and the default is lexicographic, so it's
         // safe to just force lexicographic comparator here for now.
-        private final Comparator<byte[]> comparator = new LexicographicComparator();
-        byte[] rawToKey;
+        private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
+        private byte[] rawToKey;
 
-        public RocksDBRangeIterator(RocksIterator iter, StateSerdes<K, V> serdes,
-                                    K from, K to) {
+        public RocksDBRangeIterator(RocksIterator iter, StateSerdes<K, V> serdes, K from, K to) {
             super(iter, serdes);
             iter.seek(serdes.rawKey(from));
             this.rawToKey = serdes.rawKey(to);

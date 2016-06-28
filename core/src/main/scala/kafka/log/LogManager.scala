@@ -132,10 +132,9 @@ class LogManager(val logDirs: Array[File],
       try {
         recoveryPoints = this.recoveryPointCheckpoints(dir).read
       } catch {
-        case e: Exception => {
+        case e: Exception =>
           warn("Error occured while reading recovery-point-offset-checkpoint file of directory " + dir, e)
           warn("Resetting the recovery checkpoint to 0")
-        }
       }
 
       val jobsForDir = for {
@@ -282,7 +281,7 @@ class LogManager(val logDirs: Array[File],
       // If the log does not exist, skip it
       if (log != null) {
         //May need to abort and pause the cleaning of the log, and resume after truncation is done.
-        val needToStopCleaner: Boolean = (truncateOffset < log.activeSegment.baseOffset)
+        val needToStopCleaner: Boolean = truncateOffset < log.activeSegment.baseOffset
         if (needToStopCleaner && cleaner != null)
           cleaner.abortAndPauseCleaning(topicAndPartition)
         log.truncateTo(truncateOffset)

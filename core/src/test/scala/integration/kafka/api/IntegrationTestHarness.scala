@@ -46,15 +46,15 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
 
   override def generateConfigs() = {
     val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile)
+      trustStoreFile = trustStoreFile, saslProperties = saslProperties)
     cfgs.foreach(_.putAll(serverConfig))
     cfgs.map(KafkaConfig.fromProps)
   }
 
   @Before
   override def setUp() {
-    val producerSecurityProps = TestUtils.producerSecurityConfigs(securityProtocol, trustStoreFile)
-    val consumerSecurityProps = TestUtils.consumerSecurityConfigs(securityProtocol, trustStoreFile)
+    val producerSecurityProps = TestUtils.producerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties)
+    val consumerSecurityProps = TestUtils.consumerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties)
     super.setUp()
     producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
     producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
@@ -66,11 +66,13 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
       producers += TestUtils.createNewProducer(brokerList,
                                                securityProtocol = this.securityProtocol,
                                                trustStoreFile = this.trustStoreFile,
+                                               saslProperties = this.saslProperties,
                                                props = Some(producerConfig))
     for (i <- 0 until consumerCount) {
       consumers += TestUtils.createNewConsumer(brokerList,
                                                securityProtocol = this.securityProtocol,
                                                trustStoreFile = this.trustStoreFile,
+                                               saslProperties = this.saslProperties,
                                                props = Some(consumerConfig))
     }
 
@@ -79,7 +81,7 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
       serverConfig.getProperty(KafkaConfig.OffsetsTopicPartitionsProp).toInt,
       serverConfig.getProperty(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
       servers,
-      servers(0).consumerCoordinator.offsetsTopicConfigs)
+      servers.head.groupCoordinator.offsetsTopicConfigs)
   }
 
   @After

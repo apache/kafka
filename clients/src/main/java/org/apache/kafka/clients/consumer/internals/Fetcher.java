@@ -61,6 +61,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -130,10 +131,9 @@ public class Fetcher<K, V> {
     /**
      * Set-up a fetch request for any node that we have assigned partitions for which doesn't have one.
      *
-     * @param cluster The current cluster metadata
      */
-    public void sendFetches(Cluster cluster) {
-        for (Map.Entry<Node, FetchRequest> fetchEntry: createFetchRequests(cluster).entrySet()) {
+    public void sendFetches() {
+        for (Map.Entry<Node, FetchRequest> fetchEntry: createFetchRequests().entrySet()) {
             final FetchRequest fetch = fetchEntry.getValue();
             client.send(fetchEntry.getKey(), ApiKeys.FETCH, fetch)
                     .addListener(new RequestFutureListener<ClientResponse>() {
@@ -182,25 +182,26 @@ public class Fetcher<K, V> {
      * @return The map of topics with their partition information
      */
     public Map<String, List<PartitionInfo>> getAllTopicMetadata(long timeout) {
-        return getTopicMetadata(null, timeout);
+        return getTopicMetadata(MetadataRequest.allTopics(), timeout);
     }
 
     /**
      * Get metadata for all topics present in Kafka cluster
      *
-     * @param topics The list of topics to fetch or null to fetch all
+     * @param request The MetadataRequest to send
      * @param timeout time for which getting topic metadata is attempted
      * @return The map of topics with their partition information
      */
-    public Map<String, List<PartitionInfo>> getTopicMetadata(List<String> topics, long timeout) {
-        if (topics != null && topics.isEmpty())
+    public Map<String, List<PartitionInfo>> getTopicMetadata(MetadataRequest request, long timeout) {
+        // Save the round trip if no topics are requested.
+        if (!request.isAllTopics() && request.topics().isEmpty())
             return Collections.emptyMap();
 
         long start = time.milliseconds();
         long remaining = timeout;
 
         do {
-            RequestFuture<ClientResponse> future = sendMetadataRequest(topics);
+            RequestFuture<ClientResponse> future = sendMetadataRequest(request);
             client.poll(future, remaining);
 
             if (future.failed() && !future.isRetriable())
@@ -265,14 +266,12 @@ public class Fetcher<K, V> {
      * Send Metadata Request to least loaded node in Kafka cluster asynchronously
      * @return A future that indicates result of sent metadata request
      */
-    private RequestFuture<ClientResponse> sendMetadataRequest(List<String> topics) {
-        if (topics == null)
-            topics = Collections.emptyList();
+    private RequestFuture<ClientResponse> sendMetadataRequest(MetadataRequest request) {
         final Node node = client.leastLoadedNode();
         if (node == null)
             return RequestFuture.noBrokersAvailable();
         else
-            return client.send(node, ApiKeys.METADATA, new MetadataRequest(topics));
+            return client.send(node, ApiKeys.METADATA, request);
     }
 
     /**
@@ -291,7 +290,7 @@ public class Fetcher<K, V> {
         else
             throw new NoOffsetForPartitionException(partition);
 
-        log.debug("Resetting offset for partition {} to {} offset.", partition, strategy.name().toLowerCase());
+        log.debug("Resetting offset for partition {} to {} offset.", partition, strategy.name().toLowerCase(Locale.ROOT));
         long offset = listOffset(partition, timestamp);
 
         // we might lose the assignment while fetching the offset, so check it is still active
@@ -525,8 +524,9 @@ public class Fetcher<K, V> {
      * Create fetch requests for all nodes for which we have assigned partitions
      * that have no existing requests in flight.
      */
-    private Map<Node, FetchRequest> createFetchRequests(Cluster cluster) {
+    private Map<Node, FetchRequest> createFetchRequests() {
         // create the fetch info
+        Cluster cluster = metadata.fetch();
         Map<Node, Map<TopicPartition, FetchRequest.PartitionData>> fetchable = new HashMap<>();
         for (TopicPartition partition : fetchablePartitions()) {
             Node node = cluster.leaderFor(partition);
@@ -586,11 +586,14 @@ public class Fetcher<K, V> {
                 ByteBuffer buffer = partition.recordSet;
                 MemoryRecords records = MemoryRecords.readableRecords(buffer);
                 List<ConsumerRecord<K, V>> parsed = new ArrayList<>();
+                boolean skippedRecords = false;
                 for (LogEntry logEntry : records) {
                     // Skip the messages earlier than current position.
                     if (logEntry.offset() >= position) {
                         parsed.add(parseRecord(tp, logEntry));
                         bytes += logEntry.size();
+                    } else {
+                        skippedRecords = true;
                     }
                 }
 
@@ -599,7 +602,7 @@ public class Fetcher<K, V> {
                     ConsumerRecord<K, V> record = parsed.get(parsed.size() - 1);
                     this.records.add(new PartitionRecords<>(fetchOffset, tp, parsed));
                     this.sensors.recordsFetchLag.record(partition.highWatermark - record.offset());
-                } else if (buffer.limit() > 0) {
+                } else if (buffer.limit() > 0 && !skippedRecords) {
                     // we did not read a single message from a non-empty buffer
                     // because that message's size is larger than fetch size, in this case
                     // record this exception
@@ -767,13 +770,13 @@ public class Fetcher<K, V> {
         }
 
         public void recordTopicFetchMetrics(String topic, int bytes, int records) {
-            Map<String, String> metricTags = new HashMap<>();
-            metricTags.put("topic", topic.replace(".", "_"));
-
             // record bytes fetched
             String name = "topic." + topic + ".bytes-fetched";
             Sensor bytesFetched = this.metrics.getSensor(name);
             if (bytesFetched == null) {
+                Map<String, String> metricTags = new HashMap<>(1);
+                metricTags.put("topic", topic.replace('.', '_'));
+
                 bytesFetched = this.metrics.sensor(name);
                 bytesFetched.add(this.metrics.metricName("fetch-size-avg",
                         this.metricGrpName,
@@ -794,6 +797,9 @@ public class Fetcher<K, V> {
             name = "topic." + topic + ".records-fetched";
             Sensor recordsFetched = this.metrics.getSensor(name);
             if (recordsFetched == null) {
+                Map<String, String> metricTags = new HashMap<>(1);
+                metricTags.put("topic", topic.replace('.', '_'));
+
                 recordsFetched = this.metrics.sensor(name);
                 recordsFetched.add(this.metrics.metricName("records-per-request-avg",
                         this.metricGrpName,

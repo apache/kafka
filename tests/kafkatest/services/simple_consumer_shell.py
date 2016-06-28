@@ -15,10 +15,10 @@
 
 from ducktape.services.background_thread import BackgroundThreadService
 
-from kafkatest.services.kafka.directory import kafka_dir
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 
 
-class SimpleConsumerShell(BackgroundThreadService):
+class SimpleConsumerShell(KafkaPathResolverMixin, BackgroundThreadService):
 
     logs = {
         "simple_consumer_shell_log": {
@@ -26,13 +26,14 @@ class SimpleConsumerShell(BackgroundThreadService):
             "collect_default": False}
     }
 
-    def __init__(self, context, num_nodes, kafka, topic, partition=0):
+    def __init__(self, context, num_nodes, kafka, topic, partition=0, stop_timeout_sec=30):
         super(SimpleConsumerShell, self).__init__(context, num_nodes)
 
         self.kafka = kafka
         self.topic = topic
         self.partition = partition
         self.output = ""
+        self.stop_timeout_sec = stop_timeout_sec
 
     def _worker(self, idx, node):
         cmd = self.start_cmd(node)
@@ -44,8 +45,8 @@ class SimpleConsumerShell(BackgroundThreadService):
         self.logger.debug(self.output)
 
     def start_cmd(self, node):
-        cmd = "/opt/%s/bin/" % kafka_dir(node)
-        cmd += "kafka-run-class.sh kafka.tools.SimpleConsumerShell"
+        cmd = self.path.script("kafka-run-class.sh", node)
+        cmd += " kafka.tools.SimpleConsumerShell"
         cmd += " --topic %s --broker-list %s --partition %s --no-wait-at-logend" % (self.topic, self.kafka.bootstrap_servers(), self.partition)
 
         cmd += " 2>> /mnt/get_simple_consumer_shell.log | tee -a /mnt/get_simple_consumer_shell.log &"
@@ -56,13 +57,10 @@ class SimpleConsumerShell(BackgroundThreadService):
 
     def stop_node(self, node):
         node.account.kill_process("SimpleConsumerShell", allow_fail=False)
-        if self.worker_threads is None:
-            return
 
-        # block until the corresponding thread exits
-        if len(self.worker_threads) >= self.idx(node):
-            # Need to guard this because stop is preemptively called before the worker threads are added and started
-            self.worker_threads[self.idx(node) - 1].join()
+        stopped = self.wait_node(node, timeout_sec=self.stop_timeout_sec)
+        assert stopped, "Node %s: did not stop within the specified timeout of %s seconds" % \
+                        (str(node.account), str(self.stop_timeout_sec))
 
     def clean_node(self, node):
         node.account.kill_process("SimpleConsumerShell", clean_shutdown=False, allow_fail=False)

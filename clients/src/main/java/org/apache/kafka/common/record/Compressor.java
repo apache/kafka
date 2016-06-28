@@ -77,7 +77,7 @@ public class Compressor {
         @Override
         public Constructor get() throws ClassNotFoundException, NoSuchMethodException {
             return Class.forName("org.apache.kafka.common.record.KafkaLZ4BlockInputStream")
-                .getConstructor(InputStream.class);
+                .getConstructor(InputStream.class, Boolean.TYPE);
         }
     });
 
@@ -91,7 +91,7 @@ public class Compressor {
     public float compressionRate;
     public long maxTimestamp;
 
-    public Compressor(ByteBuffer buffer, CompressionType type, int blockSize) {
+    public Compressor(ByteBuffer buffer, CompressionType type) {
         this.type = type;
         this.initPos = buffer.position();
 
@@ -108,11 +108,7 @@ public class Compressor {
 
         // create the stream
         bufferStream = new ByteBufferOutputStream(buffer);
-        appendStream = wrapForOutput(bufferStream, type, blockSize);
-    }
-
-    public Compressor(ByteBuffer buffer, CompressionType type) {
-        this(buffer, type, COMPRESSION_DEFAULT_BUFFER_SIZE);
+        appendStream = wrapForOutput(bufferStream, type, COMPRESSION_DEFAULT_BUFFER_SIZE);
     }
 
     public ByteBuffer buffer() {
@@ -275,7 +271,7 @@ public class Compressor {
         }
     }
 
-    static public DataInputStream wrapForInput(ByteBufferInputStream buffer, CompressionType type) {
+    static public DataInputStream wrapForInput(ByteBufferInputStream buffer, CompressionType type, byte messageVersion) {
         try {
             switch (type) {
                 case NONE:
@@ -291,7 +287,8 @@ public class Compressor {
                     }
                 case LZ4:
                     try {
-                        InputStream stream = (InputStream) lz4InputStreamSupplier.get().newInstance(buffer);
+                        InputStream stream = (InputStream) lz4InputStreamSupplier.get().newInstance(buffer,
+                                messageVersion == Record.MAGIC_VALUE_V0);
                         return new DataInputStream(stream);
                     } catch (Exception e) {
                         throw new KafkaException(e);

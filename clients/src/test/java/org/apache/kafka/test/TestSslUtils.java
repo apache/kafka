@@ -210,6 +210,7 @@ public class TestSslUtils {
             X509Certificate cCert = generateCertificate("CN=" + host + ", O=A client", cKP, 30, "SHA1withRSA");
             createKeyStore(keyStoreFile.getPath(), password, "client", cKP.getPrivate(), cCert);
             certs.put(certAlias, cCert);
+            keyStoreFile.deleteOnExit();
         } else if (mode == Mode.SERVER) {
             keyStoreFile = File.createTempFile("serverKS", ".jks");
             KeyPair sKP = generateKeyPair("RSA");
@@ -217,10 +218,12 @@ public class TestSslUtils {
                                                         "SHA1withRSA");
             createKeyStore(keyStoreFile.getPath(), password, password, "server", sKP.getPrivate(), sCert);
             certs.put(certAlias, sCert);
+            keyStoreFile.deleteOnExit();
         }
 
         if (trustStore) {
             createTrustStore(trustStoreFile.getPath(), trustStorePassword, certs);
+            trustStoreFile.deleteOnExit();
         }
 
         return createSslConfig(mode, keyStoreFile, password, password, trustStoreFile, trustStorePassword);

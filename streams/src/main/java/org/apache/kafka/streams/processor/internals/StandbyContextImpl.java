@@ -98,6 +98,9 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
         return metrics;
     }
 
+    /**
+     * @throws IllegalStateException
+     */
     @Override
     public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
         if (initialized)
@@ -106,53 +109,83 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
         stateMgr.register(store, loggingEnabled, stateRestoreCallback);
     }
 
+    /**
+     * @throws UnsupportedOperationException
+     */
     @Override
     public StateStore getStateStore(String name) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("this should not happen: getStateStore() not supported in standby tasks.");
     }
 
+    /**
+     * @throws UnsupportedOperationException
+     */
     @Override
     public String topic() {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("this should not happen: topic() not supported in standby tasks.");
     }
 
+    /**
+     * @throws UnsupportedOperationException
+     */
     @Override
     public int partition() {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("this should not happen: partition() not supported in standby tasks.");
     }
 
+    /**
+     * @throws UnsupportedOperationException
+     */
     @Override
     public long offset() {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("this should not happen: offset() not supported in standby tasks.");
     }
 
+    /**
+     * @throws UnsupportedOperationException
+     */
     @Override
     public long timestamp() {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("this should not happen: timestamp() not supported in standby tasks.");
     }
 
+    /**
+     * @throws UnsupportedOperationException
+     */
     @Override
     public <K, V> void forward(K key, V value) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
     }
 
+    /**
+     * @throws UnsupportedOperationException
+     */
     @Override
     public <K, V> void forward(K key, V value, int childIndex) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
     }
 
+    /**
+     * @throws UnsupportedOperationException
+     */
     @Override
     public <K, V> void forward(K key, V value, String childName) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
     }
 
+    /**
+     * @throws UnsupportedOperationException
+     */
     @Override
     public void commit() {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("this should not happen: commit() not supported in standby tasks.");
     }
 
+    /**
+     * @throws UnsupportedOperationException
+     */
     @Override
     public void schedule(long interval) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("this should not happen: schedule() not supported in standby tasks.");
     }
 }

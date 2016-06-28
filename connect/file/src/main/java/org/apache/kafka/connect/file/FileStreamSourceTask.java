@@ -103,7 +103,7 @@ public class FileStreamSourceTask extends SourceTask {
                 reader = new BufferedReader(new InputStreamReader(stream));
                 log.debug("Opened {} for reading", logFilename());
             } catch (FileNotFoundException e) {
-                log.warn("Couldn't find file for FileStreamSourceTask, sleeping to wait for it to be created");
+                log.warn("Couldn't find file {} for FileStreamSourceTask, sleeping to wait for it to be created", logFilename());
                 synchronized (this) {
                     this.wait(1000);
                 }
@@ -146,7 +146,6 @@ public class FileStreamSourceTask extends SourceTask {
                                 records = new ArrayList<>();
                             records.add(new SourceRecord(offsetKey(filename), offsetValue(streamOffset), topic, VALUE_SCHEMA, line));
                         }
-                        new ArrayList<SourceRecord>();
                     } while (line != null);
                 }
             }

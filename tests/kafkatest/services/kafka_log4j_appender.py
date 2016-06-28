@@ -15,11 +15,11 @@
 
 from ducktape.services.background_thread import BackgroundThreadService
 
-from kafkatest.services.kafka.directory import kafka_dir
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.security.security_config import SecurityConfig
 
 
-class KafkaLog4jAppender(BackgroundThreadService):
+class KafkaLog4jAppender(KafkaPathResolverMixin, BackgroundThreadService):
 
     logs = {
         "producer_log": {
@@ -43,8 +43,8 @@ class KafkaLog4jAppender(BackgroundThreadService):
         node.account.ssh(cmd)
 
     def start_cmd(self, node):
-        cmd = "/opt/%s/bin/" % kafka_dir(node)
-        cmd += "kafka-run-class.sh org.apache.kafka.tools.VerifiableLog4jAppender"
+        cmd = self.path.script("kafka-run-class.sh", node)
+        cmd += " org.apache.kafka.tools.VerifiableLog4jAppender"
         cmd += " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_protocol))
 
         if self.max_messages > 0:
@@ -67,13 +67,10 @@ class KafkaLog4jAppender(BackgroundThreadService):
 
     def stop_node(self, node):
         node.account.kill_process("VerifiableLog4jAppender", allow_fail=False)
-        if self.worker_threads is None:
-            return
 
-        # block until the corresponding thread exits
-        if len(self.worker_threads) >= self.idx(node):
-            # Need to guard this because stop is preemptively called before the worker threads are added and started
-            self.worker_threads[self.idx(node) - 1].join()
+        stopped = self.wait_node(node, timeout_sec=self.stop_timeout_sec)
+        assert stopped, "Node %s: did not stop within the specified timeout of %s seconds" % \
+                        (str(node.account), str(self.stop_timeout_sec))
 
     def clean_node(self, node):
         node.account.kill_process("VerifiableLog4jAppender", clean_shutdown=False, allow_fail=False)

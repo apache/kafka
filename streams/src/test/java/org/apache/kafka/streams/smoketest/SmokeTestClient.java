@@ -23,12 +23,13 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
+import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.kstream.TumblingWindows;
+import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.UnlimitedWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -106,7 +107,11 @@ public class SmokeTestClient extends SmokeTestUtil {
         data.process(SmokeTestUtil.<Integer>printProcessorSupplier("data"));
 
         // min
-        data.aggregateByKey(
+        KGroupedStream<String, Integer>
+            groupedData =
+            data.groupByKey(stringSerde, intSerde);
+
+        groupedData.aggregate(
                 new Initializer<Integer>() {
                     public Integer apply() {
                         return Integer.MAX_VALUE;
@@ -119,7 +124,6 @@ public class SmokeTestClient extends SmokeTestUtil {
                     }
                 },
                 UnlimitedWindows.of("uwin-min"),
-                stringSerde,
                 intSerde
         ).toStream().map(
                 new Unwindow<String, Integer>()
@@ -129,7 +133,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         minTable.toStream().process(SmokeTestUtil.<Integer>printProcessorSupplier("min"));
 
         // max
-        data.aggregateByKey(
+        groupedData.aggregate(
                 new Initializer<Integer>() {
                     public Integer apply() {
                         return Integer.MIN_VALUE;
@@ -142,7 +146,6 @@ public class SmokeTestClient extends SmokeTestUtil {
                     }
                 },
                 UnlimitedWindows.of("uwin-max"),
-                stringSerde,
                 intSerde
         ).toStream().map(
                 new Unwindow<String, Integer>()
@@ -152,7 +155,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         maxTable.toStream().process(SmokeTestUtil.<Integer>printProcessorSupplier("max"));
 
         // sum
-        data.aggregateByKey(
+        groupedData.aggregate(
                 new Initializer<Long>() {
                     public Long apply() {
                         return 0L;
@@ -165,7 +168,6 @@ public class SmokeTestClient extends SmokeTestUtil {
                     }
                 },
                 UnlimitedWindows.of("win-sum"),
-                stringSerde,
                 longSerde
         ).toStream().map(
                 new Unwindow<String, Long>()
@@ -176,10 +178,8 @@ public class SmokeTestClient extends SmokeTestUtil {
         sumTable.toStream().process(SmokeTestUtil.<Long>printProcessorSupplier("sum"));
 
         // cnt
-        data.countByKey(
-                UnlimitedWindows.of("uwin-cnt"),
-                stringSerde
-        ).toStream().map(
+        groupedData.count(UnlimitedWindows.of("uwin-cnt"))
+            .toStream().map(
                 new Unwindow<String, Long>()
         ).to(stringSerde, longSerde, "cnt");
 
@@ -206,29 +206,26 @@ public class SmokeTestClient extends SmokeTestUtil {
         ).to(stringSerde, doubleSerde, "avg");
 
         // windowed count
-        data.countByKey(
-                TumblingWindows.of("tumbling-win-cnt").with(WINDOW_SIZE),
-                stringSerde
-        ).toStream().map(
+        groupedData.count(TimeWindows.of("tumbling-win-cnt", WINDOW_SIZE))
+            .toStream().map(
                 new KeyValueMapper<Windowed<String>, Long, KeyValue<String, Long>>() {
                     @Override
                     public KeyValue<String, Long> apply(Windowed<String> key, Long value) {
-                        return new KeyValue<>(key.value() + "@" + key.window().start(), value);
+                        return new KeyValue<>(key.key() + "@" + key.window().start(), value);
                     }
                 }
         ).to(stringSerde, longSerde, "wcnt");
 
         // test repartition
         Agg agg = new Agg();
-        cntTable.aggregate(
-                agg.init(),
-                agg.adder(),
-                agg.remover(),
-                agg.selector(),
-                stringSerde,
-                longSerde,
-                longSerde,
-                "cntByCnt"
+        cntTable.groupBy(agg.selector(),
+                         stringSerde,
+                         longSerde
+        ).aggregate(agg.init(),
+                    agg.adder(),
+                    agg.remover(),
+                    longSerde,
+                    "cntByCnt"
         ).to(stringSerde, longSerde, "tagg");
 
         return new KafkaStreams(builder, props);

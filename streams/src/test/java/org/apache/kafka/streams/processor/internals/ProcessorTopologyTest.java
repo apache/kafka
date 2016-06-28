@@ -38,10 +38,10 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StateTestUtils;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.ProcessorTopologyTestDriver;
+import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -66,7 +66,7 @@ public class ProcessorTopologyTest {
     @Before
     public void setup() {
         // Create a new directory in which we'll put all of the state for this test, enabling running tests in parallel ...
-        File localState = StateTestUtils.tempDir();
+        File localState = TestUtils.tempDir();
         Properties props = new Properties();
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "processor-topology-test");
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
@@ -351,9 +351,11 @@ public class ProcessorTopologyTest {
         @Override
         public void punctuate(long streamTime) {
             int count = 0;
-            for (KeyValueIterator<String, String> iter = store.all(); iter.hasNext();) {
-                iter.next();
-                ++count;
+            try (KeyValueIterator<String, String> iter = store.all()) {
+                while (iter.hasNext()) {
+                    iter.next();
+                    ++count;
+                }
             }
             context().forward(Long.toString(streamTime), count);
         }
