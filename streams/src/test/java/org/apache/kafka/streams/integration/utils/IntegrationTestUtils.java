@@ -200,10 +200,9 @@ public class IntegrationTestUtils {
             }
         };
 
-        String errorMessage = "Did not receive expected " + expectedNumRecords +
-                " number of records before timeout " + waitTime + " ms";
+        String conditionDetails = "Did not receive " + expectedNumRecords + " number of records";
 
-        TestUtils.waitForCondition(valuesRead, waitTime, errorMessage);
+        TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
 
         return accumData;
     }
@@ -240,10 +239,9 @@ public class IntegrationTestUtils {
             }
         };
 
-        String errorMessage = "Did not receive expected " + expectedNumRecords +
-                              " number of records before timeout " + waitTime + " ms";
+        String conditionDetails = "Did not receive " + expectedNumRecords + " number of records";
 
-        TestUtils.waitForCondition(valuesRead, waitTime, errorMessage);
+        TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
 
         return accumData;
     }
