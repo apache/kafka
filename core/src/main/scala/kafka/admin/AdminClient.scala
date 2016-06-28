@@ -69,7 +69,7 @@ class AdminClient(val time: Time,
     val response = sendAnyNode(ApiKeys.GROUP_COORDINATOR, request).asInstanceOf[GroupCoordinatorResponse]
     Errors.forCode(response.errorCode()) match {
       case Errors.GROUP_COORDINATOR_NOT_AVAILABLE => None
-      case error: Errors =>
+      case error =>
         error.maybeThrow()
         Some(response.node())
     }
