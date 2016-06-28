@@ -174,6 +174,48 @@ import java.util.regex.Pattern;
  * the partition so that no new records are received from poll until after thread has finished handling those
  * previously returned.
  *
+ * <h3><a name="failuredetection">Detecting Consumer Failures</a></h3>
+ *
+ * After subscribing to a set of topics, the consumer will automatically join the group when {@link #poll(long)} is
+ * invoked. The poll API is designed to ensure consumer liveness. As long as you continue to call poll, the consumer
+ * will stay in the group and continue to receive messages from the partitions it was assigned. Underneath the covers,
+ * the poll API sends periodic heartbeats to the server; when you stop calling poll (perhaps because an exception was thrown),
+ * then no heartbeats will be sent. If a period of the configured <i>session timeout</i> elapses before the server
+ * has received a heartbeat, then the consumer will be kicked out of the group and its partitions will be reassigned.
+ * This is designed to prevent situations where the consumer has failed, yet continues to hold onto the partitions
+ * it was assigned (thus preventing active consumers in the group from taking them). To stay in the group, you
+ * have to prove you are still alive by calling poll.
+ * <p>
+ * The implication of this design is that message processing time in the poll loop must be bounded so that
+ * heartbeats can be sent before expiration of the session timeout. What typically happens when processing time
+ * exceeds the session timeout is that the consumer won't be able to commit offsets for any of the processed records.
+ * For example, this is indicated by a {@link CommitFailedException} thrown from {@link #commitSync()}. This
+ * guarantees that only active members of the group are allowed to commit offsets. If the consumer
+ * has been kicked out of the group, then its partitions will have been assigned to another member, which will be
+ * committing its own offsets as it handles new records. This gives offset commits an isolation guarantee.
+ * <p>
+ * The consumer provides two configuration settings to control this behavior:
+ * <ol>
+ *     <li><code>session.timeout.ms</code>: By increasing the session timeout, you can give the consumer more
+ *     time to handle a batch of records returned from {@link #poll(long)}. The only drawback is that it
+ *     will take longer for the server to detect hard consumer failures, which can cause a delay before
+ *     a rebalance can be completed. However, clean shutdown with {@link #close()} is not impacted since
+ *     the consumer will send an explicit message to the server to leave the group and cause an immediate
+ *     rebalance.</li>
+ *     <li><code>max.poll.records</code>: Processing time in the poll loop is typically proportional to the number
+ *     of records processed, so it's natural to want to set a limit on the number of records handled at once.
+ *     This setting provides that. By default, there is essentially no limit.</li>
+ * </ol>
+ * <p>
+ * For use cases where message processing time varies unpredictably, neither of these options may be viable.
+ * The recommended way to handle these cases is to move message processing to another thread, which allows
+ * the consumer to continue sending heartbeats while the processor is still working. Some care must be taken
+ * to ensure that committed offsets do not get ahead of the actual position. Typically, you must disable automatic
+ * commits and manually commit processed offsets for records only after the thread has finished handling them
+ * (depending on the delivery semantics you need). Note also that you will generally need to {@link #pause(Collection)}
+ * the partition so that no new records are received from poll until after thread has finished handling those
+ * previously returned.
+ *
  * <h3>Usage Examples</h3>
  * The consumer APIs offer flexibility to cover a variety of consumption use cases. Here are some examples to
  * demonstrate how to use them.
