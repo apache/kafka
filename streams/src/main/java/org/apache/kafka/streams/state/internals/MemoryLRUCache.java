@@ -105,6 +105,11 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
+    public boolean isOpen() {
+        return true;
+    }
+
+    @Override
     public V get(K key) {
         return this.map.get(key);
     }

@@ -97,6 +97,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private StoreChangeLogger<Bytes, byte[]> changeLogger;
     private StoreChangeLogger.ValueGetter<Bytes, byte[]> getter;
 
+    private volatile boolean open = false;
+
     public KeyValueStore<K, V> enableLogging() {
         loggingEnabled = true;
 
@@ -164,6 +166,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         this.dbDir = new File(new File(context.stateDir(), parentDir), this.name);
         this.db = openDB(this.dbDir, this.options, TTL_SECONDS);
+        open = true;
     }
 
     public void init(ProcessorContext context, StateStore root) {
@@ -234,7 +237,16 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
+    public boolean isOpen() {
+        return open;
+    }
+
+    @Override
     public V get(K key) {
+        if (!open) {
+            throw new InvalidStateStoreException("Store " + this.name + " is currently not open");
+        }
+
         if (cache != null) {
             RocksDBCacheEntry entry = cache.get(key);
 
@@ -336,6 +348,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public KeyValueIterator<K, V> range(K from, K to) {
+        if (!open) {
+            throw new InvalidStateStoreException("Store " + this.name + " is currently not open");
+        }
         // we need to flush the cache if necessary before returning the iterator
         if (cache != null)
             flushCache();
@@ -345,6 +360,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public KeyValueIterator<K, V> all() {
+        if (!open) {
+            throw new InvalidStateStoreException("Store " + this.name + " is currently not open");
+        }
         // we need to flush the cache if necessary before returning the iterator
         if (cache != null)
             flushCache();
@@ -468,11 +486,10 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void close() {
-
-        if (db == null) {
+        if (!open) {
             return;
         }
-
+        open = false;
         flush();
         options.dispose();
         wOptions.dispose();
