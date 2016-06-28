@@ -16,13 +16,14 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
+import org.apache.kafka.streams.state.StateStoreProvider;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class ReadOnlyStoresProviderStub implements ReadOnlyStoresProvider {
+public class StateStoreProviderStub implements StateStoreProvider {
 
     private final Map<String, StateStore> stores = new HashMap<>();
 

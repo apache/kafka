@@ -29,8 +29,8 @@ import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.state.QueryableStoreType;
-import org.apache.kafka.streams.state.internals.ReadOnlyStoresProvider;
-import org.apache.kafka.streams.state.internals.StreamThreadReadOnlyStoresProvider;
+import org.apache.kafka.streams.state.StateStoreProvider;
+import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -157,10 +157,10 @@ public class KafkaStreams {
         this.metrics = new Metrics(metricConfig, reporters, time);
 
         this.threads = new StreamThread[config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG)];
-        final ArrayList<ReadOnlyStoresProvider> storeProviders = new ArrayList<>();
+        final ArrayList<StateStoreProvider> storeProviders = new ArrayList<>();
         for (int i = 0; i < this.threads.length; i++) {
             this.threads[i] = new StreamThread(builder, config, clientSupplier, applicationId, clientId, processId, metrics, time);
-            storeProviders.add(new StreamThreadReadOnlyStoresProvider(threads[i]));
+            storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
         }
 
         this.queryableStoreProvider = new QueryableStoreProvider(storeProviders);

@@ -12,36 +12,33 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
-package org.apache.kafka.streams.state;
+package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.state.internals.InvalidStateStoreException;
-import org.apache.kafka.streams.state.internals.ReadOnlyStoresProvider;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.QueryableStoreType;
+import org.apache.kafka.streams.state.StateStoreProvider;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Provides access to {@link org.apache.kafka.streams.processor.StateStore}s as
- * defined by {@link QueryableStoreType}
+ * Provides access to {@link org.apache.kafka.streams.processor.StateStore}s accepted
+ * by {@link QueryableStoreType#accepts(StateStore)}
  * @param <T>
  */
-public class UnderlyingStoreProvider<T> {
+public class UnderlyingStoreProvider implements StateStoreProvider {
 
-    private final List<ReadOnlyStoresProvider> storeProviders;
-    private final QueryableStoreType<T> queryableStoreType;
+    private final List<StateStoreProvider> storeProviders;
 
-    public UnderlyingStoreProvider(final List<ReadOnlyStoresProvider> storeProviders,
-                                   final QueryableStoreType<T> queryableStoreType) {
-
+    public UnderlyingStoreProvider(final List<StateStoreProvider> storeProviders) {
         this.storeProviders = storeProviders;
-        this.queryableStoreType = queryableStoreType;
     }
 
-    public List<T> getStores(final String storeName) {
+    public <T> List<T> getStores(final String storeName, QueryableStoreType<T> type) {
         final List<T> allStores = new ArrayList<>();
-        for (ReadOnlyStoresProvider provider : storeProviders) {
+        for (StateStoreProvider provider : storeProviders) {
             final List<T> stores =
-                provider.getStores(storeName, queryableStoreType);
+                provider.getStores(storeName, type);
             allStores.addAll(stores);
         }
         if (allStores.isEmpty()) {

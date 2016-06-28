@@ -18,18 +18,19 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.state.QueryableStoreType;
+import org.apache.kafka.streams.state.StateStoreProvider;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Wrapper over StreamThread that implements ReadOnlyStoresProvider
+ * Wrapper over StreamThread that implements StateStoreProvider
  */
-public class StreamThreadReadOnlyStoresProvider implements ReadOnlyStoresProvider {
+public class StreamThreadStateStoreProvider implements StateStoreProvider {
 
     private final StreamThread streamThread;
 
-    public StreamThreadReadOnlyStoresProvider(final StreamThread streamThread) {
+    public StreamThreadStateStoreProvider(final StreamThread streamThread) {
         this.streamThread = streamThread;
     }
 

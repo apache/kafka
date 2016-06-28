@@ -15,9 +15,10 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
+import org.apache.kafka.streams.state.StateStoreProvider;
 import org.apache.kafka.streams.state.WindowStoreIterator;
-import org.apache.kafka.streams.state.UnderlyingStoreProvider;
 
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -28,19 +29,21 @@ import java.util.NoSuchElementException;
  */
 public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K, V> {
 
+    private final QueryableStoreType<ReadOnlyWindowStore<K, V>> windowStoreType;
     private final String storeName;
-    private final UnderlyingStoreProvider<ReadOnlyWindowStore<K, V>> provider;
+    private final StateStoreProvider provider;
 
-    public CompositeReadOnlyWindowStore(
-        final UnderlyingStoreProvider<ReadOnlyWindowStore<K, V>> provider,
-        final String storeName) {
+    public CompositeReadOnlyWindowStore(final StateStoreProvider provider,
+                                        final QueryableStoreType<ReadOnlyWindowStore<K, V>> windowStoreType,
+                                        final String storeName) {
         this.provider = provider;
+        this.windowStoreType = windowStoreType;
         this.storeName = storeName;
     }
 
     @Override
     public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
-        final List<ReadOnlyWindowStore<K, V>> stores = provider.getStores(storeName);
+        final List<ReadOnlyWindowStore<K, V>> stores = provider.getStores(storeName, windowStoreType);
         for (ReadOnlyWindowStore<K, V> windowStore : stores) {
             final WindowStoreIterator<V> result = windowStore.fetch(key, timeFrom, timeTo);
             if (!result.hasNext()) {

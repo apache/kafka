@@ -16,20 +16,20 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
-import org.apache.kafka.streams.state.internals.ReadOnlyStoresProvider;
-import org.apache.kafka.streams.state.UnderlyingStoreProvider;
+import org.apache.kafka.streams.state.StateStoreProvider;
+import org.apache.kafka.streams.state.internals.UnderlyingStoreProvider;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A wrapper over all of the {@link ReadOnlyStoresProvider}s in a Topology
+ * A wrapper over all of the {@link StateStoreProvider}s in a Topology
  */
 class QueryableStoreProvider {
 
-    private final List<ReadOnlyStoresProvider> storeProviders;
+    private final List<StateStoreProvider> storeProviders;
 
-    QueryableStoreProvider(final List<ReadOnlyStoresProvider> storeProviders) {
+    QueryableStoreProvider(final List<StateStoreProvider> storeProviders) {
         this.storeProviders = new ArrayList<>(storeProviders);
     }
 
@@ -43,14 +43,14 @@ class QueryableStoreProvider {
      */
     public <T> T getStore(final String storeName, final QueryableStoreType<T> queryableStoreType) {
         final List<T> allStores = new ArrayList<>();
-        for (ReadOnlyStoresProvider storeProvider : storeProviders) {
+        for (StateStoreProvider storeProvider : storeProviders) {
             allStores.addAll(storeProvider.getStores(storeName, queryableStoreType));
         }
         if (allStores.isEmpty()) {
             return null;
         }
         return queryableStoreType.create(
-                new UnderlyingStoreProvider<>(storeProviders, queryableStoreType),
+                new UnderlyingStoreProvider(storeProviders),
                 storeName);
     }
 }

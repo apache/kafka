@@ -39,9 +39,9 @@ public interface QueryableStoreType<T> {
     /**
      * Create an instance of T (usually a facade) that developers can use
      * to query the Underlying {@StateStore}s
-     * @param storeProvider     provides access to all the underlying StateStore instances of type T
+     * @param storeProvider     provides access to all the underlying StateStore instances
      * @param storeName         The name of the Store
      * @return  T usually a read-only interface over a StateStore @see {@link QueryableStoreTypes.KeyValueStoreType}
      */
-    T create(final UnderlyingStoreProvider<T> storeProvider, final String storeName);
+    T create(final StateStoreProvider storeProvider, final String storeName);
 }

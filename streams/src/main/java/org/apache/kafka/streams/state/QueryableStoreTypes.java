@@ -66,10 +66,9 @@ public class QueryableStoreTypes {
         }
 
         @Override
-        public ReadOnlyKeyValueStore<K, V> create(
-            final UnderlyingStoreProvider<ReadOnlyKeyValueStore<K, V>> storeProvider,
-            final String storeName) {
-            return new CompositeReadOnlyStore<>(storeProvider, storeName);
+        public ReadOnlyKeyValueStore<K, V> create(final StateStoreProvider storeProvider,
+                                                  final String storeName) {
+            return new CompositeReadOnlyStore<>(storeProvider, this, storeName);
         }
 
     }
@@ -81,10 +80,9 @@ public class QueryableStoreTypes {
         }
 
         @Override
-        public ReadOnlyWindowStore<K, V> create(
-            final UnderlyingStoreProvider<ReadOnlyWindowStore<K, V>> storeProvider,
-            final String storeName) {
-            return new CompositeReadOnlyWindowStore<>(storeProvider, storeName);
+        public ReadOnlyWindowStore<K, V> create(final StateStoreProvider storeProvider,
+                                                final String storeName) {
+            return new CompositeReadOnlyWindowStore<>(storeProvider, this, storeName);
         }
 
     }

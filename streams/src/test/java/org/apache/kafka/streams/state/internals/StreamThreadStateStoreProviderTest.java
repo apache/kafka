@@ -50,12 +50,12 @@ import java.util.UUID;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.windowStore;
 import static org.junit.Assert.assertEquals;
 
-public class StreamThreadReadOnlyStoresProviderTest {
+public class StreamThreadStateStoreProviderTest {
 
     private StreamThread thread;
     private StreamTask taskOne;
     private StreamTask taskTwo;
-    private StreamThreadReadOnlyStoresProvider provider;
+    private StreamThreadStateStoreProvider provider;
 
     @Before
     public void before() throws IOException {
@@ -104,7 +104,7 @@ public class StreamThreadReadOnlyStoresProviderTest {
                 return tasks;
             }
         };
-        provider = new StreamThreadReadOnlyStoresProvider(thread);
+        provider = new StreamThreadStateStoreProvider(thread);
     }
 
     @Test

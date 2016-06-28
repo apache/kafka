@@ -18,12 +18,11 @@ package org.apache.kafka.streams;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.NoOpWindowStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
-import org.apache.kafka.streams.state.ReadOnlyWindowStore;
-import org.apache.kafka.streams.state.WindowStoreIterator;
-import org.apache.kafka.streams.state.internals.ReadOnlyStoresProvider;
-import org.apache.kafka.streams.state.internals.ReadOnlyStoresProviderStub;
+import org.apache.kafka.streams.state.StateStoreProvider;
+import org.apache.kafka.streams.state.internals.StateStoreProviderStub;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -40,12 +39,12 @@ public class QueryableStoreTypeProviderTest {
 
     @Before
     public void before() {
-        final ReadOnlyStoresProviderStub theStoreProvider = new ReadOnlyStoresProviderStub();
+        final StateStoreProviderStub theStoreProvider = new StateStoreProviderStub();
         theStoreProvider.addStore(keyValueStore, new NoOpReadOnlyStore<>());
         theStoreProvider.addStore(windowStore, new NoOpWindowStore());
         storeProvider =
             new QueryableStoreProvider(
-                Collections.<ReadOnlyStoresProvider>singletonList(theStoreProvider));
+                Collections.<StateStoreProvider>singletonList(theStoreProvider));
     }
 
     @Test
@@ -125,44 +124,6 @@ public class QueryableStoreTypeProviderTest {
         @Override
         public boolean isOpen() {
             return false;
-        }
-    }
-
-    public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
-
-        @Override
-        public String name() {
-            return null;
-        }
-
-        @Override
-        public void init(final ProcessorContext context, final StateStore root) {
-
-        }
-
-        @Override
-        public void flush() {
-
-        }
-
-        @Override
-        public void close() {
-
-        }
-
-        @Override
-        public boolean persistent() {
-            return false;
-        }
-
-        @Override
-        public boolean isOpen() {
-            return false;
-        }
-
-        @Override
-        public WindowStoreIterator fetch(final Object key, final long timeFrom, final long timeTo) {
-            return null;
         }
     }
 

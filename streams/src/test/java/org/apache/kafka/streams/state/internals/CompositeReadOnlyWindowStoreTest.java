@@ -16,8 +16,8 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.state.StateStoreProvider;
 import org.apache.kafka.streams.state.WindowStoreIterator;
-import org.apache.kafka.streams.state.UnderlyingStoreProvider;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -33,8 +33,8 @@ import static org.junit.Assert.assertEquals;
 public class CompositeReadOnlyWindowStoreTest {
 
     private final String storeName = "window-store";
-    private ReadOnlyStoresProviderStub stubProviderOne;
-    private ReadOnlyStoresProviderStub stubProviderTwo;
+    private StateStoreProviderStub stubProviderOne;
+    private StateStoreProviderStub stubProviderTwo;
     private CompositeReadOnlyWindowStore<String, String>
         windowStore;
     private ReadOnlyWindowStoreStub<String, String> undelyingWindowStore;
@@ -43,8 +43,8 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Before
     public void before() {
-        stubProviderOne = new ReadOnlyStoresProviderStub();
-        stubProviderTwo = new ReadOnlyStoresProviderStub();
+        stubProviderOne = new StateStoreProviderStub();
+        stubProviderTwo = new StateStoreProviderStub();
         undelyingWindowStore = new ReadOnlyWindowStoreStub<>();
         stubProviderOne.addStore(storeName, undelyingWindowStore);
 
@@ -53,9 +53,9 @@ public class CompositeReadOnlyWindowStoreTest {
 
 
         windowStore = new CompositeReadOnlyWindowStore<>(
-            new UnderlyingStoreProvider<>(Arrays.<ReadOnlyStoresProvider>asList(stubProviderOne, stubProviderTwo),
-                                          QueryableStoreTypes.<String, String>windowStore()),
-            storeName);
+            new UnderlyingStoreProvider(Arrays.<StateStoreProvider>asList(stubProviderOne, stubProviderTwo)),
+                QueryableStoreTypes.<String, String>windowStore(),
+                storeName);
     }
 
     @Test

@@ -17,7 +17,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
-import org.apache.kafka.streams.state.UnderlyingStoreProvider;
+import org.apache.kafka.streams.state.StateStoreProvider;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -33,7 +33,7 @@ import static org.junit.Assert.assertTrue;
 public class CompositeReadOnlyStoreTest {
 
     private final String storeName = "my-store";
-    private ReadOnlyStoresProviderStub stubProviderTwo;
+    private StateStoreProviderStub stubProviderTwo;
     private KeyValueStore<String, String> stubOneUnderlying;
     private CompositeReadOnlyStore<String, String> theStore;
     private KeyValueStore<String, String>
@@ -41,8 +41,8 @@ public class CompositeReadOnlyStoreTest {
 
     @Before
     public void before() {
-        final ReadOnlyStoresProviderStub stubProviderOne = new ReadOnlyStoresProviderStub();
-        stubProviderTwo = new ReadOnlyStoresProviderStub();
+        final StateStoreProviderStub stubProviderOne = new StateStoreProviderStub();
+        stubProviderTwo = new StateStoreProviderStub();
 
         stubOneUnderlying = new TestKeyValueStore<>(storeName);
         stubProviderOne.addStore(storeName, stubOneUnderlying);
@@ -50,10 +50,9 @@ public class CompositeReadOnlyStoreTest {
         stubProviderOne.addStore("other-store", otherUnderlyingStore);
 
         theStore = new CompositeReadOnlyStore<>(
-            new UnderlyingStoreProvider<>(
-                Arrays.<ReadOnlyStoresProvider>asList(stubProviderOne, stubProviderTwo),
-                QueryableStoreTypes.<String, String>keyValueStore()),
-            storeName);
+            new UnderlyingStoreProvider(Arrays.<StateStoreProvider>asList(stubProviderOne, stubProviderTwo)),
+                                        QueryableStoreTypes.<String, String>keyValueStore(),
+                                        storeName);
     }
 
     @Test
@@ -164,10 +163,7 @@ public class CompositeReadOnlyStoreTest {
     }
 
     private CompositeReadOnlyStore<Object, Object> noStores() {
-        return new CompositeReadOnlyStore<>(
-            new UnderlyingStoreProvider<>(
-                Collections.<ReadOnlyStoresProvider>emptyList(),
-                QueryableStoreTypes.keyValueStore()),
-            storeName);
+        return new CompositeReadOnlyStore<>(new UnderlyingStoreProvider(Collections.<StateStoreProvider>emptyList()),
+                QueryableStoreTypes.keyValueStore(), storeName);
     }
 }

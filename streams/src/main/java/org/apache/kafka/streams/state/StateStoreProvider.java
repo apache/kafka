@@ -12,20 +12,19 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.streams.state;
 
-import org.apache.kafka.streams.state.QueryableStoreType;
-import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.processor.StateStore;
 
 import java.util.List;
 
 /**
- * A ReadOnlyStoresProvider provides access to StateStore that have been created
+ * A StateStoreProvider provides access to {@link StateStore}s that have been created
  * as part of the {@link org.apache.kafka.streams.processor.internals.ProcessorTopology}.
  * To get access to custom stores developers should implement {@link QueryableStoreType}.
  * @see QueryableStoreTypes
  */
-public interface ReadOnlyStoresProvider {
+public interface StateStoreProvider {
 
     /**
      * Find instances of StateStore that are accepted by {@link QueryableStoreType#accepts} and
