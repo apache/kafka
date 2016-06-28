@@ -227,7 +227,7 @@ public class TestUtils {
     }
 
     /**
-     *  uses default value of 15 seconds for timeout, and default message for failure
+     *  uses default value of 15 seconds for timeout
      */
     public static void waitForCondition(TestCondition testCondition, String conditionDetails) throws InterruptedException {
         waitForCondition(testCondition, 15000, conditionDetails);
@@ -247,8 +247,9 @@ public class TestUtils {
             Thread.sleep(Math.min(maxWaitMs, 100L));
         }
 
-        if (!testCondition.conditionMet() && conditionDetails != null) {
-            throw new AssertionError("Condition not met within timeout " + maxWaitMs + ". " +conditionDetails);
+        if (!testCondition.conditionMet()) {
+            conditionDetails = conditionDetails != null ? conditionDetails : "";
+            throw new AssertionError("Condition not met within timeout " + maxWaitMs + ". " + conditionDetails);
         }
     }
 
