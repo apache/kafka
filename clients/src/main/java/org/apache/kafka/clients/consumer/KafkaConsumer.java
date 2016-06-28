@@ -795,6 +795,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
         acquire();
         try {
+            for (String topic : topics)
+                if (topic == null || topic.equals(""))
+                    throw new IllegalArgumentException("Topic collection shouldn't contain null or empty string");
             if (topics.isEmpty()) {
                 // treat subscribing to empty topic list as the same as unsubscribing
                 this.unsubscribe();
