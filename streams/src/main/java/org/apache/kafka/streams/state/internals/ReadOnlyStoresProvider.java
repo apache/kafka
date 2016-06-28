@@ -22,7 +22,7 @@ import java.util.List;
 /**
  * A ReadOnlyStoresProvider provides access to StateStore that have been created
  * as part of the {@link org.apache.kafka.streams.processor.internals.ProcessorTopology}.
- * To get access to custom stores, developers should implement {@link QueryableStoreType}.
+ * To get access to custom stores developers should implement {@link QueryableStoreType}.
  * @see QueryableStoreTypes
  */
 public interface ReadOnlyStoresProvider {
