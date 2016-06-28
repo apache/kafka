@@ -1,3 +1,15 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
+ * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
+ * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+ * License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
+ */
 package org.apache.kafka.common.metrics;
 
 import java.util.List;
@@ -6,10 +18,7 @@ import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.utils.Time;
 
 /**
- * @author jcheng
- *
  * A registry of predefined Metrics for the SpecificMetricsTest.java class.
- * 
  */
 public class SampleMetrics extends SpecificMetrics {
 
@@ -34,18 +43,18 @@ public class SampleMetrics extends SpecificMetrics {
     public static final MetricNameTemplate SIMPLE_STATS_TOTAL = new MetricNameTemplate("s2.total", "grp1", "Total of the metric in testSimpleStats");
 
     private static final MetricNameTemplate[] ALL_METRICS = {
-                METRIC1,
-                METRIC2,
-                DIRECT_MEASUREABLE,
-                SIMPLE_STATS_AVG,
-                SIMPLE_STATS_MAX,
-                SIMPLE_STATS_MIN,
-                SIMPLE_STATS_RATE,
-                SIMPLE_STATS_OCCURENCES,
-                SIMPLE_STATS_COUNT,
-                SIMPLE_STATS_MEDIAN,
-                SIMPLE_STATS_PERCENT,
-                SIMPLE_STATS_TOTAL
+        METRIC1,
+        METRIC2,
+        DIRECT_MEASUREABLE,
+        SIMPLE_STATS_AVG,
+        SIMPLE_STATS_MAX,
+        SIMPLE_STATS_MIN,
+        SIMPLE_STATS_RATE,
+        SIMPLE_STATS_OCCURENCES,
+        SIMPLE_STATS_COUNT,
+        SIMPLE_STATS_MEDIAN,
+        SIMPLE_STATS_PERCENT,
+        SIMPLE_STATS_TOTAL
     };
 
     public static void main(String[] args) {
