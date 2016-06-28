@@ -371,11 +371,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return sendOldValues;
     }
 
-    private void materialize(KTableSource<K, ?> source) {
+    public void materialize(KTableSource<K, ?> source) {
         synchronized (source) {
             if (!source.isMaterialized()) {
                 StateStoreSupplier storeSupplier =
-                        new KTableStoreSupplier<>(storeName, keySerde, valSerde, null);
+                        new KTableStoreSupplier<>(source.storeName, keySerde, valSerde, null);
                 // mark this state as non internal hence it is read directly from a user topic
                 topology.addStateStore(storeSupplier, false, name);
                 source.materialize();

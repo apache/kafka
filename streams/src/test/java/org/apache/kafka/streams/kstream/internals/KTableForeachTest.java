@@ -24,8 +24,13 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
+
+import java.io.File;
+import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 import java.util.ArrayList;
@@ -36,11 +41,16 @@ import static org.junit.Assert.assertEquals;
 public class KTableForeachTest {
 
     final private String topicName = "topic";
-
+    private File stateDir = null;
     final private Serde<Integer> intSerde = Serdes.Integer();
     final private Serde<String> stringSerde = Serdes.String();
 
     private KStreamTestDriver driver;
+
+    @Before
+    public void setUp() throws IOException {
+        stateDir = TestUtils.tempDirectory("kafka-test");
+    }
 
     @After
     public void cleanup() {
@@ -82,7 +92,7 @@ public class KTableForeachTest {
         table.foreach(action);
 
         // Then
-        driver = new KStreamTestDriver(builder);
+        driver = new KStreamTestDriver(builder, stateDir);
         for (KeyValue<Integer, String> record: inputRecords) {
             driver.process(topicName, record.key, record.value);
         }

@@ -39,6 +39,7 @@ import static org.junit.Assert.assertTrue;
 public class KTableSourceTest {
 
     final private Serde<String> stringSerde = Serdes.String();
+    final private Serde<Integer> intSerde = Serdes.Integer();
 
     private KStreamTestDriver driver = null;
     private File stateDir = null;
@@ -62,12 +63,12 @@ public class KTableSourceTest {
 
         String topic1 = "topic1";
 
-        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
+        KTable<String, Integer> table1 = builder.table(stringSerde, intSerde, topic1, "anyStoreName");
 
-        MockProcessorSupplier<String, String> proc1 = new MockProcessorSupplier<>();
+        MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
         table1.toStream().process(proc1);
 
-        driver = new KStreamTestDriver(builder);
+        driver = new KStreamTestDriver(builder, stateDir);
 
         driver.process(topic1, "A", 1);
         driver.process(topic1, "B", 2);
