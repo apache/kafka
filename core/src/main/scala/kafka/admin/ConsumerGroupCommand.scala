@@ -72,7 +72,6 @@ object ConsumerGroupCommand {
     } catch {
       case e: Throwable =>
         println("Error while executing consumer group command " + e.getMessage)
-        println(Utils.stackTrace(e))
     } finally {
       consumerGroupService.close()
     }

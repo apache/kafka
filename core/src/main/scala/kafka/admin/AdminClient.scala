@@ -73,7 +73,7 @@ class AdminClient(val time: Time,
     val response = new GroupCoordinatorResponse(responseBody)
     Errors.forCode(response.errorCode()) match {
       case Errors.GROUP_COORDINATOR_NOT_AVAILABLE => None
-      case error: Errors =>
+      case error =>
         error.maybeThrow()
         Some(response.node())
     }
@@ -128,7 +128,7 @@ class AdminClient(val time: Time,
   def describeGroup(groupId: String): Option[GroupSummary] = {
     findCoordinator(groupId) match {
       case None => 
-        println("Could not find coordinator for group %s, which implies that one of the consumer offsets partitions may be offline or in the process of being created if this is a new cluster.".format(groupId))
+        throw new KafkaException(s"Could not find coordinator for group $groupId, which implies that one of the consumer offsets partitions may be offline or in the process of being created if this is a new cluster.")
         None
       case Some(coordinator) =>
         val responseBody = send(coordinator, ApiKeys.DESCRIBE_GROUPS, new DescribeGroupsRequest(List(groupId).asJava))
