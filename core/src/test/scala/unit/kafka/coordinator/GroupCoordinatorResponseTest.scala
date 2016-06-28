@@ -910,7 +910,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
 
     EasyMock.replay(replicaManager)
 
-    groupCoordinator.handleJoinGroup(groupId, memberId, "clientId", "clientHost", sessionTimeout,
+    groupCoordinator.handleJoinGroup(groupId, memberId, "clientId", "clientHost", sessionTimeout, sessionTimeout,
       protocolType, protocols, responseCallback)
     responseFuture
   }

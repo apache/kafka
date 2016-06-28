@@ -93,6 +93,7 @@ class GroupCoordinator(val brokerId: Int,
                       memberId: String,
                       clientId: String,
                       clientHost: String,
+                      rebalanceTimeoutMs: Int,
                       sessionTimeoutMs: Int,
                       protocolType: String,
                       protocols: List[(String, Array[Byte])],
@@ -118,11 +119,11 @@ class GroupCoordinator(val brokerId: Int,
             responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID.code))
           } else {
             val group = groupManager.addGroup(new GroupMetadata(groupId))
-            doJoinGroup(group, memberId, clientId, clientHost, sessionTimeoutMs, protocolType, protocols, responseCallback)
+            doJoinGroup(group, memberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
           }
 
         case Some(group) =>
-          doJoinGroup(group, memberId, clientId, clientHost, sessionTimeoutMs, protocolType, protocols, responseCallback)
+          doJoinGroup(group, memberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
       }
     }
   }
@@ -131,6 +132,7 @@ class GroupCoordinator(val brokerId: Int,
                           memberId: String,
                           clientId: String,
                           clientHost: String,
+                          rebalanceTimeoutMs: Int,
                           sessionTimeoutMs: Int,
                           protocolType: String,
                           protocols: List[(String, Array[Byte])],
@@ -154,7 +156,7 @@ class GroupCoordinator(val brokerId: Int,
 
           case PreparingRebalance =>
             if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
-              addMemberAndRebalance(sessionTimeoutMs, clientId, clientHost, protocolType, protocols, group, responseCallback)
+              addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, clientId, clientHost, protocolType, protocols, group, responseCallback)
             } else {
               val member = group.get(memberId)
               updateMemberAndRebalance(group, member, protocols, responseCallback)
@@ -162,7 +164,7 @@ class GroupCoordinator(val brokerId: Int,
 
           case AwaitingSync =>
             if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
-              addMemberAndRebalance(sessionTimeoutMs, clientId, clientHost, protocolType, protocols, group, responseCallback)
+              addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, clientId, clientHost, protocolType, protocols, group, responseCallback)
             } else {
               val member = group.get(memberId)
               if (member.matches(protocols)) {
@@ -189,7 +191,7 @@ class GroupCoordinator(val brokerId: Int,
           case Empty | Stable =>
             if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
               // if the member id is unknown, register the member to the group
-              addMemberAndRebalance(sessionTimeoutMs, clientId, clientHost, protocolType, protocols, group, responseCallback)
+              addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, clientId, clientHost, protocolType, protocols, group, responseCallback)
             } else {
               val member = group.get(memberId)
               if (memberId == group.leaderId || !member.matches(protocols)) {
@@ -343,27 +345,42 @@ class GroupCoordinator(val brokerId: Int,
       responseCallback(Errors.NONE.code)
     } else {
       groupManager.getGroup(groupId) match {
-        case None => responseCallback(Errors.UNKNOWN_MEMBER_ID.code)
+        case None =>
+          responseCallback(Errors.UNKNOWN_MEMBER_ID.code)
+
         case Some(group) =>
           group synchronized {
-            if (group.is(Empty)) {
-              responseCallback(Errors.UNKNOWN_MEMBER_ID.code)
-            } else if (group.is(Dead)) {
-              // if the group is marked as dead, it means some other thread has just removed the group
-              // from the coordinator metadata; this is likely that the group has migrated to some other
-              // coordinator OR the group is in a transient unstable phase. Let the member retry
-              // joining without the specified member id,
-              responseCallback(Errors.UNKNOWN_MEMBER_ID.code)
-            } else if (!group.is(Stable)) {
-              responseCallback(Errors.REBALANCE_IN_PROGRESS.code)
-            } else if (!group.has(memberId)) {
-              responseCallback(Errors.UNKNOWN_MEMBER_ID.code)
-            } else if (generationId != group.generationId) {
-              responseCallback(Errors.ILLEGAL_GENERATION.code)
-            } else {
-              val member = group.get(memberId)
-              completeAndScheduleNextHeartbeatExpiration(group, member)
-              responseCallback(Errors.NONE.code)
+            group.currentState match {
+              case Dead =>
+                // if the group is marked as dead, it means some other thread has just removed the group
+                // from the coordinator metadata; this is likely that the group has migrated to some other
+                // coordinator OR the group is in a transient unstable phase. Let the member retry
+                // joining without the specified member id,
+                responseCallback(Errors.UNKNOWN_MEMBER_ID.code)
+
+              case Empty =>
+                responseCallback(Errors.UNKNOWN_MEMBER_ID.code)
+
+              case AwaitingSync =>
+                responseCallback(Errors.REBALANCE_IN_PROGRESS.code)
+
+              case PreparingRebalance =>
+                if (group.has(memberId) && generationId == group.generationId) {
+                  val member = group.get(memberId)
+                  completeAndScheduleNextHeartbeatExpiration(group, member)
+                }
+                responseCallback(Errors.REBALANCE_IN_PROGRESS.code)
+
+              case Stable =>
+                if (!group.has(memberId)) {
+                  responseCallback(Errors.UNKNOWN_MEMBER_ID.code)
+                } else if (generationId != group.generationId) {
+                  responseCallback(Errors.ILLEGAL_GENERATION.code)
+                } else {
+                  val member = group.get(memberId)
+                  completeAndScheduleNextHeartbeatExpiration(group, member)
+                  responseCallback(Errors.NONE.code)
+                }
             }
           }
       }
@@ -585,7 +602,8 @@ class GroupCoordinator(val brokerId: Int,
     heartbeatPurgatory.checkAndComplete(memberKey)
   }
 
-  private def addMemberAndRebalance(sessionTimeoutMs: Int,
+  private def addMemberAndRebalance(rebalanceTimeoutMs: Int,
+                                    sessionTimeoutMs: Int,
                                     clientId: String,
                                     clientHost: String,
                                     protocolType: String,
@@ -594,7 +612,8 @@ class GroupCoordinator(val brokerId: Int,
                                     callback: JoinCallback) = {
     // use the client-id with a random id suffix as the member-id
     val memberId = clientId + "-" + group.generateMemberIdSuffix
-    val member = new MemberMetadata(memberId, group.groupId, clientId, clientHost, sessionTimeoutMs, protocolType, protocols)
+    val member = new MemberMetadata(memberId, group.groupId, clientId, clientHost, rebalanceTimeoutMs,
+      sessionTimeoutMs, protocolType, protocols)
     member.awaitingJoinCallback = callback
     group.add(member.memberId, member)
     maybePrepareRebalance(group)
@@ -625,7 +644,7 @@ class GroupCoordinator(val brokerId: Int,
     group.transitionTo(PreparingRebalance)
     info("Preparing to restabilize group %s with old generation %s".format(group.groupId, group.generationId))
 
-    val rebalanceTimeout = group.rebalanceTimeout
+    val rebalanceTimeout = group.rebalanceTimeoutMs
     val delayedRebalance = new DelayedJoin(this, group, rebalanceTimeout)
     val groupKey = GroupKey(group.groupId)
     joinPurgatory.tryCompleteElseWatch(delayedRebalance, Seq(groupKey))

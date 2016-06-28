@@ -42,7 +42,8 @@ import static org.junit.Assert.assertTrue;
 public class AbstractCoordinatorTest {
 
     private static final ByteBuffer EMPTY_DATA = ByteBuffer.wrap(new byte[0]);
-    private static final int SESSION_TIMEOUT_MS = 30000;
+    private static final int REBALANCE_TIMEOUT_MS = 60000;
+    private static final int SESSION_TIMEOUT_MS = 10000;
     private static final int HEARTBEAT_INTERVAL_MS = 3000;
     private static final long RETRY_BACKOFF_MS = 100;
     private static final long REQUEST_TIMEOUT_MS = 40000;
@@ -101,7 +102,7 @@ public class AbstractCoordinatorTest {
         public DummyCoordinator(ConsumerNetworkClient client,
                                 Metrics metrics,
                                 Time time) {
-            super(client, GROUP_ID, SESSION_TIMEOUT_MS, HEARTBEAT_INTERVAL_MS, metrics,
+            super(client, GROUP_ID, REBALANCE_TIMEOUT_MS, SESSION_TIMEOUT_MS, HEARTBEAT_INTERVAL_MS, metrics,
                     METRIC_GROUP_PREFIX, time, RETRY_BACKOFF_MS);
         }
 

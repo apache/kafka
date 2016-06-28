@@ -46,7 +46,8 @@ class GroupMetadataManagerTest {
   val groupId = "foo"
   val groupPartitionId = 0
   val protocolType = "protocolType"
-  val sessionTimeout = 30000
+  val rebalanceTimeout = 60000
+  val sessionTimeout = 10000
 
 
   @Before
@@ -119,7 +120,7 @@ class GroupMetadataManagerTest {
     val group = new GroupMetadata(groupId)
     groupMetadataManager.addGroup(group)
 
-    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, sessionTimeout,
+    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
       protocolType, List(("protocol", Array[Byte]())))
     member.awaitingJoinCallback = (joinGroupResult: JoinGroupResult) => {}
     group.add(memberId, member)
@@ -337,7 +338,7 @@ class GroupMetadataManagerTest {
     val group = new GroupMetadata(groupId)
     groupMetadataManager.addGroup(group)
 
-    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, sessionTimeout,
+    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
       protocolType, List(("protocol", Array[Byte]())))
     member.awaitingJoinCallback = (joinGroupResult: JoinGroupResult) => {}
     group.add(memberId, member)

@@ -80,6 +80,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      */
     public ConsumerCoordinator(ConsumerNetworkClient client,
                                String groupId,
+                               int rebalanceTimeoutMs,
                                int sessionTimeoutMs,
                                int heartbeatIntervalMs,
                                List<PartitionAssignor> assignors,
@@ -96,6 +97,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                boolean excludeInternalTopics) {
         super(client,
                 groupId,
+                rebalanceTimeoutMs,
                 sessionTimeoutMs,
                 heartbeatIntervalMs,
                 metrics,

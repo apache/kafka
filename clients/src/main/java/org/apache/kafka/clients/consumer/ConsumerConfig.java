@@ -48,6 +48,10 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String MAX_POLL_RECORDS_CONFIG = "max.poll.records";
     private static final String MAX_POLL_RECORDS_DOC = "The maximum number of records returned in a single call to poll().";
 
+    /** <code>max.poll.interval.ms</code> */
+    public static final String MAX_POLL_INTERVAL_MS_CONFIG = "max.poll.interval.ms";
+    private static final String MAX_POLL_INTERVAL_MS_DOC = "The maximum delay between invocations of poll(). This is used as a liveness check to ensure consumers are still alive while holding onto a partition assignment. If poll() is not called within each interval of this duration, then the group will rebalance and reassign the partitions to another member.";
+
     /**
      * <code>session.timeout.ms</code>
      */
@@ -328,10 +332,16 @@ public class ConsumerConfig extends AbstractConfig {
                                         INTERCEPTOR_CLASSES_DOC)
                                 .define(MAX_POLL_RECORDS_CONFIG,
                                         Type.INT,
-                                        Integer.MAX_VALUE,
+                                        500,
                                         atLeast(1),
                                         Importance.MEDIUM,
                                         MAX_POLL_RECORDS_DOC)
+                                .define(MAX_POLL_INTERVAL_MS_CONFIG,
+                                        Type.INT,
+                                        300000,
+                                        atLeast(1),
+                                        Importance.MEDIUM,
+                                        MAX_POLL_INTERVAL_MS_DOC)
                                 .define(EXCLUDE_INTERNAL_TOPICS_CONFIG,
                                         Type.BOOLEAN,
                                         DEFAULT_EXCLUDE_INTERNAL_TOPICS,

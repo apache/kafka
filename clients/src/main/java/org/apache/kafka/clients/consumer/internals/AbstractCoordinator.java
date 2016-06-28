@@ -84,6 +84,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
     private final Heartbeat heartbeat;
     private final HeartbeatTask heartbeatTask;
+    private final int rebalanceTimeoutMs;
     private final int sessionTimeoutMs;
     private final GroupCoordinatorMetrics sensors;
     protected final String groupId;
@@ -105,6 +106,7 @@ public abstract class AbstractCoordinator implements Closeable {
      */
     public AbstractCoordinator(ConsumerNetworkClient client,
                                String groupId,
+                               int rebalanceTimeoutMs,
                                int sessionTimeoutMs,
                                int heartbeatIntervalMs,
                                Metrics metrics,
@@ -117,6 +119,7 @@ public abstract class AbstractCoordinator implements Closeable {
         this.memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
         this.groupId = groupId;
         this.coordinator = null;
+        this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.sessionTimeoutMs = sessionTimeoutMs;
         this.heartbeat = new Heartbeat(this.sessionTimeoutMs, heartbeatIntervalMs, time.milliseconds());
         this.heartbeatTask = new HeartbeatTask();
@@ -350,12 +353,13 @@ public abstract class AbstractCoordinator implements Closeable {
         JoinGroupRequest request = new JoinGroupRequest(
                 groupId,
                 this.sessionTimeoutMs,
+                this.sessionTimeoutMs,
                 this.memberId,
                 protocolType(),
                 metadata());
 
         log.debug("Sending JoinGroup ({}) to coordinator {}", request, this.coordinator);
-        return client.send(coordinator, ApiKeys.JOIN_GROUP, (short) 0, request)
+        return client.send(coordinator, ApiKeys.JOIN_GROUP, request)
                 .compose(new JoinGroupResponseHandler());
     }
 

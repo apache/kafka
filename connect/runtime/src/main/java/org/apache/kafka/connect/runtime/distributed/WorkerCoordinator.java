@@ -74,6 +74,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                              WorkerRebalanceListener listener) {
         super(client,
                 groupId,
+                sessionTimeoutMs, // FIXME: What should Connect use for the rebalance timeout?
                 sessionTimeoutMs,
                 heartbeatIntervalMs,
                 metrics,
