@@ -138,7 +138,7 @@ class AdminClient(val time: Time,
   def describeConsumerGroup(groupId: String): ConsumerGroupSummary = {
     findCoordinator(groupId) match {
       case None => 
-        throw new KafkaException(s"Could not find coordinator for group %s, which implies that one of the consumer offsets partitions may be offline or in the process of being created if this is a new cluster.".format(groupId))
+        throw new KafkaException(s"Could not find coordinator for group $groupId, which implies that one of the consumer offsets partitions may be offline or in the process of being created if this is a new cluster.")
       case Some(coordinator) =>
         val responseBody = send(coordinator, ApiKeys.DESCRIBE_GROUPS, new DescribeGroupsRequest(Collections.singletonList(groupId)))
         val response = responseBody.asInstanceOf[DescribeGroupsResponse]
