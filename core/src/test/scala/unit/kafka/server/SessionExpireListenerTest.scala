@@ -22,20 +22,25 @@ import kafka.utils.ZkUtils
 import org.I0Itec.zkclient.ZkClient
 import org.apache.zookeeper.Watcher
 import org.easymock.EasyMock
-import org.junit.{Assert, Before, Test}
+import org.junit.{Assert, Test}
 import Assert._
 import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.{Meter, Metric, MetricName}
-import org.apache.kafka.common.utils.MockTime
+import com.yammer.metrics.core.Meter
 import scala.collection.JavaConverters._
 
 class SessionExpireListenerTest {
 
-  private var time = new MockTime
   private val brokerId = 1
+
+  private def cleanMetricsRegistry() {
+    val metrics = Metrics.defaultRegistry
+    metrics.allMetrics.keySet.asScala.foreach(metrics.removeMetric)
+  }
 
   @Test
   def testSessionExpireListenerMetrics() {
+
+    cleanMetricsRegistry()
 
     val metrics = Metrics.defaultRegistry
 
@@ -43,7 +48,7 @@ class SessionExpireListenerTest {
       val meter = metrics.allMetrics.asScala.collectFirst {
         case (metricName, meter: Meter) if metricName.getName == name => meter
       }.getOrElse(sys.error(s"Unable to find meter with name $name"))
-      assertEquals("Unexpected meter count", expected, meter.count)
+      assertEquals(s"Unexpected meter count for $name", expected, meter.count)
     }
 
     val zkClient = EasyMock.mock(classOf[ZkClient])

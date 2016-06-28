@@ -28,7 +28,6 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.state.StateTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -41,6 +40,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
@@ -50,6 +50,8 @@ public class KStreamRepartitionJoinTest {
     @ClassRule
     public static final EmbeddedSingleNodeKafkaCluster CLUSTER =
         new EmbeddedSingleNodeKafkaCluster();
+
+    private static final long WINDOW_SIZE = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
 
     private KStreamBuilder builder;
     private Properties streamsConfiguration;
@@ -81,7 +83,7 @@ public class KStreamRepartitionJoinTest {
             .put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, StateTestUtils.tempDir().getPath());
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDir().getPath());
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
 
 
@@ -226,7 +228,7 @@ public class KStreamRepartitionJoinTest {
         streamTwo
             .join(streamOne.map(keyMapper),
                   joiner,
-                  JoinWindows.of().within(60 * 1000),
+                  getJoinWindow(),
                   Serdes.Integer(),
                   Serdes.String(),
                   Serdes.Integer(),
@@ -255,7 +257,7 @@ public class KStreamRepartitionJoinTest {
         String outputTopic = "left-join";
         map1.leftJoin(map2,
                       valueJoiner,
-                      JoinWindows.of().within(60 * 1000),
+                      getJoinWindow(),
                       Serdes.Integer(),
                       Serdes.Integer(),
                       Serdes.String(),
@@ -286,8 +288,7 @@ public class KStreamRepartitionJoinTest {
 
         final KStream<Integer, String> join = map1.join(map2,
                                                         valueJoiner,
-                                                        JoinWindows.of()
-                                                            .within(60 * 1000),
+                                                        getJoinWindow(),
                                                         Serdes.Integer(),
                                                         Serdes.Integer(),
                                                         Serdes.String(),
@@ -304,7 +305,7 @@ public class KStreamRepartitionJoinTest {
         join.map(kvMapper)
             .join(streamFour.map(kvMapper),
                   joiner,
-                  JoinWindows.of().within(60 * 1000),
+                  getJoinWindow(),
                   Serdes.Integer(),
                   Serdes.String(),
                   Serdes.String(),
@@ -315,6 +316,10 @@ public class KStreamRepartitionJoinTest {
 
         return new ExpectedOutputOnTopic(Arrays.asList("1:A:A", "2:B:B", "3:C:C", "4:D:D", "5:E:E"),
                             topic);
+    }
+
+    private JoinWindows getJoinWindow() {
+        return (JoinWindows) JoinWindows.of(WINDOW_SIZE).until(3 * WINDOW_SIZE);
     }
 
 
@@ -441,7 +446,7 @@ public class KStreamRepartitionJoinTest {
         CLUSTER.createTopic(outputTopic);
         lhs.join(rhs,
                  valueJoiner,
-                 JoinWindows.of().within(60 * 1000),
+                 getJoinWindow(),
                  Serdes.Integer(),
                  Serdes.Integer(),
                  Serdes.String(),

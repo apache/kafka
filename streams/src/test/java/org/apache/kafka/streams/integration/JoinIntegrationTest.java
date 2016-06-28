@@ -32,7 +32,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.state.StateTestUtils;
+import org.apache.kafka.test.TestUtils;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -150,7 +150,7 @@ public class JoinIntegrationTest {
         // with automatically) we don't need to set this anymore and can update `purgeLocalStreamsState`
         // accordingly.
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG,
-                                 StateTestUtils.tempDir().getPath());
+                                 TestUtils.tempDir().getPath());
 
         // Remove any state from previous test runs
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
