@@ -220,7 +220,7 @@ public class KTableFilterTest {
         driver.process(topic1, "B", null);
 
         proc1.checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
-        proc2.checkEmpty();
+        proc2.checkEmptyAndClearProcessResult();
     }
 
     @Test
@@ -254,7 +254,7 @@ public class KTableFilterTest {
         driver.process(topic1, "C", 1);
 
         proc1.checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
-        proc2.checkEmpty(); // we got nothing since all inputs are odd or filtered out
+        proc2.checkEmptyAndClearProcessResult(); // we got nothing since all inputs are odd or filtered out
 
         driver.process(topic1, "A", 2);
         driver.process(topic1, "B", 2);
