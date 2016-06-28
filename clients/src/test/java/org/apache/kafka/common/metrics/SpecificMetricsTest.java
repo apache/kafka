@@ -131,15 +131,15 @@ public class SpecificMetricsTest {
     @Test
     public void testHierarchicalSensors() {
         Sensor parent1 = metrics.sensor("test.parent1");
-        parent1.add(metrics.metricName("test.parent1.count", "grp1"), new Count());
+        parent1.add(metrics.metricInstance(SampleMetrics.HIERARCHICAL_SENSORS_PARENT1_COUNT), new Count());
         Sensor parent2 = metrics.sensor("test.parent2");
-        parent2.add(metrics.metricName("test.parent2.count", "grp1"), new Count());
+        parent2.add(metrics.metricInstance(SampleMetrics.HIERARCHICAL_SENSORS_PARENT2_COUNT), new Count());
         Sensor child1 = metrics.sensor("test.child1", parent1, parent2);
-        child1.add(metrics.metricName("test.child1.count", "grp1"), new Count());
+        child1.add(metrics.metricInstance(SampleMetrics.HIERARCHICAL_SENSORS_CHILD1_COUNT), new Count());
         Sensor child2 = metrics.sensor("test.child2", parent1);
-        child2.add(metrics.metricName("test.child2.count", "grp1"), new Count());
+        child2.add(metrics.metricInstance(SampleMetrics.HIERARCHICAL_SENSORS_CHILD2_COUNT), new Count());
         Sensor grandchild = metrics.sensor("test.grandchild", child1);
-        grandchild.add(metrics.metricName("test.grandchild.count", "grp1"), new Count());
+        grandchild.add(metrics.metricInstance(SampleMetrics.HIERARCHICAL_SENSORS_GRANDCHILD_COUNT), new Count());
 
         /* increment each sensor one time */
         parent1.record();

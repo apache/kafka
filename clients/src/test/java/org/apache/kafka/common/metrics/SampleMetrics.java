@@ -42,6 +42,13 @@ public class SampleMetrics extends SpecificMetrics {
     public static final MetricNameTemplate SIMPLE_STATS_PERCENT = new MetricNameTemplate("test.percent", "grp1", "Percent of the metric in testSimpleStats");
     public static final MetricNameTemplate SIMPLE_STATS_TOTAL = new MetricNameTemplate("s2.total", "grp1", "Total of the metric in testSimpleStats");
 
+    public static final MetricNameTemplate HIERARCHICAL_SENSORS_PARENT1_COUNT = new MetricNameTemplate("test.parent1.count", "grp1", "parent1 in testHierarchicalSensors");
+    public static final MetricNameTemplate HIERARCHICAL_SENSORS_PARENT2_COUNT = new MetricNameTemplate("test.parent2.count", "grp1", "parent2 in testHierarchicalSensors");
+    public static final MetricNameTemplate HIERARCHICAL_SENSORS_CHILD1_COUNT = new MetricNameTemplate("test.child1.count", "grp1", "child1 in testHierarchicalSensors");
+    public static final MetricNameTemplate HIERARCHICAL_SENSORS_CHILD2_COUNT = new MetricNameTemplate("test.child2.count", "grp1", "child2 in testHierarchicalSensors");
+    public static final MetricNameTemplate HIERARCHICAL_SENSORS_GRANDCHILD_COUNT = new MetricNameTemplate("test.grandchild.count", "grp1", "grandchild in testHierarchicalSensors");
+
+    
     private static final MetricNameTemplate[] ALL_METRICS = {
         METRIC1,
         METRIC2,
@@ -54,7 +61,12 @@ public class SampleMetrics extends SpecificMetrics {
         SIMPLE_STATS_COUNT,
         SIMPLE_STATS_MEDIAN,
         SIMPLE_STATS_PERCENT,
-        SIMPLE_STATS_TOTAL
+        SIMPLE_STATS_TOTAL,
+        HIERARCHICAL_SENSORS_PARENT1_COUNT,
+        HIERARCHICAL_SENSORS_PARENT2_COUNT,
+        HIERARCHICAL_SENSORS_CHILD1_COUNT,
+        HIERARCHICAL_SENSORS_CHILD2_COUNT,
+        HIERARCHICAL_SENSORS_GRANDCHILD_COUNT
     };
 
     public static void main(String[] args) {
