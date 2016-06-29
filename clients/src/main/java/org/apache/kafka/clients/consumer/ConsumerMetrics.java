@@ -12,6 +12,10 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import java.util.Map;
+import java.util.Set;
+
+import org.apache.kafka.clients.consumer.internals.FetcherMetricsRegistry;
 import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.metrics.SpecificMetrics;
 
@@ -77,6 +81,13 @@ public class ConsumerMetrics {
         TOPIC_RECORDS_CONSUMED_RATE,
     };
     
+    public FetcherMetricsRegistry fetcherMetrics;
+    
+    public ConsumerMetrics(Set<String> metricsTags, String string) {
+        // TODO Auto-generated constructor stub
+        this.fetcherMetrics = new FetcherMetricsRegistry(metricsTags);
+    }
+
     public static void main(String[] args) {
         System.out.println(SpecificMetrics.toHtmlTable("kafka.consumer", ALL_METRICS));
     }

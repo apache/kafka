@@ -103,8 +103,8 @@ public class Fetcher<K, V> {
                    Metadata metadata,
                    SubscriptionState subscriptions,
                    SpecificMetrics metrics,
-                   Time time,
-                   long retryBackoffMs) {
+                   FetcherMetricsRegistry metricsRegistry,
+                   Time time, long retryBackoffMs) {
 
         this.time = time;
         this.client = client;
@@ -718,31 +718,34 @@ public class Fetcher<K, V> {
         public final Sensor recordsFetchLag;
         public final Sensor fetchThrottleTimeSensor;
 
+        private FetcherMetricsRegistry metricsRegistry;
+
 
         public FetchManagerMetrics(SpecificMetrics metrics) {
             this.metrics = metrics;
+            this.metricsRegistry = new FetcherMetricsRegistry(metrics.config().tags().keySet());
 
             this.bytesFetched = metrics.sensor("bytes-fetched");
-            this.bytesFetched.add(metrics.metricInstance(ConsumerMetrics.FETCH_SIZE_AVG), new Avg());
-            this.bytesFetched.add(metrics.metricInstance(ConsumerMetrics.FETCH_SIZE_MAX), new Max());
-            this.bytesFetched.add(metrics.metricInstance(ConsumerMetrics.BYTES_CONSUMED_RATE), new Rate());
+            this.bytesFetched.add(metrics.metricInstance(metricsRegistry.FETCH_SIZE_AVG), new Avg());
+            this.bytesFetched.add(metrics.metricInstance(metricsRegistry.FETCH_SIZE_MAX), new Max());
+            this.bytesFetched.add(metrics.metricInstance(metricsRegistry.BYTES_CONSUMED_RATE), new Rate());
 
             this.recordsFetched = metrics.sensor("records-fetched");
-            this.recordsFetched.add(metrics.metricInstance(ConsumerMetrics.RECORDS_PER_REQUEST_AVG), new Avg());
-            this.recordsFetched.add(metrics.metricInstance(ConsumerMetrics.RECORDS_CONSUMED_RATE), new Rate());
+            this.recordsFetched.add(metrics.metricInstance(metricsRegistry.RECORDS_PER_REQUEST_AVG), new Avg());
+            this.recordsFetched.add(metrics.metricInstance(metricsRegistry.RECORDS_CONSUMED_RATE), new Rate());
 
             this.fetchLatency = metrics.sensor("fetch-latency");
-            this.fetchLatency.add(metrics.metricInstance(ConsumerMetrics.FETCH_LATENCY_AVG), new Avg());
-            this.fetchLatency.add(metrics.metricInstance(ConsumerMetrics.FETCH_LATENCY_MAX), new Max());
-            this.fetchLatency.add(metrics.metricInstance(ConsumerMetrics.FETCH_RATE), new Rate(new Count()));
+            this.fetchLatency.add(metrics.metricInstance(metricsRegistry.FETCH_LATENCY_AVG), new Avg());
+            this.fetchLatency.add(metrics.metricInstance(metricsRegistry.FETCH_LATENCY_MAX), new Max());
+            this.fetchLatency.add(metrics.metricInstance(metricsRegistry.FETCH_RATE), new Rate(new Count()));
 
             this.recordsFetchLag = metrics.sensor("records-lag");
-            this.recordsFetchLag.add(metrics.metricInstance(ConsumerMetrics.RECORDS_LAG_MAX), new Max());
+            this.recordsFetchLag.add(metrics.metricInstance(metricsRegistry.RECORDS_LAG_MAX), new Max());
 
             this.fetchThrottleTimeSensor = metrics.sensor("fetch-throttle-time");
-            this.fetchThrottleTimeSensor.add(metrics.metricInstance(ConsumerMetrics.FETCH_THROTTLE_TIME_AVG), new Avg());
+            this.fetchThrottleTimeSensor.add(metrics.metricInstance(metricsRegistry.FETCH_THROTTLE_TIME_AVG), new Avg());
 
-            this.fetchThrottleTimeSensor.add(metrics.metricInstance(ConsumerMetrics.FETCH_THROTTLE_TIME_MAX), new Max());
+            this.fetchThrottleTimeSensor.add(metrics.metricInstance(metricsRegistry.FETCH_THROTTLE_TIME_MAX), new Max());
         }
 
         public void recordTopicFetchMetrics(String topic, int bytes, int records) {
@@ -754,11 +757,11 @@ public class Fetcher<K, V> {
                 metricTags.put("topic", topic.replace('.', '_'));
 
                 bytesFetched = this.metrics.sensor(name);
-                bytesFetched.add(this.metrics.metricInstance(ConsumerMetrics.TOPIC_FETCH_SIZE_AVG,
+                bytesFetched.add(this.metrics.metricInstance(metricsRegistry.TOPIC_FETCH_SIZE_AVG,
                         metricTags), new Avg());
-                bytesFetched.add(this.metrics.metricInstance(ConsumerMetrics.TOPIC_FETCH_SIZE_MAX,
+                bytesFetched.add(this.metrics.metricInstance(metricsRegistry.TOPIC_FETCH_SIZE_MAX,
                         metricTags), new Max());
-                bytesFetched.add(this.metrics.metricInstance(ConsumerMetrics.TOPIC_BYTES_CONSUMED_RATE,
+                bytesFetched.add(this.metrics.metricInstance(metricsRegistry.TOPIC_BYTES_CONSUMED_RATE,
                         metricTags), new Rate());
             }
             bytesFetched.record(bytes);
@@ -771,9 +774,9 @@ public class Fetcher<K, V> {
                 metricTags.put("topic", topic.replace('.', '_'));
 
                 recordsFetched = this.metrics.sensor(name);
-                recordsFetched.add(this.metrics.metricInstance(ConsumerMetrics.TOPIC_RECORDS_PER_REQUEST_AVG,
+                recordsFetched.add(this.metrics.metricInstance(metricsRegistry.TOPIC_RECORDS_PER_REQUEST_AVG,
                         metricTags), new Avg());
-                recordsFetched.add(this.metrics.metricInstance(ConsumerMetrics.TOPIC_RECORDS_CONSUMED_RATE,
+                recordsFetched.add(this.metrics.metricInstance(metricsRegistry.TOPIC_RECORDS_CONSUMED_RATE,
                         metricTags), new Rate());
             }
             recordsFetched.record(records);

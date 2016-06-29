@@ -87,6 +87,8 @@ public class FetcherTest {
     private SubscriptionState subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);
     private SubscriptionState subscriptionsNoAutoReset = new SubscriptionState(OffsetResetStrategy.NONE);
     private SpecificMetrics metrics = new SpecificMetrics(time);
+    FetcherMetricsRegistry metricsRegistry = new FetcherMetricsRegistry();
+
     private static final double EPSILON = 0.0001;
     private ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, 1000);
 
@@ -528,8 +530,8 @@ public class FetcherTest {
         }
 
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
-        KafkaMetric avgMetric = allMetrics.get(metrics.metricInstance(ConsumerMetrics.FETCH_THROTTLE_TIME_AVG));
-        KafkaMetric maxMetric = allMetrics.get(metrics.metricInstance(ConsumerMetrics.FETCH_THROTTLE_TIME_MAX));
+        KafkaMetric avgMetric = allMetrics.get(metrics.metricInstance(metricsRegistry.FETCH_THROTTLE_TIME_AVG));
+        KafkaMetric maxMetric = allMetrics.get(metrics.metricInstance(metricsRegistry.FETCH_THROTTLE_TIME_MAX));
         assertEquals(200, avgMetric.value(), EPSILON);
         assertEquals(300, maxMetric.value(), EPSILON);
     }
@@ -590,6 +592,7 @@ public class FetcherTest {
                 metadata,
                 subscriptions,
                 metrics,
+                metricsRegistry,
                 time,
                 retryBackoffMs);
     }
