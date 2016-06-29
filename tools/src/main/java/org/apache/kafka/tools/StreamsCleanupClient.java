@@ -229,7 +229,12 @@ public class StreamsCleanupClient {
                 }
             }
 
-            for (String window : options.valuesOf(windowOption)) {
+            List<String> windowTopics = new LinkedList<>();
+            for (String operator : options.valuesOf(windowOption)) {
+                windowTopics.add(operator + "-this");
+                windowTopics.add(operator + "-other");
+            }
+            for (String window : windowTopics) {
                 String changelog = applicationId + "-" + window + "-changelog";
                 if (allTopics.contains(changelog)) {
                     TopicCommand.main(new String[] {
