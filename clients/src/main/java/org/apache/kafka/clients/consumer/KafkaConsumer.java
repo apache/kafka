@@ -799,11 +799,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 // treat subscribing to empty topic list as the same as unsubscribing
                 this.unsubscribe();
             } else {
-                Collection<String> nonNullTopics = new ArrayList<>(topics);
-                nonNullTopics.removeAll(Collections.singleton(null));
-
-                log.debug("Subscribed to topic(s): {}", Utils.join(nonNullTopics, ", "));
-                this.subscriptions.subscribe(nonNullTopics, listener);
+                for (String topic : topics) {
+                    if (topic == null || topic.trim().equals(""))
+                        throw new IllegalArgumentException("Topic collection should not contain null or empty topic");
+                }
+                log.debug("Subscribed to topic(s): {}", Utils.join(topics, ", "));
+                this.subscriptions.subscribe(topics, listener);
                 metadata.setTopics(subscriptions.groupSubscription());
             }
         } finally {
