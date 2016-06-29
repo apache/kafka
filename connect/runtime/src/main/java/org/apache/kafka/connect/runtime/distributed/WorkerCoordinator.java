@@ -17,10 +17,12 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
+import org.apache.kafka.clients.consumer.internals.AbstractCoordinatorMetrics;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.SpecificMetrics;
 import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.utils.CircularIterator;
 import org.apache.kafka.common.utils.Time;
@@ -65,7 +67,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                              String groupId,
                              int sessionTimeoutMs,
                              int heartbeatIntervalMs,
-                             Metrics metrics,
+                             SpecificMetrics metrics,
                              String metricGrpPrefix,
                              Time time,
                              long retryBackoffMs,
@@ -77,7 +79,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                 sessionTimeoutMs,
                 heartbeatIntervalMs,
                 metrics,
-                metricGrpPrefix,
+                new AbstractCoordinatorMetrics(metricGrpPrefix),
                 time,
                 retryBackoffMs);
         this.restUrl = restUrl;

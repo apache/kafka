@@ -22,7 +22,7 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.SpecificMetrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.GroupCoordinatorResponse;
@@ -74,7 +74,7 @@ public class WorkerCoordinatorTest {
     private Cluster cluster = TestUtils.singletonCluster("topic", 1);
     private Node node = cluster.nodes().get(0);
     private Metadata metadata;
-    private Metrics metrics;
+    private SpecificMetrics metrics;
     private ConsumerNetworkClient consumerClient;
     private MockRebalanceListener rebalanceListener;
     @Mock private KafkaConfigBackingStore configStorage;
@@ -90,7 +90,7 @@ public class WorkerCoordinatorTest {
         this.metadata = new Metadata(0, Long.MAX_VALUE);
         this.metadata.update(cluster, time.milliseconds());
         this.consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, 1000);
-        this.metrics = new Metrics(time);
+        this.metrics = new SpecificMetrics(time);
         this.rebalanceListener = new MockRebalanceListener();
         this.configStorage = PowerMock.createMock(KafkaConfigBackingStore.class);
 

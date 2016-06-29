@@ -20,7 +20,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.SpecificMetrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.GroupCoordinatorResponse;
@@ -64,7 +64,7 @@ public class AbstractCoordinatorTest {
         Metadata metadata = new Metadata();
         this.consumerClient = new ConsumerNetworkClient(mockClient, metadata, mockTime,
                 RETRY_BACKOFF_MS, REQUEST_TIMEOUT_MS);
-        Metrics metrics = new Metrics();
+        SpecificMetrics metrics = new SpecificMetrics();
 
         Cluster cluster = TestUtils.singletonCluster("topic", 1);
         metadata.update(cluster, mockTime.milliseconds());
@@ -99,10 +99,10 @@ public class AbstractCoordinatorTest {
     public class DummyCoordinator extends AbstractCoordinator {
 
         public DummyCoordinator(ConsumerNetworkClient client,
-                                Metrics metrics,
+                                SpecificMetrics metrics,
                                 Time time) {
             super(client, GROUP_ID, SESSION_TIMEOUT_MS, HEARTBEAT_INTERVAL_MS, metrics,
-                    METRIC_GROUP_PREFIX, time, RETRY_BACKOFF_MS);
+                    new AbstractCoordinatorMetrics(METRIC_GROUP_PREFIX), time, RETRY_BACKOFF_MS);
         }
 
         @Override

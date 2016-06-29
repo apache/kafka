@@ -70,7 +70,7 @@ public class SpecificMetrics extends Metrics {
         
         if (!runtimeTagKeys.equals(templateTagKeys)) {
             throw new IllegalArgumentException("For '" + template.name() + "', runtime-defined metric tags do not match compile-time defined metric tags. " + ""
-                    + "Runtime = " + runtimeTagKeys.toString() + " Compile-time = " + templateTagKeys.toString() );
+                    + "Runtime = " + runtimeTagKeys.toString() + " Compile-time = " + templateTagKeys.toString());
         }
                 
         return super.metricName(template.name(), template.group(), template.description(), tags);
@@ -120,7 +120,7 @@ public class SpecificMetrics extends Metrics {
     public static String toHtmlTable(String domain, MetricNameTemplate[] allMetrics) {
         Map<String, Map<String, String>> beansAndAttributes = new HashMap<String, Map<String, String>>();
 
-        try (Metrics metrics = new Metrics() ) {
+        try (Metrics metrics = new Metrics()) {
             for (MetricNameTemplate template : allMetrics) {
                 Map<String, String> tags = new HashMap<String, String>();
                 for (String s : template.tags()) {

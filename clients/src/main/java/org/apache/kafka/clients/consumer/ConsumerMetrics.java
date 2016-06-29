@@ -17,6 +17,7 @@ import org.apache.kafka.common.metrics.SpecificMetrics;
 
 public class ConsumerMetrics {
 
+    /** ********* Fetcher Metrics ***********/
     // XXX group name is no longer configurable at runtime. Is that okay?
     public static final MetricNameTemplate FETCH_SIZE_AVG = new MetricNameTemplate("fetch-size-avg", "consumer-fetch-manager-metrics", 
             "The average number of bytes fetched per request", "client-id");
@@ -58,6 +59,7 @@ public class ConsumerMetrics {
     public static final MetricNameTemplate TOPIC_RECORDS_CONSUMED_RATE = new MetricNameTemplate("records-consumed-rate", "consumer-fetch-manager-metrics", 
             "The average number of records consumed per second for topic {topic}", "client-id", "topic");
 
+    
     private static final MetricNameTemplate[] ALL_METRICS = {
         FETCH_SIZE_AVG,
         FETCH_SIZE_MAX,

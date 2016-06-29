@@ -33,6 +33,7 @@ import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.SpecificMetrics;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
@@ -86,7 +87,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                List<PartitionAssignor> assignors,
                                Metadata metadata,
                                SubscriptionState subscriptions,
-                               Metrics metrics,
+                               SpecificMetrics metrics,
                                String metricGrpPrefix,
                                Time time,
                                long retryBackoffMs,
@@ -100,7 +101,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 sessionTimeoutMs,
                 heartbeatIntervalMs,
                 metrics,
-                metricGrpPrefix,
+                new AbstractCoordinatorMetrics("consumer"),
                 time,
                 retryBackoffMs);
         this.metadata = metadata;

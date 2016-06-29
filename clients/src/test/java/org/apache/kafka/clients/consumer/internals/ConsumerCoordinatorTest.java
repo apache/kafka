@@ -38,7 +38,7 @@ import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.TopicConstants;
-import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.SpecificMetrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.GroupCoordinatorResponse;
@@ -93,7 +93,7 @@ public class ConsumerCoordinatorTest {
     private Node node = cluster.nodes().get(0);
     private SubscriptionState subscriptions;
     private Metadata metadata;
-    private Metrics metrics;
+    private SpecificMetrics metrics;
     private ConsumerNetworkClient consumerClient;
     private MockRebalanceListener rebalanceListener;
     private MockCommitCallback defaultOffsetCommitCallback;
@@ -108,7 +108,7 @@ public class ConsumerCoordinatorTest {
         this.metadata = new Metadata(0, Long.MAX_VALUE);
         this.metadata.update(cluster, time.milliseconds());
         this.consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, 1000);
-        this.metrics = new Metrics(time);
+        this.metrics = new SpecificMetrics(time);
         this.rebalanceListener = new MockRebalanceListener();
         this.defaultOffsetCommitCallback = new MockCommitCallback();
         this.partitionAssignor.clear();
@@ -644,7 +644,7 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testIncludeInternalTopicsConfigOption() {
-        coordinator = buildCoordinator(new Metrics(), assignors, false, false);
+        coordinator = buildCoordinator(new SpecificMetrics(), assignors, false, false);
         subscriptions.subscribe(Pattern.compile(".*"), rebalanceListener);
 
         metadata.update(TestUtils.singletonCluster(TopicConstants.GROUP_METADATA_TOPIC_NAME, 2), time.milliseconds());
@@ -734,7 +734,7 @@ public class ConsumerCoordinatorTest {
     public void testAutoCommitDynamicAssignment() {
         final String consumerId = "consumer";
 
-        ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
+        ConsumerCoordinator coordinator = buildCoordinator(new SpecificMetrics(), assignors,
                 ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, true);
 
         subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
@@ -760,7 +760,7 @@ public class ConsumerCoordinatorTest {
     public void testAutoCommitDynamicAssignmentRebalance() {
         final String consumerId = "consumer";
 
-        ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
+        ConsumerCoordinator coordinator = buildCoordinator(new SpecificMetrics(), assignors,
                 ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, true);
 
         subscriptions.subscribe(Arrays.asList(topicName), rebalanceListener);
@@ -788,7 +788,7 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testAutoCommitManualAssignment() {
-        ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
+        ConsumerCoordinator coordinator = buildCoordinator(new SpecificMetrics(), assignors,
                 ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, true);
 
         subscriptions.assignFromUser(Arrays.asList(tp));
@@ -806,7 +806,7 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testAutoCommitManualAssignmentCoordinatorUnknown() {
-        ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
+        ConsumerCoordinator coordinator = buildCoordinator(new SpecificMetrics(), assignors,
                 ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, true);
 
         subscriptions.assignFromUser(Arrays.asList(tp));
@@ -1094,7 +1094,7 @@ public class ConsumerCoordinatorTest {
         RoundRobinAssignor roundRobin = new RoundRobinAssignor();
         RangeAssignor range = new RangeAssignor();
 
-        try (Metrics metrics = new Metrics(time)) {
+        try (SpecificMetrics metrics = new SpecificMetrics(time)) {
             ConsumerCoordinator coordinator = buildCoordinator(metrics, Arrays.<PartitionAssignor>asList(roundRobin, range),
                     ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, false);
             List<ProtocolMetadata> metadata = coordinator.metadata();
@@ -1103,7 +1103,7 @@ public class ConsumerCoordinatorTest {
             assertEquals(range.name(), metadata.get(1).name());
         }
 
-        try (Metrics metrics = new Metrics(time)) {
+        try (SpecificMetrics metrics = new SpecificMetrics(time)) {
             ConsumerCoordinator coordinator = buildCoordinator(metrics, Arrays.<PartitionAssignor>asList(range, roundRobin),
                     ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, false);
             List<ProtocolMetadata> metadata = coordinator.metadata();
@@ -1144,7 +1144,7 @@ public class ConsumerCoordinatorTest {
         assertTrue(subscriptions.partitionAssignmentNeeded());
     }
 
-    private ConsumerCoordinator buildCoordinator(Metrics metrics,
+    private ConsumerCoordinator buildCoordinator(SpecificMetrics metrics,
                                                  List<PartitionAssignor> assignors,
                                                  boolean excludeInternalTopics,
                                                  boolean autoCommitEnabled) {
