@@ -95,6 +95,7 @@ public class KTableFilterTest {
         driver.process(topic1, "A", null);
         driver.process(topic1, "B", null);
 
+        // Guozhang's second fix suppresses A:null, B:null for proc2 and proc3 below
         proc2.checkAndClearProcessResult("A:null", "B:2", "C:null", "D:4");
         proc3.checkAndClearProcessResult("A:1", "B:null", "C:3", "D:null");
     }
@@ -224,6 +225,7 @@ public class KTableFilterTest {
         driver.process(topic1, "B", null);
 
         proc1.checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
+        // Guozhang's second fix suppresses A:null, B:null for proc2  below
         proc2.checkEmptyAndClearProcessResult();
     }
 
