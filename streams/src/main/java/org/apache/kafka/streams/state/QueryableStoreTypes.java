@@ -21,7 +21,7 @@ import org.apache.kafka.streams.state.internals.CompositeReadOnlyWindowStore;
 /**
  * Provides access to the {@link QueryableStoreType}s provided with KafkaStreams. These
  * can be used with {@link org.apache.kafka.streams.KafkaStreams#getStore(String, QueryableStoreType)}
- * To access and query the {@link StateStore}s that are port of a Topology
+ * To access and query the {@link StateStore}s that are part of a Topology
  */
 public class QueryableStoreTypes {
 

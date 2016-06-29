@@ -170,7 +170,7 @@ public class QueryableStateIntegrationTest {
             public String apply(final String value1, final String value2) {
                 return value1 + value2;
             }
-        }, JoinWindows.of("join").within(10 * 60 * 1000L))
+        }, JoinWindows.of("join", 10 * 60 * 1000L))
             .to(OUTPUT_TOPIC);
 
         // Non Windowed
