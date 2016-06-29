@@ -295,17 +295,17 @@ public class KTableFilterTest {
                     return value.compareToIgnoreCase("accept") == 0;
                 }
             }).mapValues(
-               new ValueMapper<String, String>() {
-                   @Override
-                   public String apply(String value) {
-                       return value;
-                   }
-            }).groupBy( new KeyValueMapper<String, String, KeyValue<String, String>>() {
-                   @Override
-                   public KeyValue<String, String> apply(String first, String second) {
-                       return (second == null || first.compareTo(second) <=0) ?  new KeyValue<>(first, first) : new KeyValue(second, second);
-                   }
-            }).reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, "mock-result");
+                new ValueMapper<String, String>() {
+                    @Override
+                    public String apply(String value) {
+                        return value;
+                    }
+                }).groupBy(new KeyValueMapper<String, String, KeyValue<String, String>>() {
+                    @Override
+                    public KeyValue<String, String> apply(String first, String second) {
+                        return (second == null || first.compareTo(second) <= 0) ?  new KeyValue<>(first, first) : new KeyValue(second, second);
+                    }
+                }).reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, "mock-result");
 
         MockProcessorSupplier<String, String> proc1 = new MockProcessorSupplier<>();
         MockProcessorSupplier<String, String> proc2 = new MockProcessorSupplier<>();
