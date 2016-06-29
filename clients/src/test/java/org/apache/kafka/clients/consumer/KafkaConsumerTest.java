@@ -117,30 +117,30 @@ public class KafkaConsumerTest {
         consumer.close();
     }
 
-    @Test
-    public void testSubscriptionThrowsExceptionIfTopicNullOrEmpty() {
+    @Test(expected = IllegalArgumentException.class)
+    public void testSubscriptionOnNullTopic() {
         KafkaConsumer<byte[], byte[]> consumer = newConsumer();
-
-        String topicNull = null;
+        String nullTopic = null;
 
         try {
-            consumer.subscribe(Collections.singletonList(topicNull));
-        } catch (IllegalArgumentException e) {
-            assertEquals("Topic collection should not contain null or empty topic", e.getMessage());
-            return;
+            consumer.subscribe(Collections.singletonList(nullTopic));
+        } finally {
+            consumer.close();
         }
-        Assert.fail("should have caught an exception and returned");
 
-        String topicEmpty = "  ";
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testSubscriptionOnEmptyTopic() {
+        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
+        String emptyTopic = "  ";
+
         try {
-            consumer.subscribe(Collections.singletonList(topicEmpty));
-        } catch (IllegalArgumentException e) {
-            assertEquals("Topic collection should not contain null or empty topic", e.getMessage());
-            return;
+            consumer.subscribe(Collections.singletonList(emptyTopic));
+        } finally {
+            consumer.close();
         }
-        Assert.fail("should have caught an exception and returned");
 
-        consumer.close();
     }
 
     @Test(expected = IllegalArgumentException.class)
