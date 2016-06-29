@@ -13,9 +13,11 @@
 package org.apache.kafka.common.metrics;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
@@ -48,6 +50,16 @@ public class SpecificMetrics extends Metrics {
     }
 
     public MetricName metricInstance(MetricNameTemplate template, Map<String, String> tags) {
+        // check to make sure that the runtime defined tags contain all the template tags.
+        Set<String> runtimeTagKeys = new HashSet<>(tags.keySet());
+        runtimeTagKeys.addAll(config().tags().keySet());
+        
+        Set<String> templateTagKeys = template.tags();
+        
+        if (!runtimeTagKeys.equals(templateTagKeys)) {
+            throw new IllegalArgumentException("Runtime-defined metric tags do not match compile-time defined metric tags");
+        }
+                
         return super.metricName(template.name(), template.group(), template.description(), tags);
     }
 

@@ -21,6 +21,7 @@ import static org.junit.Assert.fail;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -77,8 +78,44 @@ public class SpecificMetricsTest {
         } catch (IllegalArgumentException e) {
             // this is expected
         }
+        
+        Map<String, String> parentTagsWithValues = new LinkedHashMap<>();
+        parentTagsWithValues.put("parent-tag", "parent-tag-value");
+
+        Map<String, String> childTagsWithValues = new LinkedHashMap<>();
+        childTagsWithValues.put("child-tag", "child-tag-value");
+        
+        SpecificMetrics inherited = new SpecificMetrics(new MetricConfig().tags(parentTagsWithValues), Arrays.asList((MetricsReporter) new JmxReporter()), time, true);
+        
+        MetricName inheritedMetric = inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, childTagsWithValues);
+        
+        Map<String, String> filledOutTags = inheritedMetric.tags();
+        assertEquals("parent-tag should be set properly", filledOutTags.get("parent-tag"), "parent-tag-value");
+        assertEquals("child-tag should be set properly", filledOutTags.get("child-tag"), "child-tag-value");
+
+        try {
+            inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, parentTagsWithValues);
+            fail("Creating MetricName should fail if the child metrics are not defined at runtime");
+        } catch (IllegalArgumentException e) {
+            // this is expected
+        }
+
+        try {
+            
+            Map<String, String> runtimeTags = new LinkedHashMap<>();
+            runtimeTags.put("child-tag", "child-tag-value");
+            runtimeTags.put("tag-not-in-template", "unexpected-value");
+
+            inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, runtimeTags);
+            fail("Creating MetricName should fail if there is a tag at runtime that is not in the template");
+        } catch (IllegalArgumentException e) {
+            // this is expected
+        }
+                
+        inherited.close();
     }
 
+    
     @Test
     public void testSimpleStats() throws Exception {
         ConstantMeasurable measurable = new ConstantMeasurable();

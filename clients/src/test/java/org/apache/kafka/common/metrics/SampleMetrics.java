@@ -30,6 +30,9 @@ public class SampleMetrics extends SpecificMetrics {
 
     public static final MetricNameTemplate METRIC1 = new MetricNameTemplate("name", "group", "The first metric used in testMetricName()", "key1", "key2");
     public static final MetricNameTemplate METRIC2 = new MetricNameTemplate("name", "group", "The second metric used in testMetricName()", "key1", "key2");
+
+    public static final MetricNameTemplate METRIC_WITH_INHERITED_TAGS = new MetricNameTemplate("inherited.tags", "group", "inherited.tags in testMetricName", "parent-tag", "child-tag");
+    
     public static final MetricNameTemplate DIRECT_MEASUREABLE = new MetricNameTemplate("direct.measurable", "grp1", "The fraction of time an appender waits for space allocation.");
 
     public static final MetricNameTemplate SIMPLE_STATS_AVG = new MetricNameTemplate("test.avg", "grp1", "Average of the metric in testSimpleStats");
@@ -75,6 +78,8 @@ public class SampleMetrics extends SpecificMetrics {
     private static final MetricNameTemplate[] ALL_METRICS = {
         METRIC1,
         METRIC2,
+        METRIC_WITH_INHERITED_TAGS,
+        
         DIRECT_MEASUREABLE,
         SIMPLE_STATS_AVG,
         SIMPLE_STATS_MAX,
