@@ -362,7 +362,10 @@ class GroupCoordinator(val brokerId: Int,
                 responseCallback(Errors.UNKNOWN_MEMBER_ID.code)
 
               case AwaitingSync =>
-                responseCallback(Errors.REBALANCE_IN_PROGRESS.code)
+                if (!group.has(memberId))
+                  responseCallback(Errors.UNKNOWN_MEMBER_ID.code)
+                else
+                  responseCallback(Errors.REBALANCE_IN_PROGRESS.code)
 
               case PreparingRebalance =>
                 if (group.has(memberId) && generationId == group.generationId) {
