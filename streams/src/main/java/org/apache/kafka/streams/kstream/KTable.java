@@ -117,6 +117,10 @@ public interface KTable<K, V> {
      * Materialize this stream to a topic, also creates a new instance of {@link KTable} from the topic
      * using default serializers and deserializers and producer's {@link DefaultPartitioner}.
      * This is equivalent to calling {@link #to(String)} and {@link org.apache.kafka.streams.kstream.KStreamBuilder#table(String, String)}.
+     * The resulting {@link KTable} will be materialized in a local state
+     * store with the given store name. Also a changelog topic named "applicationID-storeName-changelog"
+     * will be automatically created in Kafka for failure recovery, where "applicationID"
+     * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
      * @param topic         the topic name
      * @param storeName     the state store name used for this KTable
@@ -128,6 +132,10 @@ public interface KTable<K, V> {
      * Materialize this stream to a topic, also creates a new instance of {@link KTable} from the topic using default serializers
      * and deserializers and a customizable {@link StreamPartitioner} to determine the distribution of records to partitions.
      * This is equivalent to calling {@link #to(String)} and {@link org.apache.kafka.streams.kstream.KStreamBuilder#table(String, String)}.
+     * The resulting {@link KTable} will be materialized in a local state
+     * store with the given store name. Also a changelog topic named "applicationID-storeName-changelog"
+     * will be automatically created in Kafka for failure recovery, where "applicationID"
+     * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
      * @param partitioner  the function used to determine how records are distributed among partitions of the topic,
      *                     if not specified producer's {@link DefaultPartitioner} will be used
@@ -144,6 +152,10 @@ public interface KTable<K, V> {
      * &mdash; otherwise producer's {@link DefaultPartitioner} is used.
      * This is equivalent to calling {@link #to(Serde, Serde, String)} and
      * {@link org.apache.kafka.streams.kstream.KStreamBuilder#table(Serde, Serde, String, String)}.
+     * The resulting {@link KTable} will be materialized in a local state
+     * store with the given store name. Also a changelog topic named "applicationID-storeName-changelog"
+     * will be automatically created in Kafka for failure recovery, where "applicationID"
+     * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
      * @param keySerde     key serde used to send key-value pairs,
      *                     if not specified the default key serde defined in the configuration will be used
@@ -160,6 +172,10 @@ public interface KTable<K, V> {
      * using a customizable {@link StreamPartitioner} to determine the distribution of records to partitions.
      * This is equivalent to calling {@link #to(Serde, Serde, StreamPartitioner, String)} and
      * {@link org.apache.kafka.streams.kstream.KStreamBuilder#table(Serde, Serde, String, String)}.
+     * The resulting {@link KTable} will be materialized in a local state
+     * store with the given store name. Also a changelog topic named "applicationID-storeName-changelog"
+     * will be automatically created in Kafka for failure recovery, where "applicationID"
+     * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
      * @param keySerde     key serde used to send key-value pairs,
      *                     if not specified the default key serde defined in the configuration will be used
@@ -318,7 +334,7 @@ public interface KTable<K, V> {
     void foreach(ForeachAction<K, V> action);
 
     /**
-     * Get the state store name, if any
+     * Get the name of the local state store used for materializing this {@link KTable}
      * @return the underlying state store name, or null if KTable does not have one
      */
     String getStoreName();

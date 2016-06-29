@@ -35,6 +35,10 @@ public interface KGroupedTable<K, V> {
 
     /**
      * Combine updating values of this stream by the selected key into a new instance of {@link KTable}.
+     * The resulting {@link KTable} will be materialized in a local state
+     * store with the given store name. Also a changelog topic named "applicationID-storeName-changelog"
+     * will be automatically created in Kafka for failure recovery, where "applicationID"
+     * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
      * @param adder         the instance of {@link Reducer} for addition
      * @param subtractor    the instance of {@link Reducer} for subtraction
@@ -48,6 +52,10 @@ public interface KGroupedTable<K, V> {
 
     /**
      * Aggregate updating values of this stream by the selected key into a new instance of {@link KTable}.
+     * The resulting {@link KTable} will be materialized in a local state
+     * store with the given store name. Also a changelog topic named "applicationID-storeName-changelog"
+     * will be automatically created in Kafka for failure recovery, where "applicationID"
+     * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
      * @param initializer   the instance of {@link Initializer}
      * @param adder         the instance of {@link Aggregator} for addition
@@ -68,6 +76,10 @@ public interface KGroupedTable<K, V> {
     /**
      * Aggregate updating values of this stream by the selected key into a new instance of {@link KTable}
      * using default serializers and deserializers.
+     * The resulting {@link KTable} will be materialized in a local state
+     * store with the given store name. Also a changelog topic named "applicationID-storeName-changelog"
+     * will be automatically created in Kafka for failure recovery, where "applicationID"
+     * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
      * @param initializer   the instance of {@link Initializer}
      * @param adder         the instance of {@link Aggregator} for addition
@@ -84,6 +96,10 @@ public interface KGroupedTable<K, V> {
 
     /**
      * Count number of records of this stream by the selected key into a new instance of {@link KTable}.
+     * The resulting {@link KTable} will be materialized in a local state
+     * store with the given store name. Also a changelog topic named "applicationID-storeName-changelog"
+     * will be automatically created in Kafka for failure recovery, where "applicationID"
+     * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
      * @param storeName     the name of the underlying {@link KTable} state store
      * @return a {@link KTable} with same key and {@link Long} value type as this {@link KGroupedTable},
