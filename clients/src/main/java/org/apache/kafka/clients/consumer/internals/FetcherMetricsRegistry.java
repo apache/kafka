@@ -20,95 +20,95 @@ public class FetcherMetricsRegistry {
 
     private Set<String> tags;
     private Set<String> topicTags;
-    public MetricNameTemplate FETCH_SIZE_AVG;
-    public MetricNameTemplate FETCH_SIZE_MAX;
-    public MetricNameTemplate BYTES_CONSUMED_RATE;
-    public MetricNameTemplate RECORDS_PER_REQUEST_AVG;
-    public MetricNameTemplate RECORDS_CONSUMED_RATE;
-    public MetricNameTemplate FETCH_LATENCY_AVG;
-    public MetricNameTemplate FETCH_LATENCY_MAX;
-    public MetricNameTemplate FETCH_RATE;
-    public MetricNameTemplate RECORDS_LAG_MAX;
-    public MetricNameTemplate FETCH_THROTTLE_TIME_AVG;
-    public MetricNameTemplate FETCH_THROTTLE_TIME_MAX;
-    public MetricNameTemplate TOPIC_FETCH_SIZE_AVG;
-    public MetricNameTemplate TOPIC_FETCH_SIZE_MAX;
-    public MetricNameTemplate TOPIC_BYTES_CONSUMED_RATE;
-    public MetricNameTemplate TOPIC_RECORDS_PER_REQUEST_AVG;
-    public MetricNameTemplate TOPIC_RECORDS_CONSUMED_RATE;
+    public MetricNameTemplate fetchSizeAvg;
+    public MetricNameTemplate fetchSizeMax;
+    public MetricNameTemplate bytesConsumedRate;
+    public MetricNameTemplate recordsPerRequestAvg;
+    public MetricNameTemplate recordsConsumedRate;
+    public MetricNameTemplate fetchLatencyAvg;
+    public MetricNameTemplate fetchLatencyMax;
+    public MetricNameTemplate fetchRate;
+    public MetricNameTemplate recordsLagMax;
+    public MetricNameTemplate fetchThrottleTimeAvg;
+    public MetricNameTemplate fetchThrottleTimeMax;
+    public MetricNameTemplate topicFetchSizeAvg;
+    public MetricNameTemplate topicFetchSizeMax;
+    public MetricNameTemplate topicBytesConsumedRate;
+    public MetricNameTemplate topicRecordsPerRequestAvg;
+    public MetricNameTemplate topicRecordsConsumedRate;
 
     public FetcherMetricsRegistry() {
         this(new HashSet<String>());
     }
 
     public FetcherMetricsRegistry(Set<String> tagsArg) {
-        // make a copuy
+        // make a copy
         this.tags = new HashSet<>(tagsArg);
         topicTags = new HashSet<>(tagsArg);
         topicTags.add("topic");
 
         /* ***** Fetcher level *****/
-        this.FETCH_SIZE_AVG = new MetricNameTemplate("fetch-size-avg", "consumer-fetch-manager-metrics", 
+        this.fetchSizeAvg = new MetricNameTemplate("fetch-size-avg", "consumer-fetch-manager-metrics", 
                 "The average number of bytes fetched per request", tags);
 
-        this.FETCH_SIZE_MAX = new MetricNameTemplate("fetch-size-max", "consumer-fetch-manager-metrics", 
+        this.fetchSizeMax = new MetricNameTemplate("fetch-size-max", "consumer-fetch-manager-metrics", 
                 "The maximum number of bytes fetched per request", tags);
-        this.BYTES_CONSUMED_RATE = new MetricNameTemplate("bytes-consumed-rate", "consumer-fetch-manager-metrics", 
+        this.bytesConsumedRate = new MetricNameTemplate("bytes-consumed-rate", "consumer-fetch-manager-metrics", 
                 "The average number of bytes consumed per second", tags);
 
-        this.RECORDS_PER_REQUEST_AVG = new MetricNameTemplate("records-per-request-avg", "consumer-fetch-manager-metrics", 
+        this.recordsPerRequestAvg = new MetricNameTemplate("records-per-request-avg", "consumer-fetch-manager-metrics", 
                 "The average number of records in each request", tags);
-        this.RECORDS_CONSUMED_RATE = new MetricNameTemplate("records-consumed-rate", "consumer-fetch-manager-metrics", 
+        this.recordsConsumedRate = new MetricNameTemplate("records-consumed-rate", "consumer-fetch-manager-metrics", 
                 "The average number of records consumed per second", tags);
 
-        this.FETCH_LATENCY_AVG = new MetricNameTemplate("fetch-latency-avg", "consumer-fetch-manager-metrics", 
+        this.fetchLatencyAvg = new MetricNameTemplate("fetch-latency-avg", "consumer-fetch-manager-metrics", 
                 "The average time taken for a fetch request.", tags);
-        this.FETCH_LATENCY_MAX = new MetricNameTemplate("fetch-latency-max", "consumer-fetch-manager-metrics", 
+        this.fetchLatencyMax = new MetricNameTemplate("fetch-latency-max", "consumer-fetch-manager-metrics", 
                 "The max time taken for any fetch request.", tags);
-        this.FETCH_RATE = new MetricNameTemplate("fetch-rate", "consumer-fetch-manager-metrics", 
+        this.fetchRate = new MetricNameTemplate("fetch-rate", "consumer-fetch-manager-metrics", 
                 "The number of fetch requests per second.", tags);
 
-        this.RECORDS_LAG_MAX = new MetricNameTemplate("records-lag-max", "consumer-fetch-manager-metrics", 
+        this.recordsLagMax = new MetricNameTemplate("records-lag-max", "consumer-fetch-manager-metrics", 
                 "The maximum lag in terms of number of records for any partition in this window", tags);
 
-        this.FETCH_THROTTLE_TIME_AVG = new MetricNameTemplate("fetch-throttle-time-avg", "consumer-fetch-manager-metrics", 
+        this.fetchThrottleTimeAvg = new MetricNameTemplate("fetch-throttle-time-avg", "consumer-fetch-manager-metrics", 
                 "The average throttle time in ms", tags);
-        this.FETCH_THROTTLE_TIME_MAX = new MetricNameTemplate("fetch-throttle-time-max", "consumer-fetch-manager-metrics", 
+        this.fetchThrottleTimeMax = new MetricNameTemplate("fetch-throttle-time-max", "consumer-fetch-manager-metrics", 
                 "The maximum throttle time in ms", tags);
 
         /* ***** Topic level *****/
-        this.TOPIC_FETCH_SIZE_AVG = new MetricNameTemplate("fetch-size-avg", "consumer-fetch-manager-metrics", 
+        this.topicFetchSizeAvg = new MetricNameTemplate("fetch-size-avg", "consumer-fetch-manager-metrics", 
                 "The average number of bytes fetched per request for topic {topic}", topicTags);
-        this.TOPIC_FETCH_SIZE_MAX = new MetricNameTemplate("fetch-size-max", "consumer-fetch-manager-metrics", 
+        this.topicFetchSizeMax = new MetricNameTemplate("fetch-size-max", "consumer-fetch-manager-metrics", 
                 "The maximum number of bytes fetched per request for topic {topic}", topicTags);
-        this.TOPIC_BYTES_CONSUMED_RATE = new MetricNameTemplate("bytes-consumed-rate", "consumer-fetch-manager-metrics", 
+        this.topicBytesConsumedRate = new MetricNameTemplate("bytes-consumed-rate", "consumer-fetch-manager-metrics", 
                 "The average number of bytes consumed per second for topic {topic}", topicTags);
 
-        this.TOPIC_RECORDS_PER_REQUEST_AVG = new MetricNameTemplate("records-per-request-avg", "consumer-fetch-manager-metrics", 
+        this.topicRecordsPerRequestAvg = new MetricNameTemplate("records-per-request-avg", "consumer-fetch-manager-metrics", 
                 "The average number of records in each request for topic {topic}", topicTags);
-        this.TOPIC_RECORDS_CONSUMED_RATE = new MetricNameTemplate("records-consumed-rate", "consumer-fetch-manager-metrics", 
+        this.topicRecordsConsumedRate = new MetricNameTemplate("records-consumed-rate", "consumer-fetch-manager-metrics", 
                 "The average number of records consumed per second for topic {topic}", topicTags);
         
     }
     
     public MetricNameTemplate[] getAllTemplates() {
         return new MetricNameTemplate[] {
-            FETCH_SIZE_AVG,
-            FETCH_SIZE_MAX,
-            BYTES_CONSUMED_RATE,
-            RECORDS_PER_REQUEST_AVG,
-            RECORDS_CONSUMED_RATE,
-            FETCH_LATENCY_AVG,
-            FETCH_LATENCY_MAX,
-            FETCH_RATE,
-            RECORDS_LAG_MAX,
-            FETCH_THROTTLE_TIME_AVG,
-            FETCH_THROTTLE_TIME_MAX,
-            TOPIC_FETCH_SIZE_AVG,
-            TOPIC_FETCH_SIZE_MAX,
-            TOPIC_BYTES_CONSUMED_RATE,
-            TOPIC_RECORDS_PER_REQUEST_AVG,
-            TOPIC_RECORDS_CONSUMED_RATE,
+            fetchSizeAvg,
+            fetchSizeMax,
+            bytesConsumedRate,
+            recordsPerRequestAvg,
+            recordsConsumedRate,
+            fetchLatencyAvg,
+            fetchLatencyMax,
+            fetchRate,
+            recordsLagMax,
+            fetchThrottleTimeAvg,
+            fetchThrottleTimeMax,
+            topicFetchSizeAvg,
+            topicFetchSizeMax,
+            topicBytesConsumedRate,
+            topicRecordsPerRequestAvg,
+            topicRecordsConsumedRate,
         };
     }
 

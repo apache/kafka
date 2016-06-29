@@ -726,26 +726,26 @@ public class Fetcher<K, V> {
             this.metricsRegistry = new FetcherMetricsRegistry(metrics.config().tags().keySet());
 
             this.bytesFetched = metrics.sensor("bytes-fetched");
-            this.bytesFetched.add(metrics.metricInstance(metricsRegistry.FETCH_SIZE_AVG), new Avg());
-            this.bytesFetched.add(metrics.metricInstance(metricsRegistry.FETCH_SIZE_MAX), new Max());
-            this.bytesFetched.add(metrics.metricInstance(metricsRegistry.BYTES_CONSUMED_RATE), new Rate());
+            this.bytesFetched.add(metrics.metricInstance(metricsRegistry.fetchSizeAvg), new Avg());
+            this.bytesFetched.add(metrics.metricInstance(metricsRegistry.fetchSizeMax), new Max());
+            this.bytesFetched.add(metrics.metricInstance(metricsRegistry.bytesConsumedRate), new Rate());
 
             this.recordsFetched = metrics.sensor("records-fetched");
-            this.recordsFetched.add(metrics.metricInstance(metricsRegistry.RECORDS_PER_REQUEST_AVG), new Avg());
-            this.recordsFetched.add(metrics.metricInstance(metricsRegistry.RECORDS_CONSUMED_RATE), new Rate());
+            this.recordsFetched.add(metrics.metricInstance(metricsRegistry.recordsPerRequestAvg), new Avg());
+            this.recordsFetched.add(metrics.metricInstance(metricsRegistry.recordsConsumedRate), new Rate());
 
             this.fetchLatency = metrics.sensor("fetch-latency");
-            this.fetchLatency.add(metrics.metricInstance(metricsRegistry.FETCH_LATENCY_AVG), new Avg());
-            this.fetchLatency.add(metrics.metricInstance(metricsRegistry.FETCH_LATENCY_MAX), new Max());
-            this.fetchLatency.add(metrics.metricInstance(metricsRegistry.FETCH_RATE), new Rate(new Count()));
+            this.fetchLatency.add(metrics.metricInstance(metricsRegistry.fetchLatencyAvg), new Avg());
+            this.fetchLatency.add(metrics.metricInstance(metricsRegistry.fetchLatencyMax), new Max());
+            this.fetchLatency.add(metrics.metricInstance(metricsRegistry.fetchRate), new Rate(new Count()));
 
             this.recordsFetchLag = metrics.sensor("records-lag");
-            this.recordsFetchLag.add(metrics.metricInstance(metricsRegistry.RECORDS_LAG_MAX), new Max());
+            this.recordsFetchLag.add(metrics.metricInstance(metricsRegistry.recordsLagMax), new Max());
 
             this.fetchThrottleTimeSensor = metrics.sensor("fetch-throttle-time");
-            this.fetchThrottleTimeSensor.add(metrics.metricInstance(metricsRegistry.FETCH_THROTTLE_TIME_AVG), new Avg());
+            this.fetchThrottleTimeSensor.add(metrics.metricInstance(metricsRegistry.fetchThrottleTimeAvg), new Avg());
 
-            this.fetchThrottleTimeSensor.add(metrics.metricInstance(metricsRegistry.FETCH_THROTTLE_TIME_MAX), new Max());
+            this.fetchThrottleTimeSensor.add(metrics.metricInstance(metricsRegistry.fetchThrottleTimeMax), new Max());
         }
 
         public void recordTopicFetchMetrics(String topic, int bytes, int records) {
@@ -757,11 +757,11 @@ public class Fetcher<K, V> {
                 metricTags.put("topic", topic.replace('.', '_'));
 
                 bytesFetched = this.metrics.sensor(name);
-                bytesFetched.add(this.metrics.metricInstance(metricsRegistry.TOPIC_FETCH_SIZE_AVG,
+                bytesFetched.add(this.metrics.metricInstance(metricsRegistry.topicFetchSizeAvg,
                         metricTags), new Avg());
-                bytesFetched.add(this.metrics.metricInstance(metricsRegistry.TOPIC_FETCH_SIZE_MAX,
+                bytesFetched.add(this.metrics.metricInstance(metricsRegistry.topicFetchSizeMax,
                         metricTags), new Max());
-                bytesFetched.add(this.metrics.metricInstance(metricsRegistry.TOPIC_BYTES_CONSUMED_RATE,
+                bytesFetched.add(this.metrics.metricInstance(metricsRegistry.topicBytesConsumedRate,
                         metricTags), new Rate());
             }
             bytesFetched.record(bytes);
@@ -774,9 +774,9 @@ public class Fetcher<K, V> {
                 metricTags.put("topic", topic.replace('.', '_'));
 
                 recordsFetched = this.metrics.sensor(name);
-                recordsFetched.add(this.metrics.metricInstance(metricsRegistry.TOPIC_RECORDS_PER_REQUEST_AVG,
+                recordsFetched.add(this.metrics.metricInstance(metricsRegistry.topicRecordsPerRequestAvg,
                         metricTags), new Avg());
-                recordsFetched.add(this.metrics.metricInstance(metricsRegistry.TOPIC_RECORDS_CONSUMED_RATE,
+                recordsFetched.add(this.metrics.metricInstance(metricsRegistry.topicRecordsConsumedRate,
                         metricTags), new Rate());
             }
             recordsFetched.record(records);
