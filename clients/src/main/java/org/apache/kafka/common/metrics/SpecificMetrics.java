@@ -131,11 +131,13 @@ public class SpecificMetrics extends Metrics {
                 String mBeanName = JmxReporter.getMBeanName(domain, metricName);
                 if (!beansAndAttributes.containsKey(mBeanName)) {
                     beansAndAttributes.put(mBeanName, new HashMap<String, String>());
-                } else {
-                    throw new IllegalArgumentException("mBean '" + mBeanName + "' is defined twice.");
                 }
                 Map<String, String> attrAndDesc = beansAndAttributes.get(mBeanName);
-                attrAndDesc.put(template.name(), template.description());
+                if (!attrAndDesc.containsKey(template.name())) {
+                    attrAndDesc.put(template.name(), template.description());
+                } else {
+                    throw new IllegalArgumentException("mBean '" + mBeanName + "' attribute '" + template.name() + "' is defined twice.");
+                }
             }
         }
         
