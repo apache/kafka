@@ -117,23 +117,27 @@ public class SpecificMetrics extends Metrics {
     }
 
     public static String toHtmlTable(String domain, MetricNameTemplate[] allMetrics) {
-        // TODO Auto-generated method stub
-        Metrics metrics = new Metrics();
         Map<String, Map<String, String>> beansAndAttributes = new HashMap<String, Map<String, String>>();
-        for (MetricNameTemplate template : allMetrics) {
-            Map<String, String> tags = new HashMap<String, String>();
-            for (String s : template.tags()) {
-                tags.put(s, "{" + s + "}");
-            }
 
-            MetricName metricName = metrics.metricName(template.name(), template.group(), template.description(), tags);
-            String mBeanName = JmxReporter.getMBeanName(domain, metricName);
-            if (!beansAndAttributes.containsKey(mBeanName)) {
-                beansAndAttributes.put(mBeanName, new HashMap<String, String>());
+        try (Metrics metrics = new Metrics() ) {
+            for (MetricNameTemplate template : allMetrics) {
+                Map<String, String> tags = new HashMap<String, String>();
+                for (String s : template.tags()) {
+                    tags.put(s, "{" + s + "}");
+                }
+
+                MetricName metricName = metrics.metricName(template.name(), template.group(), template.description(), tags);
+                String mBeanName = JmxReporter.getMBeanName(domain, metricName);
+                if (!beansAndAttributes.containsKey(mBeanName)) {
+                    beansAndAttributes.put(mBeanName, new HashMap<String, String>());
+                } else {
+                    throw new IllegalArgumentException("mBean '" + mBeanName + "' is defined twice.");
+                }
+                Map<String, String> attrAndDesc = beansAndAttributes.get(mBeanName);
+                attrAndDesc.put(template.name(), template.description());
             }
-            Map<String, String> attrAndDesc = beansAndAttributes.get(mBeanName);
-            attrAndDesc.put(template.name(), template.description());
         }
+        
         StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");
         b.append("<tr>\n");
@@ -163,7 +167,7 @@ public class SpecificMetrics extends Metrics {
 
         }
         b.append("</tbody></table>");
-        metrics.close();
+
         return b.toString();
 
     }
