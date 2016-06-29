@@ -42,7 +42,8 @@ import java.util.Map;
  * A join is symmetric in the sense, that a join specification on the first stream returns the same result record as
  * a join specification on the second stream with flipped before and after values.
  * <p>
- * Both values (before and after) must not be negative and not zero at the same time.
+ * Both values (before and after) must not result in an "inverse" window,
+ * i.e., lower-interval-bound must not be larger than upper-interval.bound.
  */
 public class JoinWindows extends Windows<TimeWindow> {
 
@@ -54,14 +55,17 @@ public class JoinWindows extends Windows<TimeWindow> {
     private JoinWindows(String name, long before, long after) {
         super(name);
 
-        if (before < 0) {
-            throw new IllegalArgumentException("window size must be > 0 (you provided before as " + before + ")");
+        if (before < 0) { // shift lower bound to right
+            if (after < -before) {
+                throw new IllegalArgumentException("Upper interval bound smaller than lower interval bound."
+                                                   + " <after> must be at least " + (-before));
+            }
         }
-        if (after < 0) {
-            throw new IllegalArgumentException("window size must be > 0 (you provided after as " + after + ")");
-        }
-        if (before == 0 && after == 0) {
-            throw new IllegalArgumentException("window size must be > 0 (you provided 0)");
+        if (after < 0) { // shift upper bound to left
+            if (before < -after) {
+                throw new IllegalArgumentException("Lower interval bound greater than upper interval bound."
+                        + " <before> must be at least " + (-after));
+            }
         }
 
         this.after = after;
@@ -70,6 +74,7 @@ public class JoinWindows extends Windows<TimeWindow> {
 
     /**
      * Specifies that records of the same key are joinable if their timestamps are within {@code timeDifference}.
+     * ({@code timeDifference} must not be negative)
      *
      * @param timeDifference    join window interval
      */
