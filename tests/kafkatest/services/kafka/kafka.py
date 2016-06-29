@@ -87,7 +87,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.topics = topics
         self.minikdc = None
         self.authorizer_class_name = authorizer_class_name
-        self.zk_set_acl = "false"
+        self.zk_set_acl = False
 
         #
         # In a heavily loaded and not very fast machine, it is
