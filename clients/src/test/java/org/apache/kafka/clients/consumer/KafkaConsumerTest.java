@@ -33,6 +33,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.SpecificMetrics;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -549,7 +550,7 @@ public class KafkaConsumerTest {
         List<PartitionAssignor> assignors = Arrays.asList(assignor);
         ConsumerInterceptors<String, String> interceptors = null;
 
-        Metrics metrics = new Metrics();
+        SpecificMetrics metrics = new SpecificMetrics();
         SubscriptionState subscriptions = new SubscriptionState(autoResetStrategy);
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(client, metadata, time, retryBackoffMs, requestTimeoutMs);
         ConsumerCoordinator consumerCoordinator = new ConsumerCoordinator(

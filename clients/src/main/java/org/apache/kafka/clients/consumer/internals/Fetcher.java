@@ -15,6 +15,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.consumer.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
@@ -32,6 +33,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.SpecificMetrics;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
@@ -101,7 +103,7 @@ public class Fetcher<K, V> {
                    Deserializer<V> valueDeserializer,
                    Metadata metadata,
                    SubscriptionState subscriptions,
-                   Metrics metrics,
+                   SpecificMetrics metrics,
                    String metricGrpPrefix,
                    Time time,
                    long retryBackoffMs) {
@@ -710,7 +712,7 @@ public class Fetcher<K, V> {
     }
 
     private class FetchManagerMetrics {
-        public final Metrics metrics;
+        public final SpecificMetrics metrics;
         public final String metricGrpName;
 
         public final Sensor bytesFetched;
@@ -720,53 +722,31 @@ public class Fetcher<K, V> {
         public final Sensor fetchThrottleTimeSensor;
 
 
-        public FetchManagerMetrics(Metrics metrics, String metricGrpPrefix) {
+        public FetchManagerMetrics(SpecificMetrics metrics, String metricGrpPrefix) {
             this.metrics = metrics;
             this.metricGrpName = metricGrpPrefix + "-fetch-manager-metrics";
 
             this.bytesFetched = metrics.sensor("bytes-fetched");
-            this.bytesFetched.add(metrics.metricName("fetch-size-avg",
-                this.metricGrpName,
-                "The average number of bytes fetched per request"), new Avg());
-            this.bytesFetched.add(metrics.metricName("fetch-size-max",
-                this.metricGrpName,
-                "The maximum number of bytes fetched per request"), new Max());
-            this.bytesFetched.add(metrics.metricName("bytes-consumed-rate",
-                this.metricGrpName,
-                "The average number of bytes consumed per second"), new Rate());
+            this.bytesFetched.add(metrics.metricInstance(ConsumerMetrics.FETCH_SIZE_AVG), new Avg());
+            this.bytesFetched.add(metrics.metricInstance(ConsumerMetrics.FETCH_SIZE_MAX), new Max());
+            this.bytesFetched.add(metrics.metricInstance(ConsumerMetrics.BYTES_CONSUMED_RATE), new Rate());
 
             this.recordsFetched = metrics.sensor("records-fetched");
-            this.recordsFetched.add(metrics.metricName("records-per-request-avg",
-                this.metricGrpName,
-                "The average number of records in each request"), new Avg());
-            this.recordsFetched.add(metrics.metricName("records-consumed-rate",
-                this.metricGrpName,
-                "The average number of records consumed per second"), new Rate());
+            this.recordsFetched.add(metrics.metricInstance(ConsumerMetrics.RECORDS_PER_REQUEST_AVG), new Avg());
+            this.recordsFetched.add(metrics.metricInstance(ConsumerMetrics.RECORDS_CONSUMED_RATE), new Rate());
 
             this.fetchLatency = metrics.sensor("fetch-latency");
-            this.fetchLatency.add(metrics.metricName("fetch-latency-avg",
-                this.metricGrpName,
-                "The average time taken for a fetch request."), new Avg());
-            this.fetchLatency.add(metrics.metricName("fetch-latency-max",
-                this.metricGrpName,
-                "The max time taken for any fetch request."), new Max());
-            this.fetchLatency.add(metrics.metricName("fetch-rate",
-                this.metricGrpName,
-                "The number of fetch requests per second."), new Rate(new Count()));
+            this.fetchLatency.add(metrics.metricInstance(ConsumerMetrics.FETCH_LATENCY_AVG), new Avg());
+            this.fetchLatency.add(metrics.metricInstance(ConsumerMetrics.FETCH_LATENCY_MAX), new Max());
+            this.fetchLatency.add(metrics.metricInstance(ConsumerMetrics.FETCH_RATE), new Rate(new Count()));
 
             this.recordsFetchLag = metrics.sensor("records-lag");
-            this.recordsFetchLag.add(metrics.metricName("records-lag-max",
-                this.metricGrpName,
-                "The maximum lag in terms of number of records for any partition in this window"), new Max());
+            this.recordsFetchLag.add(metrics.metricInstance(ConsumerMetrics.RECORDS_LAG_MAX), new Max());
 
             this.fetchThrottleTimeSensor = metrics.sensor("fetch-throttle-time");
-            this.fetchThrottleTimeSensor.add(metrics.metricName("fetch-throttle-time-avg",
-                                                         this.metricGrpName,
-                                                         "The average throttle time in ms"), new Avg());
+            this.fetchThrottleTimeSensor.add(metrics.metricInstance(ConsumerMetrics.FETCH_THROTTLE_TIME_AVG), new Avg());
 
-            this.fetchThrottleTimeSensor.add(metrics.metricName("fetch-throttle-time-max",
-                                                         this.metricGrpName,
-                                                         "The maximum throttle time in ms"), new Max());
+            this.fetchThrottleTimeSensor.add(metrics.metricInstance(ConsumerMetrics.FETCH_THROTTLE_TIME_MAX), new Max());
         }
 
         public void recordTopicFetchMetrics(String topic, int bytes, int records) {
@@ -778,17 +758,11 @@ public class Fetcher<K, V> {
                 metricTags.put("topic", topic.replace('.', '_'));
 
                 bytesFetched = this.metrics.sensor(name);
-                bytesFetched.add(this.metrics.metricName("fetch-size-avg",
-                        this.metricGrpName,
-                        "The average number of bytes fetched per request for topic " + topic,
+                bytesFetched.add(this.metrics.metricInstance(ConsumerMetrics.TOPIC_FETCH_SIZE_AVG,
                         metricTags), new Avg());
-                bytesFetched.add(this.metrics.metricName("fetch-size-max",
-                        this.metricGrpName,
-                        "The maximum number of bytes fetched per request for topic " + topic,
+                bytesFetched.add(this.metrics.metricInstance(ConsumerMetrics.TOPIC_FETCH_SIZE_MAX,
                         metricTags), new Max());
-                bytesFetched.add(this.metrics.metricName("bytes-consumed-rate",
-                        this.metricGrpName,
-                        "The average number of bytes consumed per second for topic " + topic,
+                bytesFetched.add(this.metrics.metricInstance(ConsumerMetrics.TOPIC_BYTES_CONSUMED_RATE,
                         metricTags), new Rate());
             }
             bytesFetched.record(bytes);
@@ -801,13 +775,9 @@ public class Fetcher<K, V> {
                 metricTags.put("topic", topic.replace('.', '_'));
 
                 recordsFetched = this.metrics.sensor(name);
-                recordsFetched.add(this.metrics.metricName("records-per-request-avg",
-                        this.metricGrpName,
-                        "The average number of records in each request for topic " + topic,
+                recordsFetched.add(this.metrics.metricInstance(ConsumerMetrics.TOPIC_RECORDS_PER_REQUEST_AVG,
                         metricTags), new Avg());
-                recordsFetched.add(this.metrics.metricName("records-consumed-rate",
-                        this.metricGrpName,
-                        "The average number of records consumed per second for topic " + topic,
+                recordsFetched.add(this.metrics.metricInstance(ConsumerMetrics.TOPIC_RECORDS_CONSUMED_RATE,
                         metricTags), new Rate());
             }
             recordsFetched.record(records);

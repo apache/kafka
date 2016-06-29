@@ -35,6 +35,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.SpecificMetrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
@@ -85,14 +86,14 @@ public class FetcherTest {
     private Node node = cluster.nodes().get(0);
     private SubscriptionState subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);
     private SubscriptionState subscriptionsNoAutoReset = new SubscriptionState(OffsetResetStrategy.NONE);
-    private Metrics metrics = new Metrics(time);
+    private SpecificMetrics metrics = new SpecificMetrics(time);
     private static final double EPSILON = 0.0001;
     private ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(client, metadata, time, 100, 1000);
 
     private MemoryRecords records = MemoryRecords.emptyRecords(ByteBuffer.allocate(1024), CompressionType.NONE);
     private MemoryRecords nextRecords = MemoryRecords.emptyRecords(ByteBuffer.allocate(1024), CompressionType.NONE);
     private Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, metrics);
-    private Metrics fetcherMetrics = new Metrics(time);
+    private SpecificMetrics fetcherMetrics = new SpecificMetrics(time);
     private Fetcher<byte[], byte[]> fetcherNoAutoReset = createFetcher(subscriptionsNoAutoReset, fetcherMetrics);
 
     @Before
@@ -149,7 +150,7 @@ public class FetcherTest {
 
     @Test
     public void testFetchMaxPollRecords() {
-        Fetcher<byte[], byte[]> fetcher = createFetcher(2, subscriptions, new Metrics(time));
+        Fetcher<byte[], byte[]> fetcher = createFetcher(2, subscriptions, new SpecificMetrics(time));
 
         List<ConsumerRecord<byte[], byte[]>> records;
         subscriptions.assignFromUser(Arrays.asList(tp));
@@ -577,7 +578,7 @@ public class FetcherTest {
 
     private Fetcher<byte[], byte[]> createFetcher(int maxPollRecords,
                                                   SubscriptionState subscriptions,
-                                                  Metrics metrics) {
+                                                  SpecificMetrics metrics) {
         return new Fetcher<>(consumerClient,
                 minBytes,
                 maxWaitMs,
@@ -595,7 +596,7 @@ public class FetcherTest {
     }
 
 
-    private  Fetcher<byte[], byte[]> createFetcher(SubscriptionState subscriptions, Metrics metrics) {
+    private  Fetcher<byte[], byte[]> createFetcher(SubscriptionState subscriptions, SpecificMetrics metrics) {
         return createFetcher(Integer.MAX_VALUE, subscriptions, metrics);
     }
 }

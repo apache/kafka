@@ -29,6 +29,18 @@ import org.apache.kafka.common.utils.Time;
  */
 public class SpecificMetrics extends Metrics {
 
+    public SpecificMetrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time) {
+        super(defaultConfig, reporters, time);
+    }
+    
+    public SpecificMetrics(Time time) {
+        super(time);
+    }
+    
+    public SpecificMetrics() {
+        super();
+    }
+    
     public SpecificMetrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time,
             boolean enableExpiration) {
         super(defaultConfig, reporters, time, enableExpiration);

@@ -33,6 +33,7 @@ import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
+import org.apache.kafka.common.metrics.SpecificMetrics;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.requests.MetadataRequest;
@@ -513,7 +514,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private final Time time;
     private final ConsumerNetworkClient client;
-    private final Metrics metrics;
+    private final SpecificMetrics metrics;
     private final SubscriptionState subscriptions;
     private final Metadata metadata;
     private final long retryBackoffMs;
@@ -614,7 +615,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             List<MetricsReporter> reporters = config.getConfiguredInstances(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG,
                     MetricsReporter.class);
             reporters.add(new JmxReporter(JMX_PREFIX));
-            this.metrics = new Metrics(metricConfig, reporters, time);
+            this.metrics = new SpecificMetrics(metricConfig, reporters, time);
             this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
             this.metadata = new Metadata(retryBackoffMs, config.getLong(ConsumerConfig.METADATA_MAX_AGE_CONFIG));
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
@@ -712,7 +713,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                   ConsumerInterceptors<K, V> interceptors,
                   Time time,
                   ConsumerNetworkClient client,
-                  Metrics metrics,
+                  SpecificMetrics metrics,
                   SubscriptionState subscriptions,
                   Metadata metadata,
                   long retryBackoffMs,
