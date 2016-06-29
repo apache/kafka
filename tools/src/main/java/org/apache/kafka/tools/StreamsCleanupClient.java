@@ -10,7 +10,7 @@
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
-package org.apache.kafka.streams.tools;
+package org.apache.kafka.tools;
 
 import joptsimple.OptionException;
 import joptsimple.OptionParser;
@@ -24,18 +24,16 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Properties;
+import java.util.*;
 
 /**
  * TODO
  */
-public class KafkaStreamsCleanupClient {
+public class StreamsCleanupClient {
     private static OptionSpec<String> bootstrapServerOption;
     private static OptionSpec<String> zookeeperOption;
     private static OptionSpec<String> applicationIdOption;
@@ -142,7 +140,7 @@ public class KafkaStreamsCleanupClient {
     private void clearIntermediateTopics(ZkUtils zkUtils, List<String> allTopics) {
         if (options.has(intermediateTopicsOption)) {
             System.out.println("Clearing intermediate user topics.");
-
+            
             HashMap<String, String> topicRetentionTime = new HashMap<>();
             for (String topic : options.valuesOf(intermediateTopicsOption)) {
                 if (allTopics.contains(topic)) {
@@ -154,10 +152,43 @@ public class KafkaStreamsCleanupClient {
                 }
             }
 
-            // TODO fix -- simply sleep is not good enough
+            Properties config = new Properties();
+            config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOption));
+            config.setProperty(ConsumerConfig.GROUP_ID_CONFIG, options.valueOf(applicationIdOption));
+            config.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+            config.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+            KafkaConsumer<byte[], byte[]> client = new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
             try {
-                Thread.sleep(120 * 1000); // default clean-up interval is 60 seconds
-            } catch (Exception e) { }
+                client.subscribe(topicRetentionTime.keySet());
+                client.poll(1);
+
+                HashMap<TopicPartition, Long> lowerOffsets = new HashMap<>();
+                Set<TopicPartition> partitions = client.assignment();
+                do {
+                    lowerOffsets.clear();
+
+                    for (TopicPartition partition : partitions) {
+                        client.seek(partition, 0);
+                        lowerOffsets.put(partition, client.position(partition));
+                    }
+
+                    client.seekToEnd(partitions);
+                    Iterator<TopicPartition> it = partitions.iterator();
+                    while (it.hasNext()) {
+                        TopicPartition partition = it.next();
+                        if(client.position(partition) == lowerOffsets.get(partition)) {
+                            it.remove(); 
+                        }
+                    }
+                } while(!lowerOffsets.isEmpty());
+            } catch (RuntimeException e) {
+                System.err.println("Clearing intermediate topics failed. Did not restore values for parameter <retention.ms>\n"
+                                   + "Values for <retention.ms>: " + topicRetentionTime);
+                throw e;
+            } finally {
+                client.close();
+            }
 
             for (String topic : options.valuesOf(intermediateTopicsOption)) {
                 if (allTopics.contains(topic)) {
@@ -227,25 +258,12 @@ public class KafkaStreamsCleanupClient {
         }
 
         System.out.println("Removing local state store.");
-        deleteDirectory(stateStore);
+        Utils.delete(stateStore);
         System.out.println("Deleted " + stateStore.getAbsolutePath());
     }
 
-    private void deleteDirectory(File directory) {
-        for (File f : directory.listFiles()) {
-            if (f.isDirectory()) {
-                deleteDirectory(f);
-            } else if (!f.delete()) {
-                System.err.println("ERROR: could not delete file " + f.getName() + " within " + directory.getAbsolutePath());
-            }
-        }
-        if (!directory.delete()) {
-            System.err.println("ERROR: could not delete directory " + directory.getAbsolutePath());
-        }
-    }
-
     public static void main(String[] args) throws IOException {
-        new KafkaStreamsCleanupClient().run(args);
+        new StreamsCleanupClient().run(args);
     }
 
 }
