@@ -12,21 +12,12 @@
  */
 package org.apache.kafka.common.metrics;
 
-import java.util.List;
-
 import org.apache.kafka.common.MetricNameTemplate;
-import org.apache.kafka.common.utils.Time;
 
 /**
  * A registry of predefined Metrics for the SpecificMetricsTest.java class.
  */
-public class SampleMetrics extends SpecificMetrics {
-
-
-    public SampleMetrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time,
-            boolean enableExpiration) {
-        super(defaultConfig, reporters, time, enableExpiration);
-    }
+public class SampleMetrics {
 
     public static final MetricNameTemplate METRIC1 = new MetricNameTemplate("name", "group", "The first metric used in testMetricName()", "key1", "key2");
     public static final MetricNameTemplate METRIC2 = new MetricNameTemplate("name", "group", "The second metric used in testMetricName()", "key1", "key2");
