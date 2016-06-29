@@ -24,6 +24,10 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockReducer;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -274,4 +278,48 @@ public class KTableFilterTest {
         proc2.checkAndClearProcessResult("B:(null<-2)");  // B is deleted from source Table1
     }
 
+    @Test
+    public void testSkipNullOnMaterialization() throws IOException {
+        // do not explicitly set enableSendingOldValues, which is considered a cheat. Let a further downstream stateful operator trigger it instead.
+        // This test may well need review/deletion with future materialization changes, should materialization occur more frequently for instance.
+        KStreamBuilder builder = new KStreamBuilder();
+
+        String topic1 = "topic1";
+
+        KTableImpl<String, String, String> table1 =
+            (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
+        KTableImpl<String, String, String> table2 = (KTableImpl<String, String, String>) table1.filter(
+            new Predicate<String, String>() {
+                @Override
+                public boolean test(String key, String value) {
+                    return value.compareToIgnoreCase("accept") == 0;
+                }
+            }).mapValues(
+               new ValueMapper<String, String>() {
+                   @Override
+                   public String apply(String value) {
+                       return value;
+                   }
+            }).groupBy( new KeyValueMapper<String, String, KeyValue<String, String>>() {
+                   @Override
+                   public KeyValue<String, String> apply(String first, String second) {
+                       return (second == null || first.compareTo(second) <=0) ?  new KeyValue<>(first, first) : new KeyValue(second, second);
+                   }
+            }).reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, "mock-result");
+
+        MockProcessorSupplier<String, String> proc1 = new MockProcessorSupplier<>();
+        MockProcessorSupplier<String, String> proc2 = new MockProcessorSupplier<>();
+
+        builder.addProcessor("proc1", proc1, table1.name);
+        builder.addProcessor("proc2", proc2, table2.name);
+
+        driver = new KStreamTestDriver(builder, stateDir, stringSerde, stringSerde);
+
+        driver.process(topic1, "A", "reject");
+        driver.process(topic1, "B", "reject");
+        driver.process(topic1, "C", "reject");
+
+        proc1.checkAndClearProcessResult("A:(reject<-null)", "B:(reject<-null)", "C:(reject<-null)");
+        proc2.checkEmptyAndClearProcessResult(); // we got nothing since no input matches (though enableSendingOldValues is not set by test on table2 explicitly)
+    }
 }
