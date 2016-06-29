@@ -69,7 +69,8 @@ public class SpecificMetrics extends Metrics {
         Set<String> templateTagKeys = template.tags();
         
         if (!runtimeTagKeys.equals(templateTagKeys)) {
-            throw new IllegalArgumentException("Runtime-defined metric tags do not match compile-time defined metric tags");
+            throw new IllegalArgumentException("For '" + template.name() + "', runtime-defined metric tags do not match compile-time defined metric tags. " + ""
+                    + "Runtime = " + runtimeTagKeys.toString() + " Compile-time = " + templateTagKeys.toString() );
         }
                 
         return super.metricName(template.name(), template.group(), template.description(), tags);
