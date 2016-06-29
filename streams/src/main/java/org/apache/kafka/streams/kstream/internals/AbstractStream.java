@@ -33,6 +33,7 @@ public abstract class AbstractStream<K> {
     public AbstractStream(KStreamBuilder topology, String name, Set<String> sourceNodes) {
         this.topology = topology;
         this.name = name;
+        assert (sourceNodes != null);
         this.sourceNodes = sourceNodes;
     }
 
@@ -42,9 +43,6 @@ public abstract class AbstractStream<K> {
     protected Set<String> ensureJoinableWith(AbstractStream<K> other) {
         Set<String> thisSourceNodes = sourceNodes;
         Set<String> otherSourceNodes = other.sourceNodes;
-
-        if (thisSourceNodes == null || otherSourceNodes == null)
-            throw new TopologyBuilderException(this.name + " and " + other.name + " are not joinable");
 
         Set<String> allSourceNodes = new HashSet<>();
         allSourceNodes.addAll(thisSourceNodes);
