@@ -37,8 +37,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -67,6 +69,7 @@ public class TopologyBuilder {
     private final HashMap<String, Pattern> nodeToSourcePatterns = new LinkedHashMap<>();
     private final HashMap<String, Pattern> topicToPatterns = new HashMap<>();
     private final HashMap<String, String> nodeToSinkTopic = new HashMap<>();
+    private final Map<String, String> stateStoreNameToSourceTopic = new HashMap<>();
     private SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
     private String applicationId;
 
@@ -591,10 +594,36 @@ public class TopologyBuilder {
 
         NodeFactory nodeFactory = nodeFactories.get(processorName);
         if (nodeFactory instanceof ProcessorNodeFactory) {
-            ((ProcessorNodeFactory) nodeFactory).addStateStore(stateStoreName);
+            ProcessorNodeFactory processorNodeFactory = (ProcessorNodeFactory) nodeFactory;
+            processorNodeFactory.addStateStore(stateStoreName);
+            connectChangeLogToSourceTopic(stateStoreName, stateStoreFactory, processorNodeFactory);
         } else {
             throw new TopologyBuilderException("cannot connect a state store " + stateStoreName + " to a source node or a sink node.");
         }
+    }
+
+    private void connectChangeLogToSourceTopic(final String stateStoreName,
+                                               final StateStoreFactory stateStoreFactory,
+                                               final ProcessorNodeFactory processorNodeFactory) {
+
+        final Queue<String> nodes = new LinkedList<>(Arrays.asList(processorNodeFactory.parents));
+        String sourceTopic = null;
+        while (!nodes.isEmpty() && sourceTopic == null) {
+            String processor = nodes.poll();
+            NodeFactory nodeFactory = nodeFactories.get(processor);
+            if (nodeFactory instanceof SourceNodeFactory) {
+                sourceTopic = ((SourceNodeFactory) nodeFactory).getTopics()[0];
+            } else if (nodeFactory instanceof ProcessorNodeFactory) {
+                nodes.addAll(Arrays.asList(((ProcessorNodeFactory) nodeFactory).parents));
+            }
+        }
+
+        if (sourceTopic == null) {
+            throw new TopologyBuilderException("can't find source topic for state store " +
+                    stateStoreName);
+        }
+        stateStoreNameToSourceTopic.put(stateStoreFactory.supplier.name(),
+                sourceTopic);
     }
 
     /**
@@ -888,5 +917,9 @@ public class TopologyBuilder {
      */
     public void setApplicationId(String applicationId) {
         this.applicationId = applicationId;
+    }
+
+    public Map<String, String> getStateStoreNameToSourceTopics() {
+        return Collections.unmodifiableMap(stateStoreNameToSourceTopic);
     }
 }

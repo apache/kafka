@@ -17,7 +17,9 @@
 
 package org.apache.kafka.streams;
 
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.junit.Assert;
 import org.junit.Test;
@@ -102,5 +104,44 @@ public class KafkaStreamsTest {
             return;
         }
         Assert.fail("should have caught an exception and returned");
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void shouldNotGetAllTasksWhenNotRunning() throws Exception {
+        KafkaStreams streams = createKafkaStreams();
+        streams.getAllTasks();
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void shouldNotGetAllTasksWithStoreWhenNotRunning() throws Exception {
+        KafkaStreams streams = createKafkaStreams();
+        streams.getAllTasksWithStore("store");
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void shouldNotGetTaskWithKeyAndSerializerWhenNotRunning() throws Exception {
+        KafkaStreams streams = createKafkaStreams();
+        streams.getTaskWithKey("store", "key", Serdes.String().serializer());
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void shouldNotGetTaskWithKeyAndPartitionerWhenNotRunning() throws Exception {
+        KafkaStreams streams = createKafkaStreams();
+        streams.getTaskWithKey("store", "key", new StreamPartitioner<String, Object>() {
+            @Override
+            public Integer partition(final String key, final Object value, final int numPartitions) {
+                return 0;
+            }
+        });
+    }
+
+
+    private KafkaStreams createKafkaStreams() {
+        Properties props = new Properties();
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+
+        KStreamBuilder builder = new KStreamBuilder();
+        return new KafkaStreams(builder, props);
     }
 }

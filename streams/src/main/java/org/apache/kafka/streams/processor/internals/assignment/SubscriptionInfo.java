@@ -23,6 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -31,22 +32,24 @@ public class SubscriptionInfo {
 
     private static final Logger log = LoggerFactory.getLogger(SubscriptionInfo.class);
 
-    private static final int CURRENT_VERSION = 1;
+    private static final int CURRENT_VERSION = 2;
 
     public final int version;
     public final UUID processId;
     public final Set<TaskId> prevTasks;
     public final Set<TaskId> standbyTasks;
+    public final String userEndPoint;
 
-    public SubscriptionInfo(UUID processId, Set<TaskId> prevTasks, Set<TaskId> standbyTasks) {
-        this(CURRENT_VERSION, processId, prevTasks, standbyTasks);
+    public SubscriptionInfo(UUID processId, Set<TaskId> prevTasks, Set<TaskId> standbyTasks, String userEndPoint) {
+        this(CURRENT_VERSION, processId, prevTasks, standbyTasks, userEndPoint);
     }
 
-    private SubscriptionInfo(int version, UUID processId, Set<TaskId> prevTasks, Set<TaskId> standbyTasks) {
+    private SubscriptionInfo(int version, UUID processId, Set<TaskId> prevTasks, Set<TaskId> standbyTasks, String userEndPoint) {
         this.version = version;
         this.processId = processId;
         this.prevTasks = prevTasks;
         this.standbyTasks = standbyTasks;
+        this.userEndPoint = userEndPoint;
     }
 
     /**
@@ -54,30 +57,50 @@ public class SubscriptionInfo {
      */
     public ByteBuffer encode() {
         if (version == CURRENT_VERSION) {
-            ByteBuffer buf = ByteBuffer.allocate(4 /* version */ + 16 /* process id */ + 4 + prevTasks.size() * 8 + 4 + standbyTasks.size() * 8);
-            // version
-            buf.putInt(version);
-            // encode client UUID
-            buf.putLong(processId.getMostSignificantBits());
-            buf.putLong(processId.getLeastSignificantBits());
-            // encode ids of previously running tasks
-            buf.putInt(prevTasks.size());
-            for (TaskId id : prevTasks) {
-                id.writeTo(buf);
+            byte[] endPointBytes;
+            if (userEndPoint == null) {
+                endPointBytes = new byte[0];
+            } else {
+                endPointBytes = userEndPoint.getBytes(Charset.forName("UTF-8"));
             }
-            // encode ids of cached tasks
-            buf.putInt(standbyTasks.size());
-            for (TaskId id : standbyTasks) {
-                id.writeTo(buf);
-            }
+            ByteBuffer buf = ByteBuffer.allocate(4 /* version */ + 16 /* process id */ + 4 +
+                    prevTasks.size() * 8 + 4 + standbyTasks.size() * 8
+                    + 4 /* length of bytes */ + endPointBytes.length
+            );
+            encodeV1(buf);
+            buf.putInt(endPointBytes.length);
+            buf.put(endPointBytes);
             buf.rewind();
-
             return buf;
 
+        }
+        if (version == 1) {
+            ByteBuffer buf = ByteBuffer.allocate(4 /* version */ + 16 /* process id */ + 4 + prevTasks.size() * 8 + 4 + standbyTasks.size() * 8);
+            encodeV1(buf);
+            buf.rewind();
+            return buf;
         } else {
             TaskAssignmentException ex = new TaskAssignmentException("unable to encode subscription data: version=" + version);
             log.error(ex.getMessage(), ex);
             throw ex;
+        }
+    }
+
+    private void encodeV1(final ByteBuffer buf) {
+        // version
+        buf.putInt(version);
+        // encode client UUID
+        buf.putLong(processId.getMostSignificantBits());
+        buf.putLong(processId.getLeastSignificantBits());
+        // encode ids of previously running tasks
+        buf.putInt(prevTasks.size());
+        for (TaskId id : prevTasks) {
+            id.writeTo(buf);
+        }
+        // encode ids of cached tasks
+        buf.putInt(standbyTasks.size());
+        for (TaskId id : standbyTasks) {
+            id.writeTo(buf);
         }
     }
 
@@ -90,7 +113,7 @@ public class SubscriptionInfo {
 
         // Decode version
         int version = data.getInt();
-        if (version == CURRENT_VERSION) {
+        if (version == CURRENT_VERSION || version == 1) {
             // Decode client UUID
             UUID processId = new UUID(data.getLong(), data.getLong());
             // Decode previously active tasks
@@ -107,7 +130,17 @@ public class SubscriptionInfo {
                 standbyTasks.add(TaskId.readFrom(data));
             }
 
-            return new SubscriptionInfo(version, processId, prevTasks, standbyTasks);
+            String userEndPoint = null;
+            if (version == CURRENT_VERSION) {
+                int bytesLength = data.getInt();
+                if (bytesLength != 0) {
+                    byte[] bytes = new byte[bytesLength];
+                    data.get(bytes);
+                    userEndPoint = new String(bytes, Charset.forName("UTF-8"));
+                }
+
+            }
+            return new SubscriptionInfo(version, processId, prevTasks, standbyTasks, userEndPoint);
 
         } else {
             TaskAssignmentException ex = new TaskAssignmentException("unable to decode subscription data: version=" + version);
@@ -118,7 +151,11 @@ public class SubscriptionInfo {
 
     @Override
     public int hashCode() {
-        return version ^ processId.hashCode() ^ prevTasks.hashCode() ^ standbyTasks.hashCode();
+        int hashCode = version ^ processId.hashCode() ^ prevTasks.hashCode() ^ standbyTasks.hashCode();
+        if (userEndPoint == null) {
+            return hashCode;
+        }
+        return hashCode ^ userEndPoint.hashCode();
     }
 
     @Override
@@ -128,7 +165,8 @@ public class SubscriptionInfo {
             return this.version == other.version &&
                     this.processId.equals(other.processId) &&
                     this.prevTasks.equals(other.prevTasks) &&
-                    this.standbyTasks.equals(other.standbyTasks);
+                    this.standbyTasks.equals(other.standbyTasks) &&
+                    this.userEndPoint != null ? this.userEndPoint.equals(other.userEndPoint) : other.userEndPoint == null;
         } else {
             return false;
         }

@@ -20,6 +20,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.state.HostState;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -30,7 +31,7 @@ import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 
-public class AssginmentInfoTest {
+public class AssignmentInfoTest {
 
     @Test
     public void testEncodeDecode() {
@@ -41,7 +42,7 @@ public class AssginmentInfoTest {
         standbyTasks.put(new TaskId(1, 1), Utils.mkSet(new TopicPartition("t1", 1), new TopicPartition("t2", 1)));
         standbyTasks.put(new TaskId(2, 0), Utils.mkSet(new TopicPartition("t3", 0), new TopicPartition("t3", 0)));
 
-        AssignmentInfo info = new AssignmentInfo(activeTasks, standbyTasks);
+        AssignmentInfo info = new AssignmentInfo(activeTasks, standbyTasks, new HashMap<HostState, Set<TopicPartition>>());
         AssignmentInfo decoded = AssignmentInfo.decode(info.encode());
 
         assertEquals(info, decoded);

@@ -339,4 +339,26 @@ public class TopologyBuilderTest {
         return nodeNames;
     }
 
+    @Test
+    public void shouldAssociateStateStoreNameWithInternalSourceTopic() throws Exception {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.addSource("source", "topic");
+        builder.addProcessor("processor", new MockProcessorSupplier(), "source");
+        builder.addStateStore(new MockStateStoreSupplier("store", false), true, "processor");
+        final Map<String, String> stateStoreNameToSourceTopic = builder.getStateStoreNameToSourceTopics();
+        assertEquals(1, stateStoreNameToSourceTopic.size());
+        assertEquals("topic", stateStoreNameToSourceTopic.get("store"));
+    }
+
+    @Test
+    public void shouldAssociateStateStoreNameWithExternalSourceTopic() throws Exception {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.addSource("source", "topic");
+        builder.addProcessor("processor", new MockProcessorSupplier(), "source");
+        builder.addStateStore(new MockStateStoreSupplier("store", false), false, "processor");
+        final Map<String, String> stateStoreNameToSourceTopic = builder.getStateStoreNameToSourceTopics();
+        assertEquals(1, stateStoreNameToSourceTopic.size());
+        assertEquals("topic", stateStoreNameToSourceTopic.get("store"));
+    }
+
 }

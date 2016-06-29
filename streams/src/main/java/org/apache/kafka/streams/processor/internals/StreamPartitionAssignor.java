@@ -25,6 +25,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.processor.TaskId;
@@ -33,7 +34,7 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
-import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.state.HostState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,6 +54,8 @@ import java.util.UUID;
 public class StreamPartitionAssignor implements PartitionAssignor, Configurable {
 
     private static final Logger log = LoggerFactory.getLogger(StreamPartitionAssignor.class);
+    private String userEndPointConfig;
+    private Map<HostState, Set<TopicPartition>> partitionsByHostState;
 
     private static class AssignedPartition implements Comparable<AssignedPartition> {
         public final TaskId taskId;
@@ -119,6 +122,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         streamThread = (StreamThread) o;
         streamThread.partitionAssignor(this);
 
+        this.userEndPointConfig = (String) configs.get(StreamsConfig.USER_ENDPOINT_CONFIG);
+
         if (configs.containsKey(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG)) {
             internalTopicManager = new InternalTopicManager(
                     (String) configs.get(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG),
@@ -143,7 +148,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         Set<TaskId> prevTasks = streamThread.prevTasks();
         Set<TaskId> standbyTasks = streamThread.cachedTasks();
         standbyTasks.removeAll(prevTasks);
-        SubscriptionInfo data = new SubscriptionInfo(streamThread.processId, prevTasks, standbyTasks);
+        SubscriptionInfo data = new SubscriptionInfo(streamThread.processId, prevTasks, standbyTasks, this.userEndPointConfig);
 
         return new Subscription(new ArrayList<>(topics), data.encode());
     }
@@ -228,6 +233,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         Map<UUID, Set<String>> consumersByClient = new HashMap<>();
         Map<UUID, ClientState<TaskId>> states = new HashMap<>();
         SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
+        Map<UUID, String> consumerEndPointMap = new HashMap<>();
         // decode subscription info
         for (Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
             String consumerId = entry.getKey();
@@ -239,7 +245,9 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
 
             SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
-
+            if (info.userEndPoint != null && !info.userEndPoint.isEmpty()) {
+                consumerEndPointMap.put(info.processId, info.userEndPoint);
+            }
             Set<String> consumers = consumersByClient.get(info.processId);
             if (consumers == null) {
                 consumers = new HashSet<>();
@@ -361,8 +369,9 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         // assign tasks to clients
         states = TaskAssignor.assign(states, partitionsForTask.keySet(), numStandbyReplicas);
-        Map<String, Assignment> assignment = new HashMap<>();
 
+        final List<AssignmentDetail> assignmentDetails = new ArrayList<>();
+        final Map<HostState, Set<TopicPartition>> endPointMap = new HashMap<>();
         for (Map.Entry<UUID, Set<String>> entry : consumersByClient.entrySet()) {
             UUID processId = entry.getKey();
             Set<String> consumers = entry.getValue();
@@ -408,14 +417,26 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 for (AssignedPartition partition : assignedPartitions) {
                     active.add(partition.taskId);
                     activePartitions.add(partition.partition);
+                    String endPoint = consumerEndPointMap.get(processId);
+                    if (endPoint != null) {
+                        final String[] hostPort = endPoint.split(":");
+                        final HostState hostState = new HostState(hostPort[0], Integer.valueOf(hostPort[1]));
+                        if (!endPointMap.containsKey(hostState)) {
+                            endPointMap.put(hostState, new HashSet<TopicPartition>());
+                        }
+                        final Set<TopicPartition> topicPartitions = endPointMap.get(hostState);
+                        topicPartitions.add(partition.partition);
+                    }
                 }
 
-                AssignmentInfo data = new AssignmentInfo(active, standby);
-                assignment.put(consumer, new Assignment(activePartitions, data.encode()));
-                i++;
 
-                active.clear();
-                standby.clear();
+                assignmentDetails.add(new AssignmentDetail(consumer,
+                                                           active,
+                                                           standby,
+                                                           endPointMap,
+                    activePartitions));
+
+                i++;
             }
         }
 
@@ -424,7 +445,39 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // change log topics should be compacted
         prepareTopic(stateChangelogTopicToTaskIds, true /* compactTopic */, true);
 
+        Map<String, Assignment> assignment = new HashMap<>();
+        for (AssignmentDetail assignmentDetail : assignmentDetails) {
+            assignment.put(assignmentDetail.consumer, assignmentDetail.createAssignment());
+        }
         return assignment;
+    }
+
+    class AssignmentDetail {
+
+        private final String consumer;
+        private final List<TaskId> active;
+        private final Map<TaskId, Set<TopicPartition>> standby;
+        private final Map<HostState, Set<TopicPartition>> endPointMap;
+        private final List<TopicPartition> activePartitions;
+
+        AssignmentDetail(final String consumer,
+                         final List<TaskId> active,
+                         final Map<TaskId, Set<TopicPartition>> standby,
+                         final Map<HostState, Set<TopicPartition>> endPointMap,
+                         final List<TopicPartition> activePartitions) {
+            this.consumer = consumer;
+
+            this.active = active;
+            this.standby = standby;
+            this.endPointMap = endPointMap;
+            this.activePartitions = activePartitions;
+        }
+
+        Assignment createAssignment() {
+            return new Assignment(activePartitions, new AssignmentInfo(active,
+                                                                       standby,
+                                                                       endPointMap).encode());
+        }
     }
 
     /**
@@ -460,6 +513,15 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
         }
         this.partitionToTaskIds = partitionToTaskIds;
+        setPartitionsByHostState(info.partitionsByHostState);
+    }
+
+    private synchronized void setPartitionsByHostState(final Map<HostState, Set<TopicPartition>> partitionsByHostState) {
+        this.partitionsByHostState = partitionsByHostState;
+    }
+
+    public synchronized Map<HostState, Set<TopicPartition>> getPartitionsByHostState() {
+        return Collections.unmodifiableMap(partitionsByHostState);
     }
 
     private void ensureCopartitioning(Collection<Set<String>> copartitionGroups, Map<Integer, Set<String>> internalTopicGroups, Cluster metadata) {
