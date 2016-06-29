@@ -1,15 +1,10 @@
 package org.apache.kafka.clients.consumer;
 
-import java.util.List;
-
 import org.apache.kafka.common.MetricNameTemplate;
-import org.apache.kafka.common.metrics.MetricConfig;
-import org.apache.kafka.common.metrics.MetricsReporter;
-import org.apache.kafka.common.metrics.SpecificMetrics;
-import org.apache.kafka.common.utils.Time;
 
 public class ConsumerMetrics {
 
+    // XXX group name is no longer configurable at runtime. Is that okay?
     public static final MetricNameTemplate FETCH_SIZE_AVG = new MetricNameTemplate("fetch-size-avg", "consumer-fetch-manager-metrics", 
             "The average number of bytes fetched per request");
     public static final MetricNameTemplate FETCH_SIZE_MAX = new MetricNameTemplate("fetch-size-max", "consumer-fetch-manager-metrics", 

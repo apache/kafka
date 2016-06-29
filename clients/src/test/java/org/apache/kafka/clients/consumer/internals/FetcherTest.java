@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.consumer.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -34,7 +35,6 @@ import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.metrics.KafkaMetric;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.SpecificMetrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -528,8 +528,8 @@ public class FetcherTest {
         }
 
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
-        KafkaMetric avgMetric = allMetrics.get(metrics.metricName("fetch-throttle-time-avg", metricGroup, ""));
-        KafkaMetric maxMetric = allMetrics.get(metrics.metricName("fetch-throttle-time-max", metricGroup, ""));
+        KafkaMetric avgMetric = allMetrics.get(metrics.metricInstance(ConsumerMetrics.FETCH_THROTTLE_TIME_AVG));
+        KafkaMetric maxMetric = allMetrics.get(metrics.metricInstance(ConsumerMetrics.FETCH_THROTTLE_TIME_MAX));
         assertEquals(200, avgMetric.value(), EPSILON);
         assertEquals(300, maxMetric.value(), EPSILON);
     }
@@ -590,7 +590,6 @@ public class FetcherTest {
                 metadata,
                 subscriptions,
                 metrics,
-                "consumer" + groupId,
                 time,
                 retryBackoffMs);
     }

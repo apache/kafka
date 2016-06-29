@@ -32,7 +32,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.SpecificMetrics;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.protocol.Errors;
@@ -583,7 +582,6 @@ public class KafkaConsumerTest {
                 metadata,
                 subscriptions,
                 metrics,
-                metricGroupPrefix,
                 time,
                 retryBackoffMs);
 

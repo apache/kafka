@@ -31,7 +31,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.SpecificMetrics;
 import org.apache.kafka.common.network.ChannelBuilder;
@@ -687,7 +686,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     this.metadata,
                     this.subscriptions,
                     metrics,
-                    metricGrpPrefix,
                     this.time,
                     this.retryBackoffMs);
 

@@ -104,7 +104,6 @@ public class Fetcher<K, V> {
                    Metadata metadata,
                    SubscriptionState subscriptions,
                    SpecificMetrics metrics,
-                   String metricGrpPrefix,
                    Time time,
                    long retryBackoffMs) {
 
@@ -126,7 +125,7 @@ public class Fetcher<K, V> {
         this.unauthorizedTopics = new HashSet<>();
         this.recordTooLargePartitions = new HashMap<>();
 
-        this.sensors = new FetchManagerMetrics(metrics, metricGrpPrefix);
+        this.sensors = new FetchManagerMetrics(metrics);
         this.retryBackoffMs = retryBackoffMs;
     }
 
@@ -713,7 +712,6 @@ public class Fetcher<K, V> {
 
     private class FetchManagerMetrics {
         public final SpecificMetrics metrics;
-        public final String metricGrpName;
 
         public final Sensor bytesFetched;
         public final Sensor recordsFetched;
@@ -722,9 +720,8 @@ public class Fetcher<K, V> {
         public final Sensor fetchThrottleTimeSensor;
 
 
-        public FetchManagerMetrics(SpecificMetrics metrics, String metricGrpPrefix) {
+        public FetchManagerMetrics(SpecificMetrics metrics) {
             this.metrics = metrics;
-            this.metricGrpName = metricGrpPrefix + "-fetch-manager-metrics";
 
             this.bytesFetched = metrics.sensor("bytes-fetched");
             this.bytesFetched.add(metrics.metricInstance(ConsumerMetrics.FETCH_SIZE_AVG), new Avg());
