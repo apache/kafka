@@ -211,7 +211,7 @@ public class KeyValueStoreTestDriver<K, V> {
                 send(record, keySerializer, valueSerializer);
             }
         };
-        this.stateDir = TestUtils.tempDir();
+        this.stateDir = TestUtils.tempDirectory();
         this.stateDir.mkdirs();
 
         Properties props = new Properties();
