@@ -12,7 +12,9 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import org.apache.kafka.common.MetricNameTemplate;
@@ -92,8 +94,8 @@ public class FetcherMetricsRegistry {
         
     }
     
-    public MetricNameTemplate[] getAllTemplates() {
-        return new MetricNameTemplate[] {
+    public List<MetricNameTemplate> getAllTemplates() {
+        return Arrays.asList(
             fetchSizeAvg,
             fetchSizeMax,
             bytesConsumedRate,
@@ -109,8 +111,8 @@ public class FetcherMetricsRegistry {
             topicFetchSizeMax,
             topicBytesConsumedRate,
             topicRecordsPerRequestAvg,
-            topicRecordsConsumedRate,
-        };
+            topicRecordsConsumedRate
+        );
     }
 
 }

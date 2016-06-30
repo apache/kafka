@@ -12,9 +12,12 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerCoordinatorMetricsRegistry;
 import org.apache.kafka.clients.consumer.internals.FetcherMetricsRegistry;
 import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.metrics.SpecificMetrics;
@@ -22,21 +25,30 @@ import org.apache.kafka.common.metrics.SpecificMetrics;
 public class ConsumerMetrics {
     
     public FetcherMetricsRegistry fetcherMetrics;
+    public ConsumerCoordinatorMetricsRegistry consumerCoordinatorMetrics;
     
-    public ConsumerMetrics(Set<String> metricsTags, String string) {
+    public ConsumerMetrics(Set<String> metricsTags, String metricGrpPrefix) {
         // TODO Auto-generated constructor stub
         this.fetcherMetrics = new FetcherMetricsRegistry(metricsTags);
+        this.consumerCoordinatorMetrics = new ConsumerCoordinatorMetricsRegistry(metricsTags, metricGrpPrefix);
     }
 
-    private MetricNameTemplate[] getAllTemplates() {
-        return this.fetcherMetrics.getAllTemplates();
+    public ConsumerMetrics(String metricGroupPrefix) {
+        this(new HashSet<String>(), metricGroupPrefix);
+    }
+
+    private List<MetricNameTemplate> getAllTemplates() {
+        List<MetricNameTemplate> l = new ArrayList<>();
+        l.addAll(this.fetcherMetrics.getAllTemplates());
+        l.addAll(consumerCoordinatorMetrics.getAllTemplates());
+        return l;
     }
 
     public static void main(String[] args) {
         Set<String> tags = new HashSet<>();
         tags.add("client-id");
         ConsumerMetrics metrics = new ConsumerMetrics(tags, "consumer");
-        MetricNameTemplate[] allMetrics = metrics.getAllTemplates();
+        MetricNameTemplate[] allMetrics = metrics.getAllTemplates().toArray(new MetricNameTemplate[0]);
         System.out.println(SpecificMetrics.toHtmlTable("kafka.consumer", allMetrics));
     }
 }

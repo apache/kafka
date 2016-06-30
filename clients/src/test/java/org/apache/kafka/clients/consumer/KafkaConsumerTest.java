@@ -551,7 +551,7 @@ public class KafkaConsumerTest {
         ConsumerInterceptors<String, String> interceptors = null;
 
         SpecificMetrics metrics = new SpecificMetrics();
-        FetcherMetricsRegistry metricsRegistry = new FetcherMetricsRegistry();
+        ConsumerMetrics metricsRegistry = new ConsumerMetrics(metricGroupPrefix);
 
         SubscriptionState subscriptions = new SubscriptionState(autoResetStrategy);
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(client, metadata, time, retryBackoffMs, requestTimeoutMs);
@@ -564,7 +564,7 @@ public class KafkaConsumerTest {
                 metadata,
                 subscriptions,
                 metrics,
-                metricGroupPrefix,
+                metricsRegistry.consumerCoordinatorMetrics,
                 time,
                 retryBackoffMs,
                 defaultCommitCallback,
@@ -585,7 +585,7 @@ public class KafkaConsumerTest {
                 metadata,
                 subscriptions,
                 metrics,
-                metricsRegistry,
+                metricsRegistry.fetcherMetrics,
                 time,
                 retryBackoffMs);
 
