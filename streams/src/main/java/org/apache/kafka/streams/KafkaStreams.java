@@ -237,7 +237,14 @@ public class KafkaStreams {
      * @return  A facade wrapping the {@link org.apache.kafka.streams.processor.StateStore} instances
      */
     public <T> T getStore(final String storeName, final QueryableStoreType<T> queryableStoreType) {
+        validateIsRunning();
         return queryableStoreProvider.getStore(storeName, queryableStoreType);
+    }
+
+    private void validateIsRunning() {
+        if (state != RUNNING) {
+            throw new IllegalStateException("KafkaStreams has not been started");
+        }
     }
 
 }
