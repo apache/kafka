@@ -283,7 +283,38 @@ public class SchemaBuilderTest {
                 .defaultValue(defMap).build();
     }
 
+    @Test
+    public void testSimpleCyclicSchema() {
+        Schema schemaA = SchemaBuilder.struct()
+                .name("A")
+                .field("value", Schema.INT8_SCHEMA)
+                .optional().field("next", "A")
+                .build();
 
+        assertEquals(schemaA.field("next").schema(), schemaA);
+    }
+
+    @Test
+    public void testNestedCyclicSchema() {
+        Schema schemaA = SchemaBuilder.struct()
+                .name("A").optional()
+                .field("valueA", Schema.INT8_SCHEMA)
+                .field("b", "B")
+                .build();
+
+        Schema schemaB = SchemaBuilder.struct()
+                .name("B").optional()
+                .field("valueB", Schema.STRING_SCHEMA)
+                .field("a", schemaA)
+                .build();
+
+
+        assertEquals(schemaB.field("a").schema().field("b").schema(),
+                     schemaB);
+        schemaA = schemaB.field("a").schema();
+        assertEquals(schemaA.field("b").schema().field("a").schema(),
+                     schemaA);
+    }
 
     private void assertTypeAndDefault(Schema schema, Schema.Type type, boolean optional, Object defaultValue) {
         assertEquals(type, schema.type());

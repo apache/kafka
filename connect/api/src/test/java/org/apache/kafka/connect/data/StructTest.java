@@ -57,6 +57,11 @@ public class StructTest {
             .field("map", MAP_SCHEMA)
             .field("nested", NESTED_CHILD_SCHEMA)
             .build();
+    private static final Schema CYCLIC_SCHEMA = SchemaBuilder.struct()
+            .name("node")
+            .field("value", Schema.INT32_SCHEMA)
+            .optional().field("next", "node")
+            .build();
 
     private static final Schema REQUIRED_FIELD_SCHEMA = Schema.INT8_SCHEMA;
     private static final Schema OPTIONAL_FIELD_SCHEMA = SchemaBuilder.int8().optional().build();
@@ -106,6 +111,18 @@ public class StructTest {
         assertEquals((byte) 12, struct.getStruct("nested").get("int8"));
 
         struct.validate();
+    }
+
+    @Test
+    public void testCyclicStruct() {
+        Struct list = new Struct(CYCLIC_SCHEMA)
+                .put("value", 1).put("next", new Struct(CYCLIC_SCHEMA)
+                        .put("value", 2).put("next", new Struct(CYCLIC_SCHEMA)
+                                .put("value", 3)));
+
+        assertEquals(1, (int) list.getInt32("value"));
+        assertEquals(2, (int) list.getStruct("next").getInt32("value"));
+        assertEquals(3, (int) list.getStruct("next").getStruct("next").getInt32("value"));
     }
 
 

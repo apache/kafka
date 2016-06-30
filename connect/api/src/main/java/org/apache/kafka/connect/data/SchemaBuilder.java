@@ -325,6 +325,29 @@ public class SchemaBuilder implements Schema {
     }
 
     /**
+     * Add a field to the struct schema by name, that will be resolved later. Throws a SchemaBuilderException if this
+     * is not a struct schema.
+     * @param fieldName the name of the field to add
+     * @param schemaName the name of the schema for the field
+     * @param optional a flag if the schema is optional or not
+     * @return the SchemaBuilder
+     */
+    public SchemaBuilder field(String fieldName, String schemaName, boolean optional) {
+        return field(fieldName, new FutureSchema(schemaName, optional));
+    }
+
+    /**
+     * Add a optional field to the struct by name, that will be resolved later. Throws a SchemaBuilderException if this
+     * is not a struct schema.
+     * @param fieldName the name of the field to add
+     * @param schemaName the name of the schema for the field
+     * @return the SchemaBuilder
+     */
+    public SchemaBuilder field(String fieldName, String schemaName) {
+        return field(fieldName, schemaName, true);
+    }
+
+    /**
      * Get the list of fields for this Schema. Throws a DataException if this schema is not a struct.
      * @return the list of fields for this Schema
      */
@@ -399,6 +422,10 @@ public class SchemaBuilder implements Schema {
         return build();
     }
 
+    @Override
+    public Schema resolve(List<Schema> parents) {
+        return build();
+    }
 
     private static void checkNull(String fieldName, Object val) {
         if (val != null)

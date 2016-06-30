@@ -161,4 +161,11 @@ public interface Schema {
      * @return the {@link Schema}
      */
     Schema schema();
+
+    /**
+     * Resolve this and any child schemas that may symbolic or have cyclic references
+     * @param parents a list of schemas that are parents of this schema
+     * @return the resolved schema
+     */
+    Schema resolve(List<Schema> parents);
 }

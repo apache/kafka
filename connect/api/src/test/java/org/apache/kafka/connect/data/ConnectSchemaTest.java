@@ -286,18 +286,17 @@ public class ConnectSchemaTest {
     public void testStructEquality() {
         // Same as testArrayEquality, but checks differences in fields. Only does a simple check, relying on tests of
         // Field's equals() method to validate all variations in the list of fields will be checked
-        ConnectSchema s1 = new ConnectSchema(Schema.Type.STRUCT, false, null, null, null, null, null,
+        Schema s1 = new ConnectSchema(Schema.Type.STRUCT, false, null, null, null, null, null,
                 Arrays.asList(new Field("field", 0, SchemaBuilder.int8().build()),
                         new Field("field2", 1, SchemaBuilder.int16().build())), null, null);
-        ConnectSchema s2 = new ConnectSchema(Schema.Type.STRUCT, false, null, null, null, null, null,
+        Schema s2 = new ConnectSchema(Schema.Type.STRUCT, false, null, null, null, null, null,
                 Arrays.asList(new Field("field", 0, SchemaBuilder.int8().build()),
                         new Field("field2", 1, SchemaBuilder.int16().build())), null, null);
-        ConnectSchema differentField = new ConnectSchema(Schema.Type.STRUCT, false, null, null, null, null, null,
+        Schema differentField = new ConnectSchema(Schema.Type.STRUCT, false, null, null, null, null, null,
                 Arrays.asList(new Field("field", 0, SchemaBuilder.int8().build()),
                         new Field("different field name", 1, SchemaBuilder.int16().build())), null, null);
 
         assertEquals(s1, s2);
         assertNotEquals(s1, differentField);
     }
-
 }
