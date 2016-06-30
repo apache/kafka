@@ -896,8 +896,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquire();
         try {
             Set<String> topics = new HashSet<>();
-            for (TopicPartition tp : partitions)
-            {
+            for (TopicPartition tp : partitions) {
                 String topic = (tp != null) ? tp.topic() : null;
                 if (topic == null || topic.trim().equals(""))
                     throw new IllegalArgumentException("Topic partitions cannot have null or empty topic");
