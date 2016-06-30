@@ -12,7 +12,6 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import java.util.Map;
 import java.util.Set;
 
 import org.apache.kafka.clients.consumer.internals.FetcherMetricsRegistry;

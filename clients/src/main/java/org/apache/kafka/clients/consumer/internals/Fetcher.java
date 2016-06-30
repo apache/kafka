@@ -15,7 +15,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
-import org.apache.kafka.clients.consumer.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
@@ -124,7 +123,7 @@ public class Fetcher<K, V> {
         this.unauthorizedTopics = new HashSet<>();
         this.recordTooLargePartitions = new HashMap<>();
 
-        this.sensors = new FetchManagerMetrics(metrics);
+        this.sensors = new FetchManagerMetrics(metrics, metricsRegistry);
         this.retryBackoffMs = retryBackoffMs;
     }
 
@@ -720,10 +719,9 @@ public class Fetcher<K, V> {
 
         private FetcherMetricsRegistry metricsRegistry;
 
-
-        public FetchManagerMetrics(SpecificMetrics metrics) {
+        public FetchManagerMetrics(SpecificMetrics metrics, FetcherMetricsRegistry metricsRegistry) {
             this.metrics = metrics;
-            this.metricsRegistry = new FetcherMetricsRegistry(metrics.config().tags().keySet());
+            this.metricsRegistry = metricsRegistry;
 
             this.bytesFetched = metrics.sensor("bytes-fetched");
             this.bytesFetched.add(metrics.metricInstance(metricsRegistry.fetchSizeAvg), new Avg());
