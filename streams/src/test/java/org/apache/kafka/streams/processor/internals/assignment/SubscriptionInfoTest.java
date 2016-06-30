@@ -21,6 +21,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -38,10 +39,18 @@ public class SubscriptionInfoTest {
         Set<TaskId> standbyTasks =
                 new HashSet<>(Arrays.asList(new TaskId(1, 1), new TaskId(2, 0)));
 
-        SubscriptionInfo info = new SubscriptionInfo(processId, activeTasks, standbyTasks);
+        SubscriptionInfo info = new SubscriptionInfo(processId, activeTasks, standbyTasks, null);
         SubscriptionInfo decoded = SubscriptionInfo.decode(info.encode());
 
         assertEquals(info, decoded);
+    }
+
+    @Test
+    public void shouldEncodeDecodeWithUserEndPoint() throws Exception {
+        SubscriptionInfo original = new SubscriptionInfo(UUID.randomUUID(),
+                Collections.singleton(new TaskId(0, 0)), Collections.<TaskId>emptySet(), "localhost:80");
+        SubscriptionInfo decoded = SubscriptionInfo.decode(original.encode());
+        assertEquals(original, decoded);
     }
 
 }

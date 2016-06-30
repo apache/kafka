@@ -699,4 +699,7 @@ public class Utils {
             throw exception;
     }
 
+    public static int toPositive(int number) {
+        return number & 0x7fffffff;
+    }
 }

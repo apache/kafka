@@ -103,6 +103,9 @@ public class StreamsConfig extends AbstractConfig {
     public static final String VALUE_SERDE_CLASS_CONFIG = "value.serde";
     public static final String VALUE_SERDE_CLASS_DOC = "Serializer / deserializer class for value that implements the <code>Serde</code> interface.";
 
+    public static final String USER_ENDPOINT_CONFIG = "user.endpoint.config";
+    public static final String USER_ENDPOINT_DOC = "A user defined endpoint that can be used to connect to remote KafkaStreams instances";
+
     /** <code>metrics.sample.window.ms</code> */
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
 
@@ -213,7 +216,12 @@ public class StreamsConfig extends AbstractConfig {
                                         2,
                                         atLeast(1),
                                         Importance.LOW,
-                                        CommonClientConfigs.METRICS_NUM_SAMPLES_DOC);
+                                        CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
+                                .define(USER_ENDPOINT_CONFIG,
+                                        Type.STRING,
+                                        "",
+                                        Importance.LOW,
+                                        USER_ENDPOINT_DOC);
     }
 
     // this is the list of configs for underlying clients
@@ -271,6 +279,7 @@ public class StreamsConfig extends AbstractConfig {
         if (!getString(ZOOKEEPER_CONNECT_CONFIG).equals(""))
             props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, getString(ZOOKEEPER_CONNECT_CONFIG));
 
+        props.put(USER_ENDPOINT_CONFIG, getString(USER_ENDPOINT_CONFIG));
         return props;
     }
 
