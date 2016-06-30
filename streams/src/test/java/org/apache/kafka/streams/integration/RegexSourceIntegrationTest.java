@@ -86,6 +86,7 @@ public class RegexSourceIntegrationTest {
     private static final String DEFAULT_OUTPUT_TOPIC = "outputTopic";
     private static final String STRING_SERDE_CLASSNAME = Serdes.String().getClass().getName();
     private Properties streamsConfiguration;
+    private static final String STREAM_TASKS_NOT_UPDATED = "Stream tasks not updated";
 
 
     @BeforeClass
@@ -146,11 +147,12 @@ public class RegexSourceIntegrationTest {
         streamThreads[0] = testStreamThread;
         streams.start();
 
-        TestUtils.waitForCondition(tasksUpdated);
+        TestUtils.waitForCondition(tasksUpdated, STREAM_TASKS_NOT_UPDATED);
+        testStreamThread.streamTaskUpdated = false;
 
         CLUSTER.createTopic("TEST-TOPIC-2");
 
-        TestUtils.waitForCondition(tasksUpdated);
+        TestUtils.waitForCondition(tasksUpdated, STREAM_TASKS_NOT_UPDATED);
 
         streams.close();
 
@@ -193,11 +195,13 @@ public class RegexSourceIntegrationTest {
 
         streams.start();
 
-        TestUtils.waitForCondition(tasksUpdated);
+        TestUtils.waitForCondition(tasksUpdated, STREAM_TASKS_NOT_UPDATED);
+        //reset
+        testStreamThread.streamTaskUpdated = false;
 
         CLUSTER.deleteTopic("TEST-TOPIC-A");
 
-        TestUtils.waitForCondition(tasksUpdated);
+        TestUtils.waitForCondition(tasksUpdated, STREAM_TASKS_NOT_UPDATED);
 
         streams.close();
 
@@ -331,12 +335,7 @@ public class RegexSourceIntegrationTest {
         return new TestCondition() {
             @Override
             public boolean conditionMet() {
-                if (testStreamThread.streamTaskUpdated) {
-                    testStreamThread.streamTaskUpdated = false;
-                    return true;
-                } else {
-                    return false;
-                }
+                return testStreamThread.streamTaskUpdated;
             }
         };
     }
