@@ -64,13 +64,21 @@ public class JoinWindows extends Windows<TimeWindow> {
     }
 
     /**
-     * Specifies that records of the same key are joinable if their timestamps are within {@code timeDifference}.
-     * ({@code timeDifference} must not be negative)
+     * Specifies that records of the same key are joinable if their timestamps are equal.
      *
-     * @param timeDifference    join window interval
+     * @param name    The name of the window. Must not be null or empty.
      */
-    public static JoinWindows of(String name, long timeDifference) {
-        return new JoinWindows(name, timeDifference, timeDifference);
+    public static JoinWindows of(String name) {
+        return new JoinWindows(name, 0L, 0L);
+    }
+
+    /**
+     * Specifies that records of the same key are joinable if their timestamps are within {@code timeDifference}.
+     *
+     * @param timeDifference    join window interval (must not be negative)
+     */
+    public JoinWindows with(long timeDifference) {
+        return new JoinWindows(this.name, timeDifference, timeDifference);
     }
 
     /**

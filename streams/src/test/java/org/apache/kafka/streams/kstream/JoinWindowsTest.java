@@ -33,8 +33,8 @@ public class JoinWindowsTest {
 
     @Test
     public void shouldHaveSaneEqualsAndHashCode() {
-        JoinWindows w1 = JoinWindows.of("w1", anySize);
-        JoinWindows w2 = JoinWindows.of("w2", anySize);
+        JoinWindows w1 = JoinWindows.of("w1").with(anySize);
+        JoinWindows w2 = JoinWindows.of("w2").with(anySize);
 
         // Reflexive
         assertEquals(w1, w1);
@@ -45,8 +45,8 @@ public class JoinWindowsTest {
         assertEquals(w2, w1);
         assertEquals(w1.hashCode(), w2.hashCode());
 
-        JoinWindows w3 = JoinWindows.of("w3", w2.after).before(anyOtherSize);
-        JoinWindows w4 = JoinWindows.of("w4", anyOtherSize).after(w2.after);
+        JoinWindows w3 = JoinWindows.of("w3").with(w2.after).before(anyOtherSize);
+        JoinWindows w4 = JoinWindows.of("w4").with(anyOtherSize).after(w2.after);
         assertEquals(w3, w4);
         assertEquals(w4, w3);
         assertEquals(w3.hashCode(), w4.hashCode());
@@ -56,54 +56,56 @@ public class JoinWindowsTest {
         assertNotEquals("must be false for different window types", UnlimitedWindows.of("irrelevant"), w1);
         assertNotEquals("must be false for different types", new Object(), w1);
 
-        JoinWindows differentWindowSize = JoinWindows.of("differentWindowSize", w1.after + 1);
+        JoinWindows differentWindowSize = JoinWindows.of("differentWindowSize").with(w1.after + 1);
         assertNotEquals("must be false when window sizes are different", differentWindowSize, w1);
 
-        JoinWindows differentWindowSize2 = JoinWindows.of("differentWindowSize", w1.after).after(w1.after + 1);
+        JoinWindows differentWindowSize2 = JoinWindows.of("differentWindowSize").with(w1.after).after(w1.after + 1);
         assertNotEquals("must be false when window sizes are different", differentWindowSize2, w1);
 
-        JoinWindows differentWindowSize3 = JoinWindows.of("differentWindowSize", w1.after).before(w1.before + 1);
+        JoinWindows differentWindowSize3 = JoinWindows.of("differentWindowSize").with(w1.after).before(w1.before + 1);
         assertNotEquals("must be false when window sizes are different", differentWindowSize3, w1);
     }
 
     @Test
     public void validWindows() {
-        JoinWindows.of(anyName, anyOtherSize)   // [ -anyOtherSize ; anyOtherSize ]
-            .before(anySize)                    // [ -anySize ; anyOtherSize ]
-            .before(0)                          // [ 0 ; anyOtherSize ]
-            .before(-anySize)                   // [ anySize ; anyOtherSize ]
-            .before(-anyOtherSize);             // [ anyOtherSize ; anyOtherSize ]
+        JoinWindows.of(anyName)
+            .with(anyOtherSize)     // [ -anyOtherSize ; anyOtherSize ]
+            .before(anySize)        // [ -anySize ; anyOtherSize ]
+            .before(0)              // [ 0 ; anyOtherSize ]
+            .before(-anySize)       // [ anySize ; anyOtherSize ]
+            .before(-anyOtherSize); // [ anyOtherSize ; anyOtherSize ]
 
-        JoinWindows.of(anyName, anyOtherSize)   // [ -anyOtherSize ; anyOtherSize ]
-            .after(anySize)                     // [ -anyOtherSize ; anySize ]
-            .after(0)                           // [ -anyOtherSize ; 0 ]
-            .after(-anySize)                    // [ -anyOtherSize ; -anySize ]
-            .after(-anyOtherSize);              // [ -anyOtherSize ; -anyOtherSize ]
+        JoinWindows.of(anyName)
+            .with(anyOtherSize)     // [ -anyOtherSize ; anyOtherSize ]
+            .after(anySize)         // [ -anyOtherSize ; anySize ]
+            .after(0)               // [ -anyOtherSize ; 0 ]
+            .after(-anySize)        // [ -anyOtherSize ; -anySize ]
+            .after(-anyOtherSize);  // [ -anyOtherSize ; -anyOtherSize ]
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void nameMustNotBeEmpty() {
-        JoinWindows.of("", anySize);
+        JoinWindows.of("").with(anySize);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void nameMustNotBeNull() {
-        JoinWindows.of(null, anySize);
+        JoinWindows.of(null).with(anySize);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void timeDifferenceMustNotBeNegative() {
-        JoinWindows.of(anyName, -1);
+        JoinWindows.of(anyName).with(-1);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void afterBelowLower() {
-        JoinWindows.of(anyName, anySize).after(-anySize - 1);
+        JoinWindows.of(anyName).with(anySize).after(-anySize - 1);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void beforeOverUpper() {
-        JoinWindows.of(anyName, anySize).before(-anySize - 1);
+        JoinWindows.of(anyName).with(anySize).before(-anySize - 1);
     }
 
 }
