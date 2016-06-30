@@ -48,7 +48,6 @@ public class ConsumerMetrics {
         Set<String> tags = new HashSet<>();
         tags.add("client-id");
         ConsumerMetrics metrics = new ConsumerMetrics(tags, "consumer");
-        MetricNameTemplate[] allMetrics = metrics.getAllTemplates().toArray(new MetricNameTemplate[0]);
-        System.out.println(SpecificMetrics.toHtmlTable("kafka.consumer", allMetrics));
+        System.out.println(SpecificMetrics.toHtmlTable("kafka.consumer", metrics.getAllTemplates()));
     }
 }

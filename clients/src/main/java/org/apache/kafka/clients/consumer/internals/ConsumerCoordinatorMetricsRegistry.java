@@ -48,13 +48,13 @@ public class ConsumerCoordinatorMetricsRegistry extends AbstractCoordinatorMetri
     }
     
     public List<MetricNameTemplate> getAllTemplates() {
-        List<MetricNameTemplate> l = new ArrayList<>(Arrays.asList(
+        List<MetricNameTemplate> l = new ArrayList<>(super.getAllTemplates());
+        l.addAll(Arrays.asList(
                 commitLatencyAvg,
                 commitLatencyMax,
                 commitRate,
                 assignedPartitions
             ));
-        l.addAll(super.getAllTemplates());
         return l;
     }
 

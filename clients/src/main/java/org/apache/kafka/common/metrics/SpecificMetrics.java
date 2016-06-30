@@ -117,7 +117,7 @@ public class SpecificMetrics extends Metrics {
         return super.metricName(name, group, tags);
     }
 
-    public static String toHtmlTable(String domain, MetricNameTemplate[] allMetrics) {
+    public static String toHtmlTable(String domain, List<MetricNameTemplate> allMetrics) {
         Map<String, Map<String, String>> beansAndAttributes = new HashMap<String, Map<String, String>>();
 
         try (Metrics metrics = new Metrics()) {
