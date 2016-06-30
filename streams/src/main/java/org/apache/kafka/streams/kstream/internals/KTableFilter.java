@@ -77,7 +77,9 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
             V newValue = computeValue(key, change.newValue);
             V oldValue = sendOldValues ? computeValue(key, change.oldValue) : null;
 
-            if (oldValue == null && newValue == null) return; // unnecessary to forward here.
+            if (sendOldValues && oldValue == null && newValue == null)
+                return; // unnecessary to forward here.
+
             context().forward(key, new Change<>(newValue, oldValue));
         }
 

@@ -95,8 +95,8 @@ public class KTableFilterTest {
         driver.process(topic1, "A", null);
         driver.process(topic1, "B", null);
 
-        proc2.checkAndClearProcessResult("B:2", "D:4");
-        proc3.checkAndClearProcessResult("A:1", "C:3");
+        proc2.checkAndClearProcessResult("A:null", "B:2", "C:null", "D:4", "A:null", "B:null");
+        proc3.checkAndClearProcessResult("A:1", "B:null", "C:3", "D:null", "A:null", "B:null");
     }
 
     @Test
@@ -207,7 +207,7 @@ public class KTableFilterTest {
         driver.process(topic1, "C", 1);
 
         proc1.checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
-        proc2.checkEmptyAndClearProcessResult();
+        proc2.checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)", "C:(null<-null)");
 
         driver.process(topic1, "A", 2);
         driver.process(topic1, "B", 2);
@@ -218,13 +218,13 @@ public class KTableFilterTest {
         driver.process(topic1, "A", 3);
 
         proc1.checkAndClearProcessResult("A:(3<-null)");
-        proc2.checkEmptyAndClearProcessResult();
+        proc2.checkAndClearProcessResult("A:(null<-null)");
 
         driver.process(topic1, "A", null);
         driver.process(topic1, "B", null);
 
         proc1.checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
-        proc2.checkEmptyAndClearProcessResult();
+        proc2.checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
     }
 
     @Test
