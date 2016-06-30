@@ -98,12 +98,12 @@ public class JoinWindowsTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void afterBelowLower() {
-        JoinWindows.of(anyName, anySize).after(-anySize-1);
+        JoinWindows.of(anyName, anySize).after(-anySize - 1);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void beforeOverUpper() {
-        JoinWindows.of(anyName, anySize).before(-anySize-1);
+        JoinWindows.of(anyName, anySize).before(-anySize - 1);
     }
 
 }

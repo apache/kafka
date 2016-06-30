@@ -55,17 +55,8 @@ public class JoinWindows extends Windows<TimeWindow> {
     private JoinWindows(String name, long before, long after) {
         super(name);
 
-        if (before < 0) { // shift lower bound to right
-            if (after < -before) {
-                throw new IllegalArgumentException("Upper interval bound smaller than lower interval bound."
-                                                   + " <after> must be at least " + (-before));
-            }
-        }
-        if (after < 0) { // shift upper bound to left
-            if (before < -after) {
-                throw new IllegalArgumentException("Lower interval bound greater than upper interval bound."
-                        + " <before> must be at least " + (-after));
-            }
+        if (before + after < 0) {
+            throw new IllegalArgumentException("Window interval (ie, before+after) must not be negative");
         }
 
         this.after = after;
