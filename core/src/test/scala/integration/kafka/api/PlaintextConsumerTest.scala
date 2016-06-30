@@ -183,12 +183,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(0, this.consumers(0).assignment().size)
   }
 
-  @Test (expected = classOf[IllegalArgumentException])
-  def testEmptyPatternSubscription() {
-    val pattern = Pattern.compile("^\\s*$")
-    this.consumers(0).subscribe(pattern, new TestConsumerReassignmentListener)
-  }
-
   @Test
   def testPatternUnsubscription() {
     val numRecords = 10000
