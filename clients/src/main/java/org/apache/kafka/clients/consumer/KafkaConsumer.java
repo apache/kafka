@@ -801,7 +801,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             } else {
                 for (String topic : topics) {
                     if (topic == null || topic.trim().equals(""))
-                        throw new IllegalArgumentException("Topic collection should not contain null or empty topic");
+                        throw new IllegalArgumentException("Topic collection cannot contain null or empty topic");
                 }
                 log.debug("Subscribed to topic(s): {}", Utils.join(topics, ", "));
                 this.subscriptions.subscribe(topics, listener);
@@ -854,6 +854,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
         acquire();
         try {
+            if (pattern == null || pattern.matcher("^\\s*$").matches())
+                throw new IllegalArgumentException("Topic pattern cannot be null or empty");
             log.debug("Subscribed to pattern: {}", pattern);
             this.subscriptions.subscribe(pattern, listener);
             this.metadata.needMetadataForAllTopics(true);
@@ -893,11 +895,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void assign(Collection<TopicPartition> partitions) {
         acquire();
         try {
-            log.debug("Subscribed to partition(s): {}", Utils.join(partitions, ", "));
-            this.subscriptions.assignFromUser(partitions);
             Set<String> topics = new HashSet<>();
             for (TopicPartition tp : partitions)
-                topics.add(tp.topic());
+            {
+                String topic = (tp != null) ? tp.topic() : null;
+                if (topic == null || topic.trim().equals(""))
+                    throw new IllegalArgumentException("Topic partitions cannot have null or empty topic");
+                topics.add(topic);
+            }
+
+            log.debug("Subscribed to partition(s): {}", Utils.join(partitions, ", "));
+            this.subscriptions.assignFromUser(partitions);
             metadata.setTopics(topics);
         } finally {
             release();

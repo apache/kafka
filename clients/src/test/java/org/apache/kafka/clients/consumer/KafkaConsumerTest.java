@@ -158,6 +158,34 @@ public class KafkaConsumerTest {
         }
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void testAssignOnNullTopicPartition() {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testAssignOnNullTopicPartition");
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
+        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
+        try {
+            consumer.assign(Arrays.asList(new TopicPartition(null, 0)));
+        } finally {
+            consumer.close();
+        }
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testAssignOnEmptyTopicPartition() {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testAssignOnEmptyTopicPartition");
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
+        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
+        try {
+            consumer.assign(Arrays.asList(new TopicPartition("  ", 0)));
+        } finally {
+            consumer.close();
+        }
+    }
+
     @Test
     public void testInterceptorConstructorClose() throws Exception {
         try {
