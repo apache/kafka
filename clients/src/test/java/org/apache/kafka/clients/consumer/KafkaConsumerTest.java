@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
+import org.apache.kafka.clients.consumer.internals.FetcherMetricsRegistry;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
@@ -550,6 +551,8 @@ public class KafkaConsumerTest {
         ConsumerInterceptors<String, String> interceptors = null;
 
         SpecificMetrics metrics = new SpecificMetrics();
+        FetcherMetricsRegistry metricsRegistry = new FetcherMetricsRegistry();
+
         SubscriptionState subscriptions = new SubscriptionState(autoResetStrategy);
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(client, metadata, time, retryBackoffMs, requestTimeoutMs);
         ConsumerCoordinator consumerCoordinator = new ConsumerCoordinator(
@@ -582,6 +585,7 @@ public class KafkaConsumerTest {
                 metadata,
                 subscriptions,
                 metrics,
+                metricsRegistry,
                 time,
                 retryBackoffMs);
 
