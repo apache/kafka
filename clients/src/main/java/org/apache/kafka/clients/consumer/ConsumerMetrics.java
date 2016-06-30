@@ -28,7 +28,6 @@ public class ConsumerMetrics {
     public ConsumerCoordinatorMetricsRegistry consumerCoordinatorMetrics;
     
     public ConsumerMetrics(Set<String> metricsTags, String metricGrpPrefix) {
-        // TODO Auto-generated constructor stub
         this.fetcherMetrics = new FetcherMetricsRegistry(metricsTags);
         this.consumerCoordinatorMetrics = new ConsumerCoordinatorMetricsRegistry(metricsTags, metricGrpPrefix);
     }
