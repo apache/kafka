@@ -31,9 +31,10 @@ public abstract class AbstractStream<K> {
     protected final Set<String> sourceNodes;
 
     public AbstractStream(KStreamBuilder topology, String name, Set<String> sourceNodes) {
+        assert sourceNodes != null && !sourceNodes.isEmpty() : "parameter <sourceNodes> must not be null or empty";
+
         this.topology = topology;
         this.name = name;
-        assert (sourceNodes != null);
         this.sourceNodes = sourceNodes;
     }
 
@@ -41,12 +42,9 @@ public abstract class AbstractStream<K> {
      * @throws TopologyBuilderException if the streams are not joinable
      */
     protected Set<String> ensureJoinableWith(AbstractStream<K> other) {
-        Set<String> thisSourceNodes = sourceNodes;
-        Set<String> otherSourceNodes = other.sourceNodes;
-
         Set<String> allSourceNodes = new HashSet<>();
-        allSourceNodes.addAll(thisSourceNodes);
-        allSourceNodes.addAll(otherSourceNodes);
+        allSourceNodes.addAll(sourceNodes);
+        allSourceNodes.addAll(other.sourceNodes);
 
         topology.copartitionSources(allSourceNodes);
 
