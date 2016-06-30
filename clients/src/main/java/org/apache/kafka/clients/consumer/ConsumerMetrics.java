@@ -39,6 +39,4 @@ public class ConsumerMetrics {
         MetricNameTemplate[] allMetrics = metrics.getAllTemplates();
         System.out.println(SpecificMetrics.toHtmlTable("kafka.consumer", allMetrics));
     }
-
-
 }
