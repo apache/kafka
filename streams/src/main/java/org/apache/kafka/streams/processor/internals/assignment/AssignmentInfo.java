@@ -21,7 +21,7 @@ import org.apache.kafka.common.record.ByteBufferInputStream;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.state.HostState;
+import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,15 +44,15 @@ public class AssignmentInfo {
     public final int version;
     public final List<TaskId> activeTasks; // each element corresponds to a partition
     public final Map<TaskId, Set<TopicPartition>> standbyTasks;
-    public final Map<HostState, Set<TopicPartition>> partitionsByHostState;
+    public final Map<HostInfo, Set<TopicPartition>> partitionsByHostState;
 
     public AssignmentInfo(List<TaskId> activeTasks, Map<TaskId, Set<TopicPartition>> standbyTasks,
-                          Map<HostState, Set<TopicPartition>> hostState) {
+                          Map<HostInfo, Set<TopicPartition>> hostState) {
         this(1, activeTasks, standbyTasks, hostState);
     }
 
     protected AssignmentInfo(int version, List<TaskId> activeTasks, Map<TaskId, Set<TopicPartition>> standbyTasks,
-                             Map<HostState, Set<TopicPartition>> hostState) {
+                             Map<HostInfo, Set<TopicPartition>> hostState) {
         this.version = version;
         this.activeTasks = activeTasks;
         this.standbyTasks = standbyTasks;
@@ -92,11 +92,11 @@ public class AssignmentInfo {
             // Encode partitionsByHostState
             if (version == CURRENT_VERSION) {
                 out.writeInt(partitionsByHostState.size());
-                for (Map.Entry<HostState, Set<TopicPartition>> entry : partitionsByHostState
+                for (Map.Entry<HostInfo, Set<TopicPartition>> entry : partitionsByHostState
                     .entrySet()) {
-                    final HostState hostState = entry.getKey();
-                    out.writeUTF(hostState.getHost());
-                    out.writeInt(hostState.getPort());
+                    final HostInfo hostInfo = entry.getKey();
+                    out.writeUTF(hostInfo.getHost());
+                    out.writeInt(hostInfo.getPort());
                     writeTopicPartitions(out, entry.getValue());
                 }
             }
@@ -148,12 +148,12 @@ public class AssignmentInfo {
                 standbyTasks.put(id, readTopicPartitions(in));
             }
 
-            Map<HostState, Set<TopicPartition>> hostStateToTopicPartitions = new HashMap<>();
+            Map<HostInfo, Set<TopicPartition>> hostStateToTopicPartitions = new HashMap<>();
             if (version == CURRENT_VERSION) {
                 int numEntries = in.readInt();
                 for (int i = 0; i < numEntries; i++) {
-                    HostState hostState = new HostState(in.readUTF(), in.readInt());
-                    hostStateToTopicPartitions.put(hostState, readTopicPartitions(in));
+                    HostInfo hostInfo = new HostInfo(in.readUTF(), in.readInt());
+                    hostStateToTopicPartitions.put(hostInfo, readTopicPartitions(in));
                 }
             }
 

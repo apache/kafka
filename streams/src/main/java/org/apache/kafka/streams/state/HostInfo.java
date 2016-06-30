@@ -24,22 +24,22 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
  * Represents a user defined endpoint in a {@link org.apache.kafka.streams.KafkaStreams} application.
  * Instances of this class can be obtained by calling one of:
  *  {@link KafkaStreams#getAllTasks()}
- *  {@link KafkaStreams#getAllTasksWithStore(String)}
- *  {@link KafkaStreams#getTaskWithKey(String, Object, StreamPartitioner)}
- *  {@link KafkaStreams#getTaskWithKey(String, Object, Serializer)}
+ *  {@link KafkaStreams#getAllInstancesWithStore(String)}
+ *  {@link KafkaStreams#getInstanceWithKey(String, Object, StreamPartitioner)}
+ *  {@link KafkaStreams#getInstanceWithKey(String, Object, Serializer)}
  *
- *  The HostState is constructed during Partition Assignment
+ *  The HostInfo is constructed during Partition Assignment
  *  see {@link org.apache.kafka.streams.processor.internals.StreamPartitionAssignor}
  *  It is extracted from the config {@link org.apache.kafka.streams.StreamsConfig#USER_ENDPOINT_CONFIG}
  *
  *  If developers wish to expose an endpoint in their KafkaStreams applications they should provide the above
  *  config.
  */
-public class HostState {
+public class HostInfo {
     private final String host;
     private final int port;
 
-    public HostState(String host, int port) {
+    public HostInfo(String host, int port) {
         this.host = host;
         this.port = port;
     }
@@ -49,10 +49,10 @@ public class HostState {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        HostState hostState = (HostState) o;
+        HostInfo hostInfo = (HostInfo) o;
 
-        if (port != hostState.port) return false;
-        return host.equals(hostState.host);
+        if (port != hostInfo.port) return false;
+        return host.equals(hostInfo.host);
 
     }
 
@@ -73,7 +73,7 @@ public class HostState {
 
     @Override
     public String toString() {
-        return "HostState{" +
+        return "HostInfo{" +
                 "host='" + host + '\'' +
                 ", port=" + port +
                 '}';

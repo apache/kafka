@@ -43,7 +43,7 @@ import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
-import org.apache.kafka.streams.state.HostState;
+import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -691,7 +691,7 @@ public class StreamThread extends Thread {
         }
     }
 
-    public Map<HostState, Set<TopicPartition>> getPartitionsByHostState() {
+    public Map<HostInfo, Set<TopicPartition>> getPartitionsByHostState() {
         if (partitionAssignor == null) {
             return Collections.emptyMap();
         }

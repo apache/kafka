@@ -31,7 +31,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
-import org.apache.kafka.streams.state.HostState;
+import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateStoreSupplier;
@@ -465,7 +465,7 @@ public class StreamPartitionAssignorTest {
         standbyTasks.put(task1, Utils.mkSet(new TopicPartition("t1", 0)));
         standbyTasks.put(task2, Utils.mkSet(new TopicPartition("t2", 0)));
 
-        AssignmentInfo info = new AssignmentInfo(activeTaskList, standbyTasks, new HashMap<HostState, Set<TopicPartition>>());
+        AssignmentInfo info = new AssignmentInfo(activeTaskList, standbyTasks, new HashMap<HostInfo, Set<TopicPartition>>());
         PartitionAssignor.Assignment assignment = new PartitionAssignor.Assignment(Utils.mkList(t1p0, t2p3), info.encode());
         partitionAssignor.onAssignment(assignment);
 
@@ -614,7 +614,7 @@ public class StreamPartitionAssignorTest {
         final Map<String, PartitionAssignor.Assignment> assignments = partitionAssignor.assign(metadata, subscriptions);
         final PartitionAssignor.Assignment consumerAssignment = assignments.get("consumer1");
         final AssignmentInfo assignmentInfo = AssignmentInfo.decode(consumerAssignment.userData());
-        final Set<TopicPartition> topicPartitions = assignmentInfo.partitionsByHostState.get(new HostState("localhost", 8080));
+        final Set<TopicPartition> topicPartitions = assignmentInfo.partitionsByHostState.get(new HostInfo("localhost", 8080));
         assertEquals(Utils.mkSet(new TopicPartition("topic1", 0),
                 new TopicPartition("topic1", 1),
                 new TopicPartition("topic1", 2)), topicPartitions);
@@ -624,8 +624,8 @@ public class StreamPartitionAssignorTest {
     public void shouldExposeHostStateToTopicPartitionsOnAssignment() throws Exception {
         final StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
         List<TopicPartition> topic = Arrays.asList(new TopicPartition("topic", 0));
-        final Map<HostState, Set<TopicPartition>> hostState =
-                Collections.singletonMap(new HostState("localhost", 80),
+        final Map<HostInfo, Set<TopicPartition>> hostState =
+                Collections.singletonMap(new HostInfo("localhost", 80),
                         Collections.singleton(new TopicPartition("topic", 0)));
         AssignmentInfo assignmentInfo = new AssignmentInfo(Collections.singletonList(new TaskId(0, 0)),
                 Collections.<TaskId, Set<TopicPartition>>emptyMap(),

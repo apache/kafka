@@ -34,7 +34,7 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
-import org.apache.kafka.streams.state.HostState;
+import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,7 +55,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
     private static final Logger log = LoggerFactory.getLogger(StreamPartitionAssignor.class);
     private String userEndPointConfig;
-    private Map<HostState, Set<TopicPartition>> partitionsByHostState;
+    private Map<HostInfo, Set<TopicPartition>> partitionsByHostState;
 
     private static class AssignedPartition implements Comparable<AssignedPartition> {
         public final TaskId taskId;
@@ -371,7 +371,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         states = TaskAssignor.assign(states, partitionsForTask.keySet(), numStandbyReplicas);
 
         final List<AssignmentDetail> assignmentDetails = new ArrayList<>();
-        final Map<HostState, Set<TopicPartition>> endPointMap = new HashMap<>();
+        final Map<HostInfo, Set<TopicPartition>> endPointMap = new HashMap<>();
         for (Map.Entry<UUID, Set<String>> entry : consumersByClient.entrySet()) {
             UUID processId = entry.getKey();
             Set<String> consumers = entry.getValue();
@@ -420,11 +420,11 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                     String endPoint = consumerEndPointMap.get(processId);
                     if (endPoint != null) {
                         final String[] hostPort = endPoint.split(":");
-                        final HostState hostState = new HostState(hostPort[0], Integer.valueOf(hostPort[1]));
-                        if (!endPointMap.containsKey(hostState)) {
-                            endPointMap.put(hostState, new HashSet<TopicPartition>());
+                        final HostInfo hostInfo = new HostInfo(hostPort[0], Integer.valueOf(hostPort[1]));
+                        if (!endPointMap.containsKey(hostInfo)) {
+                            endPointMap.put(hostInfo, new HashSet<TopicPartition>());
                         }
-                        final Set<TopicPartition> topicPartitions = endPointMap.get(hostState);
+                        final Set<TopicPartition> topicPartitions = endPointMap.get(hostInfo);
                         topicPartitions.add(partition.partition);
                     }
                 }
@@ -457,13 +457,13 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         private final String consumer;
         private final List<TaskId> active;
         private final Map<TaskId, Set<TopicPartition>> standby;
-        private final Map<HostState, Set<TopicPartition>> endPointMap;
+        private final Map<HostInfo, Set<TopicPartition>> endPointMap;
         private final List<TopicPartition> activePartitions;
 
         AssignmentDetail(final String consumer,
                          final List<TaskId> active,
                          final Map<TaskId, Set<TopicPartition>> standby,
-                         final Map<HostState, Set<TopicPartition>> endPointMap,
+                         final Map<HostInfo, Set<TopicPartition>> endPointMap,
                          final List<TopicPartition> activePartitions) {
             this.consumer = consumer;
 
@@ -513,14 +513,10 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
         }
         this.partitionToTaskIds = partitionToTaskIds;
-        setPartitionsByHostState(info.partitionsByHostState);
+        this.partitionsByHostState = info.partitionsByHostState;
     }
 
-    private synchronized void setPartitionsByHostState(final Map<HostState, Set<TopicPartition>> partitionsByHostState) {
-        this.partitionsByHostState = partitionsByHostState;
-    }
-
-    public synchronized Map<HostState, Set<TopicPartition>> getPartitionsByHostState() {
+    public Map<HostInfo, Set<TopicPartition>> getPartitionsByHostState() {
         return Collections.unmodifiableMap(partitionsByHostState);
     }
 

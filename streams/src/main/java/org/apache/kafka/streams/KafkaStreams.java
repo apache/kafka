@@ -28,15 +28,14 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
-import org.apache.kafka.streams.processor.internals.HostStateToTaskMetadata;
+import org.apache.kafka.streams.processor.internals.KafkaStreamsInstances;
 import org.apache.kafka.streams.processor.internals.StreamThread;
-import org.apache.kafka.streams.state.HostState;
-import org.apache.kafka.streams.state.TaskMetadata;
+import org.apache.kafka.streams.state.KafkaStreamsInstance;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -227,71 +226,71 @@ public class KafkaStreams {
 
 
     /**
-     * Find all of the {@link HostState}s and their associated {@link TaskMetadata} in a {@link KafkaStreams application}
+     * Find all of the instances of {@link KafkaStreamsInstance} in a {@link KafkaStreams application}
      * Note: this is a point in time view and it may change due to partition reassignment.
-     * @return  all the {@link HostState}s in a {@link KafkaStreams} application and their corresponding
-     *          {@link TaskMetadata}
+     * @return collection containing all instances of {@link KafkaStreamsInstance} in this application
      */
-    public Map<HostState, TaskMetadata> getAllTasks() {
+    public Collection<KafkaStreamsInstance> getAllTasks() {
         validateIsRunning();
-        final HostStateToTaskMetadata hostStateToTaskMetadata
-                = new HostStateToTaskMetadata(threads[0].getPartitionsByHostState(), builder);
-        return hostStateToTaskMetadata.getAllTasks();
+        final KafkaStreamsInstances instances
+                = new KafkaStreamsInstances(threads[0].getPartitionsByHostState(), builder);
+        return instances.getAllStreamsInstances();
     }
 
 
     /**
-     * Find all of the {@link HostState}s and their associated {@link TaskMetadata} for a given storeName
+     * Find the instances {@link KafkaStreamsInstance} for a given storeName
      * Note: this is a point in time view and it may change due to partition reassignment.
      * @param storeName the storeName to find metadata for
-     * @return  A map containing {@link HostState} and {@link TaskMetadata} for the provided storeName
+     * @return  A collection containing instances of {@link KafkaStreamsInstance} that have the provided storeName
      */
-    public Map<HostState, TaskMetadata> getAllTasksWithStore(final String storeName) {
+    public Collection<KafkaStreamsInstance> getAllInstancesWithStore(final String storeName) {
         validateIsRunning();
-        final HostStateToTaskMetadata hostStateToTaskMetadata
-                = new HostStateToTaskMetadata(threads[0].getPartitionsByHostState(), builder);
-        return hostStateToTaskMetadata.getAllTasksWithStore(storeName);
+        final KafkaStreamsInstances instances
+                = new KafkaStreamsInstances(threads[0].getPartitionsByHostState(), builder);
+        return instances.getAllStreamsInstancesWithStore(storeName);
     }
 
     /**
-     * Find the {@link HostState} and its associated {@link TaskMetadata} for a
-     * given storeName and key. The key may not exist in the {@link org.apache.kafka.streams.processor.StateStore},
+     * Find the {@link KafkaStreamsInstance} for a given storeName and key.
+     * Note: the key may not exist in the {@link org.apache.kafka.streams.processor.StateStore},
      * this method provides a way of finding which host it would exist on.
      * Note: this is a point in time view and it may change due to partition reassignment.
      * @param storeName         Name of the store
      * @param key               Key to use to for partition
      * @param keySerializer     Serializer for the key
      * @param <K>               key type
-     * @return  The {@link HostState} with its associated {@link TaskMetadata} for the storeName and key
+     * @return  The {@link KafkaStreamsInstance} for the storeName and key
      */
-    public <K> Map<HostState, TaskMetadata> getTaskWithKey(final String storeName,
-                                                           final K key,
-                                                           final Serializer<K> keySerializer) {
+    public <K> KafkaStreamsInstance getInstanceWithKey(final String storeName,
+                                           final K key,
+                                           final Serializer<K> keySerializer) {
         validateIsRunning();
-        final HostStateToTaskMetadata hostStateToTaskMetadata
-                = new HostStateToTaskMetadata(threads[0].getPartitionsByHostState(), builder);
-        return hostStateToTaskMetadata.getTaskWithKey(storeName, key, keySerializer);
+        final KafkaStreamsInstances instances
+                = new KafkaStreamsInstances(threads[0].getPartitionsByHostState(), builder);
+        return instances.getStreamsInstanceWithKey(storeName, key, keySerializer);
     }
 
     /**
-     * Find the {@link HostState} and its associated {@link TaskMetadata} for a
-     * given storeName and key. Note: the key may not exist in the {@link org.apache.kafka.streams.processor.StateStore},
+     * Find the {@link KafkaStreamsInstance} for a given storeName and key.
+     * Note: the key may not exist in the {@link org.apache.kafka.streams.processor.StateStore},
      * this method provides a way of finding which host it would exist on.
      * Note: this is a point in time view and it may change due to partition reassignment.
      * @param storeName         Name of the store
      * @param key               Key to use to for partition
-     * @param keySerializer     Serializer for the key
+     * @param partitioner       Partitioner for the store
      * @param <K>               key type
-     * @return  The {@link HostState} with its associated {@link TaskMetadata} for the storeName and key
+     * @return  The {@link KafkaStreamsInstance} for the storeName and key
      */
-    public <K> Map<HostState, TaskMetadata> getTaskWithKey(final String storeName,
-                                                           final K key,
-                                                           final StreamPartitioner<K, ?> partitioner) {
+    public <K> KafkaStreamsInstance getInstanceWithKey(final String storeName,
+                                                       final K key,
+                                                       final StreamPartitioner<K, ?> partitioner) {
         validateIsRunning();
-        final HostStateToTaskMetadata hostStateToTaskMetadata
-                = new HostStateToTaskMetadata(threads[0].getPartitionsByHostState(), builder);
-        return hostStateToTaskMetadata.getTaskWithKey(storeName, key, partitioner);
+        final KafkaStreamsInstances instances
+                = new KafkaStreamsInstances(threads[0].getPartitionsByHostState(), builder);
+        return instances.getStreamsInstanceWithKey(storeName, key, partitioner);
     }
+
 
     private void validateIsRunning() {
         if (state != RUNNING) {
