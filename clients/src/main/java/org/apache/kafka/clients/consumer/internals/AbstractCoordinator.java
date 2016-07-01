@@ -23,8 +23,8 @@ import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.SpecificMetrics;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
@@ -105,7 +105,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                String groupId,
                                int sessionTimeoutMs,
                                int heartbeatIntervalMs,
-                               SpecificMetrics metrics,
+                               Metrics metrics,
                                AbstractCoordinatorMetrics metricRegistry,
                                Time time,
                                long retryBackoffMs) {
@@ -690,7 +690,7 @@ public abstract class AbstractCoordinator implements Closeable {
         public final Sensor joinLatency;
         public final Sensor syncLatency;
 
-        public GroupCoordinatorMetrics(SpecificMetrics metrics, AbstractCoordinatorMetrics metricRegistry) {
+        public GroupCoordinatorMetrics(Metrics metrics, AbstractCoordinatorMetrics metricRegistry) {
             this.heartbeatLatency = metrics.sensor("heartbeat-latency");
             this.heartbeatLatency.add(metrics.metricInstance(metricRegistry.heartbeatResponseTimeMax), new Max());
             this.heartbeatLatency.add(metrics.metricInstance(metricRegistry.heartbeatRate), new Rate(new Count()));

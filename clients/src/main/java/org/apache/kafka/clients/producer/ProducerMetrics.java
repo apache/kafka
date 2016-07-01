@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Set;
 
 import org.apache.kafka.common.MetricNameTemplate;
-import org.apache.kafka.common.metrics.SpecificMetrics;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.SelectorMetricsRegistry;
 
 public class ProducerMetrics {
@@ -39,7 +39,7 @@ public class ProducerMetrics {
         Set<String> tags = new HashSet<>();
         tags.add("client-id");
         ProducerMetrics metrics = new ProducerMetrics(tags, "producer");
-        System.out.println(SpecificMetrics.toHtmlTable("kafka.producer", metrics.getAllTemplates()));
+        System.out.println(Metrics.toHtmlTable("kafka.producer", metrics.getAllTemplates()));
     }
 
 }

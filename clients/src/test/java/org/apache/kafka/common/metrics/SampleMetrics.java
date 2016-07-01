@@ -18,7 +18,7 @@ import java.util.List;
 import org.apache.kafka.common.MetricNameTemplate;
 
 /**
- * A registry of predefined Metrics for the SpecificMetricsTest.java class.
+ * A registry of predefined Metrics for the MetricsTest.java class.
  */
 public class SampleMetrics {
 
@@ -115,7 +115,7 @@ public class SampleMetrics {
     );
 
     public static void main(String[] args) {
-        System.out.println(SpecificMetrics.toHtmlTable("sample.domain", ALL_METRICS));
+        System.out.println(Metrics.toHtmlTable("sample.domain", ALL_METRICS));
         
     }
 }

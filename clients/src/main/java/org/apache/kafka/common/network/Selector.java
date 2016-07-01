@@ -35,9 +35,9 @@ import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.SpecificMetrics;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
@@ -103,7 +103,7 @@ public class Selector implements Selectable {
     /**
      * Create a new nioSelector
      */
-    public Selector(int maxReceiveSize, long connectionMaxIdleMs, SpecificMetrics metrics, Time time, SelectorMetricsRegistry metricsRegistry, Map<String, String> metricTags, boolean metricsPerConnection, ChannelBuilder channelBuilder) {
+    public Selector(int maxReceiveSize, long connectionMaxIdleMs, Metrics metrics, Time time, SelectorMetricsRegistry metricsRegistry, Map<String, String> metricTags, boolean metricsPerConnection, ChannelBuilder channelBuilder) {
         try {
             this.nioSelector = java.nio.channels.Selector.open();
         } catch (IOException e) {
@@ -130,7 +130,7 @@ public class Selector implements Selectable {
         this.metricsPerConnection = metricsPerConnection;
     }
 
-    public Selector(long connectionMaxIdleMS, SpecificMetrics metrics, Time time, SelectorMetricsRegistry metricsRegistry, ChannelBuilder channelBuilder) {
+    public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, SelectorMetricsRegistry metricsRegistry, ChannelBuilder channelBuilder) {
         this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricsRegistry, new HashMap<String, String>(), true, channelBuilder);
     }
 
@@ -568,7 +568,7 @@ public class Selector implements Selectable {
 
 
     private class SelectorMetrics {
-        private final SpecificMetrics metrics;
+        private final Metrics metrics;
         
         public final Sensor connectionClosed;
         public final Sensor connectionCreated;
@@ -584,7 +584,7 @@ public class Selector implements Selectable {
 
         private SelectorMetricsRegistry metricsRegistry;
 
-        public SelectorMetrics(SpecificMetrics metrics, SelectorMetricsRegistry metricsRegistry) {
+        public SelectorMetrics(Metrics metrics, SelectorMetricsRegistry metricsRegistry) {
             this.metricsRegistry = metricsRegistry;
             
             this.metrics = metrics;

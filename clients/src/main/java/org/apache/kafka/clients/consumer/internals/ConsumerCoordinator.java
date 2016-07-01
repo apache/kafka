@@ -31,8 +31,8 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.TopicConstants;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.SpecificMetrics;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
@@ -86,7 +86,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                List<PartitionAssignor> assignors,
                                Metadata metadata,
                                SubscriptionState subscriptions,
-                               SpecificMetrics metrics,
+                               Metrics metrics,
                                ConsumerCoordinatorMetricsRegistry metricsRegistry,
                                Time time,
                                long retryBackoffMs,
@@ -666,7 +666,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private class ConsumerCoordinatorMetrics {
         public final Sensor commitLatency;
 
-        public ConsumerCoordinatorMetrics(SpecificMetrics metrics, ConsumerCoordinatorMetricsRegistry metricsRegistry) {
+        public ConsumerCoordinatorMetrics(Metrics metrics, ConsumerCoordinatorMetricsRegistry metricsRegistry) {
             this.commitLatency = metrics.sensor("commit-latency");
             this.commitLatency.add(metrics.metricInstance(metricsRegistry.commitLatencyAvg), new Avg());
             this.commitLatency.add(metrics.metricInstance(metricsRegistry.commitLatencyMax), new Max());

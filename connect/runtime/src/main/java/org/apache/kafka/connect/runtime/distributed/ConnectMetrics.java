@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Set;
 
 import org.apache.kafka.common.MetricNameTemplate;
-import org.apache.kafka.common.metrics.SpecificMetrics;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.SelectorMetricsRegistry;
 
 public class ConnectMetrics {
@@ -44,7 +44,7 @@ public class ConnectMetrics {
         Set<String> tags = new HashSet<>();
         tags.add("client-id");
         ConnectMetrics metrics = new ConnectMetrics(tags, "connect");
-        System.out.println(SpecificMetrics.toHtmlTable("kafka.connect", metrics.getAllTemplates()));
+        System.out.println(Metrics.toHtmlTable("kafka.connect", metrics.getAllTemplates()));
 
     }
 

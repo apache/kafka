@@ -24,7 +24,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 
-import org.apache.kafka.common.metrics.SpecificMetrics;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.security.ssl.SslFactory;
@@ -39,7 +39,7 @@ import org.junit.Test;
  */
 public class SslSelectorTest extends SelectorTest {
 
-    private SpecificMetrics metrics;
+    private Metrics metrics;
     private Map<String, Object> sslClientConfigs;
 
     @Before
@@ -54,7 +54,7 @@ public class SslSelectorTest extends SelectorTest {
         sslClientConfigs = TestSslUtils.createSslConfig(false, false, Mode.CLIENT, trustStoreFile, "client");
         this.channelBuilder = new SslChannelBuilder(Mode.CLIENT);
         this.channelBuilder.configure(sslClientConfigs);
-        this.metrics = new SpecificMetrics();
+        this.metrics = new Metrics();
         this.selector = new Selector(5000, metrics, time, new SelectorMetricsRegistry("MetricGroup"), channelBuilder);
     }
 

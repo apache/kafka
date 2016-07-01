@@ -13,14 +13,10 @@
 package org.apache.kafka.common.metrics;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
 
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.utils.Time;
 
 /**
@@ -47,10 +43,6 @@ public class SpecificMetrics extends Metrics {
 
     }
 
-    public MetricName metricInstance(MetricNameTemplate template, String... keyValue) {
-        return metricInstance(template, getTags(keyValue));
-    }
-
     private static Map<String, String> getTags(String... keyValue) {
         if ((keyValue.length % 2) != 0)
             throw new IllegalArgumentException("keyValue needs to be specified in pairs");
@@ -59,21 +51,6 @@ public class SpecificMetrics extends Metrics {
         for (int i = 0; i < keyValue.length; i += 2)
             tags.put(keyValue[i], keyValue[i + 1]);
         return tags;
-    }
-
-    public MetricName metricInstance(MetricNameTemplate template, Map<String, String> tags) {
-        // check to make sure that the runtime defined tags contain all the template tags.
-        Set<String> runtimeTagKeys = new HashSet<>(tags.keySet());
-        runtimeTagKeys.addAll(config().tags().keySet());
-        
-        Set<String> templateTagKeys = template.tags();
-        
-        if (!runtimeTagKeys.equals(templateTagKeys)) {
-            throw new IllegalArgumentException("For '" + template.name() + "', runtime-defined metric tags do not match compile-time defined metric tags. " + ""
-                    + "Runtime = " + runtimeTagKeys.toString() + " Compile-time = " + templateTagKeys.toString());
-        }
-                
-        return super.metricName(template.name(), template.group(), template.description(), tags);
     }
 
     /**
@@ -115,64 +92,6 @@ public class SpecificMetrics extends Metrics {
     public MetricName metricName(String name, String group, Map<String, String> tags) {
         // TODO Auto-generated method stub
         return super.metricName(name, group, tags);
-    }
-
-    public static String toHtmlTable(String domain, List<MetricNameTemplate> allMetrics) {
-        Map<String, Map<String, String>> beansAndAttributes = new HashMap<String, Map<String, String>>();
-
-        try (Metrics metrics = new Metrics()) {
-            for (MetricNameTemplate template : allMetrics) {
-                Map<String, String> tags = new HashMap<String, String>();
-                for (String s : template.tags()) {
-                    tags.put(s, "{" + s + "}");
-                }
-
-                MetricName metricName = metrics.metricName(template.name(), template.group(), template.description(), tags);
-                String mBeanName = JmxReporter.getMBeanName(domain, metricName);
-                if (!beansAndAttributes.containsKey(mBeanName)) {
-                    beansAndAttributes.put(mBeanName, new HashMap<String, String>());
-                }
-                Map<String, String> attrAndDesc = beansAndAttributes.get(mBeanName);
-                if (!attrAndDesc.containsKey(template.name())) {
-                    attrAndDesc.put(template.name(), template.description());
-                } else {
-                    throw new IllegalArgumentException("mBean '" + mBeanName + "' attribute '" + template.name() + "' is defined twice.");
-                }
-            }
-        }
-        
-        StringBuilder b = new StringBuilder();
-        b.append("<table class=\"data-table\"><tbody>\n");
-        b.append("<tr>\n");
-        b.append("<th>Mbean name</th>\n");
-        b.append("<th>Attribute name</th>\n");
-        b.append("<th>Description</th>\n");
-        b.append("</tr>\n");
-
-        for (Entry<String, Map<String, String>> e : beansAndAttributes.entrySet()) {
-            b.append("<tr>\n");
-            b.append("<td colspan=3>");
-            b.append(e.getKey());
-            b.append("</td>");
-            b.append("</tr>\n");
-
-            for (Entry<String, String> e2 : e.getValue().entrySet()) {
-                b.append("<tr>\n");
-                b.append("<td></td>");
-                b.append("<td>");
-                b.append(e2.getKey());
-                b.append("</td>");
-                b.append("<td>");
-                b.append(e2.getValue());
-                b.append("</td>");
-                b.append("</tr>\n");
-            }
-
-        }
-        b.append("</tbody></table>");
-
-        return b.toString();
-
     }
 
 }

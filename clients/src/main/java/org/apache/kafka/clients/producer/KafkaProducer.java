@@ -44,10 +44,10 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.SpecificMetrics;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.record.CompressionType;
@@ -139,7 +139,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final Metadata metadata;
     private final RecordAccumulator accumulator;
     private final Sender sender;
-    private final SpecificMetrics metrics;
+    private final Metrics metrics;
     private final Thread ioThread;
     private final CompressionType compressionType;
     private final Sensor errors;
@@ -221,7 +221,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             List<MetricsReporter> reporters = config.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
                     MetricsReporter.class);
             reporters.add(new JmxReporter(JMX_PREFIX));
-            this.metrics = new SpecificMetrics(metricConfig, reporters, time);
+            this.metrics = new Metrics(metricConfig, reporters, time);
             
             ProducerMetrics metricsRegistry = new ProducerMetrics(metricTags.keySet(), "producer");
             

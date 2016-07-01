@@ -20,7 +20,7 @@ import java.util.Set;
 import org.apache.kafka.clients.consumer.internals.ConsumerCoordinatorMetricsRegistry;
 import org.apache.kafka.clients.consumer.internals.FetcherMetricsRegistry;
 import org.apache.kafka.common.MetricNameTemplate;
-import org.apache.kafka.common.metrics.SpecificMetrics;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.SelectorMetricsRegistry;
 
 public class ConsumerMetrics {
@@ -51,6 +51,6 @@ public class ConsumerMetrics {
         Set<String> tags = new HashSet<>();
         tags.add("client-id");
         ConsumerMetrics metrics = new ConsumerMetrics(tags, "consumer");
-        System.out.println(SpecificMetrics.toHtmlTable("kafka.consumer", metrics.getAllTemplates()));
+        System.out.println(Metrics.toHtmlTable("kafka.consumer", metrics.getAllTemplates()));
     }
 }

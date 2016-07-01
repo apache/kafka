@@ -21,6 +21,7 @@ import static org.junit.Assert.fail;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -449,6 +450,58 @@ public class MetricsTest {
                 ((Rate) km.measurable()).windowSize(cfg, time.milliseconds()) / 1000, EPS);
     }
 
+    @Test
+    public void testMetricInstances() {
+        MetricName n1 = metrics.metricInstance(SampleMetrics.METRIC1, "key1", "value1", "key2", "value2");
+        Map<String, String> tags = new HashMap<String, String>();
+        tags.put("key1", "value1");
+        tags.put("key2", "value2");
+        MetricName n2 = metrics.metricInstance(SampleMetrics.METRIC2, tags);
+        assertEquals("metric names created in two different ways should be equal", n1, n2);
+
+        try {
+            metrics.metricInstance(SampleMetrics.METRIC1, "key1");
+            fail("Creating MetricName with an odd number of keyValue should fail");
+        } catch (IllegalArgumentException e) {
+            // this is expected
+        }
+        
+        Map<String, String> parentTagsWithValues = new LinkedHashMap<>();
+        parentTagsWithValues.put("parent-tag", "parent-tag-value");
+
+        Map<String, String> childTagsWithValues = new LinkedHashMap<>();
+        childTagsWithValues.put("child-tag", "child-tag-value");
+
+        try (Metrics inherited = new Metrics(new MetricConfig().tags(parentTagsWithValues), Arrays.asList((MetricsReporter) new JmxReporter()), time, true)) {
+            MetricName inheritedMetric = inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, childTagsWithValues);
+
+            Map<String, String> filledOutTags = inheritedMetric.tags();
+            assertEquals("parent-tag should be set properly", filledOutTags.get("parent-tag"), "parent-tag-value");
+            assertEquals("child-tag should be set properly", filledOutTags.get("child-tag"), "child-tag-value");
+
+            try {
+                inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, parentTagsWithValues);
+                fail("Creating MetricName should fail if the child metrics are not defined at runtime");
+            } catch (IllegalArgumentException e) {
+                // this is expected
+            }
+
+            try {
+
+                Map<String, String> runtimeTags = new LinkedHashMap<>();
+                runtimeTags.put("child-tag", "child-tag-value");
+                runtimeTags.put("tag-not-in-template", "unexpected-value");
+
+                inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, runtimeTags);
+                fail("Creating MetricName should fail if there is a tag at runtime that is not in the template");
+            } catch (IllegalArgumentException e) {
+                // this is expected
+            }
+        }
+
+    }
+
+    
     public static class ConstantMeasurable implements Measurable {
         public double value = 0.0;
 

@@ -30,8 +30,8 @@ import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.SpecificMetrics;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
@@ -101,7 +101,7 @@ public class Fetcher<K, V> {
                    Deserializer<V> valueDeserializer,
                    Metadata metadata,
                    SubscriptionState subscriptions,
-                   SpecificMetrics metrics,
+                   Metrics metrics,
                    FetcherMetricsRegistry metricsRegistry,
                    Time time, long retryBackoffMs) {
 
@@ -709,7 +709,7 @@ public class Fetcher<K, V> {
     }
 
     private class FetchManagerMetrics {
-        public final SpecificMetrics metrics;
+        public final Metrics metrics;
 
         public final Sensor bytesFetched;
         public final Sensor recordsFetched;
@@ -719,7 +719,7 @@ public class Fetcher<K, V> {
 
         private FetcherMetricsRegistry metricsRegistry;
 
-        public FetchManagerMetrics(SpecificMetrics metrics, FetcherMetricsRegistry metricsRegistry) {
+        public FetchManagerMetrics(Metrics metrics, FetcherMetricsRegistry metricsRegistry) {
             this.metrics = metrics;
             this.metricsRegistry = metricsRegistry;
 

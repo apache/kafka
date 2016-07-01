@@ -29,7 +29,7 @@ import javax.net.ssl.SSLEngine;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.security.ssl.SslFactory;
-import org.apache.kafka.common.metrics.SpecificMetrics;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.config.types.Password;
@@ -61,7 +61,7 @@ public class SslTransportLayerTest {
         sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
         this.channelBuilder = new SslChannelBuilder(Mode.CLIENT);
         this.channelBuilder.configure(sslClientConfigs);
-        this.selector = new Selector(5000, new SpecificMetrics(), new MockTime(), new SelectorMetricsRegistry("MetricGroup"), channelBuilder);
+        this.selector = new Selector(5000, new Metrics(), new MockTime(), new SelectorMetricsRegistry("MetricGroup"), channelBuilder);
     }
 
     @After
@@ -397,7 +397,7 @@ public class SslTransportLayerTest {
 
         };
         this.channelBuilder.configure(sslClientConfigs);
-        this.selector = new Selector(5000, new SpecificMetrics(), new MockTime(), new SelectorMetricsRegistry("MetricGroup"), channelBuilder);
+        this.selector = new Selector(5000, new Metrics(), new MockTime(), new SelectorMetricsRegistry("MetricGroup"), channelBuilder);
     }
     
     /**

@@ -51,11 +51,11 @@ public class SpecificMetricsTest {
     private static final double EPS = 0.000001;
     private MockTime time = new MockTime();
     private MetricConfig config = new MetricConfig();
-    private SpecificMetrics metrics;
+    private Metrics metrics;
 
     @Before
     public void setup() {
-        this.metrics = new SpecificMetrics(config, Arrays.asList((MetricsReporter) new JmxReporter()), time, true);
+        this.metrics = new Metrics(config, Arrays.asList((MetricsReporter) new JmxReporter()), time, true);
     }
 
     @After
@@ -85,7 +85,7 @@ public class SpecificMetricsTest {
         Map<String, String> childTagsWithValues = new LinkedHashMap<>();
         childTagsWithValues.put("child-tag", "child-tag-value");
         
-        SpecificMetrics inherited = new SpecificMetrics(new MetricConfig().tags(parentTagsWithValues), Arrays.asList((MetricsReporter) new JmxReporter()), time, true);
+        Metrics inherited = new Metrics(new MetricConfig().tags(parentTagsWithValues), Arrays.asList((MetricsReporter) new JmxReporter()), time, true);
         
         MetricName inheritedMetric = inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, childTagsWithValues);
         
