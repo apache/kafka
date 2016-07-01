@@ -72,6 +72,11 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
   @volatile private var logCleanLastRun : Long = System.currentTimeMillis
   newGauge("log-clean-last-run", new Gauge[Long] { def value = logCleanLastRun })
 
+  /* a gauge for tracking the number of logs remaining to clean. A non zero value indicates
+   * that the cleaner has not been successful. */
+  @volatile private var logCleanerLogsToClean  = 0
+  newGauge("log-clean-logs-to-clean", new Gauge[Int] { def value = logCleanerLogsToClean })
+
   /**
    * @return the position processed for all logs.
    */
@@ -118,6 +123,7 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
       } else {
         val filthiest = cleanableLogs.max
         inProgress.put(filthiest.topicPartition, LogCleaningInProgress)
+        this.logCleanerLogsToClean = this.logCleanerLogsToClean + 1
         Some(filthiest)
       }
     }
@@ -248,5 +254,12 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
           throw new IllegalStateException("In-progress partition %s cannot be in %s state.".format(topicAndPartition, s))
       }
     }
+  }
+  /**
+   * Decrement logCleanerLogsToClean count once the log is cleaned.
+   */
+  def successfulClean() {
+    this.logCleanerLogsToClean = this.logCleanerLogsToClean - 1
+
   }
 }
