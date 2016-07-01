@@ -230,7 +230,7 @@ public class KafkaStreams {
      * Note: this is a point in time view and it may change due to partition reassignment.
      * @return collection containing all instances of {@link KafkaStreamsInstance} in this application
      */
-    public Collection<KafkaStreamsInstance> getAllTasks() {
+    public Collection<KafkaStreamsInstance> getAllInstances() {
         validateIsRunning();
         final KafkaStreamsInstances instances
                 = new KafkaStreamsInstances(threads[0].getPartitionsByHostState(), builder);

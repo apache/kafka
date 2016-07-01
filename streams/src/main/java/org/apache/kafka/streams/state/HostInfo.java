@@ -23,7 +23,7 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 /**
  * Represents a user defined endpoint in a {@link org.apache.kafka.streams.KafkaStreams} application.
  * Instances of this class can be obtained by calling one of:
- *  {@link KafkaStreams#getAllTasks()}
+ *  {@link KafkaStreams#getAllInstances()}
  *  {@link KafkaStreams#getAllInstancesWithStore(String)}
  *  {@link KafkaStreams#getInstanceWithKey(String, Object, StreamPartitioner)}
  *  {@link KafkaStreams#getInstanceWithKey(String, Object, Serializer)}

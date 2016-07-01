@@ -109,7 +109,7 @@ public class KafkaStreamsTest {
     @Test(expected = IllegalStateException.class)
     public void shouldNotGetAllTasksWhenNotRunning() throws Exception {
         KafkaStreams streams = createKafkaStreams();
-        streams.getAllTasks();
+        streams.getAllInstances();
     }
 
     @Test(expected = IllegalStateException.class)
