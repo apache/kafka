@@ -91,12 +91,25 @@ public interface KStream<K, V> {
     <V1> KStream<K, V1> mapValues(ValueMapper<V, V1> mapper);
 
     /**
-     * Print the elements of this stream to System.out
+     * Print the elements of this stream to System.out.  This function
+     * will use the generated name of the parent processor node to label the key/value pairs
+     * printed out to the console.
      *
      * Implementors will need to override toString for keys and values that are not of
      * type String, Integer etc to get meaningful information.
      */
     void print();
+
+    /**
+     * Print the elements of this stream to System.out.  This function
+     * will use the given name to label the key/value printed out to the console.
+     *
+     * @param streamName the name used to label the key/value pairs printed out to the console
+     *
+     * Implementors will need to override toString for keys and values that are not of
+     * type String, Integer etc to get meaningful information.
+     */
+    void print(String streamName);
 
 
     /**
@@ -106,11 +119,12 @@ public interface KStream<K, V> {
      *                 if not specified the default serde defined in the configs will be used
      * @param valSerde value serde used to send key-value pairs,
      *                 if not specified the default serde defined in the configs will be used
+     * @param streamName the name used to label the key/value pairs printed out to the console
      *
-     *                 Implementors will need to override toString for keys and values that are not of
-     *                 type String, Integer etc to get meaningful information.
+     * Implementors will need to override toString for keys and values that are not of
+     * type String, Integer etc to get meaningful information.
      */
-    void print(Serde<K> keySerde, Serde<V> valSerde);
+    void print(Serde<K> keySerde, Serde<V> valSerde, String streamName);
 
 
     /**

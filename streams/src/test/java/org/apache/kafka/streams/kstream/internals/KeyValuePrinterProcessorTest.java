@@ -57,10 +57,34 @@ public class KeyValuePrinterProcessorTest {
     @Test
     public void testPrintKeyValueDefaultSerde() throws Exception {
 
-        KeyValuePrinter<String, String> keyValuePrinter = new KeyValuePrinter<>(printStream);
+        KeyValuePrinter<String, String> keyValuePrinter = new KeyValuePrinter<>(printStream, null);
         String[] suppliedKeys = {"foo", "bar", null};
         String[] suppliedValues = {"value1", "value2", "value3"};
         String[] expectedValues = {"foo , value1", "bar , value2", "null , value3"};
+
+
+        KStream<String, String> stream = builder.stream(stringSerde, stringSerde, topicName);
+        stream.process(keyValuePrinter);
+
+        driver = new KStreamTestDriver(builder);
+        for (int i = 0; i < suppliedKeys.length; i++) {
+            driver.process(topicName, suppliedKeys[i], suppliedValues[i]);
+        }
+
+        String[] capturedValues = new String(baos.toByteArray(), Charset.forName("UTF-8")).split("\n");
+
+        for (int i = 0; i < capturedValues.length; i++) {
+            assertEquals(capturedValues[i], expectedValues[i]);
+        }
+    }
+
+    @Test
+    public void testPrintKeyValuesWithName() throws Exception {
+
+        KeyValuePrinter<String, String> keyValuePrinter = new KeyValuePrinter<>(printStream, "test-stream");
+        String[] suppliedKeys = {"foo", "bar", null};
+        String[] suppliedValues = {"value1", "value2", "value3"};
+        String[] expectedValues = {"[test-stream]: foo , value1", "[test-stream]: bar , value2", "[test-stream]: null , value3"};
 
 
         KStream<String, String> stream = builder.stream(stringSerde, stringSerde, topicName);
@@ -83,7 +107,7 @@ public class KeyValuePrinterProcessorTest {
     public void testPrintKeyValueWithProvidedSerde() throws Exception {
 
         Serde<MockObject> mockObjectSerde = Serdes.serdeFrom(new MockSerializer(), new MockDeserializer());
-        KeyValuePrinter<String, MockObject> keyValuePrinter = new KeyValuePrinter<>(printStream, stringSerde, mockObjectSerde);
+        KeyValuePrinter<String, MockObject> keyValuePrinter = new KeyValuePrinter<>(printStream, stringSerde, mockObjectSerde, null);
         KStream<String, MockObject> stream = builder.stream(stringSerde, mockObjectSerde, topicName);
 
         stream.process(keyValuePrinter);

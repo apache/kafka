@@ -137,7 +137,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     @Override
     public void print(Serde<K> keySerde, Serde<V> valSerde) {
         String name = topology.newName(PRINTING_NAME);
-        topology.addProcessor(name, new KeyValuePrinter<>(keySerde, valSerde), this.name);
+        topology.addProcessor(name, new KeyValuePrinter<>(keySerde, valSerde, this.name), this.name);
     }
 
 
@@ -154,7 +154,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         String name = topology.newName(PRINTING_NAME);
         try {
             PrintStream printStream = new PrintStream(new FileOutputStream(filePath));
-            topology.addProcessor(name, new KeyValuePrinter<>(printStream, keySerde, valSerde), this.name);
+            topology.addProcessor(name, new KeyValuePrinter<>(printStream, keySerde, valSerde, null), this.name);
         } catch (FileNotFoundException e) {
             String message = "Unable to write stream to file at [" + filePath + "] " + e.getMessage();
             throw new TopologyBuilderException(message);
