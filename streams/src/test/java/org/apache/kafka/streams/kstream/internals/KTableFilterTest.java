@@ -258,30 +258,29 @@ public class KTableFilterTest {
         driver.process(topic1, "C", 1);
 
         proc1.checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
-        proc2.checkEmptyAndClearProcessResult(); // we got nothing since all inputs are odd or filtered out
+        proc2.checkEmptyAndClearProcessResult();
 
         driver.process(topic1, "A", 2);
         driver.process(topic1, "B", 2);
 
         proc1.checkAndClearProcessResult("A:(2<-1)", "B:(2<-1)");
-        proc2.checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)"); // we are informed of 2 making it in for both A and B
+        proc2.checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
 
         driver.process(topic1, "A", 3);
 
         proc1.checkAndClearProcessResult("A:(3<-2)");
-        proc2.checkAndClearProcessResult("A:(null<-2)"); // no change for B but A is deleted
+        proc2.checkAndClearProcessResult("A:(null<-2)");
 
         driver.process(topic1, "A", null);
         driver.process(topic1, "B", null);
 
         proc1.checkAndClearProcessResult("A:(null<-3)", "B:(null<-2)");
-        proc2.checkAndClearProcessResult("B:(null<-2)");  // B is deleted from source Table1
+        proc2.checkAndClearProcessResult("B:(null<-2)");
     }
 
     @Test
     public void testSkipNullOnMaterialization() throws IOException {
-        // do not explicitly set enableSendingOldValues, which is considered a cheat. Let a further downstream stateful operator trigger it instead.
-        // This test may well need review/deletion with future materialization changes, should materialization occur more frequently for instance.
+        // Do not explicitly set enableSendingOldValues. Let a further downstream stateful operator trigger it instead.
         KStreamBuilder builder = new KStreamBuilder();
 
         String topic1 = "topic1";
@@ -320,6 +319,6 @@ public class KTableFilterTest {
         driver.process(topic1, "C", "reject");
 
         proc1.checkAndClearProcessResult("A:(reject<-null)", "B:(reject<-null)", "C:(reject<-null)");
-        proc2.checkEmptyAndClearProcessResult(); // we got nothing since no input matches (though enableSendingOldValues is not set by test on table2 explicitly)
+        proc2.checkEmptyAndClearProcessResult();
     }
 }
