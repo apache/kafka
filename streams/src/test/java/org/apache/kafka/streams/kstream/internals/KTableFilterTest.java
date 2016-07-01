@@ -25,8 +25,7 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -292,12 +291,8 @@ public class KTableFilterTest {
                 public boolean test(String key, String value) {
                     return value.equalsIgnoreCase("accept");
                 }
-            }).groupBy(new KeyValueMapper<String, String, KeyValue<String, String>>() {
-                @Override
-                public KeyValue<String, String> apply(String first, String second) {
-                    return new KeyValue<>(first, first);
-                }
-            }).reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, "mock-result");
+            }).groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper())
+            .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, "mock-result");
 
         MockProcessorSupplier<String, String> proc1 = new MockProcessorSupplier<>();
         MockProcessorSupplier<String, String> proc2 = new MockProcessorSupplier<>();
