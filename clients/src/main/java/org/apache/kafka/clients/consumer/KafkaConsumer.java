@@ -854,8 +854,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
         acquire();
         try {
-            if (pattern == null || pattern.pattern().equals("^\\s*$"))
-                throw new IllegalArgumentException("Topic pattern cannot be null or empty");
+            if (pattern == null)
+                throw new IllegalArgumentException("Topic pattern cannot be null");
             log.debug("Subscribed to pattern: {}", pattern);
             this.subscriptions.subscribe(pattern, listener);
             this.metadata.needMetadataForAllTopics(true);
