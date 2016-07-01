@@ -1,5 +1,7 @@
 package org.apache.kafka.common.network;
 
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -74,6 +76,34 @@ public class SelectorMetricsRegistry {
         this.nodeRequestLatencyAvg = new MetricNameTemplate("request-latency-avg", nodeGroupName, "The average request latency in ms", nodeGroupTags);
         this.nodeRequestLatencyMax = new MetricNameTemplate("request-latency-max", nodeGroupName, "The maximum request latency in ms", nodeGroupTags);
 
+    }
+
+
+    public Collection<? extends MetricNameTemplate> getAllTemplates() {
+        return Arrays.asList(this.connectionCloseRate,
+                this.connectionCreationRate,
+                this.networkIORate,
+                this.outgoingByteRate,
+                this.requestRate,
+                this.requestSizeAvg,
+                this.requestSizeMax,
+                this.incomingByteRate,
+                this.responseRate,
+                this.selectRate,
+                this.ioWaitTimeNsAvg,
+                this.ioWaitRatio,
+                this.ioTimeNsAvg,
+                this.ioRatio,
+                this.connectionCount,
+                this.nodeOutgoingByteRate,
+                this.nodeRequestRate,
+                this.nodeRequestSizeAvg,
+                this.nodeRequestSizeMax,
+                this.nodeIncomingByteRate,
+                this.nodeResponseRate,
+                this.nodeRequestLatencyAvg,
+                this.nodeRequestLatencyMax
+            );
     }
 
 }

@@ -42,7 +42,8 @@ public class ConsumerMetrics {
     private List<MetricNameTemplate> getAllTemplates() {
         List<MetricNameTemplate> l = new ArrayList<>();
         l.addAll(this.fetcherMetrics.getAllTemplates());
-        l.addAll(consumerCoordinatorMetrics.getAllTemplates());
+        l.addAll(this.consumerCoordinatorMetrics.getAllTemplates());
+        l.addAll(this.selectorMetrics.getAllTemplates());
         return l;
     }
 

@@ -23,6 +23,7 @@ public class ConnectMetrics {
     private List<MetricNameTemplate> getAllTemplates() {
         List<MetricNameTemplate> l = new ArrayList<>();
         l.addAll(this.coordinatorMetrics.getAllTemplates());
+        l.addAll(this.selectorMetrics.getAllTemplates());
         return l;
     }
 

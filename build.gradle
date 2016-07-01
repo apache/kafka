@@ -502,9 +502,16 @@ project(':core') {
     standardOutput = new File(generatedDocsDir, "consumer_metrics.html").newOutputStream()
   }
 
+  task genProducerMetricsDocs(type: JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    main = 'org.apache.kafka.clients.producer.ProducerMetrics'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "producer_metrics.html").newOutputStream()
+  }
+
   task siteDocsTar(dependsOn: ['genProtocolErrorDocs', 'genProtocolApiKeyDocs', 'genProtocolMessageDocs',
                                'genProducerConfigDocs', 'genConsumerConfigDocs', 'genKafkaConfigDocs',
-                               'genConsumerMetricsDocs', ':connect:runtime:genConnectMetricsDocs',
+                               'genConsumerMetricsDocs', 'genProducerMetricsDocs', ':connect:runtime:genConnectMetricsDocs',
                                ':connect:runtime:genConnectConfigDocs', ':streams:genStreamsConfigDocs' ], type: Tar) {
     classifier = 'site-docs'
     compression = Compression.GZIP
