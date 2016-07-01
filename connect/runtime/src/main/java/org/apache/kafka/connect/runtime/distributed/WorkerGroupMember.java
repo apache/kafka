@@ -94,7 +94,7 @@ public class WorkerGroupMember {
 
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config.values());
             NetworkClient netClient = new NetworkClient(
-                    new Selector(config.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder),
+                    new Selector(config.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricsRegistry.selectorMetrics, channelBuilder),
                     this.metadata,
                     clientId,
                     100, // a fixed large enough value will suffice

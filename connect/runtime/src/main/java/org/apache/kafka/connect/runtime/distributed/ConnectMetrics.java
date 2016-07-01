@@ -7,13 +7,17 @@ import java.util.Set;
 
 import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.metrics.SpecificMetrics;
+import org.apache.kafka.common.network.SelectorMetricsRegistry;
 
 public class ConnectMetrics {
 
     public WorkerCoordinatorMetricsRegistry coordinatorMetrics;
+    public SelectorMetricsRegistry selectorMetrics;
 
     public ConnectMetrics(Set<String> tags, String metricGrpPrefix) {
         this.coordinatorMetrics = new WorkerCoordinatorMetricsRegistry(tags, metricGrpPrefix);
+        this.selectorMetrics = new SelectorMetricsRegistry(tags, metricGrpPrefix);
+
     }
     
     private List<MetricNameTemplate> getAllTemplates() {
