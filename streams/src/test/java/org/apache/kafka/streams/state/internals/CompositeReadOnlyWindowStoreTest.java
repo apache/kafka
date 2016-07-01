@@ -53,7 +53,7 @@ public class CompositeReadOnlyWindowStoreTest {
 
 
         windowStore = new CompositeReadOnlyWindowStore<>(
-            new UnderlyingStoreProvider(Arrays.<StateStoreProvider>asList(stubProviderOne, stubProviderTwo)),
+            new WrappingStoreProvider(Arrays.<StateStoreProvider>asList(stubProviderOne, stubProviderTwo)),
                 QueryableStoreTypes.<String, String>windowStore(),
                 storeName);
     }

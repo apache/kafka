@@ -12,12 +12,11 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
-package org.apache.kafka.streams;
+package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.StateStoreProvider;
-import org.apache.kafka.streams.state.internals.UnderlyingStoreProvider;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -25,11 +24,11 @@ import java.util.List;
 /**
  * A wrapper over all of the {@link StateStoreProvider}s in a Topology
  */
-class QueryableStoreProvider {
+public class QueryableStoreProvider {
 
     private final List<StateStoreProvider> storeProviders;
 
-    QueryableStoreProvider(final List<StateStoreProvider> storeProviders) {
+    public QueryableStoreProvider(final List<StateStoreProvider> storeProviders) {
         this.storeProviders = new ArrayList<>(storeProviders);
     }
 
@@ -50,7 +49,7 @@ class QueryableStoreProvider {
             return null;
         }
         return queryableStoreType.create(
-                new UnderlyingStoreProvider(storeProviders),
+                new WrappingStoreProvider(storeProviders),
                 storeName);
     }
 }

@@ -12,7 +12,7 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
-package org.apache.kafka.streams;
+package org.apache.kafka.streams.state.internals;
 
 
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -22,7 +22,6 @@ import org.apache.kafka.streams.state.NoOpWindowStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.StateStoreProvider;
-import org.apache.kafka.streams.state.internals.StateStoreProviderStub;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -31,7 +30,7 @@ import java.util.Collections;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
-public class QueryableStoreTypeProviderTest {
+public class QueryableStoreProviderTest {
 
     private final String keyValueStore = "key-value";
     private final String windowStore = "window-store";

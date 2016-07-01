@@ -31,15 +31,15 @@ import java.util.NoSuchElementException;
  * @param <K> key type
  * @param <V> value type
  */
-public class CompositeReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V> {
+public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueStore<K, V> {
 
     private final StateStoreProvider storeProvider;
     private final QueryableStoreType<ReadOnlyKeyValueStore<K, V>> storeType;
     private final String storeName;
 
-    public CompositeReadOnlyStore(final StateStoreProvider storeProvider,
-                                  final QueryableStoreType<ReadOnlyKeyValueStore<K, V>> storeType,
-                                  final String storeName) {
+    public CompositeReadOnlyKeyValueStore(final StateStoreProvider storeProvider,
+                                          final QueryableStoreType<ReadOnlyKeyValueStore<K, V>> storeType,
+                                          final String storeName) {
         this.storeProvider = storeProvider;
         this.storeType = storeType;
         this.storeName = storeName;

@@ -30,12 +30,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-public class CompositeReadOnlyStoreTest {
+public class CompositeReadOnlyKeyValueStoreTest {
 
     private final String storeName = "my-store";
     private StateStoreProviderStub stubProviderTwo;
     private KeyValueStore<String, String> stubOneUnderlying;
-    private CompositeReadOnlyStore<String, String> theStore;
+    private CompositeReadOnlyKeyValueStore<String, String> theStore;
     private KeyValueStore<String, String>
         otherUnderlyingStore;
 
@@ -44,13 +44,13 @@ public class CompositeReadOnlyStoreTest {
         final StateStoreProviderStub stubProviderOne = new StateStoreProviderStub();
         stubProviderTwo = new StateStoreProviderStub();
 
-        stubOneUnderlying = new TestKeyValueStore<>(storeName);
+        stubOneUnderlying = new InMemoryKeyValueStore<>(storeName);
         stubProviderOne.addStore(storeName, stubOneUnderlying);
-        otherUnderlyingStore = new TestKeyValueStore<>(storeName);
+        otherUnderlyingStore = new InMemoryKeyValueStore<>(storeName);
         stubProviderOne.addStore("other-store", otherUnderlyingStore);
 
-        theStore = new CompositeReadOnlyStore<>(
-            new UnderlyingStoreProvider(Arrays.<StateStoreProvider>asList(stubProviderOne, stubProviderTwo)),
+        theStore = new CompositeReadOnlyKeyValueStore<>(
+            new WrappingStoreProvider(Arrays.<StateStoreProvider>asList(stubProviderOne, stubProviderTwo)),
                                         QueryableStoreTypes.<String, String>keyValueStore(),
                                         storeName);
     }
@@ -76,7 +76,7 @@ public class CompositeReadOnlyStoreTest {
     public void shouldFindValueForKeyWhenMultiStores() throws Exception {
         final KeyValueStore<String, String>
             cache =
-            new TestKeyValueStore<>(storeName);
+            new InMemoryKeyValueStore<>(storeName);
         stubProviderTwo.addStore(storeName, cache);
 
         cache.put("key-two", "key-two-value");
@@ -102,7 +102,7 @@ public class CompositeReadOnlyStoreTest {
     public void shouldSupportRangeAcrossMultipleKVStores() throws Exception {
         final KeyValueStore<String, String>
             cache =
-            new TestKeyValueStore<>(storeName);
+            new InMemoryKeyValueStore<>(storeName);
         stubProviderTwo.addStore(storeName, cache);
 
         stubOneUnderlying.put("a", "a");
@@ -125,7 +125,7 @@ public class CompositeReadOnlyStoreTest {
     public void shouldSupportAllAcrossMultipleStores() throws Exception {
         final KeyValueStore<String, String>
             cache =
-            new TestKeyValueStore<>(storeName);
+            new InMemoryKeyValueStore<>(storeName);
         stubProviderTwo.addStore(storeName, cache);
 
         stubOneUnderlying.put("a", "a");
@@ -162,8 +162,8 @@ public class CompositeReadOnlyStoreTest {
         noStores().all();
     }
 
-    private CompositeReadOnlyStore<Object, Object> noStores() {
-        return new CompositeReadOnlyStore<>(new UnderlyingStoreProvider(Collections.<StateStoreProvider>emptyList()),
+    private CompositeReadOnlyKeyValueStore<Object, Object> noStores() {
+        return new CompositeReadOnlyKeyValueStore<>(new WrappingStoreProvider(Collections.<StateStoreProvider>emptyList()),
                 QueryableStoreTypes.keyValueStore(), storeName);
     }
 }

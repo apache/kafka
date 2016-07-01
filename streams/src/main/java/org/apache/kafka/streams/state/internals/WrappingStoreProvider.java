@@ -22,18 +22,24 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Provides access to {@link org.apache.kafka.streams.processor.StateStore}s accepted
- * by {@link QueryableStoreType#accepts(StateStore)}
- * @param <T>
+ * Provides a wrapper over multiple underlying {@link StateStoreProvider}s
  */
-public class UnderlyingStoreProvider implements StateStoreProvider {
+public class WrappingStoreProvider implements StateStoreProvider {
 
     private final List<StateStoreProvider> storeProviders;
 
-    public UnderlyingStoreProvider(final List<StateStoreProvider> storeProviders) {
+    public WrappingStoreProvider(final List<StateStoreProvider> storeProviders) {
         this.storeProviders = storeProviders;
     }
 
+    /**
+     * Provides access to {@link org.apache.kafka.streams.processor.StateStore}s accepted
+     * by {@link QueryableStoreType#accepts(StateStore)}
+     * @param storeName  name of the store
+     * @param type      The {@link QueryableStoreType}
+     * @param <T>       The type of the Store, for example, {@link org.apache.kafka.streams.state.ReadOnlyKeyValueStore}
+     * @return  a List of all the stores with the storeName and are accepted by {@link QueryableStoreType#accepts(StateStore)}
+     */
     public <T> List<T> getStores(final String storeName, QueryableStoreType<T> type) {
         final List<T> allStores = new ArrayList<>();
         for (StateStoreProvider provider : storeProviders) {

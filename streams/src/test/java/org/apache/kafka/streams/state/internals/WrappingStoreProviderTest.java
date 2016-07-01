@@ -31,28 +31,28 @@ import java.util.List;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.windowStore;
 import static org.junit.Assert.assertEquals;
 
-public class UnderlyingStoreProviderTest {
+public class WrappingStoreProviderTest {
 
-    private UnderlyingStoreProvider underlyingStoreProvider;
+    private WrappingStoreProvider wrappingStoreProvider;
 
     @Before
     public void before() {
         final StateStoreProviderStub stubProviderOne = new StateStoreProviderStub();
         final StateStoreProviderStub stubProviderTwo = new StateStoreProviderStub();
 
-        stubProviderOne.addStore("kv", new TestKeyValueStore<String, String>("kv"));
+        stubProviderOne.addStore("kv", new InMemoryKeyValueStore<String, String>("kv"));
         stubProviderOne.addStore("window", new NoOpWindowStore());
-        stubProviderTwo.addStore("kv", new TestKeyValueStore<String, String>("kv"));
+        stubProviderTwo.addStore("kv", new InMemoryKeyValueStore<String, String>("kv"));
         stubProviderTwo.addStore("window", new NoOpWindowStore());
 
-        underlyingStoreProvider = new UnderlyingStoreProvider(
+        wrappingStoreProvider = new WrappingStoreProvider(
                 Arrays.<StateStoreProvider>asList(stubProviderOne, stubProviderTwo));
     }
 
     @Test
     public void shouldFindKeyValueStores() throws Exception {
         List<ReadOnlyKeyValueStore<String, String>> results =
-                underlyingStoreProvider.getStores("kv", QueryableStoreTypes.<String, String>keyValueStore());
+                wrappingStoreProvider.getStores("kv", QueryableStoreTypes.<String, String>keyValueStore());
         assertEquals(2, results.size());
     }
 
@@ -60,12 +60,12 @@ public class UnderlyingStoreProviderTest {
     public void shouldFindWindowStores() throws Exception {
         final List<ReadOnlyWindowStore<Object, Object>>
                 windowStores =
-                underlyingStoreProvider.getStores("window", windowStore());
+                wrappingStoreProvider.getStores("window", windowStore());
         assertEquals(2, windowStores.size());
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfNoStoreOfTypeFound() throws Exception {
-        underlyingStoreProvider.getStores("doesn't exist", QueryableStoreTypes.keyValueStore());
+        wrappingStoreProvider.getStores("doesn't exist", QueryableStoreTypes.keyValueStore());
     }
 }

@@ -26,12 +26,12 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.TreeMap;
 
-class TestKeyValueStore<K, V> implements KeyValueStore<K, V> {
+class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private final TreeMap<K, V> map = new TreeMap<>();
     private final String name;
     private boolean open = true;
 
-    TestKeyValueStore(final String name) {
+    InMemoryKeyValueStore(final String name) {
         this.name = name;
     }
 

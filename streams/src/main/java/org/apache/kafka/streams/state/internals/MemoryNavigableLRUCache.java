@@ -20,34 +20,13 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.NavigableSet;
-import java.util.TreeSet;
+import java.util.TreeMap;
 
 public class MemoryNavigableLRUCache<K, V> extends MemoryLRUCache<K, V> {
 
     public MemoryNavigableLRUCache(String name, final int maxCacheSize) {
-        super();
-
-        this.name = name;
-        this.keys = new TreeSet<>();
-
-        // leave room for one extra entry to handle adding an entry before the oldest can be removed
-        this.map = new LinkedHashMap<K, V>(maxCacheSize + 1, 1.01f, true) {
-            private static final long serialVersionUID = 1L;
-
-            @Override
-            protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
-                if (size() > maxCacheSize) {
-                    K key = eldest.getKey();
-                    keys.remove(key);
-                    if (listener != null) listener.apply(key, eldest.getValue());
-                    return true;
-                }
-                return false;
-            }
-        };
+        super(name, maxCacheSize);
     }
 
     @Override
@@ -60,12 +39,23 @@ public class MemoryNavigableLRUCache<K, V> extends MemoryLRUCache<K, V> {
     @SuppressWarnings("unchecked")
     @Override
     public KeyValueIterator<K, V> range(K from, K to) {
-        return new MemoryNavigableLRUCache.CacheIterator<K, V>(((NavigableSet) this.keys).subSet(from, true, to, false).iterator(), this.map);
+        final TreeMap<K, V> treeMap = toTreeMap();
+        return new MemoryNavigableLRUCache.CacheIterator<K, V>(treeMap.navigableKeySet().subSet(from, true, to, false).iterator(), treeMap);
     }
 
     @Override
-    public KeyValueIterator<K, V> all() {
-        return new MemoryNavigableLRUCache.CacheIterator<K, V>(this.keys.iterator(), this.map);
+    public  KeyValueIterator<K, V> all() {
+        final TreeMap<K, V> treeMap = toTreeMap();
+        return new MemoryNavigableLRUCache.CacheIterator<K, V>(treeMap.navigableKeySet().iterator(), treeMap);
+    }
+
+    private TreeMap<K, V> toTreeMap() {
+        lock.readLock().lock();
+        try {
+            return new TreeMap<>(this.map);
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     private static class CacheIterator<K, V> implements KeyValueIterator<K, V> {
@@ -91,8 +81,7 @@ public class MemoryNavigableLRUCache<K, V> extends MemoryLRUCache<K, V> {
 
         @Override
         public void remove() {
-            keys.remove();
-            entries.remove(lastKey);
+            // do nothing
         }
 
         @Override

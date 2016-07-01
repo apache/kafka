@@ -29,7 +29,7 @@ import org.apache.kafka.streams.processor.StateStore;
 public interface QueryableStoreType<T> {
 
     /**
-     * Called when searching for {@StateStore}s to see if they
+     * Called when searching for {@link StateStore}s to see if they
      * match the type expected by implementors of this interface
      * @param stateStore    The stateStore
      * @return true if it is a match
@@ -38,7 +38,7 @@ public interface QueryableStoreType<T> {
 
     /**
      * Create an instance of T (usually a facade) that developers can use
-     * to query the Underlying {@StateStore}s
+     * to query the underlying {@link StateStore}s
      * @param storeProvider     provides access to all the underlying StateStore instances
      * @param storeName         The name of the Store
      * @return  T usually a read-only interface over a StateStore @see {@link QueryableStoreTypes.KeyValueStoreType}

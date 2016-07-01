@@ -15,7 +15,7 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.internals.CompositeReadOnlyStore;
+import org.apache.kafka.streams.state.internals.CompositeReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlyWindowStore;
 
 /**
@@ -68,13 +68,12 @@ public class QueryableStoreTypes {
         @Override
         public ReadOnlyKeyValueStore<K, V> create(final StateStoreProvider storeProvider,
                                                   final String storeName) {
-            return new CompositeReadOnlyStore<>(storeProvider, this, storeName);
+            return new CompositeReadOnlyKeyValueStore<>(storeProvider, this, storeName);
         }
 
     }
 
-    private static class WindowStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlyWindowStore<K,
-            V>> {
+    private static class WindowStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlyWindowStore<K, V>> {
         WindowStoreType() {
             super(ReadOnlyWindowStore.class);
         }

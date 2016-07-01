@@ -712,7 +712,7 @@ public class RocksDBWindowStoreTest {
                 assertEquals(2, fetchedCount);
 
                 assertEquals(
-                        Utils.mkSet(inner.segmentName(1L), inner.segmentName(2L), inner.segmentName(3L)),
+                        Utils.mkSet(inner.segmentName(1L), inner.segmentName(3L)),
                         segmentDirs(baseDir)
                 );
 
@@ -728,7 +728,7 @@ public class RocksDBWindowStoreTest {
                 assertEquals(1, fetchedCount);
 
                 assertEquals(
-                        Utils.mkSet(inner.segmentName(3L), inner.segmentName(4L), inner.segmentName(5L)),
+                        Utils.mkSet(inner.segmentName(3L), inner.segmentName(5L)),
                         segmentDirs(baseDir)
                 );
 

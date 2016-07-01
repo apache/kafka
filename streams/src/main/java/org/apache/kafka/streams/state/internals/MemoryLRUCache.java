@@ -23,11 +23,10 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * An in-memory LRU cache store based on HashSet and HashMap.
@@ -48,18 +47,15 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
         void apply(K key, V value);
     }
 
-    protected String name;
+    protected final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+    private String name;
     protected Map<K, V> map;
-    protected Set<K> keys;
+    private volatile boolean open = true;
 
     protected EldestEntryRemovalListener<K, V> listener;
 
-    // this is used for extended MemoryNavigableLRUCache only
-    public MemoryLRUCache() {}
-
     public MemoryLRUCache(String name, final int maxCacheSize) {
         this.name = name;
-        this.keys = new HashSet<>();
 
         // leave room for one extra entry to handle adding an entry before the oldest can be removed
         this.map = new LinkedHashMap<K, V>(maxCacheSize + 1, 1.01f, true) {
@@ -69,7 +65,6 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
             protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
                 if (size() > maxCacheSize) {
                     K key = eldest.getKey();
-                    keys.remove(key);
                     if (listener != null) listener.apply(key, eldest.getValue());
                     return true;
                 }
@@ -106,18 +101,27 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public boolean isOpen() {
-        return true;
+        return open;
     }
 
     @Override
-    public V get(K key) {
-        return this.map.get(key);
+    public  V get(K key) {
+        lock.readLock().lock();
+        try {
+            return this.map.get(key);
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     @Override
     public void put(K key, V value) {
-        this.map.put(key, value);
-        this.keys.add(key);
+        lock.writeLock().lock();
+        try {
+            this.map.put(key, value);
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     @Override
@@ -137,9 +141,13 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public V delete(K key) {
-        V value = this.map.remove(key);
-        this.keys.remove(key);
-        return value;
+        lock.writeLock().lock();
+        try {
+            V value = this.map.remove(key);
+            return value;
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     /**
@@ -170,6 +178,10 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void close() {
-        // do-nothing since it is in-memory
+        open = false;
+    }
+
+    public int size() {
+        return this.map.size();
     }
 }

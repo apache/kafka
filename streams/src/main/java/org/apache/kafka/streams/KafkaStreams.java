@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.apache.kafka.streams.state.internals.QueryableStoreProvider;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.StateStoreProvider;
 import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProvider;
@@ -243,7 +244,7 @@ public class KafkaStreams {
 
     private void validateIsRunning() {
         if (state != RUNNING) {
-            throw new IllegalStateException("KafkaStreams has not been started");
+            throw new IllegalStateException("KafkaStreams is not running");
         }
     }
 
