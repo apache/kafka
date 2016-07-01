@@ -112,7 +112,7 @@ public class KTableImplTest {
 
         assertEquals(Utils.mkList("A:01", "B:02", "C:03", "D:04"), proc1.processed);
         assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4"), proc2.processed);
-        assertEquals(Utils.mkList("B:2", "D:4"), proc3.processed);
+        assertEquals(Utils.mkList("A:null", "B:2", "C:null", "D:4"), proc3.processed);
         assertEquals(Utils.mkList("A:01", "B:02", "C:03", "D:04"), proc4.processed);
     }
 
