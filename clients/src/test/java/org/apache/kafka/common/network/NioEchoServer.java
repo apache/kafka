@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.SpecificMetrics;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.utils.MockTime;
 
@@ -50,7 +50,7 @@ public class NioEchoServer extends Thread {
         this.socketChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
         this.newChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
         ChannelBuilder channelBuilder = ChannelBuilders.create(securityProtocol, Mode.SERVER, LoginType.SERVER, configs, null, true);
-        this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder);
+        this.selector = new Selector(5000, new SpecificMetrics(), new MockTime(), new SelectorMetricsRegistry("MetricGroup"), channelBuilder);
         setName("echoserver");
         setDaemon(true);
         acceptorThread = new AcceptorThread();

@@ -21,15 +21,18 @@ import org.apache.kafka.clients.consumer.internals.ConsumerCoordinatorMetricsReg
 import org.apache.kafka.clients.consumer.internals.FetcherMetricsRegistry;
 import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.metrics.SpecificMetrics;
+import org.apache.kafka.common.network.SelectorMetricsRegistry;
 
 public class ConsumerMetrics {
     
     public FetcherMetricsRegistry fetcherMetrics;
     public ConsumerCoordinatorMetricsRegistry consumerCoordinatorMetrics;
+    public SelectorMetricsRegistry selectorMetrics;
     
     public ConsumerMetrics(Set<String> metricsTags, String metricGrpPrefix) {
         this.fetcherMetrics = new FetcherMetricsRegistry(metricsTags);
         this.consumerCoordinatorMetrics = new ConsumerCoordinatorMetricsRegistry(metricsTags, metricGrpPrefix);
+        this.selectorMetrics = new SelectorMetricsRegistry(metricsTags, metricGrpPrefix);
     }
 
     public ConsumerMetrics(String metricGroupPrefix) {

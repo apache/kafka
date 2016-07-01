@@ -22,7 +22,7 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.nio.ByteBuffer;
 
-import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.SpecificMetrics;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -43,7 +43,7 @@ public class SelectorTest {
     protected Time time;
     protected Selector selector;
     protected ChannelBuilder channelBuilder;
-    private Metrics metrics;
+    private SpecificMetrics metrics;
 
     @Before
     public void setUp() throws Exception {
@@ -53,8 +53,8 @@ public class SelectorTest {
         this.time = new MockTime();
         this.channelBuilder = new PlaintextChannelBuilder();
         this.channelBuilder.configure(configs);
-        this.metrics = new Metrics();
-        this.selector = new Selector(5000, this.metrics, time, "MetricGroup", channelBuilder);
+        this.metrics = new SpecificMetrics();
+        this.selector = new Selector(5000, this.metrics, time, new SelectorMetricsRegistry("MetricGroup"), channelBuilder);
     }
 
     @After
