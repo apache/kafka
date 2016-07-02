@@ -106,7 +106,7 @@ public final class RecordAccumulator {
         this.retryBackoffMs = retryBackoffMs;
         this.batches = new CopyOnWriteMap<>();
         String metricGrpName = "producer-metrics";
-        this.free = new BufferPool(totalSize, batchSize, metrics, time, metricGrpName);
+        this.free = new BufferPool(totalSize, batchSize, metrics, time, metricsRegistry.bufferPoolMetrics);
         this.incomplete = new IncompleteRecordBatches();
         this.muted = new HashSet<>();
         this.time = time;
