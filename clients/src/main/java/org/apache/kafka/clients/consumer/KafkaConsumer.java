@@ -800,7 +800,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 this.unsubscribe();
             } else {
                 for (String topic : topics) {
-                    if (topic == null || topic.trim().equals(""))
+                    if (topic == null || topic.trim().isEmpty())
                         throw new IllegalArgumentException("Topic collection cannot contain null or empty topic");
                 }
                 log.debug("Subscribed to topic(s): {}", Utils.join(topics, ", "));
@@ -898,7 +898,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             Set<String> topics = new HashSet<>();
             for (TopicPartition tp : partitions) {
                 String topic = (tp != null) ? tp.topic() : null;
-                if (topic == null || topic.trim().equals(""))
+                if (topic == null || topic.trim().isEmpty())
                     throw new IllegalArgumentException("Topic partitions cannot have null or empty topic");
                 topics.add(topic);
             }

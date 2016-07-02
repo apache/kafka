@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
+import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
@@ -62,6 +63,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Pattern;
 
 import static java.util.Collections.singleton;
 import static org.junit.Assert.assertEquals;
@@ -127,7 +129,6 @@ public class KafkaConsumerTest {
         } finally {
             consumer.close();
         }
-
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -140,7 +141,18 @@ public class KafkaConsumerTest {
         } finally {
             consumer.close();
         }
+    }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void testSubscriptionOnNullPattern() {
+        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
+        Pattern pattern = null;
+
+        try {
+            consumer.subscribe(pattern, new NoOpConsumerRebalanceListener());
+        } finally {
+            consumer.close();
+        }
     }
 
     @Test(expected = IllegalArgumentException.class)
