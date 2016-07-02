@@ -13,8 +13,8 @@
 package org.apache.kafka.common.network;
 
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import org.apache.kafka.common.MetricNameTemplate;
@@ -91,7 +91,7 @@ public class SelectorMetricsRegistry {
     }
 
 
-    public Collection<? extends MetricNameTemplate> getAllTemplates() {
+    public List<MetricNameTemplate> getAllTemplates() {
         return Arrays.asList(this.connectionCloseRate,
                 this.connectionCreationRate,
                 this.networkIORate,
