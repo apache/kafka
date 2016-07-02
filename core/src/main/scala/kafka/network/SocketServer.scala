@@ -399,7 +399,7 @@ private[kafka] class Processor(val id: Int,
     connectionsMaxIdleMs,
     metrics,
     time,
-    new SelectorMetricsRegistry(metrics.config().tags().keySet(), "socket-server"),
+    new SelectorMetricsRegistry(metricTags.keySet(), "socket-server"),
     metricTags,
     false,
     ChannelBuilders.create(protocol, Mode.SERVER, LoginType.SERVER, channelConfigs, null, true))
