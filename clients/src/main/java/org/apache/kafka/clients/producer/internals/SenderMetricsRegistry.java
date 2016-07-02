@@ -21,7 +21,6 @@ import org.apache.kafka.common.MetricNameTemplate;
 
 public class SenderMetricsRegistry {
 
-    private String metricGrpName;
     public MetricNameTemplate batchSizeAvg;
     public MetricNameTemplate batchSizeMax;
     public MetricNameTemplate compressionRateAvg;
@@ -39,14 +38,18 @@ public class SenderMetricsRegistry {
     public MetricNameTemplate recordSizeAvg;
     public MetricNameTemplate requestsInFlight;
     public MetricNameTemplate metadataAge;
+    public MetricNameTemplate topicRecordSendRate;
+    public MetricNameTemplate topicByteRate;
+    public MetricNameTemplate topicCompressionRate;
+    public MetricNameTemplate topicRecordRetryRate;
+    public MetricNameTemplate topicRecordErrorRate;
 
     public SenderMetricsRegistry() {
         this(new HashSet<String>());
     }
 
     public SenderMetricsRegistry(Set<String> tags) {
-        // TODO Auto-generated constructor stub
-        this.metricGrpName = "producer-metrics";
+        String metricGrpName = "producer-metrics";
         
         this.batchSizeAvg = new MetricNameTemplate("batch-size-avg", metricGrpName, "The average number of bytes sent per partition per-request.", tags);
         this.batchSizeMax = new MetricNameTemplate("batch-size-max", metricGrpName, "The max number of bytes sent per partition per-request.", tags);
@@ -66,6 +69,15 @@ public class SenderMetricsRegistry {
         this.requestsInFlight = new MetricNameTemplate("requests-in-flight", metricGrpName, "The current number of in-flight requests awaiting a response.", tags);
         this.metadataAge = new MetricNameTemplate("metadata-age", metricGrpName, "The age in seconds of the current producer metadata being used.", tags);
 
+        String topicMetricGrpName = "producer-topic-metrics";
+        Set<String> topicTags = new HashSet<String>(tags);
+        topicTags.add("topic");
+
+        this.topicRecordSendRate = new MetricNameTemplate("record-send-rate", topicMetricGrpName, "The average number of records sent per second.", topicTags);
+        this.topicByteRate = new MetricNameTemplate("byte-rate", topicMetricGrpName, "The average number of bytes sent per second.", topicTags);
+        this.topicCompressionRate = new MetricNameTemplate("compression-rate", topicMetricGrpName, "The average compression rate of record batches.", topicTags);
+        this.topicRecordRetryRate = new MetricNameTemplate("record-retry-rate", topicMetricGrpName, "The average per-second number of retried record sends", topicTags);
+        this.topicRecordErrorRate = new MetricNameTemplate("record-error-rate", topicMetricGrpName, "The average per-second number of record sends that resulted in errors", topicTags);
 
     }
 
@@ -86,7 +98,15 @@ public class SenderMetricsRegistry {
                 this.recordSizeMax,
                 this.recordSizeAvg,
                 this.requestsInFlight,
-                this.metadataAge);
+                this.metadataAge,
+                
+                // per-topic metrics
+                this.topicRecordSendRate,
+                this.topicByteRate,
+                this.topicCompressionRate,
+                this.topicRecordRetryRate,
+                this.topicRecordErrorRate
+                );
     }
 
 }
