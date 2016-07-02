@@ -86,7 +86,7 @@ class ReplicaFetcherThread(name: String,
       brokerConfig.connectionsMaxIdleMs,
       metrics,
       time,
-      new SelectorMetricsRegistry("replica-fetcher"),
+      new SelectorMetricsRegistry(metrics.config().tags().keySet(), "replica-fetcher"),
       Map("broker-id" -> sourceBroker.id.toString, "fetcher-id" -> fetcherId.toString).asJava,
       false,
       channelBuilder

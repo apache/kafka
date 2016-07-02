@@ -336,7 +336,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
           config.connectionsMaxIdleMs,
           metrics,
           kafkaMetricsTime,
-          new SelectorMetricsRegistry("kafka-server-controlled-shutdown"),
+          new SelectorMetricsRegistry(metrics.config().tags().keySet(), "kafka-server-controlled-shutdown"),
           Map.empty.asJava,
           false,
           channelBuilder

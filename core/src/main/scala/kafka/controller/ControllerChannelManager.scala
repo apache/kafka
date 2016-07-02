@@ -102,7 +102,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
         config.connectionsMaxIdleMs,
         metrics,
         time,
-        new SelectorMetricsRegistry("controller-channel"),
+        new SelectorMetricsRegistry(metrics.config().tags().keySet(), "controller-channel"),
         Map("broker-id" -> broker.id.toString).asJava,
         false,
         channelBuilder

@@ -220,7 +220,7 @@ object AdminClient {
       DefaultConnectionMaxIdleMs,
       metrics,
       time,
-      new SelectorMetricsRegistry("admin"),
+      new SelectorMetricsRegistry(metrics.config().tags().keySet(), "admin"),
       channelBuilder)
 
     val networkClient = new NetworkClient(
