@@ -26,7 +26,7 @@ import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{ChannelBuilders, LoginType, Mode, NetworkReceive, Selectable, Selector}
+import org.apache.kafka.common.network.{ChannelBuilders, LoginType, Mode, NetworkReceive, Selectable, Selector, SelectorMetricsRegistry}
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.requests.{UpdateMetadataRequest, _}
 import org.apache.kafka.common.utils.Time
@@ -102,7 +102,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
         config.connectionsMaxIdleMs,
         metrics,
         time,
-        "controller-channel",
+        new SelectorMetricsRegistry("controller-channel"),
         Map("broker-id" -> broker.id.toString).asJava,
         false,
         channelBuilder

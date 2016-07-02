@@ -25,7 +25,7 @@ import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
 import org.apache.kafka.common.errors.DisconnectException
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.Selector
+import org.apache.kafka.common.network.{Selector, SelectorMetricsRegistry}
 import org.apache.kafka.common.protocol.types.Struct
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
@@ -220,7 +220,7 @@ object AdminClient {
       DefaultConnectionMaxIdleMs,
       metrics,
       time,
-      "admin",
+      new SelectorMetricsRegistry("admin"),
       channelBuilder)
 
     val networkClient = new NetworkClient(
