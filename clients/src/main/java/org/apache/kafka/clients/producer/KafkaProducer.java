@@ -296,6 +296,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     (short) parseAcks(config.getString(ProducerConfig.ACKS_CONFIG)),
                     config.getInt(ProducerConfig.RETRIES_CONFIG),
                     this.metrics,
+                    metricsRegistry.senderMetrics,
                     new SystemTime(),
                     clientId,
                     this.requestTimeoutMs);

@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Set;
 
 import org.apache.kafka.clients.producer.internals.RecordAccumulatorMetricsRegistry;
+import org.apache.kafka.clients.producer.internals.SenderMetricsRegistry;
 import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.SelectorMetricsRegistry;
@@ -26,16 +27,19 @@ public class ProducerMetrics {
 
     public SelectorMetricsRegistry selectorMetrics;
     public RecordAccumulatorMetricsRegistry recordAccumulatorMetrics;
+    public SenderMetricsRegistry senderMetrics;
 
     public ProducerMetrics(Set<String> tags, String metricGrpPrefix) {
         this.selectorMetrics = new SelectorMetricsRegistry(tags, metricGrpPrefix);
         this.recordAccumulatorMetrics = new RecordAccumulatorMetricsRegistry(tags);
+        this.senderMetrics = new SenderMetricsRegistry(tags);
     }
 
     private List<MetricNameTemplate> getAllTemplates() {
         List<MetricNameTemplate> l = new ArrayList<>();
         l.addAll(this.selectorMetrics.getAllTemplates());
         l.addAll(this.recordAccumulatorMetrics.getAllTemplates());
+        l.addAll(this.senderMetrics.getAllTemplates());
         return l;
     }
 

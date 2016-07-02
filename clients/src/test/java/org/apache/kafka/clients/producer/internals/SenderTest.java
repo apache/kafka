@@ -65,7 +65,7 @@ public class SenderTest {
     private Metrics metrics = null;
     private RecordAccumulator accumulator = null;
     private Sender sender = null;
-
+    
     @Before
     public void setup() {
         Map<String, String> metricTags = new LinkedHashMap<String, String>();
@@ -73,6 +73,7 @@ public class SenderTest {
         MetricConfig metricConfig = new MetricConfig().tags(metricTags);
         metrics = new Metrics(metricConfig, time);
         accumulator = new RecordAccumulator(batchSize, 1024 * 1024, CompressionType.NONE, 0L, 0L, metrics, new RecordAccumulatorMetricsRegistry(metricTags.keySet()), time);
+        SenderMetricsRegistry senderMetricsRegistry = new SenderMetricsRegistry(metricTags.keySet());
         sender = new Sender(client,
                             metadata,
                             this.accumulator,
@@ -81,6 +82,7 @@ public class SenderTest {
                             ACKS_ALL,
                             MAX_RETRIES,
                             metrics,
+                            senderMetricsRegistry,
                             time,
                             CLIENT_ID,
                             REQUEST_TIMEOUT);
@@ -141,6 +143,7 @@ public class SenderTest {
                                        ACKS_ALL,
                                        maxRetries,
                                        m,
+                                       new SenderMetricsRegistry(),
                                        time,
                                        "clientId",
                                        REQUEST_TIMEOUT);
@@ -194,6 +197,7 @@ public class SenderTest {
                 ACKS_ALL,
                 maxRetries,
                 m,
+                new SenderMetricsRegistry(),
                 time,
                 "clientId",
                 REQUEST_TIMEOUT);
