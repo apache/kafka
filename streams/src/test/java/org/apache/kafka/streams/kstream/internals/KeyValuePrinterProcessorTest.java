@@ -60,7 +60,7 @@ public class KeyValuePrinterProcessorTest {
         KeyValuePrinter<String, String> keyValuePrinter = new KeyValuePrinter<>(printStream, null);
         String[] suppliedKeys = {"foo", "bar", null};
         String[] suppliedValues = {"value1", "value2", "value3"};
-        String[] expectedValues = {"foo , value1", "bar , value2", "null , value3"};
+        String[] expectedValues = {"[null]: foo , value1", "[null]: bar , value2", "[null]: null , value3"};
 
 
         KStream<String, String> stream = builder.stream(stringSerde, stringSerde, topicName);
@@ -118,7 +118,7 @@ public class KeyValuePrinterProcessorTest {
         byte[] suppliedValue = "{\"name\":\"print\", \"label\":\"test\"}".getBytes(Charset.forName("UTF-8"));
 
         driver.process(topicName, suppliedKey, suppliedValue);
-        String expectedPrintedValue = "null , name:print label:test";
+        String expectedPrintedValue = "[null]: null , name:print label:test";
         String capturedValue = new String(baos.toByteArray(), Charset.forName("UTF-8")).trim();
 
         assertEquals(capturedValue, expectedPrintedValue);

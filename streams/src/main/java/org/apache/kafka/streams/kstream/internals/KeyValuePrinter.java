@@ -73,7 +73,7 @@ class KeyValuePrinter<K, V> implements ProcessorSupplier<K, V> {
             this.printStream = printStream;
             this.keySerde = keySerde;
             this.valueSerde = valueSerde;
-            this.streamName = (streamName == null) ? "" : "[" + streamName + "]: ";
+            this.streamName = streamName;
         }
 
         @Override
@@ -94,7 +94,7 @@ class KeyValuePrinter<K, V> implements ProcessorSupplier<K, V> {
             K keyToPrint = (K) maybeDeserialize(key, keySerde.deserializer());
             V valueToPrint = (V) maybeDeserialize(value, valueSerde.deserializer());
 
-            printStream.println(this.streamName + keyToPrint + " , " + valueToPrint);
+            printStream.println("[" + this.streamName + "]: " + keyToPrint + " , " + valueToPrint);
 
             this.processorContext.forward(key, value);
         }
