@@ -19,7 +19,7 @@ import java.util.Set;
 
 import org.apache.kafka.common.MetricNameTemplate;
 
-public class AbstractCoordinatorMetrics {
+public class AbstractCoordinatorMetricsRegistry {
 
     public MetricNameTemplate heartbeatResponseTimeMax;
     public MetricNameTemplate heartbeatRate;
@@ -31,11 +31,11 @@ public class AbstractCoordinatorMetrics {
     public MetricNameTemplate syncRate;
     public MetricNameTemplate lastHeartbeatSecondsAgo;
 
-    public AbstractCoordinatorMetrics(String metricGrpPrefix) {
+    public AbstractCoordinatorMetricsRegistry(String metricGrpPrefix) {
         this(new HashSet<String>(), metricGrpPrefix);
     }
     
-    public AbstractCoordinatorMetrics(Set<String> metricsTags, String metricGrpPrefix) {
+    public AbstractCoordinatorMetricsRegistry(Set<String> metricsTags, String metricGrpPrefix) {
         String groupName = metricGrpPrefix + "-coordinator-metrics";
         
         this.heartbeatResponseTimeMax = new MetricNameTemplate("heartbeat-response-time-max", groupName,

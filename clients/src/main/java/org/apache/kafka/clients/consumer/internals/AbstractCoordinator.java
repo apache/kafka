@@ -106,7 +106,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                int sessionTimeoutMs,
                                int heartbeatIntervalMs,
                                Metrics metrics,
-                               AbstractCoordinatorMetrics metricRegistry,
+                               AbstractCoordinatorMetricsRegistry metricRegistry,
                                Time time,
                                long retryBackoffMs) {
         this.client = client;
@@ -690,7 +690,7 @@ public abstract class AbstractCoordinator implements Closeable {
         public final Sensor joinLatency;
         public final Sensor syncLatency;
 
-        public GroupCoordinatorMetrics(Metrics metrics, AbstractCoordinatorMetrics metricRegistry) {
+        public GroupCoordinatorMetrics(Metrics metrics, AbstractCoordinatorMetricsRegistry metricRegistry) {
             this.heartbeatLatency = metrics.sensor("heartbeat-latency");
             this.heartbeatLatency.add(metrics.metricInstance(metricRegistry.heartbeatResponseTimeMax), new Max());
             this.heartbeatLatency.add(metrics.metricInstance(metricRegistry.heartbeatRate), new Rate(new Count()));

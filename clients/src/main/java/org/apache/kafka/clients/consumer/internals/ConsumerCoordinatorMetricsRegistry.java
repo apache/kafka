@@ -20,7 +20,7 @@ import java.util.Set;
 
 import org.apache.kafka.common.MetricNameTemplate;
 
-public class ConsumerCoordinatorMetricsRegistry extends AbstractCoordinatorMetrics {
+public class ConsumerCoordinatorMetricsRegistry extends AbstractCoordinatorMetricsRegistry {
 
     private String groupName;
     public MetricNameTemplate commitLatencyAvg;

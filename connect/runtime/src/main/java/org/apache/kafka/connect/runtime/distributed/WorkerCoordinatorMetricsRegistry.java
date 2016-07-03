@@ -18,11 +18,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import org.apache.kafka.clients.consumer.internals.AbstractCoordinatorMetrics;
+import org.apache.kafka.clients.consumer.internals.AbstractCoordinatorMetricsRegistry;
 import org.apache.kafka.common.MetricNameTemplate;
 
 public class WorkerCoordinatorMetricsRegistry
-        extends AbstractCoordinatorMetrics {
+        extends AbstractCoordinatorMetricsRegistry {
 
     public MetricNameTemplate assignedConnectors;
     public MetricNameTemplate assignedTasks;
