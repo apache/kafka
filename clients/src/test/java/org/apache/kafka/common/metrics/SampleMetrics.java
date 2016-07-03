@@ -12,9 +12,6 @@
  */
 package org.apache.kafka.common.metrics;
 
-import java.util.Arrays;
-import java.util.List;
-
 import org.apache.kafka.common.MetricNameTemplate;
 
 /**
@@ -26,15 +23,5 @@ public class SampleMetrics {
     public static final MetricNameTemplate METRIC2 = new MetricNameTemplate("name", "group", "The second metric used in testMetricName()", "key1", "key2");
 
     public static final MetricNameTemplate METRIC_WITH_INHERITED_TAGS = new MetricNameTemplate("inherited.tags", "group", "inherited.tags in testMetricName", "parent-tag", "child-tag");
-        
-    private static final List<MetricNameTemplate> ALL_METRICS = Arrays.asList(
-        METRIC1,
-        METRIC2,
-        METRIC_WITH_INHERITED_TAGS
-    );
-
-    public static void main(String[] args) {
-        System.out.println(Metrics.toHtmlTable("sample.domain", ALL_METRICS));
-        
-    }
 }
+
