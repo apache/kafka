@@ -15,9 +15,9 @@ package org.apache.kafka.common.config;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
-import org.apache.kafka.common.metrics.FakeMetricsReporter;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricsReporter;
+import org.apache.kafka.test.MockMetricsReporter;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -36,12 +36,12 @@ public class AbstractConfigTest {
     @Test
     public void testConfiguredInstances() {
         testValidInputs("");
-        testValidInputs("org.apache.kafka.common.metrics.FakeMetricsReporter");
-        testValidInputs("org.apache.kafka.common.metrics.FakeMetricsReporter, org.apache.kafka.common.metrics.FakeMetricsReporter");
+        testValidInputs("org.apache.kafka.test.MockMetricsReporter");
+        testValidInputs("org.apache.kafka.test.MockMetricsReporter, org.apache.kafka.test.MockMetricsReporter");
         testInvalidInputs(",");
         testInvalidInputs("org.apache.kafka.clients.producer.unknown-metrics-reporter");
         testInvalidInputs("test1,test2");
-        testInvalidInputs("org.apache.kafka.common.metrics.FakeMetricsReporter,");
+        testInvalidInputs("org.apache.kafka.test.MockMetricsReporter,");
     }
 
     @Test
@@ -64,13 +64,14 @@ public class AbstractConfigTest {
     @Test
     public void testUnused() {
         Properties props = new Properties();
-        String configValue = "org.apache.kafka.common.config.AbstractConfigTest$ConfiguredFakeMetricsReporter";
+        String configValue = ConfiguredMockMetricsReporter.class.getName();
+        assertEquals("org.apache.kafka.common.config.AbstractConfigTest$ConfiguredMockMetricsReporter", configValue);
         props.put(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, configValue);
-        props.put(FakeMetricsReporterConfig.EXTRA_CONFIG, "my_value");
+        props.put(MockMetricsReporterConfig.EXTRA_CONFIG, "my_value");
         TestConfig config = new TestConfig(props);
 
         assertTrue("metric.extra_config should be marked unused before getConfiguredInstances is called",
-            config.unused().contains(FakeMetricsReporterConfig.EXTRA_CONFIG));
+            config.unused().contains(MockMetricsReporterConfig.EXTRA_CONFIG));
 
         config.getConfiguredInstances(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
         assertTrue("All defined configurations should be marked as used", config.unused().isEmpty());
@@ -167,9 +168,9 @@ public class AbstractConfigTest {
     }
 
     private static class ClassTestConfig extends AbstractConfig {
-        static final Class<?> DEFAULT_CLASS = FakeMetricsReporter.class;
+        static final Class<?> DEFAULT_CLASS = MockMetricsReporter.class;
         static final Class<?> VISIBLE_CLASS = JmxReporter.class;
-        static final Class<?> RESTRICTED_CLASS = ConfiguredFakeMetricsReporter.class;
+        static final Class<?> RESTRICTED_CLASS = ConfiguredMockMetricsReporter.class;
 
         private static final ConfigDef CONFIG;
         static {
@@ -233,17 +234,17 @@ public class AbstractConfigTest {
         }
     }
 
-    public static class ConfiguredFakeMetricsReporter extends FakeMetricsReporter {
+    public static class ConfiguredMockMetricsReporter extends MockMetricsReporter {
         @Override
         public void configure(Map<String, ?> configs) {
-            FakeMetricsReporterConfig config = new FakeMetricsReporterConfig(configs);
+            MockMetricsReporterConfig config = new MockMetricsReporterConfig(configs);
 
             // Calling getString() should have the side effect of marking that config as used.
-            config.getString(FakeMetricsReporterConfig.EXTRA_CONFIG);
+            config.getString(MockMetricsReporterConfig.EXTRA_CONFIG);
         }
     }
 
-    public static class FakeMetricsReporterConfig extends AbstractConfig {
+    public static class MockMetricsReporterConfig extends AbstractConfig {
 
         public static final String EXTRA_CONFIG = "metric.extra_config";
         private static final String EXTRA_CONFIG_DOC = "An extraneous configuration string.";
@@ -252,7 +253,7 @@ public class AbstractConfigTest {
                 ConfigDef.Importance.LOW, EXTRA_CONFIG_DOC);
 
 
-        public FakeMetricsReporterConfig(Map<?, ?> props) {
+        public MockMetricsReporterConfig(Map<?, ?> props) {
             super(CONFIG, props);
         }
     }
