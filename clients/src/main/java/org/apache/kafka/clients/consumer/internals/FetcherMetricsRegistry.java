@@ -41,55 +41,57 @@ public class FetcherMetricsRegistry {
     public MetricNameTemplate topicRecordsConsumedRate;
 
     public FetcherMetricsRegistry() {
-        this(new HashSet<String>());
+        this(new HashSet<String>(), "");
     }
 
-    public FetcherMetricsRegistry(Set<String> tagsArg) {
+    public FetcherMetricsRegistry(Set<String> tagsArg, String metricGrpPrefix) {
+        String groupName = metricGrpPrefix + "-fetch-manager-metrics";
+        
         // make a copy
         this.tags = new HashSet<>(tagsArg);
         topicTags = new HashSet<>(tagsArg);
         topicTags.add("topic");
 
         /* ***** Fetcher level *****/
-        this.fetchSizeAvg = new MetricNameTemplate("fetch-size-avg", "consumer-fetch-manager-metrics", 
+        this.fetchSizeAvg = new MetricNameTemplate("fetch-size-avg", groupName, 
                 "The average number of bytes fetched per request", tags);
 
-        this.fetchSizeMax = new MetricNameTemplate("fetch-size-max", "consumer-fetch-manager-metrics", 
+        this.fetchSizeMax = new MetricNameTemplate("fetch-size-max", groupName, 
                 "The maximum number of bytes fetched per request", tags);
-        this.bytesConsumedRate = new MetricNameTemplate("bytes-consumed-rate", "consumer-fetch-manager-metrics", 
+        this.bytesConsumedRate = new MetricNameTemplate("bytes-consumed-rate", groupName, 
                 "The average number of bytes consumed per second", tags);
 
-        this.recordsPerRequestAvg = new MetricNameTemplate("records-per-request-avg", "consumer-fetch-manager-metrics", 
+        this.recordsPerRequestAvg = new MetricNameTemplate("records-per-request-avg", groupName, 
                 "The average number of records in each request", tags);
-        this.recordsConsumedRate = new MetricNameTemplate("records-consumed-rate", "consumer-fetch-manager-metrics", 
+        this.recordsConsumedRate = new MetricNameTemplate("records-consumed-rate", groupName, 
                 "The average number of records consumed per second", tags);
 
-        this.fetchLatencyAvg = new MetricNameTemplate("fetch-latency-avg", "consumer-fetch-manager-metrics", 
+        this.fetchLatencyAvg = new MetricNameTemplate("fetch-latency-avg", groupName, 
                 "The average time taken for a fetch request.", tags);
-        this.fetchLatencyMax = new MetricNameTemplate("fetch-latency-max", "consumer-fetch-manager-metrics", 
+        this.fetchLatencyMax = new MetricNameTemplate("fetch-latency-max", groupName, 
                 "The max time taken for any fetch request.", tags);
-        this.fetchRate = new MetricNameTemplate("fetch-rate", "consumer-fetch-manager-metrics", 
+        this.fetchRate = new MetricNameTemplate("fetch-rate", groupName, 
                 "The number of fetch requests per second.", tags);
 
-        this.recordsLagMax = new MetricNameTemplate("records-lag-max", "consumer-fetch-manager-metrics", 
+        this.recordsLagMax = new MetricNameTemplate("records-lag-max", groupName, 
                 "The maximum lag in terms of number of records for any partition in this window", tags);
 
-        this.fetchThrottleTimeAvg = new MetricNameTemplate("fetch-throttle-time-avg", "consumer-fetch-manager-metrics", 
+        this.fetchThrottleTimeAvg = new MetricNameTemplate("fetch-throttle-time-avg", groupName, 
                 "The average throttle time in ms", tags);
-        this.fetchThrottleTimeMax = new MetricNameTemplate("fetch-throttle-time-max", "consumer-fetch-manager-metrics", 
+        this.fetchThrottleTimeMax = new MetricNameTemplate("fetch-throttle-time-max", groupName, 
                 "The maximum throttle time in ms", tags);
 
         /* ***** Topic level *****/
-        this.topicFetchSizeAvg = new MetricNameTemplate("fetch-size-avg", "consumer-fetch-manager-metrics", 
+        this.topicFetchSizeAvg = new MetricNameTemplate("fetch-size-avg", groupName, 
                 "The average number of bytes fetched per request for topic {topic}", topicTags);
-        this.topicFetchSizeMax = new MetricNameTemplate("fetch-size-max", "consumer-fetch-manager-metrics", 
+        this.topicFetchSizeMax = new MetricNameTemplate("fetch-size-max", groupName, 
                 "The maximum number of bytes fetched per request for topic {topic}", topicTags);
-        this.topicBytesConsumedRate = new MetricNameTemplate("bytes-consumed-rate", "consumer-fetch-manager-metrics", 
+        this.topicBytesConsumedRate = new MetricNameTemplate("bytes-consumed-rate", groupName, 
                 "The average number of bytes consumed per second for topic {topic}", topicTags);
 
-        this.topicRecordsPerRequestAvg = new MetricNameTemplate("records-per-request-avg", "consumer-fetch-manager-metrics", 
+        this.topicRecordsPerRequestAvg = new MetricNameTemplate("records-per-request-avg", groupName, 
                 "The average number of records in each request for topic {topic}", topicTags);
-        this.topicRecordsConsumedRate = new MetricNameTemplate("records-consumed-rate", "consumer-fetch-manager-metrics", 
+        this.topicRecordsConsumedRate = new MetricNameTemplate("records-consumed-rate", groupName, 
                 "The average number of records consumed per second for topic {topic}", topicTags);
         
     }

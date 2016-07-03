@@ -689,7 +689,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     this.subscriptions,
                     metrics,
                     metricsRegistry.fetcherMetrics,
-                    this.time, this.retryBackoffMs);
+                    this.time,
+                    this.retryBackoffMs);
 
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId);

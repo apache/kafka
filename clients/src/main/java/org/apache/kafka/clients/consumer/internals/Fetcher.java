@@ -103,7 +103,8 @@ public class Fetcher<K, V> {
                    SubscriptionState subscriptions,
                    Metrics metrics,
                    FetcherMetricsRegistry metricsRegistry,
-                   Time time, long retryBackoffMs) {
+                   Time time,
+                   long retryBackoffMs) {
 
         this.time = time;
         this.client = client;

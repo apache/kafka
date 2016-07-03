@@ -30,7 +30,7 @@ public class ConsumerMetrics {
     public SelectorMetricsRegistry selectorMetrics;
     
     public ConsumerMetrics(Set<String> metricsTags, String metricGrpPrefix) {
-        this.fetcherMetrics = new FetcherMetricsRegistry(metricsTags);
+        this.fetcherMetrics = new FetcherMetricsRegistry(metricsTags, metricGrpPrefix);
         this.consumerCoordinatorMetrics = new ConsumerCoordinatorMetricsRegistry(metricsTags, metricGrpPrefix);
         this.selectorMetrics = new SelectorMetricsRegistry(metricsTags, metricGrpPrefix);
     }
