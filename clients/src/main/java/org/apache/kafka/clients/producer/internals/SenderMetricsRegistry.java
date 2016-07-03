@@ -49,6 +49,8 @@ public class SenderMetricsRegistry {
     }
 
     public SenderMetricsRegistry(Set<String> tags) {
+
+        /* ***** Client level *****/
         String metricGrpName = "producer-metrics";
         
         this.batchSizeAvg = new MetricNameTemplate("batch-size-avg", metricGrpName, "The average number of bytes sent per partition per-request.", tags);
@@ -69,6 +71,7 @@ public class SenderMetricsRegistry {
         this.requestsInFlight = new MetricNameTemplate("requests-in-flight", metricGrpName, "The current number of in-flight requests awaiting a response.", tags);
         this.metadataAge = new MetricNameTemplate("metadata-age", metricGrpName, "The age in seconds of the current producer metadata being used.", tags);
 
+        /* ***** Topic level *****/
         String topicMetricGrpName = "producer-topic-metrics";
         Set<String> topicTags = new HashSet<String>(tags);
         topicTags.add("topic");

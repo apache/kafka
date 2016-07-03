@@ -21,8 +21,6 @@ import org.apache.kafka.common.MetricNameTemplate;
 
 public class FetcherMetricsRegistry {
 
-    private Set<String> tags;
-    private Set<String> topicTags;
     public MetricNameTemplate fetchSizeAvg;
     public MetricNameTemplate fetchSizeMax;
     public MetricNameTemplate bytesConsumedRate;
@@ -44,15 +42,10 @@ public class FetcherMetricsRegistry {
         this(new HashSet<String>(), "");
     }
 
-    public FetcherMetricsRegistry(Set<String> tagsArg, String metricGrpPrefix) {
-        String groupName = metricGrpPrefix + "-fetch-manager-metrics";
-        
-        // make a copy
-        this.tags = new HashSet<>(tagsArg);
-        topicTags = new HashSet<>(tagsArg);
-        topicTags.add("topic");
+    public FetcherMetricsRegistry(Set<String> tags, String metricGrpPrefix) {
 
-        /* ***** Fetcher level *****/
+        /* ***** Client level *****/
+        String groupName = metricGrpPrefix + "-fetch-manager-metrics";
         this.fetchSizeAvg = new MetricNameTemplate("fetch-size-avg", groupName, 
                 "The average number of bytes fetched per request", tags);
 
@@ -82,6 +75,9 @@ public class FetcherMetricsRegistry {
                 "The maximum throttle time in ms", tags);
 
         /* ***** Topic level *****/
+        Set<String> topicTags = new HashSet<>(tags);
+        topicTags.add("topic");
+
         this.topicFetchSizeAvg = new MetricNameTemplate("fetch-size-avg", groupName, 
                 "The average number of bytes fetched per request for topic {topic}", topicTags);
         this.topicFetchSizeMax = new MetricNameTemplate("fetch-size-max", groupName, 
