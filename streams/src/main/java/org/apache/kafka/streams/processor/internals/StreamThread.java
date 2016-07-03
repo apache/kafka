@@ -155,6 +155,7 @@ public class StreamThread extends Thread {
                         String clientId,
                         UUID processId,
                         Metrics metrics,
+                        StreamThreadMetricsRegistry metricsRegistry,
                         Time time) {
         super("StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement());
 
@@ -199,7 +200,7 @@ public class StreamThread extends Thread {
         this.lastCommit = time.milliseconds();
         this.time = time;
 
-        this.sensors = new StreamsMetricsImpl(metrics);
+        this.sensors = new StreamsMetricsImpl(metrics, metricsRegistry);
 
         this.running = new AtomicBoolean(true);
     }
@@ -700,7 +701,7 @@ public class StreamThread extends Thread {
         final Sensor taskCreationSensor;
         final Sensor taskDestructionSensor;
 
-        public StreamsMetricsImpl(Metrics metrics) {
+        public StreamsMetricsImpl(Metrics metrics, StreamThreadMetricsRegistry metricsRegistry) {
 
             this.metrics = metrics;
             this.metricGrpName = "stream-metrics";
@@ -708,30 +709,30 @@ public class StreamThread extends Thread {
             this.metricTags.put("client-id", clientId + "-" + getName());
 
             this.commitTimeSensor = metrics.sensor("commit-time");
-            this.commitTimeSensor.add(metrics.metricName("commit-time-avg", metricGrpName, "The average commit time in ms", metricTags), new Avg());
-            this.commitTimeSensor.add(metrics.metricName("commit-time-max", metricGrpName, "The maximum commit time in ms", metricTags), new Max());
-            this.commitTimeSensor.add(metrics.metricName("commit-calls-rate", metricGrpName, "The average per-second number of commit calls", metricTags), new Rate(new Count()));
+            this.commitTimeSensor.add(metrics.metricInstance(metricsRegistry.commitTimeAvg, metricTags), new Avg());
+            this.commitTimeSensor.add(metrics.metricInstance(metricsRegistry.commitTimeMax, metricTags), new Max());
+            this.commitTimeSensor.add(metrics.metricInstance(metricsRegistry.commitCallsRate, metricTags), new Rate(new Count()));
 
             this.pollTimeSensor = metrics.sensor("poll-time");
-            this.pollTimeSensor.add(metrics.metricName("poll-time-avg", metricGrpName, "The average poll time in ms", metricTags), new Avg());
-            this.pollTimeSensor.add(metrics.metricName("poll-time-max", metricGrpName, "The maximum poll time in ms", metricTags), new Max());
-            this.pollTimeSensor.add(metrics.metricName("poll-calls-rate", metricGrpName, "The average per-second number of record-poll calls", metricTags), new Rate(new Count()));
+            this.pollTimeSensor.add(metrics.metricInstance(metricsRegistry.pollTimeAvg, metricTags), new Avg());
+            this.pollTimeSensor.add(metrics.metricInstance(metricsRegistry.pollTimeMax, metricTags), new Max());
+            this.pollTimeSensor.add(metrics.metricInstance(metricsRegistry.pollCallsRate, metricTags), new Rate(new Count()));
 
             this.processTimeSensor = metrics.sensor("process-time");
-            this.processTimeSensor.add(metrics.metricName("process-time-avg-ms", metricGrpName, "The average process time in ms", metricTags), new Avg());
-            this.processTimeSensor.add(metrics.metricName("process-time-max-ms", metricGrpName, "The maximum process time in ms", metricTags), new Max());
-            this.processTimeSensor.add(metrics.metricName("process-calls-rate", metricGrpName, "The average per-second number of process calls", metricTags), new Rate(new Count()));
+            this.processTimeSensor.add(metrics.metricInstance(metricsRegistry.processTimeAvgMs, metricTags), new Avg());
+            this.processTimeSensor.add(metrics.metricInstance(metricsRegistry.processTimeMaxMs, metricTags), new Max());
+            this.processTimeSensor.add(metrics.metricInstance(metricsRegistry.processCallsRate, metricTags), new Rate(new Count()));
 
             this.punctuateTimeSensor = metrics.sensor("punctuate-time");
-            this.punctuateTimeSensor.add(metrics.metricName("punctuate-time-avg", metricGrpName, "The average punctuate time in ms", metricTags), new Avg());
-            this.punctuateTimeSensor.add(metrics.metricName("punctuate-time-max", metricGrpName, "The maximum punctuate time in ms", metricTags), new Max());
-            this.punctuateTimeSensor.add(metrics.metricName("punctuate-calls-rate", metricGrpName, "The average per-second number of punctuate calls", metricTags), new Rate(new Count()));
+            this.punctuateTimeSensor.add(metrics.metricInstance(metricsRegistry.punctuateTimeAvg, metricTags), new Avg());
+            this.punctuateTimeSensor.add(metrics.metricInstance(metricsRegistry.punctuateTimeMax, metricTags), new Max());
+            this.punctuateTimeSensor.add(metrics.metricInstance(metricsRegistry.punctuateCallsRate, metricTags), new Rate(new Count()));
 
             this.taskCreationSensor = metrics.sensor("task-creation");
-            this.taskCreationSensor.add(metrics.metricName("task-creation-rate", metricGrpName, "The average per-second number of newly created tasks", metricTags), new Rate(new Count()));
+            this.taskCreationSensor.add(metrics.metricInstance(metricsRegistry.taskCreationRate, metricTags), new Rate(new Count()));
 
             this.taskDestructionSensor = metrics.sensor("task-destruction");
-            this.taskDestructionSensor.add(metrics.metricName("task-destruction-rate", metricGrpName, "The average per-second number of destructed tasks", metricTags), new Rate(new Count()));
+            this.taskDestructionSensor.add(metrics.metricInstance(metricsRegistry.taskDestructionRate, metricTags), new Rate(new Count()));
         }
 
         @Override

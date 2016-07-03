@@ -512,7 +512,8 @@ project(':core') {
   task siteDocsTar(dependsOn: ['genProtocolErrorDocs', 'genProtocolApiKeyDocs', 'genProtocolMessageDocs',
                                'genProducerConfigDocs', 'genConsumerConfigDocs', 'genKafkaConfigDocs',
                                'genConsumerMetricsDocs', 'genProducerMetricsDocs', ':connect:runtime:genConnectMetricsDocs',
-                               ':connect:runtime:genConnectConfigDocs', ':streams:genStreamsConfigDocs' ], type: Tar) {
+                               ':connect:runtime:genConnectConfigDocs', ':streams:genStreamsMetricsDocs', 
+                               ':streams:genStreamsConfigDocs' ], type: Tar) {
     classifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("../docs")
@@ -740,6 +741,13 @@ project(':streams') {
     main = 'org.apache.kafka.streams.StreamsConfig'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "streams_config.html").newOutputStream()
+  }
+
+  task genStreamsMetricsDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'org.apache.kafka.streams.StreamsMetricsRegistry'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "streams_metrics.html").newOutputStream()
   }
 }
 

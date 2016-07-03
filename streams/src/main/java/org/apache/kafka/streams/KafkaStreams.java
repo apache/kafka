@@ -149,10 +149,11 @@ public class KafkaStreams {
                 TimeUnit.MILLISECONDS);
 
         this.metrics = new Metrics(metricConfig, reporters, time);
-
+        StreamsMetricsRegistry metricsRegistry = new StreamsMetricsRegistry();
+        
         this.threads = new StreamThread[config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG)];
         for (int i = 0; i < this.threads.length; i++) {
-            this.threads[i] = new StreamThread(builder, config, clientSupplier, applicationId, clientId, processId, metrics, time);
+            this.threads[i] = new StreamThread(builder, config, clientSupplier, applicationId, clientId, processId, metrics, metricsRegistry.streamThreadMetrics, time);
         }
     }
 
