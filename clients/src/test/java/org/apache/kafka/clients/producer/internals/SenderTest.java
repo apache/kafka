@@ -65,7 +65,7 @@ public class SenderTest {
     private Metrics metrics = null;
     private RecordAccumulator accumulator = null;
     private Sender sender = null;
-    
+
     @Before
     public void setup() {
         Map<String, String> metricTags = new LinkedHashMap<String, String>();
@@ -123,8 +123,9 @@ public class SenderTest {
             sender.run(time.milliseconds());
         }
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
-        KafkaMetric avgMetric = allMetrics.get(metrics.metricName("produce-throttle-time-avg", METRIC_GROUP, ""));
-        KafkaMetric maxMetric = allMetrics.get(metrics.metricName("produce-throttle-time-max", METRIC_GROUP, ""));
+        SenderMetricsRegistry metricRegistry = new SenderMetricsRegistry(metrics.config().tags().keySet());
+        KafkaMetric avgMetric = allMetrics.get(metrics.metricInstance(metricRegistry.produceThrottleTimeAvg));
+        KafkaMetric maxMetric = allMetrics.get(metrics.metricInstance(metricRegistry.produceThrottleTimeMax));
         assertEquals(200, avgMetric.value(), EPS);
         assertEquals(300, maxMetric.value(), EPS);
     }

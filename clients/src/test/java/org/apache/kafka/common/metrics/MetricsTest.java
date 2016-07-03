@@ -21,7 +21,6 @@ import static org.junit.Assert.fail;
 
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -466,10 +465,10 @@ public class MetricsTest {
             // this is expected
         }
         
-        Map<String, String> parentTagsWithValues = new LinkedHashMap<>();
+        Map<String, String> parentTagsWithValues = new HashMap<>();
         parentTagsWithValues.put("parent-tag", "parent-tag-value");
 
-        Map<String, String> childTagsWithValues = new LinkedHashMap<>();
+        Map<String, String> childTagsWithValues = new HashMap<>();
         childTagsWithValues.put("child-tag", "child-tag-value");
 
         try (Metrics inherited = new Metrics(new MetricConfig().tags(parentTagsWithValues), Arrays.asList((MetricsReporter) new JmxReporter()), time, true)) {
@@ -488,7 +487,7 @@ public class MetricsTest {
 
             try {
 
-                Map<String, String> runtimeTags = new LinkedHashMap<>();
+                Map<String, String> runtimeTags = new HashMap<>();
                 runtimeTags.put("child-tag", "child-tag-value");
                 runtimeTags.put("tag-not-in-template", "unexpected-value");
 
