@@ -242,7 +242,6 @@ import java.util.regex.Pattern;
  *     props.put(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
  *     props.put(&quot;group.id&quot;, &quot;test&quot;);
  *     props.put(&quot;enable.auto.commit&quot;, &quot;false&quot;);
- *     props.put(&quot;auto.commit.interval.ms&quot;, &quot;1000&quot;);
  *     props.put(&quot;session.timeout.ms&quot;, &quot;30000&quot;);
  *     props.put(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
  *     props.put(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
@@ -560,10 +559,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * A consumer is instantiated by providing a {@link java.util.Properties} object as configuration. Valid
-     * configuration strings are documented at {@link ConsumerConfig} A consumer is instantiated by providing a
-     * {@link java.util.Properties} object as configuration. Valid configuration strings are documented at
-     * {@link ConsumerConfig}
+     * A consumer is instantiated by providing a {@link java.util.Properties} object as configuration.
+     * <p>
+     * Valid configuration strings are documented at {@link ConsumerConfig}
+     * 
+     * @param properties The consumer configuration properties
      */
     public KafkaConsumer(Properties properties) {
         this(properties, null, null);
