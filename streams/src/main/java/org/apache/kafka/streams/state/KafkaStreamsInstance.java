@@ -74,4 +74,13 @@ public class KafkaStreamsInstance {
         result = 31 * result + topicPartitions.hashCode();
         return result;
     }
+
+    @Override
+    public String toString() {
+        return "KafkaStreamsInstance{" +
+                "hostInfo=" + hostInfo +
+                ", stateStores=" + stateStores +
+                ", topicPartitions=" + topicPartitions +
+                '}';
+    }
 }

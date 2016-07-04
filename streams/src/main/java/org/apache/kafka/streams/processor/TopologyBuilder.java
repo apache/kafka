@@ -37,10 +37,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -69,7 +67,7 @@ public class TopologyBuilder {
     private final HashMap<String, Pattern> nodeToSourcePatterns = new LinkedHashMap<>();
     private final HashMap<String, Pattern> topicToPatterns = new HashMap<>();
     private final HashMap<String, String> nodeToSinkTopic = new HashMap<>();
-    private final Map<String, String> stateStoreNameToSourceTopic = new HashMap<>();
+    private final Map<String, Set<String>> stateStoreNameToSourceTopics = new HashMap<>();
     private SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
     private String applicationId;
 
@@ -596,34 +594,37 @@ public class TopologyBuilder {
         if (nodeFactory instanceof ProcessorNodeFactory) {
             ProcessorNodeFactory processorNodeFactory = (ProcessorNodeFactory) nodeFactory;
             processorNodeFactory.addStateStore(stateStoreName);
-            connectChangeLogToSourceTopic(stateStoreName, stateStoreFactory, processorNodeFactory);
+            connectStateStoreNameToSourceTopics(stateStoreName, stateStoreFactory, processorNodeFactory);
         } else {
             throw new TopologyBuilderException("cannot connect a state store " + stateStoreName + " to a source node or a sink node.");
         }
     }
 
-    private void connectChangeLogToSourceTopic(final String stateStoreName,
-                                               final StateStoreFactory stateStoreFactory,
-                                               final ProcessorNodeFactory processorNodeFactory) {
 
-        final Queue<String> nodes = new LinkedList<>(Arrays.asList(processorNodeFactory.parents));
-        String sourceTopic = null;
-        while (!nodes.isEmpty() && sourceTopic == null) {
-            String processor = nodes.poll();
-            NodeFactory nodeFactory = nodeFactories.get(processor);
+    private Set<String> findSourceTopicsForProcessorParents(String [] parents) {
+        final Set<String> sourceTopics = new HashSet<>();
+        for (String parent : parents) {
+            NodeFactory nodeFactory = nodeFactories.get(parent);
             if (nodeFactory instanceof SourceNodeFactory) {
-                sourceTopic = ((SourceNodeFactory) nodeFactory).getTopics()[0];
+                sourceTopics.addAll(Arrays.asList(((SourceNodeFactory) nodeFactory).getTopics()));
             } else if (nodeFactory instanceof ProcessorNodeFactory) {
-                nodes.addAll(Arrays.asList(((ProcessorNodeFactory) nodeFactory).parents));
+                sourceTopics.addAll(findSourceTopicsForProcessorParents(((ProcessorNodeFactory) nodeFactory).parents));
             }
         }
+        return sourceTopics;
+    }
 
-        if (sourceTopic == null) {
+    private void connectStateStoreNameToSourceTopics(final String stateStoreName,
+                                                     final StateStoreFactory stateStoreFactory,
+                                                     final ProcessorNodeFactory processorNodeFactory) {
+
+        final Set<String> sourceTopics = findSourceTopicsForProcessorParents(processorNodeFactory.parents);
+        if (sourceTopics.isEmpty()) {
             throw new TopologyBuilderException("can't find source topic for state store " +
                     stateStoreName);
         }
-        stateStoreNameToSourceTopic.put(stateStoreFactory.supplier.name(),
-                sourceTopic);
+        stateStoreNameToSourceTopics.put(stateStoreFactory.supplier.name(),
+                Collections.unmodifiableSet(sourceTopics));
     }
 
     /**
@@ -919,7 +920,7 @@ public class TopologyBuilder {
         this.applicationId = applicationId;
     }
 
-    public Map<String, String> getStateStoreNameToSourceTopics() {
-        return Collections.unmodifiableMap(stateStoreNameToSourceTopic);
+    public Map<String, Set<String>> stateStoreNameToSourceTopics() {
+        return Collections.unmodifiableMap(stateStoreNameToSourceTopics);
     }
 }

@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -44,40 +45,44 @@ public class KafkaStreamsInstancesTest {
     private HostInfo hostOne;
     private HostInfo hostTwo;
     private HostInfo hostThree;
-    private TopicPartition tp1;
-    private TopicPartition tp2;
-    private TopicPartition tp3;
+    private TopicPartition topic1P0;
+    private TopicPartition topic2P0;
+    private TopicPartition topic3P0;
     private Map<HostInfo, Set<TopicPartition>> hostToPartitions;
     private KStreamBuilder builder;
+    private TopicPartition topic1P1;
+    private TopicPartition topic2P1;
 
     @Before
     public void before() {
         builder = new KStreamBuilder();
-        builder.stream("topic-one")
-                .groupByKey()
-                .count("table-one");
+        final KStream<Object, Object> one = builder.stream("topic-one");
+        one.groupByKey().count("table-one");
 
-        builder.stream("topic-two")
-                .groupByKey()
-                .count("table-two");
+        final KStream<Object, Object> two = builder.stream("topic-two");
+        two.groupByKey().count("table-two");
 
         builder.stream("topic-three")
                 .groupByKey()
                 .count("table-three");
 
+        builder.merge(one, two).groupByKey().count("merged-table");
+
         builder.setApplicationId("appId");
 
-        tp1 = new TopicPartition("topic-one", 0);
-        tp2 = new TopicPartition("topic-two", 0);
-        tp3 = new TopicPartition("topic-three", 0);
+        topic1P0 = new TopicPartition("topic-one", 0);
+        topic1P1 = new TopicPartition("topic-one", 1);
+        topic2P0 = new TopicPartition("topic-two", 0);
+        topic2P1 = new TopicPartition("topic-two", 1);
+        topic3P0 = new TopicPartition("topic-three", 0);
 
         hostOne = new HostInfo("host-one", 8080);
         hostTwo = new HostInfo("host-two", 9090);
         hostThree = new HostInfo("host-three", 7070);
         hostToPartitions = new HashMap<>();
-        hostToPartitions.put(hostOne, Collections.singleton(tp1));
-        hostToPartitions.put(hostTwo, Collections.singleton(tp2));
-        hostToPartitions.put(hostThree, Collections.singleton(tp3));
+        hostToPartitions.put(hostOne, Utils.mkSet(topic1P0, topic2P1));
+        hostToPartitions.put(hostTwo, Utils.mkSet(topic2P0, topic1P1));
+        hostToPartitions.put(hostThree, Collections.singleton(topic3P0));
 
         discovery = new KafkaStreamsInstances(hostToPartitions, builder);
 
@@ -85,15 +90,18 @@ public class KafkaStreamsInstancesTest {
 
     @Test
     public void shouldGetAllStreamInstances() throws Exception {
-        final KafkaStreamsInstance one = new KafkaStreamsInstance(hostOne, Collections.singleton("table-one"), Collections.singleton(tp1));
-        final KafkaStreamsInstance two = new KafkaStreamsInstance(hostTwo, Collections.singleton("table-two"), Collections.singleton(tp2));
-        final KafkaStreamsInstance three = new KafkaStreamsInstance(hostThree, Collections.singleton("table-three"), Collections.singleton(tp3));
+        final KafkaStreamsInstance one = new KafkaStreamsInstance(hostOne, Utils.mkSet("table-one", "table-two", "merged-table"),
+                Utils.mkSet(topic1P0, topic2P1));
+        final KafkaStreamsInstance two = new KafkaStreamsInstance(hostTwo, Utils.mkSet("table-two", "table-one", "merged-table"),
+                Utils.mkSet(topic2P0, topic1P1));
+        final KafkaStreamsInstance three = new KafkaStreamsInstance(hostThree, Collections.singleton("table-three"),
+                Collections.singleton(topic3P0));
 
         Collection<KafkaStreamsInstance> actual = discovery.getAllStreamsInstances();
         assertEquals(3, actual.size());
-        assertTrue(actual.contains(one));
-        assertTrue(actual.contains(two));
-        assertTrue(actual.contains(three));
+        assertTrue("expected " + actual + " to contain " + one, actual.contains(one));
+        assertTrue("expected " + actual + " to contain " + two, actual.contains(two));
+        assertTrue("expected " + actual + " to contain " + three, actual.contains(three));
     }
 
     @Test
@@ -109,20 +117,25 @@ public class KafkaStreamsInstancesTest {
         final HostInfo hostFour = new HostInfo("host-four", 8080);
         hostToPartitions.put(hostFour, Utils.mkSet(tp4));
 
-        final KafkaStreamsInstance expected = new KafkaStreamsInstance(hostFour, Collections.<String>emptySet(), Collections.singleton(tp4));
+        final KafkaStreamsInstance expected = new KafkaStreamsInstance(hostFour, Collections.<String>emptySet(),
+                Collections.singleton(tp4));
         final KafkaStreamsInstances discovery = new KafkaStreamsInstances(hostToPartitions, builder);
         final Collection<KafkaStreamsInstance> actual = discovery.getAllStreamsInstances();
-        assertTrue(actual.contains(expected));
+        assertTrue("expected " + actual + " to contain " + expected, actual.contains(expected));
     }
 
     @Test
     public void shouldGetInstancesForStoreName() throws Exception {
-        final KafkaStreamsInstance instance = new KafkaStreamsInstance(hostOne, Collections.singleton("table-one"), Collections.singleton(tp1));
+        final KafkaStreamsInstance one = new KafkaStreamsInstance(hostOne, Utils.mkSet("table-one", "table-two", "merged-table"),
+                Utils.mkSet(topic1P0, topic2P1));
+        final KafkaStreamsInstance two = new KafkaStreamsInstance(hostTwo, Utils.mkSet("table-two", "table-one", "merged-table"),
+                Utils.mkSet(topic2P0, topic1P1));
         final Collection<KafkaStreamsInstance> actual = discovery.getAllStreamsInstancesWithStore("table-one");
-        assertEquals(1, actual.size());
-        assertEquals(instance, actual.iterator().next());
+        assertEquals(2, actual.size());
+        assertTrue("expected " + actual + " to contain " + one, actual.contains(one));
+        assertTrue("expected " + actual + " to contain " + two, actual.contains(two));
     }
-    
+
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIllegalArgumentExceptionIfStoreNameIsNullOnGetAllInstancesWithStore() throws Exception {
         discovery.getAllStreamsInstancesWithStore(null);
@@ -137,10 +150,11 @@ public class KafkaStreamsInstancesTest {
     @Test
     public void shouldGetInstanceWithKey() throws Exception {
         final TopicPartition tp4 = new TopicPartition("topic-three", 1);
-        hostToPartitions.put(hostTwo, Utils.mkSet(tp2, tp4));
+        hostToPartitions.put(hostTwo, Utils.mkSet(topic2P0, tp4));
         final KafkaStreamsInstances discovery = new KafkaStreamsInstances(hostToPartitions, builder);
 
-        final KafkaStreamsInstance expected = new KafkaStreamsInstance(hostThree, Collections.singleton("table-three"), Collections.singleton(tp3));
+        final KafkaStreamsInstance expected = new KafkaStreamsInstance(hostThree, Collections.singleton("table-three"),
+                Collections.singleton(topic3P0));
 
         final KafkaStreamsInstance actual = discovery.getStreamsInstanceWithKey("table-three", "the-key",
                 Serdes.String().serializer());
@@ -151,10 +165,11 @@ public class KafkaStreamsInstancesTest {
     @Test
     public void shouldGetInstanceWithKeyAndCustomPartitioner() throws Exception {
         final TopicPartition tp4 = new TopicPartition("topic-three", 1);
-        hostToPartitions.put(hostTwo, Utils.mkSet(tp2, tp4));
+        hostToPartitions.put(hostTwo, Utils.mkSet(topic2P0, tp4));
         final KafkaStreamsInstances discovery = new KafkaStreamsInstances(hostToPartitions, builder);
 
-        final KafkaStreamsInstance expected = new KafkaStreamsInstance(hostTwo, Collections.singleton("table-three"), Collections.singleton(tp4));
+        final KafkaStreamsInstance expected = new KafkaStreamsInstance(hostTwo, Utils.mkSet("table-two", "table-three", "merged-table"),
+                Utils.mkSet(topic2P0, tp4));
 
         KafkaStreamsInstance actual = discovery.getStreamsInstanceWithKey("table-three", "the-key", new StreamPartitioner<String, Object>() {
             @Override
@@ -162,8 +177,26 @@ public class KafkaStreamsInstancesTest {
                 return 1;
             }
         });
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    public void shouldGetInstanceWithKeyWithMergedStreams() throws Exception {
+        final TopicPartition topic2P2 = new TopicPartition("topic-two", 2);
+        hostToPartitions.put(hostTwo, Utils.mkSet(topic2P0, topic1P1, topic2P2));
+        final KafkaStreamsInstances discovery = new KafkaStreamsInstances(hostToPartitions, builder);
+        final KafkaStreamsInstance expected = new KafkaStreamsInstance(hostTwo, Utils.mkSet("table-two", "table-one", "merged-table"),
+                Utils.mkSet(topic2P0, topic1P1, topic2P2));
+
+        final KafkaStreamsInstance actual = discovery.getStreamsInstanceWithKey("merged-table", "123", new StreamPartitioner<String, Object>() {
+            @Override
+            public Integer partition(final String key, final Object value, final int numPartitions) {
+                return 2;
+            }
+        });
 
         assertEquals(expected, actual);
+
     }
 
     @Test

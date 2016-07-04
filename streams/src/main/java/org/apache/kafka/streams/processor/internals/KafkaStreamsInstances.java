@@ -60,13 +60,7 @@ public class KafkaStreamsInstances {
      * @return all the {@link KafkaStreamsInstance}s in a {@link KafkaStreams} application
      */
     public Collection<KafkaStreamsInstance> getAllStreamsInstances() {
-        final Map<String, String> stateStoreNameToSourceTopics = builder.getStateStoreNameToSourceTopics();
-        final Map<HostInfo, KafkaStreamsInstance> results = new HashMap<>();
-
-        for (final Map.Entry<String, String> entry : stateStoreNameToSourceTopics.entrySet()) {
-            updateInstancesWithStore(entry.getKey(), results, partitionsByTopic.get(entry.getValue()));
-        }
-
+        final Map<HostInfo, KafkaStreamsInstance> results = allInstancesWithStores();
         /**
          * Add hosts that don't have any stores
          */
@@ -77,8 +71,9 @@ public class KafkaStreamsInstances {
                         hostToTopicPartition.get(hostInfo)));
             }
         }
-        return new ArrayList<>(results.values());
+        return results.values();
     }
+
 
     /**
      * Find all of the {@link KafkaStreamsInstance}s for a given storeName
@@ -90,18 +85,23 @@ public class KafkaStreamsInstances {
         if (storeName == null) {
             throw new IllegalArgumentException("storeName cannot be null");
         }
-        final String sourceTopic = builder.getStateStoreNameToSourceTopics().get(storeName);
-        if (sourceTopic == null) {
+        final Set<String> sourceTopics = builder.stateStoreNameToSourceTopics().get(storeName);
+        if (sourceTopics == null) {
             return Collections.emptyList();
         }
-        final Map<HostInfo, KafkaStreamsInstance> results = new HashMap<>();
-        updateInstancesWithStore(storeName, results, partitionsByTopic.get(sourceTopic));
-        return new ArrayList<>(results.values());
 
+        final Collection<KafkaStreamsInstance> allStreamsInstances = allInstancesWithStores().values();
+        final ArrayList<KafkaStreamsInstance> results = new ArrayList<>();
+        for (KafkaStreamsInstance instance : allStreamsInstances) {
+            if (instance.getStateStoreNames().contains(storeName)) {
+                results.add(instance);
+            }
+        }
+        return results;
     }
 
     /**
-     * Find all of the {@link KafkaStreamsInstance}s for a given storeName and key.
+     * Find the {@link KafkaStreamsInstance}s for a given storeName and key.
      * Note: the key may not exist in the {@link org.apache.kafka.streams.processor.StateStore},
      * this method provides a way of finding which {@link KafkaStreamsInstance} it would exist on.
      *
@@ -109,7 +109,7 @@ public class KafkaStreamsInstances {
      * @param key           Key to use to for partition
      * @param keySerializer Serializer for the key
      * @param <K>           key type
-     * @return The {@link HostInfo} with its associated {@link TaskMetadata} for the storeName and key
+     * @return The {@link KafkaStreamsInstance} for the storeName and key
      */
     public <K> KafkaStreamsInstance getStreamsInstanceWithKey(final String storeName,
                                                               final K key,
@@ -121,7 +121,7 @@ public class KafkaStreamsInstances {
         return getStreamsInstanceWithKey(storeName, key, new StreamPartitioner<K, Object>() {
             @Override
             public Integer partition(final K key, final Object value, final int numPartitions) {
-                final String sourceTopic = builder.getStateStoreNameToSourceTopics().get(storeName);
+                final String sourceTopic = builder.stateStoreNameToSourceTopics().get(storeName).iterator().next();
                 final byte[] bytes = keySerializer.serialize(sourceTopic, key);
                 return toPositive(Utils.murmur2(bytes)) % numPartitions;
             }
@@ -129,7 +129,7 @@ public class KafkaStreamsInstances {
     }
 
     /**
-     * Find all of the {@link KafkaStreamsInstance}s for a given storeName and key.
+     * Find the {@link KafkaStreamsInstance}s for a given storeName and key.
      * Note: the key may not exist in the {@link org.apache.kafka.streams.processor.StateStore},
      * this method provides a way of finding which {@link KafkaStreamsInstance} it would exist on.
      *
@@ -137,7 +137,7 @@ public class KafkaStreamsInstances {
      * @param key         Key to use to for partition
      * @param partitioner partitioner to use to find correct partition for key
      * @param <K>         key type
-     * @return The {@link HostInfo} with its associated {@link TaskMetadata} for the storeName and key
+     * @return The {@link KafkaStreamsInstance} for the storeName and key
      */
     public <K> KafkaStreamsInstance getStreamsInstanceWithKey(final String storeName,
                                                               final K key,
@@ -154,20 +154,51 @@ public class KafkaStreamsInstances {
             throw new IllegalArgumentException("partitioner cannot be null");
         }
 
-        final String sourceTopic = builder.getStateStoreNameToSourceTopics().get(storeName);
-        if (sourceTopic == null) {
+        final Set<String> sourceTopics = builder.stateStoreNameToSourceTopics().get(storeName);
+        if (sourceTopics == null) {
             return null;
         }
-        final List<TopicPartition> allPartitions = partitionsByTopic.get(sourceTopic);
-        final Integer partition = partitioner.partition(key, null, allPartitions.size());
-        final Map<HostInfo, KafkaStreamsInstance> results = new HashMap<>();
-        updateInstancesWithStore(storeName, results, Collections.singletonList(new TopicPartition(sourceTopic, partition)));
-        if (results.isEmpty()) {
-            return null;
+
+        final Collection<KafkaStreamsInstance> allStreamsInstances = allInstancesWithStores().values();
+
+        int numPartitions = 0;
+        for (String topic : sourceTopics) {
+            final List<TopicPartition> topicPartitions = partitionsByTopic.get(topic);
+            if (topicPartitions.size() > numPartitions) {
+                numPartitions = topicPartitions.size();
+            }
         }
-        return results.values().iterator().next();
+
+        final Integer partition = partitioner.partition(key, null, numPartitions);
+        final Set<TopicPartition> matchingPartitions = new HashSet<>();
+        for (String sourceTopic : sourceTopics) {
+            matchingPartitions.add(new TopicPartition(sourceTopic, partition));
+        }
+
+        for (KafkaStreamsInstance kafkaStreamsInstance : allStreamsInstances) {
+            final Set<String> stateStoreNames = kafkaStreamsInstance.getStateStoreNames();
+            final Set<TopicPartition> topicPartitions = new HashSet<>(kafkaStreamsInstance.getTopicPartitions());
+            topicPartitions.retainAll(matchingPartitions);
+            if (stateStoreNames.contains(storeName)
+                    && !topicPartitions.isEmpty()) {
+                return kafkaStreamsInstance;
+            }
+        }
+        return null;
     }
 
+    private Map<HostInfo, KafkaStreamsInstance> allInstancesWithStores() {
+        final Map<String, Set<String>> stateStoreNameToSourceTopics = builder.stateStoreNameToSourceTopics();
+        final Map<HostInfo, KafkaStreamsInstance> results = new HashMap<>();
+
+        for (final Map.Entry<String, Set<String>> entry : stateStoreNameToSourceTopics.entrySet()) {
+            final Set<String> sourceTopics = entry.getValue();
+            for (String topic : sourceTopics) {
+                updateInstancesWithStore(entry.getKey(), results, partitionsByTopic.get(topic));
+            }
+        }
+        return results;
+    }
 
     private void updateInstancesWithStore(final String storeName,
                                           final Map<HostInfo, KafkaStreamsInstance> results,
