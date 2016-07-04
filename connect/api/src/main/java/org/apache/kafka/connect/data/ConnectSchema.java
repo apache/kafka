@@ -290,25 +290,23 @@ public class ConnectSchema implements Schema {
     }
 
     @Override
-    public synchronized boolean equals(Object o) {
+    public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || !(o instanceof Schema)) return false;
         Schema schema = (Schema) o;
-
         return Objects.equals(optional, schema.isOptional()) &&
-                    Objects.equals(type, schema.type()) &&
-                    Objects.equals(defaultValue, schema.defaultValue()) &&
-                    (type != Type.STRUCT ||
-                            Objects.equals(fields, schema.fields())) &&
-                    (type != Type.MAP ||
-                            Objects.equals(keySchema, schema.keySchema())) &&
-                    ((type != Type.MAP && type != Type.ARRAY) ||
-                            Objects.equals(valueSchema, schema.valueSchema())) &&
-                    Objects.equals(name, schema.name()) &&
-                    Objects.equals(version, schema.version()) &&
-                    Objects.equals(doc, schema.doc()) &&
-                    Objects.equals(parameters, schema.parameters());
-
+                Objects.equals(type, schema.type()) &&
+                Objects.equals(defaultValue, schema.defaultValue()) &&
+                (type != Type.STRUCT ||
+                        Objects.equals(fields, schema.fields())) &&
+                (type != Type.MAP ||
+                        Objects.equals(keySchema, schema.keySchema())) &&
+                ((type != Type.MAP && type != Type.ARRAY) ||
+                        Objects.equals(valueSchema, schema.valueSchema())) &&
+                Objects.equals(name, schema.name()) &&
+                Objects.equals(version, schema.version()) &&
+                Objects.equals(doc, schema.doc()) &&
+                Objects.equals(parameters, schema.parameters());
     }
 
     @Override

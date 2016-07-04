@@ -163,7 +163,7 @@ public interface Schema {
     Schema schema();
 
     /**
-     * Resolve this and any child schemas that may symbolic or have cyclic references
+     * Resolve this and any child schemas that may be symbolic or have cyclic references
      * @param parents a list of schemas that are parents of this schema
      * @return the resolved schema
      */

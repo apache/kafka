@@ -19,7 +19,6 @@ package org.apache.kafka.connect.data;
 
 import org.apache.kafka.connect.errors.DataException;
 
-import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -29,14 +28,10 @@ public class FutureSchema implements Schema {
     private final String name;
     private final boolean optional;
 
-    // Tokens to stop recursive comparing
-    private IdentityHashMap<Schema, Schema> others;
-
     public FutureSchema(String name, boolean optional) {
         this.child = null;
         this.name = name;
         this.optional = optional;
-        this.others = new IdentityHashMap<>();
     }
 
     private void checkChild() {
@@ -70,10 +65,6 @@ public class FutureSchema implements Schema {
         return child;
     }
 
-    /**
-     * Return the hashcode of the child if set, so that the wrapper is transparent for comparisons.
-     * @return the hashcode
-     */
     @Override
     public int hashCode() {
         return Objects.hash(name, optional);
@@ -84,7 +75,6 @@ public class FutureSchema implements Schema {
         if (this == o) return true;
         if ((o == null) || ((child == null) && getClass() != o.getClass()) || !(o instanceof Schema)) return false;
         Schema schema = (Schema) o;
-
         return Objects.equals(name, schema.name()) &&
                 Objects.equals(optional, schema.isOptional());
     }

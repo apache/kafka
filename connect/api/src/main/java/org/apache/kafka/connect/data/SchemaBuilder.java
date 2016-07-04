@@ -337,7 +337,7 @@ public class SchemaBuilder implements Schema {
     }
 
     /**
-     * Add a optional field to the struct by name, that will be resolved later. Throws a SchemaBuilderException if this
+     * Add an optional field to the struct by name, that will be resolved later. Throws a SchemaBuilderException if this
      * is not a struct schema.
      * @param fieldName the name of the field to add
      * @param schemaName the name of the schema for the field
