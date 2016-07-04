@@ -98,8 +98,9 @@ public class StreamThread extends Thread {
 
     private StreamPartitionAssignor partitionAssignor = null;
 
-    private long lastClean;
-    private long lastCommit;
+    private long currTimeMs;
+    private long lastCleanMs;
+    private long lastCommitMs;
     private Throwable rebalanceException = null;
 
     private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
@@ -123,7 +124,7 @@ public class StreamThread extends Thread {
             try {
                 addStreamTasks(assignment);
                 addStandbyTasks();
-                lastClean = time.milliseconds(); // start the cleaning cycle
+                lastCleanMs = time.milliseconds(); // start the cleaning cycle
             } catch (Throwable t) {
                 rebalanceException = t;
                 throw t;
@@ -133,8 +134,8 @@ public class StreamThread extends Thread {
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> assignment) {
             try {
-                commitAll(time.milliseconds());
-                lastClean = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
+                commitAll();
+                lastCleanMs = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
             } catch (Throwable t) {
                 rebalanceException = t;
                 throw t;
@@ -194,9 +195,10 @@ public class StreamThread extends Thread {
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
         this.cleanTimeMs = config.getLong(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
 
-        this.lastClean = Long.MAX_VALUE; // the cleaning cycle won't start until partition assignment
-        this.lastCommit = time.milliseconds();
         this.time = time;
+        this.currTimeMs = time.milliseconds();
+        this.lastCleanMs = Long.MAX_VALUE; // the cleaning cycle won't start until partition assignment
+        this.lastCommitMs = currTimeMs;
 
         this.sensors = new StreamsMetricsImpl(metrics);
 
@@ -247,7 +249,7 @@ public class StreamThread extends Thread {
 
         // Exceptions should not prevent this call from going through all shutdown steps
         try {
-            commitAll(time.milliseconds());
+            commitAll();
         } catch (Throwable e) {
             // already logged in commitAll()
         }
@@ -281,17 +283,16 @@ public class StreamThread extends Thread {
     }
 
     /**
-     * Compute the latency based on the previous marked timestamp,
+     * Compute the latency based on the current marked timestamp,
      * and update the marked timestamp with the current system timestamp.
      *
-     * @param now Previous marked timestamp
      * @return latency
      */
-    private long computeLatency(long now) {
-        long then = now;
-        now = time.milliseconds();
+    private long computeLatency() {
+        long previousTimeMs = this.currTimeMs;
+        this.currTimeMs = time.milliseconds();
 
-        return Math.max(now - then, 0);
+        return Math.max(this.currTimeMs - previousTimeMs, 0);
     }
 
     private void runLoop() {
@@ -310,7 +311,7 @@ public class StreamThread extends Thread {
 
 
         while (stillRunning()) {
-            long now = time.milliseconds();
+            this.currTimeMs = time.milliseconds();
 
             // try to fetch some records if necessary
             if (requiresPoll) {
@@ -336,7 +337,7 @@ public class StreamThread extends Thread {
 
                 // only record poll latency is long poll is required
                 if (longPoll) {
-                    sensors.pollTimeSensor.record(computeLatency(now));
+                    sensors.pollTimeSensor.record(computeLatency());
                 }
             }
 
@@ -352,24 +353,24 @@ public class StreamThread extends Thread {
 
                         requiresPoll = requiresPoll || task.requiresPoll();
 
-                        sensors.processTimeSensor.record(computeLatency(now));
+                        sensors.processTimeSensor.record(computeLatency());
 
-                        maybePunctuate(task, now);
+                        maybePunctuate(task);
 
                         if (task.commitNeeded())
-                            commitOne(task, now);
+                            commitOne(task);
                     }
 
                     // if pollTimeMs has passed since the last poll, we poll to respond to a possible rebalance
                     // even when we paused all partitions.
-                    if (lastPoll + this.pollTimeMs < now)
+                    if (lastPoll + this.pollTimeMs < this.currTimeMs)
                         requiresPoll = true;
 
                 } else {
                     // even when no task is assigned, we must poll to get a task.
                     requiresPoll = true;
                 }
-                maybeCommit(now);
+                maybeCommit();
             }
 
             maybeUpdateStandbyTasks();
@@ -432,12 +433,12 @@ public class StreamThread extends Thread {
         return true;
     }
 
-    private void maybePunctuate(StreamTask task, long now) {
+    private void maybePunctuate(StreamTask task) {
         try {
             // check whether we should punctuate based on the task's partition group timestamp;
             // which are essentially based on record timestamp.
             if (task.maybePunctuate())
-                sensors.punctuateTimeSensor.record(computeLatency(now));
+                sensors.punctuateTimeSensor.record(computeLatency());
 
         } catch (KafkaException e) {
             log.error("Failed to punctuate active task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
@@ -445,12 +446,12 @@ public class StreamThread extends Thread {
         }
     }
 
-    protected void maybeCommit(long now) {
-        if (commitTimeMs >= 0 && lastCommit + commitTimeMs < now) {
+    protected void maybeCommit() {
+        if (commitTimeMs >= 0 && lastCommitMs + commitTimeMs < this.currTimeMs) {
             log.trace("Committing processor instances because the commit interval has elapsed.");
 
-            commitAll(now);
-            lastCommit = now;
+            commitAll();
+            lastCommitMs = this.currTimeMs;
 
             processStandbyRecords = true;
         }
@@ -459,19 +460,19 @@ public class StreamThread extends Thread {
     /**
      * Commit the states of all its tasks
      */
-    private void commitAll(long now) {
+    private void commitAll() {
         for (StreamTask task : activeTasks.values()) {
-            commitOne(task, now);
+            commitOne(task);
         }
         for (StandbyTask task : standbyTasks.values()) {
-            commitOne(task, now);
+            commitOne(task);
         }
     }
 
     /**
      * Commit the state of a task
      */
-    private void commitOne(AbstractTask task, long now) {
+    private void commitOne(AbstractTask task) {
         try {
             task.commit();
         } catch (CommitFailedException e) {
@@ -483,7 +484,7 @@ public class StreamThread extends Thread {
             throw e;
         }
 
-        sensors.commitTimeSensor.record(computeLatency(now));
+        sensors.commitTimeSensor.record(computeLatency());
     }
 
     /**
@@ -492,7 +493,7 @@ public class StreamThread extends Thread {
     protected void maybeClean() {
         long now = time.milliseconds();
 
-        if (now > lastClean + cleanTimeMs) {
+        if (now > lastCleanMs + cleanTimeMs) {
             File[] stateDirs = stateDir.listFiles();
             if (stateDirs != null) {
                 for (File dir : stateDirs) {
@@ -531,7 +532,7 @@ public class StreamThread extends Thread {
                 }
             }
 
-            lastClean = now;
+            lastCleanMs = now;
         }
     }
 
@@ -761,7 +762,7 @@ public class StreamThread extends Thread {
         public void recordLatencyNs(Sensor sensor, long startNs, long endNs) {
             // this nanosecond to millisecond transformation may cause some drift,
             // on Linux it is about 10 milliseconds per second in worst case.
-            sensor.record(endNs - startNs, endNs / 1000000);
+            sensor.record(endNs - startNs, currTimeMs);
         }
 
         /**

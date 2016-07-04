@@ -397,8 +397,8 @@ public class StreamThreadTest {
 
             StreamThread thread = new StreamThread(builder, config, new MockClientSupplier(), applicationId, clientId,  processId, new Metrics(), mockTime) {
                 @Override
-                public void maybeCommit(long now) {
-                    super.maybeCommit(now);
+                public void maybeCommit() {
+                    super.maybeCommit();
                 }
 
                 @Override
@@ -428,14 +428,14 @@ public class StreamThreadTest {
 
             // no task is committed before the commit interval
             mockTime.sleep(commitInterval - 10L);
-            thread.maybeCommit(mockTime.milliseconds());
+            thread.maybeCommit();
             for (StreamTask task : thread.tasks().values()) {
                 assertFalse(((TestStreamTask) task).committed);
             }
 
             // all tasks are committed after the commit interval
             mockTime.sleep(11L);
-            thread.maybeCommit(mockTime.milliseconds());
+            thread.maybeCommit();
             for (StreamTask task : thread.tasks().values()) {
                 assertTrue(((TestStreamTask) task).committed);
                 ((TestStreamTask) task).committed = false;
@@ -443,14 +443,14 @@ public class StreamThreadTest {
 
             // no task is committed before the commit interval, again
             mockTime.sleep(commitInterval - 10L);
-            thread.maybeCommit(mockTime.milliseconds());
+            thread.maybeCommit();
             for (StreamTask task : thread.tasks().values()) {
                 assertFalse(((TestStreamTask) task).committed);
             }
 
             // all tasks are committed after the commit interval, again
             mockTime.sleep(11L);
-            thread.maybeCommit(mockTime.milliseconds());
+            thread.maybeCommit();
             for (StreamTask task : thread.tasks().values()) {
                 assertTrue(((TestStreamTask) task).committed);
                 ((TestStreamTask) task).committed = false;
