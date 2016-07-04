@@ -196,7 +196,7 @@ public class KafkaConsumerTest {
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
         KafkaConsumer<byte[], byte[]> consumer = newConsumer();
         try {
-            consumer.assign(Collections.emptyList());
+            consumer.assign(Collections.<TopicPartition>emptyList());
         } finally {
             consumer.close();
         }
