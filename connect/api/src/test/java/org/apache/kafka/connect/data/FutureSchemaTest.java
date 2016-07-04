@@ -77,7 +77,7 @@ public class FutureSchemaTest {
         assertNotEquals(futureS1Opt, s1Opt);
         assertNotEquals(futureS2Opt, s2Opt);
 
-        futureS1.name();
+        futureS1.type();
     }
 
     @Test
