@@ -183,14 +183,14 @@ public class QueryableStateIntegrationTest {
 
         final ReadOnlyWindowStore<String, String>
             joinThis =
-            kafkaStreams.getStore("join-this", QueryableStoreTypes.<String, String>windowStore());
+            kafkaStreams.store("join-this", QueryableStoreTypes.<String, String>windowStore());
 
         final ReadOnlyWindowStore<String, String>
             joinOther =
-            kafkaStreams.getStore("join-other", QueryableStoreTypes.<String, String>windowStore());
+            kafkaStreams.store("join-other", QueryableStoreTypes.<String, String>windowStore());
 
         final ReadOnlyKeyValueStore<String, Long>
-            myCount = kafkaStreams.getStore("my-count", QueryableStoreTypes.<String, Long>keyValueStore());
+            myCount = kafkaStreams.store("my-count", QueryableStoreTypes.<String, Long>keyValueStore());
 
         verifyCanGetByKey(keys, expectedJoinThis,
                           expectedJoinOther,

@@ -237,7 +237,7 @@ public class KafkaStreams {
      * @param <T>                   return type
      * @return  A facade wrapping the {@link org.apache.kafka.streams.processor.StateStore} instances
      */
-    public <T> T getStore(final String storeName, final QueryableStoreType<T> queryableStoreType) {
+    public <T> T store(final String storeName, final QueryableStoreType<T> queryableStoreType) {
         validateIsRunning();
         return queryableStoreProvider.getStore(storeName, queryableStoreType);
     }
