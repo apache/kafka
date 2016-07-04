@@ -228,6 +228,10 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     public static <K, V> KStream<K, V> merge(KStreamBuilder topology, KStream<K, V>[] streams) {
+        if(streams == null || streams.length == 0) {
+            throw new IllegalArgumentException("Parameter <streams> must not be null or has length zero");
+        }
+
         String name = topology.newName(MERGE_NAME);
         String[] parentNames = new String[streams.length];
         Set<String> allSourceNodes = new HashSet<>();
