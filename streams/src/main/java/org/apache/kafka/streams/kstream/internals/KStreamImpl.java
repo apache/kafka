@@ -538,14 +538,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    public <K1, V1> KGroupedStream<K1, V1> groupBy(KeyValueMapper<K, V, K1> selector) {
+    public <K1> KGroupedStream<K1, V> groupBy(KeyValueMapper<K, V, K1> selector) {
         return groupBy(selector, null, null);
     }
 
     @Override
-    public <K1, V1> KGroupedStream<K1, V1> groupBy(KeyValueMapper<K, V, K1> selector,
+    public <K1> KGroupedStream<K1, V> groupBy(KeyValueMapper<K, V, K1> selector,
                                                    Serde<K1> keySerde,
-                                                   Serde<V1> valSerde) {
+                                                   Serde<V> valSerde) {
 
         String selectName = internalSelectKey(selector);
         return new KGroupedStreamImpl<>(topology,
