@@ -352,10 +352,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         byte[] binaryFrom = WindowStoreUtils.toBinaryKey(key, timeFrom, 0, serdes);
         byte[] binaryTo = WindowStoreUtils.toBinaryKey(key, timeTo, Integer.MAX_VALUE, serdes);
 
-        ArrayList<KeyValueIterator<Bytes, byte[]>> iterators = new ArrayList<>();
         final List<Segment> segments = new ArrayList<>();
-
-
         for (long segmentId = segFrom; segmentId <= segTo; segmentId++) {
             Segment segment = getSegment(segmentId);
             if (segment != null && segment.isOpen()) {
