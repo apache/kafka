@@ -109,25 +109,25 @@ public class KafkaStreamsTest {
     @Test(expected = IllegalStateException.class)
     public void shouldNotGetAllTasksWhenNotRunning() throws Exception {
         KafkaStreams streams = createKafkaStreams();
-        streams.getAllInstances();
+        streams.allInstances();
     }
 
     @Test(expected = IllegalStateException.class)
     public void shouldNotGetAllTasksWithStoreWhenNotRunning() throws Exception {
         KafkaStreams streams = createKafkaStreams();
-        streams.getAllInstancesWithStore("store");
+        streams.allInstancesWithStore("store");
     }
 
     @Test(expected = IllegalStateException.class)
     public void shouldNotGetTaskWithKeyAndSerializerWhenNotRunning() throws Exception {
         KafkaStreams streams = createKafkaStreams();
-        streams.getInstanceWithKey("store", "key", Serdes.String().serializer());
+        streams.instanceWithKey("store", "key", Serdes.String().serializer());
     }
 
     @Test(expected = IllegalStateException.class)
     public void shouldNotGetTaskWithKeyAndPartitionerWhenNotRunning() throws Exception {
         KafkaStreams streams = createKafkaStreams();
-        streams.getInstanceWithKey("store", "key", new StreamPartitioner<String, Object>() {
+        streams.instanceWithKey("store", "key", new StreamPartitioner<String, Object>() {
             @Override
             public Integer partition(final String key, final Object value, final int numPartitions) {
                 return 0;

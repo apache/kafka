@@ -230,7 +230,7 @@ public class KafkaStreams {
      * Note: this is a point in time view and it may change due to partition reassignment.
      * @return collection containing all instances of {@link KafkaStreamsInstance} in this application
      */
-    public Collection<KafkaStreamsInstance> getAllInstances() {
+    public Collection<KafkaStreamsInstance> allInstances() {
         validateIsRunning();
         final KafkaStreamsInstances instances
                 = new KafkaStreamsInstances(threads[0].getPartitionsByHostState(), builder);
@@ -244,7 +244,7 @@ public class KafkaStreams {
      * @param storeName the storeName to find metadata for
      * @return  A collection containing instances of {@link KafkaStreamsInstance} that have the provided storeName
      */
-    public Collection<KafkaStreamsInstance> getAllInstancesWithStore(final String storeName) {
+    public Collection<KafkaStreamsInstance> allInstancesWithStore(final String storeName) {
         validateIsRunning();
         final KafkaStreamsInstances instances
                 = new KafkaStreamsInstances(threads[0].getPartitionsByHostState(), builder);
@@ -262,9 +262,9 @@ public class KafkaStreams {
      * @param <K>               key type
      * @return  The {@link KafkaStreamsInstance} for the storeName and key
      */
-    public <K> KafkaStreamsInstance getInstanceWithKey(final String storeName,
-                                           final K key,
-                                           final Serializer<K> keySerializer) {
+    public <K> KafkaStreamsInstance instanceWithKey(final String storeName,
+                                                    final K key,
+                                                    final Serializer<K> keySerializer) {
         validateIsRunning();
         final KafkaStreamsInstances instances
                 = new KafkaStreamsInstances(threads[0].getPartitionsByHostState(), builder);
@@ -282,9 +282,9 @@ public class KafkaStreams {
      * @param <K>               key type
      * @return  The {@link KafkaStreamsInstance} for the storeName and key
      */
-    public <K> KafkaStreamsInstance getInstanceWithKey(final String storeName,
-                                                       final K key,
-                                                       final StreamPartitioner<K, ?> partitioner) {
+    public <K> KafkaStreamsInstance instanceWithKey(final String storeName,
+                                                    final K key,
+                                                    final StreamPartitioner<K, ?> partitioner) {
         validateIsRunning();
         final KafkaStreamsInstances instances
                 = new KafkaStreamsInstances(threads[0].getPartitionsByHostState(), builder);
