@@ -19,6 +19,7 @@ package org.apache.kafka.connect.data;
 
 import org.apache.kafka.connect.errors.DataException;
 
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -28,10 +29,14 @@ public class FutureSchema implements Schema {
     private final String name;
     private final boolean optional;
 
+    // Tokens to stop recursive comparing
+    private IdentityHashMap<Schema, Schema> others;
+
     public FutureSchema(String name, boolean optional) {
         this.child = null;
         this.name = name;
         this.optional = optional;
+        this.others = new IdentityHashMap<>();
     }
 
     private void checkChild() {
@@ -71,30 +76,17 @@ public class FutureSchema implements Schema {
      */
     @Override
     public int hashCode() {
-        if (child != null) {
-            return child.hashCode();
-        } else {
-            return Objects.hash(name, optional);
-        }
+        return Objects.hash(name, optional);
     }
 
-    /**
-     * Test equality with the child if set, so that the wrapper is transparent for comparisons.
-     * @param o the other object to compare to
-     * @return if the objects are equal
-     */
     @Override
     public boolean equals(Object o) {
-        if (child != null) {
-            return child.equals(o);
-        } else {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            FutureSchema schema = (FutureSchema) o;
+        if (this == o) return true;
+        if ((o == null) || ((child == null) && getClass() != o.getClass()) || !(o instanceof Schema)) return false;
+        Schema schema = (Schema) o;
 
-            return Objects.equals(name, schema.name) &&
-                    Objects.equals(optional, schema.optional);
-        }
+        return Objects.equals(name, schema.name()) &&
+                Objects.equals(optional, schema.isOptional());
     }
 
     @Override

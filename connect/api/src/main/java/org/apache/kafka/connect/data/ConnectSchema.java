@@ -26,7 +26,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.ArrayList;
-import java.util.IdentityHashMap;
 import java.util.Objects;
 
 public class ConnectSchema implements Schema {
@@ -96,10 +95,6 @@ public class ConnectSchema implements Schema {
     private final String doc;
     private final Map<String, String> parameters;
 
-    // Tokens to stop recursive hashing or comparing in cyclic schemas
-    private boolean hashing;
-    private IdentityHashMap<Schema, Schema> others;
-
     /**
      * Construct a Schema. Most users should not construct schemas manually, preferring {@link SchemaBuilder} instead.
      */
@@ -111,8 +106,6 @@ public class ConnectSchema implements Schema {
         this.version = version;
         this.doc = doc;
         this.parameters = parameters;
-        this.hashing = false;
-        this.others = new IdentityHashMap<>();
 
         this.fields = fields;
         if (this.fields != null && this.type == Type.STRUCT) {
@@ -297,18 +290,12 @@ public class ConnectSchema implements Schema {
     }
 
     @Override
-    public boolean equals(Object o) {
+    public synchronized boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || !(o instanceof Schema)) return false;
         Schema schema = (Schema) o;
 
-        // The identity hash map caches the comparisons so we can
-        // break recursion. We return true, because if there are
-        // no other inequalities, then these objects are equal.
-        boolean result = true;
-        if (!others.containsKey(schema)) {
-            others.put(schema, schema);
-            result = Objects.equals(optional, schema.isOptional()) &&
+        return Objects.equals(optional, schema.isOptional()) &&
                     Objects.equals(type, schema.type()) &&
                     Objects.equals(defaultValue, schema.defaultValue()) &&
                     (type != Type.STRUCT ||
@@ -321,21 +308,12 @@ public class ConnectSchema implements Schema {
                     Objects.equals(version, schema.version()) &&
                     Objects.equals(doc, schema.doc()) &&
                     Objects.equals(parameters, schema.parameters());
-        }
-        others.clear();
 
-        return result;
     }
 
     @Override
     public int hashCode() {
-        int hash = 0;
-        if (!hashing) {
-            hashing = true;
-            hash = Objects.hash(type, optional, defaultValue, fields, keySchema, valueSchema, name, version, doc, parameters);
-            hashing = false;
-        }
-        return hash;
+        return Objects.hash(type, optional, defaultValue, fields, keySchema, valueSchema, name, version, doc, parameters);
     }
 
     @Override

@@ -90,13 +90,36 @@ public class FutureSchemaTest {
                 Arrays.asList(new Field("value", 0, SchemaBuilder.int8().build()),
                         new Field("next", 1, new FutureSchema("node", true))), null, null);
 
-        ConnectSchema different = new ConnectSchema(Schema.Type.STRUCT, true, null, "node", null, null, null,
+        // Double nesting is equivalent, just inefficient.
+        ConnectSchema s3 = new ConnectSchema(Schema.Type.STRUCT, true, null, "node", null, null, null,
+                Arrays.asList(new Field("value", 0, SchemaBuilder.int8().build()),
+                        new Field("next", 1, s2)), null, null);
+
+        assertEquals(s1, s2);
+        assertEquals(s1, s3);
+    }
+
+    @Test
+    public void testCyclicInequality() {
+        ConnectSchema s1 = new ConnectSchema(Schema.Type.STRUCT, true, null, "node", null, null, null,
+                Arrays.asList(new Field("value", 0, SchemaBuilder.int8().build()),
+                        new Field("next", 1, new FutureSchema("node", true))), null, null);
+
+        ConnectSchema differentField = new ConnectSchema(Schema.Type.STRUCT, true, null, "node", null, null, null,
                 Arrays.asList(new Field("different", 0, SchemaBuilder.int8().build()),
                         new Field("next", 1, new FutureSchema("node", true))), null, null);
 
-        assertEquals(s1, s2);
-        assertEquals(s2, s1);
-        assertNotEquals(s1, different);
+        ConnectSchema differentNode = new ConnectSchema(Schema.Type.STRUCT, true, null, "node", null, null, null,
+                Arrays.asList(new Field("value", 0, SchemaBuilder.int8().build()),
+                        new Field("next", 1, new FutureSchema("different", true))), null, null);
+
+        ConnectSchema differentStructure = new ConnectSchema(Schema.Type.STRUCT, true, null, "different", null, null, null,
+                Arrays.asList(new Field("value", 0, SchemaBuilder.int8().build()),
+                        new Field("next", 1, differentNode)), null, null);
+
+
+        assertNotEquals(s1, differentField);
+        assertNotEquals(s1, differentStructure);
     }
 
     @Test
