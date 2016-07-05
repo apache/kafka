@@ -236,7 +236,7 @@ class LogCleaner(val config: CleanerConfig,
           try {
             endOffset = cleaner.clean(cleanable)
             recordStats(cleaner.id, cleanable.log.name, cleanable.firstDirtyOffset, endOffset, cleaner.stats)
-            cleanerManager.successfulClean()
+            cleanerManager.decrementNumFilthyLogs()
           } catch {
             case pe: LogCleaningAbortedException => // task can be aborted, let it go.
           } finally {
