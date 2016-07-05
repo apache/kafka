@@ -61,10 +61,10 @@ public class SelectorMetricsRegistry {
         this.outgoingByteRate = new MetricNameTemplate("outgoing-byte-rate", groupName, "The average number of outgoing bytes sent per second to all servers.", metricsTags);
         this.requestRate = new MetricNameTemplate("request-rate", groupName, "The average number of requests sent per second.", metricsTags);
 
-        this.requestSizeAvg = new MetricNameTemplate("request-size-avg", groupName, "The average size of all requests in the window..", metricsTags);
+        this.requestSizeAvg = new MetricNameTemplate("request-size-avg", groupName, "The average size of all requests in the window.", metricsTags);
         this.requestSizeMax = new MetricNameTemplate("request-size-max", groupName, "The maximum size of any request sent in the window.", metricsTags);
         this.incomingByteRate = new MetricNameTemplate("incoming-byte-rate", groupName, "Bytes/second read off all sockets", metricsTags);
-        this.responseRate = new MetricNameTemplate("response-rate", groupName, "Responses received sent per second.", metricsTags);
+        this.responseRate = new MetricNameTemplate("response-rate", groupName, "The average number of responses received per second.", metricsTags);
         this.selectRate = new MetricNameTemplate("select-rate", groupName, "Number of times the I/O layer checked for new I/O to perform per second", metricsTags);
         this.ioWaitTimeNsAvg = new MetricNameTemplate("io-wait-time-ns-avg", groupName, "The average length of time the I/O thread spent waiting for a socket ready for reads or writes in nanoseconds.", metricsTags);
         this.ioWaitRatio = new MetricNameTemplate("io-wait-ratio", groupName, "The fraction of time the I/O thread spent waiting.", metricsTags);
@@ -79,7 +79,7 @@ public class SelectorMetricsRegistry {
         
         this.nodeOutgoingByteRate = new MetricNameTemplate("outgoing-byte-rate", nodeGroupName, "The average number of outgoing bytes sent per second to all servers.", nodeGroupTags);
         this.nodeRequestRate = new MetricNameTemplate("request-rate", nodeGroupName, "The average number of requests sent per second.", nodeGroupTags);
-        this.nodeRequestSizeAvg = new MetricNameTemplate("request-size-avg", nodeGroupName, "The average size of all requests in the window..", nodeGroupTags);
+        this.nodeRequestSizeAvg = new MetricNameTemplate("request-size-avg", nodeGroupName, "The average size of all requests in the window.", nodeGroupTags);
         this.nodeRequestSizeMax = new MetricNameTemplate("request-size-max", nodeGroupName, "The maximum size of any request sent in the window.", nodeGroupTags);
 
         this.nodeIncomingByteRate = new MetricNameTemplate("incoming-byte-rate", nodeGroupName, "Bytes/second read off all sockets", nodeGroupTags);
