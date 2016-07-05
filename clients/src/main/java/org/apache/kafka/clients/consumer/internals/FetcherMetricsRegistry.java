@@ -79,16 +79,16 @@ public class FetcherMetricsRegistry {
         topicTags.add("topic");
 
         this.topicFetchSizeAvg = new MetricNameTemplate("fetch-size-avg", groupName, 
-                "The average number of bytes fetched per request for topic {topic}", topicTags);
+                "The average number of bytes fetched per request for a topic", topicTags);
         this.topicFetchSizeMax = new MetricNameTemplate("fetch-size-max", groupName, 
-                "The maximum number of bytes fetched per request for topic {topic}", topicTags);
+                "The maximum number of bytes fetched per request for a topic", topicTags);
         this.topicBytesConsumedRate = new MetricNameTemplate("bytes-consumed-rate", groupName, 
-                "The average number of bytes consumed per second for topic {topic}", topicTags);
+                "The average number of bytes consumed per second for a topic", topicTags);
 
         this.topicRecordsPerRequestAvg = new MetricNameTemplate("records-per-request-avg", groupName, 
-                "The average number of records in each request for topic {topic}", topicTags);
+                "The average number of records in each request for a topic", topicTags);
         this.topicRecordsConsumedRate = new MetricNameTemplate("records-consumed-rate", groupName, 
-                "The average number of records consumed per second for topic {topic}", topicTags);
+                "The average number of records consumed per second for a topic", topicTags);
         
     }
     
