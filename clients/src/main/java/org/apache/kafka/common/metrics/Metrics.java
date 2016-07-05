@@ -261,7 +261,7 @@ public class Metrics implements Closeable {
     
         for (Entry<String, Map<String, String>> e : beansAndAttributes.entrySet()) {
             b.append("<tr>\n");
-            b.append("<td colspan=3>");
+            b.append("<td colspan=3 class=\"mbeanName\" style=\"background-color:#ccc; font-weight: bold;\">");
             b.append(e.getKey());
             b.append("</td>");
             b.append("</tr>\n");
