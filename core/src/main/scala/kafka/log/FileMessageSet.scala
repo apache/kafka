@@ -333,8 +333,11 @@ class FileMessageSet private[kafka](@volatile var file: File,
   /**
    * Truncate this file message set to the given size in bytes. Note that this API does no checking that the
    * given size falls on a valid message boundary.
+   * In some versions of the JDK truncating to the same size as the file message set will cause an
+   * update of the files mtime, so truncate is only performed if the targetSize is smaller than the
+   * size of the underlying FileChannel.
    * It is expected that no other threads will do writes to the log when this function is called.
-   * @param targetSize The size to truncate to.
+   * @param targetSize The size to truncate to. Must be between 0 and sizeInBytes.
    * @return The number of bytes truncated off
    */
   def truncateTo(targetSize: Int): Int = {
@@ -342,7 +345,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
     if(targetSize > originalSize || targetSize < 0)
       throw new KafkaException("Attempt to truncate log segment to " + targetSize + " bytes failed, " +
                                " size of this log segment is " + originalSize + " bytes.")
-    if (targetSize != channel.size.toInt) {
+    if (targetSize < channel.size.toInt) {
       channel.truncate(targetSize)
       channel.position(targetSize)
       _size.set(targetSize)

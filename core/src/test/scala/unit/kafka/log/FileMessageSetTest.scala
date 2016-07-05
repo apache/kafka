@@ -25,6 +25,7 @@ import kafka.common.LongRef
 import org.junit.Assert._
 import kafka.utils.TestUtils._
 import kafka.message._
+import kafka.common.KafkaException
 import org.easymock.EasyMock
 import org.junit.Test
 
@@ -154,8 +155,8 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
   }
 
   /**
-    * Test the truncateTo only calls truncate on the FileChannel if the size of the
-    * FileChannel is different to the target size. This is important because some JVMs
+    * Test that truncateTo only calls truncate on the FileChannel if the size of the
+    * FileChannel is bigger than the target size. This is important because some JVMs
     * change the mtime of the file, even if truncate should do nothing.
     */
   @Test
@@ -168,6 +169,30 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
 
     val msgSet = new FileMessageSet(tempFile(), channelMock)
     msgSet.truncateTo(42)
+
+    EasyMock.verify(channelMock)
+  }
+
+  /**
+    * Expect a KafkaException if targetSize is bigger than the size of
+    * the FileMessageSet.
+    */
+  @Test
+  def testTruncateNotCalledIfSizeIsBiggerThanTargetSize() {
+    val channelMock = EasyMock.createMock(classOf[FileChannel])
+
+    EasyMock.expect(channelMock.size).andReturn(42L).atLeastOnce()
+    EasyMock.expect(channelMock.position(42L)).andReturn(null)
+    EasyMock.replay(channelMock)
+
+    val msgSet = new FileMessageSet(tempFile(), channelMock)
+
+    try {
+      msgSet.truncateTo(43)
+      fail("Should throw KafkaException")
+    } catch {
+      case e: KafkaException => // expected
+    }
 
     EasyMock.verify(channelMock)
   }
