@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.io.File;
+import java.util.Map;
 
 public class StandbyContextImpl implements ProcessorContext, RecordCollector.Supplier {
 
@@ -34,6 +35,7 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
     private final StreamsMetrics metrics;
     private final ProcessorStateManager stateMgr;
 
+    private final StreamsConfig config;
     private final Serde<?> keySerde;
     private final Serde<?> valSerde;
 
@@ -49,6 +51,7 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
         this.metrics = metrics;
         this.stateMgr = stateMgr;
 
+        this.config = config;
         this.keySerde = config.keySerde();
         this.valSerde = config.valueSerde();
 
@@ -187,5 +190,15 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
     @Override
     public void schedule(long interval) {
         throw new UnsupportedOperationException("this should not happen: schedule() not supported in standby tasks.");
+    }
+
+    @Override
+    public Map<String, Object> appConfigs() {
+        return config.originals();
+    }
+
+    @Override
+    public Map<String, Object> appConfigsWithPrefix(String prefix) {
+        return config.originalsWithPrefix(prefix);
     }
 }

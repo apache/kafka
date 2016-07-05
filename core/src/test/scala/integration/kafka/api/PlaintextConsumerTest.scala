@@ -127,6 +127,15 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumeAndVerifyRecords(consumer = this.consumers.head, numRecords = 1, startingOffset = 0)
   }
 
+  /**
+   * Verifies that pattern subscription performs as expected.
+   * The pattern matches the topics 'topic' and 'tblablac', but not 'tblablak' or 'tblab1'.
+   * It is expected that the consumer is subscribed to all partitions of 'topic' and
+   * 'tblablac' after the subscription when metadata is refreshed.
+   * When a new topic 'tsomec' is added afterwards, it is expected that upon the next
+   * metadata refresh the consumer becomes subscribed to this new topic and all partitions
+   * of that topic are assigned to it.
+   */
   @Test
   def testPatternSubscription() {
     val numRecords = 10000
@@ -183,12 +192,84 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(0, this.consumers.head.assignment().size)
   }
 
+  /**
+   * Verifies that a second call to pattern subscription succeeds and performs as expected.
+   * The initial subscription is to a pattern that matches two topics 'topic' and 'foo'.
+   * The second subscription is to a pattern that matches 'foo' and a new topic 'bar'.
+   * It is expected that the consumer is subscribed to all partitions of 'topic' and 'foo' after
+   * the first subscription, and to all partitions of 'foo' and 'bar' after the second.
+   * The metadata refresh interval is intentionally increased to a large enough value to guarantee
+   * that it is the subscription call that triggers a metadata refresh, and not the timeout.
+   */
+  @Test
+  def testSubsequentPatternSubscription() {
+    this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "30000")
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
+
+    val numRecords = 10000
+    sendRecords(numRecords)
+
+    // the first topic ('topic')  matches first subscription pattern only
+
+    val fooTopic = "foo" // matches both subscription patterns
+    TestUtils.createTopic(this.zkUtils, fooTopic, 1, serverCount, this.servers)
+    sendRecords(1000, new TopicPartition(fooTopic, 0))
+
+    assertEquals(0, consumer0.assignment().size)
+
+    val pattern1 = Pattern.compile(".*o.*") // only 'topic' and 'foo' match this 
+    consumer0.subscribe(pattern1, new TestConsumerReassignmentListener)
+    consumer0.poll(50)
+
+    var subscriptions = Set(
+      new TopicPartition(topic, 0),
+      new TopicPartition(topic, 1),
+      new TopicPartition(fooTopic, 0))
+
+    TestUtils.waitUntilTrue(() => {
+      consumer0.poll(50)
+      consumer0.assignment() == subscriptions.asJava
+    }, s"Expected partitions ${subscriptions.asJava} but actually got ${consumer0.assignment()}")
+
+    val barTopic = "bar" // matches the next subscription pattern
+    TestUtils.createTopic(this.zkUtils, barTopic, 1, serverCount, this.servers)
+    sendRecords(1000, new TopicPartition(barTopic, 0))
+
+    val pattern2 = Pattern.compile("...") // only 'foo' and 'bar' match this
+    consumer0.subscribe(pattern2, new TestConsumerReassignmentListener)
+    consumer0.poll(50)
+
+    subscriptions --= Set(
+      new TopicPartition(topic, 0),
+      new TopicPartition(topic, 1))
+
+    subscriptions ++= Set(
+      new TopicPartition(barTopic, 0))
+
+    TestUtils.waitUntilTrue(() => {
+      consumer0.poll(50)
+      consumer0.assignment() == subscriptions.asJava
+    }, s"Expected partitions ${subscriptions.asJava} but actually got ${consumer0.assignment()}")
+
+    consumer0.unsubscribe()
+    assertEquals(0, consumer0.assignment().size)
+  }
+
+  /**
+   * Verifies that pattern unsubscription performs as expected.
+   * The pattern matches the topics 'topic' and 'tblablac'.
+   * It is expected that the consumer is subscribed to all partitions of 'topic' and
+   * 'tblablac' after the subscription when metadata is refreshed.
+   * When consumer unsubscribes from all its subscriptions, it is expected that its
+   * assignments are cleared right away.
+   */
   @Test
   def testPatternUnsubscription() {
     val numRecords = 10000
     sendRecords(numRecords)
 
-    val topic1 = "tblablac" // matches subscribed pattern
+    val topic1 = "tblablac" // matches the subscription pattern
     TestUtils.createTopic(this.zkUtils, topic1, 2, serverCount, this.servers)
     sendRecords(1000, new TopicPartition(topic1, 0))
     sendRecords(1000, new TopicPartition(topic1, 1))
