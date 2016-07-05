@@ -54,7 +54,7 @@ public abstract class Windows<W extends Window> {
      *
      * @return  itself
      */
-    public Windows until(long durationMs) {
+    public Windows<W> until(long durationMs) {
         this.maintainDurationMs = durationMs;
 
         return this;
@@ -66,7 +66,7 @@ public abstract class Windows<W extends Window> {
      *
      * @return  itself
      */
-    protected Windows segments(int segments) {
+    protected Windows<W> segments(int segments) {
         this.segments = segments;
 
         return this;
