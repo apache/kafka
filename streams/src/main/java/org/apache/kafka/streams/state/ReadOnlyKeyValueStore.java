@@ -18,7 +18,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * A key value store that only supports read operations.
- * Implementations should be Thread Safe as concurrent reads and writes
+ * Implementations should be thread-safe as concurrent reads and writes
  * are expected
  * @param <K> the key type
  * @param <V> the value type
