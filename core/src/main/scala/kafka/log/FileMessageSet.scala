@@ -333,6 +333,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
   /**
    * Truncate this file message set to the given size in bytes. Note that this API does no checking that the
    * given size falls on a valid message boundary.
+   * It is expected that no other threads will do writes to the log when this function is called.
    * @param targetSize The size to truncate to.
    * @return The number of bytes truncated off
    */
