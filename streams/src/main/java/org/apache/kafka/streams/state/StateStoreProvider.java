@@ -19,7 +19,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import java.util.List;
 
 /**
- * A StateStoreProvider provides access to {@link StateStore}s that have been created
+ * Provides access to {@link StateStore}s that have been created
  * as part of the {@link org.apache.kafka.streams.processor.internals.ProcessorTopology}.
  * To get access to custom stores developers should implement {@link QueryableStoreType}.
  * @see QueryableStoreTypes

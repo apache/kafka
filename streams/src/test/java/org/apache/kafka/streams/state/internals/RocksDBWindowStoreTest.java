@@ -73,7 +73,7 @@ public class RocksDBWindowStoreTest {
 
     @Test
     public void shouldOnlyIterateOpenSegments() throws Exception {
-        final File baseDir = TestUtils.tempDir();
+        final File baseDir = TestUtils.tempDirectory();
         Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerde.serializer(), byteArraySerde.serializer());
         RecordCollector recordCollector = new RecordCollector(producer) {
             @Override
