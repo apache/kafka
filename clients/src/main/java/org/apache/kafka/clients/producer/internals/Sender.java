@@ -395,7 +395,6 @@ public class Sender implements Runnable {
 
         public SenderMetrics(Metrics metrics, SenderMetricsRegistry metricsRegistry) {
             this.metrics = metrics;
-            String metricGrpName = "producer-metrics";
             this.metricsRegistry = metricsRegistry;
             
             this.batchSizeSensor = metrics.sensor("batch-size");
@@ -469,7 +468,6 @@ public class Sender implements Runnable {
             if (topicRecordCount == null) {
                 Map<String, String> metricTags = new LinkedHashMap<String, String>();
                 metricTags.put("topic", topic);
-                String metricGrpName = "producer-topic-metrics";
 
                 topicRecordCount = this.metrics.sensor(topicRecordsCountName);
                 MetricName m = this.metrics.metricInstance(metricsRegistry.topicRecordSendRate, metricTags);
