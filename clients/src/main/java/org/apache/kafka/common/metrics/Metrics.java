@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -228,11 +229,11 @@ public class Metrics implements Closeable {
     }
 
     public static String toHtmlTable(String domain, List<MetricNameTemplate> allMetrics) {
-        Map<String, Map<String, String>> beansAndAttributes = new HashMap<String, Map<String, String>>();
+        Map<String, Map<String, String>> beansAndAttributes = new TreeMap<String, Map<String, String>>();
     
         try (Metrics metrics = new Metrics()) {
             for (MetricNameTemplate template : allMetrics) {
-                Map<String, String> tags = new HashMap<String, String>();
+                Map<String, String> tags = new TreeMap<String, String>();
                 for (String s : template.tags()) {
                     tags.put(s, "{" + s + "}");
                 }
@@ -240,7 +241,7 @@ public class Metrics implements Closeable {
                 MetricName metricName = metrics.metricName(template.name(), template.group(), template.description(), tags);
                 String mBeanName = JmxReporter.getMBeanName(domain, metricName);
                 if (!beansAndAttributes.containsKey(mBeanName)) {
-                    beansAndAttributes.put(mBeanName, new HashMap<String, String>());
+                    beansAndAttributes.put(mBeanName, new TreeMap<String, String>());
                 }
                 Map<String, String> attrAndDesc = beansAndAttributes.get(mBeanName);
                 if (!attrAndDesc.containsKey(template.name())) {
