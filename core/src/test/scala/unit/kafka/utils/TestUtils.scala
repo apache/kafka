@@ -50,6 +50,7 @@ import org.apache.kafka.common.network.Mode
 import org.apache.kafka.common.record.CompressionType
 import org.apache.kafka.common.serialization.{ByteArraySerializer, Serializer}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.test.{TestUtils => JTestUtils}
 
 import scala.collection.Map
 import scala.collection.JavaConversions._
@@ -762,7 +763,7 @@ object TestUtils extends Logging {
   /**
    * Wait until the given condition is true or throw an exception if the given wait time elapses.
    */
-  def waitUntilTrue(condition: () => Boolean, msg: String, waitTime: Long = 5000L): Boolean = {
+  def waitUntilTrue(condition: () => Boolean, msg: String, waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Boolean = {
     val startTime = System.currentTimeMillis()
     while (true) {
       if (condition())
