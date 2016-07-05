@@ -66,7 +66,7 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
 
   /* a gauge for tracking the number of logCleaner runs */
   @volatile private var numLogCleanRuns = 0
-  newGauge("number-of-runs", new Gauge[Int] { def value = numLogCleanRuns })
+  newGauge("num-runs", new Gauge[Int] { def value = numLogCleanRuns })
 
   /* a gauge for tracking the last time of logCleaner run */
   @volatile private var logCleanLastRun : Long = System.currentTimeMillis
@@ -161,7 +161,6 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
           state match {
             case LogCleaningInProgress =>
               inProgress.put(topicAndPartition, LogCleaningAborted)
-
             case s =>
               throw new IllegalStateException("Compaction for partition %s cannot be aborted and paused since it is in %s state."
                                               .format(topicAndPartition, s))
