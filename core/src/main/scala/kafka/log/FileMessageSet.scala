@@ -54,12 +54,12 @@ class FileMessageSet private[kafka](@volatile var file: File,
     if(isSlice)
       new AtomicInteger(end - start) // don't check the file size if this is just a slice view
     else
-      new AtomicInteger(math.min(channel.size().toInt, end) - start)
+      new AtomicInteger(math.min(channel.size.toInt, end) - start)
 
   /* if this is not a slice, update the file pointer to the end of the file */
   if (!isSlice)
     /* set the file position to the last byte in the file */
-    channel.position(math.min(channel.size().toInt, end))
+    channel.position(math.min(channel.size.toInt, end))
 
   /**
    * Create a file message set with no slicing.
@@ -157,7 +157,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
    */
   def writeTo(destChannel: GatheringByteChannel, writePosition: Long, size: Int): Int = {
     // Ensure that the underlying size has not changed.
-    val newSize = math.min(channel.size().toInt, end) - start
+    val newSize = math.min(channel.size.toInt, end) - start
     if (newSize < _size.get()) {
       throw new KafkaException("Size of FileMessageSet %s has been truncated during write: old size %d, new size %d"
         .format(file.getAbsolutePath, _size.get(), newSize))
@@ -342,7 +342,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
     if(targetSize > originalSize || targetSize < 0)
       throw new KafkaException("Attempt to truncate log segment to " + targetSize + " bytes failed, " +
                                " size of this log segment is " + originalSize + " bytes.")
-    if (targetSize != channel.size().toInt) {
+    if (targetSize != channel.size.toInt) {
       channel.truncate(targetSize)
       channel.position(targetSize)
       _size.set(targetSize)
