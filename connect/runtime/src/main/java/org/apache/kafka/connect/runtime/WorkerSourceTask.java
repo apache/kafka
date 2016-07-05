@@ -181,7 +181,7 @@ class WorkerSourceTask extends WorkerTask {
         for (final SourceRecord record : toSend) {
             byte[] key = keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key());
             byte[] value = valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
-            final ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(record.topic(), record.kafkaPartition(), key, value);
+            final ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(record.topic(), record.kafkaPartition(), record.timestamp(), key, value);
             log.trace("Appending record with key {}, value {}", record.key(), record.value());
             // We need this queued first since the callback could happen immediately (even synchronously in some cases).
             // Because of this we need to be careful about handling retries -- we always save the previously attempted
@@ -211,9 +211,7 @@ class WorkerSourceTask extends WorkerTask {
                                     // user overrode these settings, the best we can do is notify them of the failure via
                                     // logging.
                                     log.error("{} failed to send record to {}: {}", id, record.topic(), e);
-                                    log.debug("Failed record: topic {}, Kafka partition {}, key {}, value {}, source offset {}, source partition {}",
-                                            record.topic(), record.kafkaPartition(), record.key(), record.value(),
-                                            record.sourceOffset(), record.sourcePartition());
+                                    log.debug("Failed record: {}", record);
                                 } else {
                                     log.trace("Wrote record successfully: topic {} partition {} offset {}",
                                             recordMetadata.topic(), recordMetadata.partition(),
@@ -243,6 +241,8 @@ class WorkerSourceTask extends WorkerTask {
             task.commitRecord(record);
         } catch (InterruptedException e) {
             log.error("Exception thrown", e);
+        } catch (Throwable t) {
+            log.error("Exception thrown while calling task.commitRecord()", t);
         }
     }
 
@@ -366,8 +366,8 @@ class WorkerSourceTask extends WorkerTask {
             this.task.commit();
         } catch (InterruptedException ex) {
             log.warn("Commit interrupted", ex);
-        } catch (Throwable ex) {
-            log.error("Exception thrown while calling task.commit()", ex);
+        } catch (Throwable t) {
+            log.error("Exception thrown while calling task.commit()", t);
         }
     }
 

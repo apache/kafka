@@ -32,6 +32,9 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
+import org.apache.kafka.connect.tools.MockConnector;
+import org.apache.kafka.connect.tools.MockSinkConnector;
+import org.apache.kafka.connect.tools.MockSourceConnector;
 import org.apache.kafka.connect.tools.VerifiableSinkConnector;
 import org.apache.kafka.connect.tools.VerifiableSourceConnector;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -87,7 +90,9 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     private static List<ConnectorPluginInfo> validConnectorPlugins;
     private static final Object LOCK = new Object();
     private Thread classPathTraverser;
-    private static final List<Class<? extends Connector>> EXCLUDES = Arrays.<Class<? extends Connector>>asList(VerifiableSourceConnector.class, VerifiableSinkConnector.class);
+    private static final List<Class<? extends Connector>> EXCLUDES = Arrays.asList(
+            VerifiableSourceConnector.class, VerifiableSinkConnector.class,
+            MockConnector.class, MockSourceConnector.class, MockSinkConnector.class);
 
     public AbstractHerder(Worker worker,
                           String workerId,

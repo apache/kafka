@@ -475,7 +475,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
               response = channel.receive()
               val shutdownResponse = kafka.api.ControlledShutdownResponse.readFrom(response.payload())
               if (shutdownResponse.errorCode == Errors.NONE.code && shutdownResponse.partitionsRemaining != null &&
-                shutdownResponse.partitionsRemaining.size == 0) {
+                shutdownResponse.partitionsRemaining.isEmpty) {
                 shutdownSucceeded = true
                 info ("Controlled shutdown succeeded")
               }
@@ -649,7 +649,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         s"Configured broker.id $brokerId doesn't match stored broker.id ${brokerIdSet.last} in meta.properties. " +
         s"If you moved your data, make sure your configured broker.id matches. " +
         s"If you intend to create a new broker, you should remove all data in your data directories (log.dirs).")
-    else if(brokerIdSet.size == 0 && brokerId < 0 && config.brokerIdGenerationEnable)  // generate a new brokerId from Zookeeper
+    else if(brokerIdSet.isEmpty && brokerId < 0 && config.brokerIdGenerationEnable)  // generate a new brokerId from Zookeeper
       brokerId = generateBrokerId
     else if(brokerIdSet.size == 1) // pick broker.id from meta.properties
       brokerId = brokerIdSet.last

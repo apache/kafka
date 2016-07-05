@@ -32,6 +32,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.test.TestUtils;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -141,12 +142,14 @@ public class JoinIntegrationTest {
         streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
         streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         // Explicitly place the state directory under /tmp so that we can remove it via
         // `purgeLocalStreamsState` below.  Once Streams is updated to expose the effective
         // StreamsConfig configuration (so we can retrieve whatever state directory Streams came up
         // with automatically) we don't need to set this anymore and can update `purgeLocalStreamsState`
         // accordingly.
-        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, "/tmp/kafka-streams");
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG,
+                                 TestUtils.tempDirectory().getPath());
 
         // Remove any state from previous test runs
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
@@ -204,22 +207,19 @@ public class JoinIntegrationTest {
                 }
             })
             // Compute the total per region by summing the individual click counts per region.
-            .reduceByKey(new Reducer<Long>() {
+            .groupByKey(stringSerde, longSerde)
+            .reduce(new Reducer<Long>() {
                 @Override
                 public Long apply(Long value1, Long value2) {
                     return value1 + value2;
                 }
-            }, stringSerde, longSerde, "ClicksPerRegionUnwindowed");
+            }, "ClicksPerRegionUnwindowed");
 
         // Write the (continuously updating) results to the output topic.
         clicksPerRegion.to(stringSerde, longSerde, OUTPUT_TOPIC);
 
         KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
         streams.start();
-
-        // Wait briefly for the topology to be fully up and running (otherwise it might miss some or all
-        // of the input data we produce below).
-        Thread.sleep(10000);
 
         //
         // Step 2: Publish user-region information.

@@ -63,6 +63,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
     val deletedProps = ConfigCommand.parseConfigsToBeDeleted(createOpts)
     assertEquals(1, deletedProps.size)
-    assertEquals("a", deletedProps(0))
+    assertEquals("a", deletedProps.head)
   }
 }

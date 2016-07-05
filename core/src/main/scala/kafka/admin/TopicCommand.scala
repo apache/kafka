@@ -118,7 +118,7 @@ object TopicCommand extends Logging {
   def alterTopic(zkUtils: ZkUtils, opts: TopicCommandOptions) {
     val topics = getTopics(zkUtils, opts)
     val ifExists = if (opts.options.has(opts.ifExistsOpt)) true else false
-    if (topics.length == 0 && !ifExists) {
+    if (topics.isEmpty && !ifExists) {
       throw new IllegalArgumentException("Topic %s does not exist on ZK path %s".format(opts.options.valueOf(opts.topicOpt),
           opts.options.valueOf(opts.zkConnectOpt)))
     }
@@ -165,7 +165,7 @@ object TopicCommand extends Logging {
   def deleteTopic(zkUtils: ZkUtils, opts: TopicCommandOptions) {
     val topics = getTopics(zkUtils, opts)
     val ifExists = if (opts.options.has(opts.ifExistsOpt)) true else false
-    if (topics.length == 0 && !ifExists) {
+    if (topics.isEmpty && !ifExists) {
       throw new IllegalArgumentException("Topic %s does not exist on ZK path %s".format(opts.options.valueOf(opts.topicOpt),
           opts.options.valueOf(opts.zkConnectOpt)))
     }
@@ -216,7 +216,7 @@ object TopicCommand extends Logging {
               val leader = zkUtils.getLeaderForPartition(topic, partitionId)
               if ((!reportUnderReplicatedPartitions && !reportUnavailablePartitions) ||
                   (reportUnderReplicatedPartitions && inSyncReplicas.size < assignedReplicas.size) ||
-                  (reportUnavailablePartitions && (!leader.isDefined || !liveBrokers.contains(leader.get)))) {
+                  (reportUnavailablePartitions && (leader.isEmpty || !liveBrokers.contains(leader.get)))) {
                 print("\tTopic: " + topic)
                 print("\tPartition: " + partitionId)
                 print("\tLeader: " + (if(leader.isDefined) leader.get else "none"))

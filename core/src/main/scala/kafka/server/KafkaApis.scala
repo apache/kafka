@@ -71,7 +71,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handle(request: RequestChannel.Request) {
     try {
       trace("Handling request:%s from connection %s;securityProtocol:%s,principal:%s".
-        format(request.requestObj, request.connectionId, request.securityProtocol, request.session.principal))
+        format(request.requestDesc(true), request.connectionId, request.securityProtocol, request.session.principal))
       ApiKeys.forId(request.requestId) match {
         case ApiKeys.PRODUCE => handleProducerRequest(request)
         case ApiKeys.FETCH => handleFetchRequest(request)
@@ -293,7 +293,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         val currentTimestamp = SystemTime.milliseconds
         val defaultExpireTimestamp = offsetRetention + currentTimestamp
         val partitionData = authorizedRequestInfo.mapValues { partitionData =>
-          val metadata = if (partitionData.metadata == null) OffsetMetadata.NoMetadata else partitionData.metadata;
+          val metadata = if (partitionData.metadata == null) OffsetMetadata.NoMetadata else partitionData.metadata
           new OffsetAndMetadata(
             offsetMetadata = OffsetMetadata(partitionData.offset, metadata),
             commitTimestamp = currentTimestamp,

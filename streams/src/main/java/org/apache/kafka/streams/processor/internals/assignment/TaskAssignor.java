@@ -40,10 +40,16 @@ public class TaskAssignor<C, T extends Comparable<T>> {
         }
 
         TaskAssignor<C, T> assignor = new TaskAssignor<>(states, tasks, seed);
+        log.info("Assigning tasks to clients: {}, prevAssignmentBalanced: {}, " +
+            "prevClientsUnchangeed: {}, tasks: {}, replicas: {}",
+            states, assignor.prevAssignmentBalanced, assignor.prevClientsUnchanged,
+            tasks, numStandbyReplicas);
+
         assignor.assignTasks();
         if (numStandbyReplicas > 0)
             assignor.assignStandbyTasks(numStandbyReplicas);
 
+        log.info("Assigned with: " + assignor.states);
         return assignor.states;
     }
 
@@ -52,13 +58,29 @@ public class TaskAssignor<C, T extends Comparable<T>> {
     private final Set<TaskPair<T>> taskPairs;
     private final int maxNumTaskPairs;
     private final ArrayList<T> tasks;
+    private boolean prevAssignmentBalanced = true;
+    private boolean prevClientsUnchanged = true;
 
     private TaskAssignor(Map<C, ClientState<T>> states, Set<T> tasks, long randomSeed) {
         this.rand = new Random(randomSeed);
         this.states = new HashMap<>();
+        int avgNumTasks = tasks.size() / states.size();
+        Set<T> existingTasks = new HashSet<>();
         for (Map.Entry<C, ClientState<T>> entry : states.entrySet()) {
             this.states.put(entry.getKey(), entry.getValue().copy());
+            Set<T> oldTasks = entry.getValue().prevAssignedTasks;
+            // make sure the previous assignment is balanced
+            prevAssignmentBalanced = prevAssignmentBalanced &&
+                oldTasks.size() < 2 * avgNumTasks && oldTasks.size() > avgNumTasks / 2;
+            for (T task : oldTasks) {
+                // Make sure there is no duplicates
+                prevClientsUnchanged = prevClientsUnchanged && !existingTasks.contains(task);
+            }
+            existingTasks.addAll(oldTasks);
         }
+        // Make sure the existing assignment didn't miss out any task
+        prevClientsUnchanged = prevClientsUnchanged && existingTasks.equals(tasks);
+
         this.tasks = new ArrayList<>(tasks);
 
         int numTasks = tasks.size();
@@ -112,6 +134,10 @@ public class TaskAssignor<C, T extends Comparable<T>> {
         double candidateAdditionCost = 0d;
 
         for (ClientState<T> state : states.values()) {
+            if (prevAssignmentBalanced && prevClientsUnchanged &&
+                state.prevAssignedTasks.contains(task)) {
+                return state;
+            }
             if (!state.assignedTasks.contains(task)) {
                 // if checkTaskPairs flag is on, skip this client if this task doesn't introduce a new task combination
                 if (checkTaskPairs && !state.assignedTasks.isEmpty() && !hasNewTaskPair(task, state))

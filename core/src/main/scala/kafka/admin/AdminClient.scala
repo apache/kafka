@@ -49,7 +49,7 @@ class AdminClient(val time: Time,
     client.poll(future)
 
     if (future.succeeded())
-      return future.value().responseBody()
+      future.value().responseBody()
     else
       throw future.exception()
   }
@@ -61,10 +61,10 @@ class AdminClient(val time: Time,
           return send(broker, api, request)
         } catch {
           case e: Exception =>
-            debug(s"Request ${api} failed against node ${broker}", e)
+            debug(s"Request $api failed against node $broker", e)
         }
     }
-    throw new RuntimeException(s"Request ${api} failed on brokers ${bootstrapBrokers}")
+    throw new RuntimeException(s"Request $api failed on brokers $bootstrapBrokers")
   }
 
   private def findCoordinator(groupId: String): Node = {
@@ -88,7 +88,7 @@ class AdminClient(val time: Time,
     val response = new MetadataResponse(responseBody)
     val errors = response.errors()
     if (!errors.isEmpty)
-      debug(s"Metadata request contained errors: ${errors}")
+      debug(s"Metadata request contained errors: $errors")
     response.cluster().nodes().asScala.toList
   }
 
@@ -100,7 +100,7 @@ class AdminClient(val time: Time,
             listGroups(broker)
           } catch {
             case e: Exception =>
-              debug(s"Failed to find groups from broker ${broker}", e)
+              debug(s"Failed to find groups from broker $broker", e)
               List[GroupOverview]()
           }
         }
@@ -127,7 +127,7 @@ class AdminClient(val time: Time,
     val response = new DescribeGroupsResponse(responseBody)
     val metadata = response.groups().get(groupId)
     if (metadata == null)
-      throw new KafkaException(s"Response from broker contained no metadata for group ${groupId}")
+      throw new KafkaException(s"Response from broker contained no metadata for group $groupId")
 
     Errors.forCode(metadata.errorCode()).maybeThrow()
     val members = metadata.members().map { member =>
@@ -143,21 +143,21 @@ class AdminClient(val time: Time,
                              clientHost: String,
                              assignment: List[TopicPartition])
 
-  def describeConsumerGroup(groupId: String): List[ConsumerSummary] = {
+  def describeConsumerGroup(groupId: String): Option[List[ConsumerSummary]] = {
     val group = describeGroup(groupId)
     if (group.state == "Dead")
-      return List.empty[ConsumerSummary]
+      return None
 
     if (group.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
-      throw new IllegalArgumentException(s"Group ${groupId} with protocol type '${group.protocolType}' is not a valid consumer group")
+      throw new IllegalArgumentException(s"Group $groupId with protocol type '${group.protocolType}' is not a valid consumer group")
 
     if (group.state == "Stable") {
-      group.members.map { member =>
+      Some(group.members.map { member =>
         val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment))
         new ConsumerSummary(member.memberId, member.clientId, member.clientHost, assignment.partitions().asScala.toList)
-      }
+      })
     } else {
-      List.empty
+      Some(List.empty)
     }
   }
 

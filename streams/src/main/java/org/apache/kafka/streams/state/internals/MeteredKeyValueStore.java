@@ -154,6 +154,11 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
+    public long approximateNumEntries() {
+        return this.inner.approximateNumEntries();
+    }
+
+    @Override
     public void close() {
         inner.close();
     }

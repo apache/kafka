@@ -19,18 +19,19 @@ package org.apache.kafka.streams.integration;
 
 import org.I0Itec.zkclient.ZkClient;
 import org.I0Itec.zkclient.ZkConnection;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
+import org.apache.kafka.test.TestUtils;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -122,8 +123,8 @@ public class InternalTopicIntegrationTest {
         streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
         streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, "/tmp/kafka-streams");
-
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         KStreamBuilder builder = new KStreamBuilder();
 
         KStream<String, String> textLines = builder.stream(DEFAULT_INPUT_TOPIC);
@@ -134,12 +135,12 @@ public class InternalTopicIntegrationTest {
                 public Iterable<String> apply(String value) {
                     return Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+"));
                 }
-            }).map(new KeyValueMapper<String, String, KeyValue<String, String>>() {
+            }).groupBy(new KeyValueMapper<String, String, String>() {
                 @Override
-                public KeyValue<String, String> apply(String key, String value) {
-                    return new KeyValue<String, String>(value, value);
+                public String apply(String key, String value) {
+                    return value;
                 }
-            }).countByKey("Counts").toStream();
+            }).count("Counts").toStream();
 
         wordCounts.to(stringSerde, longSerde, DEFAULT_OUTPUT_TOPIC);
 
@@ -148,10 +149,6 @@ public class InternalTopicIntegrationTest {
 
         KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
         streams.start();
-
-        // Wait briefly for the topology to be fully up and running (otherwise it might miss some or all
-        // of the input data we produce below).
-        Thread.sleep(5000);
 
         //
         // Step 2: Produce some input data to the input topic.

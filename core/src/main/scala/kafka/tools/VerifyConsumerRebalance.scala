@@ -89,7 +89,7 @@ object VerifyConsumerRebalance extends Logging {
       info("Alive partitions for topic %s are %s ".format(topic, partitions.toString))
       info("Alive consumers for topic %s => %s ".format(topic, consumersPerTopicMap.get(topic)))
       val partitionsWithOwners = zkUtils.getChildrenParentMayNotExist(topicDirs.consumerOwnerDir)
-      if(partitionsWithOwners.size == 0) {
+      if(partitionsWithOwners.isEmpty) {
         error("No owners for any partitions for topic " + topic)
         rebalanceSucceeded = false
       }

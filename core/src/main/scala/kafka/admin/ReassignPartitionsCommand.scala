@@ -113,7 +113,7 @@ object ReassignPartitionsCommand extends Logging {
       val (_, replicas) = assignment.head
       val assignedReplicas = AdminUtils.assignReplicasToBrokers(brokerMetadatas, assignment.size, replicas.size)
       partitionsToBeReassigned ++= assignedReplicas.map { case (partition, replicas) =>
-        (TopicAndPartition(topic, partition) -> replicas)
+        TopicAndPartition(topic, partition) -> replicas
       }
     }
 

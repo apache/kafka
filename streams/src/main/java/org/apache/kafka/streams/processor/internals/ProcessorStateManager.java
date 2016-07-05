@@ -134,6 +134,8 @@ public class ProcessorStateManager {
             retry--;
             lock = lockStateDirectory(channel);
         }
+        // TODO: closing the channel here risks releasing all locks on the file
+        // see {@link https://issues.apache.org/jira/browse/KAFKA-3812}
         if (lock == null) {
             channel.close();
         }
@@ -336,6 +338,8 @@ public class ProcessorStateManager {
      */
     public void close(Map<TopicPartition, Long> ackedOffsets) throws IOException {
         try {
+            // attempting to flush and close the stores, just in case they
+            // are not closed by a ProcessorNode yet
             if (!stores.isEmpty()) {
                 log.debug("Closing stores.");
                 for (Map.Entry<String, StateStore> entry : stores.entrySet()) {

@@ -30,7 +30,7 @@ import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.BrokerNotAvailableException
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.utils.Utils
@@ -277,20 +277,10 @@ object ConsumerGroupCommand {
 
     private def getZkConsumer(brokerId: Int): Option[SimpleConsumer] = {
       try {
-        zkUtils.readDataMaybeNull(ZkUtils.BrokerIdsPath + "/" + brokerId)._1 match {
-          case Some(brokerInfoString) =>
-            Json.parseFull(brokerInfoString) match {
-              case Some(m) =>
-                val brokerInfo = m.asInstanceOf[Map[String, Any]]
-                val host = brokerInfo.get("host").get.asInstanceOf[String]
-                val port = brokerInfo.get("port").get.asInstanceOf[Int]
-                Some(new SimpleConsumer(host, port, 10000, 100000, "ConsumerGroupCommand"))
-              case None =>
-                throw new BrokerNotAvailableException("Broker id %d does not exist".format(brokerId))
-            }
-          case None =>
-            throw new BrokerNotAvailableException("Broker id %d does not exist".format(brokerId))
-        }
+        zkUtils.getBrokerInfo(brokerId)
+          .map(_.getBrokerEndPoint(SecurityProtocol.PLAINTEXT))
+          .map(endPoint => new SimpleConsumer(endPoint.host, endPoint.port, 10000, 100000, "ConsumerGroupCommand"))
+          .orElse(throw new BrokerNotAvailableException("Broker id %d does not exist".format(brokerId)))
       } catch {
         case t: Throwable =>
           println("Could not parse broker info due to " + t.getMessage)
@@ -312,22 +302,25 @@ object ConsumerGroupCommand {
     }
 
     protected def describeGroup(group: String) {
-      val consumerSummaries = adminClient.describeConsumerGroup(group)
-      if (consumerSummaries.isEmpty)
-        println(s"Consumer group `${group}` does not exist or is rebalancing.")
-      else {
-        val consumer = getConsumer()
-        printDescribeHeader()
-        consumerSummaries.foreach { consumerSummary =>
-          val topicPartitions = consumerSummary.assignment.map(tp => TopicAndPartition(tp.topic, tp.partition))
-          val partitionOffsets = topicPartitions.flatMap { topicPartition =>
-            Option(consumer.committed(new TopicPartition(topicPartition.topic, topicPartition.partition))).map { offsetAndMetadata =>
-              topicPartition -> offsetAndMetadata.offset
+      adminClient.describeConsumerGroup(group) match {
+        case None => println(s"Consumer group `${group}` does not exist.")
+        case Some(consumerSummaries) =>
+          if (consumerSummaries.isEmpty)
+            println(s"Consumer group `${group}` is rebalancing.")
+          else {
+            val consumer = getConsumer()
+            printDescribeHeader()
+            consumerSummaries.foreach { consumerSummary =>
+              val topicPartitions = consumerSummary.assignment.map(tp => TopicAndPartition(tp.topic, tp.partition))
+              val partitionOffsets = topicPartitions.flatMap { topicPartition =>
+                Option(consumer.committed(new TopicPartition(topicPartition.topic, topicPartition.partition))).map { offsetAndMetadata =>
+                  topicPartition -> offsetAndMetadata.offset
+                }
+              }.toMap
+              describeTopicPartition(group, topicPartitions, partitionOffsets.get,
+                _ => Some(s"${consumerSummary.clientId}_${consumerSummary.clientHost}"))
             }
-          }.toMap
-          describeTopicPartition(group, topicPartitions, partitionOffsets.get,
-            _ => Some(s"${consumerSummary.clientId}_${consumerSummary.clientHost}"))
-        }
+          }
       }
     }
 

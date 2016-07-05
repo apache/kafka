@@ -26,7 +26,7 @@ import org.apache.kafka.common.network.NetworkSend
 
 object RequestOrResponseSend {
   def serialize(request: RequestOrResponse): ByteBuffer = {
-    val buffer = ByteBuffer.allocate(request.sizeInBytes + (if(request.requestId != None) 2 else 0))
+    val buffer = ByteBuffer.allocate(request.sizeInBytes + (if(request.requestId.isDefined) 2 else 0))
     request.requestId match {
       case Some(requestId) =>
         buffer.putShort(requestId)

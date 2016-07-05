@@ -87,6 +87,9 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     private static final TopicPartition UNASSIGNED_TOPIC_PARTITION = new TopicPartition(TOPIC, 200);
 
     private static final Map<String, String> TASK_PROPS = new HashMap<>();
+    private static final long TIMESTAMP = 42L;
+    private static final TimestampType TIMESTAMP_TYPE = TimestampType.CREATE_TIME;
+
     static {
         TASK_PROPS.put(SinkConnector.TOPICS_CONFIG, TOPIC);
         TASK_PROPS.put(TaskConfig.TASK_CLASS_CONFIG, TestSinkTask.class.getName());
@@ -161,7 +164,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
             assertEquals(1, recs.size());
             for (SinkRecord rec : recs) {
                 SinkRecord referenceSinkRecord
-                        = new SinkRecord(TOPIC, PARTITION, KEY_SCHEMA, KEY, VALUE_SCHEMA, VALUE, FIRST_OFFSET + offset);
+                        = new SinkRecord(TOPIC, PARTITION, KEY_SCHEMA, KEY, VALUE_SCHEMA, VALUE, FIRST_OFFSET + offset, TIMESTAMP, TIMESTAMP_TYPE);
                 assertEquals(referenceSinkRecord, rec);
                 offset++;
             }
@@ -517,7 +520,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                                 Collections.singletonMap(
                                         new TopicPartition(TOPIC, PARTITION),
                                         Arrays.asList(
-                                                new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, RAW_KEY, RAW_VALUE)
+                                                new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, TIMESTAMP, TIMESTAMP_TYPE, 0L, 0, 0, RAW_KEY, RAW_VALUE)
                                         )));
                         recordsReturned++;
                         return records;
@@ -546,7 +549,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                                 Collections.singletonMap(
                                         new TopicPartition(TOPIC, PARTITION),
                                         Arrays.asList(
-                                                new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, RAW_KEY, RAW_VALUE)
+                                                new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, TIMESTAMP, TIMESTAMP_TYPE, 0L, 0, 0, RAW_KEY, RAW_VALUE)
                                         )));
                         recordsReturned++;
                         return records;

@@ -85,8 +85,8 @@ public class Struct {
      */
     public Object get(Field field) {
         Object val = values[field.index()];
-        if (val == null && schema.defaultValue() != null) {
-            val = schema.defaultValue();
+        if (val == null && field.schema().defaultValue() != null) {
+            val = field.schema().defaultValue();
         }
         return val;
     }

@@ -36,6 +36,8 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertThat;
 
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
@@ -56,7 +58,7 @@ public class WordCountIntegrationTest {
 
     @BeforeClass
     public static void startKafkaCluster() throws Exception {
-        CLUSTER.createTopic(DEFAULT_INPUT_TOPIC);
+        CLUSTER.createTopic(DEFAULT_INPUT_TOPIC, 2, 1);
         CLUSTER.createTopic(DEFAULT_OUTPUT_TOPIC);
     }
 
@@ -65,9 +67,9 @@ public class WordCountIntegrationTest {
         List<String> inputValues = Arrays.asList("hello", "world", "world", "hello world");
         List<KeyValue<String, Long>> expectedWordCounts = Arrays.asList(
             new KeyValue<>("hello", 1L),
+            new KeyValue<>("hello", 2L),
             new KeyValue<>("world", 1L),
             new KeyValue<>("world", 2L),
-            new KeyValue<>("hello", 2L),
             new KeyValue<>("world", 3L)
         );
 
@@ -83,12 +85,13 @@ public class WordCountIntegrationTest {
         streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
         streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         // Explicitly place the state directory under /tmp so that we can remove it via
         // `purgeLocalStreamsState` below.  Once Streams is updated to expose the effective
         // StreamsConfig configuration (so we can retrieve whatever state directory Streams came up
         // with automatically) we don't need to set this anymore and can update `purgeLocalStreamsState`
         // accordingly.
-        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, "/tmp/kafka-streams");
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, "/tmp/kstreams-word-count");
 
         KStreamBuilder builder = new KStreamBuilder();
 
@@ -100,12 +103,12 @@ public class WordCountIntegrationTest {
                 public Iterable<String> apply(String value) {
                     return Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+"));
                 }
-            }).map(new KeyValueMapper<String, String, KeyValue<String, String>>() {
+            }).groupBy(new KeyValueMapper<String, String, String>() {
                 @Override
-                public KeyValue<String, String> apply(String key, String value) {
-                    return new KeyValue<String, String>(value, value);
+                public String apply(final String key, final String value) {
+                    return value;
                 }
-            }).countByKey("Counts")
+            }).count("Counts")
             .toStream();
 
         wordCounts.to(stringSerde, longSerde, DEFAULT_OUTPUT_TOPIC);
@@ -115,11 +118,7 @@ public class WordCountIntegrationTest {
 
         KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
         streams.start();
-
-        // Wait briefly for the topology to be fully up and running (otherwise it might miss some or all
-        // of the input data we produce below).
-        Thread.sleep(5000);
-
+        
         //
         // Step 2: Produce some input data to the input topic.
         //
@@ -142,6 +141,16 @@ public class WordCountIntegrationTest {
         consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
         List<KeyValue<String, Long>> actualWordCounts = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig,
             DEFAULT_OUTPUT_TOPIC, expectedWordCounts.size());
+        Collections.sort(actualWordCounts, new Comparator<KeyValue<String, Long>>() {
+            @Override
+            public int compare(final KeyValue<String, Long> o1, final KeyValue<String, Long> o2) {
+                int keyComparison = o1.key.compareTo(o2.key);
+                if (keyComparison == 0) {
+                    return o1.value.compareTo(o2.value);
+                }
+                return keyComparison;
+            }
+        });
         streams.close();
         assertThat(actualWordCounts, equalTo(expectedWordCounts));
     }

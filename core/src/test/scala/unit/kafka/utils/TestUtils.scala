@@ -94,7 +94,7 @@ object TestUtils extends Logging {
     val parentFile = new File(parent)
     parentFile.mkdirs()
 
-    org.apache.kafka.test.TestUtils.tempDirectory(parentFile.toPath, "kafka-");
+    org.apache.kafka.test.TestUtils.tempDirectory(parentFile.toPath, "kafka-")
   }
 
   /**
@@ -335,12 +335,12 @@ object TestUtils extends Logging {
 
     // check if the expected iterator is longer
     if (expected.hasNext) {
-      var length1 = length;
+      var length1 = length
       while (expected.hasNext) {
         expected.next
         length1 += 1
       }
-      assertFalse("Iterators have uneven length-- first has more: "+length1 + " > " + length, true);
+      assertFalse("Iterators have uneven length-- first has more: "+length1 + " > " + length, true)
     }
 
     // check if the actual iterator was longer
@@ -350,7 +350,7 @@ object TestUtils extends Logging {
         actual.next
         length2 += 1
       }
-      assertFalse("Iterators have uneven length-- second has more: "+length2 + " > " + length, true);
+      assertFalse("Iterators have uneven length-- second has more: "+length2 + " > " + length, true)
     }
   }
 
@@ -671,7 +671,7 @@ object TestUtils extends Logging {
         try{
           val currentLeaderAndIsrOpt = zkUtils.getLeaderAndIsrForPartition(topic, partition)
           var newLeaderAndIsr: LeaderAndIsr = null
-          if(currentLeaderAndIsrOpt == None)
+          if(currentLeaderAndIsrOpt.isEmpty)
             newLeaderAndIsr = new LeaderAndIsr(leader, List(leader))
           else{
             newLeaderAndIsr = currentLeaderAndIsrOpt.get
@@ -716,7 +716,7 @@ object TestUtils extends Logging {
           } else if (oldLeaderOpt.isDefined && oldLeaderOpt.get != l) {
             trace("Leader for partition [%s,%d] is changed from %d to %d".format(topic, partition, oldLeaderOpt.get, l))
             isLeaderElectedOrChanged = true
-          } else if (!oldLeaderOpt.isDefined) {
+          } else if (oldLeaderOpt.isEmpty) {
             trace("Leader %d is elected for partition [%s,%d]".format(l, topic, partition))
             isLeaderElectedOrChanged = true
           } else {
@@ -856,7 +856,7 @@ object TestUtils extends Logging {
     // in sync replicas should not have any replica that is not in the new assigned replicas
     val phantomInSyncReplicas = inSyncReplicas.toSet -- assignedReplicas.toSet
     assertTrue("All in sync replicas %s must be in the assigned replica list %s".format(inSyncReplicas, assignedReplicas),
-      phantomInSyncReplicas.size == 0)
+      phantomInSyncReplicas.isEmpty)
   }
 
   def ensureNoUnderReplicatedPartitions(zkUtils: ZkUtils, topic: String, partitionToBeReassigned: Int, assignedReplicas: Seq[Int],
@@ -1031,7 +1031,7 @@ object TestUtils extends Logging {
       "Topic path /brokers/topics/%s not deleted after /admin/delete_topic/%s path is deleted".format(topic, topic))
     // ensure that the topic-partition has been deleted from all brokers' replica managers
     TestUtils.waitUntilTrue(() =>
-      servers.forall(server => topicAndPartitions.forall(tp => server.replicaManager.getPartition(tp.topic, tp.partition) == None)),
+      servers.forall(server => topicAndPartitions.forall(tp => server.replicaManager.getPartition(tp.topic, tp.partition).isEmpty)),
       "Replica manager's should have deleted all of this topic's partitions")
     // ensure that logs from all replicas are deleted if delete topic is marked successful in zookeeper
     assertTrue("Replica logs not deleted after delete topic is complete",
@@ -1146,7 +1146,7 @@ class IntEncoder(props: VerifiableProperties = null) extends Encoder[Int] {
 @deprecated("This class is deprecated and it will be removed in a future release.", "0.10.0.0")
 class StaticPartitioner(props: VerifiableProperties = null) extends Partitioner {
   def partition(data: Any, numPartitions: Int): Int = {
-    (data.asInstanceOf[String].length % numPartitions)
+    data.asInstanceOf[String].length % numPartitions
   }
 }
 
