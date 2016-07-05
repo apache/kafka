@@ -31,7 +31,7 @@ public abstract class AbstractStream<K> {
     protected final Set<String> sourceNodes;
 
     public AbstractStream(KStreamBuilder topology, String name, Set<String> sourceNodes) {
-        if(sourceNodes == null || sourceNodes.isEmpty()) {
+        if (sourceNodes == null || sourceNodes.isEmpty()) {
             throw new IllegalArgumentException("parameter <sourceNodes> must not be null or empty");
         }
 

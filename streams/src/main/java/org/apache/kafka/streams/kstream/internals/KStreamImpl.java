@@ -228,7 +228,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     public static <K, V> KStream<K, V> merge(KStreamBuilder topology, KStream<K, V>[] streams) {
-        if(streams == null || streams.length == 0) {
+        if (streams == null || streams.length == 0) {
             throw new IllegalArgumentException("Parameter <streams> must not be null or has length zero");
         }
 
