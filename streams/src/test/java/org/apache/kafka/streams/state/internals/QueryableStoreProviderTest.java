@@ -121,7 +121,7 @@ public class QueryableStoreProviderTest {
         }
 
         @Override
-        public boolean isOpen() {
+        public boolean open() {
             return false;
         }
     }

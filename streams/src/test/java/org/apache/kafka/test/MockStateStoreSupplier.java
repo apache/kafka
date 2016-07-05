@@ -102,7 +102,7 @@ public class MockStateStoreSupplier implements StateStoreSupplier {
         }
 
         @Override
-        public boolean isOpen() {
+        public boolean open() {
             return !closed;
         }
 

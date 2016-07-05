@@ -60,8 +60,8 @@ public interface StateStore {
     boolean persistent();
 
     /**
-     * Is this store open
+     * Is this store open for reading and writing
      * @return {@code true} if the store is open
      */
-    boolean isOpen();
+    boolean open();
 }

@@ -42,7 +42,7 @@ public class StreamThreadStateStoreProvider implements StateStoreProvider {
         for (StreamTask streamTask : streamThread.tasks().values()) {
             final StateStore store = streamTask.getStore(storeName);
             if (store != null && queryableStoreType.accepts(store)) {
-                if (!store.isOpen()) {
+                if (!store.open()) {
                     throw new InvalidStateStoreException("Store: " + storeName + " isn't open");
                 }
                 stores.add((T) store);

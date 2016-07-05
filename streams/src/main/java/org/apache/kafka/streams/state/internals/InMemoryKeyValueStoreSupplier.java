@@ -108,7 +108,7 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
         }
 
         @Override
-        public boolean isOpen() {
+        public boolean open() {
             return this.open;
         }
 

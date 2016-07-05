@@ -38,7 +38,7 @@ public interface ReadOnlyKeyValueStore<K, V> {
     /**
      * Get an iterator over a given range of keys. This iterator MUST be closed after use.
      * The returned iterator must be safe from {@link java.util.ConcurrentModificationException}s
-     * and must not return null values
+     * and must not return null values. No ordering guarantees are provided.
      * @param from The first key that could be in the range
      * @param to The last key that could be in the range
      * @return The iterator for this range.
@@ -49,7 +49,7 @@ public interface ReadOnlyKeyValueStore<K, V> {
     /**
      * Return an iterator over all keys in this store. This iterator MUST be closed after use.
      * The returned iterator must be safe from {@link java.util.ConcurrentModificationException}s
-     * and must not return null values
+     * and must not return null values. No ordering guarantees are provided.
      * @return An iterator of all key/value pairs in the store.
      */
     KeyValueIterator<K, V> all();
