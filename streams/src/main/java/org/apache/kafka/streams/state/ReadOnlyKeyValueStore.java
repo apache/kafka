@@ -17,7 +17,9 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * A key value store that only supports read operations
+ * A key value store that only supports read operations.
+ * Implementations should be Thread Safe as concurrent reads and writes
+ * are expected
  * @param <K> the key type
  * @param <V> the value type
  */
@@ -35,7 +37,8 @@ public interface ReadOnlyKeyValueStore<K, V> {
 
     /**
      * Get an iterator over a given range of keys. This iterator MUST be closed after use.
-     *
+     * The returned iterator must be safe from {@link java.util.ConcurrentModificationException}s
+     * and must not return null values
      * @param from The first key that could be in the range
      * @param to The last key that could be in the range
      * @return The iterator for this range.
@@ -44,8 +47,9 @@ public interface ReadOnlyKeyValueStore<K, V> {
     KeyValueIterator<K, V> range(K from, K to);
 
     /**
-     * Return an iterator over all keys in the database. This iterator MUST be closed after use.
-     *
+     * Return an iterator over all keys in this store. This iterator MUST be closed after use.
+     * The returned iterator must be safe from {@link java.util.ConcurrentModificationException}s
+     * and must not return null values
      * @return An iterator of all key/value pairs in the store.
      */
     KeyValueIterator<K, V> all();

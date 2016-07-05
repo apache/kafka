@@ -37,19 +37,19 @@ public class CompositeReadOnlyWindowStoreTest {
     private StateStoreProviderStub stubProviderTwo;
     private CompositeReadOnlyWindowStore<String, String>
         windowStore;
-    private ReadOnlyWindowStoreStub<String, String> undelyingWindowStore;
+    private ReadOnlyWindowStoreStub<String, String> underlyingWindowStore;
     private ReadOnlyWindowStoreStub<String, String>
-        otherUnderylingStore;
+            otherUnderlyingStore;
 
     @Before
     public void before() {
         stubProviderOne = new StateStoreProviderStub();
         stubProviderTwo = new StateStoreProviderStub();
-        undelyingWindowStore = new ReadOnlyWindowStoreStub<>();
-        stubProviderOne.addStore(storeName, undelyingWindowStore);
+        underlyingWindowStore = new ReadOnlyWindowStoreStub<>();
+        stubProviderOne.addStore(storeName, underlyingWindowStore);
 
-        otherUnderylingStore = new ReadOnlyWindowStoreStub<>();
-        stubProviderOne.addStore("other-window-store", otherUnderylingStore);
+        otherUnderlyingStore = new ReadOnlyWindowStoreStub<>();
+        stubProviderOne.addStore("other-window-store", otherUnderlyingStore);
 
 
         windowStore = new CompositeReadOnlyWindowStore<>(
@@ -60,8 +60,8 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Test
     public void shouldFetchValuesFromWindowStore() throws Exception {
-        undelyingWindowStore.put("my-key", "my-value", 0L);
-        undelyingWindowStore.put("my-key", "my-later-value", 10L);
+        underlyingWindowStore.put("my-key", "my-value", 0L);
+        underlyingWindowStore.put("my-key", "my-later-value", 10L);
 
         final WindowStoreIterator<String> iterator = windowStore.fetch("my-key", 0L, 25L);
         final List<KeyValue<Long, String>> results = toList(iterator);
@@ -83,7 +83,7 @@ public class CompositeReadOnlyWindowStoreTest {
             ReadOnlyWindowStoreStub<>();
         stubProviderTwo.addStore(storeName, secondUnderlying);
 
-        undelyingWindowStore.put("key-one", "value-one", 0L);
+        underlyingWindowStore.put("key-one", "value-one", 0L);
         secondUnderlying.put("key-two", "value-two", 10L);
 
         final List<KeyValue<Long, String>> keyOneResults = toList(windowStore.fetch("key-one", 0L,
@@ -97,8 +97,8 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Test
     public void shouldNotGetValuesFromOtherStores() throws Exception {
-        otherUnderylingStore.put("some-key", "some-value", 0L);
-        undelyingWindowStore.put("some-key", "my-value", 1L);
+        otherUnderlyingStore.put("some-key", "some-value", 0L);
+        underlyingWindowStore.put("some-key", "my-value", 1L);
 
         final List<KeyValue<Long, String>> results = toList(windowStore.fetch("some-key", 0L, 2L));
         assertEquals(Collections.singletonList(new KeyValue<>(1L, "my-value")), results);

@@ -23,7 +23,7 @@ public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
 
     @Override
     public String name() {
-        return null;
+        return "";
     }
 
     @Override

@@ -18,7 +18,8 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * A window store that only supports read operations
- *
+ * Implementations should be thread safe as concurrent reads and writes
+ * are expected.
  * @param <K> Type of keys
  * @param <V> Type of values
  */
