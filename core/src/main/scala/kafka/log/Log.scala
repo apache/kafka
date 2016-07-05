@@ -194,7 +194,7 @@ class Log(val dir: File,
               segment.index.sanityCheck()
           } catch {
             case e: java.lang.IllegalArgumentException =>
-              warn("Found a corrupted index file, %s, deleting and rebuilding index...".format(indexFile.getAbsolutePath))
+              warn("Found a corrupted index file, %s, deleting and rebuilding index. Error Message: %s".format(indexFile.getAbsolutePath, e.getMessage))
               indexFile.delete()
               segment.recover(config.maxMessageSize)
           }
@@ -802,7 +802,7 @@ class Log(val dir: File,
     }
   }
 
-  override def toString() = "Log(" + dir + ")"
+  override def toString = "Log(" + dir + ")"
 
   /**
    * This method performs an asynchronous log segment delete by doing the following:

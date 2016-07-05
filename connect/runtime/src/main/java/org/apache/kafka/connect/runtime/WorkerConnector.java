@@ -66,10 +66,9 @@ public class WorkerConnector {
     }
 
     public void initialize(ConnectorConfig connectorConfig) {
-        log.debug("Initializing connector {} with config {}", connName, config);
-
         try {
             this.config = connectorConfig.originalsStrings();
+            log.debug("Initializing connector {} with config {}", connName, config);
 
             connector.initialize(new ConnectorContext() {
                 @Override

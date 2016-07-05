@@ -25,8 +25,7 @@ import org.junit.Test;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertNotEquals;
 
 public class TimeWindowsTest {
 
@@ -39,31 +38,30 @@ public class TimeWindowsTest {
         TimeWindows w2 = TimeWindows.of("w2", w1.size);
 
         // Reflexive
-        assertTrue(w1.equals(w1));
-        assertTrue(w1.hashCode() == w1.hashCode());
+        assertEquals(w1, w1);
+        assertEquals(w1.hashCode(), w1.hashCode());
 
         // Symmetric
-        assertTrue(w1.equals(w2));
-        assertTrue(w1.hashCode() == w2.hashCode());
-        assertTrue(w2.hashCode() == w1.hashCode());
+        assertEquals(w1, w2);
+        assertEquals(w2, w1);
+        assertEquals(w1.hashCode(), w2.hashCode());
 
         // Transitive
         TimeWindows w3 = TimeWindows.of("w3", w2.size);
-        assertTrue(w2.equals(w3));
-        assertTrue(w2.hashCode() == w3.hashCode());
-        assertTrue(w1.equals(w3));
-        assertTrue(w1.hashCode() == w3.hashCode());
+        assertEquals(w2, w3);
+        assertEquals(w1, w3);
+        assertEquals(w1.hashCode(), w3.hashCode());
 
         // Inequality scenarios
-        assertFalse("must be false for null", w1.equals(null));
-        assertFalse("must be false for different window types", w1.equals(UnlimitedWindows.of("irrelevant")));
-        assertFalse("must be false for different types", w1.equals(new Object()));
+        assertNotEquals("must be false for null", null, w1);
+        assertNotEquals("must be false for different window types", UnlimitedWindows.of("irrelevant"), w1);
+        assertNotEquals("must be false for different types", new Object(), w1);
 
         TimeWindows differentWindowSize = TimeWindows.of("differentWindowSize", w1.size + 1);
-        assertFalse("must be false when window sizes are different", w1.equals(differentWindowSize));
+        assertNotEquals("must be false when window sizes are different", differentWindowSize, w1);
 
         TimeWindows differentAdvanceInterval = w1.advanceBy(w1.advance - 1);
-        assertFalse("must be false when advance intervals are different", w1.equals(differentAdvanceInterval));
+        assertNotEquals("must be false when advance intervals are different", differentAdvanceInterval, w1);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -110,6 +108,14 @@ public class TimeWindowsTest {
         assertEquals(new TimeWindow(10L, 22L), matched.get(10L));
         assertEquals(new TimeWindow(15L, 27L), matched.get(15L));
         assertEquals(new TimeWindow(20L, 32L), matched.get(20L));
+    }
+
+    @Test
+    public void windowsForBarelyOverlappingHoppingWindows() {
+        TimeWindows windows = TimeWindows.of(anyName, 6L).advanceBy(5L);
+        Map<Long, TimeWindow> matched = windows.windowsFor(7L);
+        assertEquals(1, matched.size());
+        assertEquals(new TimeWindow(5L, 11L), matched.get(5L));
     }
 
     @Test

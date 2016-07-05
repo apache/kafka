@@ -515,14 +515,14 @@ class ZkUtils(val zkClient: ZkClient,
 
   /**
     * Conditional delete the persistent path data, return true if it succeeds,
-    * otherwise (the current version is not the expected version)
+    * false otherwise (the current version is not the expected version)
     */
    def conditionalDeletePath(path: String, expectedVersion: Int): Boolean = {
     try {
       zkClient.delete(path, expectedVersion)
       true
     } catch {
-      case e: KeeperException.BadVersionException => false
+      case e: ZkBadVersionException => false
     }
   }
 
@@ -653,7 +653,7 @@ class ZkUtils(val zkClient: ZkClient,
       val topic = topicAndPartitionMap._1
       val partitionMap = topicAndPartitionMap._2
       debug("partition assignment of /brokers/topics/%s is %s".format(topic, partitionMap))
-      (topic -> partitionMap.keys.toSeq.sortWith((s,t) => s < t))
+      topic -> partitionMap.keys.toSeq.sortWith((s, t) => s < t)
     }
   }
 
@@ -663,7 +663,7 @@ class ZkUtils(val zkClient: ZkClient,
     jsonPartitionMapOpt match {
       case Some(jsonPartitionMap) =>
         val reassignedPartitions = parsePartitionReassignmentData(jsonPartitionMap)
-        reassignedPartitions.map(p => (p._1 -> new ReassignedPartitionsContext(p._2)))
+        reassignedPartitions.map(p => p._1 -> new ReassignedPartitionsContext(p._2))
       case None => Map.empty[TopicAndPartition, ReassignedPartitionsContext]
     }
   }
@@ -828,9 +828,9 @@ class ZkUtils(val zkClient: ZkClient,
     val topics = getChildrenParentMayNotExist(BrokerTopicsPath)
     if(topics == null) Set.empty[TopicAndPartition]
     else {
-      topics.map { topic =>
+      topics.flatMap { topic =>
         getChildren(getTopicPartitionsPath(topic)).map(_.toInt).map(TopicAndPartition(topic, _))
-      }.flatten.toSet
+      }.toSet
     }
   }
 

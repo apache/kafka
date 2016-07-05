@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
@@ -293,6 +294,112 @@ public class WorkerSinkTaskTest {
         PowerMock.verifyAll();
     }
 
+    @Test
+    public void testWakeupInCommitSyncCausesRetry() throws Exception {
+        expectInitializeTask();
+        expectPollInitialAssignment();
+
+        final List<TopicPartition> partitions = asList(TOPIC_PARTITION, TOPIC_PARTITION2);
+
+        sinkTask.close(new HashSet<>(partitions));
+        EasyMock.expectLastCall();
+
+        sinkTask.flush(EasyMock.<Map<TopicPartition, OffsetAndMetadata>>anyObject());
+        EasyMock.expectLastCall();
+
+        // first one raises wakeup
+        consumer.commitSync(EasyMock.<Map<TopicPartition, OffsetAndMetadata>>anyObject());
+        EasyMock.expectLastCall().andThrow(new WakeupException());
+
+        // we should retry and complete the commit
+        consumer.commitSync(EasyMock.<Map<TopicPartition, OffsetAndMetadata>>anyObject());
+        EasyMock.expectLastCall();
+
+        EasyMock.expect(consumer.position(TOPIC_PARTITION)).andReturn(FIRST_OFFSET);
+        EasyMock.expect(consumer.position(TOPIC_PARTITION2)).andReturn(FIRST_OFFSET);
+
+        sinkTask.open(partitions);
+        EasyMock.expectLastCall();
+
+        EasyMock.expect(consumer.poll(EasyMock.anyLong())).andAnswer(
+                new IAnswer<ConsumerRecords<byte[], byte[]>>() {
+                    @Override
+                    public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
+                        rebalanceListener.getValue().onPartitionsRevoked(partitions);
+                        rebalanceListener.getValue().onPartitionsAssigned(partitions);
+                        return ConsumerRecords.empty();
+                    }
+                });
+
+        EasyMock.expect(consumer.assignment()).andReturn(new HashSet<>(partitions));
+
+        consumer.resume(Collections.singleton(TOPIC_PARTITION));
+        EasyMock.expectLastCall();
+
+        consumer.resume(Collections.singleton(TOPIC_PARTITION2));
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        workerTask.poll(Long.MAX_VALUE); // poll for initial assignment
+        workerTask.poll(Long.MAX_VALUE); // now rebalance with the wakeup triggered
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testMissingTimestampPropagation() throws Exception {
+        expectInitializeTask();
+        expectConsumerPoll(1, Record.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE);
+        expectConvertMessages(1);
+
+        Capture<Collection<SinkRecord>> records = EasyMock.newCapture(CaptureType.ALL);
+
+        sinkTask.put(EasyMock.capture(records));
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        workerTask.poll(Long.MAX_VALUE);
+
+        SinkRecord record = records.getValue().iterator().next();
+
+        // we expect null for missing timestamp, the sentinel value of Record.NO_TIMESTAMP is Kafka's API
+        assertEquals(null, record.timestamp());
+        assertEquals(TimestampType.NO_TIMESTAMP_TYPE, record.timestampType());
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testTimestampPropagation() throws Exception {
+        final Long timestamp = System.currentTimeMillis();
+        final TimestampType timestampType = TimestampType.CREATE_TIME;
+
+        expectInitializeTask();
+        expectConsumerPoll(1, timestamp, timestampType);
+        expectConvertMessages(1);
+
+        Capture<Collection<SinkRecord>> records = EasyMock.newCapture(CaptureType.ALL);
+
+        sinkTask.put(EasyMock.capture(records));
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        workerTask.poll(Long.MAX_VALUE);
+
+        SinkRecord record = records.getValue().iterator().next();
+
+        assertEquals(timestamp, record.timestamp());
+        assertEquals(timestampType, record.timestampType());
+
+        PowerMock.verifyAll();
+    }
 
     private void expectInitializeTask() throws Exception {
         PowerMock.expectPrivate(workerTask, "createConsumer").andReturn(consumer);
@@ -377,13 +484,17 @@ public class WorkerSinkTaskTest {
     }
 
     private void expectConsumerPoll(final int numMessages) {
+        expectConsumerPoll(numMessages, Record.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE);
+    }
+
+    private void expectConsumerPoll(final int numMessages, final long timestamp, final TimestampType timestampType) {
         EasyMock.expect(consumer.poll(EasyMock.anyLong())).andAnswer(
                 new IAnswer<ConsumerRecords<byte[], byte[]>>() {
                     @Override
                     public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
                         List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
                         for (int i = 0; i < numMessages; i++)
-                            records.add(new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned + i, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, RAW_KEY, RAW_VALUE));
+                            records.add(new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned + i, timestamp, timestampType, 0L, 0, 0, RAW_KEY, RAW_VALUE));
                         recordsReturned += numMessages;
                         return new ConsumerRecords<>(
                                 numMessages > 0 ?

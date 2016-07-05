@@ -212,7 +212,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         try {
             if (ttl == TTL_NOT_USED) {
                 dir.getParentFile().mkdirs();
-                return RocksDB.open(options, dir.toString());
+                return RocksDB.open(options, dir.getAbsolutePath());
             } else {
                 throw new UnsupportedOperationException("Change log is not supported for store " + this.name + " since it is TTL based.");
                 // TODO: support TTL with change log?
@@ -354,6 +354,43 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         return new RocksDbIterator<>(innerIter, serdes);
     }
 
+    /**
+     * Return an approximate count of key-value mappings in this store.
+     *
+     * <code>RocksDB</code> cannot return an exact entry count without doing a
+     * full scan, so this method relies on the <code>rocksdb.estimate-num-keys</code>
+     * property to get an approximate count. The returned size also includes
+     * a count of dirty keys in the store's in-memory cache, which may lead to some
+     * double-counting of entries and inflate the estimate.
+     *
+     * @return an approximate count of key-value mappings in the store.
+     */
+    @Override
+    public long approximateNumEntries() {
+        long value;
+        try {
+            value = this.db.getLongProperty("rocksdb.estimate-num-keys");
+        } catch (RocksDBException e) {
+            throw new ProcessorStateException("Error fetching property from store " + this.name, e);
+        }
+        if (isOverflowing(value)) {
+            return Long.MAX_VALUE;
+        }
+        if (this.cacheDirtyKeys != null) {
+            value += this.cacheDirtyKeys.size();
+        }
+        if (isOverflowing(value)) {
+            return Long.MAX_VALUE;
+        }
+        return value;
+    }
+
+    private boolean isOverflowing(long value) {
+        // RocksDB returns an unsigned 8-byte integer, which could overflow long
+        // and manifest as a negative value.
+        return value < 0;
+    }
+
     private void flushCache() {
         // flush of the cache entries if necessary
         if (cache != null) {
@@ -407,6 +444,10 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void flush() {
+        if (db == null) {
+            return;
+        }
+
         // flush of the cache entries if necessary
         flushCache();
 
@@ -427,6 +468,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void close() {
+
+        if (db == null) {
+            return;
+        }
+
         flush();
         options.dispose();
         wOptions.dispose();

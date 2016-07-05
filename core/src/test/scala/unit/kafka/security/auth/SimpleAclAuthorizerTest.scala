@@ -336,10 +336,28 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
       aclId % 10 != 0
     }.toSet
 
-    TestUtils.assertConcurrent("Should support many concurrent calls", concurrentFuctions, 15000)
+    TestUtils.assertConcurrent("Should support many concurrent calls", concurrentFuctions, 30 * 1000)
 
     TestUtils.waitAndVerifyAcls(expectedAcls, simpleAclAuthorizer, commonResource)
     TestUtils.waitAndVerifyAcls(expectedAcls, simpleAclAuthorizer2, commonResource)
+  }
+
+  @Test
+  def testHighConcurrencyDeletionOfResourceAcls() {
+    val acl = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username), Allow, WildCardHost, All)
+
+    // Alternate authorizer to keep adding and removing zookeeper path
+    val concurrentFuctions = (0 to 50).map { i =>
+      () => {
+        simpleAclAuthorizer.addAcls(Set(acl), resource)
+        simpleAclAuthorizer2.removeAcls(Set(acl), resource)
+      }
+    }
+
+    TestUtils.assertConcurrent("Should support many concurrent calls", concurrentFuctions, 30 * 1000)
+
+    TestUtils.waitAndVerifyAcls(Set.empty[Acl], simpleAclAuthorizer, resource)
+    TestUtils.waitAndVerifyAcls(Set.empty[Acl], simpleAclAuthorizer2, resource)
   }
 
   private def changeAclAndVerify(originalAcls: Set[Acl], addedAcls: Set[Acl], removedAcls: Set[Acl], resource: Resource = resource): Set[Acl] = {

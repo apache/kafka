@@ -170,10 +170,10 @@ public enum Errors {
     }
 
     /**
-     * Returns the class name of the exception
+     * Returns the class name of the exception or null if this is {@code Errors.NONE}.
      */
     public String exceptionName() {
-        return exception.getClass().getName();
+        return exception == null ? null : exception.getClass().getName();
     }
 
     /**

@@ -32,8 +32,8 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslTestHarne
   @Test
   def testMultipleBrokerMechanisms() {
 
-    val plainSaslProducer = producers(0)
-    val plainSaslConsumer = consumers(0)
+    val plainSaslProducer = producers.head
+    val plainSaslConsumer = consumers.head
 
     val gssapiSaslProperties = kafkaSaslProperties("GSSAPI")
     val gssapiSaslProducer = TestUtils.createNewProducer(brokerList,

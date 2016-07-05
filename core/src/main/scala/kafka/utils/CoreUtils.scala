@@ -258,7 +258,7 @@ object CoreUtils extends Logging {
        * Per RFC4627, section 2.5, we're not technically required to
        * encode the C1 codes, but we do to be safe.
        */
-      case c if ((c >= '\u0000' && c <= '\u001f') || (c >= '\u007f' && c <= '\u009f')) => "\\u%04x".format(c: Int)
+      case c if (c >= '\u0000' && c <= '\u001f') || (c >= '\u007f' && c <= '\u009f') => "\\u%04x".format(c: Int)
       case c => c
     }.mkString
   }
@@ -269,7 +269,7 @@ object CoreUtils extends Logging {
   def duplicates[T](s: Traversable[T]): Iterable[T] = {
     s.groupBy(identity)
       .map{ case (k,l) => (k,l.size)}
-      .filter{ case (k,l) => (l > 1) }
+      .filter{ case (k,l) => l > 1 }
       .keys
   }
 
