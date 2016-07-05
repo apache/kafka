@@ -61,6 +61,15 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
             keyValueStore(valSerde, name));
     }
 
+    @Override
+    public KTable<K, V> reduce(final Reducer<V> reducer,
+                               final StateStoreSupplier storeSupplier,
+                               final String name) {
+        return doAggregate(
+                new KStreamReduce<K, V>(name, reducer),
+                REDUCE_NAME,
+                storeSupplier);
+    }
 
     @SuppressWarnings("unchecked")
     @Override
@@ -70,6 +79,18 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
             new KStreamWindowReduce<K, V, W>(windows, windows.name(), reducer),
             REDUCE_NAME,
             windowedStore(valSerde, windows)
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <W extends Window> KTable<Windowed<K>, V> reduce(Reducer<V> reducer,
+                                                            Windows<W> windows,
+                                                            StateStoreSupplier storeSupplier) {
+        return (KTable<Windowed<K>, V>) doAggregate(
+                new KStreamWindowReduce<K, V, W>(windows, windows.name(), reducer),
+                REDUCE_NAME,
+                storeSupplier
         );
     }
 
@@ -84,6 +105,18 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
             keyValueStore(aggValueSerde, name));
     }
 
+    @Override
+    public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
+                                      final Aggregator<K, V, T> aggregator,
+                                      final Serde<T> aggValueSerde,
+                                      final StateStoreSupplier storeSupplier,
+                                      final String name) {
+        return doAggregate(
+                new KStreamAggregate<>(name, initializer, aggregator),
+                AGGREGATE_NAME,
+                storeSupplier);
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public <W extends Window, T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
@@ -94,6 +127,20 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
             new KStreamWindowAggregate<>(windows, windows.name(), initializer, aggregator),
             AGGREGATE_NAME,
             windowedStore(aggValueSerde, windows)
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <W extends Window, T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
+                                                                  final Aggregator<K, V, T> aggregator,
+                                                                  final Windows<W> windows,
+                                                                  final Serde<T> aggValueSerde,
+                                                                  final StateStoreSupplier storeSupplier) {
+        return (KTable<Windowed<K>, T>) doAggregate(
+                new KStreamWindowAggregate<>(windows, windows.name(), initializer, aggregator),
+                AGGREGATE_NAME,
+                storeSupplier
         );
     }
 

@@ -17,6 +17,7 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 
 /**
  * {@link KGroupedStream} is an abstraction of a <i>grouped record stream</i> of key-value pairs
@@ -46,7 +47,16 @@ public interface KGroupedStream<K, V> {
     KTable<K, V> reduce(Reducer<V> reducer,
                         String name);
 
-
+    /**
+     * Combine values of this stream by the grouped key into a new instance of ever-updating with user defined state store supplier
+     * @param reducer           the instance of {@link Reducer}
+     * @param storeSupplier     the state store supplier {@link StateStoreSupplier}
+     * @param name              the name of the resulted {@link KTable}
+     * @return a {@link KTable} that contains records with unmodified keys and values that represent the latest (rolling) aggregate for each key
+     */
+    KTable<K, V> reduce(final Reducer<V> reducer,
+                        final StateStoreSupplier storeSupplier,
+                        final String name);
     /**
      * Combine values of this stream by key on a window basis into a new instance of windowed {@link KTable}.
      *
@@ -58,7 +68,18 @@ public interface KGroupedStream<K, V> {
      */
     <W extends Window> KTable<Windowed<K>, V> reduce(Reducer<V> reducer,
                                                      Windows<W> windows);
-
+    /**
+     *
+     * @param reducer          the instance of {@link Reducer}
+     * @param windows          the specification of the aggregation {@link Windows}
+     * @param storeSupplier    the state store supplier {@link StateStoreSupplier}
+     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
+     *         where each table contains records with unmodified keys and values
+     *         that represent the latest (rolling) aggregate for each key within that window
+     */
+    <W extends Window> KTable<Windowed<K>, V> reduce(Reducer<V> reducer,
+                                                     Windows<W> windows,
+                                                     StateStoreSupplier storeSupplier);
     /**
      * Aggregate values of this stream by key into a new instance of a {@link KTable}.
      *
@@ -75,6 +96,22 @@ public interface KGroupedStream<K, V> {
                                Serde<T> aggValueSerde,
                                String name);
 
+    /**
+     *
+     * @param initializer   the instance of {@link Initializer}
+     * @param aggregator    the instance of {@link Aggregator}
+     * @param aggValueSerde aggregate value serdes for materializing the aggregated table,
+     *                      if not specified the default serdes defined in the configs will be used
+     * @param storeSupplier the state store supplier {@link StateStoreSupplier}
+     * @param name          the name of the resulted {@link KTable}
+     * @param <T>           the value type of the resulted {@link KTable}
+     * @return a {@link KTable} that represents the latest (rolling) aggregate for each key
+     */
+    <T> KTable<K, T> aggregate(final Initializer<T> initializer,
+                               final Aggregator<K, V, T> aggregator,
+                               final Serde<T> aggValueSerde,
+                               final StateStoreSupplier storeSupplier,
+                               final String name);
     /**
      * Aggregate values of this stream by key on a window basis into a new instance of windowed {@link KTable}.
      *
@@ -93,8 +130,24 @@ public interface KGroupedStream<K, V> {
                                                            Aggregator<K, V, T> aggregator,
                                                            Windows<W> windows,
                                                            Serde<T> aggValueSerde);
-
-
+    /**
+     *
+     * @param initializer   the instance of {@link Initializer}
+     * @param aggregator    the instance of {@link Aggregator}
+     * @param windows       the specification of the aggregation {@link Windows}
+     * @param aggValueSerde aggregate value serdes for materializing the aggregated table,
+     *                      if not specified the default serdes defined in the configs will be used
+     * @param storeSupplier the state store supplier {@link StateStoreSupplier}
+     * @param <T>           the value type of the resulted {@link KTable}
+     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
+     *         where each table contains records with unmodified keys and values with type {@code T}
+     *         that represent the latest (rolling) aggregate for each key within that window
+     */
+    <W extends Window, T> KTable<Windowed<K>, T> aggregate(Initializer<T> initializer,
+                                                           Aggregator<K, V, T> aggregator,
+                                                           Windows<W> windows,
+                                                           Serde<T> aggValueSerde,
+                                                           StateStoreSupplier storeSupplier);
     /**
      * Count number of records of this stream by key into a new instance of a {@link KTable}
      *
