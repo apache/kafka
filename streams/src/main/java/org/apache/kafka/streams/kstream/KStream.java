@@ -491,11 +491,10 @@ public interface KStream<K, V> {
      *
      * @param selector      select the grouping key and value to be aggregated
      * @param <K1>          the key type of the {@link KGroupedStream}
-     * @param <V1>          the value type of the {@link KGroupedStream}
      *
      * @return a {@link KGroupedStream} that contains the the grouped records of the original {@link KStream}
      */
-    <K1, V1> KGroupedStream<K1, V1> groupBy(KeyValueMapper<K, V, K1> selector);
+    <K1> KGroupedStream<K1, V> groupBy(KeyValueMapper<K, V, K1> selector);
 
     /**
      * Group the records of this {@link KStream} using the provided {@link KeyValueMapper}.
@@ -507,13 +506,12 @@ public interface KStream<K, V> {
      * @param valSerde    value serdes for materializing this stream,
      *                      if not specified the default serdes defined in the configs will be used
      * @param <K1>          the key type of the {@link KGroupedStream}
-     * @param <V1>          the value type of the {@link KGroupedStream}
      *
      * @return a {@link KGroupedStream} that contains the the grouped records of the original {@link KStream}
      */
-    <K1, V1> KGroupedStream<K1, V1> groupBy(KeyValueMapper<K, V, K1> selector,
+    <K1> KGroupedStream<K1, V> groupBy(KeyValueMapper<K, V, K1> selector,
                                             Serde<K1> keySerde,
-                                            Serde<V1> valSerde);
+                                            Serde<V> valSerde);
 
     /**
      * Group the records with the same key into a {@link KGroupedStream} while preserving the
