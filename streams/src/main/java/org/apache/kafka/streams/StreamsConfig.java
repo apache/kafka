@@ -103,8 +103,8 @@ public class StreamsConfig extends AbstractConfig {
     public static final String VALUE_SERDE_CLASS_CONFIG = "value.serde";
     public static final String VALUE_SERDE_CLASS_DOC = "Serializer / deserializer class for value that implements the <code>Serde</code> interface.";
 
-    public static final String USER_ENDPOINT_CONFIG = "user.endpoint.config";
-    public static final String USER_ENDPOINT_DOC = "A user defined endpoint that can be used to connect to remote KafkaStreams instances";
+    public static final String USER_ENDPOINT_CONFIG = "user.endpoint";
+    public static final String USER_ENDPOINT_DOC = "A user defined endpoint that can be used to connect to remote KafkaStreams instances. Should be in the format host:port";
 
     /** <code>metrics.sample.window.ms</code> */
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
