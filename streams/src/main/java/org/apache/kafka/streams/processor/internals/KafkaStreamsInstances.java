@@ -60,18 +60,21 @@ public class KafkaStreamsInstances {
      * @return all the {@link KafkaStreamsInstance}s in a {@link KafkaStreams} application
      */
     public Collection<KafkaStreamsInstance> getAllStreamsInstances() {
-        final Map<HostInfo, KafkaStreamsInstance> results = allInstancesWithStores();
-        /**
-         * Add hosts that don't have any stores
-         */
-        for (HostInfo hostInfo : hostToTopicPartition.keySet()) {
-            if (!results.containsKey(hostInfo)) {
-                results.put(hostInfo, new KafkaStreamsInstance(hostInfo,
-                        Collections.<String>emptySet(),
-                        hostToTopicPartition.get(hostInfo)));
+        final List<KafkaStreamsInstance> all = new ArrayList<>();
+        final Map<String, Set<String>> stores = builder.stateStoreNameToSourceTopics();
+        for (Map.Entry<HostInfo, Set<TopicPartition>> entry : hostToTopicPartition.entrySet()) {
+            final HostInfo key = entry.getKey();
+            final Set<TopicPartition> partitionsForHost = new HashSet<>(entry.getValue());
+            final Set<String> storesOnHost = new HashSet<>();
+            for (Map.Entry<String, Set<String>> storeTopicEntry : stores.entrySet()) {
+                final Set<String> topicsForStore = storeTopicEntry.getValue();
+                if (hasPartitionsForAnyTopics(topicsForStore,   partitionsForHost)) {
+                    storesOnHost.add(storeTopicEntry.getKey());
+                }
             }
+            all.add(new KafkaStreamsInstance(key, storesOnHost, partitionsForHost));
         }
-        return results.values();
+        return all;
     }
 
 
@@ -90,7 +93,7 @@ public class KafkaStreamsInstances {
             return Collections.emptyList();
         }
 
-        final Collection<KafkaStreamsInstance> allStreamsInstances = allInstancesWithStores().values();
+        final Collection<KafkaStreamsInstance> allStreamsInstances = getAllStreamsInstances();
         final ArrayList<KafkaStreamsInstance> results = new ArrayList<>();
         for (KafkaStreamsInstance instance : allStreamsInstances) {
             if (instance.getStateStoreNames().contains(storeName)) {
@@ -159,7 +162,7 @@ public class KafkaStreamsInstances {
             return null;
         }
 
-        final Collection<KafkaStreamsInstance> allStreamsInstances = allInstancesWithStores().values();
+        final Collection<KafkaStreamsInstance> allStreamsInstances = getAllStreamsInstances();
 
         int numPartitions = 0;
         for (String topic : sourceTopics) {
@@ -187,41 +190,15 @@ public class KafkaStreamsInstances {
         return null;
     }
 
-    private Map<HostInfo, KafkaStreamsInstance> allInstancesWithStores() {
-        final Map<String, Set<String>> stateStoreNameToSourceTopics = builder.stateStoreNameToSourceTopics();
-        final Map<HostInfo, KafkaStreamsInstance> results = new HashMap<>();
-
-        for (final Map.Entry<String, Set<String>> entry : stateStoreNameToSourceTopics.entrySet()) {
-            final Set<String> sourceTopics = entry.getValue();
-            for (String topic : sourceTopics) {
-                updateInstancesWithStore(entry.getKey(), results, partitionsByTopic.get(topic));
+    private boolean hasPartitionsForAnyTopics(final Set<String> topicNames, final Set<TopicPartition> partitions) {
+        for (String topic : topicNames) {
+            for (TopicPartition tp : partitionsByTopic.get(topic)) {
+                if (partitions.contains(tp)) {
+                    return true;
+                }
             }
         }
-        return results;
-    }
-
-    private void updateInstancesWithStore(final String storeName,
-                                          final Map<HostInfo, KafkaStreamsInstance> results,
-                                          final List<TopicPartition> partitionsForTopic) {
-        for (final Map.Entry<HostInfo, Set<TopicPartition>> hostToPartitions : hostToTopicPartition.entrySet()) {
-            final Set<TopicPartition> partitionsForHost = new HashSet<>(hostToPartitions.getValue());
-            partitionsForHost.retainAll(partitionsForTopic);
-            if (partitionsForHost.isEmpty()) {
-                continue;
-            }
-
-            final HostInfo hostInfo = hostToPartitions.getKey();
-            if (!results.containsKey(hostInfo)) {
-                results.put(hostInfo, new KafkaStreamsInstance(hostInfo,
-                        Collections.<String>emptySet(), Collections.<TopicPartition>emptySet()));
-            }
-            final KafkaStreamsInstance instance = results.get(hostInfo);
-            partitionsForHost.addAll(instance.getTopicPartitions());
-            final HashSet<String> stateStoreNames = new HashSet<>();
-            stateStoreNames.add(storeName);
-            stateStoreNames.addAll(instance.getStateStoreNames());
-            results.put(hostInfo, new KafkaStreamsInstance(hostInfo, stateStoreNames, partitionsForHost));
-        }
+        return false;
     }
 
     private Map<String, List<TopicPartition>> getPartitionsByTopic() {
