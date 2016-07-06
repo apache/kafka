@@ -22,7 +22,6 @@ import org.apache.kafka.common.MetricNameTemplate;
 
 public class RecordAccumulatorMetricsRegistry {
 
-    private String groupName;
     public MetricNameTemplate waitingThreads;
     public MetricNameTemplate bufferTotalBytes;
     public MetricNameTemplate bufferAvailableBytes;
@@ -35,7 +34,7 @@ public class RecordAccumulatorMetricsRegistry {
     
     public RecordAccumulatorMetricsRegistry(Set<String> tags) {
 
-        this.groupName = "producer-metrics";
+        String groupName = "producer-metrics";
 
         this.waitingThreads = new MetricNameTemplate("waiting-threads", groupName, "The number of user threads blocked waiting for buffer memory to enqueue their records", tags);
         this.bufferTotalBytes = new MetricNameTemplate("buffer-total-bytes", groupName, "The maximum amount of buffer memory the client can use (whether or not it is currently used).", tags);

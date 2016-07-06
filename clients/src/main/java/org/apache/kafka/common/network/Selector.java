@@ -569,7 +569,6 @@ public class Selector implements Selectable {
 
     private class SelectorMetrics {
         private final Metrics metrics;
-        
         public final Sensor connectionClosed;
         public final Sensor connectionCreated;
         public final Sensor bytesTransferred;
