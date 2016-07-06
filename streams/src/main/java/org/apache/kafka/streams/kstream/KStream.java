@@ -136,8 +136,8 @@ public interface KStream<K, V> {
      *                 if not specified the default serde defined in the configs will be used
      * @param streamName the name used to label the key/value pairs printed out to the console
      *
-     * Implementors will need to override toString for keys and values that are not of
-     * type String, Integer etc to get meaningful information.
+     * Implementors will need to override {@code toString} for keys and values that are not of
+     * type {@link String}, {@link Integer} etc. to get meaningful information.
      */
     void print(Serde<K> keySerde, Serde<V> valSerde, String streamName);
 
@@ -147,10 +147,22 @@ public interface KStream<K, V> {
      *
      * @param filePath name of file to write to
      *
-     *                 Implementors will need to override toString for keys and values that are not of
-     *                 type String, Integer etc to get meaningful information.
+     * Implementors will need to override {@code toString} for keys and values that are not of
+     * type {@link String}, {@link Integer} etc. to get meaningful information.
      */
     void writeAsText(String filePath);
+
+
+    /**
+     * Write the elements of this stream to a file at the given path.
+     *
+     * @param filePath name of file to write to
+     * @param streamName the name used to label the key/value pairs printed out to the console
+     *
+     * Implementors will need to override {@code toString} for keys and values that are not of
+     * type {@link String}, {@link Integer} etc. to get meaningful information.
+     */
+    void writeAsText(String filePath, String streamName);
 
     /**
      * @param filePath name of file to write to
@@ -159,11 +171,25 @@ public interface KStream<K, V> {
      * @param valSerde value serde used to send key-value pairs,
      *                 if not specified the default serde defined in the configs will be used
      *
-     *                 Implementors will need to override toString for keys and values that are not of
-     *                 type String, Integer etc to get meaningful information.
+     * Implementors will need to override {@code toString} for keys and values that are not of
+     * type {@link String}, {@link Integer} etc. to get meaningful information.
      */
 
     void writeAsText(String filePath, Serde<K> keySerde, Serde<V> valSerde);
+
+    /**
+     * @param filePath name of file to write to
+     * @param streamName the name used to label the key/value pairs printed out to the console
+     * @param keySerde key serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     * @param valSerde value serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     *
+     * Implementors will need to override {@code toString} for keys and values that are not of
+     * type {@link String}, {@link Integer} etc. to get meaningful information.
+     */
+
+    void writeAsText(String filePath, String streamName, Serde<K> keySerde, Serde<V> valSerde);
 
     /**
      * Create a new instance of {@link KStream} by transforming each element in this stream into zero or more elements in the new stream.
