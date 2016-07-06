@@ -138,21 +138,34 @@ public class RegexSourceIntegrationTest {
         StreamThread[] streamThreads =  (StreamThread[]) streamThreadsField.get(streams);
         StreamThread originalThread = streamThreads[0];
 
-        TestStreamThread testStreamThread = new TestStreamThread(builder, streamsConfig,
+        final TestStreamThread testStreamThread = new TestStreamThread(builder, streamsConfig,
                                            new DefaultKafkaClientSupplier(),
                                            originalThread.applicationId, originalThread.clientId, originalThread.processId, new Metrics(), new SystemTime());
 
-        TestCondition tasksUpdated = createTasksUpdatedCondition(testStreamThread);
+        TestCondition oneTopicAdded  = new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                List<String> assignedTopics = testStreamThread.assignedTopicPartitions.get(FIRST_UPDATE);
+                return assignedTopics != null && assignedTopics.contains("TEST-TOPIC-1") && !assignedTopics.contains("TEST-TOPIC-2");
+            }
+        };
 
         streamThreads[0] = testStreamThread;
         streams.start();
 
-        TestUtils.waitForCondition(tasksUpdated, STREAM_TASKS_NOT_UPDATED);
-        testStreamThread.streamTaskUpdated = false;
+        TestUtils.waitForCondition(oneTopicAdded, 90000, STREAM_TASKS_NOT_UPDATED);
 
         CLUSTER.createTopic("TEST-TOPIC-2");
 
-        TestUtils.waitForCondition(tasksUpdated, STREAM_TASKS_NOT_UPDATED);
+        TestCondition secondTopicAdded  = new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                List<String> assignedTopics = testStreamThread.assignedTopicPartitions.get(SECOND_UPDATE);
+                return assignedTopics != null && assignedTopics.contains("TEST-TOPIC-1") && assignedTopics.contains("TEST-TOPIC-2");
+            }
+        };
+
+        TestUtils.waitForCondition(secondTopicAdded, 90000, STREAM_TASKS_NOT_UPDATED);
 
         streams.close();
 
@@ -186,22 +199,35 @@ public class RegexSourceIntegrationTest {
         StreamThread[] streamThreads =  (StreamThread[]) streamThreadsField.get(streams);
         StreamThread originalThread = streamThreads[0];
 
-        TestStreamThread testStreamThread = new TestStreamThread(builder, streamsConfig,
+        final TestStreamThread testStreamThread = new TestStreamThread(builder, streamsConfig,
                 new DefaultKafkaClientSupplier(),
                 originalThread.applicationId, originalThread.clientId, originalThread.processId, new Metrics(), new SystemTime());
 
         streamThreads[0] = testStreamThread;
-        TestCondition tasksUpdated = createTasksUpdatedCondition(testStreamThread);
 
+        TestCondition bothTopicsAdded  = new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                List<String> assignedTopics = testStreamThread.assignedTopicPartitions.get(FIRST_UPDATE);
+                return assignedTopics != null && assignedTopics.contains("TEST-TOPIC-A") && assignedTopics.contains("TEST-TOPIC-B");
+            }
+        };
         streams.start();
 
-        TestUtils.waitForCondition(tasksUpdated, STREAM_TASKS_NOT_UPDATED);
-        //reset
-        testStreamThread.streamTaskUpdated = false;
+        TestUtils.waitForCondition(bothTopicsAdded, 90000, STREAM_TASKS_NOT_UPDATED);
 
         CLUSTER.deleteTopic("TEST-TOPIC-A");
 
-        TestUtils.waitForCondition(tasksUpdated, STREAM_TASKS_NOT_UPDATED);
+
+        TestCondition oneTopicRemoved  = new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                List<String> assignedTopics = testStreamThread.assignedTopicPartitions.get(SECOND_UPDATE);
+                return assignedTopics != null && !assignedTopics.contains("TEST-TOPIC-A") && assignedTopics.contains("TEST-TOPIC-B");
+            }
+        };
+
+        TestUtils.waitForCondition(oneTopicRemoved, 90000, STREAM_TASKS_NOT_UPDATED);
 
         streams.close();
 
@@ -310,7 +336,6 @@ public class RegexSourceIntegrationTest {
 
         public Map<Integer, List<String>> assignedTopicPartitions = new HashMap<>();
         private int index =  0;
-        public volatile boolean streamTaskUpdated = false;
 
         public TestStreamThread(TopologyBuilder builder, StreamsConfig config, KafkaClientSupplier clientSupplier, String applicationId, String clientId, UUID processId, Metrics metrics, Time time) {
             super(builder, config, clientSupplier, applicationId, clientId, processId, metrics, time);
@@ -323,21 +348,10 @@ public class RegexSourceIntegrationTest {
                 assignedTopics.add(partition.topic());
             }
             Collections.sort(assignedTopics);
-            streamTaskUpdated = true;
             assignedTopicPartitions.put(index++, assignedTopics);
             return super.createStreamTask(id, partitions);
         }
 
-    }
-
-
-    private TestCondition createTasksUpdatedCondition(final TestStreamThread testStreamThread) {
-        return new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return testStreamThread.streamTaskUpdated;
-            }
-        };
     }
 
 }
