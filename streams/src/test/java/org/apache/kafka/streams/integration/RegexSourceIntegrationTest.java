@@ -153,7 +153,7 @@ public class RegexSourceIntegrationTest {
         streamThreads[0] = testStreamThread;
         streams.start();
 
-        TestUtils.waitForCondition(oneTopicAdded, 90000, STREAM_TASKS_NOT_UPDATED);
+        TestUtils.waitForCondition(oneTopicAdded,  STREAM_TASKS_NOT_UPDATED);
 
         CLUSTER.createTopic("TEST-TOPIC-2");
 
@@ -165,7 +165,7 @@ public class RegexSourceIntegrationTest {
             }
         };
 
-        TestUtils.waitForCondition(secondTopicAdded, 90000, STREAM_TASKS_NOT_UPDATED);
+        TestUtils.waitForCondition(secondTopicAdded,  STREAM_TASKS_NOT_UPDATED);
 
         streams.close();
 
@@ -214,7 +214,7 @@ public class RegexSourceIntegrationTest {
         };
         streams.start();
 
-        TestUtils.waitForCondition(bothTopicsAdded, 90000, STREAM_TASKS_NOT_UPDATED);
+        TestUtils.waitForCondition(bothTopicsAdded,  STREAM_TASKS_NOT_UPDATED);
 
         CLUSTER.deleteTopic("TEST-TOPIC-A");
 
@@ -227,7 +227,7 @@ public class RegexSourceIntegrationTest {
             }
         };
 
-        TestUtils.waitForCondition(oneTopicRemoved, 90000, STREAM_TASKS_NOT_UPDATED);
+        TestUtils.waitForCondition(oneTopicRemoved,  STREAM_TASKS_NOT_UPDATED);
 
         streams.close();
 
