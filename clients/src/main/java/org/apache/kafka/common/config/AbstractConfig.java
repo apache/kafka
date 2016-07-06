@@ -170,10 +170,7 @@ public class AbstractConfig {
         b.append(" values: ");
         b.append(Utils.NL);
 
-        Map<String, Object> sortedMapByKeys = new TreeMap<>();
-        sortedMapByKeys.putAll(this.values);
-
-        for (Map.Entry<String, Object> entry : sortedMapByKeys.entrySet()) {
+        for (Map.Entry<String, Object> entry : new TreeMap<>(this.values).entrySet()) {
             b.append('\t');
             b.append(entry.getKey());
             b.append(" = ");
