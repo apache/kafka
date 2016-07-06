@@ -691,7 +691,6 @@ public class StreamThread extends Thread {
 
     private class StreamsMetricsImpl implements StreamsMetrics {
         final Metrics metrics;
-        final String metricGrpName;
         final Map<String, String> metricTags;
 
         final Sensor commitTimeSensor;
@@ -704,7 +703,6 @@ public class StreamThread extends Thread {
         public StreamsMetricsImpl(Metrics metrics, StreamThreadMetricsRegistry metricsRegistry) {
 
             this.metrics = metrics;
-            this.metricGrpName = "stream-metrics";
             this.metricTags = new LinkedHashMap<>();
             this.metricTags.put("client-id", clientId + "-" + getName());
 
