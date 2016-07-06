@@ -47,7 +47,7 @@ public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
     }
 
     @Override
-    public boolean open() {
+    public boolean isOpen() {
         return false;
     }
 

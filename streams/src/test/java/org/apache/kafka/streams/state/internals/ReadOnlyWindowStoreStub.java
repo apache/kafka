@@ -78,7 +78,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     }
 
     @Override
-    public boolean open() {
+    public boolean isOpen() {
         return false;
     }
 

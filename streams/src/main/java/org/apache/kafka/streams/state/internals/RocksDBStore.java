@@ -241,7 +241,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public boolean open() {
+    public boolean isOpen() {
         return open;
     }
 

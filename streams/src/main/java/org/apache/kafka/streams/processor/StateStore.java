@@ -63,5 +63,5 @@ public interface StateStore {
      * Is this store open for reading and writing
      * @return {@code true} if the store is open
      */
-    boolean open();
+    boolean isOpen();
 }

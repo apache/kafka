@@ -162,6 +162,37 @@ public class CompositeReadOnlyKeyValueStoreTest {
         noStores().all();
     }
 
+    @Test
+    public void shouldGetApproximateEntriesAcrossAllStores() throws Exception {
+        final KeyValueStore<String, String>
+                cache =
+                new InMemoryKeyValueStore<>(storeName);
+        stubProviderTwo.addStore(storeName, cache);
+
+        stubOneUnderlying.put("a", "a");
+        stubOneUnderlying.put("b", "b");
+        stubOneUnderlying.put("z", "z");
+
+        cache.put("c", "c");
+        cache.put("d", "d");
+        cache.put("x", "x");
+
+        assertEquals(6, theStore.approximateNumEntries());
+    }
+
+    @Test
+    public void shouldReturnLongMaxValueOnOverflow() throws Exception {
+        stubProviderTwo.addStore(storeName, new InMemoryKeyValueStore<String, String>(storeName) {
+            @Override
+            public long approximateNumEntries() {
+                return Long.MAX_VALUE;
+            }
+        });
+
+        stubOneUnderlying.put("overflow", "me");
+        assertEquals(Long.MAX_VALUE, theStore.approximateNumEntries());
+    }
+
     private CompositeReadOnlyKeyValueStore<Object, Object> noStores() {
         return new CompositeReadOnlyKeyValueStore<>(new WrappingStoreProvider(Collections.<StateStoreProvider>emptyList()),
                 QueryableStoreTypes.keyValueStore(), storeName);

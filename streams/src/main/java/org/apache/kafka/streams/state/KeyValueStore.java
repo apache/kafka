@@ -71,14 +71,4 @@ public interface KeyValueStore<K, V> extends StateStore, ReadOnlyKeyValueStore<K
      */
     V delete(K key);
 
-    /**
-     * Return an approximate count of key-value mappings in this store.
-     *
-     * The count is not guaranteed to be exact in order to accommodate stores
-     * where an exact count is expensive to calculate.
-     *
-     * @return an approximate count of key-value mappings in the store.
-     */
-    long approximateNumEntries();
-
 }

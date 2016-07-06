@@ -89,7 +89,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
         @Override
         public boolean hasNext() {
-            while ((currentIterator == null || !currentIterator.hasNext() || !currentSegment.open())
+            while ((currentIterator == null || !currentIterator.hasNext() || !currentSegment.isOpen())
                     && segments.hasNext()) {
                 close();
                 currentSegment = segments.next();
@@ -245,7 +245,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     }
 
     @Override
-    public boolean open() {
+    public boolean isOpen() {
         return open;
     }
 
@@ -343,8 +343,8 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     @SuppressWarnings("unchecked")
     @Override
     public WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo) {
-        if (!open()) {
-            throw new InvalidStateStoreException("Store " + this.name + " is currently not open");
+        if (!isOpen()) {
+            throw new InvalidStateStoreException("Store " + this.name + " is currently not isOpen");
         }
         long segFrom = segmentId(timeFrom);
         long segTo = segmentId(Math.max(0L, timeTo));
@@ -355,7 +355,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         final List<Segment> segments = new ArrayList<>();
         for (long segmentId = segFrom; segmentId <= segTo; segmentId++) {
             Segment segment = getSegment(segmentId);
-            if (segment != null && segment.open()) {
+            if (segment != null && segment.isOpen()) {
                 try {
                     segments.add(segment);
                 } catch (InvalidStateStoreException ise) {

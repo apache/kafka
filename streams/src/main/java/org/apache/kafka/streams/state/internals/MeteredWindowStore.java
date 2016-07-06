@@ -75,8 +75,8 @@ public class MeteredWindowStore<K, V> implements WindowStore<K, V> {
     }
 
     @Override
-    public boolean open() {
-        return inner.open();
+    public boolean isOpen() {
+        return inner.isOpen();
     }
 
     @Override

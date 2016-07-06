@@ -52,6 +52,7 @@ public class QueryableStoreTypes {
         public QueryableStoreTypeMatcher(Class matchTo) {
             this.matchTo = matchTo;
         }
+
         @SuppressWarnings("unchecked")
         @Override
         public boolean accepts(final StateStore stateStore) {

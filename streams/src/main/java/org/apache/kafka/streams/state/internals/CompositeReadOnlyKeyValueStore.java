@@ -81,6 +81,16 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
         return new CompositeKeyValueIterator(stores.iterator(), nextIteratorFunction);
     }
 
+    @Override
+    public long approximateNumEntries() {
+        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.getStores(storeName, storeType);
+        long total = 0;
+        for (ReadOnlyKeyValueStore<K, V> store : stores) {
+            total += store.approximateNumEntries();
+        }
+        return total < 0 ? Long.MAX_VALUE : total;
+    }
+
     interface NextIteratorFunction<K, V> {
 
         KeyValueIterator<K, V> apply(final ReadOnlyKeyValueStore<K, V> store);

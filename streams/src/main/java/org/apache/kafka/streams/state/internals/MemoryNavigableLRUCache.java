@@ -40,13 +40,13 @@ public class MemoryNavigableLRUCache<K, V> extends MemoryLRUCache<K, V> {
     @Override
     public KeyValueIterator<K, V> range(K from, K to) {
         final TreeMap<K, V> treeMap = toTreeMap();
-        return new MemoryNavigableLRUCache.CacheIterator<K, V>(treeMap.navigableKeySet().subSet(from, true, to, false).iterator(), treeMap);
+        return new MemoryNavigableLRUCache.CacheIterator<>(treeMap.navigableKeySet().subSet(from, true, to, true).iterator(), treeMap);
     }
 
     @Override
     public  KeyValueIterator<K, V> all() {
         final TreeMap<K, V> treeMap = toTreeMap();
-        return new MemoryNavigableLRUCache.CacheIterator<K, V>(treeMap.navigableKeySet().iterator(), treeMap);
+        return new MemoryNavigableLRUCache.CacheIterator<>(treeMap.navigableKeySet().iterator(), treeMap);
     }
 
     private TreeMap<K, V> toTreeMap() {

@@ -94,8 +94,8 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public boolean open() {
-        return inner.open();
+    public boolean isOpen() {
+        return inner.isOpen();
     }
 
     @Override

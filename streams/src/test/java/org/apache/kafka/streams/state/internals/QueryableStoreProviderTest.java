@@ -96,8 +96,13 @@ public class QueryableStoreProviderTest {
         }
 
         @Override
+        public long approximateNumEntries() {
+            return 0L;
+        }
+
+        @Override
         public String name() {
-            return null;
+            return "";
         }
 
         @Override
@@ -121,7 +126,7 @@ public class QueryableStoreProviderTest {
         }
 
         @Override
-        public boolean open() {
+        public boolean isOpen() {
             return false;
         }
     }
