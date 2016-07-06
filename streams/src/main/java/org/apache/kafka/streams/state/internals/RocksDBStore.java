@@ -237,17 +237,25 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     public V get(K key) {
         if (cache != null) {
             RocksDBCacheEntry entry = cache.get(key);
-
             if (entry == null) {
-                V value = serdes.valueFrom(getInternal(serdes.rawKey(key)));
-                cache.put(key, new RocksDBCacheEntry(value));
-
-                return value;
+                byte[] byteValue = getInternal(serdes.rawKey(key));
+                if (byteValue == null) {
+                    return null;
+                } else {
+                    V value = serdes.valueFrom(byteValue);
+                    cache.put(key, new RocksDBCacheEntry(value));
+                    return value;
+                }
             } else {
                 return entry.value;
             }
         } else {
-            return serdes.valueFrom(getInternal(serdes.rawKey(key)));
+            byte[] byteValue = getInternal(serdes.rawKey(key));
+            if (byteValue == null) {
+                return null;
+            } else {
+                return serdes.valueFrom(byteValue);
+            }
         }
     }
 

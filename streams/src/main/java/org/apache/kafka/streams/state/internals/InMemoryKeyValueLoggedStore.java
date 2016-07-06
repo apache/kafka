@@ -66,7 +66,11 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
             public void restore(byte[] key, byte[] value) {
 
                 // directly call inner functions so that the operation is not logged
-                inner.put(serdes.keyFrom(key), serdes.valueFrom(value));
+                if (value == null) {
+                    inner.put(serdes.keyFrom(key), null);
+                } else {
+                    inner.put(serdes.keyFrom(key), serdes.valueFrom(value));
+                }
             }
         });
 
