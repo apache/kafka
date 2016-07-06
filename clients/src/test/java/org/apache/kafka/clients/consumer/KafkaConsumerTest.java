@@ -72,7 +72,6 @@ import static org.junit.Assert.fail;
 
 public class KafkaConsumerTest {
 
-    private final String topic = "test";
     private final TopicPartition tp0 = new TopicPartition("test", 0);
 
     @Test
@@ -100,6 +99,7 @@ public class KafkaConsumerTest {
     public void testSubscription() {
         KafkaConsumer<byte[], byte[]> consumer = newConsumer();
 
+        String topic = "test";
         consumer.subscribe(Collections.singletonList(topic));
         assertEquals(singleton(topic), consumer.subscription());
         assertTrue(consumer.assignment().isEmpty());
