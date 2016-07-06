@@ -128,7 +128,7 @@ public class StreamsCleanupClient {
             return;
         }
 
-        System.out.println("Resetting offests to zero for topics " + topics);
+        System.out.println("Resetting offsets to zero for topics " + topics);
 
         final Properties config = new Properties();
         config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOption));
@@ -194,7 +194,7 @@ public class StreamsCleanupClient {
         final String applicationId = options.valueOf(applicationIdOption);
 
         for (String topic : allTopics) {
-            if (topic.startsWith(applicationId + "-") && topic.endsWith("-changelog")) {
+            if (topic.startsWith(applicationId + "-") && (topic.endsWith("-changelog") || topic.endsWith("-repartition"))) {
                 TopicCommand.TopicCommandOptions commandOptions = new TopicCommand.TopicCommandOptions(new String[] {
                     "--zookeeper", options.valueOf(zookeeperOption),
                     "--delete", "--topic", topic});
