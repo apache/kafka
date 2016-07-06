@@ -148,8 +148,8 @@ object ZkUtils {
   def parsePartitionReassignmentData(jsonData: String): Map[TopicAndPartition, Seq[Int]] =
     parsePartitionReassignmentDataWithoutDedup(jsonData).toMap
 
-  def parseTopicsData(jsonData: String): Seq[String] = {
-    var topics = List.empty[String]
+  def parseTopicsData(jsonData: String): Seq[(String, Int)] = {
+    var topics = List.empty[(String, Int)]
     Json.parseFull(jsonData) match {
       case Some(m) =>
         m.asInstanceOf[Map[String, Any]].get("topics") match {
@@ -157,7 +157,8 @@ object ZkUtils {
             val mapPartitionSeq = partitionsSeq.asInstanceOf[Seq[Map[String, Any]]]
             mapPartitionSeq.foreach(p => {
               val topic = p.get("topic").get.asInstanceOf[String]
-              topics ++= List(topic)
+              val replicationFactor = p.getOrElse("replication-factor", -1).asInstanceOf[Int]
+              topics ++= List((topic, replicationFactor))
             })
           case None =>
         }

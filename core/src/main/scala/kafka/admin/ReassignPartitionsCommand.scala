@@ -121,7 +121,8 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   def generateAssignment(zkUtils: ZkUtils, brokerListToReassign: Seq[Int], topicsToMoveJsonString: String, disableRackAware: Boolean): (Map[TopicAndPartition, Seq[Int]], Map[TopicAndPartition, Seq[Int]]) = {
-    val topicsToReassign = ZkUtils.parseTopicsData(topicsToMoveJsonString)
+    val topicsToMove = ZkUtils.parseTopicsData(topicsToMoveJsonString)
+    val topicsToReassign = topicsToMove.map { case (topic, _) => topic }
     val duplicateTopicsToReassign = CoreUtils.duplicates(topicsToReassign)
     if (duplicateTopicsToReassign.nonEmpty)
       throw new AdminCommandFailedException("List of topics to reassign contains duplicate entries: %s".format(duplicateTopicsToReassign.mkString(",")))
@@ -131,10 +132,13 @@ object ReassignPartitionsCommand extends Logging {
     val rackAwareMode = if (disableRackAware) RackAwareMode.Disabled else RackAwareMode.Enforced
     val brokerMetadatas = AdminUtils.getBrokerMetadatas(zkUtils, rackAwareMode, Some(brokerListToReassign))
 
+    val newTopicReplicationFactor = topicsToMove.toMap.filter{ case (_, replicationFactor) => replicationFactor > 0}
+
     val partitionsToBeReassigned = mutable.Map[TopicAndPartition, Seq[Int]]()
     groupedByTopic.foreach { case (topic, assignment) =>
       val (_, replicas) = assignment.head
-      val assignedReplicas = AdminUtils.assignReplicasToBrokers(brokerMetadatas, assignment.size, replicas.size)
+      val replicationFactor = newTopicReplicationFactor.getOrElse(topic, replicas.size)
+      val assignedReplicas = AdminUtils.assignReplicasToBrokers(brokerMetadatas, assignment.size, replicationFactor)
       partitionsToBeReassigned ++= assignedReplicas.map { case (partition, replicas) =>
         TopicAndPartition(topic, partition) -> replicas
       }
@@ -284,7 +288,8 @@ object ReassignPartitionsCommand extends Logging {
                       .ofType(classOf[String])
     val topicsToMoveJsonFileOpt = parser.accepts("topics-to-move-json-file", "Generate a reassignment configuration to move the partitions" +
                       " of the specified topics to the list of brokers specified by the --broker-list option. The format to use is - \n" +
-                      "{\"topics\":\n\t[{\"topic\": \"foo\"},{\"topic\": \"foo1\"}],\n\"version\":1\n}")
+                      "{\"topics\":\n\t[{\"topic\": \"foo\",\n\t  \"replication-factor\": 3},\n\t {\"topic\": \"foo1\"}],\n\"version\":2\n}\n" +
+                      "If the replication-factor for a topic is unspecified, it is unchanged from its existing value.")
                       .withRequiredArg
                       .describedAs("topics to reassign json file path")
                       .ofType(classOf[String])
