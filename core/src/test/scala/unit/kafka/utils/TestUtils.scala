@@ -19,10 +19,9 @@ package kafka.utils
 
 import java.io._
 import java.nio._
-import java.nio.file.Files
 import java.nio.channels._
 import java.util.concurrent.{Callable, Executors, TimeUnit}
-import java.util.{Collections, Properties, Random}
+import java.util.{Properties, Random}
 import java.security.cert.X509Certificate
 import javax.net.ssl.X509TrustManager
 import charset.Charset
@@ -44,12 +43,10 @@ import kafka.log._
 import kafka.utils.ZkUtils._
 import org.junit.Assert._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerRecord, KafkaConsumer, RangeAssignor}
+import org.apache.kafka.clients.consumer.{KafkaConsumer, RangeAssignor}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.network.Mode
-import org.apache.kafka.common.record.CompressionType
 import org.apache.kafka.common.serialization.{ByteArraySerializer, Serializer}
-import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 
 import scala.collection.Map
@@ -61,15 +58,7 @@ import scala.collection.JavaConverters._
  */
 object TestUtils extends Logging {
 
-  val IoTmpDir = System.getProperty("java.io.tmpdir")
-
-  val Letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-  val Digits = "0123456789"
-  val LettersAndDigits = Letters + Digits
-
-  /* A consistent random number generator to make tests repeatable */
-  val seededRandom = new Random(192348092834L)
-  val random = new Random()
+  val random = JTestUtils.RANDOM
 
   /* 0 gives a random port; you can then retrieve the assigned port from the Socket object. */
   val RandomPort = 0
@@ -82,9 +71,7 @@ object TestUtils extends Logging {
   /**
    * Create a temporary directory
    */
-  def tempDir(): File = {
-    tempRelativeDir(IoTmpDir)
-  }
+  def tempDir(): File = JTestUtils.tempDirectory()
 
   def tempTopic(): String = "testTopic" + random.nextInt(1000000)
 
@@ -95,7 +82,7 @@ object TestUtils extends Logging {
     val parentFile = new File(parent)
     parentFile.mkdirs()
 
-    org.apache.kafka.test.TestUtils.tempDirectory(parentFile.toPath, "kafka-")
+    JTestUtils.tempDirectory(parentFile.toPath, null)
   }
 
   /**
@@ -115,7 +102,7 @@ object TestUtils extends Logging {
   /**
    * Create a temporary file
    */
-  def tempFile(): File = org.apache.kafka.test.TestUtils.tempFile()
+  def tempFile(): File = JTestUtils.tempFile()
 
   /**
    * Create a temporary file and return an open file channel for this file
@@ -295,11 +282,7 @@ object TestUtils extends Logging {
    *
    * @param numBytes The size of the array
    */
-  def randomBytes(numBytes: Int): Array[Byte] = {
-    val bytes = new Array[Byte](numBytes)
-    seededRandom.nextBytes(bytes)
-    bytes
-  }
+  def randomBytes(numBytes: Int): Array[Byte] = JTestUtils.randomBytes(numBytes)
 
   /**
    * Generate a random string of letters and digits of the given length
@@ -307,12 +290,7 @@ object TestUtils extends Logging {
    * @param len The length of the string
    * @return The random string
    */
-  def randomString(len: Int): String = {
-    val b = new StringBuilder()
-    for(i <- 0 until len)
-      b.append(LettersAndDigits.charAt(seededRandom.nextInt(LettersAndDigits.length)))
-    b.toString
-  }
+  def randomString(len: Int): String = JTestUtils.randomString(len)
 
   /**
    * Check that the buffer content from buffer.position() to buffer.limit() is equal
