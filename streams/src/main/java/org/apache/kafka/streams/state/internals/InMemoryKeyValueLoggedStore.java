@@ -65,7 +65,7 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
             @Override
             public void restore(byte[] key, byte[] value) {
 
-                // directly call inner functions so that the operation is not logged
+                // directly call inner functions so that the operation is not logged. Check value for null, to avoid  deserialization.
                 if (value == null) {
                     inner.put(serdes.keyFrom(key), null);
                 } else {

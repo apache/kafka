@@ -239,6 +239,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             RocksDBCacheEntry entry = cache.get(key);
             if (entry == null) {
                 byte[] byteValue = getInternal(serdes.rawKey(key));
+                //Check value for null, to avoid  deserialization
                 if (byteValue == null) {
                     return null;
                 } else {
