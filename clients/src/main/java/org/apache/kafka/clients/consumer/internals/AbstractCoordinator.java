@@ -106,7 +106,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                int sessionTimeoutMs,
                                int heartbeatIntervalMs,
                                Metrics metrics,
-                               AbstractCoordinatorMetricsRegistry metricRegistry,
+                               AbstractCoordinatorMetricsRegistry metricsRegistry,
                                Time time,
                                long retryBackoffMs) {
         this.client = client;
@@ -118,7 +118,7 @@ public abstract class AbstractCoordinator implements Closeable {
         this.sessionTimeoutMs = sessionTimeoutMs;
         this.heartbeat = new Heartbeat(this.sessionTimeoutMs, heartbeatIntervalMs, time.milliseconds());
         this.heartbeatTask = new HeartbeatTask();
-        this.sensors = new GroupCoordinatorMetrics(metrics, metricRegistry);
+        this.sensors = new GroupCoordinatorMetrics(metrics, metricsRegistry);
         this.retryBackoffMs = retryBackoffMs;
     }
 
@@ -690,20 +690,20 @@ public abstract class AbstractCoordinator implements Closeable {
         public final Sensor joinLatency;
         public final Sensor syncLatency;
 
-        public GroupCoordinatorMetrics(Metrics metrics, AbstractCoordinatorMetricsRegistry metricRegistry) {
+        public GroupCoordinatorMetrics(Metrics metrics, AbstractCoordinatorMetricsRegistry metricsRegistry) {
             this.heartbeatLatency = metrics.sensor("heartbeat-latency");
-            this.heartbeatLatency.add(metrics.metricInstance(metricRegistry.heartbeatResponseTimeMax), new Max());
-            this.heartbeatLatency.add(metrics.metricInstance(metricRegistry.heartbeatRate), new Rate(new Count()));
+            this.heartbeatLatency.add(metrics.metricInstance(metricsRegistry.heartbeatResponseTimeMax), new Max());
+            this.heartbeatLatency.add(metrics.metricInstance(metricsRegistry.heartbeatRate), new Rate(new Count()));
 
             this.joinLatency = metrics.sensor("join-latency");
-            this.joinLatency.add(metrics.metricInstance(metricRegistry.joinTimeAvg), new Avg());
-            this.joinLatency.add(metrics.metricInstance(metricRegistry.joinTimeMax), new Avg());
-            this.joinLatency.add(metrics.metricInstance(metricRegistry.joinRate), new Rate(new Count()));
+            this.joinLatency.add(metrics.metricInstance(metricsRegistry.joinTimeAvg), new Avg());
+            this.joinLatency.add(metrics.metricInstance(metricsRegistry.joinTimeMax), new Avg());
+            this.joinLatency.add(metrics.metricInstance(metricsRegistry.joinRate), new Rate(new Count()));
 
             this.syncLatency = metrics.sensor("sync-latency");
-            this.syncLatency.add(metrics.metricInstance(metricRegistry.syncTimeAvg), new Avg());
-            this.syncLatency.add(metrics.metricInstance(metricRegistry.syncTimeMax), new Avg());
-            this.syncLatency.add(metrics.metricInstance(metricRegistry.syncRate), new Rate(new Count()));
+            this.syncLatency.add(metrics.metricInstance(metricsRegistry.syncTimeAvg), new Avg());
+            this.syncLatency.add(metrics.metricInstance(metricsRegistry.syncTimeMax), new Avg());
+            this.syncLatency.add(metrics.metricInstance(metricsRegistry.syncRate), new Rate(new Count()));
 
             Measurable lastHeartbeat =
                 new Measurable() {
@@ -711,7 +711,7 @@ public abstract class AbstractCoordinator implements Closeable {
                         return TimeUnit.SECONDS.convert(now - heartbeat.lastHeartbeatSend(), TimeUnit.MILLISECONDS);
                     }
                 };
-            metrics.addMetric(metrics.metricInstance(metricRegistry.lastHeartbeatSecondsAgo),
+            metrics.addMetric(metrics.metricInstance(metricsRegistry.lastHeartbeatSecondsAgo),
                 lastHeartbeat);
         }
     }

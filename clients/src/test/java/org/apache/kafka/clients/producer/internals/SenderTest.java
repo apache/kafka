@@ -123,9 +123,9 @@ public class SenderTest {
             sender.run(time.milliseconds());
         }
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
-        SenderMetricsRegistry metricRegistry = new SenderMetricsRegistry(metrics.config().tags().keySet());
-        KafkaMetric avgMetric = allMetrics.get(metrics.metricInstance(metricRegistry.produceThrottleTimeAvg));
-        KafkaMetric maxMetric = allMetrics.get(metrics.metricInstance(metricRegistry.produceThrottleTimeMax));
+        SenderMetricsRegistry metricsRegistry = new SenderMetricsRegistry(metrics.config().tags().keySet());
+        KafkaMetric avgMetric = allMetrics.get(metrics.metricInstance(metricsRegistry.produceThrottleTimeAvg));
+        KafkaMetric maxMetric = allMetrics.get(metrics.metricInstance(metricsRegistry.produceThrottleTimeMax));
         assertEquals(200, avgMetric.value(), EPS);
         assertEquals(300, maxMetric.value(), EPS);
     }
