@@ -119,6 +119,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
         // aggregate the values with the aggregator and local store
         topology.addProcessor(funcName, aggregateSupplier, sourceName);
+
+        // if state store supplier argument is null, default is used.
         if (storeSupplier == null) {
             StateStoreSupplier aggregateStore = Stores.create(name)
                     .withKeys(keySerde)
