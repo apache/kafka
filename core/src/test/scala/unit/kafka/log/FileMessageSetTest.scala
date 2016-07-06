@@ -19,12 +19,14 @@ package kafka.log
 
 import java.io._
 import java.nio._
-import java.util.concurrent.atomic._
+import java.nio.channels._
 
 import kafka.common.LongRef
 import org.junit.Assert._
 import kafka.utils.TestUtils._
 import kafka.message._
+import kafka.common.KafkaException
+import org.easymock.EasyMock
 import org.junit.Test
 
 class FileMessageSetTest extends BaseMessageSetTestCases {
@@ -151,6 +153,69 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
     assertEquals(List(message), messageSet.toList)
     assertEquals(MessageSet.entrySize(message.message), messageSet.sizeInBytes)
   }
+
+  /**
+    * Test that truncateTo only calls truncate on the FileChannel if the size of the
+    * FileChannel is bigger than the target size. This is important because some JVMs
+    * change the mtime of the file, even if truncate should do nothing.
+    */
+  @Test
+  def testTruncateNotCalledIfSizeIsSameAsTargetSize() {
+    val channelMock = EasyMock.createMock(classOf[FileChannel])
+
+    EasyMock.expect(channelMock.size).andReturn(42L).atLeastOnce()
+    EasyMock.expect(channelMock.position(42L)).andReturn(null)
+    EasyMock.replay(channelMock)
+
+    val msgSet = new FileMessageSet(tempFile(), channelMock)
+    msgSet.truncateTo(42)
+
+    EasyMock.verify(channelMock)
+  }
+
+  /**
+    * Expect a KafkaException if targetSize is bigger than the size of
+    * the FileMessageSet.
+    */
+  @Test
+  def testTruncateNotCalledIfSizeIsBiggerThanTargetSize() {
+    val channelMock = EasyMock.createMock(classOf[FileChannel])
+
+    EasyMock.expect(channelMock.size).andReturn(42L).atLeastOnce()
+    EasyMock.expect(channelMock.position(42L)).andReturn(null)
+    EasyMock.replay(channelMock)
+
+    val msgSet = new FileMessageSet(tempFile(), channelMock)
+
+    try {
+      msgSet.truncateTo(43)
+      fail("Should throw KafkaException")
+    } catch {
+      case e: KafkaException => // expected
+    }
+
+    EasyMock.verify(channelMock)
+  }
+
+  /**
+    * see #testTruncateNotCalledIfSizeIsSameAsTargetSize
+    */
+  @Test
+  def testTruncateIfSizeIsDifferentToTargetSize() {
+    val channelMock = EasyMock.createMock(classOf[FileChannel])
+
+    EasyMock.expect(channelMock.size).andReturn(42L).atLeastOnce()
+    EasyMock.expect(channelMock.position(42L)).andReturn(null).once()
+    EasyMock.expect(channelMock.truncate(23L)).andReturn(null).once()
+    EasyMock.expect(channelMock.position(23L)).andReturn(null).once()
+    EasyMock.replay(channelMock)
+
+    val msgSet = new FileMessageSet(tempFile(), channelMock)
+    msgSet.truncateTo(23)
+
+    EasyMock.verify(channelMock)
+  }
+
 
   /**
    * Test the new FileMessageSet with pre allocate as true
