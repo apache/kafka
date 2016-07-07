@@ -804,7 +804,7 @@ public class Protocol {
             "An array of single topic creation requests. Can not have multiple entries for the same topic."),
         new Field("timeout",
             INT32,
-            "The time in ms to wait for a topic to be completely created on the controller node. Values <= 0 will trigger topic creation and return immediatly"));
+            "The time in ms to wait for a topic to be completely created on the controller node. Values <= 0 will trigger topic creation and return immediately"));
 
     public static final Schema CREATE_TOPICS_RESPONSE_V0 = new Schema(
         new Field("topic_error_codes",

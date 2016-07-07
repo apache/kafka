@@ -47,7 +47,6 @@ class DelayedCreateTopics(delayMs: Long,
     */
   override def tryComplete() : Boolean = {
     trace(s"Trying to complete operation for $createMetadata")
-    trace(s"Live brokers ${adminManager.controller.controllerContext.liveBrokerIds}")
 
     val leaderlessPartitionCount = createMetadata.foldLeft(0) { case (topicCounter, metadata) =>
       topicCounter + missingLeaderCount(metadata.topic, metadata.replicaAssignments.keySet)
@@ -86,9 +85,7 @@ class DelayedCreateTopics(delayMs: Long,
   }
 
   private def isMissingLeader(topic: String, partition: Int): Boolean = {
-    val leadershipInfo = adminManager.controller.controllerContext.partitionLeadershipInfo
-    val leaderInfo =leadershipInfo.get(TopicAndPartition(topic, partition))
     val partitionInfo = adminManager.metadataCache.getPartitionInfo(topic, partition)
-    leaderInfo.isEmpty || leaderInfo.get.leaderAndIsr.leader == LeaderAndIsr.NoLeader
+    partitionInfo.isEmpty || partitionInfo.get.leaderIsrAndControllerEpoch.leaderAndIsr.leader == LeaderAndIsr.NoLeader
   }
 }

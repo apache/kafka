@@ -185,6 +185,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     val updateMetadataResponse =
       if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
         replicaManager.maybeUpdateMetadataCache(correlationId, updateMetadataRequest, metadataCache)
+        if(controller.isActive && !updateMetadataRequest.partitionStates.isEmpty) {
+          updateMetadataRequest.partitionStates.asScala.keys.map(_.topic).toSet { topic =>
+            adminManager.tryCompleteDelayedTopicOperations(topic)
+          }
+        }
         new UpdateMetadataResponse(Errors.NONE.code)
       } else {
         new UpdateMetadataResponse(Errors.CLUSTER_AUTHORIZATION_FAILED.code)
@@ -1055,7 +1060,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     def sendResponseCallback(results: Map[String, Errors]): Unit = {
       val respHeader = new ResponseHeader(request.header.correlationId)
       if(duplicateTopics.nonEmpty)
-        error("Multiple entries for the same topic were found for the following topics: " + duplicateTopics.keySet.mkString(","))
+        warn(s"Create topics request from client ${request.header.clientId} contains multiple entries for the following topics: ${duplicateTopics.keySet.mkString(",")}")
       val completeResults = results ++ duplicateTopics.keySet.map((_, Errors.INVALID_REQUEST)).toMap
       val responseBody = new CreateTopicsResponse(completeResults.asJava)
       trace(s"Sending create topics response $responseBody for correlation id ${request.header.correlationId} to client ${request.header.clientId}.")

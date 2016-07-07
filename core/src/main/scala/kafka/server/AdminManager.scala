@@ -19,7 +19,6 @@ package kafka.server
 import java.util.Properties
 
 import kafka.admin.AdminUtils
-import kafka.controller.KafkaController
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
@@ -33,10 +32,20 @@ import scala.collection.JavaConverters._
 
 class AdminManager(val config: KafkaConfig,
                    val metrics: Metrics,
-                   val controller: KafkaController,
                    val metadataCache: MetadataCache,
                    val zkUtils: ZkUtils) extends Logging with KafkaMetricsGroup {
   this.logIdent = "[Admin Manager on Broker " + config.brokerId + "]: "
+
+  val topicPurgatory = DelayedOperationPurgatory[DelayedOperation]("topic", config.brokerId)
+
+  /**
+    * Try to complete delayed topic operations with the request key
+    */
+  def tryCompleteDelayedTopicOperations(topic: String) {
+    val key = TopicKey(topic)
+    val completed = topicPurgatory.checkAndComplete(key)
+    debug(s"Request key ${key.keyLabel} unblocked $completed topic requests.")
+  }
 
   /**
     * Create topics and wait until the topics have been completely created.
@@ -57,7 +66,7 @@ class AdminManager(val config: KafkaConfig,
         LogConfig.validate(configs)
 
         val assignments = {
-          if ((arguments.numPartitions != NO_NUM_PARTITIONS_SIGN || arguments.replicationFactor != NO_REPLICATION_FACTOR_SIGN)
+          if ((arguments.numPartitions != NO_NUM_PARTITIONS || arguments.replicationFactor != NO_REPLICATION_FACTOR)
             && !arguments.replicasAssignments.isEmpty)
             throw new InvalidRequestException("Both numPartitions or replicationFactor and replicasAssignments were set. " +
               "Both cannot be used at the same time.")
@@ -76,7 +85,7 @@ class AdminManager(val config: KafkaConfig,
         CreateTopicMetadata(topic, assignments, Errors.NONE)
       } catch {
         case e: Throwable =>
-          error(s"Error processing create topic request for topic $topic with arguments $arguments", e)
+          warn(s"Error processing create topic request for topic $topic with arguments $arguments", e)
           CreateTopicMetadata(topic, Map(), Errors.forException(e))
       }
     }
@@ -97,7 +106,7 @@ class AdminManager(val config: KafkaConfig,
       val delayedCreate = new DelayedCreateTopics(timeout, metadata.toSeq, this, responseCallback)
       val delayedCreateKeys = createInfo.keys.map(new TopicKey(_)).toSeq
       // try to complete the request immediately, otherwise put it into the purgatory
-      controller.topicPurgatory.tryCompleteElseWatch(delayedCreate, delayedCreateKeys)
+      topicPurgatory.tryCompleteElseWatch(delayedCreate, delayedCreateKeys)
     }
   }
 }

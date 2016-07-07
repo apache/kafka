@@ -89,7 +89,7 @@ class ProduceRequestTest extends BaseRequestTest {
   }
 
   private def sendProduceRequest(leaderId: Int, request: ProduceRequest): ProduceResponse = {
-    val response = send(request, ApiKeys.PRODUCE, ProtoUtils.latestVersion(ApiKeys.PRODUCE.id), brokerSocketServer(leaderId))
+    val response = send(request, ApiKeys.PRODUCE, destination = brokerSocketServer(leaderId))
     ProduceResponse.parse(response)
   }
 

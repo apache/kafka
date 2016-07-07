@@ -25,11 +25,9 @@ import java.util.Properties
 import kafka.integration.KafkaServerTestHarness
 import kafka.network.SocketServer
 import kafka.utils._
-import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
+import org.apache.kafka.common.protocol.{ApiKeys, ProtoUtils, SecurityProtocol}
 import org.apache.kafka.common.requests.{AbstractRequest, RequestHeader, ResponseHeader}
 import org.junit.Before
-
-import scala.collection.mutable.Buffer
 
 abstract class BaseRequestTest extends KafkaServerTestHarness {
   private var correlationId = 0
@@ -103,11 +101,21 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
     receiveResponse(socket)
   }
 
-  def send(request: AbstractRequest, apiKey: ApiKeys, version: Short,
+  /**
+    *
+    * @param request
+    * @param apiKey
+    * @param version An optional version to use when sending the request. If not set, the latest known version is used
+    * @param destination An optional SocketServer ot send the request to. If not set, any available server is used.
+    * @param protocol An optional SecurityProtocol to use. If not set, PLAINTEXT is used.
+    * @return
+    */
+  def send(request: AbstractRequest, apiKey: ApiKeys, version: Option[Short] = None,
            destination: SocketServer = anySocketServer, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): ByteBuffer = {
+    val requestVersion = version.getOrElse(ProtoUtils.latestVersion(apiKey.id))
     val socket = connect(destination, protocol)
     try {
-      send(request, apiKey, version, socket)
+      send(request, apiKey, requestVersion, socket)
     } finally {
       socket.close()
     }

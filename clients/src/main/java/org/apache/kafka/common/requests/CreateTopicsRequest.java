@@ -24,6 +24,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -66,21 +67,21 @@ public class CreateTopicsRequest extends AbstractRequest {
         public TopicDetails(int partitions,
                             short replicationFactor,
                             Map<String, String> configs) {
-            this(partitions, replicationFactor, new HashMap<Integer, List<Integer>>(), configs);
+            this(partitions, replicationFactor, Collections.<Integer, List<Integer>>emptyMap(), configs);
         }
 
         public TopicDetails(int partitions,
                             short replicationFactor) {
-            this(partitions, replicationFactor, new HashMap<String, String>());
+            this(partitions, replicationFactor, Collections.<String, String>emptyMap());
         }
 
         public TopicDetails(Map<Integer, List<Integer>> replicasAssignments,
                             Map<String, String> configs) {
-            this(NO_NUM_PARTITIONS_SIGN, NO_REPLICATION_FACTOR_SIGN, replicasAssignments, configs);
+            this(NO_NUM_PARTITIONS, NO_REPLICATION_FACTOR, replicasAssignments, configs);
         }
 
         public TopicDetails(Map<Integer, List<Integer>> replicasAssignments) {
-            this(replicasAssignments, new HashMap<String, String>());
+            this(replicasAssignments, Collections.<String, String>emptyMap());
         }
     }
 
@@ -91,8 +92,8 @@ public class CreateTopicsRequest extends AbstractRequest {
     // This allows the broker to return an error code for these topics.
     private final Set<String> duplicateTopics;
 
-    public static final int NO_NUM_PARTITIONS_SIGN = -1;
-    public static final short NO_REPLICATION_FACTOR_SIGN = -1;
+    public static final int NO_NUM_PARTITIONS = -1;
+    public static final short NO_REPLICATION_FACTOR = -1;
 
     public CreateTopicsRequest(Map<String, TopicDetails> topics, Integer timeout) {
         super(new Struct(CURRENT_SCHEMA));
@@ -134,7 +135,7 @@ public class CreateTopicsRequest extends AbstractRequest {
 
         this.topics = topics;
         this.timeout = timeout;
-        this.duplicateTopics = new HashSet<>();
+        this.duplicateTopics = Collections.emptySet();
     }
 
     public CreateTopicsRequest(Struct struct) {

@@ -60,23 +60,31 @@ class CreateTopicsRequestTest extends BaseRequestTest {
     assertTrue(s"There should be no errors, found ${response.errors.asScala}", error.isEmpty)
 
     request.topics.asScala.foreach { case (topic, details) =>
+
+      def verifyMetadata(socketServer: SocketServer) = {
+        val metadata = sendMetadataRequest(new MetadataRequest(List(topic).asJava)).topicMetadata.asScala
+        val metadataForTopic = metadata.filter(p => p.topic.equals(topic)).head
+
+        val partitions = if (!details.replicasAssignments.isEmpty)
+          details.replicasAssignments.size
+        else
+          details.numPartitions
+
+        val replication = if (!details.replicasAssignments.isEmpty)
+          details.replicasAssignments.asScala.head._2.size
+        else
+          details.replicationFactor
+
+        assertNotNull("The topic should be created", metadataForTopic)
+        assertEquals("The topic should have the correct number of partitions", partitions, metadataForTopic.partitionMetadata.size)
+        assertEquals("The topic should have the correct replication factor", replication, metadataForTopic.partitionMetadata.asScala.head.replicas.size)
+      }
+
+      // Verify controller broker has the correct metadata
+      verifyMetadata(controllerSocketServer)
+      // Wait until metadata is propagated and validate non-controller broker has the correct metadata
       TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
-      val metadata = sendMetadataRequest(new MetadataRequest(List(topic).asJava)).topicMetadata.asScala
-      val metadataForTopic = metadata.filter(p => p.topic.equals(topic)).head
-
-      val partitions = if (!details.replicasAssignments.isEmpty)
-        details.replicasAssignments.size
-      else
-        details.numPartitions
-
-      val replication = if (!details.replicasAssignments.isEmpty)
-        details.replicasAssignments.asScala.head._2.size
-      else
-        details.replicationFactor
-
-      assertNotNull("The topic should be created", metadataForTopic)
-      assertEquals("The topic should have the correct number of partitions", partitions, metadataForTopic.partitionMetadata.size)
-      assertEquals("The topic should have the correct replication factor", replication, metadataForTopic.partitionMetadata.asScala.head.replicas.size)
+      verifyMetadata(notControllerSocketServer)
     }
   }
 
@@ -200,13 +208,13 @@ class CreateTopicsRequestTest extends BaseRequestTest {
   }
 
   private def sendCreateTopicRequest(request: CreateTopicsRequest, version: Short, socketServer: SocketServer = controllerSocketServer): CreateTopicsResponse = {
-    val response = send(request, ApiKeys.CREATE_TOPICS, version, socketServer)
+    val response = send(request, ApiKeys.CREATE_TOPICS, Some(version), socketServer)
     CreateTopicsResponse.parse(response, version)
   }
 
-  private def sendMetadataRequest(request: MetadataRequest): MetadataResponse = {
+  private def sendMetadataRequest(request: MetadataRequest, destination: SocketServer = anySocketServer): MetadataResponse = {
     val version = ProtoUtils.latestVersion(ApiKeys.METADATA.id)
-    val response = send(request, ApiKeys.METADATA, version)
+    val response = send(request, ApiKeys.METADATA, destination = destination)
     MetadataResponse.parse(response, version)
   }
 }
