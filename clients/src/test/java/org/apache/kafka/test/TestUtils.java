@@ -123,20 +123,17 @@ public class TestUtils {
      *
      * @param prefix The prefix of the temporary directory, if null using "kafka-" as default prefix
      */
-    public static File tempDirectory(String prefix) throws IOException {
+    public static File tempDirectory(String prefix) {
         return tempDirectory(null, prefix);
     }
 
     /**
-     * Create a temporary directory named "test" under /temp
+     * Create a temporary relative directory in the default temporary-file directory with a
+     * prefix of "kafka-"
      * @return  the temporary directory just created.
      */
-    public static File tempDir() {
-        try {
-            return tempDirectory(new File("/tmp").toPath(), "test");
-        } catch (IOException ex) {
-            throw new RuntimeException("Failed to create a temp dir", ex);
-        }
+    public static File tempDirectory() {
+        return tempDirectory(null);
     }
 
     /**
@@ -145,10 +142,15 @@ public class TestUtils {
      * @param parent The parent folder path name, if null using the default temporary-file directory
      * @param prefix The prefix of the temporary directory, if null using "kafka-" as default prefix
      */
-    public static File tempDirectory(Path parent, String prefix) throws IOException {
-        final File file = parent == null ?
-                Files.createTempDirectory(prefix == null ? "kafka-" : prefix).toFile() :
-                Files.createTempDirectory(parent, prefix == null ? "kafka-" : prefix).toFile();
+    public static File tempDirectory(Path parent, String prefix) {
+        final File file;
+        prefix = prefix == null ? "kafka-" : prefix;
+        try {
+            file = parent == null ?
+                    Files.createTempDirectory(prefix).toFile() : Files.createTempDirectory(parent, prefix).toFile();
+        } catch (IOException ex) {
+            throw new RuntimeException("Failed to create a temp dir", ex);
+        }
         file.deleteOnExit();
 
         Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -225,21 +227,29 @@ public class TestUtils {
     }
 
     /**
-     *  uses default value of 30 seconds for timeout
+     *  uses default value of 15 seconds for timeout
      */
-    public static void waitForCondition(TestCondition testCondition) throws InterruptedException {
-        waitForCondition(testCondition, 30000);
+    public static void waitForCondition(TestCondition testCondition, String conditionDetails) throws InterruptedException {
+        waitForCondition(testCondition, 15000, conditionDetails);
     }
 
     /**
-     *  Used to wait for specific conditions/state to be me during a test
-     *  this is meant to be a replacement for using Thread.sleep
+     * Wait for condition to be met for at most {@code maxWaitMs} and throw assertion failure otherwise.
+     * This should be used instead of {@code Thread.sleep} whenever possible as it allows a longer timeout to be used
+     * without unnecessarily increasing test time (as the condition is checked frequently). The longer timeout is needed to
+     * avoid transient failures due to slow or overloaded machines.
      */
-    public static void waitForCondition(TestCondition testCondition, long maxTimeMillis) throws InterruptedException {
+    public static void waitForCondition(TestCondition testCondition, long maxWaitMs, String conditionDetails) throws InterruptedException {
         long startTime = System.currentTimeMillis();
 
-        while (!testCondition.conditionMet() && ((System.currentTimeMillis() - startTime) < maxTimeMillis)) {
-            Thread.sleep(Math.min(maxTimeMillis, 100L));
+
+        while (!testCondition.conditionMet() && ((System.currentTimeMillis() - startTime) < maxWaitMs)) {
+            Thread.sleep(Math.min(maxWaitMs, 100L));
+        }
+
+        if (!testCondition.conditionMet()) {
+            conditionDetails = conditionDetails != null ? conditionDetails : "";
+            throw new AssertionError("Condition not met within timeout " + maxWaitMs + ". " + conditionDetails);
         }
     }
 

@@ -28,7 +28,7 @@ import static org.junit.Assert.assertNotEquals;
 public class JoinWindowsTest {
 
     private static long anySize = 123L;
-    private static long anyOtherSize = 456L;
+    private static long anyOtherSize = 456L; // should be larger than anySize
 
     @Test
     public void shouldHaveSaneEqualsAndHashCode() {
@@ -65,25 +65,34 @@ public class JoinWindowsTest {
         assertNotEquals("must be false when window sizes are different", differentWindowSize3, w1);
     }
 
+    @Test
+    public void validWindows() {
+        JoinWindows.of(anyOtherSize)   // [ -anyOtherSize ; anyOtherSize ]
+            .before(anySize)                    // [ -anySize ; anyOtherSize ]
+            .before(0)                          // [ 0 ; anyOtherSize ]
+            .before(-anySize)                   // [ anySize ; anyOtherSize ]
+            .before(-anyOtherSize);             // [ anyOtherSize ; anyOtherSize ]
+
+        JoinWindows.of(anyOtherSize)   // [ -anyOtherSize ; anyOtherSize ]
+            .after(anySize)                     // [ -anyOtherSize ; anySize ]
+            .after(0)                           // [ -anyOtherSize ; 0 ]
+            .after(-anySize)                    // [ -anyOtherSize ; -anySize ]
+            .after(-anyOtherSize);              // [ -anyOtherSize ; -anyOtherSize ]
+    }
 
     @Test(expected = IllegalArgumentException.class)
-    public void windowSizeMustNotBeNegative() {
+    public void timeDifferenceMustNotBeNegative() {
         JoinWindows.of(-1);
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void beforeMustNotBeNegative() {
-        JoinWindows.of(anySize).before(-1);
+    public void afterBelowLower() {
+        JoinWindows.of(anySize).after(-anySize - 1);
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void afterSizeMustNotBeNegative() {
-        JoinWindows.of(anySize).after(-1);
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void windowSizeMustNotBeZero() {
-        JoinWindows.of(0);
+    public void beforeOverUpper() {
+        JoinWindows.of(anySize).before(-anySize - 1);
     }
 
 }

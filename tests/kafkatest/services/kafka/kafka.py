@@ -38,8 +38,7 @@ Port = collections.namedtuple('Port', ['name', 'number', 'open'])
 class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     PERSISTENT_ROOT = "/mnt"
-    STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "kafka.log")
-    STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "kafka.log")
+    STDOUT_STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "server-start-stdout-stderr.log")
     LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "kafka-log4j.properties")
     # Logs such as controller.log, server.log, etc all go here
     OPERATIONAL_LOG_DIR = os.path.join(PERSISTENT_ROOT, "kafka-operational-logs")
@@ -52,6 +51,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     SIMPLE_AUTHORIZER = "kafka.security.auth.SimpleAclAuthorizer"
 
     logs = {
+        "kafka_server_start_stdout_stderr": {
+            "path": STDOUT_STDERR_CAPTURE,
+            "collect_default": True},
         "kafka_operational_logs_info": {
             "path": OPERATIONAL_LOG_INFO_DIR,
             "collect_default": True},
@@ -85,6 +87,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.topics = topics
         self.minikdc = None
         self.authorizer_class_name = authorizer_class_name
+        self.zk_set_acl = False
 
         #
         # In a heavily loaded and not very fast machine, it is
@@ -184,8 +187,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         cmd += "%s %s 1>> %s 2>> %s &" % \
                (self.path.script("kafka-server-start.sh", node),
                 KafkaService.CONFIG_FILE,
-                KafkaService.STDOUT_CAPTURE,
-                KafkaService.STDERR_CAPTURE)
+                KafkaService.STDOUT_STDERR_CAPTURE,
+                KafkaService.STDOUT_STDERR_CAPTURE)
         return cmd
 
     def start_node(self, node):
@@ -199,7 +202,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         cmd = self.start_cmd(node)
         self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))
-        with node.account.monitor_log(KafkaService.STDOUT_CAPTURE) as monitor:
+        with node.account.monitor_log(KafkaService.STDOUT_STDERR_CAPTURE) as monitor:
             node.account.ssh(cmd)
             monitor.wait_until("Kafka Server.*started", timeout_sec=30, err_msg="Kafka server didn't finish startup")
 

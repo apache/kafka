@@ -71,12 +71,25 @@ public interface KTable<K, V> {
 
 
     /**
-     * Print the elements of this stream to {@code System.out}
+     * Print the elements of this stream to {@code System.out}. This function
+     * will use the generated name of the parent processor node to label the key/value pairs
+     * printed out to the console.
      *
      * Implementors will need to override toString for keys and values that are not of
      * type String, Integer etc to get meaningful information.
      */
     void print();
+
+    /**
+     * Print the elements of this stream to {@code System.out}.  This function
+     * will use the given name to label the key/value printed out to the console.
+     *
+     * @param streamName the name used to label the key/value pairs printed out to the console
+     *
+     * Implementors will need to override toString for keys and values that are not of
+     * type String, Integer etc to get meaningful information.
+     */
+    void print(String streamName);
 
     /**
      * Print the elements of this stream to {@code System.out}
@@ -91,6 +104,20 @@ public interface KTable<K, V> {
     void print(Serde<K> keySerde, Serde<V> valSerde);
 
     /**
+     * Print the elements of this stream to System.out
+     *
+     * @param keySerde key serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     * @param valSerde value serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     * @param streamName the name used to label the key/value pairs printed out to the console
+     *
+     * Implementors will need to override toString for keys and values that are not of
+     * type String, Integer etc to get meaningful information.
+     */
+    void print(Serde<K> keySerde, Serde<V> valSerde, String streamName);
+
+    /**
      * Write the elements of this stream to a file at the given path using default serializers and deserializers.
      * @param filePath name of file to write to
      *
@@ -98,6 +125,17 @@ public interface KTable<K, V> {
      * type {@link String}, {@link Integer} etc. to get meaningful information.
      */
     void writeAsText(String filePath);
+
+    /**
+     * Write the elements of this stream to a file at the given path.
+     *
+     * @param filePath name of file to write to
+     * @param streamName the name used to label the key/value pairs printed out to the console
+     *
+     * Implementors will need to override {@code toString} for keys and values that are not of
+     * type {@link String}, {@link Integer} etc. to get meaningful information.
+     */
+    void writeAsText(String filePath, String streamName);
 
     /**
      * Write the elements of this stream to a file at the given path.
@@ -112,6 +150,20 @@ public interface KTable<K, V> {
      * type {@link String}, {@link Integer} etc. to get meaningful information.
      */
     void  writeAsText(String filePath, Serde<K> keySerde, Serde<V> valSerde);
+
+    /**
+     * @param filePath name of file to write to
+     * @param streamName the name used to label the key/value pairs printed out to the console
+     * @param keySerde key serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     * @param valSerde value serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     *
+     * Implementors will need to override {@code toString} for keys and values that are not of
+     * type {@link String}, {@link Integer} etc. to get meaningful information.
+     */
+
+    void writeAsText(String filePath, String streamName, Serde<K> keySerde, Serde<V> valSerde);
 
     /**
      * Materialize this stream to a topic, also creates a new instance of {@link KTable} from the topic

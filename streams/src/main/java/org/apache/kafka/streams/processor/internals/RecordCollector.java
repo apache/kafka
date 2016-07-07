@@ -49,18 +49,6 @@ public class RecordCollector {
 
     private final Producer<byte[], byte[]> producer;
     private final Map<TopicPartition, Long> offsets;
-    private final Callback callback = new Callback() {
-        @Override
-        public void onCompletion(RecordMetadata metadata, Exception exception) {
-            if (exception == null) {
-                TopicPartition tp = new TopicPartition(metadata.topic(), metadata.partition());
-                offsets.put(tp, metadata.offset());
-            } else {
-                log.error("Error sending record: " + metadata, exception);
-            }
-        }
-    };
-
 
     public RecordCollector(Producer<byte[], byte[]> producer) {
         this.producer = producer;
@@ -81,9 +69,22 @@ public class RecordCollector {
             if (partitions != null)
                 partition = partitioner.partition(record.key(), record.value(), partitions.size());
         }
-        this.producer.send(new ProducerRecord<>(record.topic(), partition, record.timestamp(),
-                                                keyBytes,
-                                                valBytes), callback);
+
+        ProducerRecord<byte[], byte[]> serializedRecord =
+                new ProducerRecord<>(record.topic(), partition, record.timestamp(), keyBytes, valBytes);
+        final String topic = serializedRecord.topic();
+
+        this.producer.send(serializedRecord, new Callback() {
+            @Override
+            public void onCompletion(RecordMetadata metadata, Exception exception) {
+                if (exception == null) {
+                    TopicPartition tp = new TopicPartition(metadata.topic(), metadata.partition());
+                    offsets.put(tp, metadata.offset());
+                } else {
+                    log.error("Error sending record to topic {}", topic, exception);
+                }
+            }
+        });
     }
 
     public void flush() {

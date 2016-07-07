@@ -150,7 +150,7 @@ public class JoinIntegrationTest {
         // with automatically) we don't need to set this anymore and can update `purgeLocalStreamsState`
         // accordingly.
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG,
-                                 TestUtils.tempDir().getPath());
+                                 TestUtils.tempDirectory().getPath());
 
         // Remove any state from previous test runs
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
