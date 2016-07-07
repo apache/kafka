@@ -23,6 +23,7 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
+import org.apache.kafka.tools.ThroughputThrottler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,6 +47,7 @@ public class SchemaSourceTask extends SourceTask {
 
     private static final String ID_FIELD = "id";
     private static final String SEQNO_FIELD = "seqno";
+    private ThroughputThrottler throttler;
 
     private String name; // Connector name
     private int id; // Task ID
@@ -57,11 +59,6 @@ public class SchemaSourceTask extends SourceTask {
     private long maxNumMsgs;
     private boolean multipleSchema;
     private int partitionCount;
-
-    // Until we can use ThroughputThrottler from Kafka, use a fixed sleep interval. This isn't perfect, but close enough
-    // for system testing purposes
-    private long intervalMs;
-    private int intervalNanos;
 
     private static Schema valueSchema = SchemaBuilder.struct().version(1).name("record")
         .field("boolean", Schema.BOOLEAN_SCHEMA)
@@ -92,28 +89,20 @@ public class SchemaSourceTask extends SourceTask {
 
     @Override
     public void start(Map<String, String> props) {
+        final long throughput;
         try {
             name = props.get(NAME_CONFIG);
             id = Integer.parseInt(props.get(ID_CONFIG));
             topic = props.get(TOPIC_CONFIG);
             maxNumMsgs = Long.parseLong(props.get(NUM_MSGS_CONFIG));
             multipleSchema = Boolean.parseBoolean(props.get(MULTIPLE_SCHEMA_CONFIG));
-            partitionCount = Integer.parseInt(props.containsKey(PARTITION_COUNT_CONFIG) ? props.get(PARTITION_COUNT_CONFIG)
-                                                              : "1");
-            String throughputStr = props.get(THROUGHPUT_CONFIG);
-            if (throughputStr != null) {
-                long throughput = Long.parseLong(throughputStr);
-                long intervalTotalNanos = 1_000_000_000L / throughput;
-                intervalMs = intervalTotalNanos / 1_000_000L;
-                intervalNanos = (int) (intervalTotalNanos % 1_000_000L);
-            } else {
-                intervalMs = 0;
-                intervalNanos = 0;
-            }
+            partitionCount = Integer.parseInt(props.containsKey(PARTITION_COUNT_CONFIG) ? props.get(PARTITION_COUNT_CONFIG) : "1");
+            throughput = Long.parseLong(props.get(THROUGHPUT_CONFIG));
         } catch (NumberFormatException e) {
             throw new ConnectException("Invalid SchemaSourceTask configuration", e);
         }
 
+        throttler = new ThroughputThrottler(throughput, System.currentTimeMillis());
         partition = Collections.singletonMap(ID_FIELD, id);
         Map<String, Object> previousOffset = this.context.offsetStorageReader().offset(partition);
         if (previousOffset != null) {
@@ -123,17 +112,15 @@ public class SchemaSourceTask extends SourceTask {
         }
         startingSeqno = seqno;
         count = 0;
-        log.info("Started SchemaSourceTask {}-{} producing to topic {} resuming from seqno {}",
-                 name, id, topic, startingSeqno);
+        log.info("Started SchemaSourceTask {}-{} producing to topic {} resuming from seqno {}", name, id, topic, startingSeqno);
     }
 
     @Override
     public List<SourceRecord> poll() throws InterruptedException {
         if (count < maxNumMsgs) {
-            if (intervalMs > 0 || intervalNanos > 0) {
-                synchronized (this) {
-                    this.wait(intervalMs, intervalNanos);
-                }
+            long sendStartMs = System.currentTimeMillis();
+            if (throttler.shouldThrottle(seqno - startingSeqno, sendStartMs)) {
+                throttler.throttle();
             }
 
             Map<String, Long> ccOffset = Collections.singletonMap(SEQNO_FIELD, seqno);
@@ -182,8 +169,6 @@ public class SchemaSourceTask extends SourceTask {
 
     @Override
     public void stop() {
-        synchronized (this) {
-            this.notifyAll();
-        }
+        throttler.wakeup();
     }
 }
