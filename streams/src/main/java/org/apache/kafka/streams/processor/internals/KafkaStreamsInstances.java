@@ -96,7 +96,7 @@ public class KafkaStreamsInstances {
         final Collection<KafkaStreamsInstance> allStreamsInstances = getAllStreamsInstances();
         final ArrayList<KafkaStreamsInstance> results = new ArrayList<>();
         for (KafkaStreamsInstance instance : allStreamsInstances) {
-            if (instance.getStateStoreNames().contains(storeName)) {
+            if (instance.stateStoreNames().contains(storeName)) {
                 results.add(instance);
             }
         }
@@ -179,8 +179,8 @@ public class KafkaStreamsInstances {
         }
 
         for (KafkaStreamsInstance kafkaStreamsInstance : allStreamsInstances) {
-            final Set<String> stateStoreNames = kafkaStreamsInstance.getStateStoreNames();
-            final Set<TopicPartition> topicPartitions = new HashSet<>(kafkaStreamsInstance.getTopicPartitions());
+            final Set<String> stateStoreNames = kafkaStreamsInstance.stateStoreNames();
+            final Set<TopicPartition> topicPartitions = new HashSet<>(kafkaStreamsInstance.topicPartitions());
             topicPartitions.retainAll(matchingPartitions);
             if (stateStoreNames.contains(storeName)
                     && !topicPartitions.isEmpty()) {

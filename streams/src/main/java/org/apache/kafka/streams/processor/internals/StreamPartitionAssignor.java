@@ -122,7 +122,23 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         streamThread = (StreamThread) o;
         streamThread.partitionAssignor(this);
 
-        this.userEndPointConfig = (String) configs.get(StreamsConfig.USER_ENDPOINT_CONFIG);
+        String userEndPoint = (String) configs.get(StreamsConfig.USER_ENDPOINT_CONFIG);
+        if (userEndPoint != null && !userEndPoint.isEmpty()) {
+            final String[] hostPort = userEndPoint.split(":");
+            if (hostPort.length != 2) {
+                log.warn("Config '{}' isn't in the correct host:pair format. This instance will not be available for discovery"
+                        , StreamsConfig.USER_ENDPOINT_CONFIG);
+            } else {
+                try {
+                    Integer.valueOf(hostPort[1]);
+                    this.userEndPointConfig = userEndPoint;
+                } catch (NumberFormatException nfe) {
+                    log.warn("Invalid port '{}' supplied in '{}' for config '{}'. This instance will not be available for discovery"
+                            , hostPort[1], userEndPoint, StreamsConfig.USER_ENDPOINT_CONFIG);
+                }
+            }
+
+        }
 
         if (configs.containsKey(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG)) {
             internalTopicManager = new InternalTopicManager(
@@ -233,7 +249,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         Map<UUID, Set<String>> consumersByClient = new HashMap<>();
         Map<UUID, ClientState<TaskId>> states = new HashMap<>();
         SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
-        Map<UUID, String> consumerEndPointMap = new HashMap<>();
+        Map<UUID, HostInfo> consumerEndPointMap = new HashMap<>();
         // decode subscription info
         for (Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
             String consumerId = entry.getKey();
@@ -245,8 +261,9 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
 
             SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
-            if (info.userEndPoint != null && !info.userEndPoint.isEmpty()) {
-                consumerEndPointMap.put(info.processId, info.userEndPoint);
+            if (info.userEndPoint != null) {
+                final String[] hostPort = info.userEndPoint.split(":");
+                consumerEndPointMap.put(info.processId, new HostInfo(hostPort[0], Integer.valueOf(hostPort[1])));
             }
             Set<String> consumers = consumersByClient.get(info.processId);
             if (consumers == null) {
@@ -417,10 +434,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 for (AssignedPartition partition : assignedPartitions) {
                     active.add(partition.taskId);
                     activePartitions.add(partition.partition);
-                    String endPoint = consumerEndPointMap.get(processId);
-                    if (endPoint != null) {
-                        final String[] hostPort = endPoint.split(":");
-                        final HostInfo hostInfo = new HostInfo(hostPort[0], Integer.valueOf(hostPort[1]));
+                    HostInfo hostInfo = consumerEndPointMap.get(processId);
+                    if (hostInfo != null) {
                         if (!endPointMap.containsKey(hostInfo)) {
                             endPointMap.put(hostInfo, new HashSet<TopicPartition>());
                         }

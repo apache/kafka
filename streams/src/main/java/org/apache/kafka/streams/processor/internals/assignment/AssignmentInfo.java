@@ -95,8 +95,8 @@ public class AssignmentInfo {
                 for (Map.Entry<HostInfo, Set<TopicPartition>> entry : partitionsByHostState
                     .entrySet()) {
                     final HostInfo hostInfo = entry.getKey();
-                    out.writeUTF(hostInfo.getHost());
-                    out.writeInt(hostInfo.getPort());
+                    out.writeUTF(hostInfo.host());
+                    out.writeInt(hostInfo.port());
                     writeTopicPartitions(out, entry.getValue());
                 }
             }

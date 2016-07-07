@@ -42,15 +42,15 @@ public class KafkaStreamsInstance {
         this.topicPartitions = topicPartitions;
     }
 
-    public HostInfo getHostInfo() {
+    public HostInfo hostInfo() {
         return hostInfo;
     }
 
-    public Set<String> getStateStoreNames() {
+    public Set<String> stateStoreNames() {
         return stateStores;
     }
 
-    public Set<TopicPartition> getTopicPartitions() {
+    public Set<TopicPartition> topicPartitions() {
         return topicPartitions;
     }
 
