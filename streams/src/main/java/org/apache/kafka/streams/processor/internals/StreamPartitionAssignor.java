@@ -532,6 +532,9 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     }
 
     public Map<HostInfo, Set<TopicPartition>> getPartitionsByHostState() {
+        if (partitionsByHostState == null) {
+            return Collections.emptyMap();
+        }
         return Collections.unmodifiableMap(partitionsByHostState);
     }
 
