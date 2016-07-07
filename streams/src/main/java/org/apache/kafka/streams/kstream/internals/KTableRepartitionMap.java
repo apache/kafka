@@ -76,8 +76,8 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
             if (key == null)
                 throw new StreamsException("Record key for the grouping KTable should not be null.");
 
-            KeyValue<K1, V1> newPair = mapper.apply(key, change.newValue);
-            // if the old value is null, we do not need to forward its selected key-value further
+            // if the value is null, we do not need to forward its selected key-value further
+            KeyValue<K1, V1> newPair = change.newValue == null ? null : mapper.apply(key, change.newValue);
             KeyValue<K1, V1> oldPair = change.oldValue == null ? null : mapper.apply(key, change.oldValue);
 
             // if the selected repartition key or value is null, skip
