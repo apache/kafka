@@ -126,11 +126,16 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public V putIfAbsent(K key, V value) {
-        V originalValue = get(key);
-        if (originalValue == null) {
-            put(key, value);
+        lock.writeLock().lock();
+        try {
+            V originalValue = get(key);
+            if (originalValue == null) {
+                put(key, value);
+            }
+            return originalValue;
+        } finally {
+            lock.writeLock().unlock();
         }
-        return originalValue;
     }
 
     @Override
