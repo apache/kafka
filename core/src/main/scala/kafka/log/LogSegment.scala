@@ -186,7 +186,9 @@ class LogSegment(val log: FileMessageSet,
               case NoCompressionCodec =>
                 entry.offset
               case _ =>
-                ByteBufferMessageSet.deepIterator(entry).next().offset
+                val iterator = ByteBufferMessageSet.deepIterator(entry)
+                try iterator.next().offset
+                finally iterator.close()
           }
           index.append(startOffset, validBytes)
           lastIndexEntry = validBytes
