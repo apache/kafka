@@ -30,15 +30,15 @@ import java.util.Set;
  */
 public class KafkaStreamsInstance {
     private final HostInfo hostInfo;
-    private final Set<String> stateStores;
+    private final Set<String> stateStoreNames;
     private final Set<TopicPartition> topicPartitions;
 
     public KafkaStreamsInstance(final HostInfo hostInfo,
-                                final Set<String> stateStores,
+                                final Set<String> stateStoreNames,
                                 final Set<TopicPartition> topicPartitions) {
 
         this.hostInfo = hostInfo;
-        this.stateStores = stateStores;
+        this.stateStoreNames = stateStoreNames;
         this.topicPartitions = topicPartitions;
     }
 
@@ -47,7 +47,7 @@ public class KafkaStreamsInstance {
     }
 
     public Set<String> stateStoreNames() {
-        return stateStores;
+        return stateStoreNames;
     }
 
     public Set<TopicPartition> topicPartitions() {
@@ -62,7 +62,7 @@ public class KafkaStreamsInstance {
         final KafkaStreamsInstance that = (KafkaStreamsInstance) o;
 
         if (!hostInfo.equals(that.hostInfo)) return false;
-        if (!stateStores.equals(that.stateStores)) return false;
+        if (!stateStoreNames.equals(that.stateStoreNames)) return false;
         return topicPartitions.equals(that.topicPartitions);
 
     }
@@ -70,7 +70,7 @@ public class KafkaStreamsInstance {
     @Override
     public int hashCode() {
         int result = hostInfo.hashCode();
-        result = 31 * result + stateStores.hashCode();
+        result = 31 * result + stateStoreNames.hashCode();
         result = 31 * result + topicPartitions.hashCode();
         return result;
     }
@@ -79,7 +79,7 @@ public class KafkaStreamsInstance {
     public String toString() {
         return "KafkaStreamsInstance{" +
                 "hostInfo=" + hostInfo +
-                ", stateStores=" + stateStores +
+                ", stateStoreNames=" + stateStoreNames +
                 ", topicPartitions=" + topicPartitions +
                 '}';
     }
