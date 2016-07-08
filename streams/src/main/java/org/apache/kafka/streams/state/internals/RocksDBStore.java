@@ -520,13 +520,13 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void close() {
-        if (!open) {
-            return;
-        }
-        open = false;
         final Lock lock = this.lock.writeLock();
         lock.lock();
         try {
+            if (!open) {
+                return;
+            }
+            open = false;
             flush();
             options.dispose();
             wOptions.dispose();
