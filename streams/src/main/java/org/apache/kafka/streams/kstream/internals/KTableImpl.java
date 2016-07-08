@@ -393,7 +393,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return sendOldValues;
     }
 
-    public void materialize(KTableSource<K, ?> source) {
+    private void materialize(KTableSource<K, ?> source) {
         synchronized (source) {
             if (!source.isMaterialized()) {
                 StateStoreSupplier storeSupplier =

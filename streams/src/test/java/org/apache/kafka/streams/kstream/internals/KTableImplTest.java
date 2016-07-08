@@ -105,7 +105,7 @@ public class KTableImplTest {
         MockProcessorSupplier<String, String> proc4 = new MockProcessorSupplier<>();
         table4.toStream().process(proc4);
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver = new KStreamTestDriver(builder);
 
         driver.process(topic1, "A", "01");
         driver.process(topic1, "B", "02");
@@ -273,8 +273,8 @@ public class KTableImplTest {
         driver = new KStreamTestDriver(builder, stateDir, null, null);
         driver.setTime(0L);
 
-        // two state stores should be created
-        assertEquals(2, driver.allStateStores().size());
+        // no state stores should be created
+        assertEquals(0, driver.allStateStores().size());
     }
 
     @Test

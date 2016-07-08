@@ -68,7 +68,7 @@ public class KTableSourceTest {
         MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
         table1.toStream().process(proc1);
 
-        driver = new KStreamTestDriver(builder, stateDir);
+        driver = new KStreamTestDriver(builder);
 
         driver.process(topic1, "A", 1);
         driver.process(topic1, "B", 2);

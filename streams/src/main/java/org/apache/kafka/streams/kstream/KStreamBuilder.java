@@ -144,7 +144,6 @@ public class KStreamBuilder extends TopologyBuilder {
      * @return a {@link KTable} for the specified topics
      */
     public <K, V> KTable<K, V> table(Serde<K> keySerde, Serde<V> valSerde, String topic, final String storeName) {
-        KTableImpl kTableImpl = null;
         String source = newName(KStreamImpl.SOURCE_NAME);
         String name = newName(KTableImpl.SOURCE_NAME);
 
@@ -152,9 +151,7 @@ public class KStreamBuilder extends TopologyBuilder {
 
         ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(storeName);
         addProcessor(name, processorSupplier, source);
-        kTableImpl = new KTableImpl<>(this, name, processorSupplier, Collections.singleton(source), keySerde, valSerde, storeName);
-        kTableImpl.materialize((KTableSource) processorSupplier);
-        return kTableImpl;
+        return new KTableImpl<>(this, name, processorSupplier, Collections.singleton(source), keySerde, valSerde, storeName);
     }
 
     /**
