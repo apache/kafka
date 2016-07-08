@@ -273,7 +273,7 @@ public class KTableImplTest {
         driver = new KStreamTestDriver(builder, stateDir, null, null);
         driver.setTime(0L);
 
-        // one state store should be created
+        // two state stores should be created
         assertEquals(2, driver.allStateStores().size());
     }
 

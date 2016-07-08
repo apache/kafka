@@ -170,7 +170,7 @@ public interface KTable<K, V> {
      * using default serializers and deserializers and producer's {@link DefaultPartitioner}.
      * This is equivalent to calling {@link #to(String)} and {@link org.apache.kafka.streams.kstream.KStreamBuilder#table(String, String)}.
      * The resulting {@link KTable} will be materialized in a local state
-     * store with the given store name. Also a changelog topic named "applicationID-storeName-changelog"
+     * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
@@ -185,7 +185,7 @@ public interface KTable<K, V> {
      * and deserializers and a customizable {@link StreamPartitioner} to determine the distribution of records to partitions.
      * This is equivalent to calling {@link #to(String)} and {@link org.apache.kafka.streams.kstream.KStreamBuilder#table(String, String)}.
      * The resulting {@link KTable} will be materialized in a local state
-     * store with the given store name. Also a changelog topic named "applicationID-storeName-changelog"
+     * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
@@ -205,7 +205,7 @@ public interface KTable<K, V> {
      * This is equivalent to calling {@link #to(Serde, Serde, String)} and
      * {@link org.apache.kafka.streams.kstream.KStreamBuilder#table(Serde, Serde, String, String)}.
      * The resulting {@link KTable} will be materialized in a local state
-     * store with the given store name. Also a changelog topic named "applicationID-storeName-changelog"
+     * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
@@ -225,7 +225,7 @@ public interface KTable<K, V> {
      * This is equivalent to calling {@link #to(Serde, Serde, StreamPartitioner, String)} and
      * {@link org.apache.kafka.streams.kstream.KStreamBuilder#table(Serde, Serde, String, String)}.
      * The resulting {@link KTable} will be materialized in a local state
-     * store with the given store name. Also a changelog topic named "applicationID-storeName-changelog"
+     * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
@@ -387,7 +387,7 @@ public interface KTable<K, V> {
 
     /**
      * Get the name of the local state store used for materializing this {@link KTable}
-     * @return the underlying state store name, or null if KTable does not have one
+     * @return the underlying state store name, or {@code null} if KTable does not have one
      */
     String getStoreName();
 }

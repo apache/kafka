@@ -37,7 +37,7 @@ public interface KGroupedStream<K, V> {
     /**
      * Combine values of this stream by the grouped key into a new instance of ever-updating
      * {@link KTable}. The resulting {@link KTable} will be materialized in a local state
-     * store with the given store name. Also a changelog topic named "applicationID-storeName-changelog"
+     * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
@@ -53,7 +53,7 @@ public interface KGroupedStream<K, V> {
     /**
      * Combine values of this stream by key on a window basis into a new instance of windowed {@link KTable}.
      * The resulting {@link KTable} will be materialized in a local state
-     * store with the given store name. Also a changelog topic named "applicationID-storeName-changelog"
+     * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
@@ -71,7 +71,7 @@ public interface KGroupedStream<K, V> {
     /**
      * Aggregate values of this stream by key into a new instance of a {@link KTable}.
      * The resulting {@link KTable} will be materialized in a local state
-     * store with the given store name. Also a changelog topic named "applicationID-storeName-changelog"
+     * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
@@ -92,7 +92,7 @@ public interface KGroupedStream<K, V> {
     /**
      * Aggregate values of this stream by key on a window basis into a new instance of windowed {@link KTable}.
      * The resulting {@link KTable} will be materialized in a local state
-     * store with the given store name. Also a changelog topic named "applicationID-storeName-changelog"
+     * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
@@ -117,7 +117,7 @@ public interface KGroupedStream<K, V> {
     /**
      * Count number of records of this stream by key into a new instance of a {@link KTable}.
      * The resulting {@link KTable} will be materialized in a local state
-     * store with the given store name. Also a changelog topic named "applicationID-storeName-changelog"
+     * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
@@ -131,7 +131,7 @@ public interface KGroupedStream<K, V> {
     /**
      * Count number of records of this stream by key on a window basis into a new instance of windowed {@link KTable}.
      * The resulting {@link KTable} will be materialized in a local state
-     * store with the given store name. Also a changelog topic named "applicationID-storeName-changelog"
+     * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *

@@ -474,14 +474,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
      * an operation that changes the key, i.e, selectKey, map(..), flatMap(..).
      * @param keySerde      Serdes for serializing the keys
      * @param valSerde      Serdes for serilaizing the values
-     * @param storeName     state store name for source to be repartitioned
+     * @param topicNamePrefix  prefix of topic name created for repartitioning
      * @return a new {@link KStreamImpl}
      */
     private KStreamImpl<K, V> repartitionForJoin(Serde<K> keySerde,
                                                  Serde<V> valSerde,
-                                                 final String storeName) {
+                                                 final String topicNamePrefix) {
 
-        String repartitionedSourceName = createReparitionedSource(this, keySerde, valSerde, storeName);
+        String repartitionedSourceName = createReparitionedSource(this, keySerde, valSerde, topicNamePrefix);
         return new KStreamImpl<>(topology, repartitionedSourceName, Collections
             .singleton(repartitionedSourceName), false);
     }
@@ -489,13 +489,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     static <K1, V1> String createReparitionedSource(AbstractStream<K1> stream,
                                                     Serde<K1> keySerde,
                                                     Serde<V1> valSerde,
-                                                    final String storeName) {
+                                                    final String topicNamePrefix) {
         Serializer<K1> keySerializer = keySerde != null ? keySerde.serializer() : null;
         Serializer<V1> valSerializer = valSerde != null ? valSerde.serializer() : null;
         Deserializer<K1> keyDeserializer = keySerde != null ? keySerde.deserializer() : null;
         Deserializer<V1> valDeserializer = valSerde != null ? valSerde.deserializer() : null;
 
-        String repartitionTopic = storeName + REPARTITION_TOPIC_SUFFIX;
+        String repartitionTopic = topicNamePrefix + REPARTITION_TOPIC_SUFFIX;
         String sinkName = stream.topology.newName(SINK_NAME);
         String filterName = stream.topology.newName(FILTER_NAME);
         String sourceName = stream.topology.newName(SOURCE_NAME);
