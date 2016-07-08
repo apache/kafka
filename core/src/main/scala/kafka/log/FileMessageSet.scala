@@ -217,9 +217,13 @@ class FileMessageSet private[kafka](@volatile var file: File,
       } else {
         // File message set only has shallow iterator. We need to do deep iteration here if needed.
         val deepIter = ByteBufferMessageSet.deepIterator(messageAndOffset)
-        for (innerMessageAndOffset <- deepIter) {
-          newMessages += innerMessageAndOffset.message.toFormatVersion(toMagicValue)
-          offsets += innerMessageAndOffset.offset
+        try {
+          for (innerMessageAndOffset <- deepIter) {
+            newMessages += innerMessageAndOffset.message.toFormatVersion(toMagicValue)
+            offsets += innerMessageAndOffset.offset
+          }
+        } finally {
+          deepIter.close()
         }
       }
     }

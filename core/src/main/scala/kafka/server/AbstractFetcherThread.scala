@@ -132,9 +132,15 @@ abstract class AbstractFetcherThread(name: String,
                   try {
                     val messages = partitionData.toByteBufferMessageSet
                     val validBytes = messages.validBytes
-                    val newOffset = messages.shallowIterator.toSeq.lastOption match {
-                      case Some(m: MessageAndOffset) => m.nextOffset
-                      case None => currentPartitionFetchState.offset
+                    val iter = messages.shallowIterator
+                    var newOffset = currentPartitionFetchState.offset
+                    try {
+                      newOffset = iter.toSeq.lastOption match {
+                        case Some(m: MessageAndOffset) => m.nextOffset
+                        case None => currentPartitionFetchState.offset
+                      }
+                    } finally {
+                      iter.close()
                     }
                     partitionMap.put(topicAndPartition, new PartitionFetchState(newOffset))
                     fetcherLagStats.getAndMaybePut(topic, partitionId).lag = Math.max(0L, partitionData.highWatermark - newOffset)
