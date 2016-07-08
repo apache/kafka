@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -40,7 +40,12 @@ import java.util.Set;
 public class AssignmentInfo {
 
     private static final Logger log = LoggerFactory.getLogger(AssignmentInfo.class);
-    private static final int CURRENT_VERSION = 1;
+    /**
+     * A new field was added, partitionsByHostState. CURRENT_VERSION
+     * is required so we can decode the previous version. For example, this may occur
+     * during a rolling upgrade
+     */
+    private static final int CURRENT_VERSION = 2;
     public final int version;
     public final List<TaskId> activeTasks; // each element corresponds to a partition
     public final Map<TaskId, Set<TopicPartition>> standbyTasks;
@@ -48,7 +53,7 @@ public class AssignmentInfo {
 
     public AssignmentInfo(List<TaskId> activeTasks, Map<TaskId, Set<TopicPartition>> standbyTasks,
                           Map<HostInfo, Set<TopicPartition>> hostState) {
-        this(1, activeTasks, standbyTasks, hostState);
+        this(CURRENT_VERSION, activeTasks, standbyTasks, hostState);
     }
 
     protected AssignmentInfo(int version, List<TaskId> activeTasks, Map<TaskId, Set<TopicPartition>> standbyTasks,
@@ -68,13 +73,8 @@ public class AssignmentInfo {
         DataOutputStream out = new DataOutputStream(baos);
 
         try {
-            if (version < 0 || version > CURRENT_VERSION) {
-                TaskAssignmentException ex = new TaskAssignmentException("Unknown assignment data version: " + version);
-                log.error(ex.getMessage(), ex);
-                throw ex;
-            }
             // Encode version
-            out.writeInt(1);
+            out.writeInt(version);
             // Encode active tasks
             out.writeInt(activeTasks.size());
             for (TaskId id : activeTasks) {
@@ -89,17 +89,15 @@ public class AssignmentInfo {
                 Set<TopicPartition> partitions = entry.getValue();
                 writeTopicPartitions(out, partitions);
             }
-            // Encode partitionsByHostState
-            if (version == CURRENT_VERSION) {
-                out.writeInt(partitionsByHostState.size());
-                for (Map.Entry<HostInfo, Set<TopicPartition>> entry : partitionsByHostState
+            out.writeInt(partitionsByHostState.size());
+            for (Map.Entry<HostInfo, Set<TopicPartition>> entry : partitionsByHostState
                     .entrySet()) {
-                    final HostInfo hostInfo = entry.getKey();
-                    out.writeUTF(hostInfo.host());
-                    out.writeInt(hostInfo.port());
-                    writeTopicPartitions(out, entry.getValue());
-                }
+                final HostInfo hostInfo = entry.getKey();
+                out.writeUTF(hostInfo.host());
+                out.writeInt(hostInfo.port());
+                writeTopicPartitions(out, entry.getValue());
             }
+
             out.flush();
             out.close();
 

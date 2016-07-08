@@ -121,6 +121,9 @@ public class KafkaStreamsInstances {
             throw new IllegalArgumentException("keySerializer cannot be null");
         }
 
+        // To find the correct instance for a given key we need to use the same partitioning
+        // strategy that was used when producing the messages. In this case we create a StreamPartitioner
+        // that works the same as org.apache.kafka.clients.producer.internals.DefaultPartitioner
         return getStreamsInstanceWithKey(storeName, key, new StreamPartitioner<K, Object>() {
             @Override
             public Integer partition(final K key, final Object value, final int numPartitions) {

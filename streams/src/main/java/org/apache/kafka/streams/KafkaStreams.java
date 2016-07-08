@@ -227,6 +227,7 @@ public class KafkaStreams {
 
     /**
      * Find all of the instances of {@link KafkaStreamsInstance} in a {@link KafkaStreams application}
+     *
      * Note: this is a point in time view and it may change due to partition reassignment.
      * @return collection containing all instances of {@link KafkaStreamsInstance} in this application
      */
@@ -240,6 +241,7 @@ public class KafkaStreams {
 
     /**
      * Find the instances {@link KafkaStreamsInstance} for a given storeName
+     *
      * Note: this is a point in time view and it may change due to partition reassignment.
      * @param storeName the storeName to find metadata for
      * @return  A collection containing instances of {@link KafkaStreamsInstance} that have the provided storeName
@@ -253,6 +255,7 @@ public class KafkaStreams {
 
     /**
      * Find the {@link KafkaStreamsInstance} for a given storeName and key.
+     *
      * Note: the key may not exist in the {@link org.apache.kafka.streams.processor.StateStore},
      * this method provides a way of finding which host it would exist on.
      * Note: this is a point in time view and it may change due to partition reassignment.
@@ -273,8 +276,10 @@ public class KafkaStreams {
 
     /**
      * Find the {@link KafkaStreamsInstance} for a given storeName and key.
+     *
      * Note: the key may not exist in the {@link org.apache.kafka.streams.processor.StateStore},
      * this method provides a way of finding which host it would exist on.
+     *
      * Note: this is a point in time view and it may change due to partition reassignment.
      * @param storeName         Name of the store
      * @param key               Key to use to for partition

@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -56,37 +56,16 @@ public class SubscriptionInfo {
      * @throws TaskAssignmentException if method fails to encode the data
      */
     public ByteBuffer encode() {
-        if (version == CURRENT_VERSION) {
-            byte[] endPointBytes;
-            if (userEndPoint == null) {
-                endPointBytes = new byte[0];
-            } else {
-                endPointBytes = userEndPoint.getBytes(Charset.forName("UTF-8"));
-            }
-            ByteBuffer buf = ByteBuffer.allocate(4 /* version */ + 16 /* process id */ + 4 +
-                    prevTasks.size() * 8 + 4 + standbyTasks.size() * 8
-                    + 4 /* length of bytes */ + endPointBytes.length
-            );
-            encodeV1(buf);
-            buf.putInt(endPointBytes.length);
-            buf.put(endPointBytes);
-            buf.rewind();
-            return buf;
-
-        }
-        if (version == 1) {
-            ByteBuffer buf = ByteBuffer.allocate(4 /* version */ + 16 /* process id */ + 4 + prevTasks.size() * 8 + 4 + standbyTasks.size() * 8);
-            encodeV1(buf);
-            buf.rewind();
-            return buf;
+        byte[] endPointBytes;
+        if (userEndPoint == null) {
+            endPointBytes = new byte[0];
         } else {
-            TaskAssignmentException ex = new TaskAssignmentException("unable to encode subscription data: version=" + version);
-            log.error(ex.getMessage(), ex);
-            throw ex;
+            endPointBytes = userEndPoint.getBytes(Charset.forName("UTF-8"));
         }
-    }
-
-    private void encodeV1(final ByteBuffer buf) {
+        ByteBuffer buf = ByteBuffer.allocate(4 /* version */ + 16 /* process id */ + 4 +
+                prevTasks.size() * 8 + 4 + standbyTasks.size() * 8
+                + 4 /* length of bytes */ + endPointBytes.length
+        );
         // version
         buf.putInt(version);
         // encode client UUID
@@ -102,6 +81,10 @@ public class SubscriptionInfo {
         for (TaskId id : standbyTasks) {
             id.writeTo(buf);
         }
+        buf.putInt(endPointBytes.length);
+        buf.put(endPointBytes);
+        buf.rewind();
+        return buf;
     }
 
     /**
