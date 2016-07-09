@@ -195,8 +195,7 @@ public class JoinIntegrationTest {
             .leftJoin(userRegionsTable, new ValueJoiner<Long, String, RegionWithClicks>() {
                 @Override
                 public RegionWithClicks apply(Long clicks, String region) {
-                    RegionWithClicks regionWithClicks = new RegionWithClicks(region == null ? "UNKNOWN" : region, clicks);
-                    return regionWithClicks;
+                    return new RegionWithClicks(region == null ? "UNKNOWN" : region, clicks);
                 }
             })
             // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>
