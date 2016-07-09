@@ -29,6 +29,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.test.TestUtils;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -91,7 +92,7 @@ public class WordCountIntegrationTest {
         // StreamsConfig configuration (so we can retrieve whatever state directory Streams came up
         // with automatically) we don't need to set this anymore and can update `purgeLocalStreamsState`
         // accordingly.
-        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, "/tmp/kstreams-word-count");
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
 
         KStreamBuilder builder = new KStreamBuilder();
 
