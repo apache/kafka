@@ -326,6 +326,8 @@ public class StreamThread extends Thread {
                     throw new StreamsException("Failed to rebalance", rebalanceException);
 
                 if (!records.isEmpty()) {
+                    System.out.println("Poll records in partition " + records.partitions());
+
                     for (TopicPartition partition : records.partitions()) {
                         StreamTask task = activeTasksByPartition.get(partition);
                         task.addRecords(partition, records.records(partition));
@@ -334,6 +336,8 @@ public class StreamThread extends Thread {
                 } else {
                     polledRecords = false;
                 }
+
+                System.out.println("Finish polling");
 
                 // only record poll latency is long poll is required
                 if (longPoll) {
@@ -350,6 +354,8 @@ public class StreamThread extends Thread {
                     for (StreamTask task : activeTasks.values()) {
 
                         totalNumBuffered += task.process();
+
+                        System.out.println("Finish processing");
 
                         requiresPoll = requiresPoll || task.requiresPoll();
 
@@ -372,6 +378,8 @@ public class StreamThread extends Thread {
                 }
                 maybeCommit();
             }
+
+            System.out.println("Requires poll: " + requiresPoll);
 
             maybeUpdateStandbyTasks();
 
