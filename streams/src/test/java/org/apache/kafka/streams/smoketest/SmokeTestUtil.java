@@ -87,7 +87,7 @@ public class SmokeTestUtil {
             return new KeyValueMapper<String, Long, KeyValue<String, Long>>() {
                 @Override
                 public KeyValue<String, Long> apply(String key, Long value) {
-                    return new KeyValue<>(Long.toString(value), 1L);
+                    return new KeyValue<>(value == null ? null : Long.toString(value), 1L);
                 }
             };
         }
