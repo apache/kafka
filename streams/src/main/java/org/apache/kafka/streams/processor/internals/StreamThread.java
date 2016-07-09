@@ -106,6 +106,12 @@ public class StreamThread extends Thread {
 
     private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
     private boolean processStandbyRecords = false;
+    private PartitionsByHostStateChangeListener partitionsByHostStateChangeListener = new PartitionsByHostStateChangeListener() {
+        @Override
+        public void onChange(final Map<HostInfo, Set<TopicPartition>> currentState) {
+            // no-op by default;
+        }
+    };
 
     static File makeStateDir(String applicationId, String baseDirName) {
         File baseDir = new File(baseDirName);
@@ -126,6 +132,7 @@ public class StreamThread extends Thread {
                 addStreamTasks(assignment);
                 addStandbyTasks();
                 lastClean = time.milliseconds(); // start the cleaning cycle
+                partitionsByHostStateChangeListener.onChange(partitionAssignor.getPartitionsByHostState());
             } catch (Throwable t) {
                 rebalanceException = t;
                 throw t;
@@ -143,6 +150,7 @@ public class StreamThread extends Thread {
             } finally {
                 // TODO: right now upon partition revocation, we always remove all the tasks;
                 // this behavior can be optimized to only remove affected tasks in the future
+                partitionsByHostStateChangeListener.onChange(Collections.<HostInfo, Set<TopicPartition>>emptyMap());
                 removeStreamTasks();
                 removeStandbyTasks();
             }
@@ -696,6 +704,10 @@ public class StreamThread extends Thread {
             return Collections.emptyMap();
         }
         return partitionAssignor.getPartitionsByHostState();
+    }
+
+    public void setPartitionsByHostStateChangeListener(final PartitionsByHostStateChangeListener partitionsByHostStateChangeListener) {
+        this.partitionsByHostStateChangeListener = partitionsByHostStateChangeListener;
     }
 
     private class StreamsMetricsImpl implements StreamsMetrics {

@@ -102,6 +102,7 @@ public class KafkaStreams {
     // of the co-location of stream thread's consumers. It is for internal
     // usage only and should not be exposed to users at all.
     private final UUID processId;
+    private KafkaStreamsInstances kafkaStreamsInstances;
 
     /**
      * Construct the stream instance.
@@ -161,6 +162,8 @@ public class KafkaStreams {
         for (int i = 0; i < this.threads.length; i++) {
             this.threads[i] = new StreamThread(builder, config, clientSupplier, applicationId, clientId, processId, metrics, time);
         }
+        kafkaStreamsInstances = new KafkaStreamsInstances(builder);
+        threads[0].setPartitionsByHostStateChangeListener(kafkaStreamsInstances);
     }
 
     /**
@@ -233,9 +236,7 @@ public class KafkaStreams {
      */
     public Collection<KafkaStreamsInstance> allInstances() {
         validateIsRunning();
-        final KafkaStreamsInstances instances
-                = new KafkaStreamsInstances(threads[0].getPartitionsByHostState(), builder);
-        return instances.getAllStreamsInstances();
+        return kafkaStreamsInstances.getAllStreamsInstances();
     }
 
 
@@ -248,9 +249,7 @@ public class KafkaStreams {
      */
     public Collection<KafkaStreamsInstance> allInstancesWithStore(final String storeName) {
         validateIsRunning();
-        final KafkaStreamsInstances instances
-                = new KafkaStreamsInstances(threads[0].getPartitionsByHostState(), builder);
-        return instances.getAllStreamsInstancesWithStore(storeName);
+        return kafkaStreamsInstances.getAllStreamsInstancesWithStore(storeName);
     }
 
     /**
@@ -269,9 +268,7 @@ public class KafkaStreams {
                                                     final K key,
                                                     final Serializer<K> keySerializer) {
         validateIsRunning();
-        final KafkaStreamsInstances instances
-                = new KafkaStreamsInstances(threads[0].getPartitionsByHostState(), builder);
-        return instances.getStreamsInstanceWithKey(storeName, key, keySerializer);
+        return kafkaStreamsInstances.getStreamsInstanceWithKey(storeName, key, keySerializer);
     }
 
     /**
@@ -291,9 +288,7 @@ public class KafkaStreams {
                                                     final K key,
                                                     final StreamPartitioner<K, ?> partitioner) {
         validateIsRunning();
-        final KafkaStreamsInstances instances
-                = new KafkaStreamsInstances(threads[0].getPartitionsByHostState(), builder);
-        return instances.getStreamsInstanceWithKey(storeName, key, partitioner);
+        return kafkaStreamsInstances.getStreamsInstanceWithKey(storeName, key, partitioner);
     }
 
 

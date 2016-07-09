@@ -94,8 +94,8 @@ public class KafkaStreamsInstancesTest {
         hostToPartitions.put(hostTwo, Utils.mkSet(topic2P0, topic1P1));
         hostToPartitions.put(hostThree, Collections.singleton(topic3P0));
 
-        discovery = new KafkaStreamsInstances(hostToPartitions, builder);
-
+        discovery = new KafkaStreamsInstances(builder);
+        discovery.onChange(hostToPartitions);
     }
 
     @Test
@@ -126,10 +126,10 @@ public class KafkaStreamsInstancesTest {
         final TopicPartition tp5 = new TopicPartition("topic-five", 1);
         final HostInfo hostFour = new HostInfo("host-four", 8080);
         hostToPartitions.put(hostFour, Utils.mkSet(tp5));
+        discovery.onChange(hostToPartitions);
 
         final KafkaStreamsInstance expected = new KafkaStreamsInstance(hostFour, Collections.<String>emptySet(),
                 Collections.singleton(tp5));
-        final KafkaStreamsInstances discovery = new KafkaStreamsInstances(hostToPartitions, builder);
         final Collection<KafkaStreamsInstance> actual = discovery.getAllStreamsInstances();
         assertTrue("expected " + actual + " to contain " + expected, actual.contains(expected));
     }
@@ -161,7 +161,7 @@ public class KafkaStreamsInstancesTest {
     public void shouldGetInstanceWithKey() throws Exception {
         final TopicPartition tp4 = new TopicPartition("topic-three", 1);
         hostToPartitions.put(hostTwo, Utils.mkSet(topic2P0, tp4));
-        final KafkaStreamsInstances discovery = new KafkaStreamsInstances(hostToPartitions, builder);
+        discovery.onChange(hostToPartitions);
 
         final KafkaStreamsInstance expected = new KafkaStreamsInstance(hostThree, Collections.singleton("table-three"),
                 Collections.singleton(topic3P0));
@@ -176,7 +176,8 @@ public class KafkaStreamsInstancesTest {
     public void shouldGetInstanceWithKeyAndCustomPartitioner() throws Exception {
         final TopicPartition tp4 = new TopicPartition("topic-three", 1);
         hostToPartitions.put(hostTwo, Utils.mkSet(topic2P0, tp4));
-        final KafkaStreamsInstances discovery = new KafkaStreamsInstances(hostToPartitions, builder);
+
+        discovery.onChange(hostToPartitions);
 
         final KafkaStreamsInstance expected = new KafkaStreamsInstance(hostTwo, Utils.mkSet("table-two", "table-three", "merged-table"),
                 Utils.mkSet(topic2P0, tp4));
@@ -194,7 +195,8 @@ public class KafkaStreamsInstancesTest {
     public void shouldGetInstanceWithKeyWithMergedStreams() throws Exception {
         final TopicPartition topic2P2 = new TopicPartition("topic-two", 2);
         hostToPartitions.put(hostTwo, Utils.mkSet(topic2P0, topic1P1, topic2P2));
-        final KafkaStreamsInstances discovery = new KafkaStreamsInstances(hostToPartitions, builder);
+        discovery.onChange(hostToPartitions);
+
         final KafkaStreamsInstance expected = new KafkaStreamsInstance(hostTwo, Utils.mkSet("table-two", "table-one", "merged-table"),
                 Utils.mkSet(topic2P0, topic1P1, topic2P2));
 
