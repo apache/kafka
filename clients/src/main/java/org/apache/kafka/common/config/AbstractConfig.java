@@ -26,6 +26,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * A convenient base class for configurations to extend.
@@ -168,7 +169,8 @@ public class AbstractConfig {
         b.append(getClass().getSimpleName());
         b.append(" values: ");
         b.append(Utils.NL);
-        for (Map.Entry<String, Object> entry : this.values.entrySet()) {
+
+        for (Map.Entry<String, Object> entry : new TreeMap<>(this.values).entrySet()) {
             b.append('\t');
             b.append(entry.getKey());
             b.append(" = ");

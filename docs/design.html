@@ -339,9 +339,8 @@ Log compaction is handled by the log cleaner, a pool of background threads that 
 <p>
 <h4><a id="design_compactionconfig" href="#design_compactionconfig">Configuring The Log Cleaner</a></h4>
 
-The log cleaner is disabled by default. To enable it set the server config
-  <pre>  log.cleaner.enable=true</pre>
-This will start the pool of cleaner threads. To enable log cleaning on a particular topic you can add the log-specific property
+The log cleaner is enabled by default. This will start the pool of cleaner threads. 
+To enable log cleaning on a particular topic you can add the log-specific property
   <pre>  log.cleanup.policy=compact</pre>
 This can be done either at topic creation time or using the alter topic command.
 <p>

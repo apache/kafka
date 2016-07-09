@@ -18,6 +18,7 @@
 package org.apache.kafka.connect.sink;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
 
@@ -25,18 +26,32 @@ import org.apache.kafka.connect.data.Schema;
  * SinkRecord is a {@link ConnectRecord} that has been read from Kafka and includes the kafkaOffset of
  * the record in the Kafka topic-partition in addition to the standard fields. This information
  * should be used by the SinkTask to coordinate kafkaOffset commits.
+ *
+ * It also includes the {@link TimestampType}, which may be {@link TimestampType#NO_TIMESTAMP_TYPE}, and the relevant
+ * timestamp, which may be {@code null}.
  */
 @InterfaceStability.Unstable
 public class SinkRecord extends ConnectRecord {
     private final long kafkaOffset;
+    private final TimestampType timestampType;
 
     public SinkRecord(String topic, int partition, Schema keySchema, Object key, Schema valueSchema, Object value, long kafkaOffset) {
-        super(topic, partition, keySchema, key, valueSchema, value);
+        this(topic, partition, keySchema, key, valueSchema, value, kafkaOffset, null, TimestampType.NO_TIMESTAMP_TYPE);
+    }
+
+    public SinkRecord(String topic, int partition, Schema keySchema, Object key, Schema valueSchema, Object value, long kafkaOffset,
+                      Long timestamp, TimestampType timestampType) {
+        super(topic, partition, keySchema, key, valueSchema, value, timestamp);
         this.kafkaOffset = kafkaOffset;
+        this.timestampType = timestampType;
     }
 
     public long kafkaOffset() {
         return kafkaOffset;
+    }
+
+    public TimestampType timestampType() {
+        return timestampType;
     }
 
     @Override
@@ -53,13 +68,14 @@ public class SinkRecord extends ConnectRecord {
         if (kafkaOffset != that.kafkaOffset)
             return false;
 
-        return true;
+        return timestampType == that.timestampType;
     }
 
     @Override
     public int hashCode() {
         int result = super.hashCode();
         result = 31 * result + (int) (kafkaOffset ^ (kafkaOffset >>> 32));
+        result = 31 * result + timestampType.hashCode();
         return result;
     }
 
@@ -67,6 +83,7 @@ public class SinkRecord extends ConnectRecord {
     public String toString() {
         return "SinkRecord{" +
                 "kafkaOffset=" + kafkaOffset +
+                ", timestampType=" + timestampType +
                 "} " + super.toString();
     }
 }

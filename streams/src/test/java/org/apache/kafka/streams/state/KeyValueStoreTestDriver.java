@@ -211,7 +211,7 @@ public class KeyValueStoreTestDriver<K, V> {
                 send(record, keySerializer, valueSerializer);
             }
         };
-        this.stateDir = TestUtils.tempDir();
+        this.stateDir = TestUtils.tempDirectory();
         this.stateDir.mkdirs();
 
         Properties props = new Properties();
@@ -250,6 +250,16 @@ public class KeyValueStoreTestDriver<K, V> {
             @Override
             public File stateDir() {
                 return stateDir;
+            }
+
+            @Override
+            public Map<String, Object> appConfigs() {
+                return null;
+            }
+
+            @Override
+            public Map<String, Object> appConfigsWithPrefix(String prefix) {
+                return null;
             }
         };
     }

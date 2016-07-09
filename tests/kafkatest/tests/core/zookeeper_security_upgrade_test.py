@@ -87,7 +87,7 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
             self.zk.zookeeper_migration(node, "secure")
 
         # restart broker with zookeeper.set.acl=true and acls
-        self.kafka.zk_set_acl = "true"
+        self.kafka.zk_set_acl = True
         for node in self.kafka.nodes:
             self.kafka.stop_node(node)
             self.kafka.start_node(node)
