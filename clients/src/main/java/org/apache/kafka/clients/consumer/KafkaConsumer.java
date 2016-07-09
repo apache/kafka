@@ -769,7 +769,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * assignment (if there is one).</b> Note that it is not possible to combine topic subscription with group management
      * with manual partition assignment through {@link #assign(Collection)}.
      *
-     * If the given list of topics is empty, it is treated the same as {@link #unsubscribe()}.
+     * If the given list of topics is null or empty, it is treated the same as {@link #unsubscribe()}.
      *
      * <p>
      * As part of group management, the consumer will keep track of the list of consumers that belong to a particular
@@ -795,10 +795,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
         acquire();
         try {
-            if (topics.isEmpty()) {
-                // treat subscribing to empty topic list as the same as unsubscribing
+            if (topics == null || topics.isEmpty()) {
+                // treat subscribing to null or empty topic list as the same as unsubscribing
                 this.unsubscribe();
             } else {
+                for (String topic : topics) {
+                    if (topic == null || topic.trim().isEmpty())
+                        throw new IllegalArgumentException("Topic collection to subscribe to cannot contain null or empty topic");
+                }
                 log.debug("Subscribed to topic(s): {}", Utils.join(topics, ", "));
                 this.subscriptions.subscribe(topics, listener);
                 metadata.setTopics(subscriptions.groupSubscription());
@@ -850,6 +854,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
         acquire();
         try {
+            if (pattern == null)
+                throw new IllegalArgumentException("Topic pattern to subscribe to cannot be null");
             log.debug("Subscribed to pattern: {}", pattern);
             this.subscriptions.subscribe(pattern, listener);
             this.metadata.needMetadataForAllTopics(true);
@@ -890,12 +896,21 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void assign(Collection<TopicPartition> partitions) {
         acquire();
         try {
-            log.debug("Subscribed to partition(s): {}", Utils.join(partitions, ", "));
-            this.subscriptions.assignFromUser(partitions);
-            Set<String> topics = new HashSet<>();
-            for (TopicPartition tp : partitions)
-                topics.add(tp.topic());
-            metadata.setTopics(topics);
+            if (partitions == null || partitions.isEmpty()) {
+                throw new IllegalArgumentException("Topic partition collection to assign to cannot be null or empty");
+            } else {
+                Set<String> topics = new HashSet<>();
+                for (TopicPartition tp : partitions) {
+                    String topic = (tp != null) ? tp.topic() : null;
+                    if (topic == null || topic.trim().isEmpty())
+                            throw new IllegalArgumentException("Topic partitions to assign to cannot have null or empty topic");
+                    topics.add(topic);
+                }
+
+                log.debug("Subscribed to partition(s): {}", Utils.join(partitions, ", "));
+                this.subscriptions.assignFromUser(partitions);
+                metadata.setTopics(topics);
+            }
         } finally {
             release();
         }
