@@ -49,13 +49,8 @@ public class MemoryNavigableLRUCache<K, V> extends MemoryLRUCache<K, V> {
         return new MemoryNavigableLRUCache.CacheIterator<>(treeMap.navigableKeySet().iterator(), treeMap);
     }
 
-    private TreeMap<K, V> toTreeMap() {
-        lock.readLock().lock();
-        try {
-            return new TreeMap<>(this.map);
-        } finally {
-            lock.readLock().unlock();
-        }
+    private synchronized TreeMap<K, V> toTreeMap() {
+        return new TreeMap<>(this.map);
     }
 
     private static class CacheIterator<K, V> implements KeyValueIterator<K, V> {

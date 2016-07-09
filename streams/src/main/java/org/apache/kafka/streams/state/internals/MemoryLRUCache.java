@@ -26,7 +26,6 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * An in-memory LRU cache store based on HashSet and HashMap.
@@ -47,7 +46,6 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
         void apply(K key, V value);
     }
 
-    protected final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
     private String name;
     protected Map<K, V> map;
     private volatile boolean open = true;
@@ -105,37 +103,22 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public  V get(K key) {
-        lock.readLock().lock();
-        try {
-            return this.map.get(key);
-        } finally {
-            lock.readLock().unlock();
-        }
+    public synchronized V get(K key) {
+        return this.map.get(key);
     }
 
     @Override
-    public void put(K key, V value) {
-        lock.writeLock().lock();
-        try {
-            this.map.put(key, value);
-        } finally {
-            lock.writeLock().unlock();
-        }
+    public synchronized void put(K key, V value) {
+        this.map.put(key, value);
     }
 
     @Override
-    public V putIfAbsent(K key, V value) {
-        lock.writeLock().lock();
-        try {
-            V originalValue = get(key);
-            if (originalValue == null) {
-                put(key, value);
-            }
-            return originalValue;
-        } finally {
-            lock.writeLock().unlock();
+    public synchronized V putIfAbsent(K key, V value) {
+        V originalValue = get(key);
+        if (originalValue == null) {
+            put(key, value);
         }
+        return originalValue;
     }
 
     @Override
@@ -145,14 +128,9 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public V delete(K key) {
-        lock.writeLock().lock();
-        try {
-            V value = this.map.remove(key);
-            return value;
-        } finally {
-            lock.writeLock().unlock();
-        }
+    public synchronized V delete(K key) {
+        V value = this.map.remove(key);
+        return value;
     }
 
     /**
