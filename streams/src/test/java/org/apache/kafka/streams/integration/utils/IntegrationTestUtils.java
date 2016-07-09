@@ -119,7 +119,7 @@ public class IntegrationTestUtils {
         String path = streamsConfiguration.getProperty(StreamsConfig.STATE_DIR_CONFIG);
         if (path != null) {
             File node = Paths.get(path).normalize().toFile();
-            // Only purge state when it's under /tmp.  This is a safety net to prevent accidentally
+            // Only purge state when it's under java.io.tmpdir.  This is a safety net to prevent accidentally
             // deleting important local directory trees.
             if (node.getAbsolutePath().startsWith(tmpDir)) {
                 Utils.delete(new File(node.getAbsolutePath()));
