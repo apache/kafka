@@ -34,6 +34,7 @@ import org.apache.kafka.common.security.JaasUtils
 class ZookeeperLeaderElector(controllerContext: ControllerContext,
                              electionPath: String,
                              onBecomingLeader: () => Unit,
+                             onBeforeResigningAsLeader: () => Unit,
                              onResigningAsLeader: () => Unit,
                              brokerId: Int)
   extends LeaderElector with Logging {
@@ -121,13 +122,19 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
      */
     @throws(classOf[Exception])
     def handleDataChange(dataPath: String, data: Object) {
+      var isLeaderChanged = false
       inLock(controllerContext.controllerLock) {
-        val amILeaderBeforeDataChange = amILeader
-        leaderId = KafkaController.parseControllerId(data.toString)
-        info("New leader is %d".format(leaderId))
-        // The old leader needs to resign leadership if it is no longer the leader
-        if (amILeaderBeforeDataChange && !amILeader)
-          onResigningAsLeader()
+         val amILeaderBeforeDataChange = amILeader
+         leaderId = KafkaController.parseControllerId(data.toString)
+         info("New leader is %d".format(leaderId))
+         var isLeaderChanged = amILeaderBeforeDataChange && !amILeader
+      }
+
+      if (isLeaderChanged) {
+         onBeforeResigningAsLeader()
+         inLock(controllerContext.controllerLock) {
+           onResigningAsLeader()
+         }
       }
     }
 
@@ -138,10 +145,18 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
      */
     @throws(classOf[Exception])
     def handleDataDeleted(dataPath: String) {
+      debug("%s leader change listener fired for path %s to handle data deleted: trying to elect as a leader"
+           .format(brokerId, dataPath))
+      var isLeader = false
       inLock(controllerContext.controllerLock) {
-        debug("%s leader change listener fired for path %s to handle data deleted: trying to elect as a leader"
-          .format(brokerId, dataPath))
-        if(amILeader)
+        isLeader = amILeader
+      }
+       
+      if(isLeader)
+        onBeforeResigningAsLeader()
+         
+      inLock(controllerContext.controllerLock) {
+        if(isLeader)
           onResigningAsLeader()
         elect
       }

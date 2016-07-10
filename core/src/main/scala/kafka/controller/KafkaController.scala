@@ -165,7 +165,7 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
   val partitionStateMachine = new PartitionStateMachine(this)
   val replicaStateMachine = new ReplicaStateMachine(this)
   private val controllerElector = new ZookeeperLeaderElector(controllerContext, ZkUtils.ControllerPath, onControllerFailover,
-    onControllerResignation, config.brokerId)
+    onControllerBeforeResignation, onControllerResignation, config.brokerId)
   // have a separate scheduler for the controller to be able to start and stop independently of the
   // kafka server
   private val autoRebalanceScheduler = new KafkaScheduler(1)
@@ -354,10 +354,9 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
   }
 
   /**
-   * This callback is invoked by the zookeeper leader elector when the current broker resigns as the controller. This is
-   * required to clean up internal controller data structures
+   * This callback is invoked before the onControllerResignation
    */
-  def onControllerResignation() {
+  def onControllerBeforeResignation() {
     debug("Controller resigning, broker id %d".format(config.brokerId))
     // de-register listeners
     deregisterIsrChangeNotificationListener()
@@ -371,7 +370,13 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
     // shutdown leader rebalance scheduler
     if (config.autoLeaderRebalanceEnable)
       autoRebalanceScheduler.shutdown()
+  }
 
+  /**
+   * This callback is invoked by the zookeeper leader elector when the current broker resigns as the controller. This is
+   * required to clean up internal controller data structures
+   */
+  def onControllerResignation() {
     inLock(controllerContext.controllerLock) {
       // de-register partition ISR listener for on-going partition reassignment task
       deregisterReassignedPartitionsIsrChangeListeners()
@@ -694,6 +699,7 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
     inLock(controllerContext.controllerLock) {
       isRunning = false
     }
+    onControllerBeforeResignation()
     onControllerResignation()
   }
 
@@ -1170,8 +1176,8 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
     @throws(classOf[Exception])
     def handleNewSession() {
       info("ZK expired; shut down all controller components and try to re-elect")
+      onControllerResignation()
       inLock(controllerContext.controllerLock) {
-        onControllerResignation()
         controllerElector.elect
       }
     }
