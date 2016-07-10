@@ -115,7 +115,7 @@ public class IntegrationTestUtils {
      * @param streamsConfiguration Streams configuration settings
      */
     public static void purgeLocalStreamsState(Properties streamsConfiguration) throws IOException {
-        final String tmpDir = System.getProperty("java.io.tmpdir");
+        final String tmpDir = TestUtils.IO_TMP_DIR.getPath();
         String path = streamsConfiguration.getProperty(StreamsConfig.STATE_DIR_CONFIG);
         if (path != null) {
             File node = Paths.get(path).normalize().toFile();
