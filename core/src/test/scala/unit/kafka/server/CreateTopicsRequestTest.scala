@@ -114,11 +114,13 @@ class CreateTopicsRequestTest extends BaseRequestTest {
         existingTopic -> new CreateTopicsRequest.TopicDetails(1, 1.toShort),
         "partial-partitions" -> new CreateTopicsRequest.TopicDetails(-1, 1.toShort),
         "partial-replication" -> new CreateTopicsRequest.TopicDetails(1, (numBrokers + 1).toShort),
+        "partial-assignment" -> new CreateTopicsRequest.TopicDetails(invalidAssignments),
         "partial-none" -> new CreateTopicsRequest.TopicDetails(1, 1.toShort)).asJava, timeout),
       Map(
         existingTopic -> Errors.TOPIC_ALREADY_EXISTS,
         "partial-partitions" -> Errors.INVALID_PARTITIONS,
         "partial-replication" -> Errors.INVALID_REPLICATION_FACTOR,
+        "partial-assignment" -> Errors.INVALID_REPLICA_ASSIGNMENT,
         "partial-none" -> Errors.NONE
       )
     )
@@ -148,6 +150,16 @@ class CreateTopicsRequestTest extends BaseRequestTest {
     val duplicateRequest = duplicateFirstTopic(singleRequest)
     assertFalse("Request doesn't have duplicate topics", duplicateRequest.duplicateTopics().isEmpty)
     validateErrorCreateTopicsRequests(duplicateRequest, Map("duplicate-topic" -> Errors.INVALID_REQUEST))
+
+    // Duplicate Partial
+    val doubleRequest = new CreateTopicsRequest(Map(
+      "duplicate-topic" -> new CreateTopicsRequest.TopicDetails(1, 1.toShort),
+      "other-topic" -> new CreateTopicsRequest.TopicDetails(1, 1.toShort)).asJava, 1000)
+    val duplicateDoubleRequest = duplicateFirstTopic(doubleRequest)
+    assertFalse("Request doesn't have duplicate topics", duplicateDoubleRequest.duplicateTopics().isEmpty)
+    validateErrorCreateTopicsRequests(duplicateDoubleRequest, Map(
+      "duplicate-topic" -> Errors.INVALID_REQUEST,
+      "other-topic" -> Errors.NONE))
 
     // Partitions/ReplicationFactor and ReplicaAssignment
     val assignments = replicaAssignmentToJava(Map(0 -> List(0)))

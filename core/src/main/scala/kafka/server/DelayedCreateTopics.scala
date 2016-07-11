@@ -18,7 +18,6 @@
 package kafka.server
 
 import kafka.api.LeaderAndIsr
-import kafka.common.TopicAndPartition
 import org.apache.kafka.common.protocol.Errors
 
 import scala.collection._
@@ -42,15 +41,16 @@ class DelayedCreateTopics(delayMs: Long,
   extends DelayedOperation(delayMs) {
 
   /**
-    * The operation can be completed if all of the topics exist every partition has a leader in the controller.
+    * The operation can be completed if all of the topics that do not have an error exist and every partition has a leader in the controller.
     * See KafkaController.onNewTopicCreation
     */
   override def tryComplete() : Boolean = {
     trace(s"Trying to complete operation for $createMetadata")
 
-    val leaderlessPartitionCount = createMetadata.foldLeft(0) { case (topicCounter, metadata) =>
-      topicCounter + missingLeaderCount(metadata.topic, metadata.replicaAssignments.keySet)
-    }
+    val leaderlessPartitionCount = createMetadata.filter(_.error == Errors.NONE)
+      .foldLeft(0) { case (topicCounter, metadata) =>
+        topicCounter + missingLeaderCount(metadata.topic, metadata.replicaAssignments.keySet)
+      }
 
     if (leaderlessPartitionCount == 0) {
       trace("All partitions have a leader, completing the delayed operation")

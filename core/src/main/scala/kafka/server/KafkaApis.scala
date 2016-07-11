@@ -185,8 +185,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     val updateMetadataResponse =
       if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
         replicaManager.maybeUpdateMetadataCache(correlationId, updateMetadataRequest, metadataCache)
-        if(controller.isActive && !updateMetadataRequest.partitionStates.isEmpty) {
-          updateMetadataRequest.partitionStates.asScala.keys.map(_.topic).toSet { topic =>
+        if (controller.isActive && !updateMetadataRequest.partitionStates.isEmpty) {
+          updateMetadataRequest.partitionStates.keySet.asScala.map(_.topic).foreach { topic =>
             adminManager.tryCompleteDelayedTopicOperations(topic)
           }
         }
@@ -1053,21 +1053,14 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleCreateTopicsRequest(request: RequestChannel.Request) {
     val createTopicsRequest = request.body.asInstanceOf[CreateTopicsRequest]
 
-    val (validTopics, duplicateTopics) = createTopicsRequest.topics.asScala.partition { case (topic, _) =>
-      !createTopicsRequest.duplicateTopics.contains(topic)
-    }
-
     def sendResponseCallback(results: Map[String, Errors]): Unit = {
       val respHeader = new ResponseHeader(request.header.correlationId)
-      if(duplicateTopics.nonEmpty)
-        warn(s"Create topics request from client ${request.header.clientId} contains multiple entries for the following topics: ${duplicateTopics.keySet.mkString(",")}")
-      val completeResults = results ++ duplicateTopics.keySet.map((_, Errors.INVALID_REQUEST)).toMap
-      val responseBody = new CreateTopicsResponse(completeResults.asJava)
+      val responseBody = new CreateTopicsResponse(results.asJava)
       trace(s"Sending create topics response $responseBody for correlation id ${request.header.correlationId} to client ${request.header.clientId}.")
       requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, respHeader, responseBody)))
     }
 
-    if(!controller.isActive()) {
+    if (!controller.isActive()) {
       val results = createTopicsRequest.topics.asScala.map { case (topic, _) =>
         (topic, Errors.NOT_CONTROLLER)
       }
@@ -1079,10 +1072,22 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseCallback(results)
     }
     else {
+      val (validTopics, duplicateTopics) = createTopicsRequest.topics.asScala.partition { case (topic, _) =>
+        !createTopicsRequest.duplicateTopics.contains(topic)
+      }
+
+      // Special handling to add duplicate topics to the response
+      def sendResponseWithDuplicatesCallback(results: Map[String, Errors]): Unit = {
+        if (duplicateTopics.nonEmpty)
+          warn(s"Create topics request from client ${request.header.clientId} contains multiple entries for the following topics: ${duplicateTopics.keySet.mkString(",")}")
+        val completeResults = results ++ duplicateTopics.keySet.map((_, Errors.INVALID_REQUEST)).toMap
+        sendResponseCallback(completeResults)
+      }
+
       adminManager.createTopics(
         createTopicsRequest.timeout.toInt,
         validTopics,
-        sendResponseCallback
+        sendResponseWithDuplicatesCallback
       )
     }
   }

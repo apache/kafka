@@ -200,7 +200,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         kafkaController = new KafkaController(config, zkUtils, brokerState, kafkaMetricsTime, metrics, threadNamePrefix)
         kafkaController.startup()
 
-        /* start admin manager */
         adminManager = new AdminManager(config, metrics, metadataCache, zkUtils)
 
         /* start group coordinator */
