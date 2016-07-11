@@ -30,10 +30,12 @@ object ReassignPartitionsCommand extends Logging {
 
     val opts = new ReassignPartitionsCommandOptions(args)
 
+    val actionOpts = Seq(opts.generateOpt, opts.executeOpt, opts.verifyOpt, opts.dumpOpt)
     // should have exactly one action
-    val actions = Seq(opts.generateOpt, opts.executeOpt, opts.verifyOpt).count(opts.options.has _)
+    val actions = actionOpts.count(opts.options.has)
     if(actions != 1)
-      CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --generate, --execute or --verify")
+      CommandLineUtils.printUsageAndDie(opts.parser,
+        "Command must include exactly one of: " + actionOpts.map("--" + _.options.get(0)).mkString(", "))
 
     CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, opts.zkConnectOpt)
 
@@ -49,6 +51,8 @@ object ReassignPartitionsCommand extends Logging {
         generateAssignment(zkUtils, opts)
       else if (opts.options.has(opts.executeOpt))
         executeAssignment(zkUtils, opts)
+      else if (opts.options.has(opts.dumpOpt))
+        dumpAssignment(zkUtils, opts)
     } catch {
       case e: Throwable =>
         println("Execution failed due to " + e.getMessage)
@@ -156,6 +160,17 @@ object ReassignPartitionsCommand extends Logging {
       println("Failed to reassign partitions %s".format(partitionsToBeReassigned))
   }
 
+  def dumpAssignment(zkUtils: ZkUtils, opts: ReassignPartitionsCommandOptions) {
+    val topics =
+      if (opts.options.has(opts.dumpTopicsOpt)) {
+        opts.options.valueOf(opts.dumpTopicsOpt).split(",").map(_.trim).toSeq
+      } else {
+        zkUtils.getAllTopics()
+      }
+    val currentAssignment = zkUtils.getReplicaAssignmentForTopics(topics)
+    println(zkUtils.formatAsReassignmentJson(currentAssignment))
+  }
+
   private def checkIfReassignmentSucceeded(zkUtils: ZkUtils, partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]])
   :Map[TopicAndPartition, ReassignmentStatus] = {
     val partitionsBeingReassigned = zkUtils.getPartitionsBeingReassigned().mapValues(_.newReplicas)
@@ -197,6 +212,11 @@ object ReassignPartitionsCommand extends Logging {
       " Note that this only generates a candidate assignment, it does not execute it.")
     val executeOpt = parser.accepts("execute", "Kick off the reassignment as specified by the --reassignment-json-file option.")
     val verifyOpt = parser.accepts("verify", "Verify if the reassignment completed as specified by the --reassignment-json-file option.")
+    val dumpOpt = parser.accepts("dump", "Dump the current assignments as JSON which can be passed to --reassignment-json-file option")
+    val dumpTopicsOpt = parser.accepts("dump-topics", "Use with --dump to limit the list of topics to dump assignment, in the form \"topicA,topicB\"")
+                      .withOptionalArg
+                      .describedAs("topics list to dump assignment")
+                      .ofType(classOf[String])
     val reassignmentJsonFileOpt = parser.accepts("reassignment-json-file", "The JSON file with the partition reassignment configuration" +
                       "The format to use is - \n" +
                       "{\"partitions\":\n\t[{\"topic\": \"foo\",\n\t  \"partition\": 1,\n\t  \"replicas\": [1,2,3] }],\n\"version\":1\n}")
