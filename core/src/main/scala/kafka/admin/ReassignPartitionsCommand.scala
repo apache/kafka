@@ -51,7 +51,7 @@ object ReassignPartitionsCommand extends Logging {
         executeAssignment(zkUtils, opts)
     } catch {
       case e: Throwable =>
-        println("Partitions reassignment failed due to " + e.getMessage)
+        println("Execution failed due to " + e.getMessage)
         println(Utils.stackTrace(e))
     } finally {
       val zkClient = zkUtils.zkClient
