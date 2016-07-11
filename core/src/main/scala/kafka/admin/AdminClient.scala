@@ -125,7 +125,7 @@ class AdminClient(val time: Time,
     listAllGroupsFlattened.filter(_.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
   }
 
-  def describeGroup(groupId: String): Option[GroupSummary] = {
+  def describeGroup(groupId: String): GroupSummary = {
     findCoordinator(groupId) match {
       case None => 
         throw new KafkaException(s"Could not find coordinator for group $groupId, which implies that one of the consumer offsets partitions may be offline or in the process of being created if this is a new cluster.")
@@ -142,7 +142,7 @@ class AdminClient(val time: Time,
           val assignment = Utils.readBytes(member.memberAssignment())
           MemberSummary(member.memberId(), member.clientId(), member.clientHost(), metadata, assignment)
         }.toList
-        Some(GroupSummary(metadata.state(), metadata.protocolType(), metadata.protocol(), members))
+        GroupSummary(metadata.state(), metadata.protocolType(), metadata.protocol(), members)
     }
   }
 
@@ -153,14 +153,14 @@ class AdminClient(val time: Time,
 
   def describeConsumerGroup(groupId: String): Option[List[ConsumerSummary]] = {
     val group = describeGroup(groupId)
-    if (group.get.state == "Dead")
+    if (group.state == "Dead")
       return None
 
-    if (group.get.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
-      throw new IllegalArgumentException(s"Group $groupId with protocol type '${group.get.protocolType}' is not a valid consumer group")
+    if (group.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
+      throw new IllegalArgumentException(s"Group $groupId with protocol type '${group.protocolType}' is not a valid consumer group")
 
-    if (group.get.state == "Stable") {
-      Some(group.get.members.map { member =>
+    if (group.state == "Stable") {
+      Some(group.members.map { member =>
         val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment))
         new ConsumerSummary(member.memberId, member.clientId, member.clientHost, assignment.partitions().asScala.toList)
       })
