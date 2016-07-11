@@ -86,6 +86,16 @@ public interface SinkTaskContext {
      * offsets in HDFS to provide exactly once delivery. When the SinkTask is started or a rebalance occurs, the task
      * would reload offsets from HDFS. In this case, disabling consumer offset commit will save some CPU cycles and
      * network IOs.
+     *
+     * As Kafka Connect invokes the flush() method in SinkTask during offset commit which flushes all records that
+     * have been put() for the specified topic partitions. Disabling offset commits in Kafka Connect has some implications
+     * to the connector implementations: SinkTasks are now required to manually call flush() or implement the flush()
+     * logic that in the put() method to ensure the data and offsets is successfully written to the destination system.
+     *
+     * In case of manual offset management, the connector needs to make sure that offsets are written to the destination
+     * system before rebalance and task stop. SinkTask provides a close() method that will be invoked before consumer
+     * group rebalance and task stop.  In SinkTask.close(), connectors need to write the offsets to the destination system
+     * to ensure delivery guarantee.
      */
     void disableOffsetCommit();
 }

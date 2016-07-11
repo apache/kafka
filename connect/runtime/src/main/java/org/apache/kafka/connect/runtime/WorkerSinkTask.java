@@ -151,29 +151,33 @@ class WorkerSinkTask extends WorkerTask {
     protected void iteration() {
         long timeoutMs;
         if (!context.offsetCommitDisabled()) {
-            long now = time.milliseconds();
-
-            // Maybe commit
-            if (!committing && now >= nextCommit) {
-                commitOffsets(now, false);
-                nextCommit += workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
-            }
-
-            // Check for timed out commits
-            long commitTimeout = commitStarted + workerConfig.getLong(
-                WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
-            if (committing && now >= commitTimeout) {
-                log.warn("Commit of {} offsets timed out", this);
-                commitFailures++;
-                committing = false;
-            }
-
-            // And process messages
-            timeoutMs = Math.max(nextCommit - now, 0);
+            timeoutMs = maybeCommitOffsets();
         } else {
             timeoutMs = workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
         }
+        // And process messages
         poll(timeoutMs);
+    }
+
+    private long maybeCommitOffsets() {
+        long now = time.milliseconds();
+
+        // Maybe commit
+        if (!committing && now >= nextCommit) {
+            commitOffsets(now, false);
+            nextCommit += workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
+        }
+
+        // Check for timed out commits
+        long commitTimeout = commitStarted + workerConfig.getLong(
+            WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
+        if (committing && now >= commitTimeout) {
+            log.warn("Commit of {} offsets timed out", this);
+            commitFailures++;
+            committing = false;
+        }
+
+        return Math.max(nextCommit - now, 0);
     }
 
     private void onCommitCompleted(Throwable error, long seqno) {
@@ -437,7 +441,9 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private void closePartitions() {
-        commitOffsets(time.milliseconds(), true);
+        if (!context.offsetCommitDisabled()) {
+            commitOffsets(time.milliseconds(), true);
+        }
     }
 
     private class HandleRebalance implements ConsumerRebalanceListener {

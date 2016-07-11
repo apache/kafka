@@ -64,7 +64,7 @@ abstract class WorkerTask implements Runnable {
 
     /**
      * Initialize the task for execution.
-     * @param props initial configuration
+     * @param taskConfig initial configuration
      */
     public abstract void initialize(TaskConfig taskConfig);
 

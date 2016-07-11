@@ -401,6 +401,41 @@ public class WorkerSinkTaskTest {
         PowerMock.verifyAll();
     }
 
+    public void testDisableOffsetCommits() throws Exception {
+        expectInitializeTaskDisableOffsetCommit();
+        expectPollInitialAssignment();
+
+        final List<TopicPartition> partitions = asList(TOPIC_PARTITION, TOPIC_PARTITION2);
+
+        EasyMock.expect(consumer.position(TOPIC_PARTITION)).andReturn(FIRST_OFFSET);
+        EasyMock.expect(consumer.position(TOPIC_PARTITION2)).andReturn(FIRST_OFFSET);
+
+        sinkTask.open(partitions);
+        EasyMock.expectLastCall();
+
+        EasyMock.expect(consumer.poll(EasyMock.anyLong())).andAnswer(
+            new IAnswer<ConsumerRecords<byte[], byte[]>>() {
+                @Override
+                public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
+                    rebalanceListener.getValue().onPartitionsRevoked(partitions);
+                    rebalanceListener.getValue().onPartitionsAssigned(partitions);
+                    return ConsumerRecords.empty();
+                }
+            });
+
+        sinkTask.put(Collections.<SinkRecord>emptyList());
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        workerTask.poll(Long.MAX_VALUE);
+        workerTask.iteration();
+
+        PowerMock.verifyAll();
+    }
+
     private void expectInitializeTask() throws Exception {
         PowerMock.expectPrivate(workerTask, "createConsumer").andReturn(consumer);
         consumer.subscribe(EasyMock.eq(asList(TOPIC)), EasyMock.capture(rebalanceListener));
@@ -408,6 +443,25 @@ public class WorkerSinkTaskTest {
 
         sinkTask.initialize(EasyMock.capture(sinkTaskContext));
         PowerMock.expectLastCall();
+        sinkTask.start(TASK_PROPS);
+        PowerMock.expectLastCall();
+    }
+
+    private void expectInitializeTaskDisableOffsetCommit() throws Exception {
+        PowerMock.expectPrivate(workerTask, "createConsumer").andReturn(consumer);
+        consumer.subscribe(EasyMock.eq(asList(TOPIC)), EasyMock.capture(rebalanceListener));
+        PowerMock.expectLastCall();
+
+        sinkTask.initialize(EasyMock.capture(sinkTaskContext));
+        PowerMock.expectLastCall().andAnswer(
+            new IAnswer<Void>() {
+                @Override
+                public Void answer() throws Throwable {
+                    sinkTaskContext.getValue().disableOffsetCommit();
+                    return null;
+                }
+            }
+        );
         sinkTask.start(TASK_PROPS);
         PowerMock.expectLastCall();
     }
