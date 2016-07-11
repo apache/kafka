@@ -63,7 +63,7 @@ public class KStreamTestDriver {
         this.context.setTime(0L);
 
         for (StateStoreSupplier stateStoreSupplier : topology.stateStoreSuppliers()) {
-            StateStore store = stateStoreSupplier.get(true);
+            StateStore store = stateStoreSupplier.get();
             store.init(context, store);
         }
 

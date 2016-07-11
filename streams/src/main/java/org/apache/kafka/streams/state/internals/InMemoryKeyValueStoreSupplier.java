@@ -68,14 +68,10 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
         return name;
     }
 
-    public StateStore get(boolean loggingEnabled) {
+    public StateStore get() {
         MemoryStore<K, V> store = new MemoryStore<>(name, keySerde, valueSerde);
 
-        if (loggingEnabled) {
-            store.enableLogging();
-        }
-
-        return new MeteredKeyValueStore<>(store, "in-memory-state", time);
+        return new MeteredKeyValueStore<>(store.enableLogging(), "in-memory-state", time);
     }
 
     private static class MemoryStore<K, V> implements KeyValueStore<K, V> {

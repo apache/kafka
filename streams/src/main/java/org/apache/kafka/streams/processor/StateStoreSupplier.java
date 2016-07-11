@@ -32,8 +32,7 @@ public interface StateStoreSupplier {
     /**
      * Return a new {@link StateStore} instance.
      *
-     * @param loggingEnabled is true if the state store is change-logged with Kafka.
      * @return  a new {@link StateStore} instance
      */
-    StateStore get(boolean loggingEnabled);
+    StateStore get();
 }

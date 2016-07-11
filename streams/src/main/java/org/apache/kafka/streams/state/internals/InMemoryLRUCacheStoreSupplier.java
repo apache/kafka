@@ -52,14 +52,10 @@ public class InMemoryLRUCacheStoreSupplier<K, V> implements StateStoreSupplier {
         return name;
     }
 
-    public StateStore get(boolean loggingEnabled) {
+    public StateStore get() {
         MemoryNavigableLRUCache<K, V> cache = new MemoryNavigableLRUCache<>(name, capacity, keySerde, valueSerde);
+        InMemoryKeyValueLoggedStore<K, V> loggedCache = (InMemoryKeyValueLoggedStore<K, V>) cache.enableLogging();
 
-        if (loggingEnabled) {
-            InMemoryKeyValueLoggedStore<K, V> loggedCache = (InMemoryKeyValueLoggedStore<K, V>) cache.enableLogging();
-            return new MeteredKeyValueStore<>(loggedCache, "in-memory-lru-state", time);
-        } else {
-            return new MeteredKeyValueStore<>(cache, "in-memory-lru-state", time);
-        }
+        return new MeteredKeyValueStore<>(loggedCache, "in-memory-lru-state", time);
     }
 }
