@@ -66,8 +66,21 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                       String name) {
 
         ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(name, initializer, adder, subtractor);
-        return doAggregate(aggregateSupplier, aggValueSerde, AGGREGATE_NAME, name);
+        return doAggregate(aggregateSupplier, aggValueSerde, AGGREGATE_NAME, null, name);
     }
+
+    @Override
+    public <T> KTable<K, T> aggregate(Initializer<T> initializer,
+                                      Aggregator<K, V, T> adder,
+                                      Aggregator<K, V, T> subtractor,
+                                      Serde<T> aggValueSerde,
+                                      StateStoreSupplier storeSupplier,
+                                      String name) {
+
+        ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(name, initializer, adder, subtractor);
+        return doAggregate(aggregateSupplier, aggValueSerde, AGGREGATE_NAME, storeSupplier, name);
+    }
+
 
     @Override
     public <T> KTable<K, T> aggregate(Initializer<T> initializer,
@@ -81,6 +94,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     private <T> KTable<K, T> doAggregate(ProcessorSupplier<K, Change<V>> aggregateSupplier,
                                          Serde<T> aggValueSerde,
                                          String functionName,
+                                         StateStoreSupplier storeSupplier,
                                          String name) {
         String sinkName = topology.newName(KStreamImpl.SINK_NAME);
         String sourceName = topology.newName(KStreamImpl.SOURCE_NAME);
@@ -96,12 +110,6 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         ChangedSerializer<V> changedValueSerializer = new ChangedSerializer<>(valueSerializer);
         ChangedDeserializer<V> changedValueDeserializer = new ChangedDeserializer<>(valueDeserializer);
 
-        StateStoreSupplier aggregateStore = Stores.create(name)
-            .withKeys(keySerde)
-            .withValues(aggValueSerde)
-            .persistent()
-            .build();
-
         // send the aggregate key-value pairs to the intermediate topic for partitioning
         topology.addInternalTopic(topic);
         topology.addSink(sinkName, topic, keySerializer, changedValueSerializer, this.name);
@@ -111,7 +119,16 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
         // aggregate the values with the aggregator and local store
         topology.addProcessor(funcName, aggregateSupplier, sourceName);
-        topology.addStateStore(aggregateStore, funcName);
+        if (storeSupplier == null) {
+            StateStoreSupplier aggregateStore = Stores.create(name)
+                    .withKeys(keySerde)
+                    .withValues(aggValueSerde)
+                    .persistent()
+                    .build();
+            topology.addStateStore(aggregateStore, funcName);
+        } else {
+            topology.addStateStore(storeSupplier, funcName);
+        }
 
         // return the KTable representation with the intermediate topic as the sources
         return new KTableImpl<>(topology, funcName, aggregateSupplier, Collections.singleton(sourceName));
@@ -122,7 +139,16 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                Reducer<V> subtractor,
                                String name) {
         ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableReduce<>(name, adder, subtractor);
-        return doAggregate(aggregateSupplier, valSerde, REDUCE_NAME, name);
+        return doAggregate(aggregateSupplier, valSerde, REDUCE_NAME, null, name);
+    }
+
+    @Override
+    public KTable<K, V> reduce(Reducer<V> adder,
+                               Reducer<V> subtractor,
+                               StateStoreSupplier storeSupplier,
+                               String name) {
+        ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableReduce<>(name, adder, subtractor);
+        return doAggregate(aggregateSupplier, valSerde, REDUCE_NAME, storeSupplier, name);
     }
 
     @Override
