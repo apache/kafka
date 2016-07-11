@@ -145,13 +145,12 @@ public class KafkaProducerTest {
     public void testMetadataFetch() throws Exception {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        KafkaProducer<String, String> producer = new KafkaProducer<String, String>(
-                props, new StringSerializer(), new StringSerializer());
+        KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
         Metadata metadata = PowerMock.createNiceMock(Metadata.class);
         MemberModifier.field(KafkaProducer.class, "metadata").set(producer, metadata);
 
         String topic = "topic";
-        ProducerRecord<String, String> record = new ProducerRecord<String, String>(topic, "value");
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
         Collection<Node> nodes = Collections.singletonList(new Node(0, "host1", 1000));
         final Cluster emptyCluster = new Cluster(nodes,
                 Collections.<PartitionInfo>emptySet(),
@@ -165,6 +164,7 @@ public class KafkaProducerTest {
         final int refreshAttempts = 5;
         EasyMock.expect(metadata.fetch()).andReturn(emptyCluster).times(refreshAttempts - 1);
         EasyMock.expect(metadata.fetch()).andReturn(cluster).once();
+        EasyMock.expect(metadata.fetch()).andThrow(new IllegalStateException("Unexpected call to metadata.fetch()")).anyTimes();
         PowerMock.replay(metadata);
         producer.send(record);
         PowerMock.verify(metadata);
@@ -172,6 +172,7 @@ public class KafkaProducerTest {
         // Expect exactly one fetch if topic metadata is available
         PowerMock.reset(metadata);
         EasyMock.expect(metadata.fetch()).andReturn(cluster).once();
+        EasyMock.expect(metadata.fetch()).andThrow(new IllegalStateException("Unexpected call to metadata.fetch()")).anyTimes();
         PowerMock.replay(metadata);
         producer.send(record, null);
         PowerMock.verify(metadata);
@@ -179,6 +180,7 @@ public class KafkaProducerTest {
         // Expect exactly one fetch if topic metadata is available
         PowerMock.reset(metadata);
         EasyMock.expect(metadata.fetch()).andReturn(cluster).once();
+        EasyMock.expect(metadata.fetch()).andThrow(new IllegalStateException("Unexpected call to metadata.fetch()")).anyTimes();
         PowerMock.replay(metadata);
         producer.partitionsFor(topic);
         PowerMock.verify(metadata);
