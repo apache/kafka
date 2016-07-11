@@ -19,7 +19,6 @@ package kafka.admin
 import joptsimple.OptionParser
 import kafka.utils._
 import collection._
-import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import kafka.common.{TopicAndPartition, AdminCommandFailedException}
 import org.apache.kafka.common.utils.Utils
