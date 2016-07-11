@@ -18,7 +18,7 @@
 package kafka.server
 
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.requests.LeaderAndIsrRequest.PartitionState
+import org.apache.kafka.common.PartitionState
 
 import scala.collection.JavaConverters._
 import kafka.api.LeaderAndIsr

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.PartitionState;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -34,25 +35,6 @@ import java.util.Map;
 import java.util.Set;
 
 public class LeaderAndIsrRequest extends AbstractRequest {
-
-    public static class PartitionState {
-        public final int controllerEpoch;
-        public final int leader;
-        public final int leaderEpoch;
-        public final List<Integer> isr;
-        public final int zkVersion;
-        public final Set<Integer> replicas;
-
-        public PartitionState(int controllerEpoch, int leader, int leaderEpoch, List<Integer> isr, int zkVersion, Set<Integer> replicas) {
-            this.controllerEpoch = controllerEpoch;
-            this.leader = leader;
-            this.leaderEpoch = leaderEpoch;
-            this.isr = isr;
-            this.zkVersion = zkVersion;
-            this.replicas = replicas;
-        }
-
-    }
 
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.LEADER_AND_ISR.id);
 
