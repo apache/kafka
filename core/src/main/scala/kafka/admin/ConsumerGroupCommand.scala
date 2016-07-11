@@ -34,11 +34,16 @@ import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.utils.Utils
-
 import scala.collection.JavaConverters._
 import scala.collection.{Set, mutable}
 
-object ConsumerGroupCommand {
+/**
+ *  To print debug message, add the following line to log4j.properties:
+ *  log4j.logger.kafka.admin.ConsumerGroupCommand$=DEBUG
+ *  (for eclipse debugging, copy log4j.properties to the binary directory in "core" such as core/bin)
+ */
+
+object ConsumerGroupCommand extends Logging{
 
   def main(args: Array[String]) {
     val opts = new ConsumerGroupCommandOptions(args)
@@ -71,7 +76,8 @@ object ConsumerGroupCommand {
       }
     } catch {
       case e: Throwable =>
-        println("Error while executing consumer group command " + e.getMessage)
+        println("Error while executing consumer group command. " + e.getMessage)
+        debug(Utils.stackTrace(e))
     } finally {
       consumerGroupService.close()
     }
