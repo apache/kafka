@@ -23,14 +23,35 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 public class MockKeyValueMapper {
 
     private static class NoOpKeyValueMapper<K, V> implements KeyValueMapper<K, V, KeyValue<K, V>> {
-
         @Override
         public KeyValue<K, V> apply(K key, V value) {
             return KeyValue.pair(key, value);
         }
     }
 
+    private static class SelectValueKeyValueMapper<K, V> implements KeyValueMapper<K, V, KeyValue<V, V>> {
+        @Override
+        public KeyValue<V, V> apply(K key, V value) {
+            return KeyValue.pair(value, value);
+        }
+    }
+
+    private static class SelectValueMapper<K, V> implements KeyValueMapper<K, V, V> {
+        @Override
+        public V apply(K key, V value) {
+            return value;
+        }
+    }
+
     public static <K, V> KeyValueMapper<K, V, KeyValue<K, V>> NoOpKeyValueMapper() {
         return new NoOpKeyValueMapper<>();
+    }
+
+    public static <K, V> KeyValueMapper<K, V, KeyValue<V, V>> SelectValueKeyValueMapper() {
+        return new SelectValueKeyValueMapper<>();
+    }
+
+    public static <K, V> KeyValueMapper<K, V, V> SelectValueMapper() {
+        return new SelectValueMapper<>();
     }
 }

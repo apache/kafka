@@ -51,7 +51,7 @@ import static org.junit.Assert.assertThat;
  * End-to-end integration test that demonstrates how to perform a join between a KStream and a
  * KTable (think: KStream.leftJoin(KTable)), i.e. an example of a stateful computation.
  */
-public class JoinIntegrationTest {
+public class KStreamKTableJoinIntegrationTest {
     @ClassRule
     public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster();
     private static final String USER_CLICKS_TOPIC = "user-clicks";
@@ -190,8 +190,7 @@ public class JoinIntegrationTest {
             .leftJoin(userRegionsTable, new ValueJoiner<Long, String, RegionWithClicks>() {
                 @Override
                 public RegionWithClicks apply(Long clicks, String region) {
-                    RegionWithClicks regionWithClicks = new RegionWithClicks(region == null ? "UNKNOWN" : region, clicks);
-                    return regionWithClicks;
+                    return new RegionWithClicks(region == null ? "UNKNOWN" : region, clicks);
                 }
             })
             // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>

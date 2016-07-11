@@ -32,6 +32,7 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -49,7 +50,7 @@ import java.util.concurrent.ExecutionException;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 
-public class KGroupedStreamIntegrationTest {
+public class KStreamAggregationIntegrationTest {
 
     @ClassRule
     public static final EmbeddedSingleNodeKafkaCluster CLUSTER =
@@ -82,14 +83,7 @@ public class KGroupedStreamIntegrationTest {
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
 
-        KeyValueMapper<Integer, String, String>
-            mapper =
-            new KeyValueMapper<Integer, String, String>() {
-                @Override
-                public String apply(Integer key, String value) {
-                    return value;
-                }
-            };
+        KeyValueMapper<Integer, String, String> mapper = MockKeyValueMapper.<Integer, String>SelectValueMapper();
         stream = builder.stream(Serdes.Integer(), Serdes.String(), streamOneInput);
         groupedStream = stream
             .groupBy(
@@ -145,7 +139,7 @@ public class KGroupedStreamIntegrationTest {
         Collections.sort(results, new Comparator<KeyValue<String, String>>() {
             @Override
             public int compare(KeyValue<String, String> o1, KeyValue<String, String> o2) {
-                return KGroupedStreamIntegrationTest.compare(o1, o2);
+                return KStreamAggregationIntegrationTest.compare(o1, o2);
             }
         });
 
@@ -202,7 +196,7 @@ public class KGroupedStreamIntegrationTest {
                 @Override
                 public int compare(final KeyValue<String, String> o1,
                                    final KeyValue<String, String> o2) {
-                    return KGroupedStreamIntegrationTest.compare(o1, o2);
+                    return KStreamAggregationIntegrationTest.compare(o1, o2);
                 }
             };
 
@@ -253,7 +247,7 @@ public class KGroupedStreamIntegrationTest {
         Collections.sort(results, new Comparator<KeyValue<String, Integer>>() {
             @Override
             public int compare(KeyValue<String, Integer> o1, KeyValue<String, Integer> o2) {
-                return KGroupedStreamIntegrationTest.compare(o1, o2);
+                return KStreamAggregationIntegrationTest.compare(o1, o2);
             }
         });
 
@@ -305,7 +299,7 @@ public class KGroupedStreamIntegrationTest {
                 @Override
                 public int compare(final KeyValue<String, Integer> o1,
                                    final KeyValue<String, Integer> o2) {
-                    return KGroupedStreamIntegrationTest.compare(o1, o2);
+                    return KStreamAggregationIntegrationTest.compare(o1, o2);
                 }
             };
 
@@ -352,7 +346,7 @@ public class KGroupedStreamIntegrationTest {
         Collections.sort(results, new Comparator<KeyValue<String, Long>>() {
             @Override
             public int compare(KeyValue<String, Long> o1, KeyValue<String, Long> o2) {
-                return KGroupedStreamIntegrationTest.compare(o1, o2);
+                return KStreamAggregationIntegrationTest.compare(o1, o2);
             }
         });
 
@@ -394,7 +388,7 @@ public class KGroupedStreamIntegrationTest {
         Collections.sort(results, new Comparator<KeyValue<String, Long>>() {
             @Override
             public int compare(KeyValue<String, Long> o1, KeyValue<String, Long> o2) {
-                return KGroupedStreamIntegrationTest.compare(o1, o2);
+                return KStreamAggregationIntegrationTest.compare(o1, o2);
             }
         });
 
