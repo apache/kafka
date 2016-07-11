@@ -87,11 +87,6 @@ public class WordCountIntegrationTest {
         streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        // Explicitly place the state directory under /tmp so that we can remove it via
-        // `purgeLocalStreamsState` below.  Once Streams is updated to expose the effective
-        // StreamsConfig configuration (so we can retrieve whatever state directory Streams came up
-        // with automatically) we don't need to set this anymore and can update `purgeLocalStreamsState`
-        // accordingly.
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
 
         KStreamBuilder builder = new KStreamBuilder();
