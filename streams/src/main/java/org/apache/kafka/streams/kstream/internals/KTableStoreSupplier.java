@@ -51,7 +51,9 @@ public class KTableStoreSupplier<K, V> implements StateStoreSupplier {
         return name;
     }
 
-    public StateStore get() {
+    public StateStore get(boolean loggingEnabled) {
+        // ignore the input parameters and do not turn on logging,
+        // as the source topic can always be used as its changelog.
         return new MeteredKeyValueStore<>(new RocksDBStore<>(name, keySerde, valueSerde), "rocksdb-state", time);
     }
 

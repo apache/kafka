@@ -64,7 +64,7 @@ public class RocksDBWindowStoreTest {
     protected <K, V> WindowStore<K, V> createWindowStore(ProcessorContext context) {
         StateStoreSupplier supplier = new RocksDBWindowStoreSupplier<>(windowName, retentionPeriod, numSegments, true, intSerde, stringSerde);
 
-        WindowStore<K, V> store = (WindowStore<K, V>) supplier.get();
+        WindowStore<K, V> store = (WindowStore<K, V>) supplier.get(true);
         store.init(context, store);
         return store;
     }

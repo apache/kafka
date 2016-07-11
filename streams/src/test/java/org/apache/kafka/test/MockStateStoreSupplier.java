@@ -29,16 +29,10 @@ import java.util.ArrayList;
 public class MockStateStoreSupplier implements StateStoreSupplier {
     private final String name;
     private final boolean persistent;
-    private final boolean loggingEnabled;
 
     public MockStateStoreSupplier(String name, boolean persistent) {
-        this(name, persistent, true);
-    }
-
-    public MockStateStoreSupplier(String name, boolean persistent, boolean loggingEnabled) {
         this.name = name;
         this.persistent = persistent;
-        this.loggingEnabled = loggingEnabled;
     }
 
     @Override
@@ -47,7 +41,7 @@ public class MockStateStoreSupplier implements StateStoreSupplier {
     }
 
     @Override
-    public StateStore get() {
+    public StateStore get(boolean loggingEnabled) {
         if (loggingEnabled) {
             return new MockStateStore(name, persistent).enableLogging();
         } else {

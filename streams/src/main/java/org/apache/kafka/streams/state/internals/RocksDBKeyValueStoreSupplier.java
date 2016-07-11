@@ -52,7 +52,12 @@ public class RocksDBKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
         return name;
     }
 
-    public StateStore get() {
-        return new MeteredKeyValueStore<>(new RocksDBStore<>(name, keySerde, valueSerde).enableLogging(), "rocksdb-state", time);
+    public StateStore get(boolean loggingEnabled) {
+        RocksDBStore<K, V> store = new RocksDBStore<>(name, keySerde, valueSerde);
+
+        if (loggingEnabled)
+            store.enableLogging();
+
+        return new MeteredKeyValueStore<>(store, "rocksdb-state", time);
     }
 }

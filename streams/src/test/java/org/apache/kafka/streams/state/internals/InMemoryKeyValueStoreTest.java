@@ -37,7 +37,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
             supplier = Stores.create("my-store").withKeys(keyClass).withValues(valueClass).inMemory().build();
         }
 
-        KeyValueStore<K, V> store = (KeyValueStore<K, V>) supplier.get();
+        KeyValueStore<K, V> store = (KeyValueStore<K, V>) supplier.get(true);
         store.init(context, store);
         return store;
     }

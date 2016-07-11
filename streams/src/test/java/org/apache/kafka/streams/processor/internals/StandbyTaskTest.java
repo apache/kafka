@@ -84,7 +84,7 @@ public class StandbyTaskTest {
             Collections.<ProcessorNode>emptyList(),
             Collections.<String, SourceNode>emptyMap(),
             Utils.<StateStoreSupplier>mkList(
-                    new MockStateStoreSupplier(ktable.topic(), true, false)
+                    new MockStateStoreSupplier(ktable.topic(), true)
             )
     );
 

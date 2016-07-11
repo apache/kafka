@@ -72,12 +72,12 @@ public abstract class AbstractTask {
         }
     }
 
-    protected void initializeStateStores() {
+    protected void initializeStateStores(boolean loggingEnabled) {
         // set initial offset limits
         initializeOffsetLimits();
 
         for (StateStoreSupplier stateStoreSupplier : this.topology.stateStoreSuppliers()) {
-            StateStore store = stateStoreSupplier.get();
+            StateStore store = stateStoreSupplier.get(loggingEnabled);
             store.init(this.processorContext, store);
         }
     }

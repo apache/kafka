@@ -43,7 +43,7 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
             supplier = Stores.create("my-store").withKeys(keyClass).withValues(valueClass).inMemory().maxEntries(10).build();
         }
 
-        KeyValueStore<K, V> store = (KeyValueStore<K, V>) supplier.get();
+        KeyValueStore<K, V> store = (KeyValueStore<K, V>) supplier.get(true);
         store.init(context, store);
         return store;
     }

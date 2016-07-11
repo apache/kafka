@@ -52,17 +52,14 @@ public class InMemoryLRUCacheStoreSupplier<K, V> implements StateStoreSupplier {
         return name;
     }
 
-    @SuppressWarnings("unchecked")
-    public StateStore get() {
-        final MemoryNavigableLRUCache<K, V> cache = new MemoryNavigableLRUCache<K, V>(name, capacity);
-        final InMemoryKeyValueLoggedStore<K, V> loggedCache = (InMemoryKeyValueLoggedStore) cache.enableLogging(keySerde, valueSerde);
-        final MeteredKeyValueStore<K, V> store = new MeteredKeyValueStore<>(loggedCache, "in-memory-lru-state", time);
-        cache.whenEldestRemoved(new MemoryNavigableLRUCache.EldestEntryRemovalListener<K, V>() {
-            @Override
-            public void apply(K key, V value) {
-                loggedCache.removed(key);
-            }
-        });
-        return store;
+    public StateStore get(boolean loggingEnabled) {
+        MemoryNavigableLRUCache<K, V> cache = new MemoryNavigableLRUCache<>(name, capacity, keySerde, valueSerde);
+
+        if (loggingEnabled) {
+            InMemoryKeyValueLoggedStore<K, V> loggedCache = (InMemoryKeyValueLoggedStore<K, V>) cache.enableLogging();
+            return new MeteredKeyValueStore<>(loggedCache, "in-memory-lru-state", time);
+        } else {
+            return new MeteredKeyValueStore<>(cache, "in-memory-lru-state", time);
+        }
     }
 }
