@@ -17,9 +17,6 @@
 
 package kafka.cluster
 
-import java.nio.ByteBuffer
-
-import kafka.api.ApiUtils._
 import kafka.common.{BrokerEndPointNotAvailableException, BrokerNotAvailableException, KafkaException}
 import kafka.utils.Json
 import org.apache.kafka.common.Node
