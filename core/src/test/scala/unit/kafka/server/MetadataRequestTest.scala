@@ -82,6 +82,8 @@ class MetadataRequestTest extends BaseRequestTest {
 
     assertTrue("internalTopic should show isInternal", internalTopicMetadata.isInternal)
     assertFalse("notInternalTopic topic not should show isInternal", notInternalTopicMetadata.isInternal)
+
+    assertEquals(Set(internalTopic).asJava, metadataResponse.cluster.internalTopics)
   }
 
   @Test

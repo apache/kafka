@@ -154,10 +154,12 @@ public class KafkaProducerTest {
         Collection<Node> nodes = Collections.singletonList(new Node(0, "host1", 1000));
         final Cluster emptyCluster = new Cluster(nodes,
                 Collections.<PartitionInfo>emptySet(),
+                Collections.<String>emptySet(),
                 Collections.<String>emptySet());
         final Cluster cluster = new Cluster(
                 Collections.singletonList(new Node(0, "host1", 1000)),
                 Arrays.asList(new PartitionInfo(topic, 0, null, null, null)),
+                Collections.<String>emptySet(),
                 Collections.<String>emptySet());
 
         // Expect exactly one fetch for each attempt to refresh while topic metadata is not available

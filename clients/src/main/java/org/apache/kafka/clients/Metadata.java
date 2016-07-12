@@ -299,6 +299,6 @@ public final class Metadata {
             }
             nodes = cluster.nodes();
         }
-        return new Cluster(nodes, partitionInfos, unauthorizedTopics);
+        return new Cluster(nodes, partitionInfos, unauthorizedTopics, new HashSet<>(cluster.internalTopics()));
     }
 }
