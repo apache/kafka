@@ -38,6 +38,8 @@ class AdminManager(val config: KafkaConfig,
 
   val topicPurgatory = DelayedOperationPurgatory[DelayedOperation]("topic", config.brokerId)
 
+  def hasDelayedTopicOperations = topicPurgatory.delayed() != 0
+
   /**
     * Try to complete delayed topic operations with the request key
     */
