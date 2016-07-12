@@ -134,10 +134,6 @@ public class KafkaConsumerTest {
         assertEquals(singleton(topic), consumer.subscription());
         assertTrue(consumer.assignment().isEmpty());
 
-        consumer.subscribe(null);
-        assertTrue(consumer.subscription().isEmpty());
-        assertTrue(consumer.assignment().isEmpty());
-
         consumer.subscribe(Collections.<String>emptyList());
         assertTrue(consumer.subscription().isEmpty());
         assertTrue(consumer.assignment().isEmpty());
@@ -151,6 +147,17 @@ public class KafkaConsumerTest {
         assertTrue(consumer.assignment().isEmpty());
 
         consumer.close();
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testSubscriptionOnNullTopicCollection() {
+        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
+
+        try {
+            consumer.subscribe(null);
+        } finally {
+            consumer.close();
+        }
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -188,8 +195,7 @@ public class KafkaConsumerTest {
             consumer.close();
         }
     }
-
-
+    
     @Test(expected = IllegalArgumentException.class)
     public void testSeekNegative() {
         Properties props = new Properties();
@@ -219,18 +225,15 @@ public class KafkaConsumerTest {
         }
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void testAssignOnEmptyTopicPartition() {
-        Properties props = new Properties();
-        props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testAssignOnEmptyTopicPartition");
-        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
         KafkaConsumer<byte[], byte[]> consumer = newConsumer();
-        try {
-            consumer.assign(Collections.<TopicPartition>emptyList());
-        } finally {
-            consumer.close();
-        }
+
+        consumer.assign(Collections.<TopicPartition>emptyList());
+        assertTrue(consumer.subscription().isEmpty());
+        assertTrue(consumer.assignment().isEmpty());
+
+        consumer.close();
     }
 
     @Test(expected = IllegalArgumentException.class)

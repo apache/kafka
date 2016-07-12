@@ -795,8 +795,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
         acquire();
         try {
-            if (topics == null || topics.isEmpty()) {
-                // treat subscribing to null or empty topic list as the same as unsubscribing
+            if (topics == null) {
+                throw new IllegalArgumentException("Topic collection to subscribe to cannot be null");
+            } else if (topics.isEmpty()) {
+                // treat subscribing to empty topic list as the same as unsubscribing
                 this.unsubscribe();
             } else {
                 for (String topic : topics) {
@@ -896,14 +898,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void assign(Collection<TopicPartition> partitions) {
         acquire();
         try {
-            if (partitions == null || partitions.isEmpty()) {
-                throw new IllegalArgumentException("Topic partition collection to assign to cannot be null or empty");
+            if (partitions == null) {
+                throw new IllegalArgumentException("Topic partition collection to assign to cannot be null");
+            } else if (partitions.isEmpty()) {
+                this.unsubscribe();
             } else {
                 Set<String> topics = new HashSet<>();
                 for (TopicPartition tp : partitions) {
                     String topic = (tp != null) ? tp.topic() : null;
                     if (topic == null || topic.trim().isEmpty())
-                            throw new IllegalArgumentException("Topic partitions to assign to cannot have null or empty topic");
+                        throw new IllegalArgumentException("Topic partitions to assign to cannot have null or empty topic");
                     topics.add(topic);
                 }
 
