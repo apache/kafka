@@ -125,7 +125,7 @@ public class KTableSourceTest {
     }
 
     @Test
-    public void testNotSedingOldValue() throws IOException {
+    public void testNotSendingOldValue() throws IOException {
         final KStreamBuilder builder = new KStreamBuilder();
 
         String topic1 = "topic1";
@@ -160,7 +160,7 @@ public class KTableSourceTest {
     }
 
     @Test
-    public void testSedingOldValue() throws IOException {
+    public void testSendingOldValue() throws IOException {
         final KStreamBuilder builder = new KStreamBuilder();
 
         String topic1 = "topic1";

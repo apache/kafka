@@ -32,6 +32,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.test.TestUtils;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -50,7 +51,7 @@ import static org.junit.Assert.assertThat;
  * End-to-end integration test that demonstrates how to perform a join between a KStream and a
  * KTable (think: KStream.leftJoin(KTable)), i.e. an example of a stateful computation.
  */
-public class JoinIntegrationTest {
+public class KStreamKTableJoinIntegrationTest {
     @ClassRule
     public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster();
     private static final String USER_CLICKS_TOPIC = "user-clicks";
@@ -142,12 +143,8 @@ public class JoinIntegrationTest {
         streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        // Explicitly place the state directory under /tmp so that we can remove it via
-        // `purgeLocalStreamsState` below.  Once Streams is updated to expose the effective
-        // StreamsConfig configuration (so we can retrieve whatever state directory Streams came up
-        // with automatically) we don't need to set this anymore and can update `purgeLocalStreamsState`
-        // accordingly.
-        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, "/tmp/kafka-streams");
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG,
+                                 TestUtils.tempDirectory().getPath());
 
         // Remove any state from previous test runs
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
@@ -193,8 +190,7 @@ public class JoinIntegrationTest {
             .leftJoin(userRegionsTable, new ValueJoiner<Long, String, RegionWithClicks>() {
                 @Override
                 public RegionWithClicks apply(Long clicks, String region) {
-                    RegionWithClicks regionWithClicks = new RegionWithClicks(region == null ? "UNKNOWN" : region, clicks);
-                    return regionWithClicks;
+                    return new RegionWithClicks(region == null ? "UNKNOWN" : region, clicks);
                 }
             })
             // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>

@@ -82,6 +82,12 @@ public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
         processed.clear();
     }
 
+    public void checkEmptyAndClearProcessResult() {
+
+        assertEquals("the number of outputs:", 0, processed.size());
+        processed.clear();
+    }
+
     public void checkAndClearPunctuateResult(long... expected) {
         assertEquals("the number of outputs:", expected.length, punctuated.size());
 

@@ -401,6 +401,7 @@ public class Worker {
         WorkerTask task = getTask(id);
         stopTask(task);
         awaitStopTask(task, config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG));
+        log.info("Task {} completed shutdown.", task.id());
     }
 
     /**

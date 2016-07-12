@@ -212,7 +212,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         try {
             if (ttl == TTL_NOT_USED) {
                 dir.getParentFile().mkdirs();
-                return RocksDB.open(options, dir.toString());
+                return RocksDB.open(options, dir.getAbsolutePath());
             } else {
                 throw new UnsupportedOperationException("Change log is not supported for store " + this.name + " since it is TTL based.");
                 // TODO: support TTL with change log?
@@ -237,17 +237,26 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     public V get(K key) {
         if (cache != null) {
             RocksDBCacheEntry entry = cache.get(key);
-
             if (entry == null) {
-                V value = serdes.valueFrom(getInternal(serdes.rawKey(key)));
-                cache.put(key, new RocksDBCacheEntry(value));
-
-                return value;
+                byte[] byteValue = getInternal(serdes.rawKey(key));
+                //Check value for null, to avoid  deserialization error
+                if (byteValue == null) {
+                    return null;
+                } else {
+                    V value = serdes.valueFrom(byteValue);
+                    cache.put(key, new RocksDBCacheEntry(value));
+                    return value;
+                }
             } else {
                 return entry.value;
             }
         } else {
-            return serdes.valueFrom(getInternal(serdes.rawKey(key)));
+            byte[] byteValue = getInternal(serdes.rawKey(key));
+            if (byteValue == null) {
+                return null;
+            } else {
+                return serdes.valueFrom(byteValue);
+            }
         }
     }
 
