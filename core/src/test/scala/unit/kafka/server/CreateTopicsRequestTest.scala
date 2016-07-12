@@ -127,6 +127,7 @@ class CreateTopicsRequestTest extends BaseRequestTest {
     validateTopicExists("partial-none")
 
     // Timeout
+    // We don't expect a request to ever complete within 1ms. A timeout of 1 ms allows us to test the purgatory timeout logic.
     validateErrorCreateTopicsRequests(new CreateTopicsRequest(Map("error-timeout" -> new CreateTopicsRequest.TopicDetails(10, 3.toShort)).asJava, 1),
       Map("error-timeout" -> Errors.REQUEST_TIMED_OUT))
     validateErrorCreateTopicsRequests(new CreateTopicsRequest(Map("error-timeout-zero" -> new CreateTopicsRequest.TopicDetails(10, 3.toShort)).asJava, 0),
