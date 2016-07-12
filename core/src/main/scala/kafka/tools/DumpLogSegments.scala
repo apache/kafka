@@ -248,30 +248,34 @@ object DumpLogSegments {
     val shallowIterator = messageSet.iterator(maxMessageSize)
     for(shallowMessageAndOffset <- shallowIterator) { // this only does shallow iteration
       val itr = getIterator(shallowMessageAndOffset, isDeepIteration)
-      for (messageAndOffset <- itr) {
-        val msg = messageAndOffset.message
+      try {
+        for (messageAndOffset <- itr) {
+          val msg = messageAndOffset.message
 
-        if(lastOffset == -1)
+          if (lastOffset == -1)
+            lastOffset = messageAndOffset.offset
+          // If we are iterating uncompressed messages, offsets must be consecutive
+          else if (msg.compressionCodec == NoCompressionCodec && messageAndOffset.offset != lastOffset + 1) {
+            var nonConsecutivePairsSeq = nonConsecutivePairsForLogFilesMap.getOrElse(file.getAbsolutePath, List[(Long, Long)]())
+            nonConsecutivePairsSeq ::=(lastOffset, messageAndOffset.offset)
+            nonConsecutivePairsForLogFilesMap.put(file.getAbsolutePath, nonConsecutivePairsSeq)
+          }
           lastOffset = messageAndOffset.offset
-        // If we are iterating uncompressed messages, offsets must be consecutive
-        else if (msg.compressionCodec == NoCompressionCodec && messageAndOffset.offset != lastOffset +1) {
-          var nonConsecutivePairsSeq = nonConsecutivePairsForLogFilesMap.getOrElse(file.getAbsolutePath, List[(Long, Long)]())
-          nonConsecutivePairsSeq ::=(lastOffset, messageAndOffset.offset)
-          nonConsecutivePairsForLogFilesMap.put(file.getAbsolutePath, nonConsecutivePairsSeq)
-        }
-        lastOffset = messageAndOffset.offset
 
-        print("offset: " + messageAndOffset.offset + " position: " + validBytes + " isvalid: " + msg.isValid +
-              " payloadsize: " + msg.payloadSize + " magic: " + msg.magic +
-              " compresscodec: " + msg.compressionCodec + " crc: " + msg.checksum)
-        if(msg.hasKey)
-          print(" keysize: " + msg.keySize)
-        if(printContents) {
-          val (key, payload) = parser.parse(msg)
-          key.map(key => print(s" key: ${key}"))
-          payload.map(payload => print(s" payload: ${payload}"))
+          print("offset: " + messageAndOffset.offset + " position: " + validBytes + " isvalid: " + msg.isValid +
+            " payloadsize: " + msg.payloadSize + " magic: " + msg.magic +
+            " compresscodec: " + msg.compressionCodec + " crc: " + msg.checksum)
+          if (msg.hasKey)
+            print(" keysize: " + msg.keySize)
+          if (printContents) {
+            val (key, payload) = parser.parse(msg)
+            key.map(key => print(s" key: ${key}"))
+            payload.map(payload => print(s" payload: ${payload}"))
+          }
+          println()
         }
-        println()
+      } finally {
+        itr.close()
       }
       validBytes += MessageSet.entrySize(shallowMessageAndOffset.message)
     }
@@ -280,7 +284,7 @@ object DumpLogSegments {
       println("Found %d invalid bytes at the end of %s".format(trailingBytes, file.getName))
   }
 
-  private def getIterator(messageAndOffset: MessageAndOffset, isDeepIteration: Boolean) = {
+  private def getIterator(messageAndOffset: MessageAndOffset, isDeepIteration: Boolean): kafka.common.CloseableIterator[MessageAndOffset] = {
     if (isDeepIteration) {
       val message = messageAndOffset.message
       message.compressionCodec match {
@@ -294,7 +298,7 @@ object DumpLogSegments {
   }
 
   private def getSingleMessageIterator(messageAndOffset: MessageAndOffset) = {
-    new IteratorTemplate[MessageAndOffset] {
+    new CloseableIteratorTemplate[MessageAndOffset] {
       var messageIterated = false
 
       override def makeNext(): MessageAndOffset = {
@@ -304,6 +308,8 @@ object DumpLogSegments {
         } else
           allDone()
       }
+
+      override def close(): Unit = {}
     }
   }
 

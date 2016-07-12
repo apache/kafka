@@ -56,7 +56,7 @@ abstract class IteratorTemplate[T] extends Iterator[T] with java.util.Iterator[T
       case _ => maybeComputeNext()
     }
   }
-  
+
   protected def makeNext(): T
   
   def maybeComputeNext(): Boolean = {

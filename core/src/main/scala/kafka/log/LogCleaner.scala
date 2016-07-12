@@ -440,27 +440,31 @@ private[log] class Cleaner(val id: Int,
           // We use the absolute offset to decide whether to retain the message or not. This is handled by the
           // deep iterator.
           val messages = ByteBufferMessageSet.deepIterator(entry)
-          var writeOriginalMessageSet = true
-          val retainedMessages = new mutable.ArrayBuffer[MessageAndOffset]
-          messages.foreach { messageAndOffset =>
-            messagesRead += 1
-            if (shouldRetainMessage(source, map, retainDeletes, messageAndOffset)) {
-              retainedMessages += {
-                if (messageAndOffset.message.magic != messageFormatVersion) {
-                  writeOriginalMessageSet = false
-                  new MessageAndOffset(messageAndOffset.message.toFormatVersion(messageFormatVersion), messageAndOffset.offset)
+          try {
+            var writeOriginalMessageSet = true
+            val retainedMessages = new mutable.ArrayBuffer[MessageAndOffset]
+            messages.foreach { messageAndOffset =>
+              messagesRead += 1
+              if (shouldRetainMessage(source, map, retainDeletes, messageAndOffset)) {
+                retainedMessages += {
+                  if (messageAndOffset.message.magic != messageFormatVersion) {
+                    writeOriginalMessageSet = false
+                    new MessageAndOffset(messageAndOffset.message.toFormatVersion(messageFormatVersion), messageAndOffset.offset)
+                  }
+                  else messageAndOffset
                 }
-                else messageAndOffset
               }
+              else writeOriginalMessageSet = false
             }
-            else writeOriginalMessageSet = false
-          }
 
-          // There are no messages compacted out and no message format conversion, write the original message set back
-          if (writeOriginalMessageSet)
-            ByteBufferMessageSet.writeMessage(writeBuffer, entry.message, entry.offset)
-          else if (retainedMessages.nonEmpty)
-            compressMessages(writeBuffer, entry.message.compressionCodec, messageFormatVersion, retainedMessages)
+            // There are no messages compacted out and no message format conversion, write the original message set back
+            if (writeOriginalMessageSet)
+              ByteBufferMessageSet.writeMessage(writeBuffer, entry.message, entry.offset)
+            else if (retainedMessages.nonEmpty)
+              compressMessages(writeBuffer, entry.message.compressionCodec, messageFormatVersion, retainedMessages)
+          } finally {
+            messages.close()
+          }
         }
       }
 

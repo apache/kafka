@@ -17,8 +17,8 @@
 
 package kafka.message
 
-import kafka.utils.{IteratorTemplate, Logging}
-import kafka.common.{KafkaException, LongRef}
+import kafka.utils.{CloseableIteratorTemplate, IteratorTemplate, Logging}
+import kafka.common.{CloseableIterator, KafkaException, LongRef}
 import java.nio.ByteBuffer
 import java.nio.channels._
 import java.io._
@@ -78,11 +78,11 @@ object ByteBufferMessageSet {
   }
 
   /** Deep iterator that decompresses the message sets and adjusts timestamp and offset if needed. */
-  def deepIterator(wrapperMessageAndOffset: MessageAndOffset): Iterator[MessageAndOffset] = {
+  def deepIterator(wrapperMessageAndOffset: MessageAndOffset): CloseableIterator[MessageAndOffset] = {
 
     import Message._
 
-    new IteratorTemplate[MessageAndOffset] {
+    new CloseableIteratorTemplate[MessageAndOffset] {
 
       val MessageAndOffset(wrapperMessage, wrapperMessageOffset) = wrapperMessageAndOffset
       val wrapperMessageTimestampOpt: Option[Long] =
@@ -159,6 +159,10 @@ object ByteBufferMessageSet {
                 throw new KafkaException(ioe)
             }
         }
+      }
+
+      override def close() : Unit = {
+        compressed.close()
       }
     }
   }
