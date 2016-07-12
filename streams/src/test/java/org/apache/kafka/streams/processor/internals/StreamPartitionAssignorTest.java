@@ -558,7 +558,7 @@ public class StreamPartitionAssignorTest {
     @Test
     public void shouldAddUserDefinedEndPointToSubscription() throws Exception {
         final Properties properties = configProps();
-        properties.put(StreamsConfig.USER_ENDPOINT_CONFIG, "localhost:8080");
+        properties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:8080");
         final StreamsConfig config = new StreamsConfig(properties);
         final TopologyBuilder builder = new TopologyBuilder();
         final String applicationId = "application-id";
@@ -585,7 +585,7 @@ public class StreamPartitionAssignorTest {
     public void shouldMapUserEndPointToTopicPartitions() throws Exception {
         final Properties properties = configProps();
         final String myEndPoint = "localhost:8080";
-        properties.put(StreamsConfig.USER_ENDPOINT_CONFIG, myEndPoint);
+        properties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, myEndPoint);
         final StreamsConfig config = new StreamsConfig(properties);
         final TopologyBuilder builder = new TopologyBuilder();
         final String applicationId = "application-id";

@@ -122,19 +122,19 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         streamThread = (StreamThread) o;
         streamThread.partitionAssignor(this);
 
-        String userEndPoint = (String) configs.get(StreamsConfig.USER_ENDPOINT_CONFIG);
+        String userEndPoint = (String) configs.get(StreamsConfig.APPLICATION_SERVER_CONFIG);
         if (userEndPoint != null && !userEndPoint.isEmpty()) {
             final String[] hostPort = userEndPoint.split(":");
             if (hostPort.length != 2) {
                 log.warn("Config '{}' isn't in the correct host:pair format. This instance will not be available for discovery"
-                        , StreamsConfig.USER_ENDPOINT_CONFIG);
+                        , StreamsConfig.APPLICATION_SERVER_CONFIG);
             } else {
                 try {
                     Integer.valueOf(hostPort[1]);
                     this.userEndPointConfig = userEndPoint;
                 } catch (NumberFormatException nfe) {
                     log.warn("Invalid port '{}' supplied in '{}' for config '{}'. This instance will not be available for discovery"
-                            , hostPort[1], userEndPoint, StreamsConfig.USER_ENDPOINT_CONFIG);
+                            , hostPort[1], userEndPoint, StreamsConfig.APPLICATION_SERVER_CONFIG);
                 }
             }
 

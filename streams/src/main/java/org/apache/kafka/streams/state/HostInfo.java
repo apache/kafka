@@ -23,14 +23,14 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 /**
  * Represents a user defined endpoint in a {@link org.apache.kafka.streams.KafkaStreams} application.
  * Instances of this class can be obtained by calling one of:
- *  {@link KafkaStreams#allInstances()}
- *  {@link KafkaStreams#allInstancesWithStore(String)}
- *  {@link KafkaStreams#instanceWithKey(String, Object, StreamPartitioner)}
- *  {@link KafkaStreams#instanceWithKey(String, Object, Serializer)}
+ *  {@link KafkaStreams#allMetadata()}
+ *  {@link KafkaStreams#allMetadataForStore(String)}
+ *  {@link KafkaStreams#metadataWithKey(String, Object, StreamPartitioner)}
+ *  {@link KafkaStreams#metadataWithKey(String, Object, Serializer)}
  *
  *  The HostInfo is constructed during Partition Assignment
  *  see {@link org.apache.kafka.streams.processor.internals.StreamPartitionAssignor}
- *  It is extracted from the config {@link org.apache.kafka.streams.StreamsConfig#USER_ENDPOINT_CONFIG}
+ *  It is extracted from the config {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_SERVER_CONFIG}
  *
  *  If developers wish to expose an endpoint in their KafkaStreams applications they should provide the above
  *  config.

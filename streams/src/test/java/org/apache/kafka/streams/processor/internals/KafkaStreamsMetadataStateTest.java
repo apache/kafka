@@ -26,7 +26,7 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.HostInfo;
-import org.apache.kafka.streams.state.KafkaStreamsInstance;
+import org.apache.kafka.streams.state.KafkaStreamsMetadata;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -40,9 +40,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-public class KafkaStreamsInstancesTest {
+public class KafkaStreamsMetadataStateTest {
 
-    private KafkaStreamsInstances discovery;
+    private KafkaStreamsMetadataState discovery;
     private HostInfo hostOne;
     private HostInfo hostTwo;
     private HostInfo hostThree;
@@ -94,20 +94,20 @@ public class KafkaStreamsInstancesTest {
         hostToPartitions.put(hostTwo, Utils.mkSet(topic2P0, topic1P1));
         hostToPartitions.put(hostThree, Collections.singleton(topic3P0));
 
-        discovery = new KafkaStreamsInstances(builder);
+        discovery = new KafkaStreamsMetadataState(builder);
         discovery.onChange(hostToPartitions);
     }
 
     @Test
     public void shouldGetAllStreamInstances() throws Exception {
-        final KafkaStreamsInstance one = new KafkaStreamsInstance(hostOne, Utils.mkSet("table-one", "table-two", "merged-table"),
+        final KafkaStreamsMetadata one = new KafkaStreamsMetadata(hostOne, Utils.mkSet("table-one", "table-two", "merged-table"),
                 Utils.mkSet(topic1P0, topic2P1, topic4P0));
-        final KafkaStreamsInstance two = new KafkaStreamsInstance(hostTwo, Utils.mkSet("table-two", "table-one", "merged-table"),
+        final KafkaStreamsMetadata two = new KafkaStreamsMetadata(hostTwo, Utils.mkSet("table-two", "table-one", "merged-table"),
                 Utils.mkSet(topic2P0, topic1P1));
-        final KafkaStreamsInstance three = new KafkaStreamsInstance(hostThree, Collections.singleton("table-three"),
+        final KafkaStreamsMetadata three = new KafkaStreamsMetadata(hostThree, Collections.singleton("table-three"),
                 Collections.singleton(topic3P0));
 
-        Collection<KafkaStreamsInstance> actual = discovery.getAllStreamsInstances();
+        Collection<KafkaStreamsMetadata> actual = discovery.getAllMetadata();
         assertEquals(3, actual.size());
         assertTrue("expected " + actual + " to contain " + one, actual.contains(one));
         assertTrue("expected " + actual + " to contain " + two, actual.contains(two));
@@ -128,19 +128,19 @@ public class KafkaStreamsInstancesTest {
         hostToPartitions.put(hostFour, Utils.mkSet(tp5));
         discovery.onChange(hostToPartitions);
 
-        final KafkaStreamsInstance expected = new KafkaStreamsInstance(hostFour, Collections.<String>emptySet(),
+        final KafkaStreamsMetadata expected = new KafkaStreamsMetadata(hostFour, Collections.<String>emptySet(),
                 Collections.singleton(tp5));
-        final Collection<KafkaStreamsInstance> actual = discovery.getAllStreamsInstances();
+        final Collection<KafkaStreamsMetadata> actual = discovery.getAllMetadata();
         assertTrue("expected " + actual + " to contain " + expected, actual.contains(expected));
     }
 
     @Test
     public void shouldGetInstancesForStoreName() throws Exception {
-        final KafkaStreamsInstance one = new KafkaStreamsInstance(hostOne, Utils.mkSet("table-one", "table-two", "merged-table"),
+        final KafkaStreamsMetadata one = new KafkaStreamsMetadata(hostOne, Utils.mkSet("table-one", "table-two", "merged-table"),
                 Utils.mkSet(topic1P0, topic2P1, topic4P0));
-        final KafkaStreamsInstance two = new KafkaStreamsInstance(hostTwo, Utils.mkSet("table-two", "table-one", "merged-table"),
+        final KafkaStreamsMetadata two = new KafkaStreamsMetadata(hostTwo, Utils.mkSet("table-two", "table-one", "merged-table"),
                 Utils.mkSet(topic2P0, topic1P1));
-        final Collection<KafkaStreamsInstance> actual = discovery.getAllStreamsInstancesWithStore("table-one");
+        final Collection<KafkaStreamsMetadata> actual = discovery.getAllMetadataForStore("table-one");
         assertEquals(2, actual.size());
         assertTrue("expected " + actual + " to contain " + one, actual.contains(one));
         assertTrue("expected " + actual + " to contain " + two, actual.contains(two));
@@ -148,12 +148,12 @@ public class KafkaStreamsInstancesTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIllegalArgumentExceptionIfStoreNameIsNullOnGetAllInstancesWithStore() throws Exception {
-        discovery.getAllStreamsInstancesWithStore(null);
+        discovery.getAllMetadataForStore(null);
     }
 
     @Test
     public void shouldReturnEmptyCollectionOnGetAllInstancesWithStoreWhenStoreDoesntExist() throws Exception {
-        final Collection<KafkaStreamsInstance> actual = discovery.getAllStreamsInstancesWithStore("not-a-store");
+        final Collection<KafkaStreamsMetadata> actual = discovery.getAllMetadataForStore("not-a-store");
         assertTrue(actual.isEmpty());
     }
 
@@ -163,10 +163,10 @@ public class KafkaStreamsInstancesTest {
         hostToPartitions.put(hostTwo, Utils.mkSet(topic2P0, tp4));
         discovery.onChange(hostToPartitions);
 
-        final KafkaStreamsInstance expected = new KafkaStreamsInstance(hostThree, Collections.singleton("table-three"),
+        final KafkaStreamsMetadata expected = new KafkaStreamsMetadata(hostThree, Collections.singleton("table-three"),
                 Collections.singleton(topic3P0));
 
-        final KafkaStreamsInstance actual = discovery.getStreamsInstanceWithKey("table-three", "the-key",
+        final KafkaStreamsMetadata actual = discovery.getMetadataWithKey("table-three", "the-key",
                 Serdes.String().serializer());
 
         assertEquals(expected, actual);
@@ -179,10 +179,10 @@ public class KafkaStreamsInstancesTest {
 
         discovery.onChange(hostToPartitions);
 
-        final KafkaStreamsInstance expected = new KafkaStreamsInstance(hostTwo, Utils.mkSet("table-two", "table-three", "merged-table"),
+        final KafkaStreamsMetadata expected = new KafkaStreamsMetadata(hostTwo, Utils.mkSet("table-two", "table-three", "merged-table"),
                 Utils.mkSet(topic2P0, tp4));
 
-        KafkaStreamsInstance actual = discovery.getStreamsInstanceWithKey("table-three", "the-key", new StreamPartitioner<String, Object>() {
+        KafkaStreamsMetadata actual = discovery.getMetadataWithKey("table-three", "the-key", new StreamPartitioner<String, Object>() {
             @Override
             public Integer partition(final String key, final Object value, final int numPartitions) {
                 return 1;
@@ -197,10 +197,10 @@ public class KafkaStreamsInstancesTest {
         hostToPartitions.put(hostTwo, Utils.mkSet(topic2P0, topic1P1, topic2P2));
         discovery.onChange(hostToPartitions);
 
-        final KafkaStreamsInstance expected = new KafkaStreamsInstance(hostTwo, Utils.mkSet("table-two", "table-one", "merged-table"),
+        final KafkaStreamsMetadata expected = new KafkaStreamsMetadata(hostTwo, Utils.mkSet("table-two", "table-one", "merged-table"),
                 Utils.mkSet(topic2P0, topic1P1, topic2P2));
 
-        final KafkaStreamsInstance actual = discovery.getStreamsInstanceWithKey("merged-table", "123", new StreamPartitioner<String, Object>() {
+        final KafkaStreamsMetadata actual = discovery.getMetadataWithKey("merged-table", "123", new StreamPartitioner<String, Object>() {
             @Override
             public Integer partition(final String key, final Object value, final int numPartitions) {
                 return 2;
@@ -213,7 +213,7 @@ public class KafkaStreamsInstancesTest {
 
     @Test
     public void shouldReturnNullOnGetWithKeyWhenStoreDoesntExist() throws Exception {
-        final KafkaStreamsInstance actual = discovery.getStreamsInstanceWithKey("not-a-store",
+        final KafkaStreamsMetadata actual = discovery.getMetadataWithKey("not-a-store",
                 "key",
                 Serdes.String().serializer());
         assertNull(actual);
@@ -221,23 +221,23 @@ public class KafkaStreamsInstancesTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIllegalArgumentExceptionWhenKeyIsNull() throws Exception {
-        discovery.getStreamsInstanceWithKey("table-three", null, Serdes.String().serializer());
+        discovery.getMetadataWithKey("table-three", null, Serdes.String().serializer());
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIllegalArgumentExceptionWhenSerializerIsNull() throws Exception {
-        discovery.getStreamsInstanceWithKey("table-three", "key", (Serializer) null);
+        discovery.getMetadataWithKey("table-three", "key", (Serializer) null);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIllegalArgumentExceptionIfStoreNameIsNull() throws Exception {
-        discovery.getStreamsInstanceWithKey(null, "key", Serdes.String().serializer());
+        discovery.getMetadataWithKey(null, "key", Serdes.String().serializer());
     }
 
     @SuppressWarnings("unchecked")
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIllegalArgumentExceptionIfStreamPartitionerIsNull() throws Exception {
-        discovery.getStreamsInstanceWithKey(null, "key", (StreamPartitioner) null);
+        discovery.getMetadataWithKey(null, "key", (StreamPartitioner) null);
     }
 
 

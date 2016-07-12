@@ -28,9 +28,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
-import org.apache.kafka.streams.processor.internals.KafkaStreamsInstances;
+import org.apache.kafka.streams.processor.internals.KafkaStreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.StreamThread;
-import org.apache.kafka.streams.state.KafkaStreamsInstance;
+import org.apache.kafka.streams.state.KafkaStreamsMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -102,7 +102,7 @@ public class KafkaStreams {
     // of the co-location of stream thread's consumers. It is for internal
     // usage only and should not be exposed to users at all.
     private final UUID processId;
-    private KafkaStreamsInstances kafkaStreamsInstances;
+    private KafkaStreamsMetadataState kafkaStreamsInstances;
 
     /**
      * Construct the stream instance.
@@ -162,7 +162,7 @@ public class KafkaStreams {
         for (int i = 0; i < this.threads.length; i++) {
             this.threads[i] = new StreamThread(builder, config, clientSupplier, applicationId, clientId, processId, metrics, time);
         }
-        kafkaStreamsInstances = new KafkaStreamsInstances(builder);
+        kafkaStreamsInstances = new KafkaStreamsMetadataState(builder);
         threads[0].setPartitionsByHostStateChangeListener(kafkaStreamsInstances);
     }
 
@@ -229,31 +229,31 @@ public class KafkaStreams {
 
 
     /**
-     * Find all of the instances of {@link KafkaStreamsInstance} in a {@link KafkaStreams application}
+     * Find all of the instances of {@link KafkaStreamsMetadata} in a {@link KafkaStreams application}
      *
      * Note: this is a point in time view and it may change due to partition reassignment.
-     * @return collection containing all instances of {@link KafkaStreamsInstance} in this application
+     * @return collection containing all instances of {@link KafkaStreamsMetadata} in this application
      */
-    public Collection<KafkaStreamsInstance> allInstances() {
+    public Collection<KafkaStreamsMetadata> allMetadata() {
         validateIsRunning();
-        return kafkaStreamsInstances.getAllStreamsInstances();
+        return kafkaStreamsInstances.getAllMetadata();
     }
 
 
     /**
-     * Find the instances {@link KafkaStreamsInstance} for a given storeName
+     * Find the instances {@link KafkaStreamsMetadata} for a given storeName
      *
      * Note: this is a point in time view and it may change due to partition reassignment.
      * @param storeName the storeName to find metadata for
-     * @return  A collection containing instances of {@link KafkaStreamsInstance} that have the provided storeName
+     * @return  A collection containing instances of {@link KafkaStreamsMetadata} that have the provided storeName
      */
-    public Collection<KafkaStreamsInstance> allInstancesWithStore(final String storeName) {
+    public Collection<KafkaStreamsMetadata> allMetadataForStore(final String storeName) {
         validateIsRunning();
-        return kafkaStreamsInstances.getAllStreamsInstancesWithStore(storeName);
+        return kafkaStreamsInstances.getAllMetadataForStore(storeName);
     }
 
     /**
-     * Find the {@link KafkaStreamsInstance} for a given storeName and key.
+     * Find the {@link KafkaStreamsMetadata} for a given storeName and key.
      *
      * Note: the key may not exist in the {@link org.apache.kafka.streams.processor.StateStore},
      * this method provides a way of finding which host it would exist on.
@@ -262,17 +262,17 @@ public class KafkaStreams {
      * @param key               Key to use to for partition
      * @param keySerializer     Serializer for the key
      * @param <K>               key type
-     * @return  The {@link KafkaStreamsInstance} for the storeName and key
+     * @return  The {@link KafkaStreamsMetadata} for the storeName and key
      */
-    public <K> KafkaStreamsInstance instanceWithKey(final String storeName,
+    public <K> KafkaStreamsMetadata metadataWithKey(final String storeName,
                                                     final K key,
                                                     final Serializer<K> keySerializer) {
         validateIsRunning();
-        return kafkaStreamsInstances.getStreamsInstanceWithKey(storeName, key, keySerializer);
+        return kafkaStreamsInstances.getMetadataWithKey(storeName, key, keySerializer);
     }
 
     /**
-     * Find the {@link KafkaStreamsInstance} for a given storeName and key.
+     * Find the {@link KafkaStreamsMetadata} for a given storeName and key.
      *
      * Note: the key may not exist in the {@link org.apache.kafka.streams.processor.StateStore},
      * this method provides a way of finding which host it would exist on.
@@ -282,13 +282,13 @@ public class KafkaStreams {
      * @param key               Key to use to for partition
      * @param partitioner       Partitioner for the store
      * @param <K>               key type
-     * @return  The {@link KafkaStreamsInstance} for the storeName and key
+     * @return  The {@link KafkaStreamsMetadata} for the storeName and key
      */
-    public <K> KafkaStreamsInstance instanceWithKey(final String storeName,
+    public <K> KafkaStreamsMetadata metadataWithKey(final String storeName,
                                                     final K key,
                                                     final StreamPartitioner<K, ?> partitioner) {
         validateIsRunning();
-        return kafkaStreamsInstances.getStreamsInstanceWithKey(storeName, key, partitioner);
+        return kafkaStreamsInstances.getMetadataWithKey(storeName, key, partitioner);
     }
 
 
