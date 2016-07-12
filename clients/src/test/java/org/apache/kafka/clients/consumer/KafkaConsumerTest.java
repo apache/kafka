@@ -195,7 +195,7 @@ public class KafkaConsumerTest {
             consumer.close();
         }
     }
-    
+
     @Test(expected = IllegalArgumentException.class)
     public void testSeekNegative() {
         Properties props = new Properties();
