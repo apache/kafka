@@ -771,6 +771,7 @@ public class TopologyBuilder {
         return topicNames;
     }
 
+
     /**
      * Build the topology for the specified topic group. This is called automatically when passing this builder into the
      * {@link org.apache.kafka.streams.KafkaStreams#KafkaStreams(TopologyBuilder, org.apache.kafka.streams.StreamsConfig)} constructor.
@@ -793,6 +794,7 @@ public class TopologyBuilder {
         List<ProcessorNode> processorNodes = new ArrayList<>(nodeFactories.size());
         Map<String, ProcessorNode> processorMap = new HashMap<>();
         Map<String, SourceNode> topicSourceMap = new HashMap<>();
+        Map<String, SinkNode> topicSinkMap = new HashMap<>();
         Map<String, StateStoreSupplier> stateStoreMap = new HashMap<>();
 
         // create processor nodes in a topological order ("nodeFactories" is already topologically sorted)
@@ -823,8 +825,15 @@ public class TopologyBuilder {
                         }
                     }
                 } else if (factory instanceof SinkNodeFactory) {
-                    for (String parent : ((SinkNodeFactory) factory).parents) {
+                    SinkNodeFactory sinkNodeFactory = (SinkNodeFactory) factory;
+                    for (String parent : sinkNodeFactory.parents) {
                         processorMap.get(parent).addChild(node);
+                        if (internalTopicNames.contains(sinkNodeFactory.topic)) {
+                            // prefix the internal topic name with the application id
+                            topicSinkMap.put(applicationId + "-" + sinkNodeFactory.topic, (SinkNode) node);
+                        } else {
+                            topicSinkMap.put(sinkNodeFactory.topic, (SinkNode) node);
+                        }
                     }
                 } else {
                     throw new TopologyBuilderException("Unknown definition class: " + factory.getClass().getName());
@@ -832,7 +841,7 @@ public class TopologyBuilder {
             }
         }
 
-        return new ProcessorTopology(processorNodes, topicSourceMap, new ArrayList<>(stateStoreMap.values()));
+        return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap, new ArrayList<>(stateStoreMap.values()));
     }
 
     /**

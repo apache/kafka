@@ -72,6 +72,7 @@ public class StreamTaskTest {
                     put("topic2", source2);
                 }
             },
+            Collections.<String, SinkNode>emptyMap(),
             Collections.<StateStoreSupplier>emptyList()
     );
 

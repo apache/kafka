@@ -71,4 +71,20 @@ public class ProcessorNode<K, V> {
     public void close() {
         processor.close();
     }
+
+    /**
+     *
+     * @return
+     */
+    public String toString() {
+        String processorNodeString = "ProcessorNode[name=" + name;
+        if (stateStores != null && !stateStores.isEmpty()) {
+            processorNodeString += "," + "StateStores[";
+            for (String store : stateStores) {
+                processorNodeString += "store=" + store + ",";
+            }
+            processorNodeString += "]";
+        }
+        return processorNodeString;
+    }
 }

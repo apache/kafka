@@ -671,6 +671,43 @@ public class StreamThread extends Thread {
     }
 
 
+    /**
+     * Produces a string representation contain useful information about a StreamThread.
+     * This is useful in debugging scenarios.
+     * @return A string representation of the StreamThread instance.
+     */
+    @Override
+    public String toString() {
+        String streamThreadString = "StreamsThread[appId=" + this.applicationId + "," +
+            "clientId=" + clientId + ",\n" ;
+
+        // iterate and print active tasks
+        if (activeTasks != null) {
+            streamThreadString += "\t\tTasks=ActiveTasks[";
+            for (TaskId tId : activeTasks.keySet()) {
+                StreamTask task = activeTasks.get(tId);
+                streamThreadString += "taskId=" + tId.toString() + "," ;
+                streamThreadString += "task=" + task.toString() + ",\n";
+            }
+            streamThreadString += "\t\t],\n";
+        }
+
+        // iterate and print standby tasks
+        if (standbyTasks != null) {
+            streamThreadString += "\t\tTasks=StandbyTasks[";
+            for (TaskId tId : standbyTasks.keySet()) {
+                StandbyTask task = standbyTasks.get(tId);
+                streamThreadString += "taskId=" + tId.toString() + ",";
+                streamThreadString += "task=" + task.toString() + ",\n";
+            }
+            streamThreadString += "\t\t]\n";
+        }
+        streamThreadString += "\t]";
+
+        return streamThreadString;
+    }
+
+
     private void removeStandbyTasks() {
         try {
             for (StandbyTask task : standbyTasks.values()) {
