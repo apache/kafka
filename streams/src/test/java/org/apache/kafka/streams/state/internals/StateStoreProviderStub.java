@@ -16,7 +16,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
-import org.apache.kafka.streams.state.StateStoreProvider;
 
 import java.util.Collections;
 import java.util.HashMap;

@@ -18,7 +18,6 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.state.QueryableStoreType;
-import org.apache.kafka.streams.state.StateStoreProvider;
 
 import java.util.ArrayList;
 import java.util.List;

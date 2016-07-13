@@ -17,7 +17,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
-import org.apache.kafka.streams.state.StateStoreProvider;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -39,20 +38,25 @@ public class CompositeReadOnlyKeyValueStoreTest {
     private KeyValueStore<String, String>
         otherUnderlyingStore;
 
+    @SuppressWarnings("unchecked")
     @Before
     public void before() {
         final StateStoreProviderStub stubProviderOne = new StateStoreProviderStub();
         stubProviderTwo = new StateStoreProviderStub();
 
-        stubOneUnderlying = new InMemoryKeyValueStore<>(storeName);
+        stubOneUnderlying = newStoreInstance();
         stubProviderOne.addStore(storeName, stubOneUnderlying);
-        otherUnderlyingStore = new InMemoryKeyValueStore<>(storeName);
+        otherUnderlyingStore = newStoreInstance();
         stubProviderOne.addStore("other-store", otherUnderlyingStore);
 
         theStore = new CompositeReadOnlyKeyValueStore<>(
             new WrappingStoreProvider(Arrays.<StateStoreProvider>asList(stubProviderOne, stubProviderTwo)),
                                         QueryableStoreTypes.<String, String>keyValueStore(),
                                         storeName);
+    }
+
+    private KeyValueStore<String, String> newStoreInstance() {
+        return StateStoreTestUtils.newKeyValueStore(storeName, String.class, String.class);
     }
 
     @Test
@@ -72,11 +76,10 @@ public class CompositeReadOnlyKeyValueStoreTest {
         assertNull(theStore.get("otherKey"));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldFindValueForKeyWhenMultiStores() throws Exception {
-        final KeyValueStore<String, String>
-            cache =
-            new InMemoryKeyValueStore<>(storeName);
+        final KeyValueStore<String, String> cache = newStoreInstance();
         stubProviderTwo.addStore(storeName, cache);
 
         cache.put("key-two", "key-two-value");
@@ -98,11 +101,10 @@ public class CompositeReadOnlyKeyValueStoreTest {
         assertEquals(2, results.size());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldSupportRangeAcrossMultipleKVStores() throws Exception {
-        final KeyValueStore<String, String>
-            cache =
-            new InMemoryKeyValueStore<>(storeName);
+        final KeyValueStore<String, String> cache = newStoreInstance();
         stubProviderTwo.addStore(storeName, cache);
 
         stubOneUnderlying.put("a", "a");
@@ -123,9 +125,7 @@ public class CompositeReadOnlyKeyValueStoreTest {
 
     @Test
     public void shouldSupportAllAcrossMultipleStores() throws Exception {
-        final KeyValueStore<String, String>
-            cache =
-            new InMemoryKeyValueStore<>(storeName);
+        final KeyValueStore<String, String> cache = newStoreInstance();
         stubProviderTwo.addStore(storeName, cache);
 
         stubOneUnderlying.put("a", "a");
@@ -164,9 +164,7 @@ public class CompositeReadOnlyKeyValueStoreTest {
 
     @Test
     public void shouldGetApproximateEntriesAcrossAllStores() throws Exception {
-        final KeyValueStore<String, String>
-                cache =
-                new InMemoryKeyValueStore<>(storeName);
+        final KeyValueStore<String, String> cache = newStoreInstance();
         stubProviderTwo.addStore(storeName, cache);
 
         stubOneUnderlying.put("a", "a");
@@ -182,7 +180,7 @@ public class CompositeReadOnlyKeyValueStoreTest {
 
     @Test
     public void shouldReturnLongMaxValueOnOverflow() throws Exception {
-        stubProviderTwo.addStore(storeName, new InMemoryKeyValueStore<String, String>(storeName) {
+        stubProviderTwo.addStore(storeName, new StateStoreTestUtils.NoOpReadOnlyStore<Object, Object>() {
             @Override
             public long approximateNumEntries() {
                 return Long.MAX_VALUE;
@@ -197,4 +195,5 @@ public class CompositeReadOnlyKeyValueStoreTest {
         return new CompositeReadOnlyKeyValueStore<>(new WrappingStoreProvider(Collections.<StateStoreProvider>emptyList()),
                 QueryableStoreTypes.keyValueStore(), storeName);
     }
+
 }

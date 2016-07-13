@@ -113,17 +113,17 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
         }
 
         @Override
-        public V get(K key) {
+        public synchronized V get(K key) {
             return this.map.get(key);
         }
 
         @Override
-        public void put(K key, V value) {
+        public synchronized void put(K key, V value) {
             this.map.put(key, value);
         }
 
         @Override
-        public V putIfAbsent(K key, V value) {
+        public synchronized V putIfAbsent(K key, V value) {
             V originalValue = get(key);
             if (originalValue == null) {
                 put(key, value);
@@ -132,24 +132,25 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
         }
 
         @Override
-        public void putAll(List<KeyValue<K, V>> entries) {
+        public synchronized void putAll(List<KeyValue<K, V>> entries) {
             for (KeyValue<K, V> entry : entries)
                 put(entry.key, entry.value);
         }
 
         @Override
-        public V delete(K key) {
+        public synchronized V delete(K key) {
             return this.map.remove(key);
         }
 
         @Override
-        public KeyValueIterator<K, V> range(K from, K to) {
+        public synchronized KeyValueIterator<K, V> range(K from, K to) {
             return new MemoryStoreIterator<>(this.map.subMap(from, true, to, false).entrySet().iterator());
         }
 
         @Override
-        public KeyValueIterator<K, V> all() {
-            return new MemoryStoreIterator<>(this.map.entrySet().iterator());
+        public synchronized KeyValueIterator<K, V> all() {
+            final TreeMap<K, V> copy = new TreeMap<>(this.map);
+            return new MemoryStoreIterator<>(copy.entrySet().iterator());
         }
 
         @Override

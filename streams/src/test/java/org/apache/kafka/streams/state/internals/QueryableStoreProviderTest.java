@@ -15,13 +15,8 @@
 package org.apache.kafka.streams.state.internals;
 
 
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.NoOpWindowStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
-import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
-import org.apache.kafka.streams.state.StateStoreProvider;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -39,7 +34,7 @@ public class QueryableStoreProviderTest {
     @Before
     public void before() {
         final StateStoreProviderStub theStoreProvider = new StateStoreProviderStub();
-        theStoreProvider.addStore(keyValueStore, new NoOpReadOnlyStore<>());
+        theStoreProvider.addStore(keyValueStore, new StateStoreTestUtils.NoOpReadOnlyStore<>());
         theStoreProvider.addStore(windowStore, new NoOpWindowStore());
         storeProvider =
             new QueryableStoreProvider(
@@ -76,59 +71,5 @@ public class QueryableStoreProviderTest {
         assertNull(storeProvider.getStore(keyValueStore, QueryableStoreTypes.windowStore()));
     }
 
-
-    class NoOpReadOnlyStore<K, V>
-        implements ReadOnlyKeyValueStore<K, V>, StateStore {
-
-        @Override
-        public V get(final K key) {
-            return null;
-        }
-
-        @Override
-        public KeyValueIterator<K, V> range(final K from, final K to) {
-            return null;
-        }
-
-        @Override
-        public KeyValueIterator<K, V> all() {
-            return null;
-        }
-
-        @Override
-        public long approximateNumEntries() {
-            return 0L;
-        }
-
-        @Override
-        public String name() {
-            return "";
-        }
-
-        @Override
-        public void init(final ProcessorContext context, final StateStore root) {
-
-        }
-
-        @Override
-        public void flush() {
-
-        }
-
-        @Override
-        public void close() {
-
-        }
-
-        @Override
-        public boolean persistent() {
-            return false;
-        }
-
-        @Override
-        public boolean isOpen() {
-            return false;
-        }
-    }
 
 }

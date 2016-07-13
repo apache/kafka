@@ -17,6 +17,7 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlyWindowStore;
+import org.apache.kafka.streams.state.internals.StateStoreProvider;
 
 /**
  * Provides access to the {@link QueryableStoreType}s provided with KafkaStreams. These
@@ -45,11 +46,11 @@ public class QueryableStoreTypes {
         return new WindowStoreType<>();
     }
 
-    public static abstract class QueryableStoreTypeMatcher<T> implements QueryableStoreType<T> {
+    private static abstract class QueryableStoreTypeMatcher<T> implements QueryableStoreType<T> {
 
         private final Class matchTo;
 
-        public QueryableStoreTypeMatcher(Class matchTo) {
+        QueryableStoreTypeMatcher(Class matchTo) {
             this.matchTo = matchTo;
         }
 

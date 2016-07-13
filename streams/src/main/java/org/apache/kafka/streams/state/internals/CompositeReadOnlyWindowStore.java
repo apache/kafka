@@ -17,7 +17,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
-import org.apache.kafka.streams.state.StateStoreProvider;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.util.List;

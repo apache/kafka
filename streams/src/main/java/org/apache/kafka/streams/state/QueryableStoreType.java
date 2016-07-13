@@ -16,6 +16,7 @@ package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.internals.StateStoreProvider;
 
 /**
  * Used to enable querying of custom {@link StateStore} types via the

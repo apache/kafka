@@ -21,7 +21,6 @@ import org.apache.kafka.streams.state.NoOpWindowStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
-import org.apache.kafka.streams.state.StateStoreProvider;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -40,9 +39,10 @@ public class WrappingStoreProviderTest {
         final StateStoreProviderStub stubProviderOne = new StateStoreProviderStub();
         final StateStoreProviderStub stubProviderTwo = new StateStoreProviderStub();
 
-        stubProviderOne.addStore("kv", new InMemoryKeyValueStore<String, String>("kv"));
+
+        stubProviderOne.addStore("kv", StateStoreTestUtils.newKeyValueStore("kv", String.class, String.class));
         stubProviderOne.addStore("window", new NoOpWindowStore());
-        stubProviderTwo.addStore("kv", new InMemoryKeyValueStore<String, String>("kv"));
+        stubProviderTwo.addStore("kv", StateStoreTestUtils.newKeyValueStore("kv", String.class, String.class));
         stubProviderTwo.addStore("window", new NoOpWindowStore());
 
         wrappingStoreProvider = new WrappingStoreProvider(
