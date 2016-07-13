@@ -132,7 +132,7 @@ public class ProcessorTopology {
                 // get unvisited children only
                 for (ProcessorNode child : children) {
                     Boolean visited = visitedNode.get(child.name());
-                    if (visited == null || visited.booleanValue() == false) {
+                    if (visited == null || !visited.booleanValue()) {
                         // mark as visited
                         visitedNode.put(child.name(), true);
                         // put in queue

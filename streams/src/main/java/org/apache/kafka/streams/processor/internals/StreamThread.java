@@ -679,14 +679,14 @@ public class StreamThread extends Thread {
     @Override
     public String toString() {
         String streamThreadString = "StreamsThread[appId=" + this.applicationId + "," +
-            "clientId=" + clientId + ",\n" ;
+            "clientId=" + clientId + ",\n";
 
         // iterate and print active tasks
         if (activeTasks != null) {
             streamThreadString += "\t\tTasks=ActiveTasks[";
             for (TaskId tId : activeTasks.keySet()) {
                 StreamTask task = activeTasks.get(tId);
-                streamThreadString += "taskId=" + tId.toString() + "," ;
+                streamThreadString += "taskId=" + tId.toString() + ",";
                 streamThreadString += "task=" + task.toString() + ",\n";
             }
             streamThreadString += "\t\t],\n";
