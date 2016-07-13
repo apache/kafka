@@ -28,6 +28,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -59,8 +60,7 @@ public class KStreamRepartitionJoinTest {
     private KStream<Integer, String> streamTwo;
     private KStream<Integer, String> streamFour;
     private ValueJoiner<Integer, String, String> valueJoiner;
-    private KeyValueMapper<Long, Integer, KeyValue<Integer, Integer>>
-        keyMapper;
+    private KeyValueMapper<Long, Integer, KeyValue<Integer, Integer>> keyMapper;
 
     private final List<String>
         expectedStreamOneTwoJoin = Arrays.asList("1:A", "2:B", "3:C", "4:D", "5:E");
@@ -77,15 +77,12 @@ public class KStreamRepartitionJoinTest {
         builder = new KStreamBuilder();
         createTopics();
         streamsConfiguration = new Properties();
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG,
-                                 applicationId);
-        streamsConfiguration
-            .put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
-
 
         streamOne = builder.stream(Serdes.Long(), Serdes.Integer(), streamOneInput);
         streamTwo = builder.stream(Serdes.Integer(), Serdes.String(), streamTwoInput);
@@ -98,12 +95,7 @@ public class KStreamRepartitionJoinTest {
             }
         };
 
-        keyMapper = new KeyValueMapper<Long, Integer, KeyValue<Integer, Integer>>() {
-            @Override
-            public KeyValue<Integer, Integer> apply(final Long key, final Integer value) {
-                return new KeyValue<>(value, value);
-            }
-        };
+        keyMapper = MockKeyValueMapper.<Long, Integer>SelectValueKeyValueMapper();
     }
 
     @After
@@ -146,19 +138,8 @@ public class KStreamRepartitionJoinTest {
     }
 
     private ExpectedOutputOnTopic mapBothStreamsAndJoin() throws Exception {
-
-        final KStream<Integer, Integer>
-            map1 =
-            streamOne.map(keyMapper);
-
-        final KStream<Integer, String> map2 = streamTwo.map(
-            new KeyValueMapper<Integer, String, KeyValue<Integer, String>>() {
-                @Override
-                public KeyValue<Integer, String> apply(Integer key,
-                                                       String value) {
-                    return new KeyValue<>(key, value);
-                }
-            });
+        final KStream<Integer, Integer> map1 = streamOne.map(keyMapper);
+        final KStream<Integer, String> map2 = streamTwo.map(MockKeyValueMapper.<Integer, String>NoOpKeyValueMapper());
 
         doJoin(map1, map2, "map-both-streams-and-join", "map-both-join");
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, "map-both-streams-and-join");
@@ -185,14 +166,8 @@ public class KStreamRepartitionJoinTest {
 
     public ExpectedOutputOnTopic selectKeyAndJoin() throws ExecutionException, InterruptedException {
 
-        final KStream<Integer, Integer>
-            keySelected =
-            streamOne.selectKey(new KeyValueMapper<Long, Integer, Integer>() {
-                @Override
-                public Integer apply(final Long key, final Integer value) {
-                    return value;
-                }
-            });
+        final KStream<Integer, Integer> keySelected =
+                streamOne.selectKey(MockKeyValueMapper.<Long, Integer>SelectValueMapper());
 
         String outputTopic = "select-key-join";
         doJoin(keySelected, streamTwo, outputTopic, outputTopic);
@@ -241,18 +216,9 @@ public class KStreamRepartitionJoinTest {
     }
 
     public ExpectedOutputOnTopic mapBothStreamsAndLeftJoin() throws Exception {
-        final KStream<Integer, Integer>
-            map1 =
-            streamOne.map(keyMapper);
+        final KStream<Integer, Integer> map1 = streamOne.map(keyMapper);
 
-        final KStream<Integer, String> map2 = streamTwo.map(
-            new KeyValueMapper<Integer, String, KeyValue<Integer, String>>() {
-                @Override
-                public KeyValue<Integer, String> apply(Integer key,
-                                                       String value) {
-                    return new KeyValue<>(key, value);
-                }
-            });
+        final KStream<Integer, String> map2 = streamTwo.map(MockKeyValueMapper.<Integer, String>NoOpKeyValueMapper());
 
         String outputTopic = "left-join";
         map1.leftJoin(map2,
@@ -270,19 +236,10 @@ public class KStreamRepartitionJoinTest {
 
     private ExpectedOutputOnTopic joinTwoMappedStreamsOneThatHasBeenPreviouslyJoined() throws
                                                                                    Exception {
-        final KStream<Integer, Integer>
-            map1 =
-            streamOne.map(keyMapper);
+        final KStream<Integer, Integer> map1 = streamOne.map(keyMapper);
 
         final KeyValueMapper<Integer, String, KeyValue<Integer, String>>
-            kvMapper =
-            new KeyValueMapper<Integer, String, KeyValue<Integer, String>>() {
-                @Override
-                public KeyValue<Integer, String> apply(Integer key,
-                                                       String value) {
-                    return new KeyValue<>(key, value);
-                }
-            };
+            kvMapper = MockKeyValueMapper.<Integer, String>NoOpKeyValueMapper();
 
         final KStream<Integer, String> map2 = streamTwo.map(kvMapper);
 
