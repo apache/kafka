@@ -157,7 +157,7 @@ public class KTableAggregateTest {
         final String input = "count-test-input";
         final MockProcessorSupplier<String, Long> proc = new MockProcessorSupplier<>();
 
-        builder.table(Serdes.String(), Serdes.String(), input)
+        builder.table(Serdes.String(), Serdes.String(), input, "anyStoreName")
                 .groupBy(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper(), stringSerde, stringSerde)
                 .count("count")
                 .toStream()
