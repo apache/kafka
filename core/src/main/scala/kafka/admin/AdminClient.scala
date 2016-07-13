@@ -145,19 +145,31 @@ class AdminClient(val time: Time,
 
   def describeConsumerGroup(groupId: String): Option[List[ConsumerSummary]] = {
     val group = describeGroup(groupId)
-    if (group.state == "Dead")
-      return None
+
+    group.state match {
+      case "Dead" =>
+        println(s"Consumer group `${groupId}` does not exist.")
+        return None
+      case "Empty" =>
+        println(s"Consumer group `${groupId}` does not have an active member.")
+        return None
+      case _ =>
+    }
 
     if (group.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
       throw new IllegalArgumentException(s"Group $groupId with protocol type '${group.protocolType}' is not a valid consumer group")
 
-    if (group.state == "Stable") {
-      Some(group.members.map { member =>
-        val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment))
-        new ConsumerSummary(member.memberId, member.clientId, member.clientHost, assignment.partitions().asScala.toList)
-      })
-    } else {
-      Some(List.empty)
+    group.state match {
+      case "PreparingRebalance" | "AwaitingSync" =>
+        println(s"Consumer group `${groupId}` is rebalancing.")
+        return None
+      case "Stable" =>
+        return Some(group.members.map { member =>
+          val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment))
+          new ConsumerSummary(member.memberId, member.clientId, member.clientHost, assignment.partitions().asScala.toList)
+        })
+      case default =>
+        throw new RuntimeException(s"Group state '$default' is invalid")
     }
   }
 

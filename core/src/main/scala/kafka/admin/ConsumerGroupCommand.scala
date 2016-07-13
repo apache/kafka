@@ -303,23 +303,19 @@ object ConsumerGroupCommand {
 
     protected def describeGroup(group: String) {
       adminClient.describeConsumerGroup(group) match {
-        case None => println(s"Consumer group `${group}` does not exist.")
+        case None =>
         case Some(consumerSummaries) =>
-          if (consumerSummaries.isEmpty)
-            println(s"Consumer group `${group}` is rebalancing.")
-          else {
-            val consumer = getConsumer()
-            printDescribeHeader()
-            consumerSummaries.foreach { consumerSummary =>
-              val topicPartitions = consumerSummary.assignment.map(tp => TopicAndPartition(tp.topic, tp.partition))
-              val partitionOffsets = topicPartitions.flatMap { topicPartition =>
-                Option(consumer.committed(new TopicPartition(topicPartition.topic, topicPartition.partition))).map { offsetAndMetadata =>
-                  topicPartition -> offsetAndMetadata.offset
-                }
-              }.toMap
-              describeTopicPartition(group, topicPartitions, partitionOffsets.get,
-                _ => Some(s"${consumerSummary.clientId}_${consumerSummary.clientHost}"))
-            }
+          val consumer = getConsumer()
+          printDescribeHeader()
+          consumerSummaries.foreach { consumerSummary =>
+            val topicPartitions = consumerSummary.assignment.map(tp => TopicAndPartition(tp.topic, tp.partition))
+            val partitionOffsets = topicPartitions.flatMap { topicPartition =>
+              Option(consumer.committed(new TopicPartition(topicPartition.topic, topicPartition.partition))).map { offsetAndMetadata =>
+                topicPartition -> offsetAndMetadata.offset
+              }
+            }.toMap
+            describeTopicPartition(group, topicPartitions, partitionOffsets.get,
+              _ => Some(s"${consumerSummary.clientId}_${consumerSummary.clientHost}"))
           }
       }
     }
