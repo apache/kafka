@@ -28,14 +28,14 @@ import java.util.Set;
  * the instance and the Set of {@link TopicPartition}s available on the instance.
  * NOTE: This is a point in time view. It may change when rebalances happen.
  */
-public class KafkaStreamsMetadata {
+public class StreamsMetadata {
     private final HostInfo hostInfo;
     private final Set<String> stateStoreNames;
     private final Set<TopicPartition> topicPartitions;
 
-    public KafkaStreamsMetadata(final HostInfo hostInfo,
-                                final Set<String> stateStoreNames,
-                                final Set<TopicPartition> topicPartitions) {
+    public StreamsMetadata(final HostInfo hostInfo,
+                           final Set<String> stateStoreNames,
+                           final Set<TopicPartition> topicPartitions) {
 
         this.hostInfo = hostInfo;
         this.stateStoreNames = stateStoreNames;
@@ -66,7 +66,7 @@ public class KafkaStreamsMetadata {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        final KafkaStreamsMetadata that = (KafkaStreamsMetadata) o;
+        final StreamsMetadata that = (StreamsMetadata) o;
 
         if (!hostInfo.equals(that.hostInfo)) return false;
         if (!stateStoreNames.equals(that.stateStoreNames)) return false;

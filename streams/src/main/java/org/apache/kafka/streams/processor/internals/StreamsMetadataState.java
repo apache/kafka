@@ -24,7 +24,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.HostInfo;
-import org.apache.kafka.streams.state.KafkaStreamsMetadata;
+import org.apache.kafka.streams.state.StreamsMetadata;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -38,36 +38,36 @@ import java.util.Set;
 import static org.apache.kafka.common.utils.Utils.toPositive;
 
 /**
- * Provides access to the {@link KafkaStreamsMetadata} in a KafkaStreams application. This can be used
+ * Provides access to the {@link StreamsMetadata} in a KafkaStreams application. This can be used
  * to discover the locations of {@link org.apache.kafka.streams.processor.StateStore}s
  * in a KafkaStreams application
  */
-public class KafkaStreamsMetadataState implements PartitionsByHostStateChangeListener {
+public class StreamsMetadataState implements PartitionsByHostStateChangeListener {
     private final TopologyBuilder builder;
-    private final List<KafkaStreamsMetadata> allInstances = new ArrayList<>();
-    private Map<String, List<TopicPartition>> partitionsByTopic = new HashMap<>();
+    private final List<StreamsMetadata> allMetadata = new ArrayList<>();
+    private final Map<String, List<TopicPartition>> partitionsByTopic = new HashMap<>();
 
-    public KafkaStreamsMetadataState(final TopologyBuilder builder) {
+    public StreamsMetadataState(final TopologyBuilder builder) {
         this.builder = builder;
     }
 
     /**
-     * Find all of the {@link KafkaStreamsMetadata}s in a
+     * Find all of the {@link StreamsMetadata}s in a
      * {@link KafkaStreams application}
      *
-     * @return all the {@link KafkaStreamsMetadata}s in a {@link KafkaStreams} application
+     * @return all the {@link StreamsMetadata}s in a {@link KafkaStreams} application
      */
-    public synchronized Collection<KafkaStreamsMetadata> getAllMetadata() {
-        return allInstances;
+    public synchronized Collection<StreamsMetadata> getAllMetadata() {
+        return allMetadata;
     }
     
     /**
-     * Find all of the {@link KafkaStreamsMetadata}s for a given storeName
+     * Find all of the {@link StreamsMetadata}s for a given storeName
      *
      * @param storeName the storeName to find metadata for
-     * @return A collection of {@link KafkaStreamsMetadata} that have the provided storeName
+     * @return A collection of {@link StreamsMetadata} that have the provided storeName
      */
-    public synchronized Collection<KafkaStreamsMetadata> getAllMetadataForStore(final String storeName) {
+    public synchronized Collection<StreamsMetadata> getAllMetadataForStore(final String storeName) {
         if (storeName == null) {
             throw new IllegalArgumentException("storeName cannot be null");
         }
@@ -76,8 +76,8 @@ public class KafkaStreamsMetadataState implements PartitionsByHostStateChangeLis
             return Collections.emptyList();
         }
 
-        final ArrayList<KafkaStreamsMetadata> results = new ArrayList<>();
-        for (KafkaStreamsMetadata instance : allInstances) {
+        final ArrayList<StreamsMetadata> results = new ArrayList<>();
+        for (StreamsMetadata instance : allMetadata) {
             if (instance.stateStoreNames().contains(storeName)) {
                 results.add(instance);
             }
@@ -86,19 +86,19 @@ public class KafkaStreamsMetadataState implements PartitionsByHostStateChangeLis
     }
 
     /**
-     * Find the {@link KafkaStreamsMetadata}s for a given storeName and key.
+     * Find the {@link StreamsMetadata}s for a given storeName and key.
      * Note: the key may not exist in the {@link org.apache.kafka.streams.processor.StateStore},
-     * this method provides a way of finding which {@link KafkaStreamsMetadata} it would exist on.
+     * this method provides a way of finding which {@link StreamsMetadata} it would exist on.
      *
      * @param storeName     Name of the store
      * @param key           Key to use to for partition
      * @param keySerializer Serializer for the key
      * @param <K>           key type
-     * @return The {@link KafkaStreamsMetadata} for the storeName and key
+     * @return The {@link StreamsMetadata} for the storeName and key
      */
-    public synchronized <K> KafkaStreamsMetadata getMetadataWithKey(final String storeName,
-                                                                           final K key,
-                                                                           final Serializer<K> keySerializer) {
+    public synchronized <K> StreamsMetadata getMetadataWithKey(final String storeName,
+                                                               final K key,
+                                                               final Serializer<K> keySerializer) {
         if (keySerializer == null) {
             throw new IllegalArgumentException("keySerializer cannot be null");
         }
@@ -117,19 +117,19 @@ public class KafkaStreamsMetadataState implements PartitionsByHostStateChangeLis
     }
 
     /**
-     * Find the {@link KafkaStreamsMetadata}s for a given storeName and key.
+     * Find the {@link StreamsMetadata}s for a given storeName and key.
      * Note: the key may not exist in the {@link StateStore},
-     * this method provides a way of finding which {@link KafkaStreamsMetadata} it would exist on.
+     * this method provides a way of finding which {@link StreamsMetadata} it would exist on.
      *
      * @param storeName   Name of the store
      * @param key         Key to use to for partition
      * @param partitioner partitioner to use to find correct partition for key
      * @param <K>         key type
-     * @return The {@link KafkaStreamsMetadata} for the storeName and key
+     * @return The {@link StreamsMetadata} for the storeName and key
      */
-    public synchronized <K> KafkaStreamsMetadata getMetadataWithKey(final String storeName,
-                                                                    final K key,
-                                                                    final StreamPartitioner<K, ?> partitioner) {
+    public synchronized <K> StreamsMetadata getMetadataWithKey(final String storeName,
+                                                               final K key,
+                                                               final StreamPartitioner<K, ?> partitioner) {
         if (storeName == null) {
             throw new IllegalArgumentException("storeName cannot be null");
         }
@@ -162,21 +162,26 @@ public class KafkaStreamsMetadataState implements PartitionsByHostStateChangeLis
             matchingPartitions.add(new TopicPartition(sourceTopic, partition));
         }
 
-        for (KafkaStreamsMetadata kafkaStreamsMetadata : allInstances) {
-            final Set<String> stateStoreNames = kafkaStreamsMetadata.stateStoreNames();
-            final Set<TopicPartition> topicPartitions = new HashSet<>(kafkaStreamsMetadata.topicPartitions());
+        for (StreamsMetadata streamsMetadata : allMetadata) {
+            final Set<String> stateStoreNames = streamsMetadata.stateStoreNames();
+            final Set<TopicPartition> topicPartitions = new HashSet<>(streamsMetadata.topicPartitions());
             topicPartitions.retainAll(matchingPartitions);
             if (stateStoreNames.contains(storeName)
                     && !topicPartitions.isEmpty()) {
-                return kafkaStreamsMetadata;
+                return streamsMetadata;
             }
         }
         return null;
     }
 
+    /**
+     * Respond to changes to the HostInfo -> TopicPartition mapping. Will rebuild the
+     * metadata
+     * @param currentState  the current mapping of {@link HostInfo} -> {@link TopicPartition}s
+     */
     @Override
     public synchronized void onChange(final Map<HostInfo, Set<TopicPartition>> currentState) {
-        this.partitionsByTopic = getPartitionsByTopic(currentState);
+        rebuildPartitionsByTopic(currentState);
         rebuildInstances(currentState);
     }
 
@@ -192,21 +197,20 @@ public class KafkaStreamsMetadataState implements PartitionsByHostStateChangeLis
     }
 
 
-    private Map<String, List<TopicPartition>> getPartitionsByTopic(final Map<HostInfo, Set<TopicPartition>> currentState) {
-        final Map<String, List<TopicPartition>> topicPartitionByTopic = new HashMap<>();
+    private void rebuildPartitionsByTopic(final Map<HostInfo, Set<TopicPartition>> currentState) {
+        partitionsByTopic.clear();
         for (final Set<TopicPartition> topicPartitions : currentState.values()) {
             for (TopicPartition topicPartition : topicPartitions) {
-                if (!topicPartitionByTopic.containsKey(topicPartition.topic())) {
-                    topicPartitionByTopic.put(topicPartition.topic(), new ArrayList<TopicPartition>());
+                if (!partitionsByTopic.containsKey(topicPartition.topic())) {
+                    partitionsByTopic.put(topicPartition.topic(), new ArrayList<TopicPartition>());
                 }
-                topicPartitionByTopic.get(topicPartition.topic()).add(topicPartition);
+                partitionsByTopic.get(topicPartition.topic()).add(topicPartition);
             }
         }
-        return topicPartitionByTopic;
     }
 
     private void rebuildInstances(final Map<HostInfo, Set<TopicPartition>> currentState) {
-        allInstances.clear();
+        allMetadata.clear();
         if (currentState.isEmpty()) {
             return;
         }
@@ -221,7 +225,7 @@ public class KafkaStreamsMetadataState implements PartitionsByHostStateChangeLis
                     storesOnHost.add(storeTopicEntry.getKey());
                 }
             }
-            allInstances.add(new KafkaStreamsMetadata(key, storesOnHost, partitionsForHost));
+            allMetadata.add(new StreamsMetadata(key, storesOnHost, partitionsForHost));
         }
     }
 }
