@@ -115,15 +115,11 @@ public class StandbyTaskTest {
                 new PartitionInfo(storeChangelogTopicName1, 2, Node.noNode(), new Node[0], new Node[0])
         ));
 
-        System.out.println("added " + storeChangelogTopicName1);
-
         restoreStateConsumer.updatePartitions(storeChangelogTopicName2, Utils.mkList(
                 new PartitionInfo(storeChangelogTopicName2, 0, Node.noNode(), new Node[0], new Node[0]),
                 new PartitionInfo(storeChangelogTopicName2, 1, Node.noNode(), new Node[0], new Node[0]),
                 new PartitionInfo(storeChangelogTopicName2, 2, Node.noNode(), new Node[0], new Node[0])
         ));
-
-        System.out.println("added " + storeChangelogTopicName2);
     }
 
     @Test
