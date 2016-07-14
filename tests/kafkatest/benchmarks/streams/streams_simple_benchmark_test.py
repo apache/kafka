@@ -16,7 +16,7 @@
 from ducktape.mark import ignore
 
 from kafkatest.tests.kafka_test import KafkaTest
-from kafkatest.services.streams import StreamsSimpleBenchmarkService
+from kafkatest.services.performance.streams_performance import StreamsSimpleBenchmarkService
 import time
 
 class StreamsSimpleBenchmarkTest(KafkaTest):
