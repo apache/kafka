@@ -49,11 +49,11 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     protected final Serde<V> valSerde;
 
     public KGroupedTableImpl(KStreamBuilder topology,
-                             String storeName,
+                             String name,
                              String sourceName,
                              Serde<K> keySerde,
                              Serde<V> valSerde) {
-        super(topology, storeName, Collections.singleton(sourceName));
+        super(topology, name, Collections.singleton(sourceName));
         this.keySerde = keySerde;
         this.valSerde = valSerde;
     }
