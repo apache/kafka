@@ -19,6 +19,7 @@ package kafka.tools
 
 import java.io._
 import java.nio.ByteBuffer
+import java.util.Properties
 
 import joptsimple.OptionParser
 import kafka.coordinator.{GroupMetadataKey, GroupMetadataManager, OffsetKey}
@@ -124,7 +125,8 @@ object DumpLogSegments {
     val startOffset = file.getName().split("\\.")(0).toLong
     val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + Log.LogFileSuffix)
     val messageSet = new FileMessageSet(logFile, false)
-    val index = new OffsetIndex(file, baseOffset = startOffset)
+    val logConfig = LogConfig(new Properties())
+    val index = new OffsetIndex(logConfig, file, baseOffset = startOffset)
 
     //Check that index passes sanityCheck, this is the check that determines if indexes will be rebuilt on startup or not.
     if (indexSanityOnly) {

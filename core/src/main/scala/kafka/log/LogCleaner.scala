@@ -368,8 +368,8 @@ private[log] class Cleaner(val id: Int,
     val indexFile = new File(segments.head.index.file.getPath + Log.CleanedFileSuffix)
     indexFile.delete()
     val messages = new FileMessageSet(logFile, fileAlreadyExists = false, initFileSize = log.initFileSize(), preallocate = log.config.preallocate)
-    val index = new OffsetIndex(indexFile, segments.head.baseOffset, segments.head.index.maxIndexSize)
-    val cleaned = new LogSegment(messages, index, segments.head.baseOffset, segments.head.indexIntervalBytes, log.config.randomSegmentJitter, time)
+    val index = new OffsetIndex(log.config, indexFile, segments.head.baseOffset, segments.head.index.maxIndexSize)
+    val cleaned = new LogSegment(log.config, messages, index, segments.head.baseOffset, segments.head.indexIntervalBytes, log.config.randomSegmentJitter, time)
 
     try {
       // clean segments into the new destination segment

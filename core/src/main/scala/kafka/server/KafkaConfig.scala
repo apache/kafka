@@ -26,6 +26,7 @@ import kafka.coordinator.OffsetConfig
 import kafka.log.LogConfig
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, Message, MessageSet}
 import kafka.utils.CoreUtils
+import kafka.utils.Os
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, SslConfigs}
@@ -102,6 +103,7 @@ object Defaults {
   val NumRecoveryThreadsPerDataDir = 1
   val AutoCreateTopicsEnable = true
   val MinInSyncReplicas = 1
+  val MemoryMappedFileUpdatesEnabled = !Os.isWindows
 
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMs = RequestTimeoutMs
@@ -268,6 +270,7 @@ object KafkaConfig {
   val NumRecoveryThreadsPerDataDirProp = "num.recovery.threads.per.data.dir"
   val AutoCreateTopicsEnableProp = "auto.create.topics.enable"
   val MinInSyncReplicasProp = "min.insync.replicas"
+  val MemoryMappedFileUpdatesEnabledProp = "memorymapped.file.updates.enabled"
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMsProp = "controller.socket.timeout.ms"
   val DefaultReplicationFactorProp = "default.replication.factor"
@@ -452,6 +455,8 @@ object KafkaConfig {
   val NumRecoveryThreadsPerDataDirDoc = "The number of threads per data directory to be used for log recovery at startup and flushing at shutdown"
   val AutoCreateTopicsEnableDoc = "Enable auto creation of topic on the server"
   val MinInSyncReplicasDoc = "define the minimum number of replicas in ISR needed to satisfy a produce request with acks=all (or -1)"
+  val MemoryMappedFileUpdatesEnabledDoc = "Indicates if the underlying OS supports metadata(resize, update length)" + 
+    " updates on memory mapped failes. Default is false for windows."
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMsDoc = "The socket timeout for controller-to-broker channels"
   val ControllerMessageQueueSizeDoc = "The buffer size for controller-to-broker-channels"
@@ -634,7 +639,7 @@ object KafkaConfig {
       .define(LogMessageFormatVersionProp, STRING, Defaults.LogMessageFormatVersion, MEDIUM, LogMessageFormatVersionDoc)
       .define(LogMessageTimestampTypeProp, STRING, Defaults.LogMessageTimestampType, in("CreateTime", "LogAppendTime"), MEDIUM, LogMessageTimestampTypeDoc)
       .define(LogMessageTimestampDifferenceMaxMsProp, LONG, Defaults.LogMessageTimestampDifferenceMaxMs, atLeast(0), MEDIUM, LogMessageTimestampDifferenceMaxMsDoc)
-
+      .define(MemoryMappedFileUpdatesEnabledProp, BOOLEAN, Defaults.MemoryMappedFileUpdatesEnabled, HIGH, MemoryMappedFileUpdatesEnabledDoc)
       /** ********* Replication configuration ***********/
       .define(ControllerSocketTimeoutMsProp, INT, Defaults.ControllerSocketTimeoutMs, MEDIUM, ControllerSocketTimeoutMsDoc)
       .define(DefaultReplicationFactorProp, INT, Defaults.DefaultReplicationFactor, MEDIUM, DefaultReplicationFactorDoc)
@@ -837,7 +842,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val logMessageFormatVersion = ApiVersion(logMessageFormatVersionString)
   val logMessageTimestampType = TimestampType.forName(getString(KafkaConfig.LogMessageTimestampTypeProp))
   val logMessageTimestampDifferenceMaxMs = getLong(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp)
-
+  val memoryMappedFileUpdatesEnabled: java.lang.Boolean = getMemoryMappedFileUpdatesEnabled 
+  
   /** ********* Replication configuration ***********/
   val controllerSocketTimeoutMs: Int = getInt(KafkaConfig.ControllerSocketTimeoutMsProp)
   val defaultReplicationFactor: Int = getInt(KafkaConfig.DefaultReplicationFactorProp)
@@ -939,6 +945,15 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
 
     if (millis < 0) return -1
     millis
+  }
+  
+  private def getMemoryMappedFileUpdatesEnabled: Boolean = {
+    try {
+      getBoolean(KafkaConfig.MemoryMappedFileUpdatesEnabledProp)
+    }
+    catch {
+      case e: Exception => !Os.isWindows
+    }
   }
 
   private def getMap(propName: String, propValue: String): Map[String, String] = {

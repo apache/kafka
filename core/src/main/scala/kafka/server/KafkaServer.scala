@@ -78,6 +78,7 @@ object KafkaServer {
     logProps.put(LogConfig.MessageFormatVersionProp, kafkaConfig.logMessageFormatVersion.version)
     logProps.put(LogConfig.MessageTimestampTypeProp, kafkaConfig.logMessageTimestampType.name)
     logProps.put(LogConfig.MessageTimestampDifferenceMaxMsProp, kafkaConfig.logMessageTimestampDifferenceMaxMs)
+    logProps.put(LogConfig.MemoryMappedFileUpdatesEnabledProp, kafkaConfig.memoryMappedFileUpdatesEnabled)
     logProps
   }
 }

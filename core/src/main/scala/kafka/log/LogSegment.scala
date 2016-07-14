@@ -34,6 +34,7 @@ import java.io.{IOException, File}
  *
  * A segment with a base offset of [base_offset] would be stored in two files, a [base_offset].index and a [base_offset].log file.
  *
+ * @param logConfig configuration values 
  * @param log The message set containing log entries
  * @param index The offset index
  * @param baseOffset A lower bound on the offsets in this segment
@@ -41,7 +42,8 @@ import java.io.{IOException, File}
  * @param time The time instance
  */
 @nonthreadsafe
-class LogSegment(val log: FileMessageSet,
+class LogSegment(val logConfig: LogConfig,
+                 val log: FileMessageSet,
                  val index: OffsetIndex,
                  val baseOffset: Long,
                  val indexIntervalBytes: Int,
@@ -53,9 +55,9 @@ class LogSegment(val log: FileMessageSet,
   /* the number of bytes since we last added an entry in the offset index */
   private var bytesSinceLastIndexEntry = 0
 
-  def this(dir: File, startOffset: Long, indexIntervalBytes: Int, maxIndexSize: Int, rollJitterMs: Long, time: Time, fileAlreadyExists: Boolean = false, initFileSize: Int = 0, preallocate: Boolean = false) =
-    this(new FileMessageSet(file = Log.logFilename(dir, startOffset), fileAlreadyExists = fileAlreadyExists, initFileSize = initFileSize, preallocate = preallocate),
-         new OffsetIndex(Log.indexFilename(dir, startOffset), baseOffset = startOffset, maxIndexSize = maxIndexSize),
+  def this(logConfig: LogConfig, dir: File, startOffset: Long, indexIntervalBytes: Int, maxIndexSize: Int, rollJitterMs: Long, time: Time, fileAlreadyExists: Boolean = false, initFileSize: Int = 0, preallocate: Boolean = false) =
+    this(logConfig, new FileMessageSet(file = Log.logFilename(dir, startOffset), fileAlreadyExists = fileAlreadyExists, initFileSize = initFileSize, preallocate = preallocate),
+         new OffsetIndex(logConfig, Log.indexFilename(dir, startOffset), baseOffset = startOffset, maxIndexSize = maxIndexSize),
          startOffset,
          indexIntervalBytes,
          rollJitterMs,
@@ -258,7 +260,10 @@ class LogSegment(val log: FileMessageSet,
    * Change the suffix for the index and log file for this log segment
    */
   def changeFileSuffixes(oldSuffix: String, newSuffix: String) {
-
+    if(!logConfig.MemoryMappedFileUpdatesEnabled) {
+      close();
+    }
+    
     def kafkaStorageException(fileType: String, e: IOException) =
       new KafkaStorageException(s"Failed to change the $fileType file suffix from $oldSuffix to $newSuffix for log segment $baseOffset", e)
 
@@ -290,7 +295,7 @@ class LogSegment(val log: FileMessageSet,
     if(!deletedLog && log.file.exists)
       throw new KafkaStorageException("Delete of log " + log.file.getName + " failed.")
     if(!deletedIndex && index.file.exists)
-      throw new KafkaStorageException("Delete of index " + index.file.getName + " failed.")
+      throw new KafkaStorageException("Delete of index " + index.file.getAbsolutePath + " failed.")
   }
 
   /**

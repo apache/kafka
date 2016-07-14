@@ -55,9 +55,10 @@ import sun.nio.ch.DirectBuffer
  * All external APIs translate from relative offsets to full offsets, so users of this class do not interact with the internal 
  * storage format.
  */
-class OffsetIndex(@volatile private[this] var _file: File, val baseOffset: Long, val maxIndexSize: Int = -1) extends Logging {
+class OffsetIndex(val logConfig: LogConfig, @volatile private[this] var _file: File, val baseOffset: Long, val maxIndexSize: Int = -1) extends Logging {
   
   private val lock = new ReentrantLock
+  private val memoryMappedFileUpdatesEnabled = logConfig.MemoryMappedFileUpdatesEnabled
   
   /* initialize the memory mapping for this index */
   @volatile
@@ -290,8 +291,10 @@ class OffsetIndex(@volatile private[this] var _file: File, val baseOffset: Long,
       val position = mmap.position
       
       /* Windows won't let us modify the file length while the file is mmapped :-( */
-      if (Os.isWindows)
+      if (!memoryMappedFileUpdatesEnabled) {
         forceUnmap(mmap)
+      }
+      
       try {
         raf.setLength(roundedNewSize)
         mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
@@ -309,7 +312,12 @@ class OffsetIndex(@volatile private[this] var _file: File, val baseOffset: Long,
   private def forceUnmap(m: MappedByteBuffer) {
     try {
       m match {
-        case buffer: DirectBuffer => buffer.cleaner().clean()
+        case buffer: DirectBuffer => {
+          var cleaner = buffer.cleaner()        
+          if ( cleaner != null) {
+            cleaner.clean()
+          }
+        }
         case _ =>
       }
     } catch {
@@ -331,7 +339,7 @@ class OffsetIndex(@volatile private[this] var _file: File, val baseOffset: Long,
    */
   def delete(): Boolean = {
     info("Deleting index " + _file.getAbsolutePath)
-    if (Os.isWindows)
+    if (!memoryMappedFileUpdatesEnabled)
       CoreUtils.swallow(forceUnmap(mmap))
     _file.delete()
   }
@@ -384,12 +392,12 @@ class OffsetIndex(@volatile private[this] var _file: File, val baseOffset: Long,
    * and this requires synchronizing reads.
    */
   private def maybeLock[T](lock: Lock)(fun: => T): T = {
-    if(Os.isWindows)
+    if(!memoryMappedFileUpdatesEnabled)
       lock.lock()
     try {
       fun
     } finally {
-      if(Os.isWindows)
+      if(!memoryMappedFileUpdatesEnabled)
         lock.unlock()
     }
   }

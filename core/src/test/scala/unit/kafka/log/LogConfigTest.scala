@@ -22,6 +22,7 @@ import java.util.Properties
 import kafka.server.KafkaConfig
 import kafka.server.KafkaServer
 import kafka.utils.TestUtils
+import kafka.utils.Os
 import org.apache.kafka.common.config.ConfigException
 import org.junit.{Assert, Test}
 import org.junit.Assert._
@@ -37,11 +38,22 @@ class LogConfigTest {
     kafkaProps.put(KafkaConfig.LogRollTimeJitterHoursProp, "2")
     kafkaProps.put(KafkaConfig.LogRetentionTimeHoursProp, "2")
 
-    val kafkaConfig = KafkaConfig.fromProps(kafkaProps)
-    val logProps = KafkaServer.copyKafkaConfigToLog(kafkaConfig)
+    var kafkaConfig = KafkaConfig.fromProps(kafkaProps)
+    var logProps = KafkaServer.copyKafkaConfigToLog(kafkaConfig)
     assertEquals(2 * millisInHour, logProps.get(LogConfig.SegmentMsProp))
     assertEquals(2 * millisInHour, logProps.get(LogConfig.SegmentJitterMsProp))
     assertEquals(2 * millisInHour, logProps.get(LogConfig.RetentionMsProp))
+    assertEquals(!Os.isWindows, logProps.get(LogConfig.MemoryMappedFileUpdatesEnabledProp).asInstanceOf[Boolean])
+    
+    kafkaProps.put(KafkaConfig.MemoryMappedFileUpdatesEnabledProp, "true")
+    kafkaConfig = KafkaConfig.fromProps(kafkaProps)
+    logProps = KafkaServer.copyKafkaConfigToLog(kafkaConfig)
+    assertTrue(logProps.get(LogConfig.MemoryMappedFileUpdatesEnabledProp).asInstanceOf[Boolean])
+    
+    kafkaProps.put(KafkaConfig.MemoryMappedFileUpdatesEnabledProp, "false")
+    kafkaConfig = KafkaConfig.fromProps(kafkaProps)
+    logProps = KafkaServer.copyKafkaConfigToLog(kafkaConfig)
+    assertFalse(logProps.get(LogConfig.MemoryMappedFileUpdatesEnabledProp).asInstanceOf[Boolean])
   }
 
   @Test

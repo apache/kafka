@@ -181,7 +181,8 @@ class Log(val dir: File,
         // if its a log file, load the corresponding log segment
         val start = filename.substring(0, filename.length - LogFileSuffix.length).toLong
         val indexFile = Log.indexFilename(dir, start)
-        val segment = new LogSegment(dir = dir,
+        val segment = new LogSegment(config,
+                                     dir = dir,
                                      startOffset = start,
                                      indexIntervalBytes = config.indexInterval,
                                      maxIndexSize = config.maxIndexSize,
@@ -215,8 +216,9 @@ class Log(val dir: File,
       val fileName = logFile.getName
       val startOffset = fileName.substring(0, fileName.length - LogFileSuffix.length).toLong
       val indexFile = new File(CoreUtils.replaceSuffix(logFile.getPath, LogFileSuffix, IndexFileSuffix) + SwapFileSuffix)
-      val index =  new OffsetIndex(indexFile, baseOffset = startOffset, maxIndexSize = config.maxIndexSize)
-      val swapSegment = new LogSegment(new FileMessageSet(file = swapFile),
+      val index =  new OffsetIndex(config, indexFile, baseOffset = startOffset, maxIndexSize = config.maxIndexSize)
+      val swapSegment = new LogSegment(config,
+                                       new FileMessageSet(file = swapFile),
                                        index = index,
                                        baseOffset = startOffset,
                                        indexIntervalBytes = config.indexInterval,
@@ -230,7 +232,8 @@ class Log(val dir: File,
 
     if(logSegments.isEmpty) {
       // no existing segments, create a new mutable segment beginning at offset 0
-      segments.put(0L, new LogSegment(dir = dir,
+      segments.put(0L, new LogSegment(logConfig = config,
+                                     dir = dir,
                                      startOffset = 0,
                                      indexIntervalBytes = config.indexInterval,
                                      maxIndexSize = config.maxIndexSize,
@@ -656,7 +659,8 @@ class Log(val dir: File,
           entry.getValue.log.trim()
         }
       }
-      val segment = new LogSegment(dir,
+      val segment = new LogSegment(logConfig = config,
+                                   dir,
                                    startOffset = newOffset,
                                    indexIntervalBytes = config.indexInterval,
                                    maxIndexSize = config.maxIndexSize,
@@ -755,7 +759,8 @@ class Log(val dir: File,
     lock synchronized {
       val segmentsToDelete = logSegments.toList
       segmentsToDelete.foreach(deleteSegment(_))
-      addSegment(new LogSegment(dir,
+      addSegment(new LogSegment(logConfig = config,
+                                dir,
                                 newOffset,
                                 indexIntervalBytes = config.indexInterval,
                                 maxIndexSize = config.maxIndexSize,
