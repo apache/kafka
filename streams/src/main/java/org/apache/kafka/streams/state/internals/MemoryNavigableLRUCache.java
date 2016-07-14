@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
@@ -27,8 +28,8 @@ import java.util.TreeSet;
 
 public class MemoryNavigableLRUCache<K, V> extends MemoryLRUCache<K, V> {
 
-    public MemoryNavigableLRUCache(String name, final int maxCacheSize) {
-        super();
+    public MemoryNavigableLRUCache(String name, final int maxCacheSize, Serde<K> keySerde, Serde<V> valueSerde) {
+        super(keySerde, valueSerde);
 
         this.name = name;
         this.keys = new TreeSet<>();
@@ -57,15 +58,14 @@ public class MemoryNavigableLRUCache<K, V> extends MemoryLRUCache<K, V> {
         return this;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public KeyValueIterator<K, V> range(K from, K to) {
-        return new MemoryNavigableLRUCache.CacheIterator<K, V>(((NavigableSet) this.keys).subSet(from, true, to, false).iterator(), this.map);
+        return new MemoryNavigableLRUCache.CacheIterator<>(((NavigableSet<K>) this.keys).subSet(from, true, to, false).iterator(), this.map);
     }
 
     @Override
     public KeyValueIterator<K, V> all() {
-        return new MemoryNavigableLRUCache.CacheIterator<K, V>(this.keys.iterator(), this.map);
+        return new MemoryNavigableLRUCache.CacheIterator<>(this.keys.iterator(), this.map);
     }
 
     private static class CacheIterator<K, V> implements KeyValueIterator<K, V> {
