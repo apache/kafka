@@ -20,7 +20,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -35,7 +34,6 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
     private final Serde<V> valueSerde;
     private final String storeName;
 
-    private StateSerdes<K, V> serdes;
     private StoreChangeLogger<K, V> changeLogger;
     private StoreChangeLogger.ValueGetter<K, V> getter;
 
@@ -54,27 +52,14 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
     @Override
     @SuppressWarnings("unchecked")
     public void init(ProcessorContext context, StateStore root) {
+        inner.init(context, root);
+
         // construct the serde
-        this.serdes = new StateSerdes<>(storeName,
+        StateSerdes<K, V>  serdes = new StateSerdes<>(storeName,
                 keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                 valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
         this.changeLogger = new StoreChangeLogger<>(storeName, context, serdes);
-
-        context.register(root, true, new StateRestoreCallback() {
-            @Override
-            public void restore(byte[] key, byte[] value) {
-
-                // directly call inner functions so that the operation is not logged. Check value for null, to avoid  deserialization error.
-                if (value == null) {
-                    inner.put(serdes.keyFrom(key), null);
-                } else {
-                    inner.put(serdes.keyFrom(key), serdes.valueFrom(value));
-                }
-            }
-        });
-
-        inner.init(context, root);
 
         this.getter = new StoreChangeLogger.ValueGetter<K, V>() {
             @Override
@@ -82,6 +67,16 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
                 return inner.get(key);
             }
         };
+
+        // if the inner store is an LRU cache, add the eviction listener to log removed record
+        if (inner instanceof MemoryLRUCache) {
+            ((MemoryLRUCache<K, V>) inner).whenEldestRemoved(new MemoryNavigableLRUCache.EldestEntryRemovalListener<K, V>() {
+                @Override
+                public void apply(K key, V value) {
+                    removed(key);
+                }
+            });
+        }
     }
 
     @Override
