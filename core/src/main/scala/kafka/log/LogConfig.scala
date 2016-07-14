@@ -57,6 +57,7 @@ object Defaults {
   val MessageTimestampDifferenceMaxMs = kafka.server.Defaults.LogMessageTimestampDifferenceMaxMs
   val LeaderReplicationThrottledReplicas = Collections.emptyList[String]()
   val FollowerReplicationThrottledReplicas = Collections.emptyList[String]()
+  val MemoryMappedFileUpdatesEnabled = kafka.server.Defaults.MemoryMappedFileUpdatesEnabled
 }
 
 case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfig.configDef, props, false) {
@@ -91,8 +92,11 @@ case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfi
   val LeaderReplicationThrottledReplicas = getList(LogConfig.LeaderReplicationThrottledReplicasProp)
   val FollowerReplicationThrottledReplicas = getList(LogConfig.FollowerReplicationThrottledReplicasProp)
 
+  val MemoryMappedFileUpdatesEnabled = getBoolean(LogConfig.MemoryMappedFileUpdatesEnabledProp)
+
   def randomSegmentJitter: Long =
     if (segmentJitterMs == 0) 0 else Utils.abs(scala.util.Random.nextInt()) % math.min(segmentJitterMs, segmentMs)
+
 }
 
 object LogConfig {
@@ -129,6 +133,7 @@ object LogConfig {
   val MessageTimestampDifferenceMaxMsProp = "message.timestamp.difference.max.ms"
   val LeaderReplicationThrottledReplicasProp = "leader.replication.throttled.replicas"
   val FollowerReplicationThrottledReplicasProp = "follower.replication.throttled.replicas"
+  val MemoryMappedFileUpdatesEnabledProp = "memorymapped.file.updates.enabled"
 
   val SegmentSizeDoc = "This configuration controls the segment file size for " +
     "the log. Retention and cleaning is always done a file at a time so a larger " +
@@ -197,9 +202,9 @@ object LogConfig {
   val PreAllocateEnableDoc ="Should pre allocate file when create new segment?"
   val MessageFormatVersionDoc = KafkaConfig.LogMessageFormatVersionDoc
   val MessageTimestampTypeDoc = KafkaConfig.LogMessageTimestampTypeDoc
-  val MessageTimestampDifferenceMaxMsDoc = "The maximum difference allowed between the timestamp when a broker receives " +
-    "a message and the timestamp specified in the message. If message.timestamp.type=CreateTime, a message will be rejected " +
-    "if the difference in timestamp exceeds this threshold. This configuration is ignored if message.timestamp.type=LogAppendTime."
+  val MemoryMappedFileUpdatesEnabledDoc = "Indicates if the underlying OS supports metadata(resize, update length)" +
+    " updates on memory mapped failes"
+  val MessageTimestampDifferenceMaxMsDoc = KafkaConfig.LogMessageTimestampDifferenceMaxMsDoc
   val LeaderReplicationThrottledReplicasDoc = "A list of replicas for which log replication should be throttled on the leader side. The list should describe a set of " +
     "replicas in the form [PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:... or alternatively the wildcard '*' can be used to throttle all replicas for this topic."
   val FollowerReplicationThrottledReplicasDoc = "A list of replicas for which log replication should be throttled on the follower side. The list should describe a set of " +
@@ -285,6 +290,7 @@ object LogConfig {
         KafkaConfig.LogCleanupPolicyProp)
       .define(UncleanLeaderElectionEnableProp, BOOLEAN, Defaults.UncleanLeaderElectionEnable,
         MEDIUM, UncleanLeaderElectionEnableDoc, KafkaConfig.UncleanLeaderElectionEnableProp)
+      .define(MemoryMappedFileUpdatesEnabledProp, BOOLEAN, Defaults.MemoryMappedFileUpdatesEnabled, HIGH, MemoryMappedFileUpdatesEnabledDoc, KafkaConfig.MemoryMappedFileUpdatesEnabledProp)
       .define(MinInSyncReplicasProp, INT, Defaults.MinInSyncReplicas, atLeast(1), MEDIUM, MinInSyncReplicasDoc,
         KafkaConfig.MinInSyncReplicasProp)
       .define(CompressionTypeProp, STRING, Defaults.CompressionType, in(BrokerCompressionCodec.brokerCompressionOptions:_*),

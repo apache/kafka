@@ -19,7 +19,7 @@ package kafka.log
 
 import java.io._
 import org.junit.Assert._
-import java.util.{Collections, Arrays}
+import java.util.{Collections, Arrays, Properties}
 import org.junit._
 import org.scalatest.junit.JUnitSuite
 import scala.collection._
@@ -31,10 +31,10 @@ class OffsetIndexTest extends JUnitSuite {
   
   var idx: OffsetIndex = null
   val maxEntries = 30
-  
+  val config = LogConfig (new Properties())
   @Before
   def setup() {
-    this.idx = new OffsetIndex(nonExistantTempFile(), baseOffset = 45L, maxIndexSize = 30 * 8)
+    this.idx = new OffsetIndex(config, nonExistantTempFile(), baseOffset = 45L, maxIndexSize = 30 * 8)
   }
   
   @After
@@ -103,7 +103,7 @@ class OffsetIndexTest extends JUnitSuite {
     idx.append(first.offset, first.position)
     idx.append(sec.offset, sec.position)
     idx.close()
-    val idxRo = new OffsetIndex(idx.file, baseOffset = idx.baseOffset)
+    val idxRo = new OffsetIndex(config, idx.file, baseOffset = idx.baseOffset)
     assertEquals(first, idxRo.lookup(first.offset))
     assertEquals(sec, idxRo.lookup(sec.offset))
     assertEquals(sec.offset, idxRo.lastOffset)
@@ -113,7 +113,7 @@ class OffsetIndexTest extends JUnitSuite {
   
   @Test
   def truncate() {
-	val idx = new OffsetIndex(nonExistantTempFile(), baseOffset = 0L, maxIndexSize = 10 * 8)
+	val idx = new OffsetIndex(config, nonExistantTempFile(), baseOffset = 0L, maxIndexSize = 10 * 8)
 	idx.truncate()
     for(i <- 1 until 10)
       idx.append(i, i)

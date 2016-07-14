@@ -17,12 +17,17 @@
 
 package kafka.log
 
-import java.io.File
-import java.nio.ByteBuffer
+import org.apache.kafka.common.utils.Utils
 
+import java.io._
+import java.nio._
+import java.nio.channels._
+import java.util.concurrent.locks._
+
+import kafka.utils._
 import kafka.utils.CoreUtils.inLock
 import kafka.common.InvalidOffsetException
-
+import sun.nio.ch.DirectBuffer
 /**
  * An index that maps offsets to physical file locations for a particular log segment. This index may be sparse:
  * that is it may not hold an entry for all messages in the log.
@@ -48,11 +53,13 @@ import kafka.common.InvalidOffsetException
  * All external APIs translate from relative offsets to full offsets, so users of this class do not interact with the internal 
  * storage format.
  */
-class OffsetIndex(file: File, baseOffset: Long, maxIndexSize: Int = -1)
-    extends AbstractIndex[Long, Int](file, baseOffset, maxIndexSize) {
+class OffsetIndex(val logConfig: LogConfig, file: File, baseOffset: Long, maxIndexSize: Int = -1)
+  extends AbstractIndex[Long, Int](file, baseOffset, maxIndexSize) {
+
+  private val memoryMappedFileUpdatesEnabled = logConfig.MemoryMappedFileUpdatesEnabled
 
   override def entrySize = 8
-  
+
   /* the last offset in the index */
   private[this] var _lastOffset = lastEntry.offset
   
@@ -103,7 +110,8 @@ class OffsetIndex(file: File, baseOffset: Long, maxIndexSize: Int = -1)
   
   /**
    * Get the nth offset mapping from the index
-   * @param n The entry number in the index
+    *
+    * @param n The entry number in the index
    * @return The offset/position pair at that entry
    */
   def entry(n: Int): OffsetPosition = {
@@ -169,14 +177,69 @@ class OffsetIndex(file: File, baseOffset: Long, maxIndexSize: Int = -1)
     }
   }
 
-  override def sanityCheck() {
-    require(_entries == 0 || _lastOffset > baseOffset,
-            s"Corrupt index found, index file (${file.getAbsolutePath}) has non-zero size but the last offset " +
-                s"is ${_lastOffset} which is no larger than the base offset $baseOffset.")
-    val len = file.length()
-    require(len % entrySize == 0,
-            "Index file " + file.getAbsolutePath + " is corrupt, found " + len +
-            " bytes which is not positive or not a multiple of 8.")
+  /**
+    * Forcefully free the buffer's mmap. We do this only on windows.
+    */
+  override def forceUnmap(m: MappedByteBuffer) {
+    if (m != null) {
+      super.forceUnmap(m)
+    }
   }
 
+  /**
+    * Delete this index file
+    */
+  override def delete(): Boolean = {
+    info("Deleting index " + file.getAbsolutePath)
+    if (!memoryMappedFileUpdatesEnabled)
+      CoreUtils.swallow(forceUnmap(mmap))
+    file.delete()
+  }
+
+  /**
+    * Rename the file that backs this offset index
+    * @throws IOException if rename fails
+    */
+  override def renameTo(f: File) {
+    if (!memoryMappedFileUpdatesEnabled)
+      CoreUtils.swallow(forceUnmap(mmap))
+    try Utils.atomicMoveWithFallback(file.toPath, f.toPath)
+  }
+
+  /**
+   * Do a basic sanity check on this index to detect obvious problems
+    *
+    * @throws IllegalArgumentException if any problems are found
+   */
+  override def sanityCheck() {
+    require(_entries == 0 || _lastOffset > baseOffset,
+      s"Corrupt index found, index file (${file.getAbsolutePath}) has non-zero size but the last offset " +
+        s"is ${_lastOffset} which is no larger than the base offset $baseOffset.")
+    val len = file.length()
+    require(len % entrySize == 0,
+      "Index file " + file.getAbsolutePath + " is corrupt, found " + len +
+        " bytes which is not positive or not a multiple of 8.")
+  }
+  
+  /**
+   * Round a number to the greatest exact multiple of the given factor less than the given number.
+   * E.g. roundToExactMultiple(67, 8) == 64
+   */
+  private def roundToExactMultiple(number: Int, factor: Int) = factor * (number / factor)
+  
+  /**
+   * Execute the given function in a lock only if we are running on windows. We do this 
+   * because Windows won't let us resize a file while it is mmapped. As a result we have to force unmap it
+   * and this requires synchronizing reads.
+   */
+  override def maybeLock[T](lock: Lock)(fun: => T): T = {
+    if(!memoryMappedFileUpdatesEnabled)
+      forceUnmap(mmap)
+    try {
+      fun
+    } finally {
+      if(!memoryMappedFileUpdatesEnabled)
+        lock.unlock()
+    }
+  }
 }
