@@ -18,7 +18,6 @@
 package kafka.tools
 
 import joptsimple.OptionParser
-import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.security._
 
 import kafka.utils.{Logging, ZKGroupTopicDirs, ZkUtils, CommandLineUtils}
@@ -117,7 +116,7 @@ object VerifyConsumerRebalance extends Logging {
           // check if the owner is a valid consumer id
           consumerIdsForTopic match {
             case Some(consumerIds) =>
-              if(!consumerIds.contains(partitionOwner)) {
+              if(!consumerIds.map(c => c.toString).contains(partitionOwner)) {
                 error(("Owner %s for partition [%s,%d] is not a valid member of consumer " +
                   "group %s").format(partitionOwner, topic, partition, group))
                 rebalanceSucceeded = false
