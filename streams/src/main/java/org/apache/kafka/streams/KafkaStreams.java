@@ -24,6 +24,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
@@ -35,6 +36,7 @@ import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
@@ -104,6 +106,8 @@ public class KafkaStreams {
     // usage only and should not be exposed to users at all.
     private final UUID processId;
 
+    private final StreamsConfig config;
+
     /**
      * Construct the stream instance.
      *
@@ -137,6 +141,8 @@ public class KafkaStreams {
         Time time = new SystemTime();
 
         this.processId = UUID.randomUUID();
+
+        this.config = config;
 
         // The application ID is a required config and hence should always have value
         String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
@@ -232,6 +238,26 @@ public class KafkaStreams {
         sb.append("\n");
 
         return sb.toString();
+    }
+
+    /**
+     * Cleans up local state store directory ({@code state.dir}), by deleting all data with regard to the application-id.
+     * <p>
+     * May only be called before instance is started or after instance is closed.
+     *
+     * @throws IllegalStateException if instance is currently running
+     */
+    public void localCleanUp() {
+        if (state == RUNNING) {
+            throw new IllegalStateException("Cannot clean up while running.");
+        }
+
+        final String localApplicationDir = this.config.getString(StreamsConfig.STATE_DIR_CONFIG)
+                + File.separator
+                + this.config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+
+        log.debug("Clean up local Kafka Streams data in {}", localApplicationDir);
+        Utils.delete(new File(localApplicationDir));
     }
 
     /**

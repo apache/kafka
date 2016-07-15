@@ -23,9 +23,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.utils.Utils;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.LinkedList;
@@ -38,7 +36,7 @@ import java.util.Set;
  * reprocess the whole input from scratch.
  * <p>
  * This includes, setting source topic offsets to zero, skipping over all intermediate user topics,
- * deleting all internally created topics, and deleting local state stores.
+ * and deleting all internally created topics.
  */
 public class StreamsCleanupClient {
     private static OptionSpec<String> bootstrapServerOption;
@@ -46,7 +44,6 @@ public class StreamsCleanupClient {
     private static OptionSpec<String> applicationIdOption;
     private static OptionSpec<String> sourceTopicsOption;
     private static OptionSpec<String> intermediateTopicsOption;
-    private static OptionSpec<String> stateDirOption;
 
     private OptionSet options = null;
 
@@ -67,7 +64,6 @@ public class StreamsCleanupClient {
             resetSourceTopicOffsets();
             seekToEndIntermediateTopics(zkUtils, allTopics);
             deleteInternalTopics(zkUtils, allTopics);
-            removeLocalStateStore();
         } catch (Exception e) {
             exitCode = -1;
             System.err.println(e.getMessage());
@@ -103,11 +99,6 @@ public class StreamsCleanupClient {
         intermediateTopicsOption = optionParser.accepts("intermediate-topics", "Comma separated list of intermediate user topics")
                 .withRequiredArg()
                 .describedAs("list")
-                .ofType(String.class);
-        stateDirOption = optionParser.accepts("state-dir", "Local state store directory (state.dir)")
-                .withRequiredArg()
-                .describedAs("dir")
-                .defaultsTo("/tmp/kafka-streams")
                 .ofType(String.class);
 
         try {
@@ -208,22 +199,6 @@ public class StreamsCleanupClient {
         }
 
         System.out.println("Done.");
-    }
-
-    private void removeLocalStateStore() {
-        final File stateStore = new File(options.valueOf(stateDirOption) + File.separator + options.valueOf(applicationIdOption));
-        if (!stateStore.exists()) {
-            System.out.println("Nothing to clear. Local state store directory does not exist.");
-            return;
-        }
-        if (!stateStore.isDirectory()) {
-            System.err.println("ERROR: " + stateStore.getAbsolutePath() + " is not a directory.");
-            return;
-        }
-
-        System.out.println("Removing local state store.");
-        Utils.delete(stateStore);
-        System.out.println("Deleted " + stateStore.getAbsolutePath());
     }
 
     public static void main(String[] args) {
