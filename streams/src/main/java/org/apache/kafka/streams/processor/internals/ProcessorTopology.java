@@ -27,8 +27,6 @@ import java.util.Set;
 import java.util.Queue;
 import java.util.LinkedList;
 
-import static org.apache.kafka.streams.kstream.internals.KStreamImpl.SINK_NAME;
-
 public class ProcessorTopology {
 
     private final List<ProcessorNode> processorNodes;
