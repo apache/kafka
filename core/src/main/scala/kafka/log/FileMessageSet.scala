@@ -47,7 +47,8 @@ class FileMessageSet private[kafka](@volatile var file: File,
                                     private[log] val channel: FileChannel,
                                     private[log] val start: Int,
                                     private[log] val end: Int,
-                                    isSlice: Boolean) extends MessageSet with Logging {
+                                    isSlice: Boolean,
+                                    needFlushDir: Boolean) extends MessageSet with Logging {
 
   /* the size of the message set in bytes */
   private val _size =
@@ -55,6 +56,9 @@ class FileMessageSet private[kafka](@volatile var file: File,
       new AtomicInteger(end - start) // don't check the file size if this is just a slice view
     else
       new AtomicInteger(math.min(channel.size.toInt, end) - start)
+
+  /* do we need to call fsync on parent directory */
+  private val _needFlushDir = new AtomicBoolean(needFlushDir)
 
   /* if this is not a slice, update the file pointer to the end of the file */
   if (!isSlice)
@@ -65,7 +69,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
    * Create a file message set with no slicing.
    */
   def this(file: File, channel: FileChannel) =
-    this(file, channel, start = 0, end = Int.MaxValue, isSlice = false)
+    this(file, channel, start = 0, end = Int.MaxValue, isSlice = false, needFlushDir = true)
 
   /**
    * Create a file message set with no slicing
@@ -84,18 +88,20 @@ class FileMessageSet private[kafka](@volatile var file: File,
         channel = FileMessageSet.openChannel(file, mutable = true, fileAlreadyExists, initFileSize, preallocate),
         start = 0,
         end = if (!fileAlreadyExists && preallocate) 0 else Int.MaxValue,
-        isSlice = false)
+        isSlice = false,
+        needFlushDir = true)
 
   /**
    * Create a file message set with mutable option
    */
-  def this(file: File, mutable: Boolean) = this(file, FileMessageSet.openChannel(file, mutable))
+  def this(file: File, mutable: Boolean) =
+    this(file, FileMessageSet.openChannel(file, mutable), start = 0, end = Int.MaxValue, isSlice = false, needFlushDir = mutable)
 
   /**
    * Create a slice view of the file message set that begins and ends at the given byte offsets
    */
-  def this(file: File, channel: FileChannel, start: Int, end: Int) =
-    this(file, channel, start, end, isSlice = true)
+  private def this(file: File, channel: FileChannel, start: Int, end: Int) =
+    this(file, channel, start, end, isSlice = true, needFlushDir = false)
 
   /**
    * Return a message set which is a view into this set starting from the given position and with the given size limit.
@@ -303,6 +309,18 @@ class FileMessageSet private[kafka](@volatile var file: File,
    */
   def flush() = {
     channel.force(true)
+    if (_needFlushDir.getAndSet(false)) {
+      var dir: FileChannel = null
+      try {
+        dir = FileChannel.open(file.getAbsoluteFile.getParentFile.toPath, java.nio.file.StandardOpenOption.READ)
+        dir.force(true)
+      } catch {
+        case e: Throwable =>
+      } finally {
+        if (dir != null)
+          dir.close()
+      }
+    }
   }
 
   /**
@@ -369,6 +387,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
   def renameTo(f: File) {
     try Utils.atomicMoveWithFallback(file.toPath, f.toPath)
     finally this.file = f
+    _needFlushDir.set(true)
   }
 
 }
