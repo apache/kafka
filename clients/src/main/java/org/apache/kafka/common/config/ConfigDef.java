@@ -118,8 +118,10 @@ public class ConfigDef {
         Map<String, Object> values = new HashMap<String, Object>();
         for (ConfigKey key : configKeys.values()) {
             Object value;
-            if (props.containsKey(key.name))
+            if (props.containsKey(key.name)){
                 value = parseType(key.name, props.get(key.name), key.type);
+                if(key.validator!=null) key.validator.ensureValid(key.name,value);
+            }
             else if (key.defaultValue == NO_DEFAULT_VALUE)
                 throw new ConfigException("Missing required configuration \"" + key.name + "\" which has no default value.");
             else
