@@ -390,8 +390,8 @@ object ZkUtils extends Logging {
   }
 
   /**
-   * Update the value of a persistent node with the given path and data.
-   * create parrent directory if necessary. Never throw NodeExistException.
+   * Update the value of a ephemeral node with the given path and data.
+   * create parent directory if necessary. Never throw NodeExistException.
    */
   def updateEphemeralPath(client: ZkClient, path: String, data: String): Unit = {
     try {
