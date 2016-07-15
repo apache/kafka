@@ -28,7 +28,7 @@ $base_dir/../../bin/kafka-server-start.sh $base_dir/config/server.properties 2>&
 
 sleep 4
 echo "start producing $num_messages messages ..."
-$base_dir/../../bin/kafka-run-class.sh kafka.tools.ProducerPerformance --brokerinfo broker.list=0:localhost:9092 --topics test01 --messages $num_messages --message-size $message_size --batch-size 200 --threads 1 --reporting-interval 100000 num_messages --async
+$base_dir/../../bin/kafka-run-class.sh kafka.tools.ProducerPerformance  --broker-list=localhost:9092 --topics test01 --messages $num_messages --message-size $message_size --batch-size 200 --threads 1 --reporting-interval 100000 num_messages
 
 echo "wait for data to be persisted"
 cur_offset="-1"
