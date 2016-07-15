@@ -434,11 +434,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         KStreamImpl<K, V1> joinOther = (KStreamImpl) other;
 
         if (joinThis.repartitionRequired) {
-            joinThis = joinThis.repartitionForJoin(keySerde, thisValueSerde);
+            joinThis = joinThis.repartitionForJoin(keySerde, thisValueSerde, null);
         }
 
         if (joinOther.repartitionRequired) {
-            joinOther = joinOther.repartitionForJoin(keySerde, otherValueSerde);
+            joinOther = joinOther.repartitionForJoin(keySerde, otherValueSerde, null);
         }
 
         joinThis.ensureJoinableWith(joinOther);
@@ -458,25 +458,30 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
      * an operation that changes the key, i.e, selectKey, map(..), flatMap(..).
      * @param keySerde      Serdes for serializing the keys
      * @param valSerde      Serdes for serilaizing the values
+     * @param topicNamePrefix  prefix of topic name created for repartitioning, can be null,
+     *                         in which case the prefix will be auto-generated internally.
      * @return a new {@link KStreamImpl}
      */
     private KStreamImpl<K, V> repartitionForJoin(Serde<K> keySerde,
-                                                 Serde<V> valSerde) {
+                                                 Serde<V> valSerde,
+                                                 final String topicNamePrefix) {
 
-        String repartitionedSourceName = createReparitionedSource(this, keySerde, valSerde);
+        String repartitionedSourceName = createReparitionedSource(this, keySerde, valSerde, topicNamePrefix);
         return new KStreamImpl<>(topology, repartitionedSourceName, Collections
             .singleton(repartitionedSourceName), false);
     }
 
     static <K1, V1> String createReparitionedSource(AbstractStream<K1> stream,
                                                     Serde<K1> keySerde,
-                                                    Serde<V1> valSerde) {
+                                                    Serde<V1> valSerde,
+                                                    final String topicNamePrefix) {
         Serializer<K1> keySerializer = keySerde != null ? keySerde.serializer() : null;
         Serializer<V1> valSerializer = valSerde != null ? valSerde.serializer() : null;
         Deserializer<K1> keyDeserializer = keySerde != null ? keySerde.deserializer() : null;
         Deserializer<V1> valDeserializer = valSerde != null ? valSerde.deserializer() : null;
+        String baseName = topicNamePrefix != null ? topicNamePrefix : stream.name;
 
-        String repartitionTopic = stream.name + REPARTITION_TOPIC_SUFFIX;
+        String repartitionTopic = baseName + REPARTITION_TOPIC_SUFFIX;
         String sinkName = stream.topology.newName(SINK_NAME);
         String filterName = stream.topology.newName(FILTER_NAME);
         String sourceName = stream.topology.newName(SOURCE_NAME);
@@ -539,7 +544,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         if (repartitionRequired) {
             KStreamImpl<K, V> thisStreamRepartitioned = this.repartitionForJoin(keySerde,
-                                                                                valueSerde);
+                                                                                valueSerde, null);
             return thisStreamRepartitioned.doStreamTableLeftJoin(other, joiner);
         } else {
             return doStreamTableLeftJoin(other, joiner);
@@ -635,7 +640,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                    Serde<V2> otherValueSerde) {
 
             StateStoreSupplier thisWindow =
-                createWindowedStateStore(windows, keySerde, lhsValueSerde, name + "-this");
+                createWindowedStateStore(windows, keySerde, lhsValueSerde,  name + "-this");
 
             StateStoreSupplier otherWindow =
                 createWindowedStateStore(windows, keySerde, otherValueSerde, name + "-other");
@@ -644,7 +649,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             KStreamJoinWindow<K1, V1> thisWindowedStream = new KStreamJoinWindow<>(thisWindow.name(),
                                                                                    windows.before + windows.after + 1,
                                                                                    windows.maintainMs());
-            KStreamJoinWindow<K1, V2> otherWindowedStream = new KStreamJoinWindow<>(otherWindow .name(),
+            KStreamJoinWindow<K1, V2> otherWindowedStream = new KStreamJoinWindow<>(otherWindow.name(),
                                                                                     windows.before + windows.after + 1,
                                                                                     windows.maintainMs());
 

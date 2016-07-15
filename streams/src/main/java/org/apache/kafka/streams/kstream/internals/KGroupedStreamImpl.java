@@ -159,7 +159,7 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
 
         final String aggFunctionName = topology.newName(functionName);
 
-        final String sourceName = repartitionIfRequired();
+        final String sourceName = repartitionIfRequired(storeSupplier.name());
 
         topology.addProcessor(aggFunctionName, aggregateSupplier, sourceName);
         topology.addStateStore(storeSupplier, aggFunctionName);
@@ -175,10 +175,10 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
     /**
      * @return the new sourceName if repartitioned. Otherwise the name of this stream
      */
-    private String repartitionIfRequired() {
+    private String repartitionIfRequired(final String storeName) {
         if (!repartitionRequired) {
             return this.name;
         }
-        return KStreamImpl.createReparitionedSource(this, keySerde, valSerde);
+        return KStreamImpl.createReparitionedSource(this, keySerde, valSerde, storeName);
     }
 }
