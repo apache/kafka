@@ -98,6 +98,18 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         return "connect";
     }
 
+    public void poll(long now) {
+        if (coordinatorUnknown())
+            ensureCoordinatorReady();
+
+        if (needRejoin()) {
+            ensureActiveGroup();
+            now = time.milliseconds();
+        }
+
+        heartbeat.poll(now);
+    }
+
     @Override
     public List<ProtocolMetadata> metadata() {
         configSnapshot = configStorage.snapshot();
@@ -239,7 +251,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     @Override
-    public boolean needRejoin() {
+    protected boolean needRejoin() {
         return super.needRejoin() || (assignmentSnapshot == null || assignmentSnapshot.failed()) || rejoinRequested;
     }
 

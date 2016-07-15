@@ -93,7 +93,7 @@ public class JoinGroupRequest extends AbstractRequest {
         struct.set(GROUP_ID_KEY_NAME, groupId);
         struct.set(SESSION_TIMEOUT_KEY_NAME, sessionTimeout);
 
-        if (version == 1)
+        if (version >= 1)
             struct.set(REBALANCE_TIMEOUT_KEY_NAME, rebalanceTimeout);
 
         struct.set(MEMBER_ID_KEY_NAME, memberId);
@@ -122,13 +122,12 @@ public class JoinGroupRequest extends AbstractRequest {
         groupId = struct.getString(GROUP_ID_KEY_NAME);
         sessionTimeout = struct.getInt(SESSION_TIMEOUT_KEY_NAME);
 
-        if (struct.hasField(REBALANCE_TIMEOUT_KEY_NAME)) {
+        if (struct.hasField(REBALANCE_TIMEOUT_KEY_NAME))
             // rebalance timeout is added in v1
             rebalanceTimeout = struct.getInt(REBALANCE_TIMEOUT_KEY_NAME);
-        } else {
+        else
             // v0 had no rebalance timeout but used session timeout implicitly
             rebalanceTimeout = sessionTimeout;
-        }
 
         memberId = struct.getString(MEMBER_ID_KEY_NAME);
         protocolType = struct.getString(PROTOCOL_TYPE_KEY_NAME);

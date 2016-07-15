@@ -317,13 +317,13 @@ public class KafkaConsumerTest {
     }
 
     @Test
-    public void verifyHeartbeatSent() {
+    public void verifyHeartbeatSent() throws Exception {
         String topic = "topic";
         TopicPartition partition = new TopicPartition(topic, 0);
 
         int rebalanceTimeoutMs = 60000;
         int sessionTimeoutMs = 30000;
-        int heartbeatIntervalMs = 3000;
+        int heartbeatIntervalMs = 1000;
         int autoCommitIntervalMs = 10000;
 
         Time time = new MockTime();
@@ -369,9 +369,6 @@ public class KafkaConsumerTest {
         consumer.poll(0);
         assertEquals(Collections.singleton(partition), consumer.assignment());
 
-        // heartbeat interval is 2 seconds
-        time.sleep(heartbeatIntervalMs);
-
         final AtomicBoolean heartbeatReceived = new AtomicBoolean(false);
         client.prepareResponseFrom(new MockClient.RequestMatcher() {
             @Override
@@ -381,19 +378,23 @@ public class KafkaConsumerTest {
             }
         }, new HeartbeatResponse(Errors.NONE.code()).toStruct(), coordinator);
 
+        // heartbeat interval is 2 seconds
+        time.sleep(heartbeatIntervalMs);
+        Thread.sleep(heartbeatIntervalMs);
+
         consumer.poll(0);
 
         assertTrue(heartbeatReceived.get());
     }
 
     @Test
-    public void verifyHeartbeatSentWhenFetchedDataReady() {
+    public void verifyHeartbeatSentWhenFetchedDataReady() throws Exception {
         String topic = "topic";
         TopicPartition partition = new TopicPartition(topic, 0);
 
         int rebalanceTimeoutMs = 60000;
         int sessionTimeoutMs = 30000;
-        int heartbeatIntervalMs = 3000;
+        int heartbeatIntervalMs = 1000;
         int autoCommitIntervalMs = 10000;
 
         Time time = new MockTime();
@@ -438,8 +439,6 @@ public class KafkaConsumerTest {
         client.respondFrom(fetchResponse(partition, 0, 5), node);
         client.poll(0, time.milliseconds());
 
-        time.sleep(heartbeatIntervalMs);
-
         client.prepareResponseFrom(fetchResponse(partition, 5, 0), node);
         final AtomicBoolean heartbeatReceived = new AtomicBoolean(false);
         client.prepareResponseFrom(new MockClient.RequestMatcher() {
@@ -449,6 +448,9 @@ public class KafkaConsumerTest {
                 return true;
             }
         }, new HeartbeatResponse(Errors.NONE.code()).toStruct(), coordinator);
+
+        time.sleep(heartbeatIntervalMs);
+        Thread.sleep(heartbeatIntervalMs);
 
         consumer.poll(0);
 

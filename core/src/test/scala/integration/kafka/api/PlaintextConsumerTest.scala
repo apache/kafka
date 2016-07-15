@@ -593,16 +593,14 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // create a group of consumers, subscribe the consumers to all the topics and start polling
     // for the topic partition assignment
     val (rrConsumers, consumerPollers) = createConsumerGroupAndWaitForAssignment(10, List(topic1, topic2), subscriptions)
+    try {
+      validateGroupAssignment(consumerPollers, subscriptions, s"Did not get valid initial assignment for partitions ${subscriptions.asJava}")
 
-    // add one more consumer and validate re-assignment
-    addConsumersToGroupAndWaitForGroupAssignment(1, consumers, consumerPollers, List(topic1, topic2), subscriptions)
-
-    // done with pollers and consumers
-    for (poller <- consumerPollers)
-      poller.shutdown()
-
-    for (consumer <- consumers)
-      consumer.unsubscribe()
+      // add one more consumer and validate re-assignment
+      addConsumersToGroupAndWaitForGroupAssignment(1, consumers, consumerPollers, List(topic1, topic2), subscriptions)
+    } finally {
+      consumerPollers.foreach(_.shutdown())
+    }
   }
 
   /**
@@ -618,25 +616,25 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val subscriptions = Set(tp, tp2) ++ createTopicAndSendRecords(topic1, 5, 100)
 
     // subscribe all consumers to all topics and validate the assignment
-    val consumerPollers = subscribeConsumersAndWaitForAssignment(consumers, List(topic, topic1), subscriptions)
+    val consumerPollers = subscribeConsumers(consumers, List(topic, topic1))
 
-    // add 2 more consumers and validate re-assignment
-    addConsumersToGroupAndWaitForGroupAssignment(2, consumers, consumerPollers, List(topic, topic1), subscriptions)
+    try {
+      validateGroupAssignment(consumerPollers, subscriptions, s"Did not get valid initial assignment for partitions ${subscriptions.asJava}")
 
-    // add one more topic and validate partition re-assignment
-    val topic2 = "topic2"
-    val expandedSubscriptions = subscriptions ++ createTopicAndSendRecords(topic2, 3, 100)
-    changeConsumerGroupSubscriptionAndValidateAssignment(consumerPollers, List(topic, topic1, topic2), expandedSubscriptions)
+      // add 2 more consumers and validate re-assignment
+      addConsumersToGroupAndWaitForGroupAssignment(2, consumers, consumerPollers, List(topic, topic1), subscriptions)
 
-    // remove the topic we just added and validate re-assignment
-    changeConsumerGroupSubscriptionAndValidateAssignment(consumerPollers, List(topic, topic1), subscriptions)
+      // add one more topic and validate partition re-assignment
+      val topic2 = "topic2"
+      val expandedSubscriptions = subscriptions ++ createTopicAndSendRecords(topic2, 3, 100)
+      changeConsumerGroupSubscriptionAndValidateAssignment(consumerPollers, List(topic, topic1, topic2), expandedSubscriptions)
 
-    // done with pollers and consumers
-    for (poller <- consumerPollers)
-      poller.shutdown()
+      // remove the topic we just added and validate re-assignment
+      changeConsumerGroupSubscriptionAndValidateAssignment(consumerPollers, List(topic, topic1), subscriptions)
 
-    for (consumer <- consumers)
-      consumer.unsubscribe()
+    } finally {
+      consumerPollers.foreach(_.shutdown())
+    }
   }
 
   @Test
@@ -830,6 +828,138 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       startingTimestamp = startTime, timestampType = TimestampType.LOG_APPEND_TIME)
   }
 
+  @Test
+  def testListTopics() {
+    val numParts = 2
+    val topic1 = "part-test-topic-1"
+    val topic2 = "part-test-topic-2"
+    val topic3 = "part-test-topic-3"
+    TestUtils.createTopic(this.zkUtils, topic1, numParts, 1, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic2, numParts, 1, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic3, numParts, 1, this.servers)
+
+    val topics = this.consumers.head.listTopics()
+    assertNotNull(topics)
+    assertEquals(5, topics.size())
+    assertEquals(5, topics.keySet().size())
+    assertEquals(2, topics.get(topic1).size)
+    assertEquals(2, topics.get(topic2).size)
+    assertEquals(2, topics.get(topic3).size)
+  }
+
+  @Test
+  def testUnsubscribeTopic() {
+    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100") // timeout quickly to avoid slow test
+    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30")
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
+
+    val listener = new TestConsumerReassignmentListener()
+    consumer0.subscribe(List(topic).asJava, listener)
+
+    // the initial subscription should cause a callback execution
+    while (listener.callsToAssigned == 0)
+      consumer0.poll(50)
+
+    consumer0.subscribe(List[String]().asJava)
+    assertEquals(0, consumer0.assignment.size())
+  }
+
+  @Test
+  def testPauseStateNotPreservedByRebalance() {
+    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100") // timeout quickly to avoid slow test
+    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30")
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
+
+    sendRecords(5)
+    consumer0.subscribe(List(topic).asJava)
+    consumeAndVerifyRecords(consumer = consumer0, numRecords = 5, startingOffset = 0)
+    consumer0.pause(List(tp).asJava)
+
+    // subscribe to a new topic to trigger a rebalance
+    consumer0.subscribe(List("topic2").asJava)
+
+    // after rebalance, our position should be reset and our pause state lost,
+    // so we should be able to consume from the beginning
+    consumeAndVerifyRecords(consumer = consumer0, numRecords = 0, startingOffset = 5)
+  }
+
+  @Test
+  def testCommitSpecifiedOffsets() {
+    sendRecords(5, tp)
+    sendRecords(7, tp2)
+
+    this.consumers.head.assign(List(tp, tp2).asJava)
+
+    // Need to poll to join the group
+    this.consumers.head.poll(50)
+    val pos1 = this.consumers.head.position(tp)
+    val pos2 = this.consumers.head.position(tp2)
+    this.consumers.head.commitSync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(3L))).asJava)
+    assertEquals(3, this.consumers.head.committed(tp).offset)
+    assertNull(this.consumers.head.committed(tp2))
+
+    // Positions should not change
+    assertEquals(pos1, this.consumers.head.position(tp))
+    assertEquals(pos2, this.consumers.head.position(tp2))
+    this.consumers.head.commitSync(Map[TopicPartition, OffsetAndMetadata]((tp2, new OffsetAndMetadata(5L))).asJava)
+    assertEquals(3, this.consumers.head.committed(tp).offset)
+    assertEquals(5, this.consumers.head.committed(tp2).offset)
+
+    // Using async should pick up the committed changes after commit completes
+    val commitCallback = new CountConsumerCommitCallback()
+    this.consumers.head.commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp2, new OffsetAndMetadata(7L))).asJava, commitCallback)
+    awaitCommitCallback(this.consumers.head, commitCallback)
+    assertEquals(7, this.consumers.head.committed(tp2).offset)
+  }
+
+  @Test
+  def testAutoCommitOnRebalance() {
+    val topic2 = "topic2"
+    TestUtils.createTopic(this.zkUtils, topic2, 2, serverCount, this.servers)
+
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
+
+    val numRecords = 10000
+    sendRecords(numRecords)
+
+    val rebalanceListener = new ConsumerRebalanceListener {
+      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) = {
+        // keep partitions paused in this test so that we can verify the commits based on specific seeks
+        consumer0.pause(partitions)
+      }
+
+      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) = {}
+    }
+
+    consumer0.subscribe(List(topic).asJava, rebalanceListener)
+
+    val assignment = Set(tp, tp2)
+    TestUtils.waitUntilTrue(() => {
+      consumer0.poll(50)
+      consumer0.assignment() == assignment.asJava
+    }, s"Expected partitions ${assignment.asJava} but actually got ${consumer0.assignment()}")
+
+    consumer0.seek(tp, 300)
+    consumer0.seek(tp2, 500)
+
+    // change subscription to trigger rebalance
+    consumer0.subscribe(List(topic, topic2).asJava, rebalanceListener)
+
+    val newAssignment = Set(tp, tp2, new TopicPartition(topic2, 0), new TopicPartition(topic2, 1))
+    TestUtils.waitUntilTrue(() => {
+      val records = consumer0.poll(50)
+      consumer0.assignment() == newAssignment.asJava
+    }, s"Expected partitions ${newAssignment.asJava} but actually got ${consumer0.assignment()}")
+
+    // after rebalancing, we should have reset to the committed positions
+    assertEquals(300, consumer0.committed(tp).offset)
+    assertEquals(500, consumer0.committed(tp2).offset)
+  }
+
   def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {
     // use consumers defined in this class plus one additional consumer
     // Use topic defined in this class + one additional topic
@@ -887,7 +1017,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    * Subscribes consumer 'consumer' to a given list of topics 'topicsToSubscribe', creates
    * consumer poller and starts polling.
    * Assumes that the consumer is not subscribed to any topics yet
-   * @param consumer consumer
+    *
+    * @param consumer consumer
    * @param topicsToSubscribe topics that this consumer will subscribe to
    * @return consumer poller for the given consumer
    */
@@ -901,34 +1032,25 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   /**
    * Creates consumer pollers corresponding to a given consumer group, one per consumer; subscribes consumers to
-   * 'topicsToSubscribe' topics, waits until consumers get topics assignment, and validates the assignment
-   * Currently, assignment validation requires that total number of partitions is greater or equal to
-   * number of consumers (i.e. subscriptions.size >= consumerGroup.size)
-   * Assumes that topics are already created with partitions corresponding to a given set of topic partitions ('subscriptions')
+   * 'topicsToSubscribe' topics, waits until consumers get topics assignment.
    *
    * When the function returns, consumer pollers will continue to poll until shutdown is called on every poller.
    *
    * @param consumerGroup consumer group
    * @param topicsToSubscribe topics to which consumers will subscribe to
-   * @param subscriptions set of all topic partitions
    * @return collection of consumer pollers
    */
-  def subscribeConsumersAndWaitForAssignment(consumerGroup: Buffer[KafkaConsumer[Array[Byte], Array[Byte]]],
-                                             topicsToSubscribe: List[String],
-                                             subscriptions: Set[TopicPartition]): Buffer[ConsumerAssignmentPoller] = {
+  def subscribeConsumers(consumerGroup: Buffer[KafkaConsumer[Array[Byte], Array[Byte]]],
+                         topicsToSubscribe: List[String]): Buffer[ConsumerAssignmentPoller] = {
     val consumerPollers = Buffer[ConsumerAssignmentPoller]()
     for (consumer <- consumerGroup)
       consumerPollers += subscribeConsumerAndStartPolling(consumer, topicsToSubscribe)
-    validateGroupAssignment(consumerPollers, subscriptions, s"Did not get valid initial assignment for partitions ${subscriptions.asJava}")
     consumerPollers
   }
 
   /**
    * Creates 'consumerCount' consumers and consumer pollers, one per consumer; subscribes consumers to
-   * 'topicsToSubscribe' topics, waits until consumers get topics assignment, and validates the assignment
-   * Currently, assignment validation requires that total number of partitions is greater or equal to
-   * number of consumers (i.e. subscriptions.size >= consumerCount)
-   * Assumes that topics are already created with partitions corresponding to a given set of topic partitions ('subscriptions')
+   * 'topicsToSubscribe' topics, waits until consumers get topics assignment.
    *
    * When the function returns, consumer pollers will continue to poll until shutdown is called on every poller.
    *
@@ -947,7 +1069,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumers ++= consumerGroup
 
     // create consumer pollers, wait for assignment and validate it
-    val consumerPollers = subscribeConsumersAndWaitForAssignment(consumerGroup, topicsToSubscribe, subscriptions)
+    val consumerPollers = subscribeConsumers(consumerGroup, topicsToSubscribe)
 
     (consumerGroup, consumerPollers)
   }

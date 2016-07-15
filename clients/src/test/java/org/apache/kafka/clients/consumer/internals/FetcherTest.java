@@ -438,6 +438,7 @@ public class FetcherTest {
         fetcherNoAutoReset.sendFetches();
         client.prepareResponse(fetchResponse(this.records.buffer(), Errors.OFFSET_OUT_OF_RANGE.code(), 100L, 0));
         consumerClient.poll(0);
+
         assertFalse(subscriptionsNoAutoReset.isOffsetResetNeeded(tp));
         try {
             fetcherNoAutoReset.fetchedRecords();

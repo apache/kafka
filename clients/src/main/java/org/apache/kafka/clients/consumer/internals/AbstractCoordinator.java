@@ -82,8 +82,13 @@ public abstract class AbstractCoordinator implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(AbstractCoordinator.class);
 
-    private final Heartbeat heartbeat;
-    private final HeartbeatTask heartbeatTask;
+    private enum MemberState {
+        UNJOINED, // the client is not part of a group
+        REBALANCING,
+        STABLE,  // the client has joined and is sending heartbeats
+        LEAVING,
+    }
+
     private final int rebalanceTimeoutMs;
     private final int sessionTimeoutMs;
     private final GroupCoordinatorMetrics sensors;
@@ -91,13 +96,17 @@ public abstract class AbstractCoordinator implements Closeable {
     protected final ConsumerNetworkClient client;
     protected final Time time;
     protected final long retryBackoffMs;
+    protected final Heartbeat heartbeat;
 
-    private boolean needsJoinPrepare = true;
+    private HeartbeatThread heartbeatThread = null;
     private boolean rejoinNeeded = true;
-    protected Node coordinator;
-    protected String memberId;
-    protected String protocol;
-    protected int generation;
+    private boolean needsJoinPrepare = true;
+    private MemberState state = MemberState.UNJOINED;
+    private RequestFuture<ByteBuffer> joinFuture = null;
+    protected Node coordinator = null;
+    protected String memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;;
+    protected String protocol = null;
+    protected int generation = OffsetCommitRequest.DEFAULT_GENERATION_ID;
 
     private RequestFuture<Void> findCoordinatorFuture = null;
 
@@ -115,20 +124,16 @@ public abstract class AbstractCoordinator implements Closeable {
                                long retryBackoffMs) {
         this.client = client;
         this.time = time;
-        this.generation = OffsetCommitRequest.DEFAULT_GENERATION_ID;
-        this.memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
         this.groupId = groupId;
-        this.coordinator = null;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.sessionTimeoutMs = sessionTimeoutMs;
-        this.heartbeat = new Heartbeat(this.sessionTimeoutMs, heartbeatIntervalMs, time.milliseconds());
-        this.heartbeatTask = new HeartbeatTask();
+        this.heartbeat = new Heartbeat(sessionTimeoutMs, heartbeatIntervalMs, rebalanceTimeoutMs, retryBackoffMs);
         this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix);
         this.retryBackoffMs = retryBackoffMs;
     }
 
     /**
-     * Unique identifier for the class of protocols implements (e.g. "consumer" or "connect").
+     * Unique identifier for the class of supported protocols (e.g. "consumer" or "connect").
      * @return Non-null protocol type name
      */
     protected abstract String protocolType();
@@ -178,7 +183,7 @@ public abstract class AbstractCoordinator implements Closeable {
     /**
      * Block until the coordinator for this group is known and is ready to receive requests.
      */
-    public void ensureCoordinatorReady() {
+    public synchronized void ensureCoordinatorReady() {
         while (coordinatorUnknown()) {
             RequestFuture<Void> future = lookupCoordinator();
             client.poll(future);
@@ -219,14 +224,14 @@ public abstract class AbstractCoordinator implements Closeable {
      * Check whether the group should be rejoined (e.g. if metadata changes)
      * @return true if it should, false otherwise
      */
-    protected boolean needRejoin() {
+    protected synchronized boolean needRejoin() {
         return rejoinNeeded;
     }
 
     /**
      * Ensure that the group is active (i.e. joined and synced)
      */
-    public void ensureActiveGroup() {
+    public synchronized void ensureActiveGroup() {
         // always ensure that the coordinator is ready because we may have been disconnected
         // when sending heartbeats and does not necessarily require us to rejoin the group.
         ensureCoordinatorReady();
@@ -239,33 +244,47 @@ public abstract class AbstractCoordinator implements Closeable {
             needsJoinPrepare = false;
         }
 
+        if (heartbeatThread == null) {
+            heartbeatThread = new HeartbeatThread();
+            heartbeatThread.start();
+        }
+
         while (needRejoin()) {
             ensureCoordinatorReady();
 
             // ensure that there are no pending requests to the coordinator. This is important
             // in particular to avoid resending a pending JoinGroup request.
-            if (client.pendingRequestCount(this.coordinator) > 0) {
+            if (state == MemberState.LEAVING || client.pendingRequestCount(this.coordinator) > 0) {
                 client.awaitPendingRequests(this.coordinator);
                 continue;
             }
 
-            RequestFuture<ByteBuffer> future = sendJoinGroupRequest();
-            future.addListener(new RequestFutureListener<ByteBuffer>() {
-                @Override
-                public void onSuccess(ByteBuffer value) {
-                    // handle join completion in the callback so that the callback will be invoked
-                    // even if the consumer is woken up before finishing the rebalance
-                    onJoinComplete(generation, memberId, protocol, value);
-                    needsJoinPrepare = true;
-                    heartbeatTask.reset();
-                }
+            if (joinFuture == null) {
+                state = MemberState.REBALANCING;
+                joinFuture = sendJoinGroupRequest();
+                joinFuture.addListener(new RequestFutureListener<ByteBuffer>() {
+                    @Override
+                    public void onSuccess(ByteBuffer value) {
+                        // handle join completion in the callback so that the callback will be invoked
+                        // even if the consumer is woken up before finishing the rebalance
+                        joinFuture = null;
+                        state = MemberState.STABLE;
+                        needsJoinPrepare = true;
+                        onJoinComplete(generation, memberId, protocol, value);
+                        heartbeatThread.enable();
+                    }
 
-                @Override
-                public void onFailure(RuntimeException e) {
-                    // we handle failures below after the request finishes. if the join completes
-                    // after having been woken up, the exception is ignored and we will rejoin
-                }
-            });
+                    @Override
+                    public void onFailure(RuntimeException e) {
+                        // we handle failures below after the request finishes. if the join completes
+                        // after having been woken up, the exception is ignored and we will rejoin
+                        joinFuture = null;
+                        state = MemberState.UNJOINED;
+                    }
+                });
+            }
+
+            RequestFuture<ByteBuffer> future = joinFuture;
             client.poll(future);
 
             if (future.failed()) {
@@ -277,63 +296,6 @@ public abstract class AbstractCoordinator implements Closeable {
                 else if (!future.isRetriable())
                     throw exception;
                 time.sleep(retryBackoffMs);
-            }
-        }
-    }
-
-    private class HeartbeatTask implements DelayedTask {
-
-        private boolean requestInFlight = false;
-
-        public void reset() {
-            // start or restart the heartbeat task to be executed at the next chance
-            long now = time.milliseconds();
-            heartbeat.resetSessionTimeout(now);
-            client.unschedule(this);
-
-            if (!requestInFlight)
-                client.schedule(this, now);
-        }
-
-        @Override
-        public void run(final long now) {
-            if (generation < 0 || needRejoin() || coordinatorUnknown()) {
-                // no need to send the heartbeat we're not using auto-assignment or if we are
-                // awaiting a rebalance
-                return;
-            }
-
-            if (heartbeat.sessionTimeoutExpired(now)) {
-                // we haven't received a successful heartbeat in one session interval
-                // so mark the coordinator dead
-                coordinatorDead();
-                return;
-            }
-
-            if (!heartbeat.shouldHeartbeat(now)) {
-                // we don't need to heartbeat now, so reschedule for when we do
-                client.schedule(this, now + heartbeat.timeToNextHeartbeat(now));
-            } else {
-                heartbeat.sentHeartbeat(now);
-                requestInFlight = true;
-
-                RequestFuture<Void> future = sendHeartbeatRequest();
-                future.addListener(new RequestFutureListener<Void>() {
-                    @Override
-                    public void onSuccess(Void value) {
-                        requestInFlight = false;
-                        long now = time.milliseconds();
-                        heartbeat.receiveHeartbeat(now);
-                        long nextHeartbeatTime = now + heartbeat.timeToNextHeartbeat(now);
-                        client.schedule(HeartbeatTask.this, nextHeartbeatTime);
-                    }
-
-                    @Override
-                    public void onFailure(RuntimeException e) {
-                        requestInFlight = false;
-                        client.schedule(HeartbeatTask.this, time.milliseconds() + retryBackoffMs);
-                    }
-                });
             }
         }
     }
@@ -353,7 +315,7 @@ public abstract class AbstractCoordinator implements Closeable {
         JoinGroupRequest request = new JoinGroupRequest(
                 groupId,
                 this.sessionTimeoutMs,
-                this.sessionTimeoutMs,
+                this.rebalanceTimeoutMs,
                 this.memberId,
                 protocolType(),
                 metadata());
@@ -373,46 +335,48 @@ public abstract class AbstractCoordinator implements Closeable {
 
         @Override
         public void handle(JoinGroupResponse joinResponse, RequestFuture<ByteBuffer> future) {
-            Errors error = Errors.forCode(joinResponse.errorCode());
-            if (error == Errors.NONE) {
-                log.debug("Received successful join group response for group {}: {}", groupId, joinResponse.toStruct());
-                AbstractCoordinator.this.memberId = joinResponse.memberId();
-                AbstractCoordinator.this.generation = joinResponse.generationId();
-                AbstractCoordinator.this.rejoinNeeded = false;
-                AbstractCoordinator.this.protocol = joinResponse.groupProtocol();
-                sensors.joinLatency.record(response.requestLatencyMs());
-                if (joinResponse.isLeader()) {
-                    onJoinLeader(joinResponse).chain(future);
+            synchronized (AbstractCoordinator.this) {
+                Errors error = Errors.forCode(joinResponse.errorCode());
+                if (error == Errors.NONE) {
+                    log.debug("Received successful join group response for group {}: {}", groupId, joinResponse.toStruct());
+                    AbstractCoordinator.this.memberId = joinResponse.memberId();
+                    AbstractCoordinator.this.generation = joinResponse.generationId();
+                    AbstractCoordinator.this.rejoinNeeded = false;
+                    AbstractCoordinator.this.protocol = joinResponse.groupProtocol();
+                    sensors.joinLatency.record(response.requestLatencyMs());
+                    if (joinResponse.isLeader()) {
+                        onJoinLeader(joinResponse).chain(future);
+                    } else {
+                        onJoinFollower().chain(future);
+                    }
+                } else if (error == Errors.GROUP_LOAD_IN_PROGRESS) {
+                    log.debug("Attempt to join group {} rejected since coordinator {} is loading the group.", groupId,
+                            coordinator);
+                    // backoff and retry
+                    future.raise(error);
+                } else if (error == Errors.UNKNOWN_MEMBER_ID) {
+                    // reset the member id and retry immediately
+                    AbstractCoordinator.this.memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
+                    log.debug("Attempt to join group {} failed due to unknown member id.", groupId);
+                    future.raise(Errors.UNKNOWN_MEMBER_ID);
+                } else if (error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE
+                        || error == Errors.NOT_COORDINATOR_FOR_GROUP) {
+                    // re-discover the coordinator and retry with backoff
+                    coordinatorDead();
+                    log.debug("Attempt to join group {} failed due to obsolete coordinator information: {}", groupId, error.message());
+                    future.raise(error);
+                } else if (error == Errors.INCONSISTENT_GROUP_PROTOCOL
+                        || error == Errors.INVALID_SESSION_TIMEOUT
+                        || error == Errors.INVALID_GROUP_ID) {
+                    // log the error and re-throw the exception
+                    log.error("Attempt to join group {} failed due to fatal error: {}", groupId, error.message());
+                    future.raise(error);
+                } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
+                    future.raise(new GroupAuthorizationException(groupId));
                 } else {
-                    onJoinFollower().chain(future);
+                    // unexpected error, throw the exception
+                    future.raise(new KafkaException("Unexpected error in join group response: " + error.message()));
                 }
-            } else if (error == Errors.GROUP_LOAD_IN_PROGRESS) {
-                log.debug("Attempt to join group {} rejected since coordinator {} is loading the group.", groupId,
-                        coordinator);
-                // backoff and retry
-                future.raise(error);
-            } else if (error == Errors.UNKNOWN_MEMBER_ID) {
-                // reset the member id and retry immediately
-                AbstractCoordinator.this.memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
-                log.debug("Attempt to join group {} failed due to unknown member id.", groupId);
-                future.raise(Errors.UNKNOWN_MEMBER_ID);
-            } else if (error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE
-                    || error == Errors.NOT_COORDINATOR_FOR_GROUP) {
-                // re-discover the coordinator and retry with backoff
-                coordinatorDead();
-                log.debug("Attempt to join group {} failed due to obsolete coordinator information: {}", groupId, error.message());
-                future.raise(error);
-            } else if (error == Errors.INCONSISTENT_GROUP_PROTOCOL
-                    || error == Errors.INVALID_SESSION_TIMEOUT
-                    || error == Errors.INVALID_GROUP_ID) {
-                // log the error and re-throw the exception
-                log.error("Attempt to join group {} failed due to fatal error: {}", groupId, error.message());
-                future.raise(error);
-            } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
-                future.raise(new GroupAuthorizationException(groupId));
-            } else {
-                // unexpected error, throw the exception
-                future.raise(new KafkaException("Unexpected error in join group response: " + error.message()));
             }
         }
     }
@@ -456,30 +420,32 @@ public abstract class AbstractCoordinator implements Closeable {
         @Override
         public void handle(SyncGroupResponse syncResponse,
                            RequestFuture<ByteBuffer> future) {
-            Errors error = Errors.forCode(syncResponse.errorCode());
-            if (error == Errors.NONE) {
-                log.info("Successfully joined group {} with generation {}", groupId, generation);
-                sensors.syncLatency.record(response.requestLatencyMs());
-                future.complete(syncResponse.memberAssignment());
-            } else {
-                AbstractCoordinator.this.rejoinNeeded = true;
-                if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
-                    future.raise(new GroupAuthorizationException(groupId));
-                } else if (error == Errors.REBALANCE_IN_PROGRESS) {
-                    log.debug("SyncGroup for group {} failed due to coordinator rebalance", groupId);
-                    future.raise(error);
-                } else if (error == Errors.UNKNOWN_MEMBER_ID
-                        || error == Errors.ILLEGAL_GENERATION) {
-                    log.debug("SyncGroup for group {} failed due to {}", groupId, error);
-                    AbstractCoordinator.this.memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
-                    future.raise(error);
-                } else if (error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE
-                        || error == Errors.NOT_COORDINATOR_FOR_GROUP) {
-                    log.debug("SyncGroup for group {} failed due to {}", groupId, error);
-                    coordinatorDead();
-                    future.raise(error);
+            synchronized (AbstractCoordinator.this) {
+                Errors error = Errors.forCode(syncResponse.errorCode());
+                if (error == Errors.NONE) {
+                    log.info("Successfully joined group {} with generation {}", groupId, generation);
+                    sensors.syncLatency.record(response.requestLatencyMs());
+                    future.complete(syncResponse.memberAssignment());
                 } else {
-                    future.raise(new KafkaException("Unexpected error from SyncGroup: " + error.message()));
+                    AbstractCoordinator.this.rejoinNeeded = true;
+                    if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
+                        future.raise(new GroupAuthorizationException(groupId));
+                    } else if (error == Errors.REBALANCE_IN_PROGRESS) {
+                        log.debug("SyncGroup for group {} failed due to coordinator rebalance", groupId);
+                        future.raise(error);
+                    } else if (error == Errors.UNKNOWN_MEMBER_ID
+                            || error == Errors.ILLEGAL_GENERATION) {
+                        log.debug("SyncGroup for group {} failed due to {}", groupId, error);
+                        AbstractCoordinator.this.memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
+                        future.raise(error);
+                    } else if (error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE
+                            || error == Errors.NOT_COORDINATOR_FOR_GROUP) {
+                        log.debug("SyncGroup for group {} failed due to {}", groupId, error);
+                        coordinatorDead();
+                        future.raise(error);
+                    } else {
+                        future.raise(new KafkaException("Unexpected error from SyncGroup: " + error.message()));
+                    }
                 }
             }
         }
@@ -503,53 +469,44 @@ public abstract class AbstractCoordinator implements Closeable {
             log.debug("Sending coordinator request for group {} to broker {}", groupId, node);
             GroupCoordinatorRequest metadataRequest = new GroupCoordinatorRequest(this.groupId);
             return client.send(node, ApiKeys.GROUP_COORDINATOR, metadataRequest)
-                    .compose(new RequestFutureAdapter<ClientResponse, Void>() {
-                        @Override
-                        public void onSuccess(ClientResponse response, RequestFuture<Void> future) {
-                            handleGroupMetadataResponse(response, future);
-                        }
-                    });
+                    .compose(new GroupCoordinatorResponseHandler());
         }
     }
 
-    private void handleGroupMetadataResponse(ClientResponse resp, RequestFuture<Void> future) {
-        log.debug("Received group coordinator response {}", resp);
+    private class GroupCoordinatorResponseHandler extends RequestFutureAdapter<ClientResponse, Void> {
 
-        if (!coordinatorUnknown()) {
-            // We already found the coordinator, so ignore the request
-            future.complete(null);
-        } else {
-            GroupCoordinatorResponse groupCoordinatorResponse = new GroupCoordinatorResponse(resp.responseBody());
-            // use MAX_VALUE - node.id as the coordinator id to mimic separate connections
-            // for the coordinator in the underlying network client layer
-            // TODO: this needs to be better handled in KAFKA-1935
-            Errors error = Errors.forCode(groupCoordinatorResponse.errorCode());
-            if (error == Errors.NONE) {
-                this.coordinator = new Node(Integer.MAX_VALUE - groupCoordinatorResponse.node().id(),
-                        groupCoordinatorResponse.node().host(),
-                        groupCoordinatorResponse.node().port());
+        @Override
+        public void onSuccess(ClientResponse resp, RequestFuture<Void> future) {
+            synchronized (AbstractCoordinator.this) {
+                log.debug("Received group coordinator response {}", resp);
 
-                log.info("Discovered coordinator {} for group {}.", coordinator, groupId);
+                GroupCoordinatorResponse groupCoordinatorResponse = new GroupCoordinatorResponse(resp.responseBody());
+                // use MAX_VALUE - node.id as the coordinator id to mimic separate connections
+                // for the coordinator in the underlying network client layer
+                // TODO: this needs to be better handled in KAFKA-1935
+                Errors error = Errors.forCode(groupCoordinatorResponse.errorCode());
+                if (error == Errors.NONE) {
+                    AbstractCoordinator.this.coordinator = new Node(Integer.MAX_VALUE - groupCoordinatorResponse.node().id(),
+                            groupCoordinatorResponse.node().host(),
+                            groupCoordinatorResponse.node().port());
 
-                client.tryConnect(coordinator);
-
-                // start sending heartbeats only if we have a valid generation
-                if (generation > 0)
-                    heartbeatTask.reset();
-                future.complete(null);
-            } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
-                future.raise(new GroupAuthorizationException(groupId));
-            } else {
-                future.raise(error);
+                    log.info("Discovered coordinator {} for group {}.", coordinator, groupId);
+                    client.tryConnect(coordinator);
+                    future.complete(null);
+                } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
+                    future.raise(new GroupAuthorizationException(groupId));
+                } else {
+                    future.raise(error);
+                }
             }
         }
     }
 
-    /**
+        /**
      * Check if we know who the coordinator is and we have an active connection
      * @return true if the coordinator is unknown
      */
-    public boolean coordinatorUnknown() {
+    public synchronized boolean coordinatorUnknown() {
         if (coordinator == null)
             return true;
 
@@ -564,7 +521,7 @@ public abstract class AbstractCoordinator implements Closeable {
     /**
      * Mark the current coordinator as dead.
      */
-    protected void coordinatorDead() {
+    protected synchronized void coordinatorDead() {
         if (this.coordinator != null) {
             log.info("Marking the coordinator {} dead for group {}", this.coordinator, groupId);
             client.failUnsentRequests(this.coordinator, GroupCoordinatorNotAvailableException.INSTANCE);
@@ -576,7 +533,10 @@ public abstract class AbstractCoordinator implements Closeable {
      * Close the coordinator, waiting if needed to send LeaveGroup.
      */
     @Override
-    public void close() {
+    public synchronized void close() {
+        if (heartbeatThread != null)
+            heartbeatThread.close();
+
         // we do not need to re-enable wakeups since we are closing already
         client.disableWakeups();
         maybeLeaveGroup();
@@ -585,9 +545,8 @@ public abstract class AbstractCoordinator implements Closeable {
     /**
      * Leave the current group and reset local generation/memberId.
      */
-    public void maybeLeaveGroup() {
-        client.unschedule(heartbeatTask);
-        if (!coordinatorUnknown() && generation > 0) {
+    public synchronized void maybeLeaveGroup() {
+        if (!coordinatorUnknown() && state == MemberState.STABLE) {
             // this is a minimal effort attempt to leave the group. we do not
             // attempt any resending if the request fails or times out.
             sendLeaveGroupRequest();
@@ -599,24 +558,17 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     private void sendLeaveGroupRequest() {
+        state = MemberState.LEAVING;
+
         LeaveGroupRequest request = new LeaveGroupRequest(groupId, memberId);
         RequestFuture<Void> future = client.send(coordinator, ApiKeys.LEAVE_GROUP, request)
                 .compose(new LeaveGroupResponseHandler());
-
-        future.addListener(new RequestFutureListener<Void>() {
-            @Override
-            public void onSuccess(Void value) {}
-
-            @Override
-            public void onFailure(RuntimeException e) {
-                log.debug("LeaveGroup request for group {} failed with error", groupId, e);
-            }
-        });
 
         client.poll(future, 0);
     }
 
     private class LeaveGroupResponseHandler extends CoordinatorResponseHandler<LeaveGroupResponse, Void> {
+
         @Override
         public LeaveGroupResponse parse(ClientResponse response) {
             return new LeaveGroupResponse(response.responseBody());
@@ -625,24 +577,31 @@ public abstract class AbstractCoordinator implements Closeable {
         @Override
         public void handle(LeaveGroupResponse leaveResponse, RequestFuture<Void> future) {
             // process the response
-            short errorCode = leaveResponse.errorCode();
-            if (errorCode == Errors.NONE.code())
-                future.complete(null);
-            else
-                future.raise(Errors.forCode(errorCode));
+            synchronized (AbstractCoordinator.this) {
+                state = MemberState.UNJOINED;
+
+                Errors error = Errors.forCode(leaveResponse.errorCode());
+                if (error == Errors.NONE)
+                    future.complete(null);
+                else {
+                    log.debug("LeaveGroup request for group {} failed with error: {}", groupId, error.message());
+                    future.raise(error);
+                }
+            }
         }
     }
 
     /**
      * Send a heartbeat request now (visible only for testing).
      */
-    public RequestFuture<Void> sendHeartbeatRequest() {
+    protected synchronized RequestFuture<Void> sendHeartbeatRequest() {
         HeartbeatRequest req = new HeartbeatRequest(this.groupId, this.generation, this.memberId);
         return client.send(coordinator, ApiKeys.HEARTBEAT, req)
-                .compose(new HeartbeatCompletionHandler());
+                .compose(new HeartbeatResponseHandler());
     }
 
-    private class HeartbeatCompletionHandler extends CoordinatorResponseHandler<HeartbeatResponse, Void> {
+    private class HeartbeatResponseHandler extends CoordinatorResponseHandler<HeartbeatResponse, Void> {
+
         @Override
         public HeartbeatResponse parse(ClientResponse response) {
             return new HeartbeatResponse(response.responseBody());
@@ -650,40 +609,44 @@ public abstract class AbstractCoordinator implements Closeable {
 
         @Override
         public void handle(HeartbeatResponse heartbeatResponse, RequestFuture<Void> future) {
-            sensors.heartbeatLatency.record(response.requestLatencyMs());
-            Errors error = Errors.forCode(heartbeatResponse.errorCode());
-            if (error == Errors.NONE) {
-                log.debug("Received successful heartbeat response for group {}", groupId);
-                future.complete(null);
-            } else if (error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE
-                    || error == Errors.NOT_COORDINATOR_FOR_GROUP) {
-                log.debug("Attempt to heart beat failed for group {} since coordinator {} is either not started or not valid.",
-                        groupId, coordinator);
-                coordinatorDead();
-                future.raise(error);
-            } else if (error == Errors.REBALANCE_IN_PROGRESS) {
-                log.debug("Attempt to heart beat failed for group {} since it is rebalancing.", groupId);
-                AbstractCoordinator.this.rejoinNeeded = true;
-                future.raise(Errors.REBALANCE_IN_PROGRESS);
-            } else if (error == Errors.ILLEGAL_GENERATION) {
-                log.debug("Attempt to heart beat failed for group {} since generation id is not legal.", groupId);
-                AbstractCoordinator.this.rejoinNeeded = true;
-                future.raise(Errors.ILLEGAL_GENERATION);
-            } else if (error == Errors.UNKNOWN_MEMBER_ID) {
-                log.debug("Attempt to heart beat failed for group {} since member id is not valid.", groupId);
-                memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
-                AbstractCoordinator.this.rejoinNeeded = true;
-                future.raise(Errors.UNKNOWN_MEMBER_ID);
-            } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
-                future.raise(new GroupAuthorizationException(groupId));
-            } else {
-                future.raise(new KafkaException("Unexpected error in heartbeat response: " + error.message()));
+            synchronized (AbstractCoordinator.this) {
+                sensors.heartbeatLatency.record(response.requestLatencyMs());
+                Errors error = Errors.forCode(heartbeatResponse.errorCode());
+                if (error == Errors.NONE) {
+                    log.debug("Received successful heartbeat response for group {}", groupId);
+                    future.complete(null);
+                } else if (error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE
+                        || error == Errors.NOT_COORDINATOR_FOR_GROUP) {
+                    log.debug("Attempt to heart beat failed for group {} since coordinator {} is either not started or not valid.",
+                            groupId, coordinator);
+                    coordinatorDead();
+                    future.raise(error);
+                } else if (error == Errors.REBALANCE_IN_PROGRESS) {
+                    log.debug("Attempt to heart beat failed for group {} since it is rebalancing.", groupId);
+                    AbstractCoordinator.this.rejoinNeeded = true;
+                    future.raise(Errors.REBALANCE_IN_PROGRESS);
+                } else if (error == Errors.ILLEGAL_GENERATION) {
+                    log.debug("Attempt to heart beat failed for group {} since generation id is not legal.", groupId);
+                    AbstractCoordinator.this.rejoinNeeded = true;
+                    memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
+                    state = MemberState.UNJOINED;
+                    future.raise(Errors.ILLEGAL_GENERATION);
+                } else if (error == Errors.UNKNOWN_MEMBER_ID) {
+                    log.debug("Attempt to heart beat failed for group {} since member id is not valid.", groupId);
+                    memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
+                    AbstractCoordinator.this.rejoinNeeded = true;
+                    state = MemberState.UNJOINED;
+                    future.raise(Errors.UNKNOWN_MEMBER_ID);
+                } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
+                    future.raise(new GroupAuthorizationException(groupId));
+                } else {
+                    future.raise(new KafkaException("Unexpected error in heartbeat response: " + error.message()));
+                }
             }
         }
     }
 
-    protected abstract class CoordinatorResponseHandler<R, T>
-            extends RequestFutureAdapter<ClientResponse, T> {
+    protected abstract class CoordinatorResponseHandler<R, T> extends RequestFutureAdapter<ClientResponse, T> {
         protected ClientResponse response;
 
         public abstract R parse(ClientResponse response);
@@ -765,6 +728,128 @@ public abstract class AbstractCoordinator implements Closeable {
                 "The number of seconds since the last controller heartbeat"),
                 lastHeartbeat);
         }
+    }
+
+    private class HeartbeatThread extends Thread {
+        private boolean enabled = false;
+        private boolean closed = false;
+        private RequestFuture<Void> findCoordinatorFuture;
+
+        public void enable() {
+            synchronized (AbstractCoordinator.this) {
+                this.enabled = true;
+                heartbeat.resetTimeouts(time.milliseconds());
+                AbstractCoordinator.this.notify();
+            }
+        }
+
+        public void disable() {
+            synchronized (AbstractCoordinator.this) {
+                this.enabled = false;
+            }
+        }
+
+        public void close() {
+            synchronized (AbstractCoordinator.this) {
+                this.closed = true;
+                AbstractCoordinator.this.notify();
+            }
+        }
+
+        private void await() {
+            synchronized (AbstractCoordinator.this) {
+                try {
+                    AbstractCoordinator.this.wait();
+                } catch (InterruptedException e) {
+
+                }
+            }
+        }
+
+        private void awaitMs(long waitTimeMs) {
+            synchronized (AbstractCoordinator.this) {
+                try {
+                    AbstractCoordinator.this.wait(waitTimeMs);
+                } catch (InterruptedException e) {
+
+                }
+            }
+        }
+
+        @Override
+        public void run() {
+            while (true) {
+                synchronized (AbstractCoordinator.this) {
+                    if (closed)
+                        return;
+
+                    if (!enabled) {
+                        await();
+                        continue;
+                    }
+
+                    if (state != MemberState.STABLE) {
+                        // the group is not stable (perhaps because we left the group or because the coordinator
+                        // kicked us out), so disable heartbeats and wait for the main thread to rejoin.
+                        disable();
+                        continue;
+                    }
+
+                    client.pollNoWakeup();
+                    long now = time.milliseconds();
+
+                    if (coordinatorUnknown()) {
+                        if (findCoordinatorFuture != null && !findCoordinatorFuture.isDone()) {
+                            awaitMs(retryBackoffMs);
+                            continue;
+                        }
+
+                        findCoordinatorFuture = sendGroupCoordinatorRequest();
+                        findCoordinatorFuture.addListener(new RequestFutureListener<Void>() {
+                            @Override
+                            public void onSuccess(Void value) {
+                                heartbeat.resetTimeouts(time.milliseconds());
+                            }
+
+                            @Override
+                            public void onFailure(RuntimeException e) {
+                                log.debug("Group coordinator lookup for group {} failed", groupId, e);
+                            }
+                        });
+                    } else if (heartbeat.sessionTimeoutExpired(now)) {
+                        // the session timeout has expired without seeing a successful heartbeat, so we should
+                        // probably make sure the coordinator is still healthy.
+                        coordinatorDead();
+                    } else if (heartbeat.pollTimeoutExpired(now)) {
+                        // the poll timeout has expired, so we explicitly leave the group
+                        maybeLeaveGroup();
+                    } else if (!heartbeat.shouldHeartbeat(now)) {
+                        awaitMs(heartbeat.timeToNextHeartbeat(now));
+                    } else {
+                        heartbeat.sentHeartbeat(now);
+                        RequestFuture<Void> future = sendHeartbeatRequest();
+                        future.addListener(new RequestFutureListener<Void>() {
+                            @Override
+                            public void onSuccess(Void value) {
+                                heartbeat.receiveHeartbeat(time.milliseconds());
+                            }
+
+                            @Override
+                            public void onFailure(RuntimeException e) {
+                                log.debug("Heartbeat to coordinator {} failed", coordinator, e);
+                                heartbeat.failHeartbeat();
+
+                                // wake up the thread if it's sleeping to reschedule the heartbeat
+                                synchronized (AbstractCoordinator.this) {
+                                    AbstractCoordinator.this.notify();
+                                }
+                            }
+                        });
+                    }
+                }
+            }
+        }
+
     }
 
 }

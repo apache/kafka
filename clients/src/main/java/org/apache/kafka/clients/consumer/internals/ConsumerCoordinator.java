@@ -68,12 +68,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private final SubscriptionState subscriptions;
     private final OffsetCommitCallback defaultOffsetCommitCallback;
     private final boolean autoCommitEnabled;
-    private final AutoCommitTask autoCommitTask;
+    private final long autoCommitIntervalMs;
     private final ConsumerInterceptors<?, ?> interceptors;
     private final boolean excludeInternalTopics;
+    private final List<OffsetCommitCompletion> completedOffsetCommits;
 
     private MetadataSnapshot metadataSnapshot;
     private MetadataSnapshot assignmentSnapshot;
+    private long nextAutoCommitDeadline;
+
 
     /**
      * Initialize the coordination manager.
@@ -105,22 +108,20 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 time,
                 retryBackoffMs);
         this.metadata = metadata;
-
         this.metadata.requestUpdate();
+
         this.metadataSnapshot = new MetadataSnapshot(subscriptions, metadata.fetch());
         this.subscriptions = subscriptions;
         this.defaultOffsetCommitCallback = defaultOffsetCommitCallback;
         this.autoCommitEnabled = autoCommitEnabled;
+        this.autoCommitIntervalMs = autoCommitIntervalMs;
         this.assignors = assignors;
+        this.completedOffsetCommits = new ArrayList<>();
 
         addMetadataListener();
 
-        if (autoCommitEnabled) {
-            this.autoCommitTask = new AutoCommitTask(autoCommitIntervalMs);
-            this.autoCommitTask.reschedule();
-        } else {
-            this.autoCommitTask = null;
-        }
+        if (autoCommitEnabled)
+            this.nextAutoCommitDeadline = time.milliseconds() + autoCommitIntervalMs;
 
         this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix);
         this.interceptors = interceptors;
@@ -212,8 +213,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         assignor.onAssignment(assignment);
 
         // reschedule the auto commit starting from now
-        if (autoCommitEnabled)
-            autoCommitTask.reschedule();
+        this.nextAutoCommitDeadline = time.milliseconds() + autoCommitIntervalMs;
 
         // execute the user's callback after rebalance
         ConsumerRebalanceListener listener = subscriptions.listener();
@@ -227,6 +227,32 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             log.error("User provided listener {} for group {} failed on partition assignment",
                     listener.getClass().getName(), groupId, e);
         }
+    }
+
+    public synchronized void poll(long now) {
+        invokeCompletedOffsetCommitCallbacks();
+
+        if (subscriptions.partitionsAutoAssigned() && coordinatorUnknown()) {
+            ensureCoordinatorReady();
+            now = time.milliseconds();
+        }
+
+        if (subscriptions.partitionsAutoAssigned() && needRejoin()) {
+            // Due to a race condition between the initial metadata fetch and the initial rebalance, we need to ensure that
+            // the metadata is fresh before joining initially, and then request the metadata update. If metadata update arrives
+            // while the rebalance is still pending (for example, when the join group is still inflight), then we will lose
+            // track of the fact that we need to rebalance again to reflect the change to the topic subscription. Without
+            // ensuring that the metadata is fresh, any metadata update that changes the topic subscriptions and arrives with a
+            // rebalance in progress will essentially be ignored. See KAFKA-3949 for the complete description of the problem.
+            if (subscriptions.hasPatternSubscription())
+                client.ensureFreshMetadata();
+
+            ensureActiveGroup();
+            now = time.milliseconds();
+        }
+
+        heartbeat.poll(now);
+        maybeAutoCommitOffsetsAsync(now);
     }
 
     @Override
@@ -294,7 +320,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    public boolean needRejoin() {
+    protected boolean needRejoin() {
         return subscriptions.partitionsAutoAssigned() &&
                 (super.needRejoin() || subscriptions.partitionAssignmentNeeded());
     }
@@ -302,7 +328,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     /**
      * Refresh the committed offsets for provided partitions.
      */
-    public void refreshCommittedOffsetsIfNeeded() {
+    public synchronized void refreshCommittedOffsetsIfNeeded() {
         if (subscriptions.refreshCommitsNeeded()) {
             Map<TopicPartition, OffsetAndMetadata> offsets = fetchCommittedOffsets(subscriptions.assignedPartitions());
             for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
@@ -320,7 +346,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * @param partitions The partitions to fetch offsets for
      * @return A map from partition to the committed offset
      */
-    public Map<TopicPartition, OffsetAndMetadata> fetchCommittedOffsets(Set<TopicPartition> partitions) {
+    public synchronized Map<TopicPartition, OffsetAndMetadata> fetchCommittedOffsets(Set<TopicPartition> partitions) {
         while (true) {
             ensureCoordinatorReady();
 
@@ -338,26 +364,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    /**
-     * Ensure that we have a valid partition assignment from the coordinator.
-     */
-    public void ensurePartitionAssignment() {
-        if (subscriptions.partitionsAutoAssigned()) {
-            // Due to a race condition between the initial metadata fetch and the initial rebalance, we need to ensure that
-            // the metadata is fresh before joining initially, and then request the metadata update. If metadata update arrives
-            // while the rebalance is still pending (for example, when the join group is still inflight), then we will lose
-            // track of the fact that we need to rebalance again to reflect the change to the topic subscription. Without
-            // ensuring that the metadata is fresh, any metadata update that changes the topic subscriptions and arrives with a
-            // rebalance in progress will essentially be ignored. See KAFKA-3949 for the complete description of the problem.
-            if (subscriptions.hasPatternSubscription())
-                client.ensureFreshMetadata();
-
-            ensureActiveGroup();
-        }
-    }
-
     @Override
-    public void close() {
+    public synchronized void close() {
         // we do not need to re-enable wakeups since we are closing already
         client.disableWakeups();
         try {
@@ -367,8 +375,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
+    // visible for testing
+    void invokeCompletedOffsetCommitCallbacks() {
+        for (OffsetCommitCompletion completion : completedOffsetCommits)
+            completion.invoke();
+        completedOffsetCommits.clear();
+    }
 
-    public void commitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
+    public synchronized void commitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
+        invokeCompletedOffsetCommitCallbacks();
+
         if (!coordinatorUnknown()) {
             doCommitOffsetsAsync(offsets, callback);
         } else {
@@ -386,7 +402,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
                 @Override
                 public void onFailure(RuntimeException e) {
-                    callback.onComplete(offsets, new RetriableCommitFailedException(e));
+                    completedOffsetCommits.add(new OffsetCommitCompletion(callback, offsets, new RetriableCommitFailedException(e)));
                 }
             });
         }
@@ -406,15 +422,21 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             public void onSuccess(Void value) {
                 if (interceptors != null)
                     interceptors.onCommit(offsets);
-                cb.onComplete(offsets, null);
+
+                synchronized (ConsumerCoordinator.this) {
+                    completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, null));
+                }
             }
 
             @Override
             public void onFailure(RuntimeException e) {
-                if (e instanceof RetriableException) {
-                    cb.onComplete(offsets, new RetriableCommitFailedException(e));
-                } else {
-                    cb.onComplete(offsets, e);
+                Exception commitException = e;
+
+                if (e instanceof RetriableException)
+                    commitException = new RetriableCommitFailedException(e);
+
+                synchronized (ConsumerCoordinator.this) {
+                    completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, commitException));
                 }
             }
         });
@@ -428,7 +450,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      *             or to any of the specified partitions
      * @throws CommitFailedException if an unrecoverable error occurs before the commit can be completed
      */
-    public void commitOffsetsSync(Map<TopicPartition, OffsetAndMetadata> offsets) {
+    public synchronized void commitOffsetsSync(Map<TopicPartition, OffsetAndMetadata> offsets) {
+        invokeCompletedOffsetCommitCallbacks();
+
         if (offsets.isEmpty())
             return;
 
@@ -451,46 +475,25 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    private class AutoCommitTask implements DelayedTask {
-        private final long interval;
-
-        public AutoCommitTask(long interval) {
-            this.interval = interval;
-        }
-
-        private void reschedule() {
-            client.schedule(this, time.milliseconds() + interval);
-        }
-
-        private void reschedule(long at) {
-            client.schedule(this, at);
-        }
-
-        public void run(final long now) {
+    private void maybeAutoCommitOffsetsAsync(long now) {
+        if (autoCommitEnabled) {
             if (coordinatorUnknown()) {
-                log.debug("Cannot auto-commit offsets for group {} since the coordinator is unknown", groupId);
-                reschedule(now + retryBackoffMs);
-                return;
-            }
-
-            if (needRejoin()) {
-                // skip the commit when we're rejoining since we'll commit offsets synchronously
-                // before the revocation callback is invoked
-                reschedule(now + interval);
-                return;
-            }
-
-            commitOffsetsAsync(subscriptions.allConsumed(), new OffsetCommitCallback() {
-                @Override
-                public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
-                    if (exception == null) {
-                        reschedule(now + interval);
-                    } else {
-                        log.warn("Auto offset commit failed for group {}: {}", groupId, exception.getMessage());
-                        reschedule(now + interval);
+                this.nextAutoCommitDeadline = now + retryBackoffMs;
+            } else if (now >= nextAutoCommitDeadline) {
+                this.nextAutoCommitDeadline = now + autoCommitIntervalMs;
+                commitOffsetsAsync(subscriptions.allConsumed(), new OffsetCommitCallback() {
+                    @Override
+                    public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+                        if (exception != null) {
+                            log.warn("Auto offset commit failed for group {}: {}", groupId, exception.getMessage());
+                            if (exception instanceof RetriableException)
+                                nextAutoCommitDeadline = Math.min(time.milliseconds() + retryBackoffMs, nextAutoCommitDeadline);
+                        } else {
+                            log.debug("Completed autocommit of offsets {} for group {}", offsets, groupId);
+                        }
                     }
-                }
-            });
+                });
+            }
         }
     }
 
@@ -755,5 +758,20 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
+    private static class OffsetCommitCompletion {
+        private final OffsetCommitCallback callback;
+        private final Map<TopicPartition, OffsetAndMetadata> offsets;
+        private final Exception exception;
+
+        public OffsetCommitCompletion(OffsetCommitCallback callback, Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+            this.callback = callback;
+            this.offsets = offsets;
+            this.exception = exception;
+        }
+
+        public void invoke() {
+            callback.onComplete(offsets, exception);
+        }
+    }
 
 }

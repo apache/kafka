@@ -16,59 +16,85 @@ package org.apache.kafka.clients.consumer.internals;
  * A helper class for managing the heartbeat to the coordinator
  */
 public final class Heartbeat {
-    private final long timeout;
-    private final long interval;
+    private final long sessionTimeout;
+    private final long heartbeatInterval;
+    private final long maxPollInterval;
+    private final long retryBackoffMs;
 
     private long lastHeartbeatSend;
     private long lastHeartbeatReceive;
     private long lastSessionReset;
+    private long lastPoll;
+    private boolean heartbeatFailed;
 
-    public Heartbeat(long timeout,
-                     long interval,
-                     long now) {
-        if (interval >= timeout)
+    public Heartbeat(long sessionTimeout,
+                     long heartbeatInterval,
+                     long maxPollInterval,
+                     long retryBackoffMs) {
+        if (heartbeatInterval >= sessionTimeout)
             throw new IllegalArgumentException("Heartbeat must be set lower than the session timeout");
 
-        this.timeout = timeout;
-        this.interval = interval;
-        this.lastSessionReset = now;
+        this.sessionTimeout = sessionTimeout;
+        this.heartbeatInterval = heartbeatInterval;
+        this.maxPollInterval = maxPollInterval;
+        this.retryBackoffMs = retryBackoffMs;
     }
 
-    public void sentHeartbeat(long now) {
+    public synchronized void poll(long now) {
+        this.lastPoll = now;
+    }
+
+    public synchronized void sentHeartbeat(long now) {
         this.lastHeartbeatSend = now;
+        this.heartbeatFailed = false;
     }
 
-    public void receiveHeartbeat(long now) {
+    public synchronized void failHeartbeat() {
+        this.heartbeatFailed = true;
+    }
+
+    public synchronized void receiveHeartbeat(long now) {
         this.lastHeartbeatReceive = now;
     }
 
-    public boolean shouldHeartbeat(long now) {
+    public synchronized boolean shouldHeartbeat(long now) {
         return timeToNextHeartbeat(now) == 0;
     }
     
-    public long lastHeartbeatSend() {
+    public synchronized long lastHeartbeatSend() {
         return this.lastHeartbeatSend;
     }
 
-    public long timeToNextHeartbeat(long now) {
+    public synchronized long timeToNextHeartbeat(long now) {
         long timeSinceLastHeartbeat = now - Math.max(lastHeartbeatSend, lastSessionReset);
+        final long delayToNextHeartbeat;
+        if (heartbeatFailed)
+            delayToNextHeartbeat = retryBackoffMs;
+        else
+            delayToNextHeartbeat = heartbeatInterval;
 
-        if (timeSinceLastHeartbeat > interval)
+        if (timeSinceLastHeartbeat > delayToNextHeartbeat)
             return 0;
         else
-            return interval - timeSinceLastHeartbeat;
+            return delayToNextHeartbeat - timeSinceLastHeartbeat;
     }
 
-    public boolean sessionTimeoutExpired(long now) {
-        return now - Math.max(lastSessionReset, lastHeartbeatReceive) > timeout;
+    public synchronized boolean sessionTimeoutExpired(long now) {
+        return now - Math.max(lastSessionReset, lastHeartbeatReceive) > sessionTimeout;
     }
 
-    public long interval() {
-        return interval;
+    public synchronized long interval() {
+        return heartbeatInterval;
     }
 
-    public void resetSessionTimeout(long now) {
+    public synchronized void resetTimeouts(long now) {
         this.lastSessionReset = now;
+        this.lastPoll = now;
+        this.heartbeatFailed = false;
+    }
+
+    public synchronized boolean pollTimeoutExpired(long now) {
+        return now - lastPoll > maxPollInterval;
     }
 
 }

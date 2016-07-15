@@ -301,7 +301,7 @@ class GroupCoordinator(val brokerId: Int,
     delayedGroupStore.foreach(groupManager.store)
   }
 
-  def handleLeaveGroup(groupId: String, consumerId: String, responseCallback: Short => Unit) {
+  def handleLeaveGroup(groupId: String, memberId: String, responseCallback: Short => Unit) {
     if (!isActive.get) {
       responseCallback(Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code)
     } else if (!isCoordinatorForGroup(groupId)) {
@@ -319,10 +319,10 @@ class GroupCoordinator(val brokerId: Int,
 
         case Some(group) =>
           group synchronized {
-            if (group.is(Dead) || !group.has(consumerId)) {
+            if (group.is(Dead) || !group.has(memberId)) {
               responseCallback(Errors.UNKNOWN_MEMBER_ID.code)
             } else {
-              val member = group.get(consumerId)
+              val member = group.get(memberId)
               removeHeartbeatForLeavingMember(group, member)
               onMemberFailure(group, member)
               responseCallback(Errors.NONE.code)
@@ -792,7 +792,8 @@ object GroupCoordinator {
     val groupConfig = GroupConfig(groupMinSessionTimeoutMs = config.groupMinSessionTimeoutMs,
       groupMaxSessionTimeoutMs = config.groupMaxSessionTimeoutMs)
 
-    val groupMetadataManager = new GroupMetadataManager(config.brokerId, offsetConfig, replicaManager, zkUtils, time)
+    val groupMetadataManager = new GroupMetadataManager(config.brokerId, config.interBrokerProtocolVersion,
+      offsetConfig, replicaManager, zkUtils, time)
     new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupMetadataManager, heartbeatPurgatory, joinPurgatory, time)
   }
 

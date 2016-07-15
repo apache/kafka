@@ -17,6 +17,7 @@
 
 package kafka.coordinator
 
+import kafka.api.ApiVersion
 import kafka.cluster.Partition
 import kafka.common.{OffsetAndMetadata, Topic}
 import kafka.log.LogAppendInfo
@@ -75,9 +76,8 @@ class GroupMetadataManagerTest {
 
     time = new MockTime
     replicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
-    groupMetadataManager = new GroupMetadataManager(0, offsetConfig, replicaManager, zkUtils, time)
+    groupMetadataManager = new GroupMetadataManager(0, ApiVersion.latestVersion, offsetConfig, replicaManager, zkUtils, time)
     partition = EasyMock.niceMock(classOf[Partition])
-
   }
 
   @After

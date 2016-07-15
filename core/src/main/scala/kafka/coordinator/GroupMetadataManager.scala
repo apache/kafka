@@ -47,10 +47,12 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 
 import com.yammer.metrics.core.Gauge
+import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0}
 import kafka.utils.CoreUtils.inLock
 
 
 class GroupMetadataManager(val brokerId: Int,
+                           val interBrokerProtocolVersion: ApiVersion,
                            val config: OffsetConfig,
                            replicaManager: ReplicaManager,
                            zkUtils: ZkUtils,
@@ -175,9 +177,11 @@ class GroupMetadataManager(val brokerId: Int,
                         groupAssignment: Map[String, Array[Byte]],
                         responseCallback: Short => Unit): DelayedStore = {
     val (magicValue, timestamp) = getMessageFormatVersionAndTimestamp(partitionFor(group.groupId))
+    val groupMetadataValueVersion = if (interBrokerProtocolVersion < KAFKA_0_10_1_IV0) 0.toShort else GroupMetadataManager.CURRENT_GROUP_VALUE_SCHEMA_VERSION
+
     val message = new Message(
       key = GroupMetadataManager.groupMetadataKey(group.groupId),
-      bytes = GroupMetadataManager.groupMetadataValue(group, groupAssignment, version = 0),
+      bytes = GroupMetadataManager.groupMetadataValue(group, groupAssignment, version = groupMetadataValueVersion),
       timestamp = timestamp,
       magicValue = magicValue)
 
@@ -853,7 +857,9 @@ object GroupMetadataManager {
    * Generates the payload for group metadata message from given offset and metadata
    * assuming the generation id, selected protocol, leader and member assignment are all available
    *
-   * @param groupMetadata
+   * @param groupMetadata current group metadata
+   * @param assignment the assignment for the rebalancing generation
+   * @param version the version of the value message to use
    * @return payload for offset commit message
    */
   def groupMetadataValue(groupMetadata: GroupMetadata,
@@ -891,7 +897,7 @@ object GroupMetadataManager {
     value.set(MEMBERS_KEY, memberArray.toArray)
 
     val byteBuffer = ByteBuffer.allocate(2 /* version */ + value.sizeOf)
-    byteBuffer.putShort(CURRENT_GROUP_VALUE_SCHEMA_VERSION)
+    byteBuffer.putShort(version)
     value.writeTo(byteBuffer)
     byteBuffer.array()
   }

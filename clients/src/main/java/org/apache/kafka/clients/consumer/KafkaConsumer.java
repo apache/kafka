@@ -973,7 +973,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     //
                     // NOTE: since the consumed position has already been updated, we must not allow
                     // wakeups or any other errors to be triggered prior to returning the fetched records.
-                    // Additionally, pollNoWakeup does not allow automatic commits to get triggered.
                     fetcher.sendFetches();
                     client.pollNoWakeup();
 
@@ -1000,9 +999,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The fetched records (may be empty)
      */
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(long timeout) {
-        // ensure we have partitions assigned if we expect to
-        if (subscriptions.partitionsAutoAssigned())
-            coordinator.ensurePartitionAssignment();
+        coordinator.poll(time.milliseconds());
 
         // fetch positions if we have partitions we're subscribed to that we
         // don't know the offset for
@@ -1010,9 +1007,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             updateFetchPositions(this.subscriptions.missingFetchPositions());
 
         long now = time.milliseconds();
-
-        // execute delayed tasks (e.g. autocommits and heartbeats) prior to fetching records
-        client.executeDelayedTasks(now);
 
         // init any new fetches (won't resend pending fetches)
         Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();

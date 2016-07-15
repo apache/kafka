@@ -131,8 +131,7 @@ public class WorkerGroupMember {
     }
 
     public void ensureActive() {
-        coordinator.ensureCoordinatorReady();
-        coordinator.ensureActiveGroup();
+        coordinator.poll(time.milliseconds());
     }
 
     public void poll(long timeout) {
@@ -143,8 +142,7 @@ public class WorkerGroupMember {
         long remaining = timeout;
         while (remaining >= 0) {
             long start = time.milliseconds();
-            coordinator.ensureCoordinatorReady();
-            coordinator.ensureActiveGroup();
+            coordinator.poll(start);
             client.poll(remaining);
             remaining -= time.milliseconds() - start;
         }

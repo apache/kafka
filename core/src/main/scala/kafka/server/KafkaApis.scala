@@ -886,13 +886,12 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val joinGroupRequest = request.body.asInstanceOf[JoinGroupRequest]
     val responseHeader = new ResponseHeader(request.header.correlationId)
-    val version = request.header.apiVersion()
 
     // the callback for sending a join-group response
     def sendResponseCallback(joinResult: JoinGroupResult) {
       val members = joinResult.members map { case (memberId, metadataArray) => (memberId, ByteBuffer.wrap(metadataArray)) }
-      val responseBody = new JoinGroupResponse(version, joinResult.errorCode, joinResult.generationId, joinResult.subProtocol,
-        joinResult.memberId, joinResult.leaderId, members)
+      val responseBody = new JoinGroupResponse(request.header.apiVersion, joinResult.errorCode, joinResult.generationId,
+        joinResult.subProtocol, joinResult.memberId, joinResult.leaderId, members)
 
       trace("Sending join group response %s for correlation id %d to client %s."
         .format(responseBody, request.header.correlationId, request.header.clientId))
