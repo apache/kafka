@@ -206,9 +206,7 @@ public class KStreamRepartitionJoinTest {
                   getJoinWindow(),
                   Serdes.Integer(),
                   Serdes.String(),
-                  Serdes.Integer(),
-                  output + "-this",
-                  output + "-other")
+                  Serdes.Integer())
             .to(Serdes.Integer(), Serdes.String(), output);
 
         return new ExpectedOutputOnTopic(Arrays.asList("A:1", "B:2", "C:3", "D:4", "E:5"),
@@ -226,9 +224,7 @@ public class KStreamRepartitionJoinTest {
                       getJoinWindow(),
                       Serdes.Integer(),
                       Serdes.Integer(),
-                      Serdes.String(),
-                      outputTopic + "-this",
-                      outputTopic + "-other")
+                      Serdes.String())
             .to(Serdes.Integer(), Serdes.String(), outputTopic);
 
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
@@ -248,9 +244,7 @@ public class KStreamRepartitionJoinTest {
                                                         getJoinWindow(),
                                                         Serdes.Integer(),
                                                         Serdes.Integer(),
-                                                        Serdes.String(),
-                                                        "join-one-this",
-                                                        "join-one-other");
+                                                        Serdes.String());
 
         ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
             @Override
@@ -265,9 +259,7 @@ public class KStreamRepartitionJoinTest {
                   getJoinWindow(),
                   Serdes.Integer(),
                   Serdes.String(),
-                  Serdes.String(),
-                  "the-other-join-this",
-                  "the-other-join-other")
+                  Serdes.String())
             .to(Serdes.Integer(), Serdes.String(), topic);
 
 
@@ -406,9 +398,7 @@ public class KStreamRepartitionJoinTest {
                  getJoinWindow(),
                  Serdes.Integer(),
                  Serdes.Integer(),
-                 Serdes.String(),
-                 joinName + "-this",
-                 joinName + "-other")
+                 Serdes.String())
             .to(Serdes.Integer(), Serdes.String(), outputTopic);
     }
 

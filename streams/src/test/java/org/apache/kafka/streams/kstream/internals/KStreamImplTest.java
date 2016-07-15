@@ -109,14 +109,14 @@ public class KStreamImplTest {
             public Integer apply(Integer value1, Integer value2) {
                 return value1 + value2;
             }
-        }, JoinWindows.of(anyWindowSize), stringSerde, intSerde, intSerde, "join-0-this", "join-0-other");
+        }, JoinWindows.of(anyWindowSize), stringSerde, intSerde, intSerde);
 
         KStream<String, Integer> stream5 = streams2[1].join(streams3[1], new ValueJoiner<Integer, Integer, Integer>() {
             @Override
             public Integer apply(Integer value1, Integer value2) {
                 return value1 + value2;
             }
-        }, JoinWindows.of(anyWindowSize), stringSerde, intSerde, intSerde, "join-1-this", "join-1-other");
+        }, JoinWindows.of(anyWindowSize), stringSerde, intSerde, intSerde);
 
         stream4.to("topic-5");
 
