@@ -83,10 +83,10 @@ public abstract class AbstractCoordinator implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(AbstractCoordinator.class);
 
     private enum MemberState {
-        UNJOINED, // the client is not part of a group
-        REBALANCING,
-        STABLE,  // the client has joined and is sending heartbeats
-        LEAVING,
+        UNJOINED,    // the client is not part of a group
+        REBALANCING, // the client has begun rebalancing
+        STABLE,      // the client has joined and is sending heartbeats
+        LEAVING,     // the client has sent a leave group request and is awaiting its return
     }
 
     private final int rebalanceTimeoutMs;

@@ -200,7 +200,7 @@ public class ConsumerConfig extends AbstractConfig {
                                 .define(GROUP_ID_CONFIG, Type.STRING, "", Importance.HIGH, GROUP_ID_DOC)
                                 .define(SESSION_TIMEOUT_MS_CONFIG,
                                         Type.INT,
-                                        30000,
+                                        10000,
                                         Importance.HIGH,
                                         SESSION_TIMEOUT_MS_DOC)
                                 .define(HEARTBEAT_INTERVAL_MS_CONFIG,
