@@ -151,6 +151,7 @@ public class WordCountIntegrationTest {
                 return keyComparison;
             }
         });
+        String test = streams.toString();
         streams.close();
         assertThat(actualWordCounts, equalTo(expectedWordCounts));
     }

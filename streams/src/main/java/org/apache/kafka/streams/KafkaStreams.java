@@ -214,13 +214,13 @@ public class KafkaStreams {
      * @return A string representation of the Kafka Streams instance.
      */
     public String toString() {
-        String streamsString = "KafkaStreams[processID=" + this.processId + ",\n";
+        StringBuilder sb = new StringBuilder("KafkaStreams[processID=" + this.processId + ",\n");
         for (int i = 0; i < this.threads.length; i++) {
-            streamsString += "\tthread=" + this.threads[i].toString() + ",\n";
+            sb.append("\tthread=" + this.threads[i].toString() + ",\n");
         }
-        streamsString += "]";
+        sb.append("]");
 
-        return streamsString;
+        return sb.toString();
     }
 
     /**

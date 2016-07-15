@@ -80,15 +80,15 @@ public class ProcessorTopology {
 
 
     /**
-     * Produces a string representation contain useful information about a ProcessorTopology.
-     * This is useful in debugging scenarios. Prints graph by performing a breadth-first search starting
-     * from source nodes
-     * @return A string representation of the ProcessorTopology instance.
+     * Produces a string representation contain useful information this topology by performing a
+     * breadth-first traversal of the DAG from source nodes.
+     * This is useful in debugging scenarios.
+     * @return A string representation of this instance.
      */
     public String toString() {
-        Map<String, Boolean> visitedNode = new HashMap<String, Boolean>();
+        Set<String> visitedNodes = new HashSet<String>();
         Queue queue = new LinkedList();
-        String processorTopologyString = "ProcessorTopology[";
+        StringBuilder sb = new StringBuilder("ProcessorTopology[");
         Set<SourceNode> tmpSources = sources();
 
         // pre-process source nodes to get reverse mapping
@@ -111,7 +111,7 @@ public class ProcessorTopology {
             for (String topic : sourceByTopics.keySet()) {
                 SourceNode source = sourceByTopics.get(topic);
                 // mark as visited
-                visitedNode.put(source.name(), true);
+                visitedNodes.add(source.name());
                 // put in queue
                 queue.add(source);
             }
@@ -124,32 +124,32 @@ public class ProcessorTopology {
                     SourceNode node = (SourceNode) o;
                     children = node.children();
                     // print value
-                    processorTopologyString += "sourceNode=" + node.toString() + "," + "sourceTopic=" + sourceNameToTopic.get(node.name()) + "-->";
+                    sb.append("sourceNode=" + node.toString() + "," + "sourceTopic=" + sourceNameToTopic.get(node.name()) + "-->");
                 } else if (o instanceof ProcessorNode) {
                     ProcessorNode node = (ProcessorNode) o;
                     children = node.children();
                 }
                 // get unvisited children only
                 for (ProcessorNode child : children) {
-                    Boolean visited = visitedNode.get(child.name());
+                    Boolean visited = visitedNodes.contains(child.name());
                     if (visited == null || !visited.booleanValue()) {
                         // mark as visited
-                        visitedNode.put(child.name(), true);
+                        visitedNodes.add(child.name());
                         // put in queue
                         queue.add(child);
                         // print value
-                        processorTopologyString += "node=" + child.toString() + ",";
-                        if (child.name().startsWith(SINK_NAME)) {
-                            processorTopologyString += "sinkTopic=" + sinkNameToTopic.get(child.name()) + ",";
+                        sb.append("node=" + child.toString() + ",");
+                        if (sinkNameToTopic.containsKey(child.name())) {
+                            sb.append("sinkTopic=" + sinkNameToTopic.get(child.name()) + ",");
                         }
-                        processorTopologyString += "-->";
+                        sb.append("-->");
                     }
                 }
-                processorTopologyString += "\t\t\n";
+                sb.append("\t\t\n");
             }
         }
-        processorTopologyString += "]";
+        sb.append("]");
 
-        return processorTopologyString;
+        return sb.toString();
     }
 }
