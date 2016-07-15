@@ -379,7 +379,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 int min = getMin(entry.getKey());
                 int max = getMax(entry.getKey());
                 int expected = max - min;
-                if (expected != entry.getValue()) {
+                if (entry.getValue() == null || expected != entry.getValue()) {
                     System.out.println("fail: key=" + entry.getKey() + " dif=" + entry.getValue() + " expected=" + expected);
                     success = false;
                 }
@@ -455,7 +455,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 int max = getMax(entry.getKey());
                 double expected = ((long) min + (long) max) / 2.0;
 
-                if (expected != entry.getValue()) {
+                if (entry.getValue() == null || expected != entry.getValue()) {
                     System.out.println("fail: key=" + entry.getKey() + " avg=" + entry.getValue() + " expected=" + expected);
                     success = false;
                 }

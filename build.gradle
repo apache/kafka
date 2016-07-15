@@ -576,6 +576,9 @@ project(':clients') {
 
     testCompile libs.bcpkix
     testCompile libs.junit
+    testCompile libs.easymock
+    testCompile libs.powermock
+    testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
   }

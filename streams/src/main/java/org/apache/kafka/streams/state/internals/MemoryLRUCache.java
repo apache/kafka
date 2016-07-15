@@ -19,9 +19,11 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -48,16 +50,25 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
         void apply(K key, V value);
     }
 
+    private final Serde<K> keySerde;
+    private final Serde<V> valueSerde;
+
     protected String name;
     protected Map<K, V> map;
     protected Set<K> keys;
+    private StateSerdes<K, V> serdes;
 
     protected EldestEntryRemovalListener<K, V> listener;
 
     // this is used for extended MemoryNavigableLRUCache only
-    public MemoryLRUCache() {}
+    public MemoryLRUCache(Serde<K> keySerde, Serde<V> valueSerde) {
+        this.keySerde = keySerde;
+        this.valueSerde = valueSerde;
+    }
 
-    public MemoryLRUCache(String name, final int maxCacheSize) {
+    public MemoryLRUCache(String name, final int maxCacheSize, Serde<K> keySerde, Serde<V> valueSerde) {
+        this(keySerde, valueSerde);
+
         this.name = name;
         this.keys = new HashSet<>();
 
@@ -78,7 +89,7 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
         };
     }
 
-    public KeyValueStore<K, V> enableLogging(Serde<K> keySerde, Serde<V> valueSerde) {
+    public KeyValueStore<K, V> enableLogging() {
         return new InMemoryKeyValueLoggedStore<>(this.name, this, keySerde, valueSerde);
     }
 
@@ -96,7 +107,23 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     @Override
     @SuppressWarnings("unchecked")
     public void init(ProcessorContext context, StateStore root) {
-        // do nothing
+        // construct the serde
+        this.serdes = new StateSerdes<>(name,
+                keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+                valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+
+        // register the store
+        context.register(root, true, new StateRestoreCallback() {
+            @Override
+            public void restore(byte[] key, byte[] value) {
+                // check value for null, to avoid  deserialization error.
+                if (value == null) {
+                    put(serdes.keyFrom(key), null);
+                } else {
+                    put(serdes.keyFrom(key), serdes.valueFrom(value));
+                }
+            }
+        });
     }
 
     @Override
