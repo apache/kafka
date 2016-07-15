@@ -264,9 +264,9 @@ public class KafkaStreams {
      * @param <K>               key type
      * @return  The {@link StreamsMetadata} for the storeName and key
      */
-    public <K> StreamsMetadata metadataWithKey(final String storeName,
-                                               final K key,
-                                               final Serializer<K> keySerializer) {
+    public <K> StreamsMetadata metadataForKey(final String storeName,
+                                              final K key,
+                                              final Serializer<K> keySerializer) {
         validateIsRunning();
         return kafkaStreamsInstances.getMetadataWithKey(storeName, key, keySerializer);
     }
@@ -284,9 +284,9 @@ public class KafkaStreams {
      * @param <K>               key type
      * @return  The {@link StreamsMetadata} for the storeName and key
      */
-    public <K> StreamsMetadata metadataWithKey(final String storeName,
-                                               final K key,
-                                               final StreamPartitioner<K, ?> partitioner) {
+    public <K> StreamsMetadata metadataForKey(final String storeName,
+                                              final K key,
+                                              final StreamPartitioner<K, ?> partitioner) {
         validateIsRunning();
         return kafkaStreamsInstances.getMetadataWithKey(storeName, key, partitioner);
     }

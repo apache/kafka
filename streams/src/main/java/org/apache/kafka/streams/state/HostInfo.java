@@ -25,8 +25,8 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
  * Instances of this class can be obtained by calling one of:
  *  {@link KafkaStreams#allMetadata()}
  *  {@link KafkaStreams#allMetadataForStore(String)}
- *  {@link KafkaStreams#metadataWithKey(String, Object, StreamPartitioner)}
- *  {@link KafkaStreams#metadataWithKey(String, Object, Serializer)}
+ *  {@link KafkaStreams#metadataForKey(String, Object, StreamPartitioner)}
+ *  {@link KafkaStreams#metadataForKey(String, Object, Serializer)}
  *
  *  The HostInfo is constructed during Partition Assignment
  *  see {@link org.apache.kafka.streams.processor.internals.StreamPartitionAssignor}

@@ -121,13 +121,13 @@ public class KafkaStreamsTest {
     @Test(expected = IllegalStateException.class)
     public void shouldNotGetTaskWithKeyAndSerializerWhenNotRunning() throws Exception {
         KafkaStreams streams = createKafkaStreams();
-        streams.metadataWithKey("store", "key", Serdes.String().serializer());
+        streams.metadataForKey("store", "key", Serdes.String().serializer());
     }
 
     @Test(expected = IllegalStateException.class)
     public void shouldNotGetTaskWithKeyAndPartitionerWhenNotRunning() throws Exception {
         KafkaStreams streams = createKafkaStreams();
-        streams.metadataWithKey("store", "key", new StreamPartitioner<String, Object>() {
+        streams.metadataForKey("store", "key", new StreamPartitioner<String, Object>() {
             @Override
             public Integer partition(final String key, final Object value, final int numPartitions) {
                 return 0;
