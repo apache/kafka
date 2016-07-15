@@ -17,11 +17,9 @@
 
 package kafka.tools
 
-import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicLong
 import java.nio.channels.ClosedByInterruptException
 import org.apache.log4j.Logger
-import kafka.message.Message
 import kafka.utils.{ZkUtils, CommandLineUtils}
 import java.util.{ Random, Properties }
 import kafka.consumer._
@@ -37,8 +35,8 @@ object ConsumerPerformance {
 
     val config = new ConsumerPerfConfig(args)
     logger.info("Starting consumer...")
-    var totalMessagesRead = new AtomicLong(0)
-    var totalBytesRead = new AtomicLong(0)
+    val totalMessagesRead = new AtomicLong(0)
+    val totalBytesRead = new AtomicLong(0)
 
     if (!config.hideHeader) {
       if (!config.showDetailedStats)
@@ -120,7 +118,7 @@ object ConsumerPerformance {
 
     val options = parser.parse(args: _*)
 
-    CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, zkConnectOpt)
+    CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, zkConnectOpt,numMessagesOpt)
 
     val props = new Properties
     props.put("group.id", options.valueOf(groupIdOpt))
