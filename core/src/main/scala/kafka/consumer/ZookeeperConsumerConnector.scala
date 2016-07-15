@@ -167,8 +167,9 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   }
 
   private def connectZk() {
-    info("Connecting to zookeeper instance at " + config.zkConnect)
-    zkClient = new ZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, ZKStringSerializer)
+    info("Connecting to zookeeper instance at " + config.zkConnect +
+      (if (!config.exhibitorHosts.isEmpty) " (" + config.exhibitorHosts + ")" else ""))
+    zkClient = ZkUtils.bridgeCurator(config, ZkUtils.makeCuratorClient(config))
   }
 
   // Blocks until the offset manager is located and a channel is established to it.
@@ -489,6 +490,9 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       // The child change watchers will be set inside rebalance when we read the children list.
     }
 
+    @throws(classOf[Exception])
+    def handleSessionEstablishmentError(error: Throwable): Unit = {
+    }
   }
 
   class ZKTopicPartitionChangeListener(val loadBalancerListener: ZKRebalancerListener)

@@ -82,6 +82,10 @@ class KafkaHealthcheck(private val brokerId: Int,
       info("done re-registering broker")
       info("Subscribing to %s path to watch for new topics".format(ZkUtils.BrokerTopicsPath))
     }
+
+    @throws(classOf[Exception])
+    def handleSessionEstablishmentError(error: Throwable): Unit = {
+    }
   }
 
 }

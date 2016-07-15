@@ -205,7 +205,9 @@ project(':core') {
     compile project(':clients')
     compile "org.scala-lang:scala-library:$scalaVersion"
     compile 'org.apache.zookeeper:zookeeper:3.4.6'
-    compile 'com.101tec:zkclient:0.3'
+    compile 'com.101tec:zkclient:0.4'
+    compile 'org.apache.curator:curator-framework:2.7.1'
+    compile 'com.netflix.curator:curator-x-zkclient-bridge:3.0.0'
     compile 'com.yammer.metrics:metrics-core:2.2.0'
     compile 'net.sf.jopt-simple:jopt-simple:3.2'
 
