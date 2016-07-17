@@ -638,12 +638,17 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                    Serde<K1> keySerde,
                                                    Serde<V1> lhsValueSerde,
                                                    Serde<V2> otherValueSerde) {
+            String thisWindowStreamName = topology.newName(WINDOWED_NAME);
+            String otherWindowStreamName = topology.newName(WINDOWED_NAME);
+            String joinThisName = outer ? topology.newName(OUTERTHIS_NAME) : topology.newName(JOINTHIS_NAME);
+            String joinOtherName = outer ? topology.newName(OUTEROTHER_NAME) : topology.newName(JOINOTHER_NAME);
+            String joinMergeName = topology.newName(MERGE_NAME);
 
             StateStoreSupplier thisWindow =
-                createWindowedStateStore(windows, keySerde, lhsValueSerde,  name + "-this");
+                createWindowedStateStore(windows, keySerde, lhsValueSerde,  joinThisName + "-store");
 
             StateStoreSupplier otherWindow =
-                createWindowedStateStore(windows, keySerde, otherValueSerde, name + "-other");
+                createWindowedStateStore(windows, keySerde, otherValueSerde, joinOtherName + "-store");
 
 
             KStreamJoinWindow<K1, V1> thisWindowedStream = new KStreamJoinWindow<>(thisWindow.name(),
@@ -666,11 +671,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
             KStreamPassThrough<K1, R> joinMerge = new KStreamPassThrough<>();
 
-            String thisWindowStreamName = topology.newName(WINDOWED_NAME);
-            String otherWindowStreamName = topology.newName(WINDOWED_NAME);
-            String joinThisName = outer ? topology.newName(OUTERTHIS_NAME) : topology.newName(JOINTHIS_NAME);
-            String joinOtherName = outer ? topology.newName(OUTEROTHER_NAME) : topology.newName(JOINOTHER_NAME);
-            String joinMergeName = topology.newName(MERGE_NAME);
 
             topology.addProcessor(thisWindowStreamName, thisWindowedStream, ((AbstractStream) lhs).name);
             topology.addProcessor(otherWindowStreamName, otherWindowedStream, ((AbstractStream) other).name);
