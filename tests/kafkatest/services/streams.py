@@ -137,4 +137,3 @@ class StreamsSmokeTestDriverService(StreamsSmokeTestBaseService):
 class StreamsSmokeTestJobRunnerService(StreamsSmokeTestBaseService):
     def __init__(self, context, kafka):
         super(StreamsSmokeTestJobRunnerService, self).__init__(context, kafka, "process")
-
