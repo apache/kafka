@@ -381,23 +381,24 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * @return A string representation of the StreamTask instance.
      */
     public String toString() {
-        StringBuilder sb = new StringBuilder("StreamsTask[taskId=" + this.id() + ",");
+        StringBuilder sb = new StringBuilder("\tStreamsTask taskId:" + this.id() + "\n");
 
         // print topology
         if (topology != null) {
-            sb.append("topology=" + topology.toString());
+            sb.append(topology.toString());
         }
 
         // print assigned partitions
-        if (partitions != null) {
-            sb.append("Partitions[");
+        if (partitions != null && !partitions.isEmpty()) {
+            sb.append("\t\tPartitions [");
             for (TopicPartition topicPartition : partitions) {
                 sb.append(topicPartition.toString() + ",");
             }
+            sb.setLength(sb.length() - 1);
             sb.append("]");
         }
 
-        sb.append("]");
+        sb.append("\n");
         return sb.toString();
     }
 

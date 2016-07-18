@@ -33,6 +33,8 @@ public class ProcessorTopology {
     private final Map<String, SourceNode> sourceByTopics;
     private final Map<String, SinkNode> sinkByTopics;
     private final List<StateStoreSupplier> stateStoreSuppliers;
+    private final Map<String, String> sourceNameToTopic;
+    private final Map<String, String> sinkNameToTopic;
 
     public ProcessorTopology(List<ProcessorNode> processorNodes,
                              Map<String, SourceNode> sourceByTopics,
@@ -42,6 +44,20 @@ public class ProcessorTopology {
         this.sourceByTopics = Collections.unmodifiableMap(sourceByTopics);
         this.sinkByTopics   = Collections.unmodifiableMap(sinkByTopics);
         this.stateStoreSuppliers = Collections.unmodifiableList(stateStoreSuppliers);
+
+        // pre-process source nodes to get reverse mapping
+        sourceNameToTopic = new HashMap<>();
+        for (String topic : sourceByTopics.keySet()) {
+            SourceNode source = sourceByTopics.get(topic);
+            sourceNameToTopic.put(source.name(), topic);
+        }
+
+        // pre-process sink nodes to get reverse mapping
+        sinkNameToTopic = new HashMap<>();
+        for (String topic : sinkByTopics.keySet()) {
+            SinkNode sink = sinkByTopics.get(topic);
+            sinkNameToTopic.put(sink.name(), topic);
+        }
     }
 
     public Set<String> sourceTopics() {
@@ -77,77 +93,54 @@ public class ProcessorTopology {
     }
 
 
+    private String childrenToString(List<ProcessorNode<?, ?>> children) {
+        if (children == null || children.isEmpty()) {
+            return null;
+        }
+
+        StringBuilder sb = new StringBuilder("children [");
+        for (ProcessorNode child : children) {
+            sb.append(child.name() + ",");
+        }
+        sb.setLength(sb.length() - 1);
+        sb.append("]\n");
+
+        // recursively print children
+        for (ProcessorNode child : children) {
+            sb.append("\t\t" + child.name() + ": ");
+            if (sinkNameToTopic.containsKey(child.name())) {
+                sb.append("topics:" + sinkNameToTopic.get(child.name()) + " ");
+            }
+            if (child.stateStores != null && !child.stateStores.isEmpty()) {
+                sb.append("stateStores [");
+                for (String store : (Set<String>)child.stateStores) {
+                    sb.append(store + ",");
+                }
+                sb.setLength(sb.length() - 1);
+                sb.append("] ");
+            }
+            if (!sinkNameToTopic.containsKey(child.name())) {
+                sb.append(childrenToString(child.children()));
+            }
+        }
+        return sb.toString();
+    }
+
     /**
-     * Produces a string representation contain useful information this topology by performing a
-     * breadth-first traversal of the DAG from source nodes.
+     * Produces a string representation contain useful information this topology.
      * This is useful in debugging scenarios.
      * @return A string representation of this instance.
      */
     public String toString() {
-        Set<String> visitedNodes = new HashSet<String>();
-        Queue queue = new LinkedList();
-        StringBuilder sb = new StringBuilder("ProcessorTopology[");
-        Set<SourceNode> tmpSources = sources();
+        StringBuilder sb = new StringBuilder("\t\tProcessorTopology:\n");
 
-        // pre-process source nodes to get reverse mapping
-        Map<String, String> sourceNameToTopic = new HashMap<>();
+        // start from sources
         for (String topic : sourceByTopics.keySet()) {
             SourceNode source = sourceByTopics.get(topic);
-            sourceNameToTopic.put(source.name(), topic);
+            sb.append("\t\t" + source.name() + ": " + "topics: " + sourceNameToTopic.get(source.name()) + ", ");
+            sb.append(childrenToString(source.children()));
+            sb.append("\n");
         }
-
-        // pre-process sink nodes to get reverse mapping
-        Map<String, String> sinkNameToTopic = new HashMap<>();
-        for (String topic : sinkByTopics.keySet()) {
-            SinkNode sink = sinkByTopics.get(topic);
-            sinkNameToTopic.put(sink.name(), topic);
-        }
-
-        // add all sources to a queue for Breadth-First traversal
-        if (tmpSources != null) {
-            // add all sources
-            for (String topic : sourceByTopics.keySet()) {
-                SourceNode source = sourceByTopics.get(topic);
-                // mark as visited
-                visitedNodes.add(source.name());
-                // put in queue
-                queue.add(source);
-            }
-
-            // iterate to next level
-            while (!queue.isEmpty()) {
-                Object o = queue.remove();
-                List<ProcessorNode<?, ?>> children = null;
-                if (o instanceof SourceNode) {
-                    SourceNode node = (SourceNode) o;
-                    children = node.children();
-                    // print value
-                    sb.append("sourceNode=" + node.toString() + "," + "sourceTopic=" + sourceNameToTopic.get(node.name()) + "-->");
-                } else if (o instanceof ProcessorNode) {
-                    ProcessorNode node = (ProcessorNode) o;
-                    children = node.children();
-                }
-                // get unvisited children only
-                for (ProcessorNode child : children) {
-                    Boolean visited = visitedNodes.contains(child.name());
-                    if (visited == null || !visited.booleanValue()) {
-                        // mark as visited
-                        visitedNodes.add(child.name());
-                        // put in queue
-                        queue.add(child);
-                        // print value
-                        sb.append("node=" + child.toString() + ",");
-                        if (sinkNameToTopic.containsKey(child.name())) {
-                            sb.append("sinkTopic=" + sinkNameToTopic.get(child.name()) + ",");
-                        }
-                        sb.append("-->");
-                    }
-                }
-                sb.append("\t\t\n");
-            }
-        }
-        sb.append("]");
-
         return sb.toString();
     }
 }

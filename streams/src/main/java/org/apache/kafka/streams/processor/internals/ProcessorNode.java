@@ -71,21 +71,4 @@ public class ProcessorNode<K, V> {
     public void close() {
         processor.close();
     }
-
-    /**
-     * Produces a string representation contain useful information about a ProcessorNode.
-     * This is useful in debugging scenarios.
-     * @return A string representation of this instance.
-     */
-    public String toString() {
-        StringBuilder sb = new StringBuilder("ProcessorNode[name=" + name);
-        if (stateStores != null && !stateStores.isEmpty()) {
-            sb.append("," + "StateStores[");
-            for (String store : stateStores) {
-                sb.append(store + ",");
-            }
-            sb.append("]");
-        }
-        return sb.toString();
-    }
 }

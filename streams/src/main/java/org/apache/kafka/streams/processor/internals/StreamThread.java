@@ -678,31 +678,28 @@ public class StreamThread extends Thread {
      */
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder("StreamsThread[appId=" + this.applicationId + "," +
-            "clientId=" + clientId + ",\n");
+        StringBuilder sb = new StringBuilder("StreamsThread appId:" + this.applicationId + "\n");
+        sb.append("StreamsThread clientId:" + clientId + "\n");
 
         // iterate and print active tasks
         if (activeTasks != null) {
-            sb.append("\t\tTasks=ActiveTasks[");
+            sb.append("\tActive tasks:\n");
             for (TaskId tId : activeTasks.keySet()) {
                 StreamTask task = activeTasks.get(tId);
-                sb.append("taskId=" + tId.toString() + ",");
-                sb.append("task=" + task.toString() + ",\n");
+                sb.append(task.toString());
             }
-            sb.append("\t\t],\n");
+            sb.append("\n");
         }
 
         // iterate and print standby tasks
         if (standbyTasks != null) {
-            sb.append("\t\tTasks=StandbyTasks[");
+            sb.append("\tStandby tasks:\n");
             for (TaskId tId : standbyTasks.keySet()) {
                 StandbyTask task = standbyTasks.get(tId);
-                sb.append("taskId=" + tId.toString() + ",");
-                sb.append("task=" + task.toString() + ",\n");
+                sb.append(task.toString());
             }
-            sb.append("\t\t]\n");
+            sb.append("\n");
         }
-        sb.append("\t]");
 
         return sb.toString();
     }
