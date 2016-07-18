@@ -52,7 +52,7 @@ class MetadataRequestTest extends BaseRequestTest {
     assertNotEquals("Controller id should switch to a new broker", controllerId, controllerId2)
     TestUtils.waitUntilTrue(() => {
       val metadataResponse2 = sendMetadataRequest(MetadataRequest.allTopics(), 1)
-      controllerServer2.apis.brokerId == metadataResponse2.controller.id
+      metadataResponse2.controller() != null && controllerServer2.apis.brokerId == metadataResponse2.controller.id
     }, "Controller id should match the active controller after failover", 5000)
   }
 
