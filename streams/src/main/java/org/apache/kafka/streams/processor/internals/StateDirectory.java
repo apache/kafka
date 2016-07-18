@@ -29,11 +29,12 @@ import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.HashMap;
 
 /**
  * Manages the directories where the state of Tasks owned by a {@link StreamThread} are
- * stored. Handles creation/locking/unlocking/cleaning of the Task Directories
+ * stored. Handles creation/locking/unlocking/cleaning of the Task Directories. This class is not
+ * thread-safe.
  */
 public class StateDirectory {
 
@@ -41,8 +42,8 @@ public class StateDirectory {
     private static final Logger log = LoggerFactory.getLogger(StateDirectory.class);
 
     private final File stateDir;
-    private final ConcurrentHashMap<TaskId, FileChannel> channels = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<TaskId, FileLock> locks = new ConcurrentHashMap<>();
+    private final HashMap<TaskId, FileChannel> channels = new HashMap<>();
+    private final HashMap<TaskId, FileLock> locks = new HashMap<>();
 
     public StateDirectory(final String applicationId, final String stateDirConfig) {
         final File baseDir = new File(stateDirConfig);
@@ -167,13 +168,10 @@ public class StateDirectory {
     }
 
     private FileChannel getFileChannel(final TaskId taskId, final Path lockPath) throws IOException {
-        final FileChannel channel = FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-        final FileChannel existing = channels.putIfAbsent(taskId, channel);
-        if (existing != null) {
-            channel.close();
-            return existing;
+        if (!channels.containsKey(taskId)) {
+            channels.put(taskId, FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE));
         }
-        return channel;
+        return channels.get(taskId);
     }
 
     private FileLock tryAcquireLock(final FileChannel channel) throws IOException {
