@@ -369,7 +369,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
           )
           topicPartition -> partitionState
         }
-        val leaderAndIsrRequest = new requests.LeaderAndIsrRequest(controllerId, controllerEpoch, partitionStates.asJava, leaders.asJava)
+        val leaderAndIsrRequest = new LeaderAndIsrRequest(controllerId, controllerEpoch, partitionStates.asJava, leaders.asJava)
         controller.sendRequest(broker, ApiKeys.LEADER_AND_ISR, None, leaderAndIsrRequest, null)
       }
       leaderAndIsrRequestMap.clear()
