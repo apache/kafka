@@ -50,8 +50,7 @@ class StreamsSimpleBenchmarkService(KafkaPathResolverMixin, Service):
     def __init__(self, context, kafka):
         super(StreamsSimpleBenchmarkService, self).__init__(context, 1)
         self.kafka = kafka
-        self.args = {} 
-        
+
     @property
     def node(self):
         return self.nodes[0]
@@ -75,21 +74,6 @@ class StreamsSimpleBenchmarkService(KafkaPathResolverMixin, Service):
 
         node.account.ssh("rm -f " + self.PID_FILE, allow_fail=False)
 
-    def restart(self):
-        # We don't want to do any clean up here, just restart the process.
-        for node in self.nodes:
-            self.logger.info("Restarting Kafka Streams on " + str(node.account))
-            self.stop_node(node)
-            self.start_node(node)
-
-    def abortThenRestart(self):
-        # We don't want to do any clean up here, just abort then restart the process. The running service is killed immediately.
-        for node in self.nodes:
-            self.logger.info("Aborting Kafka Streams on " + str(node.account))
-            self.stop_node(node, False)
-            self.logger.info("Restarting Kafka Streams on " + str(node.account))
-            self.start_node(node)
-
     def wait(self):
         for node in self.nodes:
             for pid in self.pids(node):
@@ -100,7 +84,7 @@ class StreamsSimpleBenchmarkService(KafkaPathResolverMixin, Service):
         node.account.ssh("rm -rf " + self.PERSISTENT_ROOT, allow_fail=False)
 
     def start_cmd(self, node):
-        args = self.args.copy()
+        args = {}
         args['kafka'] = self.kafka.bootstrap_servers()
         args['zk'] = self.kafka.zk.connect_setting()
         args['state_dir'] = self.PERSISTENT_ROOT
@@ -130,3 +114,19 @@ class StreamsSimpleBenchmarkService(KafkaPathResolverMixin, Service):
 
         if len(self.pids(node)) == 0:
             raise RuntimeError("No process ids recorded")
+
+    def collect_data(self, node):
+        # Collect the data and return it to the framework
+        output = node.account.ssh_capture("grep Performance %s" % self.STDOUT_FILE)
+        data = []
+        data.append('{')
+        for line in output:
+            parts = line.split(':')
+            data.append('\'')
+            data.append(parts[0])
+            data.append('\'')
+            data.append(':')
+            data.append(parts[1]);
+        data.append('}')
+        data = ''.join(data)
+        return data

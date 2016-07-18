@@ -40,17 +40,4 @@ class StreamsSimpleBenchmarkTest(KafkaTest):
         node = self.driver.node
         node.account.ssh("grep Performance %s" % self.driver.STDOUT_FILE, allow_fail=False)
 
-        # Collect the data and return it to the framework
-        output = node.account.ssh_capture("grep Performance %s" % self.driver.STDOUT_FILE)
-        data = []
-        data.append('{')
-        for line in output:
-            parts = line.split(':')
-            data.append('\'')
-            data.append(parts[0])
-            data.append('\'')
-            data.append(':')
-            data.append(parts[1]);
-        data.append('}')
-        data = ''.join(data)
-        return data
+        return self.driver.collect_data(node)
