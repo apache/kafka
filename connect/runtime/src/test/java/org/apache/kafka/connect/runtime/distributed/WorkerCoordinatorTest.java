@@ -96,12 +96,13 @@ public class WorkerCoordinatorTest {
 
         client.setNode(node);
 
+        WorkerCoordinatorMetricsRegistry metricsRegistry = new WorkerCoordinatorMetricsRegistry("consumer" + groupId);
         this.coordinator = new WorkerCoordinator(consumerClient,
                 groupId,
                 sessionTimeoutMs,
                 heartbeatIntervalMs,
                 metrics,
-                "consumer" + groupId,
+                metricsRegistry,
                 time,
                 retryBackoffMs,
                 LEADER_URL,

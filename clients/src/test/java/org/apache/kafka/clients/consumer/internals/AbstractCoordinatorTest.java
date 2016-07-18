@@ -102,7 +102,7 @@ public class AbstractCoordinatorTest {
                                 Metrics metrics,
                                 Time time) {
             super(client, GROUP_ID, SESSION_TIMEOUT_MS, HEARTBEAT_INTERVAL_MS, metrics,
-                    METRIC_GROUP_PREFIX, time, RETRY_BACKOFF_MS);
+                    new AbstractCoordinatorMetricsRegistry(METRIC_GROUP_PREFIX), time, RETRY_BACKOFF_MS);
         }
 
         @Override

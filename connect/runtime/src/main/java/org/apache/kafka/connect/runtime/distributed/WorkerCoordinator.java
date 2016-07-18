@@ -66,7 +66,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                              int sessionTimeoutMs,
                              int heartbeatIntervalMs,
                              Metrics metrics,
-                             String metricGrpPrefix,
+                             WorkerCoordinatorMetricsRegistry metricsRegistry,
                              Time time,
                              long retryBackoffMs,
                              String restUrl,
@@ -77,13 +77,13 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                 sessionTimeoutMs,
                 heartbeatIntervalMs,
                 metrics,
-                metricGrpPrefix,
+                metricsRegistry,
                 time,
                 retryBackoffMs);
         this.restUrl = restUrl;
         this.configStorage = configStorage;
         this.assignmentSnapshot = null;
-        this.sensors = new WorkerCoordinatorMetrics(metrics, metricGrpPrefix);
+        this.sensors = new WorkerCoordinatorMetrics(metrics, metricsRegistry);
         this.listener = listener;
         this.rejoinRequested = false;
     }
@@ -268,12 +268,8 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     private class WorkerCoordinatorMetrics {
-        public final Metrics metrics;
-        public final String metricGrpName;
 
-        public WorkerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
-            this.metrics = metrics;
-            this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
+        public WorkerCoordinatorMetrics(Metrics metrics, WorkerCoordinatorMetricsRegistry metricsRegistry) {
 
             Measurable numConnectors = new Measurable() {
                 public double measure(MetricConfig config, long now) {
@@ -287,12 +283,8 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                 }
             };
 
-            metrics.addMetric(metrics.metricName("assigned-connectors",
-                              this.metricGrpName,
-                              "The number of connector instances currently assigned to this consumer"), numConnectors);
-            metrics.addMetric(metrics.metricName("assigned-tasks",
-                              this.metricGrpName,
-                              "The number of tasks currently assigned to this consumer"), numTasks);
+            metrics.addMetric(metrics.metricInstance(metricsRegistry.assignedConnectors), numConnectors);
+            metrics.addMetric(metrics.metricInstance(metricsRegistry.assignedTasks), numTasks);
         }
     }
 

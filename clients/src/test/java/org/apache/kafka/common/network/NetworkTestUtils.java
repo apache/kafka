@@ -37,7 +37,7 @@ public class NetworkTestUtils {
     }
 
     public static Selector createSelector(ChannelBuilder channelBuilder) {
-        return new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder);
+        return new Selector(5000, new Metrics(), new MockTime(), new SelectorMetricsRegistry("MetricGroup"), channelBuilder);
     }
 
     public static void checkClientConnection(Selector selector, String node, int minMessageSize, int messageCount) throws Exception {

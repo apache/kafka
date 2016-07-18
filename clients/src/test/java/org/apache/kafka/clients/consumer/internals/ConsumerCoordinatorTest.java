@@ -1148,6 +1148,7 @@ public class ConsumerCoordinatorTest {
                                                  List<PartitionAssignor> assignors,
                                                  boolean excludeInternalTopics,
                                                  boolean autoCommitEnabled) {
+        ConsumerCoordinatorMetricsRegistry metricsRegistry = new ConsumerCoordinatorMetricsRegistry("consumer" + groupId);
         return new ConsumerCoordinator(
                 consumerClient,
                 groupId,
@@ -1157,7 +1158,7 @@ public class ConsumerCoordinatorTest {
                 metadata,
                 subscriptions,
                 metrics,
-                "consumer" + groupId,
+                metricsRegistry,
                 time,
                 retryBackoffMs,
                 defaultOffsetCommitCallback,

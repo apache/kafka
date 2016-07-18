@@ -87,7 +87,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                Metadata metadata,
                                SubscriptionState subscriptions,
                                Metrics metrics,
-                               String metricGrpPrefix,
+                               ConsumerCoordinatorMetricsRegistry metricsRegistry,
                                Time time,
                                long retryBackoffMs,
                                OffsetCommitCallback defaultOffsetCommitCallback,
@@ -100,7 +100,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 sessionTimeoutMs,
                 heartbeatIntervalMs,
                 metrics,
-                metricGrpPrefix,
+                metricsRegistry,
                 time,
                 retryBackoffMs);
         this.metadata = metadata;
@@ -121,7 +121,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             this.autoCommitTask = null;
         }
 
-        this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix);
+        this.sensors = new ConsumerCoordinatorMetrics(metrics, metricsRegistry);
         this.interceptors = interceptors;
         this.excludeInternalTopics = excludeInternalTopics;
     }
@@ -674,25 +674,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private class ConsumerCoordinatorMetrics {
-        public final Metrics metrics;
-        public final String metricGrpName;
-
         public final Sensor commitLatency;
 
-        public ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
-            this.metrics = metrics;
-            this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
-
+        public ConsumerCoordinatorMetrics(Metrics metrics, ConsumerCoordinatorMetricsRegistry metricsRegistry) {
             this.commitLatency = metrics.sensor("commit-latency");
-            this.commitLatency.add(metrics.metricName("commit-latency-avg",
-                this.metricGrpName,
-                "The average time taken for a commit request"), new Avg());
-            this.commitLatency.add(metrics.metricName("commit-latency-max",
-                this.metricGrpName,
-                "The max time taken for a commit request"), new Max());
-            this.commitLatency.add(metrics.metricName("commit-rate",
-                this.metricGrpName,
-                "The number of commit calls per second"), new Rate(new Count()));
+            this.commitLatency.add(metrics.metricInstance(metricsRegistry.commitLatencyAvg), new Avg());
+            this.commitLatency.add(metrics.metricInstance(metricsRegistry.commitLatencyMax), new Max());
+            this.commitLatency.add(metrics.metricInstance(metricsRegistry.commitRate), new Rate(new Count()));
 
             Measurable numParts =
                 new Measurable() {
@@ -700,9 +688,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         return subscriptions.assignedPartitions().size();
                     }
                 };
-            metrics.addMetric(metrics.metricName("assigned-partitions",
-                this.metricGrpName,
-                "The number of partitions currently assigned to this consumer"), numParts);
+            metrics.addMetric(metrics.metricInstance(metricsRegistry.assignedPartitions), numParts);
         }
     }
 

@@ -34,7 +34,7 @@ import kafka.utils._
 import org.apache.kafka.clients.{ManualMetadataUpdater, ClientRequest, NetworkClient}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.metrics._
-import org.apache.kafka.common.network.{LoginType, Selectable, ChannelBuilders, NetworkReceive, Selector, Mode}
+import org.apache.kafka.common.network.{LoginType, Selectable, ChannelBuilders, NetworkReceive, Selector, Mode, SelectorMetricsRegistry}
 import org.apache.kafka.common.protocol.{Errors, ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.requests.{ControlledShutdownResponse, ControlledShutdownRequest, RequestSend}
@@ -339,7 +339,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
           config.connectionsMaxIdleMs,
           metrics,
           kafkaMetricsTime,
-          "kafka-server-controlled-shutdown",
+          new SelectorMetricsRegistry("kafka-server-controlled-shutdown"),
           Map.empty.asJava,
           false,
           channelBuilder

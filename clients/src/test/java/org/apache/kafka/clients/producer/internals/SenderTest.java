@@ -72,7 +72,8 @@ public class SenderTest {
         metricTags.put("client-id", CLIENT_ID);
         MetricConfig metricConfig = new MetricConfig().tags(metricTags);
         metrics = new Metrics(metricConfig, time);
-        accumulator = new RecordAccumulator(batchSize, 1024 * 1024, CompressionType.NONE, 0L, 0L, metrics, time);
+        accumulator = new RecordAccumulator(batchSize, 1024 * 1024, CompressionType.NONE, 0L, 0L, metrics, new RecordAccumulatorMetricsRegistry(metricTags.keySet()), time);
+        SenderMetricsRegistry senderMetricsRegistry = new SenderMetricsRegistry(metricTags.keySet());
         sender = new Sender(client,
                             metadata,
                             this.accumulator,
@@ -81,6 +82,7 @@ public class SenderTest {
                             ACKS_ALL,
                             MAX_RETRIES,
                             metrics,
+                            senderMetricsRegistry,
                             time,
                             CLIENT_ID,
                             REQUEST_TIMEOUT);
@@ -121,8 +123,9 @@ public class SenderTest {
             sender.run(time.milliseconds());
         }
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
-        KafkaMetric avgMetric = allMetrics.get(metrics.metricName("produce-throttle-time-avg", METRIC_GROUP, ""));
-        KafkaMetric maxMetric = allMetrics.get(metrics.metricName("produce-throttle-time-max", METRIC_GROUP, ""));
+        SenderMetricsRegistry metricsRegistry = new SenderMetricsRegistry(metrics.config().tags().keySet());
+        KafkaMetric avgMetric = allMetrics.get(metrics.metricInstance(metricsRegistry.produceThrottleTimeAvg));
+        KafkaMetric maxMetric = allMetrics.get(metrics.metricInstance(metricsRegistry.produceThrottleTimeMax));
         assertEquals(200, avgMetric.value(), EPS);
         assertEquals(300, maxMetric.value(), EPS);
     }
@@ -141,6 +144,7 @@ public class SenderTest {
                                        ACKS_ALL,
                                        maxRetries,
                                        m,
+                                       new SenderMetricsRegistry(),
                                        time,
                                        "clientId",
                                        REQUEST_TIMEOUT);
@@ -194,6 +198,7 @@ public class SenderTest {
                 ACKS_ALL,
                 maxRetries,
                 m,
+                new SenderMetricsRegistry(),
                 time,
                 "clientId",
                 REQUEST_TIMEOUT);
