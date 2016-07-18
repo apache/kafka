@@ -29,32 +29,21 @@ import static org.junit.Assert.assertTrue;
 
 public class UnlimitedWindowsTest {
 
-    private static String anyName = "window";
     private static long anyStartTime = 10L;
 
     @Test(expected = IllegalArgumentException.class)
-    public void nameMustNotBeEmpty() {
-        UnlimitedWindows.of("");
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void nameMustNotBeNull() {
-        UnlimitedWindows.of(null);
-    }
-
-    @Test(expected = IllegalArgumentException.class)
     public void startTimeMustNotBeNegative() {
-        UnlimitedWindows.of(anyName).startOn(-1);
+        UnlimitedWindows.of().startOn(-1);
     }
 
     @Test
     public void startTimeCanBeZero() {
-        UnlimitedWindows.of(anyName).startOn(0);
+        UnlimitedWindows.of().startOn(0);
     }
 
     @Test
     public void shouldIncludeRecordsThatHappenedOnWindowStart() {
-        UnlimitedWindows w = UnlimitedWindows.of(anyName).startOn(anyStartTime);
+        UnlimitedWindows w = UnlimitedWindows.of().startOn(anyStartTime);
         Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(w.start);
         assertEquals(1, matchedWindows.size());
         assertEquals(new UnlimitedWindow(anyStartTime), matchedWindows.get(anyStartTime));
@@ -62,7 +51,7 @@ public class UnlimitedWindowsTest {
 
     @Test
     public void shouldIncludeRecordsThatHappenedAfterWindowStart() {
-        UnlimitedWindows w = UnlimitedWindows.of(anyName).startOn(anyStartTime);
+        UnlimitedWindows w = UnlimitedWindows.of().startOn(anyStartTime);
         long timestamp = w.start + 1;
         Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(timestamp);
         assertEquals(1, matchedWindows.size());
@@ -71,7 +60,7 @@ public class UnlimitedWindowsTest {
 
     @Test
     public void shouldExcludeRecordsThatHappenedBeforeWindowStart() {
-        UnlimitedWindows w = UnlimitedWindows.of(anyName).startOn(anyStartTime);
+        UnlimitedWindows w = UnlimitedWindows.of().startOn(anyStartTime);
         long timestamp = w.start - 1;
         Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(timestamp);
         assertTrue(matchedWindows.isEmpty());

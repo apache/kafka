@@ -26,13 +26,13 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
 
-    public final String topic;
+    public final String storeName;
 
     private boolean materialized = false;
     private boolean sendOldValues = false;
 
-    public KTableSource(String topic) {
-        this.topic = topic;
+    public KTableSource(String storeName) {
+        this.storeName = storeName;
     }
 
     @Override
@@ -57,7 +57,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
         public void process(K key, V value) {
             // the keys should never be null
             if (key == null)
-                throw new StreamsException("Record key for the source KTable from topic " + topic + " should not be null.");
+                throw new StreamsException("Record key for the source KTable from store name " + storeName + " should not be null.");
 
             context().forward(key, new Change<>(value, null));
         }
@@ -71,14 +71,14 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
-            store = (KeyValueStore<K, V>) context.getStateStore(topic);
+            store = (KeyValueStore<K, V>) context.getStateStore(storeName);
         }
 
         @Override
         public void process(K key, V value) {
             // the keys should never be null
             if (key == null)
-                throw new StreamsException("Record key for the source KTable from topic " + topic + " should not be null.");
+                throw new StreamsException("Record key for the source KTable from store name " + storeName + " should not be null.");
 
             V oldValue = sendOldValues ? store.get(key) : null;
             store.put(key, value);

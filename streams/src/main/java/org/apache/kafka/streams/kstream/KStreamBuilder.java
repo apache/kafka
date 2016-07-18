@@ -118,35 +118,40 @@ public class KStreamBuilder extends TopologyBuilder {
      * Create a {@link KTable} instance for the specified topic.
      * Record keys of the topic should never by null, otherwise an exception will be thrown at runtime.
      * The default deserializers specified in the config are used.
+     * The resulting {@link KTable} will be materialized in a local state store with the given store name.
+     * However, no new changelog topic is created in this case since the underlying topic acts as one.
      *
      * @param topic     the topic name; cannot be null
+     * @param storeName the state store name used if this KTable is materialized, can be null if materialization not expected
      * @return a {@link KTable} for the specified topics
      */
-    public <K, V> KTable<K, V> table(String topic) {
-        return table(null, null, topic);
+    public <K, V> KTable<K, V> table(String topic, final String storeName) {
+        return table(null, null, topic, storeName);
     }
 
     /**
      * Create a {@link KTable} instance for the specified topic.
      * Record keys of the topic should never by null, otherwise an exception will be thrown at runtime.
+     * The resulting {@link KTable} will be materialized in a local state store with the given store name.
+     * However, no new changelog topic is created in this case since the underlying topic acts as one.
      *
      * @param keySerde   key serde used to send key-value pairs,
      *                   if not specified the default key serde defined in the configuration will be used
      * @param valSerde   value serde used to send key-value pairs,
      *                   if not specified the default value serde defined in the configuration will be used
      * @param topic      the topic name; cannot be null
+     * @param storeName  the state store name used if this KTable is materialized, can be null if materialization not expected
      * @return a {@link KTable} for the specified topics
      */
-    public <K, V> KTable<K, V> table(Serde<K> keySerde, Serde<V> valSerde, String topic) {
+    public <K, V> KTable<K, V> table(Serde<K> keySerde, Serde<V> valSerde, String topic, final String storeName) {
         String source = newName(KStreamImpl.SOURCE_NAME);
         String name = newName(KTableImpl.SOURCE_NAME);
 
         addSource(source, keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topic);
 
-        ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(topic);
+        ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(storeName);
         addProcessor(name, processorSupplier, source);
-
-        return new KTableImpl<>(this, name, processorSupplier, Collections.singleton(source), keySerde, valSerde);
+        return new KTableImpl<>(this, name, processorSupplier, Collections.singleton(source), keySerde, valSerde, storeName);
     }
 
     /**

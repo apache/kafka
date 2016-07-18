@@ -52,13 +52,12 @@ public class JoinWindows extends Windows<TimeWindow> {
     /** Maximum time difference for tuples that are after the join tuple. */
     public final long after;
 
-    private JoinWindows(String name, long before, long after) {
-        super(name);
+    private JoinWindows(long before, long after) {
+        super();
 
         if (before + after < 0) {
             throw new IllegalArgumentException("Window interval (ie, before+after) must not be negative");
         }
-
         this.after = after;
         this.before = before;
     }
@@ -69,8 +68,8 @@ public class JoinWindows extends Windows<TimeWindow> {
      *
      * @param timeDifference    join window interval
      */
-    public static JoinWindows of(String name, long timeDifference) {
-        return new JoinWindows(name, timeDifference, timeDifference);
+    public static JoinWindows of(long timeDifference) {
+        return new JoinWindows(timeDifference, timeDifference);
     }
 
     /**
@@ -81,7 +80,7 @@ public class JoinWindows extends Windows<TimeWindow> {
      * @param timeDifference    join window interval
      */
     public JoinWindows before(long timeDifference) {
-        return new JoinWindows(this.name, timeDifference, this.after);
+        return new JoinWindows(timeDifference, this.after);
     }
 
     /**
@@ -92,7 +91,7 @@ public class JoinWindows extends Windows<TimeWindow> {
      * @param timeDifference    join window interval
      */
     public JoinWindows after(long timeDifference) {
-        return new JoinWindows(this.name, this.before, timeDifference);
+        return new JoinWindows(this.before, timeDifference);
     }
 
     /**

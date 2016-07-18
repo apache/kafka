@@ -29,13 +29,12 @@ import static org.junit.Assert.assertNotEquals;
 
 public class TimeWindowsTest {
 
-    private static String anyName = "window";
     private static long anySize = 123L;
 
     @Test
     public void shouldHaveSaneEqualsAndHashCode() {
-        TimeWindows w1 = TimeWindows.of("w1", anySize);
-        TimeWindows w2 = TimeWindows.of("w2", w1.size);
+        TimeWindows w1 = TimeWindows.of(anySize);
+        TimeWindows w2 = TimeWindows.of(w1.size);
 
         // Reflexive
         assertEquals(w1, w1);
@@ -47,62 +46,53 @@ public class TimeWindowsTest {
         assertEquals(w1.hashCode(), w2.hashCode());
 
         // Transitive
-        TimeWindows w3 = TimeWindows.of("w3", w2.size);
+        TimeWindows w3 = TimeWindows.of(w2.size);
         assertEquals(w2, w3);
         assertEquals(w1, w3);
         assertEquals(w1.hashCode(), w3.hashCode());
 
         // Inequality scenarios
         assertNotEquals("must be false for null", null, w1);
-        assertNotEquals("must be false for different window types", UnlimitedWindows.of("irrelevant"), w1);
+        assertNotEquals("must be false for different window types", UnlimitedWindows.of(), w1);
         assertNotEquals("must be false for different types", new Object(), w1);
 
-        TimeWindows differentWindowSize = TimeWindows.of("differentWindowSize", w1.size + 1);
+        TimeWindows differentWindowSize = TimeWindows.of(w1.size + 1);
         assertNotEquals("must be false when window sizes are different", differentWindowSize, w1);
 
         TimeWindows differentAdvanceInterval = w1.advanceBy(w1.advance - 1);
         assertNotEquals("must be false when advance intervals are different", differentAdvanceInterval, w1);
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void nameMustNotBeEmpty() {
-        TimeWindows.of("", anySize);
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void nameMustNotBeNull() {
-        TimeWindows.of(null, anySize);
-    }
 
     @Test(expected = IllegalArgumentException.class)
     public void windowSizeMustNotBeNegative() {
-        TimeWindows.of(anyName, -1);
+        TimeWindows.of(-1);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void windowSizeMustNotBeZero() {
-        TimeWindows.of(anyName, 0);
+        TimeWindows.of(0);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void advanceIntervalMustNotBeNegative() {
-        TimeWindows.of(anyName, anySize).advanceBy(-1);
+        TimeWindows.of(anySize).advanceBy(-1);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void advanceIntervalMustNotBeZero() {
-        TimeWindows.of(anyName, anySize).advanceBy(0);
+        TimeWindows.of(anySize).advanceBy(0);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void advanceIntervalMustNotBeLargerThanWindowSize() {
         long size = anySize;
-        TimeWindows.of(anyName, size).advanceBy(size + 1);
+        TimeWindows.of(size).advanceBy(size + 1);
     }
 
     @Test
     public void windowsForHoppingWindows() {
-        TimeWindows windows = TimeWindows.of(anyName, 12L).advanceBy(5L);
+        TimeWindows windows = TimeWindows.of(12L).advanceBy(5L);
         Map<Long, TimeWindow> matched = windows.windowsFor(21L);
         assertEquals(12L / 5L + 1, matched.size());
         assertEquals(new TimeWindow(10L, 22L), matched.get(10L));
@@ -112,7 +102,7 @@ public class TimeWindowsTest {
 
     @Test
     public void windowsForBarelyOverlappingHoppingWindows() {
-        TimeWindows windows = TimeWindows.of(anyName, 6L).advanceBy(5L);
+        TimeWindows windows = TimeWindows.of(6L).advanceBy(5L);
         Map<Long, TimeWindow> matched = windows.windowsFor(7L);
         assertEquals(1, matched.size());
         assertEquals(new TimeWindow(5L, 11L), matched.get(5L));
@@ -120,7 +110,7 @@ public class TimeWindowsTest {
 
     @Test
     public void windowsForTumblingWindows() {
-        TimeWindows windows = TimeWindows.of(anyName, 12L);
+        TimeWindows windows = TimeWindows.of(12L);
         Map<Long, TimeWindow> matched = windows.windowsFor(21L);
         assertEquals(1, matched.size());
         assertEquals(new TimeWindow(12L, 24L), matched.get(12L));

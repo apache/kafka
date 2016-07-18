@@ -49,8 +49,9 @@ public class TimeWindows extends Windows<TimeWindow> {
      */
     public final long advance;
 
-    private TimeWindows(String name, long size, long advance) {
-        super(name);
+
+    private TimeWindows(long size, long advance) {
+        super();
         if (size <= 0) {
             throw new IllegalArgumentException("window size must be > 0 (you provided " + size + ")");
         }
@@ -70,14 +71,13 @@ public class TimeWindows extends Windows<TimeWindow> {
      * This provides the semantics of tumbling windows, which are fixed-sized, gap-less,
      * non-overlapping windows. Tumbling windows are a specialization of hopping windows.
      *
-     * @param name The name of the window. Must not be null or empty.
      * @param size The size of the window, with the requirement that size &gt; 0.
      *             The window size's effective time unit is determined by the semantics of the
      *             topology's configured {@link org.apache.kafka.streams.processor.TimestampExtractor}.
      * @return a new window definition
      */
-    public static TimeWindows of(String name, long size) {
-        return new TimeWindows(name, size, size);
+    public static TimeWindows of(long size) {
+        return new TimeWindows(size, size);
     }
 
     /**
@@ -94,7 +94,7 @@ public class TimeWindows extends Windows<TimeWindow> {
      * @return a new window definition
      */
     public TimeWindows advanceBy(long interval) {
-        return new TimeWindows(this.name, this.size, interval);
+        return new TimeWindows(this.size, interval);
     }
 
     @Override

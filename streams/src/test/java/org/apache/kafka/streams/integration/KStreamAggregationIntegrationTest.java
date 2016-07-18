@@ -174,7 +174,7 @@ public class KStreamAggregationIntegrationTest {
         produceMessages(secondBatchTimestamp);
 
         groupedStream
-            .reduce(reducer, TimeWindows.of("reduce-time-windows", 500L))
+            .reduce(reducer, TimeWindows.of(500L), "reduce-time-windows")
             .toStream(new KeyValueMapper<Windowed<String>, String, String>() {
                 @Override
                 public String apply(Windowed<String> windowedKey, String value) {
@@ -276,8 +276,8 @@ public class KStreamAggregationIntegrationTest {
         groupedStream.aggregate(
             initializer,
             aggregator,
-            TimeWindows.of("aggregate-by-key-windowed", 500L),
-            Serdes.Integer())
+            TimeWindows.of(500L),
+            Serdes.Integer(), "aggregate-by-key-windowed")
             .toStream(new KeyValueMapper<Windowed<String>, Integer, String>() {
                 @Override
                 public String apply(Windowed<String> windowedKey, Integer value) {
@@ -371,7 +371,7 @@ public class KStreamAggregationIntegrationTest {
         produceMessages(timestamp);
 
         stream.groupByKey(Serdes.Integer(), Serdes.String())
-            .count(TimeWindows.of("count-windows", 500L))
+            .count(TimeWindows.of(500L), "count-windows")
             .toStream(new KeyValueMapper<Windowed<Integer>, Long, String>() {
                 @Override
                 public String apply(final Windowed<Integer> windowedKey, final Long value) {

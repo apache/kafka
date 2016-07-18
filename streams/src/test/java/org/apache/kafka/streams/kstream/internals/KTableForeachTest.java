@@ -36,7 +36,6 @@ import static org.junit.Assert.assertEquals;
 public class KTableForeachTest {
 
     final private String topicName = "topic";
-
     final private Serde<Integer> intSerde = Serdes.Integer();
     final private Serde<String> stringSerde = Serdes.String();
 
@@ -78,7 +77,7 @@ public class KTableForeachTest {
 
         // When
         KStreamBuilder builder = new KStreamBuilder();
-        KTable<Integer, String> table = builder.table(intSerde, stringSerde, topicName);
+        KTable<Integer, String> table = builder.table(intSerde, stringSerde, topicName, "anyStoreName");
         table.foreach(action);
 
         // Then
