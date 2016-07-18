@@ -165,7 +165,7 @@ public class ProducerConfig extends AbstractConfig {
     private static final String RETRIES_DOC = "Setting a value greater than zero will cause the client to resend any record whose send fails with a potentially transient error."
                                               + " Note that this retry is no different than if the client resent the record upon receiving the "
                                               + "error. Allowing retries without setting <code>max.in.flight.requests.per.connection</code> to 1 will potentially change the ordering of records because if two batches are "
-                                              + "sent to a single partition, and the first fails and is retried but the second succeeds, then the second batch "
+                                              + "sent to a single partition, and the first fails and is retried but the second succeeds, then the records in the second batch "
                                               + "may appear first.";
 
     /** <code>retry.backoff.ms</code> */
