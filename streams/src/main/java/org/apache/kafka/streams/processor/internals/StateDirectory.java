@@ -83,7 +83,7 @@ public class StateDirectory {
             return true;
         }
         final File lockFile = new File(directoryForTask(taskId), LOCK_FILE_NAME);
-        final FileChannel channel = getFileChannel(taskId, lockFile.toPath());
+        final FileChannel channel = getOrCreateFileChannel(taskId, lockFile.toPath());
 
         FileLock lock = tryAcquireLock(channel);
         while (lock == null && retry > 0) {
@@ -167,7 +167,7 @@ public class StateDirectory {
         });
     }
 
-    private FileChannel getFileChannel(final TaskId taskId, final Path lockPath) throws IOException {
+    private FileChannel getOrCreateFileChannel(final TaskId taskId, final Path lockPath) throws IOException {
         if (!channels.containsKey(taskId)) {
             channels.put(taskId, FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE));
         }
