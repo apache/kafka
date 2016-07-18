@@ -21,9 +21,8 @@ import util.Arrays.asList
 
 import kafka.common.BrokerEndPointNotAvailableException
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.PartitionState
 import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
-import org.apache.kafka.common.requests.UpdateMetadataRequest
+import org.apache.kafka.common.requests.{PartitionState, UpdateMetadataRequest}
 import org.apache.kafka.common.requests.UpdateMetadataRequest.{Broker, EndPoint}
 import org.junit.Test
 import org.junit.Assert._

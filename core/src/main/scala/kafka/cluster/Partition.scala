@@ -18,7 +18,7 @@ package kafka.cluster
 
 import kafka.common._
 import kafka.utils._
-import kafka.utils.CoreUtils.{inReadLock,inWriteLock}
+import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.admin.AdminUtils
 import kafka.api.LeaderAndIsr
 import kafka.log.LogConfig
@@ -26,17 +26,15 @@ import kafka.server._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.controller.KafkaController
 import kafka.message.ByteBufferMessageSet
-
 import java.io.IOException
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import org.apache.kafka.common.PartitionState
+
 import org.apache.kafka.common.errors.{NotEnoughReplicasException, NotLeaderForPartitionException}
 import org.apache.kafka.common.protocol.Errors
 
-
 import scala.collection.JavaConverters._
-
 import com.yammer.metrics.core.Gauge
+import org.apache.kafka.common.requests.PartitionState
 
 /**
  * Data structure that represents a topic partition. The leader maintains the AR, ISR, CUR, RAR

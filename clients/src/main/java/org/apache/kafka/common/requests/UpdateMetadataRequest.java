@@ -13,7 +13,6 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.PartitionState;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
