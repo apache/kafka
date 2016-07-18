@@ -143,7 +143,8 @@ public class PageViewTypedDemo {
 
         KStream<String, PageView> views = builder.stream(Serdes.String(), pageViewSerde, "streams-pageview-input");
 
-        KTable<String, UserProfile> users = builder.table(Serdes.String(), userProfileSerde, "streams-userprofile-input");
+        KTable<String, UserProfile> users = builder.table(Serdes.String(), userProfileSerde,
+            "streams-userprofile-input", "streams-userprofile-store-name");
 
         KStream<WindowedPageViewByRegion, RegionCount> regionCount = views
                 .leftJoin(users, new ValueJoiner<PageView, UserProfile, PageViewByRegion>() {
@@ -168,7 +169,7 @@ public class PageViewTypedDemo {
                     }
                 })
                 .groupByKey(Serdes.String(), pageViewByRegionSerde)
-                .count(TimeWindows.of("GeoPageViewsWindow", 7 * 24 * 60 * 60 * 1000L).advanceBy(1000))
+                .count(TimeWindows.of(7 * 24 * 60 * 60 * 1000L).advanceBy(1000), "RollingSevenDaysOfPageViewsByRegion")
                 // TODO: we can merge ths toStream().map(...) with a single toStream(...)
                 .toStream()
                 .map(new KeyValueMapper<Windowed<String>, Long, KeyValue<WindowedPageViewByRegion, RegionCount>>() {

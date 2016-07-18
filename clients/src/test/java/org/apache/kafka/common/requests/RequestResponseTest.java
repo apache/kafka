@@ -99,7 +99,10 @@ public class RequestResponseTest {
                 createSaslHandshakeResponse(),
                 createApiVersionRequest(),
                 createApiVersionRequest().getErrorResponse(0, new UnknownServerException()),
-                createApiVersionResponse()
+                createApiVersionResponse(),
+                createCreateTopicRequest(),
+                createCreateTopicRequest().getErrorResponse(0, new UnknownServerException()),
+                createCreateTopicResponse()
         );
 
         for (AbstractRequestResponse req : requestResponseList)
@@ -450,5 +453,30 @@ public class RequestResponseTest {
     private AbstractRequestResponse createApiVersionResponse() {
         List<ApiVersionsResponse.ApiVersion> apiVersions = Arrays.asList(new ApiVersionsResponse.ApiVersion((short) 0, (short) 0, (short) 2));
         return new ApiVersionsResponse(Errors.NONE.code(), apiVersions);
+    }
+
+    private AbstractRequest createCreateTopicRequest() {
+        CreateTopicsRequest.TopicDetails request1 = new CreateTopicsRequest.TopicDetails(3, (short) 5);
+
+        Map<Integer, List<Integer>> replicaAssignments = new HashMap<>();
+        replicaAssignments.put(1, Arrays.asList(1, 2, 3));
+        replicaAssignments.put(2, Arrays.asList(2, 3, 4));
+
+        Map<String, String> configs = new HashMap<>();
+        configs.put("config1", "value1");
+
+        CreateTopicsRequest.TopicDetails request2 = new CreateTopicsRequest.TopicDetails(replicaAssignments, configs);
+
+        Map<String, CreateTopicsRequest.TopicDetails> request = new HashMap<>();
+        request.put("my_t1", request1);
+        request.put("my_t2", request2);
+        return new CreateTopicsRequest(request, 0);
+    }
+
+    private AbstractRequestResponse createCreateTopicResponse() {
+        Map<String, Errors> errors = new HashMap<>();
+        errors.put("t1", Errors.INVALID_TOPIC_EXCEPTION);
+        errors.put("t2", Errors.LEADER_NOT_AVAILABLE);
+        return new CreateTopicsResponse(errors);
     }
 }

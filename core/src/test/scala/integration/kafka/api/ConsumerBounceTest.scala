@@ -83,7 +83,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
 
     consumer.subscribe(List(topic), new ConsumerRebalanceListener {
       override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) {
-        // TODO: until KAFKA-2017 is merged, we have to handle the case in which the
+        // TODO: until KAFKA-2017 is merged, we have to handle the case in which
         // the commit fails on prior to rebalancing on coordinator fail-over.
         consumer.seek(tp, consumed)
       }

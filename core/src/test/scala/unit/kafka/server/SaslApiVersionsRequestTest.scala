@@ -78,12 +78,12 @@ class SaslApiVersionsRequestTest extends BaseRequestTest with SaslTestHarness {
   }
 
   private def sendApiVersionsRequest(socket: Socket, request: ApiVersionsRequest, version: Short): ApiVersionsResponse = {
-    val response = send(socket, request, ApiKeys.API_VERSIONS, version)
+    val response = send(request, ApiKeys.API_VERSIONS, version, socket)
     ApiVersionsResponse.parse(response)
   }
 
   private def sendSaslHandshakeRequestValidateResponse(socket: Socket) {
-    val response = send(socket, new SaslHandshakeRequest("PLAIN"), ApiKeys.SASL_HANDSHAKE, 0)
+    val response = send(new SaslHandshakeRequest("PLAIN"), ApiKeys.SASL_HANDSHAKE, 0.toShort, socket)
     val handshakeResponse = SaslHandshakeResponse.parse(response)
     assertEquals(Errors.NONE.code, handshakeResponse.errorCode())
     assertEquals(Collections.singletonList("PLAIN"), handshakeResponse.enabledMechanisms())

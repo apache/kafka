@@ -46,6 +46,8 @@ public class KTableKTableLeftJoinTest {
 
     final private String topic1 = "topic1";
     final private String topic2 = "topic2";
+    final private String storeName1 = "store-name-1";
+    final private String storeName2 = "store-name-2";
 
     final private Serde<Integer> intSerde = Serdes.Integer();
     final private Serde<String> stringSerde = Serdes.String();
@@ -72,8 +74,8 @@ public class KTableKTableLeftJoinTest {
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
-        KTable<Integer, String> table1 = builder.table(intSerde, stringSerde, topic1);
-        KTable<Integer, String> table2 = builder.table(intSerde, stringSerde, topic2);
+        KTable<Integer, String> table1 = builder.table(intSerde, stringSerde, topic1, storeName1);
+        KTable<Integer, String> table2 = builder.table(intSerde, stringSerde, topic2, storeName2);
         KTable<Integer, String> joined = table1.leftJoin(table2, MockValueJoiner.STRING_JOINER);
         MockProcessorSupplier<Integer, String> processor;
         processor = new MockProcessorSupplier<>();
@@ -166,8 +168,8 @@ public class KTableKTableLeftJoinTest {
         KTable<Integer, String> joined;
         MockProcessorSupplier<Integer, String> proc;
 
-        table1 = builder.table(intSerde, stringSerde, topic1);
-        table2 = builder.table(intSerde, stringSerde, topic2);
+        table1 = builder.table(intSerde, stringSerde, topic1, storeName1);
+        table2 = builder.table(intSerde, stringSerde, topic2, storeName2);
         joined = table1.leftJoin(table2, MockValueJoiner.STRING_JOINER);
 
         proc = new MockProcessorSupplier<>();
@@ -247,8 +249,8 @@ public class KTableKTableLeftJoinTest {
         KTable<Integer, String> joined;
         MockProcessorSupplier<Integer, String> proc;
 
-        table1 = builder.table(intSerde, stringSerde, topic1);
-        table2 = builder.table(intSerde, stringSerde, topic2);
+        table1 = builder.table(intSerde, stringSerde, topic1, storeName1);
+        table2 = builder.table(intSerde, stringSerde, topic2, storeName2);
         joined = table1.leftJoin(table2, MockValueJoiner.STRING_JOINER);
 
         ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues();

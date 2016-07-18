@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
@@ -25,8 +26,9 @@ import java.util.TreeMap;
 
 public class MemoryNavigableLRUCache<K, V> extends MemoryLRUCache<K, V> {
 
-    public MemoryNavigableLRUCache(String name, final int maxCacheSize) {
-        super(name, maxCacheSize);
+
+    public MemoryNavigableLRUCache(String name, final int maxCacheSize, Serde<K> keySerde, Serde<V> valueSerde) {
+        super(name, maxCacheSize, keySerde, valueSerde);
     }
 
     @Override
@@ -36,7 +38,6 @@ public class MemoryNavigableLRUCache<K, V> extends MemoryLRUCache<K, V> {
         return this;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public KeyValueIterator<K, V> range(K from, K to) {
         final TreeMap<K, V> treeMap = toTreeMap();
@@ -52,6 +53,7 @@ public class MemoryNavigableLRUCache<K, V> extends MemoryLRUCache<K, V> {
     private synchronized TreeMap<K, V> toTreeMap() {
         return new TreeMap<>(this.map);
     }
+
 
     private static class CacheIterator<K, V> implements KeyValueIterator<K, V> {
         private final Iterator<K> keys;

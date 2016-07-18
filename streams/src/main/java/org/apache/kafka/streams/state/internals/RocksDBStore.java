@@ -176,7 +176,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         this.changeLogger = this.loggingEnabled ? new StoreChangeLogger<>(name, context, WindowStoreUtils.INNER_SERDES) : null;
 
         if (this.cacheSize > 0) {
-            this.cache = new MemoryLRUCache<K, RocksDBCacheEntry>(name, cacheSize)
+            this.cache = new MemoryLRUCache<K, RocksDBCacheEntry>(name, cacheSize, null, null)
                     .whenEldestRemoved(new MemoryLRUCache.EldestEntryRemovalListener<K, RocksDBCacheEntry>() {
                         @Override
                         public void apply(K key, RocksDBCacheEntry entry) {

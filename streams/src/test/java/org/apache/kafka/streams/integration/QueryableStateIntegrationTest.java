@@ -15,6 +15,7 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -23,10 +24,9 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedSingleNodeKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
-import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
-import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -119,21 +119,14 @@ public class QueryableStateIntegrationTest {
     public void shouldBeAbleToQueryState() throws Exception {
         final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};
 
-        final Set<KeyValue<String, String>> expectedJoinThis = new TreeSet<>(stringComparator);
-        expectedJoinThis.addAll(Arrays.asList(
+        final Set<KeyValue<String, String>> batch1 = new TreeSet<>(stringComparator);
+        batch1.addAll(Arrays.asList(
             new KeyValue<>(keys[0], "hello"),
             new KeyValue<>(keys[1], "goodbye"),
             new KeyValue<>(keys[2], "welcome"),
             new KeyValue<>(keys[3], "go"),
             new KeyValue<>(keys[4], "kafka")));
 
-        final Set<KeyValue<String, String>> expectedJoinOther = new TreeSet<>(stringComparator);
-        expectedJoinOther.addAll(Arrays.asList(
-            new KeyValue<>(keys[0], "world"),
-            new KeyValue<>(keys[1], "joanne"),
-            new KeyValue<>(keys[2], "home"),
-            new KeyValue<>(keys[3], "away"),
-            new KeyValue<>(keys[4], "streams")));
 
         final Set<KeyValue<String, Long>> expectedCount = new TreeSet<>(stringLongComparator);
         for (String key : keys) {
@@ -142,60 +135,33 @@ public class QueryableStateIntegrationTest {
 
         IntegrationTestUtils.produceKeyValuesSynchronously(
             STREAM_ONE,
-            expectedJoinThis,
-            TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
-                StringSerializer.class,
-                StringSerializer.class,
-                new Properties()));
-        IntegrationTestUtils.produceKeyValuesSynchronously(
-            STREAM_TWO,
-            expectedJoinOther,
+            batch1,
             TestUtils.producerConfig(
                 CLUSTER.bootstrapServers(),
                 StringSerializer.class,
                 StringSerializer.class,
                 new Properties()));
 
-        final KStream<String, String>
-            s1 =
-            builder.stream(STREAM_ONE);
-        final KStream<String, String>
-            s2 =
-            builder.stream(STREAM_TWO);
-
-        s1.join(s2, new ValueJoiner<String, String, String>() {
-            @Override
-            public String apply(final String value1, final String value2) {
-                return value1 + value2;
-            }
-        }, JoinWindows.of("join", 10 * 60 * 1000L))
-            .to(OUTPUT_TOPIC);
+        final KStream<String, String> s1 = builder.stream(STREAM_ONE);
 
         // Non Windowed
-        s1.groupByKey().count("my-count");
+        s1.groupByKey().count("my-count").to(Serdes.String(), Serdes.Long(), OUTPUT_TOPIC);
 
+        s1.groupByKey().count(TimeWindows.of(60000L), "windowed-count");
         kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
         kafkaStreams.start();
 
         waitUntilAtLeastOneRecordProcessed();
 
-        final ReadOnlyWindowStore<String, String>
-            joinThis =
-            kafkaStreams.store("join-this", QueryableStoreTypes.<String, String>windowStore());
-
-        final ReadOnlyWindowStore<String, String>
-            joinOther =
-            kafkaStreams.store("join-other", QueryableStoreTypes.<String, String>windowStore());
-
         final ReadOnlyKeyValueStore<String, Long>
             myCount = kafkaStreams.store("my-count", QueryableStoreTypes.<String, Long>keyValueStore());
 
-        verifyCanGetByKey(keys, expectedJoinThis,
-                          expectedJoinOther,
+        final ReadOnlyWindowStore<String, Long> windowStore =
+                kafkaStreams.store("windowed-count", QueryableStoreTypes.<String, Long>windowStore());
+        verifyCanGetByKey(keys,
                           expectedCount,
-                          joinThis,
-                          joinOther,
+                          expectedCount,
+                          windowStore,
                           myCount);
 
         verifyRangeAndAll(expectedCount, myCount);
@@ -234,34 +200,28 @@ public class QueryableStateIntegrationTest {
     }
 
     private void verifyCanGetByKey(final String[] keys,
-                                   final Set<KeyValue<String, String>> expectedJoinThis,
-                                   final Set<KeyValue<String, String>> expectedJoinOther,
+                                   final Set<KeyValue<String, Long>> expectedWindowState,
                                    final Set<KeyValue<String, Long>> expectedCount,
-                                   final ReadOnlyWindowStore<String, String> joinThis,
-                                   final ReadOnlyWindowStore<String, String> joinOther,
+                                   final ReadOnlyWindowStore<String, Long> windowStore,
                                    final ReadOnlyKeyValueStore<String, Long> myCount)
         throws InterruptedException {
-        final Set<KeyValue<String, String>> joinThisState = new TreeSet<>(stringComparator);
-        final Set<KeyValue<String, String>> joinOtherState = new TreeSet<>(stringComparator);
+        final Set<KeyValue<String, Long>> windowState = new TreeSet<>(stringLongComparator);
         final Set<KeyValue<String, Long>> countState = new TreeSet<>(stringLongComparator);
 
         final long timeout = System.currentTimeMillis() + 30000;
-        while (joinThisState.size() < 5 &&
-               joinOtherState.size() < 5 &&
+        while (windowState.size() < 5 &&
                countState.size() < 5 &&
                System.currentTimeMillis() < timeout) {
             Thread.sleep(10);
             for (String key : keys) {
-                joinThisState.addAll(fetch(joinThis, key));
-                joinOtherState.addAll(fetch(joinOther, key));
+                windowState.addAll(fetch(windowStore, key));
                 final Long value = myCount.get(key);
                 if (value != null) {
                     countState.add(new KeyValue<>(key, value));
                 }
             }
         }
-        assertThat(joinThisState, equalTo(expectedJoinThis));
-        assertThat(joinOtherState, equalTo(expectedJoinOther));
+        assertThat(windowState, equalTo(expectedWindowState));
         assertThat(countState, equalTo(expectedCount));
     }
 
@@ -273,7 +233,7 @@ public class QueryableStateIntegrationTest {
         config.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
                            StringDeserializer.class.getName());
         config.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-                           StringDeserializer.class.getName());
+                           LongDeserializer.class.getName());
         IntegrationTestUtils.waitUntilMinValuesRecordsReceived(config,
                                                                OUTPUT_TOPIC,
                                                                1,
@@ -281,12 +241,12 @@ public class QueryableStateIntegrationTest {
                                                                1000);
     }
 
-    private Set<KeyValue<String, String>> fetch(final ReadOnlyWindowStore<String, String> store,
+    private Set<KeyValue<String, Long>> fetch(final ReadOnlyWindowStore<String, Long> store,
                                                 final String key) {
 
-        final WindowStoreIterator<String> fetch = store.fetch(key, 0, System.currentTimeMillis());
+        final WindowStoreIterator<Long> fetch = store.fetch(key, 0, System.currentTimeMillis());
         if (fetch.hasNext()) {
-            KeyValue<Long, String> next = fetch.next();
+            KeyValue<Long, Long> next = fetch.next();
             return Collections.singleton(KeyValue.pair(key, next.value));
         }
         return Collections.emptySet();
