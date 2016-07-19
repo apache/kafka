@@ -670,7 +670,7 @@ project(':streams') {
   dependencies {
     compile project(':clients')
     compile project(':connect:json')  // this dependency should be removed after we unify data API
-    compile libs.slf4jlog4j
+    compile libs.slf4jApi
     compile libs.rocksDBJni
     // this dependency should be removed after KIP-4
     compile (libs.zkclient) {
@@ -683,6 +683,8 @@ project(':streams') {
     testCompile project(':core')
     testCompile project(':core').sourceSets.test.output
     testCompile libs.junit
+
+    testRuntime libs.slf4jlog4j
   }
 
   javadoc {
