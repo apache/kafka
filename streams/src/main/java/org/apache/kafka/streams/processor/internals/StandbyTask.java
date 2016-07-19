@@ -38,7 +38,7 @@ public class StandbyTask extends AbstractTask {
 
     /**
      * Create {@link StandbyTask} with its assigned partitions
-     *  @param id                    the ID of this task
+     * @param id                    the ID of this task
      * @param applicationId         the ID of the stream processing application
      * @param partitions            the collection of assigned {@link TopicPartition}
      * @param topology              the instance of {@link ProcessorTopology}
@@ -46,7 +46,7 @@ public class StandbyTask extends AbstractTask {
      * @param restoreConsumer       the instance of {@link Consumer} used when restoring state
      * @param config                the {@link StreamsConfig} specified by the user
      * @param metrics               the {@link StreamsMetrics} created by the thread
-     * @param stateDirectory
+     * @param stateDirectory        the {@link StateDirectory} created by the thread
      */
     public StandbyTask(TaskId id,
                        String applicationId,
