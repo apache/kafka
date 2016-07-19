@@ -25,6 +25,7 @@ import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
@@ -37,7 +38,6 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
@@ -56,6 +56,7 @@ public class StreamThreadStateStoreProviderTest {
     private StreamTask taskOne;
     private StreamTask taskTwo;
     private StreamThreadStateStoreProvider provider;
+    private StateDirectory stateDirectory;
 
     @Before
     public void before() throws IOException {
@@ -76,8 +77,9 @@ public class StreamThreadStateStoreProviderTest {
         final String applicationId = "applicationId";
         properties.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        final String stateConfigDir = TestUtils.tempDirectory().getPath();
         properties.put(StreamsConfig.STATE_DIR_CONFIG,
-                       TestUtils.tempDirectory(new File("/tmp").toPath(), "my-state").getPath());
+                stateConfigDir);
 
         final StreamsConfig streamsConfig = new StreamsConfig(properties);
         final MockClientSupplier clientSupplier = new MockClientSupplier();
@@ -86,6 +88,7 @@ public class StreamThreadStateStoreProviderTest {
 
         final ProcessorTopology topology = builder.build("X", null);
         final Map<TaskId, StreamTask> tasks = new HashMap<>();
+        stateDirectory = new StateDirectory(applicationId, stateConfigDir);
         taskOne = createStreamsTask(applicationId, streamsConfig, clientSupplier, topology,
                                     new TaskId(0, 0));
         tasks.put(new TaskId(0, 0),
@@ -105,6 +108,7 @@ public class StreamThreadStateStoreProviderTest {
             }
         };
         provider = new StreamThreadStateStoreProvider(thread);
+
     }
 
     @Test
@@ -157,7 +161,7 @@ public class StreamThreadStateStoreProviderTest {
                               clientSupplier.consumer,
                               clientSupplier.producer,
                               clientSupplier.restoreConsumer,
-                              streamsConfig, new TheStreamMetrics()) {
+                              streamsConfig, new TheStreamMetrics(), stateDirectory) {
             @Override
             protected void initializeOffsetLimits() {
 
