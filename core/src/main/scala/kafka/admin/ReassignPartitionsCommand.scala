@@ -54,11 +54,7 @@ object ReassignPartitionsCommand extends Logging {
       case e: Throwable =>
         println("Partitions reassignment failed due to " + e.getMessage)
         println(Utils.stackTrace(e))
-    } finally {
-      val zkClient = zkUtils.zkClient
-      if (zkClient != null)
-        zkClient.close()
-    }
+    } finally zkUtils.close()
   }
 
   def verifyAssignment(zkUtils: ZkUtils, opts: ReassignPartitionsCommandOptions) {
@@ -70,14 +66,14 @@ object ReassignPartitionsCommand extends Logging {
 
     println("Status of partition reassignment:")
     val reassignedPartitionsStatus = checkIfReassignmentSucceeded(zkUtils, partitionsToBeReassigned)
-    reassignedPartitionsStatus.foreach { partition =>
-      partition._2 match {
+    reassignedPartitionsStatus.foreach { case (topicPartition, status) =>
+      status match {
         case ReassignmentCompleted =>
-          println("Reassignment of partition %s completed successfully".format(partition._1))
+          println("Reassignment of partition %s completed successfully".format(topicPartition))
         case ReassignmentFailed =>
-          println("Reassignment of partition %s failed".format(partition._1))
+          println("Reassignment of partition %s failed".format(topicPartition))
         case ReassignmentInProgress =>
-          println("Reassignment of partition %s is still in progress".format(partition._1))
+          println("Reassignment of partition %s is still in progress".format(topicPartition))
       }
     }
   }
@@ -128,20 +124,20 @@ object ReassignPartitionsCommand extends Logging {
     executeAssignment(zkUtils, reassignmentJsonString)
   }
 
-  def executeAssignment(zkUtils: ZkUtils,reassignmentJsonString: String){
+  def executeAssignment(zkUtils: ZkUtils, reassignmentJsonString: String) {
 
     val partitionsToBeReassigned = zkUtils.parsePartitionReassignmentDataWithoutDedup(reassignmentJsonString)
     if (partitionsToBeReassigned.isEmpty)
       throw new AdminCommandFailedException("Partition reassignment data file is empty")
-    val duplicateReassignedPartitions = CoreUtils.duplicates(partitionsToBeReassigned.map{ case(tp,replicas) => tp})
+    val duplicateReassignedPartitions = CoreUtils.duplicates(partitionsToBeReassigned.map { case (tp, _) => tp })
     if (duplicateReassignedPartitions.nonEmpty)
       throw new AdminCommandFailedException("Partition reassignment contains duplicate topic partitions: %s".format(duplicateReassignedPartitions.mkString(",")))
-    val duplicateEntries= partitionsToBeReassigned
-      .map{ case(tp,replicas) => (tp, CoreUtils.duplicates(replicas))}
-      .filter{ case (tp,duplicatedReplicas) => duplicatedReplicas.nonEmpty }
+    val duplicateEntries = partitionsToBeReassigned
+      .map { case (tp, replicas) => (tp, CoreUtils.duplicates(replicas))}
+      .filter { case (tp, duplicatedReplicas) => duplicatedReplicas.nonEmpty }
     if (duplicateEntries.nonEmpty) {
       val duplicatesMsg = duplicateEntries
-        .map{ case (tp,duplicateReplicas) => "%s contains multiple entries for %s".format(tp, duplicateReplicas.mkString(",")) }
+        .map { case (tp, duplicateReplicas) => "%s contains multiple entries for %s".format(tp, duplicateReplicas.mkString(",")) }
         .mkString(". ")
       throw new AdminCommandFailedException("Partition replica lists may not contain duplicate entries: %s".format(duplicatesMsg))
     }
@@ -151,7 +147,7 @@ object ReassignPartitionsCommand extends Logging {
     println("Current partition replica assignment\n\n%s\n\nSave this to use as the --reassignment-json-file option during rollback"
       .format(zkUtils.formatAsReassignmentJson(currentPartitionReplicaAssignment)))
     // start the reassignment
-    if(reassignPartitionsCommand.reassignPartitions())
+    if (reassignPartitionsCommand.reassignPartitions())
       println("Successfully started reassignment of partitions %s".format(zkUtils.formatAsReassignmentJson(partitionsToBeReassigned.toMap)))
     else
       println("Failed to reassign partitions %s".format(partitionsToBeReassigned))
@@ -228,9 +224,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: collection.Map[Top
   def reassignPartitions(): Boolean = {
     try {
       val validPartitions = partitions.filter(p => validatePartition(zkUtils, p._1.topic, p._1.partition))
-      if(validPartitions.isEmpty) {
-        false
-      }
+      if (validPartitions.isEmpty) false
       else {
         val jsonReassignmentData = zkUtils.formatAsReassignmentJson(validPartitions)
         zkUtils.createPersistentPath(ZkUtils.ReassignPartitionsPath, jsonReassignmentData)
@@ -252,7 +246,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: collection.Map[Top
       case Some(partitions) =>
         if(partitions.contains(partition)) {
           true
-        }else{
+        } else {
           error("Skipping reassignment of partition [%s,%d] ".format(topic, partition) +
             "since it doesn't exist")
           false
