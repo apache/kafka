@@ -68,7 +68,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private final SubscriptionState subscriptions;
     private final OffsetCommitCallback defaultOffsetCommitCallback;
     private final boolean autoCommitEnabled;
-    private final long autoCommitIntervalMs;
+    private final int autoCommitIntervalMs;
     private final ConsumerInterceptors<?, ?> interceptors;
     private final boolean excludeInternalTopics;
     private final List<OffsetCommitCompletion> completedOffsetCommits;
@@ -95,7 +95,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                long retryBackoffMs,
                                OffsetCommitCallback defaultOffsetCommitCallback,
                                boolean autoCommitEnabled,
-                               long autoCommitIntervalMs,
+                               int autoCommitIntervalMs,
                                ConsumerInterceptors<?, ?> interceptors,
                                boolean excludeInternalTopics) {
         super(client,

@@ -517,6 +517,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final Metadata metadata;
     private final long retryBackoffMs;
     private final long requestTimeoutMs;
+    private final int maxPollTimeoutMs;
     private boolean closed = false;
 
     // currentThread holds the threadId of the current thread accessing KafkaConsumer
@@ -644,11 +645,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     ConsumerInterceptor.class);
             this.interceptors = interceptorList.isEmpty() ? null : new ConsumerInterceptors<>(interceptorList);
 
+            boolean enableAutoCommit = config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
+            int autoCommitIntervalMs = config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG);
+            int heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
+            this.maxPollTimeoutMs = enableAutoCommit ? Math.min(autoCommitIntervalMs, heartbeatIntervalMs) : heartbeatIntervalMs;
+
             this.coordinator = new ConsumerCoordinator(this.client,
                     config.getString(ConsumerConfig.GROUP_ID_CONFIG),
                     config.getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG),
                     config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG),
-                    config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG),
+                    heartbeatIntervalMs,
                     assignors,
                     this.metadata,
                     this.subscriptions,
@@ -657,8 +663,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     this.time,
                     retryBackoffMs,
                     new ConsumerCoordinator.DefaultOffsetCommitCallback(),
-                    config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG),
-                    config.getLong(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
+                    enableAutoCommit,
+                    autoCommitIntervalMs,
                     this.interceptors,
                     config.getBoolean(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG));
             if (keyDeserializer == null) {
@@ -717,6 +723,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                   Metrics metrics,
                   SubscriptionState subscriptions,
                   Metadata metadata,
+                  boolean autoCommitEnabled,
+                  int autoCommitIntervalMs,
+                  int heartbeatIntervalMs,
                   long retryBackoffMs,
                   long requestTimeoutMs) {
         this.clientId = clientId;
@@ -732,6 +741,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.metadata = metadata;
         this.retryBackoffMs = retryBackoffMs;
         this.requestTimeoutMs = requestTimeoutMs;
+        this.maxPollTimeoutMs = autoCommitEnabled ? Math.min(autoCommitIntervalMs, heartbeatIntervalMs) : heartbeatIntervalMs;
     }
 
     /**
@@ -1014,7 +1024,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             return records;
 
         fetcher.sendFetches();
-        client.poll(timeout, time.milliseconds());
+        client.poll(Math.min(maxPollTimeoutMs, timeout), time.milliseconds());
         return fetcher.fetchedRecords();
     }
 

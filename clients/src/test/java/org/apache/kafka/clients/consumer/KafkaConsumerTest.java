@@ -808,6 +808,9 @@ public class KafkaConsumerTest {
                 metrics,
                 subscriptions,
                 metadata,
+                autoCommitEnabled,
+                autoCommitIntervalMs,
+                heartbeatIntervalMs,
                 retryBackoffMs,
                 requestTimeoutMs);
     }
