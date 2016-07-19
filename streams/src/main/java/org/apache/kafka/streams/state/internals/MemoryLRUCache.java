@@ -25,11 +25,9 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
 
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * An in-memory LRU cache store based on HashSet and HashMap.
@@ -47,16 +45,16 @@ import java.util.Set;
 public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
     public interface EldestEntryRemovalListener<K, V> {
+
         void apply(K key, V value);
     }
-
     private final Serde<K> keySerde;
-    private final Serde<V> valueSerde;
 
-    protected String name;
+    private final Serde<V> valueSerde;
+    private String name;
     protected Map<K, V> map;
-    protected Set<K> keys;
     private StateSerdes<K, V> serdes;
+    private volatile boolean open = true;
 
     protected EldestEntryRemovalListener<K, V> listener;
 
@@ -68,9 +66,7 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
     public MemoryLRUCache(String name, final int maxCacheSize, Serde<K> keySerde, Serde<V> valueSerde) {
         this(keySerde, valueSerde);
-
         this.name = name;
-        this.keys = new HashSet<>();
 
         // leave room for one extra entry to handle adding an entry before the oldest can be removed
         this.map = new LinkedHashMap<K, V>(maxCacheSize + 1, 1.01f, true) {
@@ -80,7 +76,6 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
             protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
                 if (size() > maxCacheSize) {
                     K key = eldest.getKey();
-                    keys.remove(key);
                     if (listener != null) listener.apply(key, eldest.getValue());
                     return true;
                 }
@@ -132,18 +127,22 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public V get(K key) {
+    public boolean isOpen() {
+        return open;
+    }
+
+    @Override
+    public synchronized V get(K key) {
         return this.map.get(key);
     }
 
     @Override
-    public void put(K key, V value) {
+    public synchronized void put(K key, V value) {
         this.map.put(key, value);
-        this.keys.add(key);
     }
 
     @Override
-    public V putIfAbsent(K key, V value) {
+    public synchronized V putIfAbsent(K key, V value) {
         V originalValue = get(key);
         if (originalValue == null) {
             put(key, value);
@@ -158,9 +157,8 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public V delete(K key) {
+    public synchronized V delete(K key) {
         V value = this.map.remove(key);
-        this.keys.remove(key);
         return value;
     }
 
@@ -192,6 +190,10 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void close() {
-        // do-nothing since it is in-memory
+        open = false;
+    }
+
+    public int size() {
+        return this.map.size();
     }
 }

@@ -60,6 +60,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
@@ -180,7 +181,9 @@ public class StreamThread extends Thread {
                 config.getRestoreConsumerConfigs(threadClientId));
 
         // initialize the task list
-        this.activeTasks = new HashMap<>();
+        // activeTasks needs to be concurrent as it can be accessed
+        // by QueryableState
+        this.activeTasks = new ConcurrentHashMap<>();
         this.standbyTasks = new HashMap<>();
         this.activeTasksByPartition = new HashMap<>();
         this.standbyTasksByPartition = new HashMap<>();
