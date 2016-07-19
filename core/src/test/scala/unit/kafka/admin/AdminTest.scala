@@ -175,7 +175,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     // wait until reassignment is completed
     TestUtils.waitUntilTrue(() => {
         val partitionsBeingReassigned = zkUtils.getPartitionsBeingReassigned().mapValues(_.newReplicas)
-        ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(zkUtils, topicAndPartition, newReplicas,
+        ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(zkUtils, topicAndPartition,
         Map(topicAndPartition -> newReplicas), partitionsBeingReassigned) == ReassignmentCompleted
       },
       "Partition reassignment should complete")
@@ -206,7 +206,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     // wait until reassignment is completed
     TestUtils.waitUntilTrue(() => {
         val partitionsBeingReassigned = zkUtils.getPartitionsBeingReassigned().mapValues(_.newReplicas)
-        ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(zkUtils, topicAndPartition, newReplicas,
+        ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(zkUtils, topicAndPartition,
           Map(topicAndPartition -> newReplicas), partitionsBeingReassigned) == ReassignmentCompleted
       },
       "Partition reassignment should complete")
@@ -237,7 +237,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     // wait until reassignment is completed
     TestUtils.waitUntilTrue(() => {
         val partitionsBeingReassigned = zkUtils.getPartitionsBeingReassigned().mapValues(_.newReplicas)
-        ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(zkUtils, topicAndPartition, newReplicas,
+        ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(zkUtils, topicAndPartition,
           Map(topicAndPartition -> newReplicas), partitionsBeingReassigned) == ReassignmentCompleted
       },
       "Partition reassignment should complete")
