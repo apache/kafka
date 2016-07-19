@@ -95,7 +95,7 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
             assertEquals(10, driver.sizeOf(store));
             assertTrue(driver.flushedEntryRemoved(0));
             assertTrue(driver.flushedEntryRemoved(1));
-            assertTrue(driver.flushedEntryRemoved(2));
+            assertTrue(driver.flushedEntryRemoved(3));
             assertEquals(3, driver.numFlushedEntryRemoved());
         } finally {
             store.close();

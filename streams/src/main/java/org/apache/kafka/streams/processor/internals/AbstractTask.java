@@ -126,4 +126,7 @@ public abstract class AbstractTask {
         }
     }
 
+    public StateStore getStore(final String name) {
+        return stateMgr.getStore(name);
+    }
 }
