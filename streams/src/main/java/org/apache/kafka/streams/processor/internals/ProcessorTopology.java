@@ -24,9 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Set;
-import java.util.Queue;
-import java.util.LinkedList;
-
 public class ProcessorTopology {
 
     private final List<ProcessorNode> processorNodes;
@@ -113,7 +110,7 @@ public class ProcessorTopology {
             }
             if (child.stateStores != null && !child.stateStores.isEmpty()) {
                 sb.append("stateStores [");
-                for (String store : (Set<String>)child.stateStores) {
+                for (String store : (Set<String>) child.stateStores) {
                     sb.append(store + ",");
                 }
                 sb.setLength(sb.length() - 1);
