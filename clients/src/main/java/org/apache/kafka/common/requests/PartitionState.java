@@ -36,11 +36,11 @@ public class PartitionState {
 
     @Override
     public String toString() {
-        return "(ControllerEpoch:" + controllerEpoch +
-                ",Leader:" + leader +
-                ",LeaderEpoch:" + leaderEpoch +
-                ",Isr:" + Arrays.toString(isr.toArray()) +
-                ",ZkVersion:" + zkVersion +
-                ",Replicas:" + Arrays.toString(replicas.toArray()) + ")";
+        return "PartitionState(controllerEpoch=" + controllerEpoch +
+                ", leader=" + leader +
+                ", leaderEpoch=" + leaderEpoch +
+                ", isr=" + Arrays.toString(isr.toArray()) +
+                ", zkVersion=" + zkVersion +
+                ", replicas=" + Arrays.toString(replicas.toArray()) + ")";
     }
 }
