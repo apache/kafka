@@ -644,10 +644,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     ConsumerInterceptor.class);
             this.interceptors = interceptorList.isEmpty() ? null : new ConsumerInterceptors<>(interceptorList);
 
-            int maxPollIntervalMs = config.getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);
             this.coordinator = new ConsumerCoordinator(this.client,
                     config.getString(ConsumerConfig.GROUP_ID_CONFIG),
-                    maxPollIntervalMs,
+                    config.getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG),
                     config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG),
                     config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG),
                     assignors,
@@ -1006,8 +1005,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         if (!subscriptions.hasAllFetchPositions())
             updateFetchPositions(this.subscriptions.missingFetchPositions());
 
-        long now = time.milliseconds();
-
         // init any new fetches (won't resend pending fetches)
         Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
 
@@ -1017,7 +1014,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             return records;
 
         fetcher.sendFetches();
-        client.poll(timeout, now);
+        client.poll(timeout, time.milliseconds());
         return fetcher.fetchedRecords();
     }
 

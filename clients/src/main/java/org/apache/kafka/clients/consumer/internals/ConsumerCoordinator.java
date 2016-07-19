@@ -229,6 +229,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
+    /**
+     * Poll for coordinator events. This ensures that the coordinator is known and that the consumer
+     * has joined the group (if it is using group management). This also handles periodic offset commits
+     * if they are enabled.
+     *
+     * @param now current time in milliseconds
+     */
     public synchronized void poll(long now) {
         invokeCompletedOffsetCommitCallbacks();
 
