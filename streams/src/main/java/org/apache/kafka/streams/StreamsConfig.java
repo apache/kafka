@@ -118,6 +118,10 @@ public class StreamsConfig extends AbstractConfig {
     /** <code>client.id</code> */
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
 
+    public static final String ROCKSDB_CONFIG_SETTER_CLASS_CONFIG = "rocksdb.config.setter";
+    public static final String ROCKSDB_CONFIG_SETTER_CLASS_DOC = "A Rocks DB config setter class that implements the <code>RocksDBConfigSetter</code> interface";
+
+
     static {
         CONFIG = new ConfigDef().define(APPLICATION_ID_CONFIG,      // required with no default value
                                         Type.STRING,
@@ -213,7 +217,12 @@ public class StreamsConfig extends AbstractConfig {
                                         2,
                                         atLeast(1),
                                         Importance.LOW,
-                                        CommonClientConfigs.METRICS_NUM_SAMPLES_DOC);
+                                        CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
+                                .define(ROCKSDB_CONFIG_SETTER_CLASS_CONFIG,
+                                        Type.CLASS,
+                                        null,
+                                        Importance.LOW,
+                                        ROCKSDB_CONFIG_SETTER_CLASS_DOC);
     }
 
     // this is the list of configs for underlying clients
