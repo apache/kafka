@@ -16,10 +16,17 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
+import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.Stores;
+import org.junit.Test;
+import org.rocksdb.Options;
+
+import static org.junit.Assert.assertTrue;
 
 public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
@@ -43,4 +50,23 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
         return store;
 
     }
+
+    public static class TheRocksDbConfigSetter implements RocksDBConfigSetter {
+
+        static boolean called = false;
+
+        @Override
+        public void setConfig(final String storeName, final Options options) {
+            called = true;
+        }
+    }
+
+    @Test
+    public void shouldUseCustomRocksDbConfigSetter() throws Exception {
+        final KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
+        driver.setConfig(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TheRocksDbConfigSetter.class);
+        createKeyValueStore(driver.context(), Integer.class, String.class, false);
+        assertTrue(TheRocksDbConfigSetter.called);
+    }
+
 }
