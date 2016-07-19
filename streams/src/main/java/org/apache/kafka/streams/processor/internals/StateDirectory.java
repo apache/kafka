@@ -58,7 +58,7 @@ public class StateDirectory {
     }
 
     /**
-     * Get ore create the directory for the {@link TaskId}
+     * Get or create the directory for the {@link TaskId}
      * @param taskId
      * @return directory for the {@link TaskId}
      */
