@@ -29,25 +29,20 @@ public class ProcessorTopology {
     private final List<ProcessorNode> processorNodes;
     private final Map<String, SourceNode> sourceByTopics;
     private final Map<String, SinkNode> sinkByTopics;
+    private final Map<String, String[]> nodeToSourceTopics;
     private final List<StateStoreSupplier> stateStoreSuppliers;
-    private final Map<String, String> sourceNameToTopic;
     private final Map<String, String> sinkNameToTopic;
 
     public ProcessorTopology(List<ProcessorNode> processorNodes,
                              Map<String, SourceNode> sourceByTopics,
                              Map<String, SinkNode> sinkByTopics,
+                             Map<String, String[]> nodeToSourceTopics,
                              List<StateStoreSupplier> stateStoreSuppliers) {
         this.processorNodes = Collections.unmodifiableList(processorNodes);
         this.sourceByTopics = Collections.unmodifiableMap(sourceByTopics);
+        this.nodeToSourceTopics = nodeToSourceTopics;
         this.sinkByTopics   = Collections.unmodifiableMap(sinkByTopics);
         this.stateStoreSuppliers = Collections.unmodifiableList(stateStoreSuppliers);
-
-        // pre-process source nodes to get reverse mapping
-        sourceNameToTopic = new HashMap<>();
-        for (String topic : sourceByTopics.keySet()) {
-            SourceNode source = sourceByTopics.get(topic);
-            sourceNameToTopic.put(source.name(), topic);
-        }
 
         // pre-process sink nodes to get reverse mapping
         sinkNameToTopic = new HashMap<>();
@@ -92,7 +87,7 @@ public class ProcessorTopology {
 
     private String childrenToString(List<ProcessorNode<?, ?>> children) {
         if (children == null || children.isEmpty()) {
-            return null;
+            return "";
         }
 
         StringBuilder sb = new StringBuilder("children [");
@@ -104,18 +99,7 @@ public class ProcessorTopology {
 
         // recursively print children
         for (ProcessorNode child : children) {
-            sb.append("\t\t" + child.name() + ": ");
-            if (sinkNameToTopic.containsKey(child.name())) {
-                sb.append("topics:" + sinkNameToTopic.get(child.name()) + " ");
-            }
-            if (child.stateStores != null && !child.stateStores.isEmpty()) {
-                sb.append("stateStores [");
-                for (String store : (Set<String>) child.stateStores) {
-                    sb.append(store + ",");
-                }
-                sb.setLength(sb.length() - 1);
-                sb.append("] ");
-            }
+            sb.append(child.toString());
             if (!sinkNameToTopic.containsKey(child.name())) {
                 sb.append(childrenToString(child.children()));
             }
@@ -132,9 +116,14 @@ public class ProcessorTopology {
         StringBuilder sb = new StringBuilder("\t\tProcessorTopology:\n");
 
         // start from sources
-        for (String topic : sourceByTopics.keySet()) {
-            SourceNode source = sourceByTopics.get(topic);
-            sb.append("\t\t" + source.name() + ": " + "topics: " + sourceNameToTopic.get(source.name()) + ", ");
+        for (SourceNode source : sourceByTopics.values()) {
+            sb.append("\t\t" + source.name() + ": " + "topics: [");
+            String[] topics = nodeToSourceTopics.get(source.name());
+            for (String topic : topics) {
+                sb.append(topic + ",");
+            }
+            sb.setLength(sb.length() - 1);
+            sb.append("] ");
             sb.append(childrenToString(source.children()));
             sb.append("\n");
         }

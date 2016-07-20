@@ -71,4 +71,18 @@ public class ProcessorNode<K, V> {
     public void close() {
         processor.close();
     }
+
+    public String toString() {
+        StringBuilder sb = new StringBuilder("");
+        sb.append("\t\t" + name + ": ");
+        if (stateStores != null && !stateStores.isEmpty()) {
+            sb.append("stateStores [");
+            for (String store : (Set<String>) stateStores) {
+                sb.append(store + ",");
+            }
+            sb.setLength(sb.length() - 1);
+            sb.append("] ");
+        }
+        return sb.toString();
+    }
 }

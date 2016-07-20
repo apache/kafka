@@ -841,7 +841,7 @@ public class TopologyBuilder {
             }
         }
 
-        return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap, new ArrayList<>(stateStoreMap.values()));
+        return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap, nodeToSourceTopics, new ArrayList<>(stateStoreMap.values()));
     }
 
     /**
