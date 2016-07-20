@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state;
 
-import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.Options;
 
 import java.util.Map;
@@ -29,12 +28,9 @@ public interface RocksDBConfigSetter {
 
     /**
      * Set the rocks db options for the provided storeName.
-     * <p>
-     *  Note: Some options may be taken as a hint, i.e, {@link BlockBasedTableConfig#setBlockCacheSize(long)} might be
-     *  reduced due to memory constraints.
-     * </p>
+     * 
      * @param storeName     the name of the store being configured
-     * @param options       the Rocks DB optionse
+     * @param options       the Rocks DB options
      * @param configs       the configuration supplied to {@link org.apache.kafka.streams.StreamsConfig}
      */
     void setConfig(final String storeName, final Options options, final Map<String, Object> configs);
