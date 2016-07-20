@@ -243,7 +243,7 @@ public class KafkaStreams {
     /**
      * Cleans up local state store directory ({@code state.dir}), by deleting all data with regard to the application-id.
      * <p>
-     * May only be called before instance is started or after instance is closed.
+     * May only be called either before instance is started or after instance is closed.
      *
      * @throws IllegalStateException if instance is currently running
      */
@@ -253,10 +253,13 @@ public class KafkaStreams {
         }
 
         final String localApplicationDir = this.config.getString(StreamsConfig.STATE_DIR_CONFIG)
-                + File.separator
-                + this.config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+            + File.separator
+            + this.config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
 
         log.debug("Clean up local Kafka Streams data in {}", localApplicationDir);
+        log.debug("Removing local Kafka Streams application data in {} for application {}",
+            localApplicationDir,
+            this.config.getString(StreamsConfig.APPLICATION_ID_CONFIG));
         Utils.delete(new File(localApplicationDir));
     }
 

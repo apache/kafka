@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- *
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -26,7 +26,6 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
@@ -39,6 +38,9 @@ import java.util.Set;
  * and deleting all internally created topics.
  */
 public class StreamsCleanupClient {
+    private static final int EXIT_CODE_SUCCESS = 0;
+    private static final int EXIT_CODE_ERROR = 1;
+
     private static OptionSpec<String> bootstrapServerOption;
     private static OptionSpec<String> zookeeperOption;
     private static OptionSpec<String> applicationIdOption;
@@ -47,112 +49,113 @@ public class StreamsCleanupClient {
 
     private OptionSet options = null;
 
-    public void run(String[] args) {
+    public int run(final String[] args) {
         ZkUtils zkUtils = null;
 
-        int exitCode = 0;
+        int exitCode = EXIT_CODE_SUCCESS;
         try {
             parseArguments(args);
 
-            zkUtils = ZkUtils.apply(options.valueOf(zookeeperOption),
-                    30000,
-                    30000,
-                    JaasUtils.isZkSecurityEnabled());
+            zkUtils = ZkUtils.apply(this.options.valueOf(zookeeperOption),
+                30000,
+                30000,
+                JaasUtils.isZkSecurityEnabled());
 
             final List<String> allTopics = scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics());
 
             resetSourceTopicOffsets();
             seekToEndIntermediateTopics(zkUtils, allTopics);
             deleteInternalTopics(zkUtils, allTopics);
-        } catch (Exception e) {
-            exitCode = -1;
+        } catch (final Exception e) {
+            exitCode = EXIT_CODE_ERROR;
             System.err.println(e.getMessage());
         } finally {
             if (zkUtils != null) {
                 zkUtils.close();
             }
-            System.exit(exitCode);
         }
+
+        return exitCode;
     }
 
     private void parseArguments(final String[] args) throws IOException {
         final OptionParser optionParser = new OptionParser();
         applicationIdOption = optionParser.accepts("application-id", "The Kafka Streams application ID (application.id)")
-                .withRequiredArg()
-                .describedAs("id")
-                .ofType(String.class)
-                .required();
+            .withRequiredArg()
+            .ofType(String.class)
+            .describedAs("id")
+            .required();
         bootstrapServerOption = optionParser.accepts("bootstrap-server", "Format: <host:port>")
-                .withRequiredArg()
-                .describedAs("url")
-                .defaultsTo("localhost:9092")
-                .ofType(String.class);
+            .withRequiredArg()
+            .ofType(String.class)
+            .defaultsTo("localhost:9092")
+            .describedAs("url");
         zookeeperOption = optionParser.accepts("zookeeper", "Format: <host:port>")
-                .withRequiredArg()
-                .describedAs("url")
-                .defaultsTo("localhost:2181")
-                .ofType(String.class);
+            .withRequiredArg()
+            .ofType(String.class)
+            .defaultsTo("localhost:2181")
+            .describedAs("url");
         sourceTopicsOption = optionParser.accepts("source-topics", "Comma separated list of user source topics")
-                .withRequiredArg()
-                .describedAs("list")
-                .ofType(String.class);
+            .withRequiredArg()
+            .ofType(String.class)
+            .withValuesSeparatedBy(',')
+            .describedAs("list");
         intermediateTopicsOption = optionParser.accepts("intermediate-topics", "Comma separated list of intermediate user topics")
-                .withRequiredArg()
-                .describedAs("list")
-                .ofType(String.class);
+            .withRequiredArg()
+            .ofType(String.class)
+            .withValuesSeparatedBy(',')
+            .describedAs("list");
 
         try {
-            options = optionParser.parse(args);
-        } catch (OptionException e) {
+            this.options = optionParser.parse(args);
+        } catch (final OptionException e) {
             optionParser.printHelpOn(System.err);
             throw e;
         }
     }
 
     private void resetSourceTopicOffsets() {
-        final List<String> topics = new LinkedList<>();
-        topics.addAll(options.valuesOf(sourceTopicsOption));
-        topics.addAll(options.valuesOf(intermediateTopicsOption));
+        final List<String> sourceTopics = this.options.valuesOf(sourceTopicsOption);
 
-        if (topics.size() == 0) {
-            System.out.println("No source or intermediate topics specified.");
+        if (sourceTopics.size() == 0) {
+            System.out.println("No source topics specified.");
             return;
         }
 
-        System.out.println("Resetting offsets to zero for topics " + topics);
+        System.out.println("Resetting offsets to zero for topics " + sourceTopics);
 
         final Properties config = new Properties();
-        config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOption));
-        config.setProperty(ConsumerConfig.GROUP_ID_CONFIG, options.valueOf(applicationIdOption));
+        config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, this.options.valueOf(bootstrapServerOption));
+        config.setProperty(ConsumerConfig.GROUP_ID_CONFIG, this.options.valueOf(applicationIdOption));
         config.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
         final KafkaConsumer<byte[], byte[]> client = new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
         try {
-            client.subscribe(topics);
+            client.subscribe(sourceTopics);
             client.poll(1);
 
-            for (TopicPartition partition : client.assignment()) {
+            for (final TopicPartition partition : client.assignment()) {
                 client.seek(partition, 0);
             }
             client.commitSync();
-        } catch (RuntimeException e) {
-            System.err.println("Resetting source topic offsets failed");
+        } catch (final RuntimeException e) {
+            System.err.println("Resetting source topic offsets failed.");
             throw e;
         } finally {
             client.close();
         }
     }
 
-    private void seekToEndIntermediateTopics(ZkUtils zkUtils, List<String> allTopics) {
-        if (options.has(intermediateTopicsOption)) {
+    private void seekToEndIntermediateTopics(final ZkUtils zkUtils, final List<String> allTopics) {
+        if (this.options.has(intermediateTopicsOption)) {
             System.out.println("Seek-to-end for intermediate user topics.");
 
             final Properties config = new Properties();
-            config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOption));
-            config.setProperty(ConsumerConfig.GROUP_ID_CONFIG, options.valueOf(applicationIdOption));
+            config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, this.options.valueOf(bootstrapServerOption));
+            config.setProperty(ConsumerConfig.GROUP_ID_CONFIG, this.options.valueOf(applicationIdOption));
             config.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
-            for (String topic : options.valuesOf(intermediateTopicsOption)) {
+            for (final String topic : this.options.valuesOf(intermediateTopicsOption)) {
                 if (allTopics.contains(topic)) {
                     System.out.println("Topic: " + topic);
 
@@ -164,7 +167,7 @@ public class StreamsCleanupClient {
                         final Set<TopicPartition> partitions = client.assignment();
                         client.seekToEnd(partitions);
                         client.commitSync();
-                    } catch (RuntimeException e) {
+                    } catch (final RuntimeException e) {
                         System.err.println("Seek to end for topic " + topic + " failed");
                         throw e;
                     } finally {
@@ -179,30 +182,33 @@ public class StreamsCleanupClient {
         }
     }
 
-    private void deleteInternalTopics(ZkUtils zkUtils, List<String> allTopics) {
+    private void deleteInternalTopics(final ZkUtils zkUtils, final List<String> allTopics) {
         System.out.println("Deleting internal topics.");
 
-        final String applicationId = options.valueOf(applicationIdOption);
-
-        for (String topic : allTopics) {
-            if (topic.startsWith(applicationId + "-") && (topic.endsWith("-changelog") || topic.endsWith("-repartition"))) {
-                TopicCommand.TopicCommandOptions commandOptions = new TopicCommand.TopicCommandOptions(new String[] {
-                    "--zookeeper", options.valueOf(zookeeperOption),
+        for (final String topic : allTopics) {
+            if (isInternalStreamsTopic(topic)) {
+                final TopicCommand.TopicCommandOptions commandOptions = new TopicCommand.TopicCommandOptions(new String[]{
+                    "--zookeeper", this.options.valueOf(zookeeperOption),
                     "--delete", "--topic", topic});
                 try {
                     TopicCommand.deleteTopic(zkUtils, commandOptions);
-                } catch (RuntimeException e) {
+                } catch (final RuntimeException e) {
                     System.err.println("Deleting internal topic " + topic + " failed");
-                    throw e;  
-                } 
+                    throw e;
+                }
             }
         }
 
         System.out.println("Done.");
     }
 
-    public static void main(String[] args) {
-        new StreamsCleanupClient().run(args);
+    private boolean isInternalStreamsTopic(final String topicName) {
+        return topicName.startsWith(this.options.valueOf(applicationIdOption) + "-")
+            && (topicName.endsWith("-changelog") || topicName.endsWith("-repartition"));
+    }
+
+    public static void main(final String[] args) {
+        System.exit(new StreamsCleanupClient().run(args));
     }
 
 }
