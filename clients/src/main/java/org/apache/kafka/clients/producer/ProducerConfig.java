@@ -159,14 +159,6 @@ public class ProducerConfig extends AbstractConfig {
                                                     + "not all memory the producer uses is used for buffering. Some additional memory will be used for compression (if "
                                                     + "compression is enabled) as well as for maintaining in-flight requests.";
 
-    /** <code>retries</code> */
-    public static final String RETRIES_CONFIG = "retries";
-    private static final String RETRIES_DOC = "Setting a value greater than zero will cause the client to resend any record whose send fails with a potentially transient error."
-                                              + " Note that this retry is no different than if the client resent the record upon receiving the "
-                                              + "error. Allowing retries will potentially change the ordering of records because if two records are "
-                                              + "sent to a single partition, and the first fails and is retried but the second succeeds, then the second record "
-                                              + "may appear first.";
-
     /** <code>retry.backoff.ms</code> */
     public static final String RETRY_BACKOFF_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
 
@@ -190,6 +182,14 @@ public class ProducerConfig extends AbstractConfig {
     private static final String MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_DOC = "The maximum number of unacknowledged requests the client will send on a single connection before blocking."
                                                                             + " Note that if this setting is set to be greater than 1 and there are failed sends, there is a risk of"
                                                                             + " message re-ordering due to retries (i.e., if retries are enabled).";
+
+    /** <code>retries</code> */
+    public static final String RETRIES_CONFIG = "retries";
+    private static final String RETRIES_DOC = "Setting a value greater than zero will cause the client to resend any record whose send fails with a potentially transient error."
+                                              + " Note that this retry is no different than if the client resent the record upon receiving the error."
+                                              + " Allowing retries without setting <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to 1 will potentially change the"
+                                              + " ordering of records because if two batches are sent to a single partition, and the first fails and is retried but the second"
+                                              + " succeeds, then the records in the second batch may appear first.";
 
     /** <code>key.serializer</code> */
     public static final String KEY_SERIALIZER_CLASS_CONFIG = "key.serializer";
