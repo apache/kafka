@@ -66,11 +66,14 @@ public class ProcessorStateManager {
     private final Map<TopicPartition, Long> offsetLimits;
     private final boolean isStandby;
     private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
+    private final ProcessorTopology topology;
 
     /**
      * @throws IOException if any error happens while creating or locking the state directory
      */
-    public ProcessorStateManager(String applicationId, int defaultPartition, Collection<TopicPartition> sources, File baseDir, Consumer<byte[], byte[]> restoreConsumer, boolean isStandby) throws IOException {
+    public ProcessorStateManager(String applicationId, int defaultPartition, Collection<TopicPartition> sources,
+                                 File baseDir, Consumer<byte[], byte[]> restoreConsumer, boolean isStandby,
+                                 final ProcessorTopology topology) throws IOException {
         this.applicationId = applicationId;
         this.defaultPartition = defaultPartition;
         this.partitionForTopic = new HashMap<>();
@@ -85,6 +88,7 @@ public class ProcessorStateManager {
         this.isStandby = isStandby;
         this.restoreCallbacks = isStandby ? new HashMap<String, StateRestoreCallback>() : null;
         this.offsetLimits = new HashMap<>();
+        this.topology = topology;
 
         // create the state directory for this task if missing (we won't create the parent directory)
         createStateDirectory(baseDir);
@@ -160,6 +164,11 @@ public class ProcessorStateManager {
      * @throws StreamsException if the store's change log does not contain the partition
      */
     public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
+        Map<String, String> sourceStoreToSourceTopic = null;
+        if (topology != null) {
+            sourceStoreToSourceTopic = topology.sourceStoreToSourceTopic();
+        }
+
         if (store.name().equals(CHECKPOINT_FILE_NAME))
             throw new IllegalArgumentException("Illegal store name: " + CHECKPOINT_FILE_NAME);
 
@@ -173,7 +182,10 @@ public class ProcessorStateManager {
         String topic;
         if (loggingEnabled)
             topic = storeChangelogTopic(this.applicationId, store.name());
-        else topic = store.name();
+        else if (sourceStoreToSourceTopic != null && sourceStoreToSourceTopic.containsKey(store.name()))
+            topic = sourceStoreToSourceTopic.get(store.name());
+        else
+            topic = store.name();
 
         // block until the partition is ready for this state changelog topic or time has elapsed
         int partition = getPartition(topic);

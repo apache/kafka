@@ -67,6 +67,7 @@ public class TopologyBuilder {
     private final HashMap<String, Pattern> nodeToSourcePatterns = new LinkedHashMap<>();
     private final HashMap<String, Pattern> topicToPatterns = new HashMap<>();
     private final HashMap<String, String> nodeToSinkTopic = new HashMap<>();
+    private final HashMap<String, String> sourceStoreToSourceTopic = new HashMap<>();
     private SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
     private String applicationId;
 
@@ -536,6 +537,19 @@ public class TopologyBuilder {
         return this;
     }
 
+    public synchronized final TopologyBuilder connectSourceStoreAndTopic(String sourceStoreName, String topic) {
+        if (sourceStoreToSourceTopic != null) {
+            if (sourceStoreToSourceTopic.containsKey(sourceStoreName)) {
+                throw new TopologyBuilderException("Source store " + sourceStoreName + " is already added.");
+            }
+            sourceStoreToSourceTopic.put(sourceStoreName, topic);
+        } else {
+            throw new TopologyBuilderException("sourceStoreToSourceTopic is null");
+        }
+
+        return this;
+    }
+
     /**
      * Connects a list of processors.
      *
@@ -832,7 +846,7 @@ public class TopologyBuilder {
             }
         }
 
-        return new ProcessorTopology(processorNodes, topicSourceMap, new ArrayList<>(stateStoreMap.values()));
+        return new ProcessorTopology(processorNodes, topicSourceMap, new ArrayList<>(stateStoreMap.values()), sourceStoreToSourceTopic);
     }
 
     /**

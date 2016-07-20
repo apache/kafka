@@ -154,6 +154,7 @@ public class KStreamBuilder extends TopologyBuilder {
         addProcessor(name, processorSupplier, source);
         kTableImpl = new KTableImpl<>(this, name, processorSupplier, Collections.singleton(source), keySerde, valSerde, storeName);
         kTableImpl.materialize((KTableSource) processorSupplier);
+        connectSourceStoreAndTopic(storeName, topic);
         return kTableImpl;
     }
 

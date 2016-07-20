@@ -30,13 +30,15 @@ public class ProcessorTopology {
     private final List<ProcessorNode> processorNodes;
     private final Map<String, SourceNode> sourceByTopics;
     private final List<StateStoreSupplier> stateStoreSuppliers;
-
+    private final Map<String, String> sourceStoreToSourceTopic;
     public ProcessorTopology(List<ProcessorNode> processorNodes,
                              Map<String, SourceNode> sourceByTopics,
-                             List<StateStoreSupplier> stateStoreSuppliers) {
+                             List<StateStoreSupplier> stateStoreSuppliers,
+                             Map<String, String> sourceStoreToSourceTopic) {
         this.processorNodes = Collections.unmodifiableList(processorNodes);
         this.sourceByTopics = Collections.unmodifiableMap(sourceByTopics);
         this.stateStoreSuppliers = Collections.unmodifiableList(stateStoreSuppliers);
+        this.sourceStoreToSourceTopic = sourceStoreToSourceTopic;
     }
 
     public Set<String> sourceTopics() {
@@ -59,4 +61,7 @@ public class ProcessorTopology {
         return stateStoreSuppliers;
     }
 
+    public Map<String, String> sourceStoreToSourceTopic() {
+        return sourceStoreToSourceTopic;
+    }
 }

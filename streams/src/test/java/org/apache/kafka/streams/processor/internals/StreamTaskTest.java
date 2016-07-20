@@ -72,7 +72,8 @@ public class StreamTaskTest {
                     put("topic2", source2);
                 }
             },
-            Collections.<StateStoreSupplier>emptyList()
+            Collections.<StateStoreSupplier>emptyList(),
+            Collections.<String, String>emptyMap()
     );
 
     private StreamsConfig createConfig(final File baseDir) throws Exception {
