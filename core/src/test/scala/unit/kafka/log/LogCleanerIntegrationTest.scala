@@ -18,6 +18,7 @@
 package kafka.log
 
 import java.io.File
+import java.nio.file.Files
 import java.util.Properties
 
 import kafka.common.TopicAndPartition
@@ -134,7 +135,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     val logs = new Pool[TopicAndPartition, Log]()
     for(i <- 0 until parts) {
       val dir = new File(logDir, "log-" + i)
-      dir.mkdirs()
+      Files.createDirectory(dir.toPath())
       val logProps = new Properties()
       logProps.put(LogConfig.SegmentBytesProp, segmentSize: java.lang.Integer)
       logProps.put(LogConfig.SegmentIndexBytesProp, 100*1024: java.lang.Integer)

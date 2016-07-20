@@ -18,6 +18,7 @@
 package kafka.log
 
 import java.io._
+import java.nio.file.Files
 import java.util.concurrent.TimeUnit
 
 import kafka.utils._
@@ -81,9 +82,7 @@ class LogManager(val logDirs: Array[File],
     for(dir <- dirs) {
       if(!dir.exists) {
         info("Log directory '" + dir.getAbsolutePath + "' not found, creating it.")
-        val created = dir.mkdirs()
-        if(!created)
-          throw new KafkaException("Failed to create data directory " + dir.getAbsolutePath)
+        Files.createDirectory(dir.toPath())
       }
       if(!dir.isDirectory || !dir.canRead)
         throw new KafkaException(dir.getAbsolutePath + " is not a readable log directory.")
@@ -358,7 +357,7 @@ class LogManager(val logDirs: Array[File],
       // if not, create it
       val dataDir = nextLogDir()
       val dir = new File(dataDir, topicAndPartition.topic + "-" + topicAndPartition.partition)
-      dir.mkdirs()
+      Files.createDirectory(dir.toPath())
       log = new Log(dir, 
                     config,
                     recoveryPoint = 0L,

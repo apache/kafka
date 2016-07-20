@@ -38,6 +38,7 @@ import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
+import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -212,7 +213,7 @@ public class KeyValueStoreTestDriver<K, V> {
             }
         };
         this.stateDir = TestUtils.tempDirectory();
-        this.stateDir.mkdirs();
+        Files.createDirectory(this.stateDir.toPath();
 
         Properties props = new Properties();
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");

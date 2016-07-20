@@ -92,7 +92,7 @@ object TestUtils extends Logging {
    */
   def tempRelativeDir(parent: String): File = {
     val parentFile = new File(parent)
-    parentFile.mkdirs()
+    Files.createDirectory(parentFile.toPath())
 
     org.apache.kafka.test.TestUtils.tempDirectory(parentFile.toPath, "kafka-")
   }
