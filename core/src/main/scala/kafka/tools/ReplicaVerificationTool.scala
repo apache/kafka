@@ -316,6 +316,8 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
             case t: Throwable =>
               throw new RuntimeException("Error in processing replica %d in partition %s at offset %d."
               .format(replicaId, topicAndPartition, fetchOffsetMap.get(topicAndPartition)), t)
+          } finally {
+            messageIterator.close()
           }
         }
         if (isMessageInAllReplicas) {

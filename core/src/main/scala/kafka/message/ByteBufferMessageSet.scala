@@ -17,8 +17,8 @@
 
 package kafka.message
 
-import kafka.utils.{IteratorTemplate, Logging}
-import kafka.common.{KafkaException, LongRef}
+import kafka.utils.{CloseableIteratorTemplate, IteratorTemplate, Logging}
+import kafka.common.{CloseableIterator, KafkaException, LongRef}
 import java.nio.ByteBuffer
 import java.nio.channels._
 import java.io._
@@ -78,11 +78,11 @@ object ByteBufferMessageSet {
   }
 
   /** Deep iterator that decompresses the message sets and adjusts timestamp and offset if needed. */
-  def deepIterator(wrapperMessageAndOffset: MessageAndOffset): Iterator[MessageAndOffset] = {
+  def deepIterator(wrapperMessageAndOffset: MessageAndOffset): CloseableIterator[MessageAndOffset] = {
 
     import Message._
 
-    new IteratorTemplate[MessageAndOffset] {
+    new CloseableIteratorTemplate[MessageAndOffset] {
 
       val MessageAndOffset(wrapperMessage, wrapperMessageOffset) = wrapperMessageAndOffset
       val wrapperMessageTimestampOpt: Option[Long] =
@@ -159,6 +159,10 @@ object ByteBufferMessageSet {
                 throw new KafkaException(ioe)
             }
         }
+      }
+
+      override def close() : Unit = {
+        compressed.close()
       }
     }
   }
@@ -306,24 +310,29 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
   }
 
   override def isMagicValueInAllWrapperMessages(expectedMagicValue: Byte): Boolean = {
-    for (messageAndOffset <- shallowIterator) {
-      if (messageAndOffset.message.magic != expectedMagicValue)
-        return false
+    val iter = shallowIterator
+    try {
+      for (messageAndOffset <- iter) {
+        if (messageAndOffset.message.magic != expectedMagicValue)
+          return false
+      }
+      true
+    } finally {
+      iter.close()
     }
-    true
   }
 
   /** default iterator that iterates over decompressed messages */
-  override def iterator: Iterator[MessageAndOffset] = internalIterator()
+  override def iterator: CloseableIterator[MessageAndOffset] = internalIterator()
 
   /** iterator over compressed messages without decompressing */
-  def shallowIterator: Iterator[MessageAndOffset] = internalIterator(true)
+  def shallowIterator: CloseableIterator[MessageAndOffset] = internalIterator(true)
 
   /** When flag isShallow is set to be true, we do a shallow iteration: just traverse the first level of messages. **/
-  private def internalIterator(isShallow: Boolean = false): Iterator[MessageAndOffset] = {
-    new IteratorTemplate[MessageAndOffset] {
+  private def internalIterator(isShallow: Boolean = false): CloseableIterator[MessageAndOffset] = {
+    new CloseableIteratorTemplate[MessageAndOffset] {
       var topIter = buffer.slice()
-      var innerIter: Iterator[MessageAndOffset] = null
+      var innerIter: CloseableIterator[MessageAndOffset] = null
 
       def innerDone(): Boolean = (innerIter == null || !innerIter.hasNext)
 
@@ -354,8 +363,10 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
               new MessageAndOffset(newMessage, offset)
             case _ =>
               innerIter = ByteBufferMessageSet.deepIterator(new MessageAndOffset(newMessage, offset))
-              if(!innerIter.hasNext)
+              if(!innerIter.hasNext) {
+                innerIter.close()
                 innerIter = null
+              }
               makeNext()
           }
         }
@@ -372,6 +383,11 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
         }
       }
 
+      override def close(): Unit = {
+        if (innerIter != null) {
+          innerIter.close()
+        }
+      }
     }
   }
 
