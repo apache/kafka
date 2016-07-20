@@ -537,7 +537,7 @@ public class TopologyBuilder {
         return this;
     }
 
-    public synchronized final TopologyBuilder connectSourceStoreAndTopic(String sourceStoreName, String topic) {
+    protected synchronized final TopologyBuilder connectSourceStoreAndTopic(String sourceStoreName, String topic) {
         if (sourceStoreToSourceTopic != null) {
             if (sourceStoreToSourceTopic.containsKey(sourceStoreName)) {
                 throw new TopologyBuilderException("Source store " + sourceStoreName + " is already added.");

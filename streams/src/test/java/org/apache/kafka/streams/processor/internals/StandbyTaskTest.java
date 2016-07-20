@@ -88,7 +88,11 @@ public class StandbyTaskTest {
             Utils.<StateStoreSupplier>mkList(
                     new MockStateStoreSupplier(ktable.topic(), true, false)
             ),
-            Collections.<String, String>emptyMap()
+            new HashMap<String, String>() {
+            {
+                put("ktable1", ktable.topic());
+            }
+        }
     );
     private File baseDir;
     private StateDirectory stateDirectory;

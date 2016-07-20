@@ -61,7 +61,7 @@ public class ProcessorStateManager {
     private final Map<TopicPartition, Long> offsetLimits;
     private final boolean isStandby;
     private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
-    private final ProcessorTopology topology;
+    private final Map<String, String> sourceStoreToSourceTopic;
     private final TaskId taskId;
     private final StateDirectory stateDirectory;
 
@@ -69,7 +69,7 @@ public class ProcessorStateManager {
      * @throws IOException if any error happens while creating or locking the state directory
      */
     public ProcessorStateManager(String applicationId, TaskId taskId, Collection<TopicPartition> sources, Consumer<byte[], byte[]> restoreConsumer, boolean isStandby,
-        StateDirectory stateDirectory, final ProcessorTopology topology) throws IOException {
+        StateDirectory stateDirectory, final Map<String, String> sourceStoreToSourceTopic) throws IOException {
         this.applicationId = applicationId;
         this.defaultPartition = taskId.partition;
         this.taskId = taskId;
@@ -86,7 +86,7 @@ public class ProcessorStateManager {
         this.restoreCallbacks = isStandby ? new HashMap<String, StateRestoreCallback>() : null;
         this.offsetLimits = new HashMap<>();
         this.baseDir  = stateDirectory.directoryForTask(taskId);
-        this.topology = topology;
+        this.sourceStoreToSourceTopic = sourceStoreToSourceTopic;
 
         if (!stateDirectory.lock(taskId, 5)) {
             throw new IOException("Failed to lock the state directory: " + baseDir.getCanonicalPath());
@@ -115,10 +115,6 @@ public class ProcessorStateManager {
      * @throws StreamsException if the store's change log does not contain the partition
      */
     public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
-        Map<String, String> sourceStoreToSourceTopic = null;
-        if (topology != null) {
-            sourceStoreToSourceTopic = topology.sourceStoreToSourceTopic();
-        }
 
         if (store.name().equals(CHECKPOINT_FILE_NAME)) {
             throw new IllegalArgumentException("Illegal store name: " + CHECKPOINT_FILE_NAME);
@@ -139,7 +135,7 @@ public class ProcessorStateManager {
         } else if (sourceStoreToSourceTopic != null && sourceStoreToSourceTopic.containsKey(store.name())) {
             topic = sourceStoreToSourceTopic.get(store.name());
         } else {
-            topic = store.name();
+            throw new IllegalArgumentException("Store is neither built from source topic, nor has a changelog.");
         }
 
         // block until the partition is ready for this state changelog topic or time has elapsed
