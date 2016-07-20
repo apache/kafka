@@ -16,7 +16,6 @@
  */
 package kafka.admin
 
-import kafka.common.TopicExistsException
 import org.junit.Assert._
 import org.junit.Test
 import kafka.utils.Logging
@@ -25,8 +24,9 @@ import kafka.zk.ZooKeeperTestHarness
 import kafka.server.ConfigType
 import kafka.admin.TopicCommand.TopicCommandOptions
 import kafka.utils.ZkUtils._
-import kafka.coordinator.GroupCoordinator
 import org.apache.kafka.common.internals.TopicConstants
+import org.apache.kafka.common.errors.TopicExistsException
+
 
 class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 

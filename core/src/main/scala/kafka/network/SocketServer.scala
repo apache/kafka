@@ -31,6 +31,7 @@ import kafka.common.KafkaException
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.KafkaConfig
 import kafka.utils._
+import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.network.{ChannelBuilders, KafkaChannel, LoginType, Mode, Selectable, Selector => KSelector}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
@@ -279,7 +280,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
         }
         catch {
           // We catch all the throwables to prevent the acceptor thread from exiting on exceptions due
-          // to a select operation on a specific channel or a bad request. We don't want the
+          // to a select operation on a specific channel or a bad request. We don't want
           // the broker to stop responding to requests from other clients in these scenarios.
           case e: ControlThrowable => throw e
           case e: Throwable => error("Error occurred", e)

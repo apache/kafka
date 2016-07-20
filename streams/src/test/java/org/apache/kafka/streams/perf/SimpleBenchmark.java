@@ -74,15 +74,19 @@ public class SimpleBenchmark {
     }
 
     public static void main(String[] args) throws Exception {
-        final File stateDir = new File("/tmp/kafka-streams-simple-benchmark");
-        stateDir.mkdir();
+        String kafka = args.length > 0 ? args[0] : "localhost:9092";
+        String zookeeper = args.length > 1 ? args[1] : "localhost:2181";
+        String stateDirStr = args.length > 2 ? args[2] : "/tmp/kafka-streams-simple-benchmark";
 
+        final File stateDir = new File(stateDirStr);
+        stateDir.mkdir();
         final File rocksdbDir = new File(stateDir, "rocksdb-test");
         rocksdbDir.mkdir();
 
-
-        final String kafka = "localhost:9092";
-        final String zookeeper = "localhost:2181";
+        System.out.println("SimpleBenchmark instance started");
+        System.out.println("kafka=" + kafka);
+        System.out.println("zookeeper=" + zookeeper);
+        System.out.println("stateDir=" + stateDir);
 
         SimpleBenchmark benchmark = new SimpleBenchmark(stateDir, kafka, zookeeper);
 

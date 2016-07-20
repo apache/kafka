@@ -91,13 +91,41 @@ public interface KStream<K, V> {
     <V1> KStream<K, V1> mapValues(ValueMapper<V, V1> mapper);
 
     /**
-     * Print the elements of this stream to System.out
+     * Print the elements of this stream to {@code System.out}.  This function
+     * will use the generated name of the parent processor node to label the key/value pairs
+     * printed out to the console.
      *
      * Implementors will need to override toString for keys and values that are not of
      * type String, Integer etc to get meaningful information.
      */
     void print();
 
+    /**
+     * Print the elements of this stream to {@code System.out}.  This function
+     * will use the given name to label the key/value printed out to the console.
+     *
+     * @param streamName the name used to label the key/value pairs printed out to the console
+     *
+     * Implementors will need to override toString for keys and values that are not of
+     * type String, Integer etc to get meaningful information.
+     */
+    void print(String streamName);
+
+
+    /**
+     * Print the elements of this stream to System.out.  This function
+     * will use the generated name of the parent processor node to label the key/value pairs
+     * printed out to the console.
+     *
+     * @param keySerde key serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     * @param valSerde value serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     *
+     * Implementors will need to override toString for keys and values that are not of
+     * type String, Integer etc to get meaningful information.
+     */
+    void print(Serde<K> keySerde, Serde<V> valSerde);
 
     /**
      * Print the elements of this stream to System.out
@@ -106,11 +134,12 @@ public interface KStream<K, V> {
      *                 if not specified the default serde defined in the configs will be used
      * @param valSerde value serde used to send key-value pairs,
      *                 if not specified the default serde defined in the configs will be used
+     * @param streamName the name used to label the key/value pairs printed out to the console
      *
-     *                 Implementors will need to override toString for keys and values that are not of
-     *                 type String, Integer etc to get meaningful information.
+     * Implementors will need to override {@code toString} for keys and values that are not of
+     * type {@link String}, {@link Integer} etc. to get meaningful information.
      */
-    void print(Serde<K> keySerde, Serde<V> valSerde);
+    void print(Serde<K> keySerde, Serde<V> valSerde, String streamName);
 
 
     /**
@@ -118,10 +147,22 @@ public interface KStream<K, V> {
      *
      * @param filePath name of file to write to
      *
-     *                 Implementors will need to override toString for keys and values that are not of
-     *                 type String, Integer etc to get meaningful information.
+     * Implementors will need to override {@code toString} for keys and values that are not of
+     * type {@link String}, {@link Integer} etc. to get meaningful information.
      */
     void writeAsText(String filePath);
+
+
+    /**
+     * Write the elements of this stream to a file at the given path.
+     *
+     * @param filePath name of file to write to
+     * @param streamName the name used to label the key/value pairs printed out to the console
+     *
+     * Implementors will need to override {@code toString} for keys and values that are not of
+     * type {@link String}, {@link Integer} etc. to get meaningful information.
+     */
+    void writeAsText(String filePath, String streamName);
 
     /**
      * @param filePath name of file to write to
@@ -130,11 +171,25 @@ public interface KStream<K, V> {
      * @param valSerde value serde used to send key-value pairs,
      *                 if not specified the default serde defined in the configs will be used
      *
-     *                 Implementors will need to override toString for keys and values that are not of
-     *                 type String, Integer etc to get meaningful information.
+     * Implementors will need to override {@code toString} for keys and values that are not of
+     * type {@link String}, {@link Integer} etc. to get meaningful information.
      */
 
     void writeAsText(String filePath, Serde<K> keySerde, Serde<V> valSerde);
+
+    /**
+     * @param filePath name of file to write to
+     * @param streamName the name used to label the key/value pairs printed out to the console
+     * @param keySerde key serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     * @param valSerde value serde used to send key-value pairs,
+     *                 if not specified the default serde defined in the configs will be used
+     *
+     * Implementors will need to override {@code toString} for keys and values that are not of
+     * type {@link String}, {@link Integer} etc. to get meaningful information.
+     */
+
+    void writeAsText(String filePath, String streamName, Serde<K> keySerde, Serde<V> valSerde);
 
     /**
      * Create a new instance of {@link KStream} by transforming each element in this stream into zero or more elements in the new stream.
@@ -318,6 +373,10 @@ public interface KStream<K, V> {
     /**
      * Combine element values of this stream with another {@link KStream}'s elements of the same key using windowed Inner Join.
      * If a record key is null it will not included in the resulting {@link KStream}
+     * Both of the joining {@link KStream}s will be materialized in local state stores with the given store names.
+     * Also a changelog topic named "${applicationId}-${storeName}-changelog" will be automatically created
+     * in Kafka for each store for failure recovery, where "applicationID" is user-specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig}.
      *
      * @param otherStream       the instance of {@link KStream} joined with this stream
      * @param joiner            the instance of {@link ValueJoiner}
@@ -345,13 +404,16 @@ public interface KStream<K, V> {
     /**
      * Combine element values of this stream with another {@link KStream}'s elements of the same key using windowed Inner Join
      * with default serializers and deserializers. If a record key is null it will not included in the resulting {@link KStream}
+     * Both of the joining {@link KStream}s will be materialized in local state stores with the given store names.
+     * Also a changelog topic named "${applicationId}-${storeName}-changelog" will be automatically created
+     * in Kafka for each store for failure recovery, where "applicationID" is user-specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig}.
      *
      * @param otherStream   the instance of {@link KStream} joined with this stream
      * @param joiner        the instance of {@link ValueJoiner}
      * @param windows       the specification of the {@link JoinWindows}
      * @param <V1>          the value type of the other stream
      * @param <R>           the value type of the new stream
-     *
      * @return a {@link KStream} that contains join-records for each key and values computed by the given {@link ValueJoiner},
      *         one for each matched record-pair with the same key and within the joining window intervals
      */
@@ -363,6 +425,10 @@ public interface KStream<K, V> {
     /**
      * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Outer Join.
      * If a record key is null it will not included in the resulting {@link KStream}
+     * Both of the joining {@link KStream}s will be materialized in local state stores with the given store names.
+     * Also a changelog topic named "${applicationId}-${storeName}-changelog" will be automatically created
+     * in Kafka for each store for failure recovery, where "applicationID" is user-specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig}.
      *
      * @param otherStream       the instance of {@link KStream} joined with this stream
      * @param joiner            the instance of {@link ValueJoiner}
@@ -390,6 +456,10 @@ public interface KStream<K, V> {
     /**
      * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Outer Join
      * with default serializers and deserializers. If a record key is null it will not included in the resulting {@link KStream}
+     * Both of the joining {@link KStream}s will be materialized in local state stores with the given store names.
+     * Also a changelog topic named "${applicationId}-${storeName}-changelog" will be automatically created
+     * in Kafka for each store for failure recovery, where "applicationID" is user-specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig}.
      *
      * @param otherStream   the instance of {@link KStream} joined with this stream
      * @param joiner        the instance of {@link ValueJoiner}
@@ -408,6 +478,10 @@ public interface KStream<K, V> {
     /**
      * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Left Join.
      * If a record key is null it will not included in the resulting {@link KStream}
+     * Both of the joining {@link KStream}s will be materialized in local state stores with the given store names.
+     * Also a changelog topic named "${applicationId}-${storeName}-changelog" will be automatically created
+     * in Kafka for each store for failure recovery, where "applicationID" is user-specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig}.
      *
      * @param otherStream       the instance of {@link KStream} joined with this stream
      * @param joiner            the instance of {@link ValueJoiner}
@@ -435,6 +509,10 @@ public interface KStream<K, V> {
     /**
      * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Left Join
      * with default serializers and deserializers. If a record key is null it will not included in the resulting {@link KStream}
+     * Both of the joining {@link KStream}s will be materialized in local state stores with the given store names.
+     * Also a changelog topic named "${applicationId}-${storeName}-changelog" will be automatically created
+     * in Kafka for each store for failure recovery, where "applicationID" is user-specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig}.
      *
      * @param otherStream   the instance of {@link KStream} joined with this stream
      * @param joiner        the instance of {@link ValueJoiner}
@@ -491,11 +569,10 @@ public interface KStream<K, V> {
      *
      * @param selector      select the grouping key and value to be aggregated
      * @param <K1>          the key type of the {@link KGroupedStream}
-     * @param <V1>          the value type of the {@link KGroupedStream}
      *
-     * @return a {@link KGroupedStream} that contains the the grouped records of the original {@link KStream}
+     * @return a {@link KGroupedStream} that contains the grouped records of the original {@link KStream}
      */
-    <K1, V1> KGroupedStream<K1, V1> groupBy(KeyValueMapper<K, V, K1> selector);
+    <K1> KGroupedStream<K1, V> groupBy(KeyValueMapper<K, V, K1> selector);
 
     /**
      * Group the records of this {@link KStream} using the provided {@link KeyValueMapper}.
@@ -507,13 +584,12 @@ public interface KStream<K, V> {
      * @param valSerde    value serdes for materializing this stream,
      *                      if not specified the default serdes defined in the configs will be used
      * @param <K1>          the key type of the {@link KGroupedStream}
-     * @param <V1>          the value type of the {@link KGroupedStream}
      *
-     * @return a {@link KGroupedStream} that contains the the grouped records of the original {@link KStream}
+     * @return a {@link KGroupedStream} that contains the grouped records of the original {@link KStream}
      */
-    <K1, V1> KGroupedStream<K1, V1> groupBy(KeyValueMapper<K, V, K1> selector,
+    <K1> KGroupedStream<K1, V> groupBy(KeyValueMapper<K, V, K1> selector,
                                             Serde<K1> keySerde,
-                                            Serde<V1> valSerde);
+                                            Serde<V> valSerde);
 
     /**
      * Group the records with the same key into a {@link KGroupedStream} while preserving the
