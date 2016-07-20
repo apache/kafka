@@ -435,14 +435,31 @@ public class StreamThread extends Thread {
         }
     }
 
+    /**
+     * Commit all tasks owned by this thread if specified interval time has elapsed
+     */
     protected void maybeCommit() {
-        if (commitTimeMs >= 0 && lastCommitMs + commitTimeMs < this.currTimeMs) {
+        long now = time.milliseconds();
+
+        if (commitTimeMs >= 0 && lastCommitMs + commitTimeMs < now) {
             log.trace("Committing processor instances because the commit interval has elapsed.");
 
             commitAll();
-            lastCommitMs = this.currTimeMs;
+            lastCommitMs = now;
 
             processStandbyRecords = true;
+        }
+    }
+
+    /**
+     * Cleanup any states of the tasks that have been removed from this thread
+     */
+    protected void maybeClean() {
+        long now = time.milliseconds();
+
+        if (now > lastCleanMs + cleanTimeMs) {
+            stateDirectory.cleanRemovedTasks();
+            lastCleanMs = now;
         }
     }
 
@@ -474,18 +491,6 @@ public class StreamThread extends Thread {
         }
 
         sensors.commitTimeSensor.record(computeLatency());
-    }
-
-    /**
-     * Cleanup any states of the tasks that have been removed from this thread
-     */
-    protected void maybeClean() {
-        long now = time.milliseconds();
-
-        if (now > lastCleanMs + cleanTimeMs) {
-            stateDirectory.cleanRemovedTasks();
-            lastCleanMs = now;
-        }
     }
 
     /**
