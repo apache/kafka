@@ -239,7 +239,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
   /**
    * Get a shallow iterator over the messages in the set.
    */
-  override def iterator = iterator(Int.MaxValue)
+  override def iterator: Iterator[MessageAndOffset] = iterator(Int.MaxValue)
 
   /**
    * Get an iterator over the messages in the set. We only do shallow iteration here.

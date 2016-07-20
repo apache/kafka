@@ -451,7 +451,7 @@ private[log] class Cleaner(val id: Int,
           // There are no messages compacted out, write the original message set back
           if (writeOriginalMessageSet)
             ByteBufferMessageSet.writeMessage(writeBuffer, entry.message, entry.offset)
-          else if (retainedMessages.nonEmpty)
+          else
             compressMessages(writeBuffer, entry.message.compressionCodec, messageFormatVersion, retainedMessages)
         }
       }
@@ -476,14 +476,9 @@ private[log] class Cleaner(val id: Int,
                                compressionCodec: CompressionCodec,
                                messageFormatVersion: Byte,
                                messageAndOffsets: Seq[MessageAndOffset]) {
-    val messages = messageAndOffsets.map(_.message)
-    if (messageAndOffsets.isEmpty) {
-      MessageSet.Empty.sizeInBytes
-    } else if (compressionCodec == NoCompressionCodec) {
-      for (messageOffset <- messageAndOffsets)
-        ByteBufferMessageSet.writeMessage(buffer, messageOffset.message, messageOffset.offset)
-      MessageSet.messageSetSize(messages)
-    } else {
+    require(compressionCodec != NoCompressionCodec, s"compressionCodec must not be $NoCompressionCodec")
+    if (messageAndOffsets.nonEmpty) {
+      val messages = messageAndOffsets.map(_.message)
       val magicAndTimestamp = MessageSet.magicAndLargestTimestamp(messages)
       val firstMessageOffset = messageAndOffsets.head
       val firstAbsoluteOffset = firstMessageOffset.offset
@@ -600,7 +595,7 @@ private[log] class Cleaner(val id: Int,
    */
   private[log] def buildOffsetMap(log: Log, start: Long, end: Long, map: OffsetMap): Long = {
     map.clear()
-    val dirty = log.logSegments(start, end).toSeq
+    val dirty = log.logSegments(start, end).toBuffer
     info("Building offset map for log %s for %d segments in offset range [%d, %d).".format(log.name, dirty.size, start, end))
     
     // Add all the dirty segments. We must take at least map.slots * load_factor,
