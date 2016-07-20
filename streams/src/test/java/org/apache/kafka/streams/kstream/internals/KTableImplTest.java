@@ -72,8 +72,10 @@ public class KTableImplTest {
 
         String topic1 = "topic1";
         String topic2 = "topic2";
+        String storeName1 = "storeName1";
+        String storeName2 = "storeName2";
 
-        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1);
+        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1, storeName1);
 
         MockProcessorSupplier<String, String> proc1 = new MockProcessorSupplier<>();
         table1.toStream().process(proc1);
@@ -98,7 +100,7 @@ public class KTableImplTest {
         MockProcessorSupplier<String, Integer> proc3 = new MockProcessorSupplier<>();
         table3.toStream().process(proc3);
 
-        KTable<String, String> table4 = table1.through(stringSerde, stringSerde, topic2);
+        KTable<String, String> table4 = table1.through(stringSerde, stringSerde, topic2, storeName2);
 
         MockProcessorSupplier<String, String> proc4 = new MockProcessorSupplier<>();
         table4.toStream().process(proc4);
@@ -122,9 +124,11 @@ public class KTableImplTest {
 
         String topic1 = "topic1";
         String topic2 = "topic2";
+        String storeName1 = "storeName1";
+        String storeName2 = "storeName2";
 
         KTableImpl<String, String, String> table1 =
-                (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
+                (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1, storeName1);
         KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
                 new ValueMapper<String, Integer>() {
                     @Override
@@ -140,7 +144,7 @@ public class KTableImplTest {
                     }
                 });
         KTableImpl<String, String, String> table4 = (KTableImpl<String, String, String>)
-                table1.through(stringSerde, stringSerde, topic2);
+                table1.through(stringSerde, stringSerde, topic2, storeName2);
 
         KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
         KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
@@ -241,13 +245,15 @@ public class KTableImplTest {
     public void testStateStoreLazyEval() throws IOException {
         String topic1 = "topic1";
         String topic2 = "topic2";
+        String storeName1 = "storeName1";
+        String storeName2 = "storeName2";
 
         final KStreamBuilder builder = new KStreamBuilder();
 
         KTableImpl<String, String, String> table1 =
-                (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
+                (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1, storeName1);
         KTableImpl<String, String, String> table2 =
-                (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic2);
+                (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic2, storeName2);
 
         KTableImpl<String, String, Integer> table1Mapped = (KTableImpl<String, String, Integer>) table1.mapValues(
                 new ValueMapper<String, Integer>() {
@@ -267,7 +273,7 @@ public class KTableImplTest {
         driver = new KStreamTestDriver(builder, stateDir, null, null);
         driver.setTime(0L);
 
-        // no state store should be created
+        // no state stores should be created
         assertEquals(0, driver.allStateStores().size());
     }
 
@@ -275,13 +281,15 @@ public class KTableImplTest {
     public void testStateStore() throws IOException {
         String topic1 = "topic1";
         String topic2 = "topic2";
+        String storeName1 = "storeName1";
+        String storeName2 = "storeName2";
 
         final KStreamBuilder builder = new KStreamBuilder();
 
         KTableImpl<String, String, String> table1 =
-                (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
+                (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1, storeName1);
         KTableImpl<String, String, String> table2 =
-                (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic2);
+                (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic2, storeName2);
 
         KTableImpl<String, String, Integer> table1Mapped = (KTableImpl<String, String, Integer>) table1.mapValues(
                 new ValueMapper<String, Integer>() {
@@ -315,11 +323,12 @@ public class KTableImplTest {
     @Test
     public void testRepartition() throws IOException {
         String topic1 = "topic1";
+        String storeName1 = "storeName1";
 
         final KStreamBuilder builder = new KStreamBuilder();
 
         KTableImpl<String, String, String> table1 =
-                (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
+                (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1, storeName1);
 
         KTableImpl<String, String, String> table1Aggregated = (KTableImpl<String, String, String>) table1
                 .groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper())

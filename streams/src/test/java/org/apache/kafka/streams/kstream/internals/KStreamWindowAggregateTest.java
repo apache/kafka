@@ -75,8 +75,8 @@ public class KStreamWindowAggregateTest {
                                    strSerde)
                     .aggregate(MockInitializer.STRING_INIT,
                                MockAggregator.STRING_ADDER,
-                               TimeWindows.of("topic1-Canonized", 10).advanceBy(5),
-                               strSerde);
+                               TimeWindows.of(10).advanceBy(5),
+                               strSerde, "topic1-Canonized");
 
             MockProcessorSupplier<Windowed<String>, String> proc2 = new MockProcessorSupplier<>();
             table2.toStream().process(proc2);
@@ -154,8 +154,8 @@ public class KStreamWindowAggregateTest {
                 stream1.groupByKey(strSerde, strSerde)
                     .aggregate(MockInitializer.STRING_INIT,
                                MockAggregator.STRING_ADDER,
-                               TimeWindows.of("topic1-Canonized", 10).advanceBy(5),
-                               strSerde);
+                               TimeWindows.of(10).advanceBy(5),
+                               strSerde, "topic1-Canonized");
 
             MockProcessorSupplier<Windowed<String>, String> proc1 = new MockProcessorSupplier<>();
             table1.toStream().process(proc1);
@@ -165,8 +165,8 @@ public class KStreamWindowAggregateTest {
                 stream2.groupByKey(strSerde, strSerde)
                     .aggregate(MockInitializer.STRING_INIT,
                                MockAggregator.STRING_ADDER,
-                               TimeWindows.of("topic2-Canonized", 10).advanceBy(5),
-                               strSerde);
+                               TimeWindows.of(10).advanceBy(5),
+                               strSerde, "topic2-Canonized");
 
             MockProcessorSupplier<Windowed<String>, String> proc2 = new MockProcessorSupplier<>();
             table2.toStream().process(proc2);

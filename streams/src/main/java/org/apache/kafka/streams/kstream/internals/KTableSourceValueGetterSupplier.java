@@ -22,10 +22,10 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 public class KTableSourceValueGetterSupplier<K, V> implements KTableValueGetterSupplier<K, V> {
 
-    private final String topic;
+    private final String storeName;
 
-    public KTableSourceValueGetterSupplier(String topic) {
-        this.topic = topic;
+    public KTableSourceValueGetterSupplier(String storeName) {
+        this.storeName = storeName;
     }
 
     public KTableValueGetter<K, V> get() {
@@ -38,7 +38,7 @@ public class KTableSourceValueGetterSupplier<K, V> implements KTableValueGetterS
 
         @SuppressWarnings("unchecked")
         public void init(ProcessorContext context) {
-            store = (KeyValueStore<K, V>) context.getStateStore(topic);
+            store = (KeyValueStore<K, V>) context.getStateStore(storeName);
         }
 
         public V get(K key) {

@@ -203,7 +203,7 @@ public class KStreamRepartitionJoinTest {
         streamTwo
             .join(streamOne.map(keyMapper),
                   joiner,
-                  getJoinWindow(output),
+                  getJoinWindow(),
                   Serdes.Integer(),
                   Serdes.String(),
                   Serdes.Integer())
@@ -221,7 +221,7 @@ public class KStreamRepartitionJoinTest {
         String outputTopic = "left-join";
         map1.leftJoin(map2,
                       valueJoiner,
-                      getJoinWindow("the-left-join"),
+                      getJoinWindow(),
                       Serdes.Integer(),
                       Serdes.Integer(),
                       Serdes.String())
@@ -241,7 +241,7 @@ public class KStreamRepartitionJoinTest {
 
         final KStream<Integer, String> join = map1.join(map2,
                                                         valueJoiner,
-                                                        getJoinWindow("join-one"),
+                                                        getJoinWindow(),
                                                         Serdes.Integer(),
                                                         Serdes.Integer(),
                                                         Serdes.String());
@@ -256,7 +256,7 @@ public class KStreamRepartitionJoinTest {
         join.map(kvMapper)
             .join(streamFour.map(kvMapper),
                   joiner,
-                  getJoinWindow("the-other-join"),
+                  getJoinWindow(),
                   Serdes.Integer(),
                   Serdes.String(),
                   Serdes.String())
@@ -267,8 +267,8 @@ public class KStreamRepartitionJoinTest {
                             topic);
     }
 
-    private JoinWindows getJoinWindow(String name) {
-        return (JoinWindows) JoinWindows.of(name, WINDOW_SIZE).until(3 * WINDOW_SIZE);
+    private JoinWindows getJoinWindow() {
+        return (JoinWindows) JoinWindows.of(WINDOW_SIZE).until(3 * WINDOW_SIZE);
     }
 
 
@@ -395,7 +395,7 @@ public class KStreamRepartitionJoinTest {
         CLUSTER.createTopic(outputTopic);
         lhs.join(rhs,
                  valueJoiner,
-                 getJoinWindow(joinName),
+                 getJoinWindow(),
                  Serdes.Integer(),
                  Serdes.Integer(),
                  Serdes.String())

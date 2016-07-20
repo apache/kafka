@@ -56,6 +56,7 @@ public class KStreamKTableJoinIntegrationTest {
     public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster();
     private static final String USER_CLICKS_TOPIC = "user-clicks";
     private static final String USER_REGIONS_TOPIC = "user-regions";
+    private static final String USER_REGIONS_STORE_NAME = "user-regions-store-name";
     private static final String OUTPUT_TOPIC = "output-topic";
 
     @BeforeClass
@@ -169,7 +170,7 @@ public class KStreamKTableJoinIntegrationTest {
         // subsequently processed in the `leftJoin`, the latest region update for "alice" is "europe"
         // (which overrides her previous region value of "asia").
         KTable<String, String> userRegionsTable =
-            builder.table(stringSerde, stringSerde, USER_REGIONS_TOPIC);
+            builder.table(stringSerde, stringSerde, USER_REGIONS_TOPIC, USER_REGIONS_STORE_NAME);
 
         // Compute the number of clicks per region, e.g. "europe" -> 13L.
         //

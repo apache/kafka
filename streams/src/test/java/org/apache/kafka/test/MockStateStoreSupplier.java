@@ -101,6 +101,11 @@ public class MockStateStoreSupplier implements StateStoreSupplier {
             return persistent;
         }
 
+        @Override
+        public boolean isOpen() {
+            return !closed;
+        }
+
         public final StateRestoreCallback stateRestoreCallback = new StateRestoreCallback() {
             private final Deserializer<Integer> deserializer = new IntegerDeserializer();
 

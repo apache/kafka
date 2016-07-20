@@ -24,12 +24,18 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.apache.kafka.streams.state.internals.QueryableStoreProvider;
+import org.apache.kafka.streams.state.QueryableStoreType;
+import org.apache.kafka.streams.state.internals.StateStoreProvider;
+import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
@@ -90,6 +96,7 @@ public class KafkaStreams {
 
     private final StreamThread[] threads;
     private final Metrics metrics;
+    private final QueryableStoreProvider queryableStoreProvider;
 
     // processId is expected to be unique across JVMs and to be used
     // in userData of the subscription request to allow assignor be aware
@@ -151,9 +158,13 @@ public class KafkaStreams {
         this.metrics = new Metrics(metricConfig, reporters, time);
 
         this.threads = new StreamThread[config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG)];
+        final ArrayList<StateStoreProvider> storeProviders = new ArrayList<>();
         for (int i = 0; i < this.threads.length; i++) {
             this.threads[i] = new StreamThread(builder, config, clientSupplier, applicationId, clientId, processId, metrics, time);
+            storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
         }
+
+        this.queryableStoreProvider = new QueryableStoreProvider(storeProviders);
     }
 
     /**
@@ -231,6 +242,26 @@ public class KafkaStreams {
     public void setUncaughtExceptionHandler(Thread.UncaughtExceptionHandler eh) {
         for (StreamThread thread : threads)
             thread.setUncaughtExceptionHandler(eh);
+    }
+
+    /**
+     * Get a facade wrapping the {@link org.apache.kafka.streams.processor.StateStore} instances
+     * with the provided storeName and accepted by {@link QueryableStoreType#accepts(StateStore)}.
+     * The returned object can be used to query the {@link org.apache.kafka.streams.processor.StateStore} instances
+     * @param storeName             name of the store to find
+     * @param queryableStoreType    accept only stores that are accepted by {@link QueryableStoreType#accepts(StateStore)}
+     * @param <T>                   return type
+     * @return  A facade wrapping the {@link org.apache.kafka.streams.processor.StateStore} instances
+     */
+    public <T> T store(final String storeName, final QueryableStoreType<T> queryableStoreType) {
+        validateIsRunning();
+        return queryableStoreProvider.getStore(storeName, queryableStoreType);
+    }
+
+    private void validateIsRunning() {
+        if (state != RUNNING) {
+            throw new IllegalStateException("KafkaStreams is not running");
+        }
     }
 
 }

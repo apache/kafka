@@ -46,6 +46,8 @@ public class KTableKTableOuterJoinTest {
 
     final private String topic1 = "topic1";
     final private String topic2 = "topic2";
+    final private String storeName1 = "store-name-1";
+    final private String storeName2 = "store-name-2";
 
     final private Serde<Integer> intSerde = Serdes.Integer();
     final private Serde<String> stringSerde = Serdes.String();
@@ -78,8 +80,8 @@ public class KTableKTableOuterJoinTest {
         MockProcessorSupplier<Integer, String> processor;
 
         processor = new MockProcessorSupplier<>();
-        table1 = builder.table(intSerde, stringSerde, topic1);
-        table2 = builder.table(intSerde, stringSerde, topic2);
+        table1 = builder.table(intSerde, stringSerde, topic1, storeName1);
+        table2 = builder.table(intSerde, stringSerde, topic2, storeName2);
         joined = table1.outerJoin(table2, MockValueJoiner.STRING_JOINER);
         joined.toStream().process(processor);
 
@@ -179,8 +181,8 @@ public class KTableKTableOuterJoinTest {
         KTable<Integer, String> joined;
         MockProcessorSupplier<Integer, String> proc;
 
-        table1 = builder.table(intSerde, stringSerde, topic1);
-        table2 = builder.table(intSerde, stringSerde, topic2);
+        table1 = builder.table(intSerde, stringSerde, topic1, storeName1);
+        table2 = builder.table(intSerde, stringSerde, topic2, storeName2);
         joined = table1.outerJoin(table2, MockValueJoiner.STRING_JOINER);
 
         proc = new MockProcessorSupplier<>();
@@ -268,8 +270,8 @@ public class KTableKTableOuterJoinTest {
         KTable<Integer, String> joined;
         MockProcessorSupplier<Integer, String> proc;
 
-        table1 = builder.table(intSerde, stringSerde, topic1);
-        table2 = builder.table(intSerde, stringSerde, topic2);
+        table1 = builder.table(intSerde, stringSerde, topic1, storeName1);
+        table2 = builder.table(intSerde, stringSerde, topic2, storeName2);
         joined = table1.outerJoin(table2, MockValueJoiner.STRING_JOINER);
 
         ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues();

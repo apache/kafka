@@ -26,6 +26,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
+
 import org.junit.After;
 import org.junit.Test;
 
@@ -38,8 +39,8 @@ public class KTableMapKeysTest {
 
     final private Serde<String> stringSerde = new Serdes.StringSerde();
     final private Serde<Integer>  integerSerde = new Serdes.IntegerSerde();
-
     private KStreamTestDriver driver = null;
+
 
     @After
     public void cleanup() {
@@ -55,7 +56,7 @@ public class KTableMapKeysTest {
 
         String topic1 = "topic_map_keys";
 
-        KTable<Integer, String> table1 = builder.table(integerSerde, stringSerde, topic1);
+        KTable<Integer, String> table1 = builder.table(integerSerde, stringSerde, topic1, "anyStoreName");
 
         final Map<Integer, String> keyMap = new HashMap<>();
         keyMap.put(1, "ONE");
