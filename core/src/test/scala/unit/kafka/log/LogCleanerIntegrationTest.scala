@@ -181,7 +181,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
 
   private def writeDups(numKeys: Int, numDups: Int, log: Log, codec: CompressionCodec,
                         startKey: Int = 0, magicValue: Byte = Message.CurrentMagicValue): Seq[(Int, String)] = {
-    for(_ <- 0 until numDups; key <- startKey until numKeys) yield {
+    for(_ <- 0 until numDups; key <- startKey until (startKey + numKeys)) yield {
       val payload = counter.toString
       log.append(TestUtils.singleMessageSet(payload = payload.toString.getBytes, codec = codec,
         key = key.toString.getBytes, magicValue = magicValue), assignOffsets = true)
