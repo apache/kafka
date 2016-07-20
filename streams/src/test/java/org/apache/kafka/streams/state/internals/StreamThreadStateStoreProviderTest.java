@@ -207,8 +207,7 @@ public class StreamThreadStateStoreProviderTest {
         }
 
         @Override
-        public void recordLatency(final Sensor sensor, final long startNs,
-                                  final long endNs) {
+        public void recordLatencyNs(final Sensor sensor, final long startNs, final long endNs) {
 
         }
     }
