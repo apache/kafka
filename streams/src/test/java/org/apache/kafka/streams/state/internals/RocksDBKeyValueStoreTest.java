@@ -26,6 +26,8 @@ import org.apache.kafka.streams.state.Stores;
 import org.junit.Test;
 import org.rocksdb.Options;
 
+import java.util.Map;
+
 import static org.junit.Assert.assertTrue;
 
 public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
@@ -56,7 +58,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
         static boolean called = false;
 
         @Override
-        public void setConfig(final String storeName, final Options options) {
+        public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
             called = true;
         }
     }

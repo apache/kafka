@@ -166,7 +166,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         final Class<RocksDBConfigSetter> configSetterClass = (Class<RocksDBConfigSetter>) configs.get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG);
         if (configSetterClass != null) {
             final RocksDBConfigSetter configSetter = Utils.newInstance(configSetterClass);
-            configSetter.setConfig(name, options);
+            configSetter.setConfig(name, options, configs);
         }
         // we need to construct the serde while opening DB since
         // it is also triggered by windowed DB segments without initialization

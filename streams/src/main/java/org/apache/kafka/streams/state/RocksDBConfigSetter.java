@@ -19,6 +19,8 @@ package org.apache.kafka.streams.state;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.Options;
 
+import java.util.Map;
+
 /**
  * An interface to that allows developers to customize the RocksDB settings
  * for a given Store. Please read the <a href="https://github.com/facebook/rocksdb/wiki/RocksDB-Tuning-Guide">RocksDB Tuning Guide</a>.
@@ -33,6 +35,7 @@ public interface RocksDBConfigSetter {
      * </p>
      * @param storeName     the name of the store being configured
      * @param options       the Rocks DB optionse
+     * @param configs       the configuration supplied to {@link org.apache.kafka.streams.StreamsConfig}
      */
-    void setConfig(final String storeName, final Options options);
+    void setConfig(final String storeName, final Options options, final Map<String, Object> configs);
 }
