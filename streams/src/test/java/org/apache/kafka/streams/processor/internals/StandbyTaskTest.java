@@ -74,7 +74,6 @@ public class StandbyTaskTest {
             Collections.<ProcessorNode>emptyList(),
             Collections.<String, SourceNode>emptyMap(),
             Collections.<String, SinkNode>emptyMap(),
-            Collections.<String, String[]>emptyMap(),
             Utils.<StateStoreSupplier>mkList(
                     new MockStateStoreSupplier(storeName1, false),
                     new MockStateStoreSupplier(storeName2, true)
@@ -87,7 +86,6 @@ public class StandbyTaskTest {
             Collections.<ProcessorNode>emptyList(),
             Collections.<String, SourceNode>emptyMap(),
             Collections.<String, SinkNode>emptyMap(),
-            Collections.<String, String[]>emptyMap(),
             Utils.<StateStoreSupplier>mkList(
                     new MockStateStoreSupplier(ktable.topic(), true, false)
             )

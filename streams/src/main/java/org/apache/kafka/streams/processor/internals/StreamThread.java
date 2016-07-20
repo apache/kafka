@@ -629,16 +629,15 @@ public class StreamThread extends Thread {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder("StreamsThread appId:" + this.applicationId + "\n");
-        sb.append("StreamsThread clientId:" + clientId + "\n");
+        sb.append("\tStreamsThread clientId:" + clientId + "\n");
 
         // iterate and print active tasks
         if (activeTasks != null) {
             sb.append("\tActive tasks:\n");
             for (TaskId tId : activeTasks.keySet()) {
                 StreamTask task = activeTasks.get(tId);
-                sb.append(task.toString());
+                sb.append("\t\t" + task.toString());
             }
-            sb.append("\n");
         }
 
         // iterate and print standby tasks
@@ -646,7 +645,7 @@ public class StreamThread extends Thread {
             sb.append("\tStandby tasks:\n");
             for (TaskId tId : standbyTasks.keySet()) {
                 StandbyTask task = standbyTasks.get(tId);
-                sb.append(task.toString());
+                sb.append("\t\t" + task.toString());
             }
             sb.append("\n");
         }

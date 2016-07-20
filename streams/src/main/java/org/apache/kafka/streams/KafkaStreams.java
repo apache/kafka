@@ -227,7 +227,7 @@ public class KafkaStreams {
     public String toString() {
         StringBuilder sb = new StringBuilder("KafkaStreams processID:" + this.processId + "\n");
         for (int i = 0; i < this.threads.length; i++) {
-            sb.append(this.threads[i].toString());
+            sb.append("\t" + this.threads[i].toString());
         }
         sb.append("\n");
 

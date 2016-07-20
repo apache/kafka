@@ -82,6 +82,9 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         return valSerializer;
     }
 
+    /**
+     * @return a string representation of this node, useful for debugging.
+     */
     public String toString() {
         StringBuilder sb = new StringBuilder(super.toString());
         sb.append("topic:" + topic);

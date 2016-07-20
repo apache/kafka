@@ -157,7 +157,7 @@ public class TopologyBuilder {
         @SuppressWarnings("unchecked")
         @Override
         public ProcessorNode build(String applicationId) {
-            return new SourceNode(name, keyDeserializer, valDeserializer);
+            return new SourceNode(name, nodeToSourceTopics.get(name), keyDeserializer, valDeserializer);
         }
 
         private boolean isMatch(String topic) {
@@ -841,7 +841,7 @@ public class TopologyBuilder {
             }
         }
 
-        return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap, nodeToSourceTopics, new ArrayList<>(stateStoreMap.values()));
+        return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap, new ArrayList<>(stateStoreMap.values()));
     }
 
     /**

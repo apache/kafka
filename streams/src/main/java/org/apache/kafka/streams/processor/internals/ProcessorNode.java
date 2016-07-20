@@ -72,9 +72,12 @@ public class ProcessorNode<K, V> {
         processor.close();
     }
 
+    /**
+     * @return a string representation of this node, useful for debugging.
+     */
     public String toString() {
         StringBuilder sb = new StringBuilder("");
-        sb.append("\t\t" + name + ": ");
+        sb.append(name + ": ");
         if (stateStores != null && !stateStores.isEmpty()) {
             sb.append("stateStores [");
             for (String store : (Set<String>) stateStores) {
