@@ -149,11 +149,9 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     protected void iteration() {
-        long timeoutMs;
+        long timeoutMs = Integer.MAX_VALUE;
         if (!context.offsetCommitDisabled()) {
             timeoutMs = maybeCommitOffsets();
-        } else {
-            timeoutMs = workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
         }
         // And process messages
         poll(timeoutMs);
