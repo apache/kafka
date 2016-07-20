@@ -120,23 +120,27 @@ public class ProcessorStateManager {
             sourceStoreToSourceTopic = topology.sourceStoreToSourceTopic();
         }
 
-        if (store.name().equals(CHECKPOINT_FILE_NAME))
+        if (store.name().equals(CHECKPOINT_FILE_NAME)) {
             throw new IllegalArgumentException("Illegal store name: " + CHECKPOINT_FILE_NAME);
+        }
 
-        if (this.stores.containsKey(store.name()))
+        if (this.stores.containsKey(store.name())) {
             throw new IllegalArgumentException("Store " + store.name() + " has already been registered.");
+        }
 
-        if (loggingEnabled)
+        if (loggingEnabled) {
             this.loggingEnabled.add(store.name());
-
+        }
+        
         // check that the underlying change log topic exist or not
         String topic;
-        if (loggingEnabled)
+        if (loggingEnabled) {
             topic = storeChangelogTopic(this.applicationId, store.name());
-        else if (sourceStoreToSourceTopic != null && sourceStoreToSourceTopic.containsKey(store.name()))
+        } else if (sourceStoreToSourceTopic != null && sourceStoreToSourceTopic.containsKey(store.name())) {
             topic = sourceStoreToSourceTopic.get(store.name());
-        else
+        } else {
             topic = store.name();
+        }
 
         // block until the partition is ready for this state changelog topic or time has elapsed
         int partition = getPartition(topic);
