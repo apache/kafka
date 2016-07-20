@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.TaskId;
@@ -35,9 +36,11 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
@@ -57,6 +60,7 @@ public class StreamThreadStateStoreProviderTest {
     private StreamTask taskTwo;
     private StreamThreadStateStoreProvider provider;
     private StateDirectory stateDirectory;
+    private File stateDir;
 
     @Before
     public void before() throws IOException {
@@ -77,7 +81,8 @@ public class StreamThreadStateStoreProviderTest {
         final String applicationId = "applicationId";
         properties.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        final String stateConfigDir = TestUtils.tempDirectory().getPath();
+        stateDir = TestUtils.tempDirectory();
+        final String stateConfigDir = stateDir.getPath();
         properties.put(StreamsConfig.STATE_DIR_CONFIG,
                 stateConfigDir);
 
@@ -111,6 +116,11 @@ public class StreamThreadStateStoreProviderTest {
 
     }
 
+    @After
+    public void cleanUp() {
+        Utils.delete(stateDir);
+    }
+    
     @Test
     public void shouldFindKeyValueStores() throws Exception {
         List<ReadOnlyKeyValueStore<String, String>> kvStores =
