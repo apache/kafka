@@ -275,6 +275,7 @@ object KafkaConfig {
   val ReplicaSocketTimeoutMsProp = "replica.socket.timeout.ms"
   val ReplicaSocketReceiveBufferBytesProp = "replica.socket.receive.buffer.bytes"
   val ReplicaFetchMaxBytesProp = "replica.fetch.max.bytes"
+  val ReplicaFetchBaseBytesProp = "replica.fetch.base.bytes"
   val ReplicaFetchWaitMaxMsProp = "replica.fetch.wait.max.ms"
   val ReplicaFetchMinBytesProp = "replica.fetch.min.bytes"
   val ReplicaFetchBackoffMsProp = "replica.fetch.backoff.ms"
@@ -460,7 +461,8 @@ object KafkaConfig {
   " the leader will remove the follower from isr"
   val ReplicaSocketTimeoutMsDoc = "The socket timeout for network requests. Its value should be at least replica.fetch.wait.max.ms"
   val ReplicaSocketReceiveBufferBytesDoc = "The socket receive buffer for network requests"
-  val ReplicaFetchMaxBytesDoc = "The number of bytes of messages to attempt to fetch"
+  val ReplicaFetchMaxBytesDoc = "Maximum number of bytes of messages to attempt to fetch"
+  val ReplicaFetchBaseBytesDoc = "Number of bytes of meessages to attempt to fetch. If error happens on fetching bigger messages, this value will be dynamically increased up to replicaFetchMaxBytes and shrunk back afterwards. Default is replicaFetchMaxBytes."
   val ReplicaFetchWaitMaxMsDoc = "max wait time for each fetcher request issued by follower replicas. This value should always be less than the " +
   "replica.lag.time.max.ms at all times to prevent frequent shrinking of ISR for low throughput topics"
   val ReplicaFetchMinBytesDoc = "Minimum bytes expected for each fetch response. If not enough bytes, wait up to replicaMaxWaitTimeMs"
@@ -642,6 +644,7 @@ object KafkaConfig {
       .define(ReplicaSocketTimeoutMsProp, INT, Defaults.ReplicaSocketTimeoutMs, HIGH, ReplicaSocketTimeoutMsDoc)
       .define(ReplicaSocketReceiveBufferBytesProp, INT, Defaults.ReplicaSocketReceiveBufferBytes, HIGH, ReplicaSocketReceiveBufferBytesDoc)
       .define(ReplicaFetchMaxBytesProp, INT, Defaults.ReplicaFetchMaxBytes, HIGH, ReplicaFetchMaxBytesDoc)
+      .define(ReplicaFetchBaseBytesProp, INT, Defaults.ReplicaFetchMaxBytes, HIGH, ReplicaFetchBaseBytesDoc)
       .define(ReplicaFetchWaitMaxMsProp, INT, Defaults.ReplicaFetchWaitMaxMs, HIGH, ReplicaFetchWaitMaxMsDoc)
       .define(ReplicaFetchBackoffMsProp, INT, Defaults.ReplicaFetchBackoffMs, atLeast(0), MEDIUM, ReplicaFetchBackoffMsDoc)
       .define(ReplicaFetchMinBytesProp, INT, Defaults.ReplicaFetchMinBytes, HIGH, ReplicaFetchMinBytesDoc)
@@ -845,6 +848,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val replicaSocketTimeoutMs = getInt(KafkaConfig.ReplicaSocketTimeoutMsProp)
   val replicaSocketReceiveBufferBytes = getInt(KafkaConfig.ReplicaSocketReceiveBufferBytesProp)
   val replicaFetchMaxBytes = getInt(KafkaConfig.ReplicaFetchMaxBytesProp)
+  val replicaFetchBaseBytes = getInt(KafkaConfig.ReplicaFetchBaseBytesProp)
   val replicaFetchWaitMaxMs = getInt(KafkaConfig.ReplicaFetchWaitMaxMsProp)
   val replicaFetchMinBytes = getInt(KafkaConfig.ReplicaFetchMinBytesProp)
   val replicaFetchBackoffMs = getInt(KafkaConfig.ReplicaFetchBackoffMsProp)
@@ -1007,6 +1011,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
     require(replicaFetchWaitMaxMs <= replicaSocketTimeoutMs, "replica.socket.timeout.ms should always be at least replica.fetch.wait.max.ms" +
       " to prevent unnecessary socket timeouts")
     require(replicaFetchMaxBytes >= messageMaxBytes, "replica.fetch.max.bytes should be equal or greater than message.max.bytes")
+    require(replicaFetchBaseBytes <= replicaFetchMaxBytes, "replica.fetch.base.bytes should be less than or equal to replica.fetch.max.bytes")
     require(replicaFetchWaitMaxMs <= replicaLagTimeMaxMs, "replica.fetch.wait.max.ms should always be at least replica.lag.time.max.ms" +
       " to prevent frequent changes in ISR")
     require(offsetCommitRequiredAcks >= -1 && offsetCommitRequiredAcks <= offsetsTopicReplicationFactor,
