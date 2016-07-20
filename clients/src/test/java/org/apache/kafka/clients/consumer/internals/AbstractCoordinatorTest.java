@@ -16,15 +16,20 @@
  **/
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.GroupCoordinatorResponse;
+import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
+import org.apache.kafka.common.requests.JoinGroupResponse;
+import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
@@ -37,7 +42,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class AbstractCoordinatorTest {
 
@@ -78,8 +85,8 @@ public class AbstractCoordinatorTest {
 
     @Test
     public void testCoordinatorDiscoveryBackoff() {
-        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE.code()));
-        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE.code()));
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
 
         // blackout the coordinator for 50 milliseconds to simulate a disconnect.
         // after backing off, we should be able to connect.
@@ -92,9 +99,57 @@ public class AbstractCoordinatorTest {
         assertTrue(endTime - initialTime >= RETRY_BACKOFF_MS);
     }
 
-    private Struct groupCoordinatorResponse(Node node, short error) {
-        GroupCoordinatorResponse response = new GroupCoordinatorResponse(error, node);
+    @Test
+    public void testUncaughtExceptionInHeartbeatThread() throws Exception {
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        mockClient.prepareResponse(joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+
+
+        final RuntimeException e = new RuntimeException();
+
+        // raise the error when the background thread tries to send a heartbeat
+        mockClient.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(ClientRequest request) {
+                if (request.request().header().apiKey() == ApiKeys.HEARTBEAT.id)
+                    throw e;
+                return false;
+            }
+        }, heartbeatResponse(Errors.UNKNOWN));
+
+        try {
+            coordinator.ensureActiveGroup();
+            mockTime.sleep(HEARTBEAT_INTERVAL_MS);
+            synchronized (coordinator) {
+                coordinator.notify();
+            }
+            Thread.sleep(100);
+
+            coordinator.pollHeartbeat(mockTime.milliseconds());
+            fail("Expected pollHeartbeat to raise an error");
+        } catch (RuntimeException exception) {
+            assertEquals(exception, e);
+        }
+    }
+
+    private Struct groupCoordinatorResponse(Node node, Errors error) {
+        GroupCoordinatorResponse response = new GroupCoordinatorResponse(error.code(), node);
         return response.toStruct();
+    }
+
+    private Struct heartbeatResponse(Errors error) {
+        HeartbeatResponse response = new HeartbeatResponse(error.code());
+        return response.toStruct();
+    }
+
+    private Struct joinGroupFollowerResponse(int generationId, String memberId, String leaderId, Errors error) {
+        return new JoinGroupResponse(error.code(), generationId, "dummy-subprotocol", memberId, leaderId,
+                Collections.<String, ByteBuffer>emptyMap()).toStruct();
+    }
+
+    private Struct syncGroupResponse(Errors error) {
+        return new SyncGroupResponse(error.code(), ByteBuffer.allocate(0)).toStruct();
     }
 
     public class DummyCoordinator extends AbstractCoordinator {

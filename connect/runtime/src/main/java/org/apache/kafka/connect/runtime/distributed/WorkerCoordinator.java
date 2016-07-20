@@ -107,7 +107,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
             now = time.milliseconds();
         }
 
-        heartbeat.poll(now);
+        pollHeartbeat(now);
     }
 
     @Override

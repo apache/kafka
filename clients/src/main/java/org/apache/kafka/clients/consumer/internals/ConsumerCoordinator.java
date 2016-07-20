@@ -258,7 +258,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             now = time.milliseconds();
         }
 
-        heartbeat.poll(now);
+        pollHeartbeat(now);
         maybeAutoCommitOffsetsAsync(now);
     }
 

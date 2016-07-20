@@ -53,6 +53,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * AbstractCoordinator implements group management for a single group member by interacting with
@@ -96,7 +97,7 @@ public abstract class AbstractCoordinator implements Closeable {
     protected final ConsumerNetworkClient client;
     protected final Time time;
     protected final long retryBackoffMs;
-    protected final Heartbeat heartbeat;
+    private final Heartbeat heartbeat;
 
     private HeartbeatThread heartbeatThread = null;
     private boolean rejoinNeeded = true;
@@ -227,6 +228,20 @@ public abstract class AbstractCoordinator implements Closeable {
     protected synchronized boolean needRejoin() {
         return rejoinNeeded;
     }
+
+    /**
+     * Ensure that the heartbeat thread is active and
+     * @param now
+     */
+    protected synchronized void pollHeartbeat(long now) {
+        if (heartbeatThread != null) {
+            if (heartbeatThread.hasFailed())
+                throw heartbeatThread.failureCause();
+
+            heartbeat.poll(now);
+        }
+    }
+
 
     /**
      * Ensure that the group is active (i.e. joined and synced)
@@ -502,7 +517,7 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
-        /**
+    /**
      * Check if we know who the coordinator is and we have an active connection
      * @return true if the coordinator is unknown
      */
@@ -735,6 +750,8 @@ public abstract class AbstractCoordinator implements Closeable {
         private boolean closed = false;
         private RequestFuture<Void> findCoordinatorFuture;
 
+        private AtomicReference<RuntimeException> failed = new AtomicReference<>(null);
+
         public void enable() {
             synchronized (AbstractCoordinator.this) {
                 this.enabled = true;
@@ -776,77 +793,90 @@ public abstract class AbstractCoordinator implements Closeable {
             }
         }
 
+        private boolean hasFailed() {
+            return failed.get() != null;
+        }
+
+        private RuntimeException failureCause() {
+            return failed.get();
+        }
+
         @Override
         public void run() {
-            while (true) {
-                synchronized (AbstractCoordinator.this) {
-                    if (closed)
-                        return;
+            try {
+                while (true) {
+                    synchronized (AbstractCoordinator.this) {
+                        if (closed)
+                            return;
 
-                    if (!enabled) {
-                        await();
-                        continue;
-                    }
-
-                    if (state != MemberState.STABLE) {
-                        // the group is not stable (perhaps because we left the group or because the coordinator
-                        // kicked us out), so disable heartbeats and wait for the main thread to rejoin.
-                        disable();
-                        continue;
-                    }
-
-                    client.pollNoWakeup();
-                    long now = time.milliseconds();
-
-                    if (coordinatorUnknown()) {
-                        if (findCoordinatorFuture != null && !findCoordinatorFuture.isDone()) {
-                            awaitMs(retryBackoffMs);
+                        if (!enabled) {
+                            await();
                             continue;
                         }
 
-                        findCoordinatorFuture = sendGroupCoordinatorRequest();
-                        findCoordinatorFuture.addListener(new RequestFutureListener<Void>() {
-                            @Override
-                            public void onSuccess(Void value) {
-                                heartbeat.resetTimeouts(time.milliseconds());
+                        if (state != MemberState.STABLE) {
+                            // the group is not stable (perhaps because we left the group or because the coordinator
+                            // kicked us out), so disable heartbeats and wait for the main thread to rejoin.
+                            disable();
+                            continue;
+                        }
+
+                        client.pollNoWakeup();
+                        long now = time.milliseconds();
+
+                        if (coordinatorUnknown()) {
+                            if (findCoordinatorFuture != null && !findCoordinatorFuture.isDone()) {
+                                awaitMs(retryBackoffMs);
+                                continue;
                             }
 
-                            @Override
-                            public void onFailure(RuntimeException e) {
-                                log.debug("Group coordinator lookup for group {} failed", groupId, e);
-                            }
-                        });
-                    } else if (heartbeat.sessionTimeoutExpired(now)) {
-                        // the session timeout has expired without seeing a successful heartbeat, so we should
-                        // probably make sure the coordinator is still healthy.
-                        coordinatorDead();
-                    } else if (heartbeat.pollTimeoutExpired(now)) {
-                        // the poll timeout has expired, so we explicitly leave the group
-                        maybeLeaveGroup();
-                    } else if (!heartbeat.shouldHeartbeat(now)) {
-                        awaitMs(heartbeat.timeToNextHeartbeat(now));
-                    } else {
-                        heartbeat.sentHeartbeat(now);
-                        RequestFuture<Void> future = sendHeartbeatRequest();
-                        future.addListener(new RequestFutureListener<Void>() {
-                            @Override
-                            public void onSuccess(Void value) {
-                                heartbeat.receiveHeartbeat(time.milliseconds());
-                            }
-
-                            @Override
-                            public void onFailure(RuntimeException e) {
-                                log.debug("Heartbeat to coordinator {} failed", coordinator, e);
-                                heartbeat.failHeartbeat();
-
-                                // wake up the thread if it's sleeping to reschedule the heartbeat
-                                synchronized (AbstractCoordinator.this) {
-                                    AbstractCoordinator.this.notify();
+                            findCoordinatorFuture = sendGroupCoordinatorRequest();
+                            findCoordinatorFuture.addListener(new RequestFutureListener<Void>() {
+                                @Override
+                                public void onSuccess(Void value) {
+                                    heartbeat.resetTimeouts(time.milliseconds());
                                 }
-                            }
-                        });
+
+                                @Override
+                                public void onFailure(RuntimeException e) {
+                                    log.debug("Group coordinator lookup for group {} failed", groupId, e);
+                                }
+                            });
+                        } else if (heartbeat.sessionTimeoutExpired(now)) {
+                            // the session timeout has expired without seeing a successful heartbeat, so we should
+                            // probably make sure the coordinator is still healthy.
+                            coordinatorDead();
+                        } else if (heartbeat.pollTimeoutExpired(now)) {
+                            // the poll timeout has expired, so we explicitly leave the group
+                            maybeLeaveGroup();
+                        } else if (!heartbeat.shouldHeartbeat(now)) {
+                            awaitMs(heartbeat.timeToNextHeartbeat(now));
+                        } else {
+                            heartbeat.sentHeartbeat(now);
+                            RequestFuture<Void> future = sendHeartbeatRequest();
+                            future.addListener(new RequestFutureListener<Void>() {
+                                @Override
+                                public void onSuccess(Void value) {
+                                    heartbeat.receiveHeartbeat(time.milliseconds());
+                                }
+
+                                @Override
+                                public void onFailure(RuntimeException e) {
+                                    log.debug("Heartbeat to coordinator {} failed", coordinator, e);
+                                    heartbeat.failHeartbeat();
+
+                                    // wake up the thread if it's sleeping to reschedule the heartbeat
+                                    synchronized (AbstractCoordinator.this) {
+                                        AbstractCoordinator.this.notify();
+                                    }
+                                }
+                            });
+                        }
                     }
                 }
+            } catch (RuntimeException e) {
+                log.error("Heartbeat thread for group {} failed due to unexpected error" , groupId, e);
+                this.failed.set(e);
             }
         }
 
