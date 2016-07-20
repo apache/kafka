@@ -51,11 +51,12 @@ import static org.junit.Assert.assertThat;
  * End-to-end integration test that demonstrates how to perform a join between a KStream and a
  * KTable (think: KStream.leftJoin(KTable)), i.e. an example of a stateful computation.
  */
-public class JoinIntegrationTest {
+public class KStreamKTableJoinIntegrationTest {
     @ClassRule
     public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster();
     private static final String USER_CLICKS_TOPIC = "user-clicks";
     private static final String USER_REGIONS_TOPIC = "user-regions";
+    private static final String USER_REGIONS_STORE_NAME = "user-regions-store-name";
     private static final String OUTPUT_TOPIC = "output-topic";
 
     @BeforeClass
@@ -143,11 +144,6 @@ public class JoinIntegrationTest {
         streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        // Explicitly place the state directory under /tmp so that we can remove it via
-        // `purgeLocalStreamsState` below.  Once Streams is updated to expose the effective
-        // StreamsConfig configuration (so we can retrieve whatever state directory Streams came up
-        // with automatically) we don't need to set this anymore and can update `purgeLocalStreamsState`
-        // accordingly.
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG,
                                  TestUtils.tempDirectory().getPath());
 
@@ -174,7 +170,7 @@ public class JoinIntegrationTest {
         // subsequently processed in the `leftJoin`, the latest region update for "alice" is "europe"
         // (which overrides her previous region value of "asia").
         KTable<String, String> userRegionsTable =
-            builder.table(stringSerde, stringSerde, USER_REGIONS_TOPIC);
+            builder.table(stringSerde, stringSerde, USER_REGIONS_TOPIC, USER_REGIONS_STORE_NAME);
 
         // Compute the number of clicks per region, e.g. "europe" -> 13L.
         //

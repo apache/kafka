@@ -35,17 +35,24 @@ import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.SimpleTimeZone;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
     public static final long MIN_SEGMENT_INTERVAL = 60 * 1000; // one minute
 
     private static final long USE_CURRENT_TIMESTAMP = -1L;
+
+    private volatile boolean open = false;
 
     // use the Bytes wrapper for underlying rocksDB keys since they are used for hashing data structures
     private static class Segment extends RocksDBStore<Bytes, byte[]> {
@@ -63,27 +70,36 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
     private static class RocksDBWindowStoreIterator<V> implements WindowStoreIterator<V> {
         private final StateSerdes<?, V> serdes;
-        private final KeyValueIterator<Bytes, byte[]>[] iterators;
-        private int index = 0;
+        private final Iterator<Segment> segments;
+        private final Bytes from;
+        private final Bytes to;
+        private KeyValueIterator<Bytes, byte[]> currentIterator;
+        private Segment currentSegment;
 
         RocksDBWindowStoreIterator(StateSerdes<?, V> serdes) {
-            this(serdes, WindowStoreUtils.NO_ITERATORS);
+            this(serdes, null, null, Collections.<Segment>emptyIterator());
         }
 
-        RocksDBWindowStoreIterator(StateSerdes<?, V> serdes, KeyValueIterator<Bytes, byte[]>[] iterators) {
+        RocksDBWindowStoreIterator(StateSerdes<?, V> serdes, Bytes from, Bytes to, Iterator<Segment> segments) {
             this.serdes = serdes;
-            this.iterators = iterators;
+            this.from = from;
+            this.to = to;
+            this.segments = segments;
         }
 
         @Override
         public boolean hasNext() {
-            while (index < iterators.length) {
-                if (iterators[index].hasNext())
-                    return true;
-
-                index++;
+            while ((currentIterator == null || !currentIterator.hasNext() || !currentSegment.isOpen())
+                    && segments.hasNext()) {
+                close();
+                currentSegment = segments.next();
+                try {
+                    currentIterator = currentSegment.range(from, to);
+                } catch (InvalidStateStoreException e) {
+                    // segment may have been closed so we ignore it.
+                }
             }
-            return false;
+            return currentIterator != null && currentIterator.hasNext();
         }
 
         /**
@@ -91,37 +107,37 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
          */
         @Override
         public KeyValue<Long, V> next() {
-            if (index >= iterators.length)
+            if (!hasNext()) {
                 throw new NoSuchElementException();
-
-            KeyValue<Bytes, byte[]> kv = iterators[index].next();
-
+            }
+            KeyValue<Bytes, byte[]> kv = currentIterator.next();
             return new KeyValue<>(WindowStoreUtils.timestampFromBinaryKey(kv.key.get()),
-                                  serdes.valueFrom(kv.value));
+                    serdes.valueFrom(kv.value));
         }
 
         @Override
         public void remove() {
-            if (index < iterators.length)
-                iterators[index].remove();
+
         }
 
         @Override
         public void close() {
-            for (KeyValueIterator<Bytes, byte[]> iterator : iterators) {
-                iterator.close();
+            if (currentIterator != null) {
+                currentIterator.close();
+                currentIterator = null;
             }
         }
     }
 
     private final String name;
+    private final int numSegments;
     private final long segmentInterval;
     private final boolean retainDuplicates;
-    private final Segment[] segments;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private final SimpleDateFormat formatter;
     private final StoreChangeLogger.ValueGetter<Bytes, byte[]> getter;
+    private final ConcurrentHashMap<Long, Segment> segments = new ConcurrentHashMap<>();
 
     private ProcessorContext context;
     private int seqnum = 0;
@@ -134,11 +150,11 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
     public RocksDBWindowStore(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde) {
         this.name = name;
+        this.numSegments = numSegments;
 
         // The segment interval must be greater than MIN_SEGMENT_INTERVAL
         this.segmentInterval = Math.max(retentionPeriod / (numSegments - 1), MIN_SEGMENT_INTERVAL);
 
-        this.segments = new Segment[numSegments];
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
 
@@ -192,6 +208,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         });
 
         flush();
+        open = true;
     }
 
     private void openExistingSegments() {
@@ -210,7 +227,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
                     for (long segmentId : segmentIds) {
                         if (segmentId >= 0) {
                             currentSegmentId = segmentId;
-                            getSegment(segmentId);
+                            getOrCreateSegment(segmentId);
                         }
                     }
                 }
@@ -228,8 +245,13 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     }
 
     @Override
+    public boolean isOpen() {
+        return open;
+    }
+
+    @Override
     public void flush() {
-        for (Segment segment : segments) {
+        for (Segment segment : segments.values()) {
             if (segment != null)
                 segment.flush();
         }
@@ -240,8 +262,9 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
     @Override
     public void close() {
+        open = false;
         flush();
-        for (Segment segment : segments) {
+        for (Segment segment : segments.values()) {
             if (segment != null)
                 segment.close();
         }
@@ -279,7 +302,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         }
 
         // If the record is within the retention period, put it in the store.
-        Segment segment = getSegment(segmentId);
+        Segment segment = getOrCreateSegment(segmentId);
         if (segment != null) {
             if (retainDuplicates)
                 seqnum = (seqnum + 1) & 0x7FFFFFFF;
@@ -301,7 +324,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         }
 
         // If the record is within the retention period, put it in the store.
-        Segment segment = getSegment(segmentId);
+        Segment segment = getOrCreateSegment(segmentId);
         if (segment != null)
             segment.put(Bytes.wrap(binaryKey), binaryValue);
     }
@@ -320,41 +343,56 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     @SuppressWarnings("unchecked")
     @Override
     public WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo) {
+        if (!isOpen()) {
+            throw new InvalidStateStoreException("Store " + this.name + " is currently not isOpen");
+        }
         long segFrom = segmentId(timeFrom);
         long segTo = segmentId(Math.max(0L, timeTo));
 
         byte[] binaryFrom = WindowStoreUtils.toBinaryKey(key, timeFrom, 0, serdes);
         byte[] binaryTo = WindowStoreUtils.toBinaryKey(key, timeTo, Integer.MAX_VALUE, serdes);
 
-        ArrayList<KeyValueIterator<Bytes, byte[]>> iterators = new ArrayList<>();
-
+        final List<Segment> segments = new ArrayList<>();
         for (long segmentId = segFrom; segmentId <= segTo; segmentId++) {
             Segment segment = getSegment(segmentId);
-            if (segment != null)
-                iterators.add(segment.range(Bytes.wrap(binaryFrom), Bytes.wrap(binaryTo)));
+            if (segment != null && segment.isOpen()) {
+                try {
+                    segments.add(segment);
+                } catch (InvalidStateStoreException ise) {
+                    // segment may have been closed by streams thread;
+                }
+            }
         }
 
-        if (iterators.size() > 0) {
-            return new RocksDBWindowStoreIterator<>(serdes, iterators.toArray(new KeyValueIterator[iterators.size()]));
+        if (!segments.isEmpty()) {
+            return new RocksDBWindowStoreIterator<>(serdes, Bytes.wrap(binaryFrom), Bytes.wrap(binaryTo), segments.iterator());
         } else {
             return new RocksDBWindowStoreIterator<>(serdes);
         }
     }
 
     private Segment getSegment(long segmentId) {
-        if (segmentId <= currentSegmentId && segmentId > currentSegmentId - segments.length) {
-            int index = (int) (segmentId % segments.length);
+        final Segment segment = segments.get(segmentId % numSegments);
+        if (segment != null && segment.id != segmentId) {
+            return null;
+        }
+        return segment;
+    }
 
-            if (segments[index] != null && segments[index].id != segmentId) {
+
+    private Segment getOrCreateSegment(long segmentId) {
+        if (segmentId <= currentSegmentId && segmentId > currentSegmentId - numSegments) {
+            final long key = segmentId % numSegments;
+            final Segment segment = segments.get(key);
+            if (segment != null && segment.id != segmentId) {
                 cleanup();
             }
-
-            if (segments[index] == null) {
-                segments[index] = new Segment(segmentName(segmentId), name, segmentId);
-                segments[index].openDB(context);
+            if (!segments.containsKey(key)) {
+                final Segment newSegment = new Segment(segmentName(segmentId), name, segmentId);
+                newSegment.openDB(context);
+                segments.put(key, newSegment);
             }
-
-            return segments[index];
+            return segments.get(key);
 
         } else {
             return null;
@@ -362,11 +400,12 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     }
 
     private void cleanup() {
-        for (int i = 0; i < segments.length; i++) {
-            if (segments[i] != null && segments[i].id <= currentSegmentId - segments.length) {
-                segments[i].close();
-                segments[i].destroy();
-                segments[i] = null;
+        for (Map.Entry<Long, Segment> segmentEntry : segments.entrySet()) {
+            final Segment segment = segmentEntry.getValue();
+            if (segment != null && segment.id <= currentSegmentId - numSegments) {
+                segments.remove(segmentEntry.getKey());
+                segment.close();
+                segment.destroy();
             }
         }
     }
@@ -393,7 +432,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     public Set<Long> segmentIds() {
         HashSet<Long> segmentIds = new HashSet<>();
 
-        for (Segment segment : segments) {
+        for (Segment segment : segments.values()) {
             if (segment != null)
                 segmentIds.add(segment.id);
         }

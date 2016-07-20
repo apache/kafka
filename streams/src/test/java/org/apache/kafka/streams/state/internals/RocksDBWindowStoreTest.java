@@ -32,6 +32,7 @@ import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.io.File;
@@ -46,6 +47,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 
 public class RocksDBWindowStoreTest {
@@ -67,6 +69,45 @@ public class RocksDBWindowStoreTest {
         WindowStore<K, V> store = (WindowStore<K, V>) supplier.get();
         store.init(context, store);
         return store;
+    }
+
+    @Test
+    public void shouldOnlyIterateOpenSegments() throws Exception {
+        final File baseDir = TestUtils.tempDirectory();
+        Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerde.serializer(), byteArraySerde.serializer());
+        RecordCollector recordCollector = new RecordCollector(producer) {
+            @Override
+            public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
+            }
+        };
+
+        MockProcessorContext context = new MockProcessorContext(
+                null, baseDir,
+                byteArraySerde, byteArraySerde,
+                recordCollector);
+
+        final WindowStore<Integer, String> windowStore = createWindowStore(context);
+        long currentTime = 0;
+        context.setTime(currentTime);
+        windowStore.put(1, "one");
+        currentTime = currentTime + segmentSize;
+        context.setTime(currentTime);
+        windowStore.put(1, "two");
+        currentTime = currentTime + segmentSize;
+        context.setTime(currentTime);
+        windowStore.put(1, "three");
+
+        final WindowStoreIterator<String> iterator = windowStore.fetch(1, 0, currentTime);
+
+        // roll to the next segment that will close the first
+        currentTime = currentTime + segmentSize;
+        context.setTime(currentTime);
+        windowStore.put(1, "four");
+
+        // should only have 2 values as the first segment is no longer open
+        assertEquals(new KeyValue<>(60000L, "two"), iterator.next());
+        assertEquals(new KeyValue<>(120000L, "three"), iterator.next());
+        assertFalse(iterator.hasNext());
     }
 
     @Test
@@ -712,7 +753,7 @@ public class RocksDBWindowStoreTest {
                 assertEquals(2, fetchedCount);
 
                 assertEquals(
-                        Utils.mkSet(inner.segmentName(1L), inner.segmentName(2L), inner.segmentName(3L)),
+                        Utils.mkSet(inner.segmentName(1L), inner.segmentName(3L)),
                         segmentDirs(baseDir)
                 );
 
@@ -728,7 +769,7 @@ public class RocksDBWindowStoreTest {
                 assertEquals(1, fetchedCount);
 
                 assertEquals(
-                        Utils.mkSet(inner.segmentName(3L), inner.segmentName(4L), inner.segmentName(5L)),
+                        Utils.mkSet(inner.segmentName(3L), inner.segmentName(5L)),
                         segmentDirs(baseDir)
                 );
 

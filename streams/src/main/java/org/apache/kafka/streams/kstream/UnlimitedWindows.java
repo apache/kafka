@@ -32,9 +32,8 @@ public class UnlimitedWindows extends Windows<UnlimitedWindow> {
     /** The start timestamp of the window. */
     public final long start;
 
-    private UnlimitedWindows(String name, long start) {
-        super(name);
-
+    private UnlimitedWindows(long start) {
+        super();
         if (start < 0) {
             throw new IllegalArgumentException("start must be > 0 (you provided " + start + ")");
         }
@@ -44,8 +43,8 @@ public class UnlimitedWindows extends Windows<UnlimitedWindow> {
     /**
      * Return an unlimited window starting at timestamp zero.
      */
-    public static UnlimitedWindows of(String name) {
-        return new UnlimitedWindows(name, DEFAULT_START_TIMESTAMP);
+    public static UnlimitedWindows of() {
+        return new UnlimitedWindows(DEFAULT_START_TIMESTAMP);
     }
 
     /**
@@ -55,7 +54,7 @@ public class UnlimitedWindows extends Windows<UnlimitedWindow> {
      * @return       a new unlimited window that starts at {@code start}
      */
     public UnlimitedWindows startOn(long start) {
-        return new UnlimitedWindows(this.name, start);
+        return new UnlimitedWindows(start);
     }
 
     @Override

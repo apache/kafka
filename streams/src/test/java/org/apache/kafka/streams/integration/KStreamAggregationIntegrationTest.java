@@ -32,6 +32,7 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -49,7 +50,7 @@ import java.util.concurrent.ExecutionException;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 
-public class KGroupedStreamIntegrationTest {
+public class KStreamAggregationIntegrationTest {
 
     @ClassRule
     public static final EmbeddedSingleNodeKafkaCluster CLUSTER =
@@ -82,14 +83,7 @@ public class KGroupedStreamIntegrationTest {
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
 
-        KeyValueMapper<Integer, String, String>
-            mapper =
-            new KeyValueMapper<Integer, String, String>() {
-                @Override
-                public String apply(Integer key, String value) {
-                    return value;
-                }
-            };
+        KeyValueMapper<Integer, String, String> mapper = MockKeyValueMapper.<Integer, String>SelectValueMapper();
         stream = builder.stream(Serdes.Integer(), Serdes.String(), streamOneInput);
         groupedStream = stream
             .groupBy(
@@ -145,7 +139,7 @@ public class KGroupedStreamIntegrationTest {
         Collections.sort(results, new Comparator<KeyValue<String, String>>() {
             @Override
             public int compare(KeyValue<String, String> o1, KeyValue<String, String> o2) {
-                return KGroupedStreamIntegrationTest.compare(o1, o2);
+                return KStreamAggregationIntegrationTest.compare(o1, o2);
             }
         });
 
@@ -180,7 +174,7 @@ public class KGroupedStreamIntegrationTest {
         produceMessages(secondBatchTimestamp);
 
         groupedStream
-            .reduce(reducer, TimeWindows.of("reduce-time-windows", 500L))
+            .reduce(reducer, TimeWindows.of(500L), "reduce-time-windows")
             .toStream(new KeyValueMapper<Windowed<String>, String, String>() {
                 @Override
                 public String apply(Windowed<String> windowedKey, String value) {
@@ -202,7 +196,7 @@ public class KGroupedStreamIntegrationTest {
                 @Override
                 public int compare(final KeyValue<String, String> o1,
                                    final KeyValue<String, String> o2) {
-                    return KGroupedStreamIntegrationTest.compare(o1, o2);
+                    return KStreamAggregationIntegrationTest.compare(o1, o2);
                 }
             };
 
@@ -253,7 +247,7 @@ public class KGroupedStreamIntegrationTest {
         Collections.sort(results, new Comparator<KeyValue<String, Integer>>() {
             @Override
             public int compare(KeyValue<String, Integer> o1, KeyValue<String, Integer> o2) {
-                return KGroupedStreamIntegrationTest.compare(o1, o2);
+                return KStreamAggregationIntegrationTest.compare(o1, o2);
             }
         });
 
@@ -282,8 +276,8 @@ public class KGroupedStreamIntegrationTest {
         groupedStream.aggregate(
             initializer,
             aggregator,
-            TimeWindows.of("aggregate-by-key-windowed", 500L),
-            Serdes.Integer())
+            TimeWindows.of(500L),
+            Serdes.Integer(), "aggregate-by-key-windowed")
             .toStream(new KeyValueMapper<Windowed<String>, Integer, String>() {
                 @Override
                 public String apply(Windowed<String> windowedKey, Integer value) {
@@ -305,7 +299,7 @@ public class KGroupedStreamIntegrationTest {
                 @Override
                 public int compare(final KeyValue<String, Integer> o1,
                                    final KeyValue<String, Integer> o2) {
-                    return KGroupedStreamIntegrationTest.compare(o1, o2);
+                    return KStreamAggregationIntegrationTest.compare(o1, o2);
                 }
             };
 
@@ -352,7 +346,7 @@ public class KGroupedStreamIntegrationTest {
         Collections.sort(results, new Comparator<KeyValue<String, Long>>() {
             @Override
             public int compare(KeyValue<String, Long> o1, KeyValue<String, Long> o2) {
-                return KGroupedStreamIntegrationTest.compare(o1, o2);
+                return KStreamAggregationIntegrationTest.compare(o1, o2);
             }
         });
 
@@ -377,7 +371,7 @@ public class KGroupedStreamIntegrationTest {
         produceMessages(timestamp);
 
         stream.groupByKey(Serdes.Integer(), Serdes.String())
-            .count(TimeWindows.of("count-windows", 500L))
+            .count(TimeWindows.of(500L), "count-windows")
             .toStream(new KeyValueMapper<Windowed<Integer>, Long, String>() {
                 @Override
                 public String apply(final Windowed<Integer> windowedKey, final Long value) {
@@ -394,7 +388,7 @@ public class KGroupedStreamIntegrationTest {
         Collections.sort(results, new Comparator<KeyValue<String, Long>>() {
             @Override
             public int compare(KeyValue<String, Long> o1, KeyValue<String, Long> o2) {
-                return KGroupedStreamIntegrationTest.compare(o1, o2);
+                return KStreamAggregationIntegrationTest.compare(o1, o2);
             }
         });
 

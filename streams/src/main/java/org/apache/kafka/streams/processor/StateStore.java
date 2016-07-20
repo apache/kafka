@@ -58,4 +58,10 @@ public interface StateStore {
      * @return  {@code true} if the storage is persistent&mdash;{@code false} otherwise
      */
     boolean persistent();
+
+    /**
+     * Is this store open for reading and writing
+     * @return {@code true} if the store is open
+     */
+    boolean isOpen();
 }

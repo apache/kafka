@@ -75,6 +75,11 @@ public class MeteredWindowStore<K, V> implements WindowStore<K, V> {
     }
 
     @Override
+    public boolean isOpen() {
+        return inner.isOpen();
+    }
+
+    @Override
     public WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo) {
         return new MeteredWindowStoreIterator<>(this.inner.fetch(key, timeFrom, timeTo), this.fetchTime);
     }
