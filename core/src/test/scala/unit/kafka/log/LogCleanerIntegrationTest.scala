@@ -18,6 +18,7 @@
 package kafka.log
 
 import java.io.File
+import java.nio.file.Files
 import java.util.Properties
 
 import kafka.api.{KAFKA_0_10_0_IV1, KAFKA_0_9_0}
@@ -220,7 +221,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     val logs = new Pool[TopicAndPartition, Log]()
     for(i <- 0 until parts) {
       val dir = new File(logDir, "log-" + i)
-      dir.mkdirs()
+      Files.createDirectory(dir.toPath())
 
       val log = new Log(dir = dir,
                         LogConfig(logConfigProperties(maxMessageSize, minCleanableDirtyRatio)),

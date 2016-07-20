@@ -18,6 +18,7 @@
 package kafka.log
 
 import java.io._
+import java.nio.file.Files
 import java.util.Properties
 
 import kafka.common._
@@ -242,7 +243,7 @@ class LogManagerTest {
   def testRecoveryDirectoryMappingWithRelativeDirectory() {
     logManager.shutdown()
     logDir = new File("data" + File.separator + logDir.getName)
-    logDir.mkdirs()
+    Files.createDirectory(logDir.toPath())
     logDir.deleteOnExit()
     logManager = createLogManager()
     logManager.startup
