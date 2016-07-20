@@ -431,8 +431,7 @@ private[log] class Cleaner(val id: Int,
         stats.readMessage(size)
         if (entry.message.compressionCodec == NoCompressionCodec) {
           if (shouldRetainMessage(source, map, retainDeletes, entry)) {
-            val convertedMessage = entry.message.toFormatVersion(messageFormatVersion)
-            ByteBufferMessageSet.writeMessage(writeBuffer, convertedMessage, entry.offset)
+            ByteBufferMessageSet.writeMessage(writeBuffer, entry.message, entry.offset)
             stats.recopyMessage(size)
           }
           messagesRead += 1
@@ -444,19 +443,12 @@ private[log] class Cleaner(val id: Int,
           val retainedMessages = new mutable.ArrayBuffer[MessageAndOffset]
           messages.foreach { messageAndOffset =>
             messagesRead += 1
-            if (shouldRetainMessage(source, map, retainDeletes, messageAndOffset)) {
-              retainedMessages += {
-                if (messageAndOffset.message.magic != messageFormatVersion) {
-                  writeOriginalMessageSet = false
-                  new MessageAndOffset(messageAndOffset.message.toFormatVersion(messageFormatVersion), messageAndOffset.offset)
-                }
-                else messageAndOffset
-              }
-            }
+            if (shouldRetainMessage(source, map, retainDeletes, messageAndOffset))
+              retainedMessages += messageAndOffset
             else writeOriginalMessageSet = false
           }
 
-          // There are no messages compacted out and no message format conversion, write the original message set back
+          // There are no messages compacted out, write the original message set back
           if (writeOriginalMessageSet)
             ByteBufferMessageSet.writeMessage(writeBuffer, entry.message, entry.offset)
           else if (retainedMessages.nonEmpty)
