@@ -20,6 +20,7 @@ package kafka.log
 import java.io.File
 import java.util.Properties
 
+import kafka.api.{KAFKA_0_10_0_IV1, KAFKA_0_9_0}
 import kafka.common.TopicAndPartition
 import kafka.message._
 import kafka.server.OffsetCheckpoint
@@ -33,6 +34,7 @@ import org.junit.runners.Parameterized
 import org.junit.runners.Parameterized.Parameters
 
 import scala.collection._
+import scala.util.Random
 
 /**
  * This is an integration test that tests the fully integrated log cleaner
@@ -40,117 +42,195 @@ import scala.collection._
 @RunWith(value = classOf[Parameterized])
 class LogCleanerIntegrationTest(compressionCodec: String) {
 
+  val codec = CompressionCodec.getCompressionCodec(compressionCodec)
   val time = new MockTime()
-  val segmentSize = 100
+  val segmentSize = 256
   val deleteDelay = 1000
   val logName = "log"
   val logDir = TestUtils.tempDir()
   var counter = 0
+  var cleaner: LogCleaner = _
   val topics = Array(TopicAndPartition("log", 0), TopicAndPartition("log", 1), TopicAndPartition("log", 2))
 
   @Test
   def cleanerTest() {
-    val cleaner = makeCleaner(parts = 3)
+    val largeMessageKey = 20
+    val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, Message.MagicValue_V1)
+    val maxMessageSize = largeMessageSet.sizeInBytes
+
+    cleaner = makeCleaner(parts = 3, maxMessageSize = maxMessageSize)
     val log = cleaner.logs.get(topics(0))
 
-    val appends = writeDups(numKeys = 100, numDups = 3, log, CompressionCodec.getCompressionCodec(compressionCodec))
+    val appends = writeDups(numKeys = 100, numDups = 3, log = log, codec = codec)
     val startSize = log.size
     cleaner.startup()
 
     val firstDirty = log.activeSegment.baseOffset
-    // wait until cleaning up to base_offset, note that cleaning happens only when "log dirty ratio" is higher than LogConfig.MinCleanableDirtyRatioProp
-    cleaner.awaitCleaned("log", 0, firstDirty)
+    checkLastCleaned("log", 0, firstDirty)
     val compactedSize = log.logSegments.map(_.size).sum
-    val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints.get(TopicAndPartition("log", 0)).get
-    assertTrue(s"log cleaner should have processed up to offset $firstDirty, but lastCleaned=$lastCleaned", lastCleaned >= firstDirty)
-    assertTrue(s"log should have been compacted:  startSize=$startSize compactedSize=$compactedSize", startSize > compactedSize)
-    
-    val read = readFromLog(log)
-    assertEquals("Contents of the map shouldn't change.", appends.toMap, read.toMap)
-    assertTrue(startSize > log.size)
+    assertTrue(s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize", startSize > compactedSize)
 
-    // write some more stuff and validate again
-    val appends2 = appends ++ writeDups(numKeys = 100, numDups = 3, log, CompressionCodec.getCompressionCodec(compressionCodec))
+    checkLogAfterAppendingDups(log, startSize, appends)
+
+    log.append(largeMessageSet, assignOffsets = true)
+    val dups = writeDups(startKey = largeMessageKey + 1, numKeys = 100, numDups = 3, log = log, codec = codec)
+    val appends2 = appends ++ Seq(largeMessageKey -> largeMessageValue) ++ dups
     val firstDirty2 = log.activeSegment.baseOffset
-    cleaner.awaitCleaned("log", 0, firstDirty2)
+    checkLastCleaned("log", 0, firstDirty2)
 
-    val lastCleaned2 = cleaner.cleanerManager.allCleanerCheckpoints.get(TopicAndPartition("log", 0)).get
-    assertTrue(s"log cleaner should have processed up to offset $firstDirty2", lastCleaned2 >= firstDirty2)
-
-    val read2 = readFromLog(log)
-    assertEquals("Contents of the map shouldn't change.", appends2.toMap, read2.toMap)
+    checkLogAfterAppendingDups(log, startSize, appends2)
 
     // simulate deleting a partition, by removing it from logs
     // force a checkpoint
     // and make sure its gone from checkpoint file
-
     cleaner.logs.remove(topics(0))
-
     cleaner.updateCheckpoints(logDir)
     val checkpoints = new OffsetCheckpoint(new File(logDir,cleaner.cleanerManager.offsetCheckpointFile)).read()
-
     // we expect partition 0 to be gone
-    assert(!checkpoints.contains(topics(0)))
-    cleaner.shutdown()
+    assertFalse(checkpoints.contains(topics(0)))
   }
 
-  def readFromLog(log: Log): Iterable[(Int, Int)] = {
-    for (segment <- log.logSegments; entry <- segment.log; messageAndOffset <- {
+  // returns (value, ByteBufferMessageSet)
+  private def createLargeSingleMessageSet(key: Int, messageFormatVersion: Byte): (String, ByteBufferMessageSet) = {
+    def messageValue(length: Int): String = {
+      val random = new Random(0)
+      new String(random.alphanumeric.take(length).toArray)
+    }
+    val value = messageValue(128)
+    val messageSet = TestUtils.singleMessageSet(payload = value.getBytes, codec = codec, key = key.toString.getBytes,
+      magicValue = messageFormatVersion)
+    (value, messageSet)
+  }
+
+  @Test
+  def testCleanerWithMessageFormatV0() {
+    val largeMessageKey = 20
+    val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, Message.MagicValue_V0)
+    val maxMessageSize = codec match {
+      case NoCompressionCodec => largeMessageSet.sizeInBytes
+      case _ =>
+        // the broker assigns absolute offsets for message format 0 which potentially causes the compressed size to
+        // increase because the broker offsets are larger than the ones assigned by the client
+        // adding `5` to the message set size is good enough for this test: it covers the increased message size while
+        // still being less than the overhead introduced by the conversion from message format version 0 to 1
+        largeMessageSet.sizeInBytes + 5
+    }
+
+    cleaner = makeCleaner(parts = 3, maxMessageSize = maxMessageSize)
+
+    val log = cleaner.logs.get(topics(0))
+    val props = logConfigProperties(maxMessageSize)
+    props.put(LogConfig.MessageFormatVersionProp, KAFKA_0_9_0.version)
+    log.config = new LogConfig(props)
+
+    val appends = writeDups(numKeys = 100, numDups = 3, log = log, codec = codec, magicValue = Message.MagicValue_V0)
+    val startSize = log.size
+    cleaner.startup()
+
+    val firstDirty = log.activeSegment.baseOffset
+    checkLastCleaned("log", 0, firstDirty)
+    val compactedSize = log.logSegments.map(_.size).sum
+    assertTrue(s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize", startSize > compactedSize)
+
+    checkLogAfterAppendingDups(log, startSize, appends)
+
+    val appends2: Seq[(Int, String)] = {
+      val dupsV0 = writeDups(numKeys = 40, numDups = 3, log = log, codec = codec, magicValue = Message.MagicValue_V0)
+      log.append(largeMessageSet, assignOffsets = true)
+
+      // also add some messages with version 1 to check that we handle mixed format versions correctly
+      props.put(LogConfig.MessageFormatVersionProp, KAFKA_0_10_0_IV1.version)
+      log.config = new LogConfig(props)
+      val dupsV1 = writeDups(startKey = 30, numKeys = 40, numDups = 3, log = log, codec = codec, magicValue = Message.MagicValue_V1)
+      appends ++ dupsV0 ++ Seq(largeMessageKey -> largeMessageValue) ++ dupsV1
+    }
+    val firstDirty2 = log.activeSegment.baseOffset
+    checkLastCleaned("log", 0, firstDirty2)
+
+    checkLogAfterAppendingDups(log, startSize, appends2)
+  }
+
+  private def checkLastCleaned(topic: String, partitionId: Int, firstDirty: Long) {
+    // wait until cleaning up to base_offset, note that cleaning happens only when "log dirty ratio" is higher than
+    // LogConfig.MinCleanableDirtyRatioProp
+    cleaner.awaitCleaned(topic, partitionId, firstDirty)
+    val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints.get(TopicAndPartition(topic, partitionId)).get
+    assertTrue(s"log cleaner should have processed up to offset $firstDirty, but lastCleaned=$lastCleaned",
+      lastCleaned >= firstDirty)
+  }
+
+  private def checkLogAfterAppendingDups(log: Log, startSize: Long, appends: Seq[(Int, String)]) {
+    val read = readFromLog(log)
+    assertEquals("Contents of the map shouldn't change", appends.toMap, read.toMap)
+    assertTrue(startSize > log.size)
+  }
+
+  private def readFromLog(log: Log): Iterable[(Int, String)] = {
+
+    def messageIterator(entry: MessageAndOffset): Iterator[MessageAndOffset] =
       // create single message iterator or deep iterator depending on compression codec
-      if (entry.message.compressionCodec == NoCompressionCodec)
-        Stream.cons(entry, Stream.empty).iterator
-      else
-        ByteBufferMessageSet.deepIterator(entry)
-    }) yield {
+      if (entry.message.compressionCodec == NoCompressionCodec) Iterator(entry)
+      else ByteBufferMessageSet.deepIterator(entry)
+
+    for (segment <- log.logSegments; entry <- segment.log; messageAndOffset <- messageIterator(entry)) yield {
       val key = TestUtils.readString(messageAndOffset.message.key).toInt
-      val value = TestUtils.readString(messageAndOffset.message.payload).toInt
+      val value = TestUtils.readString(messageAndOffset.message.payload)
       key -> value
     }
   }
 
-  def writeDups(numKeys: Int, numDups: Int, log: Log, codec: CompressionCodec): Seq[(Int, Int)] = {
-    for(dup <- 0 until numDups; key <- 0 until numKeys) yield {
-      val count = counter
-      log.append(TestUtils.singleMessageSet(payload = counter.toString.getBytes, codec = codec, key = key.toString.getBytes), assignOffsets = true)
+  private def writeDups(numKeys: Int, numDups: Int, log: Log, codec: CompressionCodec,
+                        startKey: Int = 0, magicValue: Byte = Message.CurrentMagicValue): Seq[(Int, String)] = {
+    for(_ <- 0 until numDups; key <- startKey until (startKey + numKeys)) yield {
+      val payload = counter.toString
+      log.append(TestUtils.singleMessageSet(payload = payload.toString.getBytes, codec = codec,
+        key = key.toString.getBytes, magicValue = magicValue), assignOffsets = true)
       counter += 1
-      (key, count)
+      (key, payload)
     }
   }
     
   @After
-  def teardown() {
+  def tearDown() {
+    cleaner.shutdown()
     time.scheduler.shutdown()
     Utils.delete(logDir)
   }
+
+  private def logConfigProperties(maxMessageSize: Int, minCleanableDirtyRatio: Float = 0.0F): Properties = {
+    val props = new Properties()
+    props.put(LogConfig.MaxMessageBytesProp, maxMessageSize: java.lang.Integer)
+    props.put(LogConfig.SegmentBytesProp, segmentSize: java.lang.Integer)
+    props.put(LogConfig.SegmentIndexBytesProp, 100*1024: java.lang.Integer)
+    props.put(LogConfig.FileDeleteDelayMsProp, deleteDelay: java.lang.Integer)
+    props.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
+    props.put(LogConfig.MinCleanableDirtyRatioProp, minCleanableDirtyRatio: java.lang.Float)
+    props
+  }
   
   /* create a cleaner instance and logs with the given parameters */
-  def makeCleaner(parts: Int, 
-                  minCleanableDirtyRatio: Float = 0.0F,
-                  numThreads: Int = 1,
-                  defaultPolicy: String = "compact",
-                  policyOverrides: Map[String, String] = Map()): LogCleaner = {
+  private def makeCleaner(parts: Int,
+                          minCleanableDirtyRatio: Float = 0.0F,
+                          numThreads: Int = 1,
+                          maxMessageSize: Int = 128,
+                          defaultPolicy: String = "compact",
+                          policyOverrides: Map[String, String] = Map()): LogCleaner = {
     
     // create partitions and add them to the pool
     val logs = new Pool[TopicAndPartition, Log]()
     for(i <- 0 until parts) {
       val dir = new File(logDir, "log-" + i)
       dir.mkdirs()
-      val logProps = new Properties()
-      logProps.put(LogConfig.SegmentBytesProp, segmentSize: java.lang.Integer)
-      logProps.put(LogConfig.SegmentIndexBytesProp, 100*1024: java.lang.Integer)
-      logProps.put(LogConfig.FileDeleteDelayMsProp, deleteDelay: java.lang.Integer)
-      logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
-      logProps.put(LogConfig.MinCleanableDirtyRatioProp, minCleanableDirtyRatio: java.lang.Float)
 
       val log = new Log(dir = dir,
-                        LogConfig(logProps),
+                        LogConfig(logConfigProperties(maxMessageSize, minCleanableDirtyRatio)),
                         recoveryPoint = 0L,
                         scheduler = time.scheduler,
                         time = time)
       logs.put(TopicAndPartition("log", i), log)      
     }
   
-    new LogCleaner(CleanerConfig(numThreads = numThreads),
+    new LogCleaner(CleanerConfig(numThreads = numThreads, ioBufferSize = maxMessageSize / 2, maxMessageSize = maxMessageSize),
                    logDirs = Array(logDir),
                    logs = logs,
                    time = time)
