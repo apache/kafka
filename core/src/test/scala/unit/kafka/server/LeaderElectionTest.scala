@@ -18,11 +18,10 @@
 package kafka.server
 
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.requests.LeaderAndIsrRequest.PartitionState
 
 import scala.collection.JavaConverters._
 import kafka.api.LeaderAndIsr
-import org.apache.kafka.common.requests.{AbstractRequestResponse, LeaderAndIsrRequest, LeaderAndIsrResponse}
+import org.apache.kafka.common.requests.{AbstractRequestResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, PartitionState}
 import org.junit.Assert._
 import kafka.utils.{CoreUtils, TestUtils}
 import kafka.cluster.Broker
@@ -149,8 +148,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
 
       controllerChannelManager.sendRequest(brokerId2, ApiKeys.LEADER_AND_ISR, None, leaderAndIsrRequest,
         staleControllerEpochCallback)
-      TestUtils.waitUntilTrue(() => staleControllerEpochDetected == true,
-        "Controller epoch should be stale")
+      TestUtils.waitUntilTrue(() => staleControllerEpochDetected, "Controller epoch should be stale")
       assertTrue("Stale controller epoch not detected by the broker", staleControllerEpochDetected)
     } finally {
       controllerChannelManager.shutdown()

@@ -28,7 +28,6 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
-import java.util.Iterator;
 import java.util.Map;
 
 public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, V> {
@@ -69,7 +68,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
 
         @Override
         public void process(K key, V value) {
-            // if the key is null, we do not need proceed aggregating the record
+            // if the key is null, we do not need proceed aggregating
             // the record with the table
             if (key == null)
                 return;
@@ -88,39 +87,37 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
                 timeTo = windowStartMs > timeTo ? windowStartMs : timeTo;
             }
 
-            WindowStoreIterator<V> iter = windowStore.fetch(key, timeFrom, timeTo);
+            try (WindowStoreIterator<V> iter = windowStore.fetch(key, timeFrom, timeTo)) {
+                // for each matching window, try to update the corresponding key and send to the downstream
+                while (iter.hasNext()) {
+                    KeyValue<Long, V> entry = iter.next();
+                    W window = matchedWindows.get(entry.key);
 
-            // for each matching window, try to update the corresponding key and send to the downstream
-            while (iter.hasNext()) {
-                KeyValue<Long, V> entry = iter.next();
-                W window = matchedWindows.get(entry.key);
+                    if (window != null) {
 
-                if (window != null) {
+                        V oldAgg = entry.value;
+                        V newAgg = oldAgg;
 
-                    V oldAgg = entry.value;
-                    V newAgg = oldAgg;
+                        // try to add the new new value (there will never be old value)
+                        if (newAgg == null) {
+                            newAgg = value;
+                        } else {
+                            newAgg = reducer.apply(newAgg, value);
+                        }
 
-                    // try to add the new new value (there will never be old value)
-                    if (newAgg == null) {
-                        newAgg = value;
-                    } else {
-                        newAgg = reducer.apply(newAgg, value);
+                        // update the store with the new value
+                        windowStore.put(key, newAgg, window.start());
+
+                        // forward the aggregated change pair
+                        if (sendOldValues)
+                            context().forward(new Windowed<>(key, window), new Change<>(newAgg, oldAgg));
+                        else
+                            context().forward(new Windowed<>(key, window), new Change<>(newAgg, null));
+
+                        matchedWindows.remove(entry.key);
                     }
-
-                    // update the store with the new value
-                    windowStore.put(key, newAgg, window.start());
-
-                    // forward the aggregated change pair
-                    if (sendOldValues)
-                        context().forward(new Windowed<>(key, window), new Change<>(newAgg, oldAgg));
-                    else
-                        context().forward(new Windowed<>(key, window), new Change<>(newAgg, null));
-
-                    matchedWindows.remove(entry.key);
                 }
             }
-
-            iter.close();
 
             // create the new window for the rest of unmatched window that do not exist yet
             for (long windowStartMs : matchedWindows.keySet()) {
@@ -138,13 +135,13 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
         return new KTableValueGetterSupplier<Windowed<K>, V>() {
 
             public KTableValueGetter<Windowed<K>, V> get() {
-                return new KStreamAggregateValueGetter();
+                return new KStreamWindowReduceValueGetter();
             }
 
         };
     }
 
-    private class KStreamAggregateValueGetter implements KTableValueGetter<Windowed<K>, V> {
+    private class KStreamWindowReduceValueGetter implements KTableValueGetter<Windowed<K>, V> {
 
         private WindowStore<K, V> windowStore;
 
@@ -161,10 +158,9 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
             W window = (W) windowedKey.window();
 
             // this iterator should only contain one element
-            Iterator<KeyValue<Long, V>> iter = windowStore.fetch(key, window.start(), window.start());
-
-            return iter.next().value;
+            try (WindowStoreIterator<V> iter = windowStore.fetch(key, window.start(), window.start())) {
+                return iter.hasNext() ? iter.next().value : null;
+            }
         }
-
     }
 }

@@ -57,7 +57,7 @@ case class TopicMetadata(topic: String, partitionsMetadata: Seq[PartitionMetadat
     partitionsMetadata.foreach(m => m.writeTo(buffer))
   }
 
-  override def toString(): String = {
+  override def toString: String = {
     val topicMetadataInfo = new StringBuilder
     topicMetadataInfo.append("{TopicMetadata for topic %s -> ".format(topic))
     Errors.forCode(errorCode) match {
@@ -138,7 +138,7 @@ case class PartitionMetadata(partitionId: Int,
     isr.foreach(r => buffer.putInt(r.id))
   }
 
-  override def toString(): String = {
+  override def toString: String = {
     val partitionMetadataString = new StringBuilder
     partitionMetadataString.append("\tpartition " + partitionId)
     partitionMetadataString.append("\tleader: " + (if(leader.isDefined) leader.get.toString else "none"))

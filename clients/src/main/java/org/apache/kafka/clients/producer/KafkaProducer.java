@@ -224,7 +224,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.metrics = new Metrics(metricConfig, reporters, time);
             this.partitioner = config.getConfiguredInstance(ProducerConfig.PARTITIONER_CLASS_CONFIG, Partitioner.class);
             long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
-            this.metadata = new Metadata(retryBackoffMs, config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG));
+            this.metadata = new Metadata(retryBackoffMs, config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG), true);
             this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
             this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
             this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
@@ -431,15 +431,15 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
-     * Implementation of asynchronously send a record to a topic. Equivalent to <code>send(record, null)</code>.
-     * See {@link #send(ProducerRecord, Callback)} for details.
+     * Implementation of asynchronously send a record to a topic.
      */
     private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
         TopicPartition tp = null;
         try {
             // first make sure the metadata for the topic is available
-            long waitedOnMetadataMs = waitOnMetadata(record.topic(), this.maxBlockTimeMs);
-            long remainingWaitMs = Math.max(0, this.maxBlockTimeMs - waitedOnMetadataMs);
+            ClusterAndWaitTime clusterAndWaitTime = waitOnMetadata(record.topic(), this.maxBlockTimeMs);
+            long remainingWaitMs = Math.max(0, this.maxBlockTimeMs - clusterAndWaitTime.waitedOnMetadataMs);
+            Cluster cluster = clusterAndWaitTime.cluster;
             byte[] serializedKey;
             try {
                 serializedKey = keySerializer.serialize(record.topic(), record.key());
@@ -456,7 +456,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         " to class " + producerConfig.getClass(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG).getName() +
                         " specified in value.serializer");
             }
-            int partition = partition(record, serializedKey, serializedValue, metadata.fetch());
+
+            int partition = partition(record, serializedKey, serializedValue, cluster);
             int serializedSize = Records.LOG_OVERHEAD + Record.recordSize(serializedKey, serializedValue);
             ensureValidRecordSize(serializedSize);
             tp = new TopicPartition(record.topic(), partition);
@@ -509,31 +510,37 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * Wait for cluster metadata including partitions for the given topic to be available.
      * @param topic The topic we want metadata for
      * @param maxWaitMs The maximum time in ms for waiting on the metadata
-     * @return The amount of time we waited in ms
+     * @return The cluster containing topic metadata and the amount of time we waited in ms
      */
-    private long waitOnMetadata(String topic, long maxWaitMs) throws InterruptedException {
-        // add topic to metadata topic list if it is not there already.
-        if (!this.metadata.containsTopic(topic))
-            this.metadata.add(topic);
-
-        if (metadata.fetch().partitionsForTopic(topic) != null)
-            return 0;
+    private ClusterAndWaitTime waitOnMetadata(String topic, long maxWaitMs) throws InterruptedException {
+        // add topic to metadata topic list if it is not there already and reset expiry
+        this.metadata.add(topic);
+        Cluster cluster = metadata.fetch();
+        if (cluster.partitionsForTopic(topic) != null)
+            return new ClusterAndWaitTime(cluster, 0);
 
         long begin = time.milliseconds();
         long remainingWaitMs = maxWaitMs;
-        while (metadata.fetch().partitionsForTopic(topic) == null) {
+        long elapsed = 0;
+        while (cluster.partitionsForTopic(topic) == null) {
             log.trace("Requesting metadata update for topic {}.", topic);
             int version = metadata.requestUpdate();
             sender.wakeup();
-            metadata.awaitUpdate(version, remainingWaitMs);
-            long elapsed = time.milliseconds() - begin;
+            try {
+                metadata.awaitUpdate(version, remainingWaitMs);
+            } catch (TimeoutException ex) {
+                // Rethrow with original maxWaitMs to prevent logging exception with remainingWaitMs
+                throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
+            }
+            cluster = metadata.fetch();
+            elapsed = time.milliseconds() - begin;
             if (elapsed >= maxWaitMs)
                 throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
-            if (metadata.fetch().unauthorizedTopics().contains(topic))
+            if (cluster.unauthorizedTopics().contains(topic))
                 throw new TopicAuthorizationException(topic);
             remainingWaitMs = maxWaitMs - elapsed;
         }
-        return time.milliseconds() - begin;
+        return new ClusterAndWaitTime(cluster, elapsed);
     }
 
     /**
@@ -598,12 +605,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     @Override
     public List<PartitionInfo> partitionsFor(String topic) {
+        Cluster cluster;
         try {
-            waitOnMetadata(topic, this.maxBlockTimeMs);
+            cluster = waitOnMetadata(topic, this.maxBlockTimeMs).cluster;
         } catch (InterruptedException e) {
             throw new InterruptException(e);
         }
-        return this.metadata.fetch().partitionsForTopic(topic);
+        return cluster.partitionsForTopic(topic);
     }
 
     /**
@@ -720,6 +728,15 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
         return this.partitioner.partition(record.topic(), record.key(), serializedKey, record.value(), serializedValue,
             cluster);
+    }
+
+    private static class ClusterAndWaitTime {
+        final Cluster cluster;
+        final long waitedOnMetadataMs;
+        ClusterAndWaitTime(Cluster cluster, long waitedOnMetadataMs) {
+            this.cluster = cluster;
+            this.waitedOnMetadataMs = waitedOnMetadataMs;
+        }
     }
 
     private static class FutureFailure implements Future<RecordMetadata> {

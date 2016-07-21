@@ -24,7 +24,7 @@ import kafka.common.OffsetAndMetadata
 import kafka.message.{Message, MessageSet}
 import kafka.server.{DelayedOperationPurgatory, ReplicaManager, KafkaConfig}
 import kafka.utils._
-import org.apache.kafka.common.{utils, TopicPartition}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{OffsetCommitRequest, JoinGroupRequest}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -96,7 +96,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", timer, config.brokerId, reaperEnabled = false)
 
     groupCoordinator = GroupCoordinator(config, zkUtils, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time)
-    groupCoordinator.startup()
+    groupCoordinator.startup(false)
 
     // add the partition into the owned partition list
     groupPartitionId = groupCoordinator.partitionFor(groupId)
@@ -106,7 +106,8 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   @After
   def tearDown() {
     EasyMock.reset(replicaManager)
-    groupCoordinator.shutdown()
+    if (groupCoordinator != null)
+      groupCoordinator.shutdown()
   }
 
   @Test
@@ -802,7 +803,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val (error, groups) = groupCoordinator.handleListGroups()
     assertEquals(Errors.NONE, error)
     assertEquals(1, groups.size)
-    assertEquals(GroupOverview("groupId", "consumer"), groups(0))
+    assertEquals(GroupOverview("groupId", "consumer"), groups.head)
   }
 
   @Test
@@ -814,7 +815,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val (error, groups) = groupCoordinator.handleListGroups()
     assertEquals(Errors.NONE, error)
     assertEquals(1, groups.size)
-    assertEquals(GroupOverview("groupId", "consumer"), groups(0))
+    assertEquals(GroupOverview("groupId", "consumer"), groups.head)
   }
 
   @Test

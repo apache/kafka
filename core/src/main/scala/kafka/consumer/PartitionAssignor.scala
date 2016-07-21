@@ -76,7 +76,7 @@ class RoundRobinAssignor() extends PartitionAssignor with Logging {
     val partitionAssignment =
       new Pool[String, mutable.Map[TopicAndPartition, ConsumerThreadId]](Some(valueFactory))
 
-    if (ctx.consumersForTopic.size > 0) {
+    if (ctx.consumersForTopic.nonEmpty) {
       // check conditions (a) and (b)
       val (headTopic, headThreadIdSet) = (ctx.consumersForTopic.head._1, ctx.consumersForTopic.head._2.toSet)
       ctx.consumersForTopic.foreach { case (topic, threadIds) =>

@@ -41,6 +41,9 @@ import java.util.Map;
  * </ul>
  * A join is symmetric in the sense, that a join specification on the first stream returns the same result record as
  * a join specification on the second stream with flipped before and after values.
+ * <p>
+ * Both values (before and after) must not result in an "inverse" window,
+ * i.e., lower-interval-bound must not be larger than upper-interval.bound.
  */
 public class JoinWindows extends Windows<TimeWindow> {
 
@@ -49,24 +52,24 @@ public class JoinWindows extends Windows<TimeWindow> {
     /** Maximum time difference for tuples that are after the join tuple. */
     public final long after;
 
-    private JoinWindows(String name, long before, long after) {
-        super(name);
+    private JoinWindows(long before, long after) {
+        super();
 
+        if (before + after < 0) {
+            throw new IllegalArgumentException("Window interval (ie, before+after) must not be negative");
+        }
         this.after = after;
         this.before = before;
     }
 
-    public static JoinWindows of(String name) {
-        return new JoinWindows(name, 0L, 0L);
-    }
-
     /**
      * Specifies that records of the same key are joinable if their timestamps are within {@code timeDifference}.
+     * ({@code timeDifference} must not be negative)
      *
      * @param timeDifference    join window interval
      */
-    public JoinWindows within(long timeDifference) {
-        return new JoinWindows(this.name, timeDifference, timeDifference);
+    public static JoinWindows of(long timeDifference) {
+        return new JoinWindows(timeDifference, timeDifference);
     }
 
     /**
@@ -77,7 +80,7 @@ public class JoinWindows extends Windows<TimeWindow> {
      * @param timeDifference    join window interval
      */
     public JoinWindows before(long timeDifference) {
-        return new JoinWindows(this.name, timeDifference, this.after);
+        return new JoinWindows(timeDifference, this.after);
     }
 
     /**
@@ -88,7 +91,7 @@ public class JoinWindows extends Windows<TimeWindow> {
      * @param timeDifference    join window interval
      */
     public JoinWindows after(long timeDifference) {
-        return new JoinWindows(this.name, this.before, timeDifference);
+        return new JoinWindows(this.before, timeDifference);
     }
 
     /**

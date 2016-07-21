@@ -58,7 +58,7 @@ object ConsumerPerformance {
     }
 
     var startMs, endMs = 0L
-    if(config.useNewConsumer) {
+    if (config.useNewConsumer) {
       val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](config.props)
       consumer.subscribe(List(config.topic))
       startMs = System.currentTimeMillis
@@ -91,11 +91,11 @@ object ConsumerPerformance {
     val elapsedSecs = (endMs - startMs) / 1000.0
     if (!config.showDetailedStats) {
       val totalMBRead = (totalBytesRead.get * 1.0) / (1024 * 1024)
-      println(("%s, %s, %.4f, %.4f, %d, %.4f").format(config.dateFormat.format(startMs), config.dateFormat.format(endMs),
+      println("%s, %s, %.4f, %.4f, %d, %.4f".format(config.dateFormat.format(startMs), config.dateFormat.format(endMs),
         totalMBRead, totalMBRead / elapsedSecs, totalMessagesRead.get, totalMessagesRead.get / elapsedSecs))
     }
   }
-  
+
   def consume(consumer: KafkaConsumer[Array[Byte], Array[Byte]], topics: List[String], count: Long, timeout: Long, config: ConsumerPerfConfig, totalMessagesRead: AtomicLong, totalBytesRead: AtomicLong) {
     var bytesRead = 0L
     var messagesRead = 0L
@@ -125,38 +125,40 @@ object ConsumerPerformance {
     val startMs = System.currentTimeMillis
     var lastReportTime: Long = startMs
     var lastConsumedTime = System.currentTimeMillis
-    
-    while(messagesRead < count && System.currentTimeMillis() - lastConsumedTime <= timeout) {
+    var currentTimeMillis = lastConsumedTime
+
+    while (messagesRead < count && currentTimeMillis - lastConsumedTime <= timeout) {
       val records = consumer.poll(100)
-      if(records.count() > 0)
-        lastConsumedTime = System.currentTimeMillis
-      for(record <- records) {
+      currentTimeMillis = System.currentTimeMillis
+      if (records.count() > 0)
+        lastConsumedTime = currentTimeMillis
+      for (record <- records) {
         messagesRead += 1
-        if(record.key != null)
+        if (record.key != null)
           bytesRead += record.key.size
-        if(record.value != null)
-          bytesRead += record.value.size 
-      
-        if (messagesRead % config.reportingInterval == 0) {
+        if (record.value != null)
+          bytesRead += record.value.size
+
+        if (currentTimeMillis - lastReportTime >= config.reportingInterval) {
           if (config.showDetailedStats)
-            printProgressMessage(0, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, lastReportTime, System.currentTimeMillis, config.dateFormat)
-          lastReportTime = System.currentTimeMillis
+            printProgressMessage(0, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, lastReportTime, currentTimeMillis, config.dateFormat)
+          lastReportTime = currentTimeMillis
           lastMessagesRead = messagesRead
           lastBytesRead = bytesRead
         }
       }
     }
-    
+
     totalMessagesRead.set(messagesRead)
     totalBytesRead.set(bytesRead)
   }
-  
+
   def printProgressMessage(id: Int, bytesRead: Long, lastBytesRead: Long, messagesRead: Long, lastMessagesRead: Long,
     startMs: Long, endMs: Long, dateFormat: SimpleDateFormat) = {
     val elapsedMs: Double = endMs - startMs
     val totalMBRead = (bytesRead * 1.0) / (1024 * 1024)
     val mbRead = ((bytesRead - lastBytesRead) * 1.0) / (1024 * 1024)
-    println(("%s, %d, %.4f, %.4f, %d, %.4f").format(dateFormat.format(endMs), id, totalMBRead,
+    println("%s, %d, %.4f, %.4f, %d, %.4f".format(dateFormat.format(endMs), id, totalMBRead,
         1000.0 * (mbRead / elapsedMs), messagesRead, ((messagesRead - lastMessagesRead) / elapsedMs) * 1000.0))
   }
 
@@ -210,14 +212,14 @@ object ConsumerPerformance {
     val options = parser.parse(args: _*)
 
     CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numMessagesOpt)
-   
+
     val useNewConsumer = options.has(useNewConsumerOpt)
-    
+
     val props = if (options.has(consumerConfigOpt))
       Utils.loadProps(options.valueOf(consumerConfigOpt))
     else
       new Properties
-    if(useNewConsumer) {
+    if (useNewConsumer) {
       import org.apache.kafka.clients.consumer.ConsumerConfig
       props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServersOpt))
       props.put(ConsumerConfig.GROUP_ID_CONFIG, options.valueOf(groupIdOpt))
@@ -241,6 +243,8 @@ object ConsumerPerformance {
     val topic = options.valueOf(topicOpt)
     val numMessages = options.valueOf(numMessagesOpt).longValue
     val reportingInterval = options.valueOf(reportingIntervalOpt).intValue
+    if (reportingInterval <= 0)
+      throw new IllegalArgumentException("Reporting interval must be greater than 0.")
     val showDetailedStats = options.has(showDetailedStatsOpt)
     val dateFormat = new SimpleDateFormat(options.valueOf(dateFormatOpt))
     val hideHeader = options.has(hideHeaderOpt)
@@ -264,11 +268,12 @@ object ConsumerPerformance {
           val messageAndMetadata = iter.next
           messagesRead += 1
           bytesRead += messageAndMetadata.message.length
+          val currentTimeMillis = System.currentTimeMillis
 
-          if (messagesRead % config.reportingInterval == 0) {
+          if (currentTimeMillis - lastReportTime >= config.reportingInterval) {
             if (config.showDetailedStats)
-              printProgressMessage(threadId, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, lastReportTime, System.currentTimeMillis, config.dateFormat)
-            lastReportTime = System.currentTimeMillis
+              printProgressMessage(threadId, bytesRead, lastBytesRead, messagesRead, lastMessagesRead, lastReportTime, currentTimeMillis, config.dateFormat)
+            lastReportTime = currentTimeMillis
             lastMessagesRead = messagesRead
             lastBytesRead = bytesRead
           }

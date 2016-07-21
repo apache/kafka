@@ -23,6 +23,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
+import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
@@ -106,7 +107,11 @@ public class SmokeTestClient extends SmokeTestUtil {
         data.process(SmokeTestUtil.<Integer>printProcessorSupplier("data"));
 
         // min
-        data.aggregateByKey(
+        KGroupedStream<String, Integer>
+            groupedData =
+            data.groupByKey(stringSerde, intSerde);
+
+        groupedData.aggregate(
                 new Initializer<Integer>() {
                     public Integer apply() {
                         return Integer.MAX_VALUE;
@@ -118,18 +123,17 @@ public class SmokeTestClient extends SmokeTestUtil {
                         return (value < aggregate) ? value : aggregate;
                     }
                 },
-                UnlimitedWindows.of("uwin-min"),
-                stringSerde,
-                intSerde
+                UnlimitedWindows.of(),
+                intSerde, "uwin-min"
         ).toStream().map(
                 new Unwindow<String, Integer>()
         ).to(stringSerde, intSerde, "min");
 
-        KTable<String, Integer> minTable = builder.table(stringSerde, intSerde, "min");
+        KTable<String, Integer> minTable = builder.table(stringSerde, intSerde, "min", "minStoreName");
         minTable.toStream().process(SmokeTestUtil.<Integer>printProcessorSupplier("min"));
 
         // max
-        data.aggregateByKey(
+        groupedData.aggregate(
                 new Initializer<Integer>() {
                     public Integer apply() {
                         return Integer.MIN_VALUE;
@@ -141,18 +145,17 @@ public class SmokeTestClient extends SmokeTestUtil {
                         return (value > aggregate) ? value : aggregate;
                     }
                 },
-                UnlimitedWindows.of("uwin-max"),
-                stringSerde,
-                intSerde
+                UnlimitedWindows.of(),
+                intSerde, "uwin-max"
         ).toStream().map(
                 new Unwindow<String, Integer>()
         ).to(stringSerde, intSerde, "max");
 
-        KTable<String, Integer> maxTable = builder.table(stringSerde, intSerde, "max");
+        KTable<String, Integer> maxTable = builder.table(stringSerde, intSerde, "max", "maxStoreName");
         maxTable.toStream().process(SmokeTestUtil.<Integer>printProcessorSupplier("max"));
 
         // sum
-        data.aggregateByKey(
+        groupedData.aggregate(
                 new Initializer<Long>() {
                     public Long apply() {
                         return 0L;
@@ -164,26 +167,23 @@ public class SmokeTestClient extends SmokeTestUtil {
                         return (long) value + aggregate;
                     }
                 },
-                UnlimitedWindows.of("win-sum"),
-                stringSerde,
-                longSerde
+                UnlimitedWindows.of(),
+                longSerde, "win-sum"
         ).toStream().map(
                 new Unwindow<String, Long>()
         ).to(stringSerde, longSerde, "sum");
 
 
-        KTable<String, Long> sumTable = builder.table(stringSerde, longSerde, "sum");
+        KTable<String, Long> sumTable = builder.table(stringSerde, longSerde, "sum", "sumStoreName");
         sumTable.toStream().process(SmokeTestUtil.<Long>printProcessorSupplier("sum"));
 
         // cnt
-        data.countByKey(
-                UnlimitedWindows.of("uwin-cnt"),
-                stringSerde
-        ).toStream().map(
+        groupedData.count(UnlimitedWindows.of(), "uwin-cnt")
+            .toStream().map(
                 new Unwindow<String, Long>()
         ).to(stringSerde, longSerde, "cnt");
 
-        KTable<String, Long> cntTable = builder.table(stringSerde, longSerde, "cnt");
+        KTable<String, Long> cntTable = builder.table(stringSerde, longSerde, "cnt", "cntStoreName");
         cntTable.toStream().process(SmokeTestUtil.<Long>printProcessorSupplier("cnt"));
 
         // dif
@@ -206,10 +206,8 @@ public class SmokeTestClient extends SmokeTestUtil {
         ).to(stringSerde, doubleSerde, "avg");
 
         // windowed count
-        data.countByKey(
-                TimeWindows.of("tumbling-win-cnt", WINDOW_SIZE),
-                stringSerde
-        ).toStream().map(
+        groupedData.count(TimeWindows.of(WINDOW_SIZE), "tumbling-win-cnt")
+            .toStream().map(
                 new KeyValueMapper<Windowed<String>, Long, KeyValue<String, Long>>() {
                     @Override
                     public KeyValue<String, Long> apply(Windowed<String> key, Long value) {

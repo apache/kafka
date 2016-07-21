@@ -19,6 +19,7 @@ package kafka.server
 import java.io.{File, IOException}
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
+
 import com.yammer.metrics.core.Gauge
 import kafka.api._
 import kafka.cluster.{Partition, Replica}
@@ -28,16 +29,18 @@ import kafka.log.{LogAppendInfo, LogManager}
 import kafka.message.{ByteBufferMessageSet, InvalidMessageException, Message, MessageSet}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
-import org.I0Itec.zkclient.IZkChildListener
-import org.apache.kafka.common.errors.{OffsetOutOfRangeException, RecordBatchTooLargeException, ReplicaNotAvailableException, RecordTooLargeException,
-InvalidTopicException, ControllerMovedException, NotLeaderForPartitionException, CorruptRecordException, UnknownTopicOrPartitionException,
-InvalidTimestampException}
+import org.apache.kafka.common.errors.{ControllerMovedException, CorruptRecordException, InvalidTimestampException,
+                                        InvalidTopicException, NotLeaderForPartitionException, OffsetOutOfRangeException,
+                                        RecordBatchTooLargeException, RecordTooLargeException, ReplicaNotAvailableException,
+                                        UnknownTopicOrPartitionException}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.internals.TopicConstants
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{LeaderAndIsrRequest, StopReplicaRequest, UpdateMetadataRequest}
+import org.apache.kafka.common.requests.{LeaderAndIsrRequest, PartitionState, StopReplicaRequest, UpdateMetadataRequest}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time => JTime}
+
 import scala.collection._
 import scala.collection.JavaConverters._
 
@@ -359,9 +362,8 @@ class ReplicaManager(val config: KafkaConfig,
       // Just return an error and don't handle the request at all
       val responseStatus = messagesPerPartition.map {
         case (topicAndPartition, messageSet) =>
-          (topicAndPartition -> new PartitionResponse(Errors.INVALID_REQUIRED_ACKS.code,
-                                                      LogAppendInfo.UnknownLogAppendInfo.firstOffset,
-                                                      Message.NoTimestamp))
+          topicAndPartition -> new PartitionResponse(Errors.INVALID_REQUIRED_ACKS.code,
+            LogAppendInfo.UnknownLogAppendInfo.firstOffset, Message.NoTimestamp)
       }
       responseCallback(responseStatus)
     }
@@ -375,7 +377,7 @@ class ReplicaManager(val config: KafkaConfig,
   private def delayedRequestRequired(requiredAcks: Short, messagesPerPartition: Map[TopicPartition, MessageSet],
                                        localProduceResults: Map[TopicPartition, LogAppendResult]): Boolean = {
     requiredAcks == -1 &&
-    messagesPerPartition.size > 0 &&
+    messagesPerPartition.nonEmpty &&
     localProduceResults.values.count(_.error.isDefined) < messagesPerPartition.size
   }
 
@@ -537,7 +539,8 @@ class ReplicaManager(val config: KafkaConfig,
           val initialLogEndOffset = localReplica.logEndOffset
           val logReadInfo = localReplica.log match {
             case Some(log) =>
-              log.read(offset, fetchSize, maxOffsetOpt)
+              val adjustedFetchSize = if (TopicConstants.INTERNAL_TOPICS.contains(topic) && !readOnlyCommitted) Math.max(fetchSize, log.config.maxMessageSize) else fetchSize
+              log.read(offset, adjustedFetchSize, maxOffsetOpt)
             case None =>
               error("Leader for partition [%s,%d] does not have a local log".format(topic, partition))
               FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MessageSet.Empty)
@@ -610,7 +613,7 @@ class ReplicaManager(val config: KafkaConfig,
         controllerEpoch = leaderAndISRRequest.controllerEpoch
 
         // First check partition's leader epoch
-        val partitionState = new mutable.HashMap[Partition, LeaderAndIsrRequest.PartitionState]()
+        val partitionState = new mutable.HashMap[Partition, PartitionState]()
         leaderAndISRRequest.partitionStates.asScala.foreach { case (topicPartition, stateInfo) =>
           val partition = getOrCreatePartition(topicPartition.topic, topicPartition.partition)
           val partitionLeaderEpoch = partition.getLeaderEpoch()
@@ -639,13 +642,13 @@ class ReplicaManager(val config: KafkaConfig,
         val partitionsTobeLeader = partitionState.filter { case (partition, stateInfo) =>
           stateInfo.leader == config.brokerId
         }
-        val partitionsToBeFollower = (partitionState -- partitionsTobeLeader.keys)
+        val partitionsToBeFollower = partitionState -- partitionsTobeLeader.keys
 
-        val partitionsBecomeLeader = if (!partitionsTobeLeader.isEmpty)
+        val partitionsBecomeLeader = if (partitionsTobeLeader.nonEmpty)
           makeLeaders(controllerId, controllerEpoch, partitionsTobeLeader, correlationId, responseMap)
         else
           Set.empty[Partition]
-        val partitionsBecomeFollower = if (!partitionsToBeFollower.isEmpty)
+        val partitionsBecomeFollower = if (partitionsToBeFollower.nonEmpty)
           makeFollowers(controllerId, controllerEpoch, partitionsToBeFollower, correlationId, responseMap, metadataCache)
         else
           Set.empty[Partition]
@@ -679,7 +682,7 @@ class ReplicaManager(val config: KafkaConfig,
    */
   private def makeLeaders(controllerId: Int,
                           epoch: Int,
-                          partitionState: Map[Partition, LeaderAndIsrRequest.PartitionState],
+                          partitionState: Map[Partition, PartitionState],
                           correlationId: Int,
                           responseMap: mutable.Map[TopicPartition, Short]): Set[Partition] = {
     partitionState.foreach(state =>
@@ -750,7 +753,7 @@ class ReplicaManager(val config: KafkaConfig,
    */
   private def makeFollowers(controllerId: Int,
                             epoch: Int,
-                            partitionState: Map[Partition, LeaderAndIsrRequest.PartitionState],
+                            partitionState: Map[Partition, PartitionState],
                             correlationId: Int,
                             responseMap: mutable.Map[TopicPartition, Short],
                             metadataCache: MetadataCache) : Set[Partition] = {

@@ -79,11 +79,11 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     this.producers.foreach(_.close)
 
     var consumed = 0L
-    val consumer = this.consumers(0)
+    val consumer = this.consumers.head
 
     consumer.subscribe(List(topic), new ConsumerRebalanceListener {
       override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) {
-        // TODO: until KAFKA-2017 is merged, we have to handle the case in which the
+        // TODO: until KAFKA-2017 is merged, we have to handle the case in which
         // the commit fails on prior to rebalancing on coordinator fail-over.
         consumer.seek(tp, consumed)
       }
@@ -124,7 +124,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     sendRecords(numRecords)
     this.producers.foreach(_.close)
 
-    val consumer = this.consumers(0)
+    val consumer = this.consumers.head
     consumer.assign(List(tp))
     consumer.seek(tp, 0)
 
@@ -174,7 +174,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
 
   private def sendRecords(numRecords: Int) {
     val futures = (0 until numRecords).map { i =>
-      this.producers(0).send(new ProducerRecord(topic, part, i.toString.getBytes, i.toString.getBytes))
+      this.producers.head.send(new ProducerRecord(topic, part, i.toString.getBytes, i.toString.getBytes))
     }
     futures.map(_.get)
   }

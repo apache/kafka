@@ -236,11 +236,22 @@ public class MetadataResponse extends AbstractRequestResponse {
     }
 
     /**
+     * Returns the set of topics with the specified error
+     */
+    public Set<String> topicsByError(Errors error) {
+        Set<String> errorTopics = new HashSet<>();
+        for (TopicMetadata metadata : topicMetadata) {
+            if (metadata.error == error)
+                errorTopics.add(metadata.topic());
+        }
+        return errorTopics;
+    }
+
+    /**
      * Get a snapshot of the cluster metadata from this response
      * @return the cluster snapshot
      */
     public Cluster cluster() {
-        Set<String> unauthorizedTopics = new HashSet<>();
         List<PartitionInfo> partitions = new ArrayList<>();
         for (TopicMetadata metadata : topicMetadata) {
             if (metadata.error == Errors.NONE) {
@@ -251,12 +262,10 @@ public class MetadataResponse extends AbstractRequestResponse {
                             partitionMetadata.leader,
                             partitionMetadata.replicas.toArray(new Node[0]),
                             partitionMetadata.isr.toArray(new Node[0])));
-            } else if (metadata.error == Errors.TOPIC_AUTHORIZATION_FAILED) {
-                unauthorizedTopics.add(metadata.topic);
             }
         }
 
-        return new Cluster(this.brokers, partitions, unauthorizedTopics);
+        return new Cluster(this.brokers, partitions, topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED));
     }
 
     /**

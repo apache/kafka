@@ -52,3 +52,9 @@ case class GroupKey(groupId: String) extends DelayedOperationKey {
 
   override def keyLabel = groupId
 }
+
+/* used by delayed-topic operations */
+case class TopicKey(topic: String) extends DelayedOperationKey {
+
+  override def keyLabel = topic
+}

@@ -26,6 +26,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * A convenient base class for configurations to extend.
@@ -151,7 +152,7 @@ public class AbstractConfig {
      * @return a Map containing the settings with the prefix
      */
     public Map<String, Object> originalsWithPrefix(String prefix) {
-        Map<String, Object> result = new RecordingMap<>();
+        Map<String, Object> result = new RecordingMap<>(prefix);
         for (Map.Entry<String, ?> entry : originals.entrySet()) {
             if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length())
                 result.put(entry.getKey().substring(prefix.length()), entry.getValue());
@@ -168,7 +169,8 @@ public class AbstractConfig {
         b.append(getClass().getSimpleName());
         b.append(" values: ");
         b.append(Utils.NL);
-        for (Map.Entry<String, Object> entry : this.values.entrySet()) {
+
+        for (Map.Entry<String, Object> entry : new TreeMap<>(this.values).entrySet()) {
             b.append('\t');
             b.append(entry.getKey());
             b.append(" = ");
@@ -202,7 +204,7 @@ public class AbstractConfig {
         if (!t.isInstance(o))
             throw new KafkaException(c.getName() + " is not an instance of " + t.getName());
         if (o instanceof Configurable)
-            ((Configurable) o).configure(this.originals);
+            ((Configurable) o).configure(originals());
         return t.cast(o);
     }
 
@@ -229,7 +231,7 @@ public class AbstractConfig {
             if (!t.isInstance(o))
                 throw new KafkaException(klass + " is not an instance of " + t.getName());
             if (o instanceof Configurable)
-                ((Configurable) o).configure(this.originals);
+                ((Configurable) o).configure(originals());
             objects.add(t.cast(o));
         }
         return objects;
@@ -256,16 +258,36 @@ public class AbstractConfig {
      */
     private class RecordingMap<V> extends HashMap<String, V> {
 
-        RecordingMap() {}
+        private final String prefix;
+
+        RecordingMap() {
+            this("");
+        }
+
+        RecordingMap(String prefix) {
+            this.prefix = prefix;
+        }
 
         RecordingMap(Map<String, ? extends V> m) {
+            this(m, "");
+        }
+
+        RecordingMap(Map<String, ? extends V> m, String prefix) {
             super(m);
+            this.prefix = prefix;
         }
 
         @Override
         public V get(Object key) {
-            if (key instanceof String)
-                ignore((String) key);
+            if (key instanceof String) {
+                String keyWithPrefix;
+                if (prefix.isEmpty()) {
+                    keyWithPrefix = (String) key;
+                } else {
+                    keyWithPrefix = prefix + key;
+                }
+                ignore(keyWithPrefix);
+            }
             return super.get(key);
         }
     }

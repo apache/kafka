@@ -99,7 +99,10 @@ public class RequestResponseTest {
                 createSaslHandshakeResponse(),
                 createApiVersionRequest(),
                 createApiVersionRequest().getErrorResponse(0, new UnknownServerException()),
-                createApiVersionResponse()
+                createApiVersionResponse(),
+                createCreateTopicRequest(),
+                createCreateTopicRequest().getErrorResponse(0, new UnknownServerException()),
+                createCreateTopicResponse()
         );
 
         for (AbstractRequestResponse req : requestResponseList)
@@ -373,15 +376,15 @@ public class RequestResponseTest {
     }
 
     private AbstractRequest createLeaderAndIsrRequest() {
-        Map<TopicPartition, LeaderAndIsrRequest.PartitionState> partitionStates = new HashMap<>();
+        Map<TopicPartition, PartitionState> partitionStates = new HashMap<>();
         List<Integer> isr = Arrays.asList(1, 2);
         List<Integer> replicas = Arrays.asList(1, 2, 3, 4);
         partitionStates.put(new TopicPartition("topic5", 105),
-                new LeaderAndIsrRequest.PartitionState(0, 2, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+                new PartitionState(0, 2, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
         partitionStates.put(new TopicPartition("topic5", 1),
-                new LeaderAndIsrRequest.PartitionState(1, 1, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+                new PartitionState(1, 1, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
         partitionStates.put(new TopicPartition("topic20", 1),
-                new LeaderAndIsrRequest.PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+                new PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
 
         Set<Node> leaders = new HashSet<>(Arrays.asList(
                 new Node(0, "test0", 1223),
@@ -399,15 +402,15 @@ public class RequestResponseTest {
 
     @SuppressWarnings("deprecation")
     private AbstractRequest createUpdateMetadataRequest(int version, String rack) {
-        Map<TopicPartition, UpdateMetadataRequest.PartitionState> partitionStates = new HashMap<>();
+        Map<TopicPartition, PartitionState> partitionStates = new HashMap<>();
         List<Integer> isr = Arrays.asList(1, 2);
         List<Integer> replicas = Arrays.asList(1, 2, 3, 4);
         partitionStates.put(new TopicPartition("topic5", 105),
-                new UpdateMetadataRequest.PartitionState(0, 2, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+                new PartitionState(0, 2, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
         partitionStates.put(new TopicPartition("topic5", 1),
-                new UpdateMetadataRequest.PartitionState(1, 1, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+                new PartitionState(1, 1, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
         partitionStates.put(new TopicPartition("topic20", 1),
-                new UpdateMetadataRequest.PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
+                new PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
 
         if (version == 0) {
             Set<Node> liveBrokers = new HashSet<>(Arrays.asList(
@@ -450,5 +453,30 @@ public class RequestResponseTest {
     private AbstractRequestResponse createApiVersionResponse() {
         List<ApiVersionsResponse.ApiVersion> apiVersions = Arrays.asList(new ApiVersionsResponse.ApiVersion((short) 0, (short) 0, (short) 2));
         return new ApiVersionsResponse(Errors.NONE.code(), apiVersions);
+    }
+
+    private AbstractRequest createCreateTopicRequest() {
+        CreateTopicsRequest.TopicDetails request1 = new CreateTopicsRequest.TopicDetails(3, (short) 5);
+
+        Map<Integer, List<Integer>> replicaAssignments = new HashMap<>();
+        replicaAssignments.put(1, Arrays.asList(1, 2, 3));
+        replicaAssignments.put(2, Arrays.asList(2, 3, 4));
+
+        Map<String, String> configs = new HashMap<>();
+        configs.put("config1", "value1");
+
+        CreateTopicsRequest.TopicDetails request2 = new CreateTopicsRequest.TopicDetails(replicaAssignments, configs);
+
+        Map<String, CreateTopicsRequest.TopicDetails> request = new HashMap<>();
+        request.put("my_t1", request1);
+        request.put("my_t2", request2);
+        return new CreateTopicsRequest(request, 0);
+    }
+
+    private AbstractRequestResponse createCreateTopicResponse() {
+        Map<String, Errors> errors = new HashMap<>();
+        errors.put("t1", Errors.INVALID_TOPIC_EXCEPTION);
+        errors.put("t2", Errors.LEADER_NOT_AVAILABLE);
+        return new CreateTopicsResponse(errors);
     }
 }

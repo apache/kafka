@@ -31,12 +31,6 @@ import java.util.Map;
 @InterfaceStability.Unstable
 public class WorkerConfig extends AbstractConfig {
 
-    public static final String CLUSTER_CONFIG = "cluster";
-    private static final String CLUSTER_CONFIG_DOC =
-            "ID for this cluster, which is used to provide a namespace so multiple Kafka Connect clusters "
-                    + "or instances may co-exist while sharing a single Kafka cluster.";
-    public static final String CLUSTER_DEFAULT = "connect";
-
     public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
     public static final String BOOTSTRAP_SERVERS_DOC
             = "A list of host/port pairs to use for establishing the initial connection to the Kafka "
@@ -51,19 +45,35 @@ public class WorkerConfig extends AbstractConfig {
 
     public static final String KEY_CONVERTER_CLASS_CONFIG = "key.converter";
     public static final String KEY_CONVERTER_CLASS_DOC =
-            "Converter class for key Connect data that implements the <code>Converter</code> interface.";
+            "Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka." +
+                    " This controls the format of the keys in messages written to or read from Kafka, and since this is" +
+                    " independent of connectors it allows any connector to work with any serialization format." +
+                    " Examples of common formats include JSON and Avro.";
 
     public static final String VALUE_CONVERTER_CLASS_CONFIG = "value.converter";
     public static final String VALUE_CONVERTER_CLASS_DOC =
-            "Converter class for value Connect data that implements the <code>Converter</code> interface.";
+            "Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka." +
+                    " This controls the format of the values in messages written to or read from Kafka, and since this is" +
+                    " independent of connectors it allows any connector to work with any serialization format." +
+                    " Examples of common formats include JSON and Avro.";
 
     public static final String INTERNAL_KEY_CONVERTER_CLASS_CONFIG = "internal.key.converter";
     public static final String INTERNAL_KEY_CONVERTER_CLASS_DOC =
-            "Converter class for internal key Connect data that implements the <code>Converter</code> interface. Used for converting data like offsets and configs.";
+            "Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka." +
+                    " This controls the format of the keys in messages written to or read from Kafka, and since this is" +
+                    " independent of connectors it allows any connector to work with any serialization format." +
+                    " Examples of common formats include JSON and Avro." +
+                    " This setting controls the format used for internal bookkeeping data used by the framework, such as" +
+                    " configs and offsets, so users can typically use any functioning Converter implementation.";
 
     public static final String INTERNAL_VALUE_CONVERTER_CLASS_CONFIG = "internal.value.converter";
     public static final String INTERNAL_VALUE_CONVERTER_CLASS_DOC =
-            "Converter class for offset value Connect data that implements the <code>Converter</code> interface. Used for converting data like offsets and configs.";
+            "Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka." +
+                    " This controls the format of the values in messages written to or read from Kafka, and since this is" +
+                    " independent of connectors it allows any connector to work with any serialization format." +
+                    " Examples of common formats include JSON and Avro." +
+                    " This setting controls the format used for internal bookkeeping data used by the framework, such as" +
+                    " configs and offsets, so users can typically use any functioning Converter implementation.";
 
     public static final String TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG
             = "task.shutdown.graceful.timeout.ms";
@@ -122,7 +132,6 @@ public class WorkerConfig extends AbstractConfig {
      */
     protected static ConfigDef baseConfigDef() {
         return new ConfigDef()
-                .define(CLUSTER_CONFIG, Type.STRING, CLUSTER_DEFAULT, Importance.HIGH, CLUSTER_CONFIG_DOC)
                 .define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, BOOTSTRAP_SERVERS_DEFAULT,
                         Importance.HIGH, BOOTSTRAP_SERVERS_DOC)
                 .define(KEY_CONVERTER_CLASS_CONFIG, Type.CLASS,

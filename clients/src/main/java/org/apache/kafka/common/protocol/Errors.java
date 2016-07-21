@@ -31,14 +31,20 @@ import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.InvalidCommitOffsetSizeException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidFetchSizeException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.InvalidPartitionsException;
+import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
+import org.apache.kafka.common.errors.InvalidReplicationFactorException;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidRequiredAcksException;
 import org.apache.kafka.common.errors.InvalidSessionTimeoutException;
 import org.apache.kafka.common.errors.InvalidTimestampException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.NetworkException;
+import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.NotCoordinatorForGroupException;
 import org.apache.kafka.common.errors.NotEnoughReplicasAfterAppendException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
@@ -50,6 +56,7 @@ import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -139,7 +146,22 @@ public enum Errors {
     ILLEGAL_SASL_STATE(34,
             new IllegalSaslStateException("Request is not valid given the current SASL state.")),
     UNSUPPORTED_VERSION(35,
-            new UnsupportedVersionException("The version of API is not supported."));
+            new UnsupportedVersionException("The version of API is not supported.")),
+    TOPIC_ALREADY_EXISTS(36,
+            new TopicExistsException("Topic with this name already exists.")),
+    INVALID_PARTITIONS(37,
+            new InvalidPartitionsException("Number of partitions is invalid.")),
+    INVALID_REPLICATION_FACTOR(38,
+            new InvalidReplicationFactorException("Replication-factor is invalid.")),
+    INVALID_REPLICA_ASSIGNMENT(39,
+            new InvalidReplicaAssignmentException("Replica assignment is invalid.")),
+    INVALID_CONFIG(40,
+            new InvalidConfigurationException("Configuration is invalid.")),
+    NOT_CONTROLLER(41,
+        new NotControllerException("This is not the correct controller for this cluster.")),
+    INVALID_REQUEST(42,
+        new InvalidRequestException("This most likely occurs because of a request being malformed by the client library or" +
+            " the message was sent to an incompatible broker. See the broker logs for more details."));
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
@@ -170,10 +192,10 @@ public enum Errors {
     }
 
     /**
-     * Returns the class name of the exception
+     * Returns the class name of the exception or null if this is {@code Errors.NONE}.
      */
     public String exceptionName() {
-        return exception.getClass().getName();
+        return exception == null ? null : exception.getClass().getName();
     }
 
     /**

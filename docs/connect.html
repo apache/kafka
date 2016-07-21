@@ -181,16 +181,16 @@ public void stop() {
 }
 </pre>
 
-Finally, the real core of the implementation is in <code>getTaskConfigs()</code>. In this case we are only
+Finally, the real core of the implementation is in <code>taskConfigs()</code>. In this case we are only
 handling a single file, so even though we may be permitted to generate more tasks as per the
 <code>maxTasks</code> argument, we return a list with only one entry:
 
 <pre>
 @Override
-public List&lt;Map&lt;String, String&gt;&gt; getTaskConfigs(int maxTasks) {
-    ArrayList&gt;Map&lt;String, String&gt;&gt; configs = new ArrayList&lt;&gt;();
+public List&lt;Map&lt;String, String&gt;&gt; taskConfigs(int maxTasks) {
+    ArrayList&lt;Map&lt;String, String&gt;&gt; configs = new ArrayList&lt;&gt;();
     // Only one input stream makes sense.
-    Map&lt;String, String&gt; config = new Map&lt;&gt;();
+    Map&lt;String, String&gt; config = new HashMap&lt;&gt;();
     if (filename != null)
         config.put(FILE_CONFIG, filename);
     config.put(TOPIC_CONFIG, topic);
@@ -214,11 +214,12 @@ Just as with the connector, we need to create a class inheriting from the approp
 
 
 <pre>
-public class FileStreamSourceTask extends SourceTask&lt;Object, Object&gt; {
+public class FileStreamSourceTask extends SourceTask {
     String filename;
     InputStream stream;
     String topic;
 
+    @Override
     public void start(Map&lt;String, String&gt; props) {
         filename = props.get(FileStreamSourceConnector.FILE_CONFIG);
         stream = openOrThrowError(filename);
@@ -356,8 +357,7 @@ Schema schema = SchemaBuilder.struct().name(NAME)
 
 Struct struct = new Struct(schema)
     .put("name", "Barbara Liskov")
-    .put("age", 75)
-    .build();
+    .put("age", 75);
 </pre>
 
 If you are implementing a source connector, you'll need to decide when and how to create schemas. Where possible, you should avoid recomputing them as much as possible. For example, if your connector is guaranteed to have a fixed schema, create it statically and reuse a single instance.

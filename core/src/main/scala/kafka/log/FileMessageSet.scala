@@ -54,12 +54,12 @@ class FileMessageSet private[kafka](@volatile var file: File,
     if(isSlice)
       new AtomicInteger(end - start) // don't check the file size if this is just a slice view
     else
-      new AtomicInteger(math.min(channel.size().toInt, end) - start)
+      new AtomicInteger(math.min(channel.size.toInt, end) - start)
 
   /* if this is not a slice, update the file pointer to the end of the file */
   if (!isSlice)
     /* set the file position to the last byte in the file */
-    channel.position(math.min(channel.size().toInt, end))
+    channel.position(math.min(channel.size.toInt, end))
 
   /**
    * Create a file message set with no slicing.
@@ -83,7 +83,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
       this(file,
         channel = FileMessageSet.openChannel(file, mutable = true, fileAlreadyExists, initFileSize, preallocate),
         start = 0,
-        end = ( if ( !fileAlreadyExists && preallocate ) 0 else Int.MaxValue),
+        end = if (!fileAlreadyExists && preallocate) 0 else Int.MaxValue,
         isSlice = false)
 
   /**
@@ -157,7 +157,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
    */
   def writeTo(destChannel: GatheringByteChannel, writePosition: Long, size: Int): Int = {
     // Ensure that the underlying size has not changed.
-    val newSize = math.min(channel.size().toInt, end) - start
+    val newSize = math.min(channel.size.toInt, end) - start
     if (newSize < _size.get()) {
       throw new KafkaException("Size of FileMessageSet %s has been truncated during write: old size %d, new size %d"
         .format(file.getAbsolutePath, _size.get(), newSize))
@@ -224,7 +224,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
       }
     }
 
-    if (sizeInBytes > 0 && newMessages.size == 0) {
+    if (sizeInBytes > 0 && newMessages.isEmpty) {
       // This indicates that the message is too large. We just return all the bytes in the file message set.
       this
     } else {
@@ -239,7 +239,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
   /**
    * Get a shallow iterator over the messages in the set.
    */
-  override def iterator = iterator(Int.MaxValue)
+  override def iterator: Iterator[MessageAndOffset] = iterator(Int.MaxValue)
 
   /**
    * Get an iterator over the messages in the set. We only do shallow iteration here.
@@ -333,7 +333,11 @@ class FileMessageSet private[kafka](@volatile var file: File,
   /**
    * Truncate this file message set to the given size in bytes. Note that this API does no checking that the
    * given size falls on a valid message boundary.
-   * @param targetSize The size to truncate to.
+   * In some versions of the JDK truncating to the same size as the file message set will cause an
+   * update of the files mtime, so truncate is only performed if the targetSize is smaller than the
+   * size of the underlying FileChannel.
+   * It is expected that no other threads will do writes to the log when this function is called.
+   * @param targetSize The size to truncate to. Must be between 0 and sizeInBytes.
    * @return The number of bytes truncated off
    */
   def truncateTo(targetSize: Int): Int = {
@@ -341,9 +345,11 @@ class FileMessageSet private[kafka](@volatile var file: File,
     if(targetSize > originalSize || targetSize < 0)
       throw new KafkaException("Attempt to truncate log segment to " + targetSize + " bytes failed, " +
                                " size of this log segment is " + originalSize + " bytes.")
-    channel.truncate(targetSize)
-    channel.position(targetSize)
-    _size.set(targetSize)
+    if (targetSize < channel.size.toInt) {
+      channel.truncate(targetSize)
+      channel.position(targetSize)
+      _size.set(targetSize)
+    }
     originalSize - targetSize
   }
 

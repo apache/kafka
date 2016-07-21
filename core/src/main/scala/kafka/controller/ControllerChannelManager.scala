@@ -28,6 +28,7 @@ import org.apache.kafka.clients.{ClientRequest, ClientResponse, ManualMetadataUp
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ChannelBuilders, LoginType, Mode, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
+import org.apache.kafka.common.requests
 import org.apache.kafka.common.requests.{UpdateMetadataRequest, _}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Node, TopicPartition}
@@ -257,13 +258,13 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
 
   def newBatch() {
     // raise error if the previous batch is not empty
-    if (leaderAndIsrRequestMap.size > 0)
+    if (leaderAndIsrRequestMap.nonEmpty)
       throw new IllegalStateException("Controller to broker state change requests batch is not empty while creating " +
         "a new one. Some LeaderAndIsr state changes %s might be lost ".format(leaderAndIsrRequestMap.toString()))
-    if (stopReplicaRequestMap.size > 0)
+    if (stopReplicaRequestMap.nonEmpty)
       throw new IllegalStateException("Controller to broker state change requests batch is not empty while creating a " +
         "new one. Some StopReplica state changes %s might be lost ".format(stopReplicaRequestMap.toString()))
-    if (updateMetadataRequestMap.size > 0)
+    if (updateMetadataRequestMap.nonEmpty)
       throw new IllegalStateException("Controller to broker state change requests batch is not empty while creating a " +
         "new one. Some UpdateMetadata state changes %s might be lost ".format(updateMetadataRequestMap.toString()))
   }
@@ -362,7 +363,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
         }
         val partitionStates = partitionStateInfos.map { case (topicPartition, partitionStateInfo) =>
           val LeaderIsrAndControllerEpoch(leaderIsr, controllerEpoch) = partitionStateInfo.leaderIsrAndControllerEpoch
-          val partitionState = new LeaderAndIsrRequest.PartitionState(controllerEpoch, leaderIsr.leader,
+          val partitionState = new requests.PartitionState(controllerEpoch, leaderIsr.leader,
             leaderIsr.leaderEpoch, leaderIsr.isr.map(Integer.valueOf).asJava, leaderIsr.zkVersion,
             partitionStateInfo.allReplicas.map(Integer.valueOf).asJava
           )
@@ -379,7 +380,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
           broker, p._1)))
         val partitionStates = partitionStateInfos.map { case (topicPartition, partitionStateInfo) =>
           val LeaderIsrAndControllerEpoch(leaderIsr, controllerEpoch) = partitionStateInfo.leaderIsrAndControllerEpoch
-          val partitionState = new UpdateMetadataRequest.PartitionState(controllerEpoch, leaderIsr.leader,
+          val partitionState = new requests.PartitionState(controllerEpoch, leaderIsr.leader,
             leaderIsr.leaderEpoch, leaderIsr.isr.map(Integer.valueOf).asJava, leaderIsr.zkVersion,
             partitionStateInfo.allReplicas.map(Integer.valueOf).asJava
           )
@@ -424,17 +425,17 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
       stopReplicaRequestMap.clear()
     } catch {
       case e : Throwable => {
-        if (leaderAndIsrRequestMap.size > 0) {
+        if (leaderAndIsrRequestMap.nonEmpty) {
           error("Haven't been able to send leader and isr requests, current state of " +
-              s"the map is $leaderAndIsrRequestMap")
+              s"the map is $leaderAndIsrRequestMap. Exception message: $e")
         }
-        if (updateMetadataRequestMap.size > 0) {
+        if (updateMetadataRequestMap.nonEmpty) {
           error("Haven't been able to send metadata update requests, current state of " +
-              s"the map is $updateMetadataRequestMap")
+              s"the map is $updateMetadataRequestMap. Exception message: $e")
         }
-        if (stopReplicaRequestMap.size > 0) {
+        if (stopReplicaRequestMap.nonEmpty) {
           error("Haven't been able to send stop replica requests, current state of " +
-              s"the map is $stopReplicaRequestMap")
+              s"the map is $stopReplicaRequestMap. Exception message: $e")
         }
         throw new IllegalStateException(e)
       }

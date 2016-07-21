@@ -27,9 +27,10 @@ import kafka.api._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{Logging, SystemTime}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.network.Send
-import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol, Protocol}
-import org.apache.kafka.common.requests.{RequestSend, ProduceRequest, AbstractRequest, RequestHeader, ApiVersionsRequest}
+import org.apache.kafka.common.protocol.{ApiKeys, Protocol, SecurityProtocol}
+import org.apache.kafka.common.requests.{AbstractRequest, ApiVersionsRequest, ProduceRequest, RequestHeader, RequestSend}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.log4j.Logger
 
@@ -100,7 +101,7 @@ object RequestChannel extends Logging {
     buffer = null
     private val requestLogger = Logger.getLogger("kafka.request.logger")
 
-    private def requestDesc(details: Boolean): String = {
+    def requestDesc(details: Boolean): String = {
       if (requestObj != null)
         requestObj.describe(details)
       else

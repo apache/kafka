@@ -27,6 +27,8 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.test.TestCondition;
+import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
 import java.io.IOException;
@@ -44,7 +46,8 @@ import java.util.concurrent.Future;
  */
 public class IntegrationTestUtils {
 
-    private static final int UNLIMITED_MESSAGES = -1;
+    public static final int UNLIMITED_MESSAGES = -1;
+    public static final long DEFAULT_TIMEOUT = 30 * 1000L;
 
     /**
      * Returns up to `maxMessages` message-values from the topic.
@@ -54,10 +57,10 @@ public class IntegrationTestUtils {
      * @param maxMessages    Maximum number of messages to read via the consumer.
      * @return The values retrieved via the consumer.
      */
-    public static <K, V> List<V> readValues(String topic, Properties consumerConfig, int maxMessages) {
+    public static <V> List<V> readValues(String topic, Properties consumerConfig, int maxMessages) {
         List<V> returnList = new ArrayList<>();
-        List<KeyValue<K, V>> kvs = readKeyValues(topic, consumerConfig, maxMessages);
-        for (KeyValue<K, V> kv : kvs) {
+        List<KeyValue<Object, V>> kvs = readKeyValues(topic, consumerConfig, maxMessages);
+        for (KeyValue<?, V> kv : kvs) {
             returnList.add(kv.value);
         }
         return returnList;
@@ -112,12 +115,13 @@ public class IntegrationTestUtils {
      * @param streamsConfiguration Streams configuration settings
      */
     public static void purgeLocalStreamsState(Properties streamsConfiguration) throws IOException {
+        final String tmpDir = TestUtils.IO_TMP_DIR.getPath();
         String path = streamsConfiguration.getProperty(StreamsConfig.STATE_DIR_CONFIG);
         if (path != null) {
             File node = Paths.get(path).normalize().toFile();
-            // Only purge state when it's under /tmp.  This is a safety net to prevent accidentally
+            // Only purge state when it's under java.io.tmpdir.  This is a safety net to prevent accidentally
             // deleting important local directory trees.
-            if (node.getAbsolutePath().startsWith("/tmp")) {
+            if (node.getAbsolutePath().startsWith(tmpDir)) {
                 Utils.delete(new File(node.getAbsolutePath()));
             }
         }
@@ -133,10 +137,21 @@ public class IntegrationTestUtils {
     public static <K, V> void produceKeyValuesSynchronously(
         String topic, Collection<KeyValue<K, V>> records, Properties producerConfig)
         throws ExecutionException, InterruptedException {
+        produceKeyValuesSynchronouslyWithTimestamp(topic,
+                                                   records,
+                                                   producerConfig,
+                                                   null);
+    }
+
+    public static <K, V> void produceKeyValuesSynchronouslyWithTimestamp(String topic,
+                                                                         Collection<KeyValue<K, V>> records,
+                                                                         Properties producerConfig,
+                                                                         Long timestamp)
+        throws ExecutionException, InterruptedException {
         Producer<K, V> producer = new KafkaProducer<>(producerConfig);
         for (KeyValue<K, V> record : records) {
             Future<RecordMetadata> f = producer.send(
-                new ProducerRecord<>(topic, record.key, record.value));
+                new ProducerRecord<>(topic, null, timestamp, record.key, record.value));
             f.get();
         }
         producer.flush();
@@ -152,6 +167,84 @@ public class IntegrationTestUtils {
             keyedRecords.add(kv);
         }
         produceKeyValuesSynchronously(topic, keyedRecords, producerConfig);
+    }
+
+    public static <K, V> List<KeyValue<K, V>> waitUntilMinKeyValueRecordsReceived(Properties consumerConfig,
+                                                                                  String topic,
+                                                                                  int expectedNumRecords) throws InterruptedException {
+
+        return waitUntilMinKeyValueRecordsReceived(consumerConfig, topic, expectedNumRecords, DEFAULT_TIMEOUT);
+    }
+
+    /**
+     * Wait until enough data (key-value records) has been consumed.
+     * @param consumerConfig Kafka Consumer configuration
+     * @param topic          Topic to consume from
+     * @param expectedNumRecords Minimum number of expected records
+     * @param waitTime       Upper bound in waiting time in milliseconds
+     * @return All the records consumed, or null if no records are consumed
+     * @throws InterruptedException
+     * @throws AssertionError if the given wait time elapses
+     */
+    public static <K, V> List<KeyValue<K, V>> waitUntilMinKeyValueRecordsReceived(final Properties consumerConfig,
+                                                                                  final String topic,
+                                                                                  final int expectedNumRecords,
+                                                                                  long waitTime) throws InterruptedException {
+        final List<KeyValue<K, V>> accumData = new ArrayList<>();
+
+        TestCondition valuesRead = new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                List<KeyValue<K, V>> readData = readKeyValues(topic, consumerConfig);
+                accumData.addAll(readData);
+                return accumData.size() >= expectedNumRecords;
+            }
+        };
+
+        String conditionDetails = "Did not receive " + expectedNumRecords + " number of records";
+
+        TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
+
+        return accumData;
+    }
+
+    public static <V> List<V> waitUntilMinValuesRecordsReceived(Properties consumerConfig,
+                                                                String topic,
+                                                                int expectedNumRecords) throws InterruptedException {
+
+        return waitUntilMinValuesRecordsReceived(consumerConfig, topic, expectedNumRecords, DEFAULT_TIMEOUT);
+    }
+
+    /**
+     * Wait until enough data (value records) has been consumed.
+     * @param consumerConfig Kafka Consumer configuration
+     * @param topic          Topic to consume from
+     * @param expectedNumRecords Minimum number of expected records
+     * @param waitTime       Upper bound in waiting time in milliseconds
+     * @return All the records consumed, or null if no records are consumed
+     * @throws InterruptedException
+     * @throws AssertionError if the given wait time elapses
+     */
+    public static <V> List<V> waitUntilMinValuesRecordsReceived(final Properties consumerConfig,
+                                                                final String topic,
+                                                                final int expectedNumRecords,
+                                                                long waitTime) throws InterruptedException {
+        final List<V> accumData = new ArrayList<>();
+
+        TestCondition valuesRead = new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                List<V> readData = readValues(topic, consumerConfig, expectedNumRecords);
+                accumData.addAll(readData);
+                return accumData.size() >= expectedNumRecords;
+            }
+        };
+
+        String conditionDetails = "Did not receive " + expectedNumRecords + " number of records";
+
+        TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
+
+        return accumData;
     }
 
 }

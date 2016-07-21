@@ -195,7 +195,7 @@ import java.util.regex.Pattern;
  *     while (true) {
  *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(100);
  *         for (ConsumerRecord&lt;String, String&gt; record : records)
- *             System.out.printf(&quot;offset = %d, key = %s, value = %s&quot;, record.offset(), record.key(), record.value());
+ *             System.out.printf(&quot;offset = %d, key = %s, value = %s%n&quot;, record.offset(), record.key(), record.value());
  *     }
  * </pre>
  *
@@ -242,7 +242,6 @@ import java.util.regex.Pattern;
  *     props.put(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
  *     props.put(&quot;group.id&quot;, &quot;test&quot;);
  *     props.put(&quot;enable.auto.commit&quot;, &quot;false&quot;);
- *     props.put(&quot;auto.commit.interval.ms&quot;, &quot;1000&quot;);
  *     props.put(&quot;session.timeout.ms&quot;, &quot;30000&quot;);
  *     props.put(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
  *     props.put(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
@@ -560,10 +559,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * A consumer is instantiated by providing a {@link java.util.Properties} object as configuration. Valid
-     * configuration strings are documented at {@link ConsumerConfig} A consumer is instantiated by providing a
-     * {@link java.util.Properties} object as configuration. Valid configuration strings are documented at
-     * {@link ConsumerConfig}
+     * A consumer is instantiated by providing a {@link java.util.Properties} object as configuration.
+     * <p>
+     * Valid configuration strings are documented at {@link ConsumerConfig}
+     * 
+     * @param properties The consumer configuration properties
      */
     public KafkaConsumer(Properties properties) {
         this(properties, null, null);
@@ -790,15 +790,22 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param topics The list of topics to subscribe to
      * @param listener Non-null listener instance to get notifications on partition assignment/revocation for the
      *                 subscribed topics
+     * @throws IllegalArgumentException If topics is null or contains null or empty elements
      */
     @Override
     public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
         acquire();
         try {
-            if (topics.isEmpty()) {
+            if (topics == null) {
+                throw new IllegalArgumentException("Topic collection to subscribe to cannot be null");
+            } else if (topics.isEmpty()) {
                 // treat subscribing to empty topic list as the same as unsubscribing
                 this.unsubscribe();
             } else {
+                for (String topic : topics) {
+                    if (topic == null || topic.trim().isEmpty())
+                        throw new IllegalArgumentException("Topic collection to subscribe to cannot contain null or empty topic");
+                }
                 log.debug("Subscribed to topic(s): {}", Utils.join(topics, ", "));
                 this.subscriptions.subscribe(topics, listener);
                 metadata.setTopics(subscriptions.groupSubscription());
@@ -824,6 +831,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * management since the listener gives you an opportunity to commit offsets before a rebalance finishes.
      *
      * @param topics The list of topics to subscribe to
+     * @throws IllegalArgumentException If topics is null or contains null or empty elements
      */
     @Override
     public void subscribe(Collection<String> topics) {
@@ -833,6 +841,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Subscribe to all topics matching specified pattern to get dynamically assigned partitions. The pattern matching will be done periodically against topics
      * existing at the time of check.
+     *
      * <p>
      * As part of group management, the consumer will keep track of the list of consumers that
      * belong to a particular group and will trigger a rebalance operation if one of the
@@ -845,14 +854,18 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * </ul>
      *
      * @param pattern Pattern to subscribe to
+     * @throws IllegalArgumentException If pattern is null
      */
     @Override
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
         acquire();
         try {
+            if (pattern == null)
+                throw new IllegalArgumentException("Topic pattern to subscribe to cannot be null");
             log.debug("Subscribed to pattern: {}", pattern);
             this.subscriptions.subscribe(pattern, listener);
             this.metadata.needMetadataForAllTopics(true);
+            this.metadata.requestUpdate();
         } finally {
             release();
         }
@@ -877,6 +890,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Manually assign a list of partition to this consumer. This interface does not allow for incremental assignment
      * and will replace the previous assignment (if there is one).
+     *
+     * If the given list of topic partition is empty, it is treated the same as {@link #unsubscribe()}.
+     *
      * <p>
      * Manual topic assignment through this method does not use the consumer's group management
      * functionality. As such, there will be no rebalance operation triggered when group membership or cluster and topic
@@ -884,17 +900,29 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * and group assignment with {@link #subscribe(Collection, ConsumerRebalanceListener)}.
      *
      * @param partitions The list of partitions to assign this consumer
+     * @throws IllegalArgumentException If partitions is null or contains null or empty topics
      */
     @Override
     public void assign(Collection<TopicPartition> partitions) {
         acquire();
         try {
-            log.debug("Subscribed to partition(s): {}", Utils.join(partitions, ", "));
-            this.subscriptions.assignFromUser(partitions);
-            Set<String> topics = new HashSet<>();
-            for (TopicPartition tp : partitions)
-                topics.add(tp.topic());
-            metadata.setTopics(topics);
+            if (partitions == null) {
+                throw new IllegalArgumentException("Topic partition collection to assign to cannot be null");
+            } else if (partitions.isEmpty()) {
+                this.unsubscribe();
+            } else {
+                Set<String> topics = new HashSet<>();
+                for (TopicPartition tp : partitions) {
+                    String topic = (tp != null) ? tp.topic() : null;
+                    if (topic == null || topic.trim().isEmpty())
+                        throw new IllegalArgumentException("Topic partitions to assign to cannot have null or empty topic");
+                    topics.add(topic);
+                }
+
+                log.debug("Subscribed to partition(s): {}", Utils.join(partitions, ", "));
+                this.subscriptions.assignFromUser(partitions);
+                metadata.setTopics(topics);
+            }
         } finally {
             release();
         }

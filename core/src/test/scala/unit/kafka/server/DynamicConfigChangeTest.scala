@@ -37,7 +37,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   @Test
   def testConfigChange() {
     assertTrue("Should contain a ConfigHandler for topics",
-               this.servers(0).dynamicConfigHandlers.contains(ConfigType.Topic))
+               this.servers.head.dynamicConfigHandlers.contains(ConfigType.Topic))
     val oldVal: java.lang.Long = 100000L
     val newVal: java.lang.Long = 200000L
     val tp = TopicAndPartition("test", 0)
@@ -45,21 +45,21 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     logProps.put(LogConfig.FlushMessagesProp, oldVal.toString)
     AdminUtils.createTopic(zkUtils, tp.topic, 1, 1, logProps)
     TestUtils.retry(10000) {
-      val logOpt = this.servers(0).logManager.getLog(tp)
+      val logOpt = this.servers.head.logManager.getLog(tp)
       assertTrue(logOpt.isDefined)
       assertEquals(oldVal, logOpt.get.config.flushInterval)
     }
     logProps.put(LogConfig.FlushMessagesProp, newVal.toString)
     AdminUtils.changeTopicConfig(zkUtils, tp.topic, logProps)
     TestUtils.retry(10000) {
-      assertEquals(newVal, this.servers(0).logManager.getLog(tp).get.config.flushInterval)
+      assertEquals(newVal, this.servers.head.logManager.getLog(tp).get.config.flushInterval)
     }
   }
 
   @Test
   def testClientQuotaConfigChange() {
     assertTrue("Should contain a ConfigHandler for topics",
-               this.servers(0).dynamicConfigHandlers.contains(ConfigType.Client))
+               this.servers.head.dynamicConfigHandlers.contains(ConfigType.Client))
     val clientId = "testClient"
     val props = new Properties()
     props.put(ClientConfigOverride.ProducerOverride, "1000")
@@ -67,8 +67,8 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     AdminUtils.changeClientIdConfig(zkUtils, clientId, props)
 
     TestUtils.retry(10000) {
-      val configHandler = this.servers(0).dynamicConfigHandlers(ConfigType.Client).asInstanceOf[ClientIdConfigHandler]
-      val quotaManagers: Map[Short, ClientQuotaManager] = servers(0).apis.quotaManagers
+      val configHandler = this.servers.head.dynamicConfigHandlers(ConfigType.Client).asInstanceOf[ClientIdConfigHandler]
+      val quotaManagers: Map[Short, ClientQuotaManager] = servers.head.apis.quotaManagers
       val overrideProducerQuota = quotaManagers.get(ApiKeys.PRODUCE.id).get.quota(clientId)
       val overrideConsumerQuota = quotaManagers.get(ApiKeys.FETCH.id).get.quota(clientId)
 

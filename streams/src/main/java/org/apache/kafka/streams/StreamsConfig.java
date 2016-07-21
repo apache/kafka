@@ -24,6 +24,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.processor.ConsumerRecordTimestampExtractor;
@@ -31,7 +32,10 @@ import org.apache.kafka.streams.processor.DefaultPartitionGrouper;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
@@ -122,7 +126,7 @@ public class StreamsConfig extends AbstractConfig {
                                 .define(BOOTSTRAP_SERVERS_CONFIG,       // required with no default value
                                         Type.LIST,
                                         Importance.HIGH,
-                                        CommonClientConfigs.BOOSTRAP_SERVERS_DOC)
+                                        CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                                 .define(CLIENT_ID_CONFIG,
                                         Type.STRING,
                                         "",
@@ -212,6 +216,28 @@ public class StreamsConfig extends AbstractConfig {
                                         CommonClientConfigs.METRICS_NUM_SAMPLES_DOC);
     }
 
+    // this is the list of configs for underlying clients
+    // that streams prefer different default values
+    private static final Map<String, Object> PRODUCER_DEFAULT_OVERRIDES;
+    static
+    {
+        Map<String, Object> tempProducerDefaultOverrides = new HashMap<>();
+        tempProducerDefaultOverrides.put(ProducerConfig.LINGER_MS_CONFIG, "100");
+
+        PRODUCER_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempProducerDefaultOverrides);
+    }
+
+    private static final Map<String, Object> CONSUMER_DEFAULT_OVERRIDES;
+    static
+    {
+        Map<String, Object> tempConsumerDefaultOverrides = new HashMap<>();
+        tempConsumerDefaultOverrides.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1000");
+        tempConsumerDefaultOverrides.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        tempConsumerDefaultOverrides.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+
+        CONSUMER_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
+    }
+
     public static class InternalConfig {
         public static final String STREAM_THREAD_INSTANCE = "__stream.thread.instance__";
     }
@@ -220,8 +246,18 @@ public class StreamsConfig extends AbstractConfig {
         super(CONFIG, props);
     }
 
-    public Map<String, Object> getConsumerConfigs(StreamThread streamThread, String groupId, String clientId) {
-        Map<String, Object> props = getBaseConsumerConfigs();
+    public Map<String, Object> getConsumerConfigs(StreamThread streamThread, String groupId, String clientId) throws ConfigException {
+        Map<String, Object> originals = this.originals();
+
+        // disable auto commit and throw exception if there is user overridden values,
+        // this is necessary for streams commit semantics
+        if (originals.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
+            throw new ConfigException("Unexpected user-specified consumer config " + ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG
+                    + ", as the streams client will always turn off auto committing.");
+        }
+
+        // generate consumer configs from original properties and overridden maps
+        Map<String, Object> props = clientProps(ConsumerConfig.configNames(), originals, CONSUMER_DEFAULT_OVERRIDES);
 
         // add client id with stream client id prefix, and group id
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
@@ -232,15 +268,24 @@ public class StreamsConfig extends AbstractConfig {
         props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, getInt(REPLICATION_FACTOR_CONFIG));
         props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, getInt(NUM_STANDBY_REPLICAS_CONFIG));
         props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamPartitionAssignor.class.getName());
-
         if (!getString(ZOOKEEPER_CONNECT_CONFIG).equals(""))
             props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, getString(ZOOKEEPER_CONNECT_CONFIG));
 
         return props;
     }
 
-    public Map<String, Object> getRestoreConsumerConfigs(String clientId) {
-        Map<String, Object> props = getBaseConsumerConfigs();
+    public Map<String, Object> getRestoreConsumerConfigs(String clientId) throws ConfigException {
+        Map<String, Object> originals = this.originals();
+
+        // disable auto commit and throw exception if there is user overridden values,
+        // this is necessary for streams commit semantics
+        if (originals.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
+            throw new ConfigException("Unexpected user-specified consumer config " + ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG
+                    + ", as the streams client will always turn off auto committing.");
+        }
+
+        // generate consumer configs from original properties and overridden maps
+        Map<String, Object> props = clientProps(ConsumerConfig.configNames(), originals, CONSUMER_DEFAULT_OVERRIDES);
 
         // no need to set group id for a restore consumer
         props.remove(ConsumerConfig.GROUP_ID_CONFIG);
@@ -251,52 +296,14 @@ public class StreamsConfig extends AbstractConfig {
         return props;
     }
 
-    private Map<String, Object> getBaseConsumerConfigs() {
-        Map<String, Object> props = this.originals();
-
-        // remove streams properties
-        removeStreamsSpecificConfigs(props);
-
-        // set consumer default property values
-        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-
-        return props;
-    }
-
     public Map<String, Object> getProducerConfigs(String clientId) {
-        Map<String, Object> props = this.originals();
-
-        // remove consumer properties that are not required for producers
-        props.remove(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
-
-        // remove streams properties
-        removeStreamsSpecificConfigs(props);
-
-        // set producer default property values
-        props.put(ProducerConfig.LINGER_MS_CONFIG, "100");
+        // generate producer configs from original properties and overridden maps
+        Map<String, Object> props = clientProps(ProducerConfig.configNames(), this.originals(), PRODUCER_DEFAULT_OVERRIDES);
 
         // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-producer");
 
         return props;
-    }
-
-    private void removeStreamsSpecificConfigs(Map<String, Object> props) {
-        props.remove(StreamsConfig.POLL_MS_CONFIG);
-        props.remove(StreamsConfig.STATE_DIR_CONFIG);
-        props.remove(StreamsConfig.APPLICATION_ID_CONFIG);
-        props.remove(StreamsConfig.KEY_SERDE_CLASS_CONFIG);
-        props.remove(StreamsConfig.VALUE_SERDE_CLASS_CONFIG);
-        props.remove(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG);
-        props.remove(StreamsConfig.REPLICATION_FACTOR_CONFIG);
-        props.remove(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
-        props.remove(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
-        props.remove(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
-        props.remove(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
-        props.remove(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG);
-        props.remove(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG);
-        props.remove(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
-        props.remove(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE);
     }
 
     public Serde keySerde() {
@@ -311,6 +318,29 @@ public class StreamsConfig extends AbstractConfig {
         serde.configure(originals(), false);
 
         return serde;
+    }
+
+    /**
+     * Filter configs that are not defined in the given set of configuration names.
+     *
+     * @param configNames The given set of configuration names.
+     * @param originals The original configs to be filtered.
+     * @param overrides The default overridden values.
+     * @return Filtered configs.
+     */
+    private Map<String, Object> clientProps(Set<String> configNames, Map<String, Object> originals, Map<String, Object> overrides) {
+        // iterate all client config names, filter out non-client configs from the original
+        // property map and use the overridden values when they are not specified by users
+        Map<String, Object> parsed = new HashMap<>();
+        for (String configName: configNames) {
+            if (originals.containsKey(configName)) {
+                parsed.put(configName, originals.get(configName));
+            } else if (overrides.containsKey(configName)) {
+                parsed.put(configName, overrides.get(configName));
+            }
+        }
+
+        return parsed;
     }
 
     public static void main(String[] args) {

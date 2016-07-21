@@ -81,7 +81,7 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
       serverConfig.getProperty(KafkaConfig.OffsetsTopicPartitionsProp).toInt,
       serverConfig.getProperty(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
       servers,
-      servers(0).consumerCoordinator.offsetsTopicConfigs)
+      servers.head.groupCoordinator.offsetsTopicConfigs)
   }
 
   @After

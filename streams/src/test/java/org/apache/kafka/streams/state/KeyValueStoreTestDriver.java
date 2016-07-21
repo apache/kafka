@@ -35,6 +35,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.MockTimestampExtractor;
+import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
 import java.util.HashMap;
@@ -210,7 +211,7 @@ public class KeyValueStoreTestDriver<K, V> {
                 send(record, keySerializer, valueSerializer);
             }
         };
-        this.stateDir = StateTestUtils.tempDir();
+        this.stateDir = TestUtils.tempDirectory();
         this.stateDir.mkdirs();
 
         Properties props = new Properties();
@@ -249,6 +250,16 @@ public class KeyValueStoreTestDriver<K, V> {
             @Override
             public File stateDir() {
                 return stateDir;
+            }
+
+            @Override
+            public Map<String, Object> appConfigs() {
+                return null;
+            }
+
+            @Override
+            public Map<String, Object> appConfigsWithPrefix(String prefix) {
+                return null;
             }
         };
     }
@@ -362,9 +373,11 @@ public class KeyValueStoreTestDriver<K, V> {
      */
     public int sizeOf(KeyValueStore<K, V> store) {
         int size = 0;
-        for (KeyValueIterator<K, V> iterator = store.all(); iterator.hasNext();) {
-            iterator.next();
-            ++size;
+        try (KeyValueIterator<K, V> iterator = store.all()) {
+            while (iterator.hasNext()) {
+                iterator.next();
+                ++size;
+            }
         }
         return size;
     }

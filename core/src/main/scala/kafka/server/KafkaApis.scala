@@ -34,10 +34,10 @@ import kafka.network._
 import kafka.network.RequestChannel.{Response, Session}
 import kafka.security.auth.{Authorizer, ClusterAction, Create, Describe, Group, Operation, Read, Resource, Topic, Write}
 import kafka.utils.{Logging, SystemTime, ZKGroupTopicDirs, ZkUtils}
-import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidTopicException, NotLeaderForPartitionException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidTopicException, NotLeaderForPartitionException, UnknownTopicOrPartitionException, TopicExistsException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, Protocol, SecurityProtocol}
-import org.apache.kafka.common.requests.{ApiVersionsResponse, DescribeGroupsRequest, DescribeGroupsResponse, GroupCoordinatorRequest, GroupCoordinatorResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsResponse, ListOffsetRequest, ListOffsetResponse, MetadataRequest, MetadataResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetFetchRequest, OffsetFetchResponse, ProduceRequest, ProduceResponse, ResponseHeader, ResponseSend, StopReplicaRequest, StopReplicaResponse, SyncGroupRequest, SyncGroupResponse, UpdateMetadataRequest, UpdateMetadataResponse}
+import org.apache.kafka.common.requests.{ApiVersionsResponse, DescribeGroupsRequest, DescribeGroupsResponse, GroupCoordinatorRequest, GroupCoordinatorResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsResponse, ListOffsetRequest, ListOffsetResponse, MetadataRequest, MetadataResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetFetchRequest, OffsetFetchResponse, ProduceRequest, ProduceResponse, ResponseHeader, ResponseSend, StopReplicaRequest, StopReplicaResponse, SyncGroupRequest, SyncGroupResponse, UpdateMetadataRequest, UpdateMetadataResponse, CreateTopicsRequest, CreateTopicsResponse}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{Node, TopicPartition}
@@ -52,6 +52,7 @@ import org.apache.kafka.common.requests.SaslHandshakeResponse
  */
 class KafkaApis(val requestChannel: RequestChannel,
                 val replicaManager: ReplicaManager,
+                val adminManager: AdminManager,
                 val coordinator: GroupCoordinator,
                 val controller: KafkaController,
                 val zkUtils: ZkUtils,
@@ -71,7 +72,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handle(request: RequestChannel.Request) {
     try {
       trace("Handling request:%s from connection %s;securityProtocol:%s,principal:%s".
-        format(request.requestObj, request.connectionId, request.securityProtocol, request.session.principal))
+        format(request.requestDesc(true), request.connectionId, request.securityProtocol, request.session.principal))
       ApiKeys.forId(request.requestId) match {
         case ApiKeys.PRODUCE => handleProducerRequest(request)
         case ApiKeys.FETCH => handleFetchRequest(request)
@@ -92,6 +93,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.LIST_GROUPS => handleListGroupsRequest(request)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
+        case ApiKeys.CREATE_TOPICS => handleCreateTopicsRequest(request)
         case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
     } catch {
@@ -183,6 +185,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     val updateMetadataResponse =
       if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
         replicaManager.maybeUpdateMetadataCache(correlationId, updateMetadataRequest, metadataCache)
+        if (adminManager.hasDelayedTopicOperations) {
+          updateMetadataRequest.partitionStates.keySet.asScala.map(_.topic).foreach { topic =>
+            adminManager.tryCompleteDelayedTopicOperations(topic)
+          }
+        }
         new UpdateMetadataResponse(Errors.NONE.code)
       } else {
         new UpdateMetadataResponse(Errors.CLUSTER_AUTHORIZATION_FAILED.code)
@@ -293,7 +300,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         val currentTimestamp = SystemTime.milliseconds
         val defaultExpireTimestamp = offsetRetention + currentTimestamp
         val partitionData = authorizedRequestInfo.mapValues { partitionData =>
-          val metadata = if (partitionData.metadata == null) OffsetMetadata.NoMetadata else partitionData.metadata;
+          val metadata = if (partitionData.metadata == null) OffsetMetadata.NoMetadata else partitionData.metadata
           new OffsetAndMetadata(
             offsetMetadata = OffsetMetadata(partitionData.offset, metadata),
             commitTimestamp = currentTimestamp,
@@ -1041,6 +1048,48 @@ class KafkaApis(val requestChannel: RequestChannel,
       quotaManager.shutdown()
     }
     info("Shutdown complete.")
+  }
+
+  def handleCreateTopicsRequest(request: RequestChannel.Request) {
+    val createTopicsRequest = request.body.asInstanceOf[CreateTopicsRequest]
+
+    def sendResponseCallback(results: Map[String, Errors]): Unit = {
+      val respHeader = new ResponseHeader(request.header.correlationId)
+      val responseBody = new CreateTopicsResponse(results.asJava)
+      trace(s"Sending create topics response $responseBody for correlation id ${request.header.correlationId} to client ${request.header.clientId}.")
+      requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, respHeader, responseBody)))
+    }
+
+    if (!controller.isActive()) {
+      val results = createTopicsRequest.topics.asScala.map { case (topic, _) =>
+        (topic, Errors.NOT_CONTROLLER)
+      }
+      sendResponseCallback(results)
+    } else if (!authorize(request.session, Create, Resource.ClusterResource)) {
+      val results = createTopicsRequest.topics.asScala.map { case (topic, _) =>
+        (topic, Errors.CLUSTER_AUTHORIZATION_FAILED)
+      }
+      sendResponseCallback(results)
+    }
+    else {
+      val (validTopics, duplicateTopics) = createTopicsRequest.topics.asScala.partition { case (topic, _) =>
+        !createTopicsRequest.duplicateTopics.contains(topic)
+      }
+
+      // Special handling to add duplicate topics to the response
+      def sendResponseWithDuplicatesCallback(results: Map[String, Errors]): Unit = {
+        if (duplicateTopics.nonEmpty)
+          warn(s"Create topics request from client ${request.header.clientId} contains multiple entries for the following topics: ${duplicateTopics.keySet.mkString(",")}")
+        val completeResults = results ++ duplicateTopics.keySet.map((_, Errors.INVALID_REQUEST)).toMap
+        sendResponseCallback(completeResults)
+      }
+
+      adminManager.createTopics(
+        createTopicsRequest.timeout.toInt,
+        validTopics,
+        sendResponseWithDuplicatesCallback
+      )
+    }
   }
 
   def authorizeClusterAction(request: RequestChannel.Request): Unit = {

@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
@@ -191,7 +192,7 @@ public class ConsumerConfig extends AbstractConfig {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
                                         Importance.HIGH,
-                                        CommonClientConfigs.BOOSTRAP_SERVERS_DOC)
+                                        CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                                 .define(GROUP_ID_CONFIG, Type.STRING, "", Importance.HIGH, GROUP_ID_DOC)
                                 .define(SESSION_TIMEOUT_MS_CONFIG,
                                         Type.INT,
@@ -239,13 +240,13 @@ public class ConsumerConfig extends AbstractConfig {
                                 .define(SEND_BUFFER_CONFIG,
                                         Type.INT,
                                         128 * 1024,
-                                        atLeast(0),
+                                        atLeast(-1),
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SEND_BUFFER_DOC)
                                 .define(RECEIVE_BUFFER_CONFIG,
                                         Type.INT,
                                         64 * 1024,
-                                        atLeast(0),
+                                        atLeast(-1),
                                         Importance.MEDIUM,
                                         CommonClientConfigs.RECEIVE_BUFFER_DOC)
                                 .define(FETCH_MIN_BYTES_CONFIG,
@@ -374,6 +375,10 @@ public class ConsumerConfig extends AbstractConfig {
 
     ConsumerConfig(Map<?, ?> props) {
         super(CONFIG, props);
+    }
+
+    public static Set<String> configNames() {
+        return CONFIG.names();
     }
 
     public static void main(String[] args) {

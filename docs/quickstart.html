@@ -168,8 +168,8 @@ my test message 2
 
 Now let's test out fault-tolerance. Broker 1 was acting as the leader so let's kill it:
 <pre>
-&gt; <b>ps | grep server-1.properties</b>
-<i>7564</i> ttys002    0:15.91 /System/Library/Frameworks/JavaVM.framework/Versions/1.6/Home/bin/java...
+&gt; <b>ps aux | grep server-1.properties</b>
+<i>7564</i> ttys002    0:15.91 /System/Library/Frameworks/JavaVM.framework/Versions/1.8/Home/bin/java...
 &gt; <b>kill -9 7564</b>
 </pre>
 
@@ -304,7 +304,16 @@ stream data will likely be flowing continuously into Kafka where the application
 </p>
 
 <pre>
-&gt; <b>cat /tmp/file-input.txt | ./bin/kafka-console-producer --broker-list localhost:9092 --topic streams-file-input</b>
+&gt; <b>bin/kafka-topics.sh --create \</b>
+            <b>--zookeeper localhost:2181 \</b>
+            <b>--replication-factor 1 \</b>
+            <b>--partitions 1 \</b>
+            <b>--topic streams-file-input</b>
+</pre>
+
+
+<pre>
+&gt; <b>cat file-input.txt | bin/kafka-console-producer.sh --broker-list localhost:9092 --topic streams-file-input</b>
 </pre>
 
 <p>
@@ -312,7 +321,7 @@ We can now run the WordCount demo application to process the input data:
 </p>
 
 <pre>
-&gt; <b>./bin/kafka-run-class org.apache.kafka.streams.examples.wordcount.WordCountDemo</b>
+&gt; <b>bin/kafka-run-class.sh org.apache.kafka.streams.examples.wordcount.WordCountDemo</b>
 </pre>
 
 <p>
@@ -324,18 +333,18 @@ We can now inspect the output of the WordCount demo application by reading from 
 </p>
 
 <pre>
-&gt; <b>./bin/kafka-console-consumer --zookeeper localhost:2181 \</b>
+&gt; <b>bin/kafka-console-consumer.sh --zookeeper localhost:2181 \</b>
             <b>--topic streams-wordcount-output \</b>
             <b>--from-beginning \</b>
             <b>--formatter kafka.tools.DefaultMessageFormatter \</b>
             <b>--property print.key=true \</b>
-            <b>--property print.key=true \</b>
+            <b>--property print.value=true \</b>
             <b>--property key.deserializer=org.apache.kafka.common.serialization.StringDeserializer \</b>
             <b>--property value.deserializer=org.apache.kafka.common.serialization.LongDeserializer</b>
 </pre>
 
 <p>
-with the following output data being printed to the console (You can stop the console consumer via <b>Ctrl-C</b>):
+with the following output data being printed to the console:
 </p>
 
 <pre>
@@ -350,7 +359,6 @@ streams 2
 join    1
 kafka   3
 summit  1
-<b>^C</b>
 </pre>
 
 <p>
@@ -358,3 +366,11 @@ Here, the first column is the Kafka message key, and the second column is the me
 Note that the output is actually a continuous stream of updates, where each data record (i.e. each line in the original output above) is
 an updated count of a single word, aka record key such as "kafka". For multiple records with the same key, each later record is an update of the previous one.
 </p>
+
+<p>
+Now you can write more input messages to the <b>streams-file-input</b> topic and observe additional messages added 
+to <b>streams-wordcount-output</b> topic, reflecting updated word counts (e.g., using the console producer and the 
+console consumer, as described above).
+</p>
+
+<p>You can stop the console consumer via <b>Ctrl-C</b>.</p>

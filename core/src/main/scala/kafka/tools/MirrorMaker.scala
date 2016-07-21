@@ -121,7 +121,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         .ofType(classOf[String])
 
       val offsetCommitIntervalMsOpt = parser.accepts("offset.commit.interval.ms",
-        "Offset commit interval in ms")
+        "Offset commit interval in ms.")
         .withRequiredArg()
         .describedAs("offset commit interval in millisecond")
         .ofType(classOf[java.lang.Integer])
@@ -134,7 +134,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         .ofType(classOf[String])
 
       val rebalanceListenerArgsOpt = parser.accepts("rebalance.listener.args",
-        "Arguments used by custom rebalance listener for mirror maker consumer")
+        "Arguments used by custom rebalance listener for mirror maker consumer.")
         .withRequiredArg()
         .describedAs("Arguments passed to custom rebalance listener constructor as a string.")
         .ofType(classOf[String])
@@ -494,7 +494,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       // Creating one stream per each connector instance
       val streams = connector.createMessageStreamsByFilter(filterSpec, 1, new DefaultDecoder(), new DefaultDecoder())
       require(streams.size == 1)
-      val stream = streams(0)
+      val stream = streams.head
       iter = stream.iterator()
     }
 
@@ -554,6 +554,11 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     override def receive() : BaseConsumerRecord = {
       if (recordIter == null || !recordIter.hasNext) {
+        // In scenarios where data does not arrive within offsetCommitIntervalMs and
+        // offsetCommitIntervalMs is less than poll's timeout, offset commit will be delayed for any
+        // uncommitted record since last poll. Using one second as poll's timeout ensures that
+        // offsetCommitIntervalMs, of value greater than 1 second, does not see delays in offset
+        // commit.
         recordIter = consumer.poll(1000).iterator
         if (!recordIter.hasNext)
           throw new ConsumerTimeoutException
@@ -673,9 +678,9 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     def handle(record: BaseConsumerRecord): util.List[ProducerRecord[Array[Byte], Array[Byte]]]
   }
 
-  private object defaultMirrorMakerMessageHandler extends MirrorMakerMessageHandler {
+  private[tools] object defaultMirrorMakerMessageHandler extends MirrorMakerMessageHandler {
     override def handle(record: BaseConsumerRecord): util.List[ProducerRecord[Array[Byte], Array[Byte]]] = {
-      Collections.singletonList(new ProducerRecord[Array[Byte], Array[Byte]](record.topic, record.key, record.value))
+      Collections.singletonList(new ProducerRecord[Array[Byte], Array[Byte]](record.topic, null, record.timestamp, record.key, record.value))
     }
   }
 

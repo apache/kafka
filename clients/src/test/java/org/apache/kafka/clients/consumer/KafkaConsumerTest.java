@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
+import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
@@ -33,6 +34,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
@@ -59,9 +61,12 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Pattern;
 
 import static java.util.Collections.singleton;
 import static org.junit.Assert.assertEquals;
@@ -95,6 +100,33 @@ public class KafkaConsumerTest {
     }
 
     @Test
+    public void testOsDefaultSocketBufferSizes() throws Exception {
+        Map<String, Object> config = new HashMap<>();
+        config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        config.put(ConsumerConfig.SEND_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
+        config.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
+        KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(
+                config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        consumer.close();
+    }
+
+    @Test(expected = KafkaException.class)
+    public void testInvalidSocketSendBufferSize() throws Exception {
+        Map<String, Object> config = new HashMap<>();
+        config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        config.put(ConsumerConfig.SEND_BUFFER_CONFIG, -2);
+        new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+    }
+
+    @Test(expected = KafkaException.class)
+    public void testInvalidSocketReceiveBufferSize() throws Exception {
+        Map<String, Object> config = new HashMap<>();
+        config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        config.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, -2);
+        new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+    }
+
+    @Test
     public void testSubscription() {
         KafkaConsumer<byte[], byte[]> consumer = newConsumer();
 
@@ -118,6 +150,53 @@ public class KafkaConsumerTest {
     }
 
     @Test(expected = IllegalArgumentException.class)
+    public void testSubscriptionOnNullTopicCollection() {
+        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
+
+        try {
+            consumer.subscribe(null);
+        } finally {
+            consumer.close();
+        }
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testSubscriptionOnNullTopic() {
+        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
+        String nullTopic = null;
+
+        try {
+            consumer.subscribe(Collections.singletonList(nullTopic));
+        } finally {
+            consumer.close();
+        }
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testSubscriptionOnEmptyTopic() {
+        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
+        String emptyTopic = "  ";
+
+        try {
+            consumer.subscribe(Collections.singletonList(emptyTopic));
+        } finally {
+            consumer.close();
+        }
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testSubscriptionOnNullPattern() {
+        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
+        Pattern pattern = null;
+
+        try {
+            consumer.subscribe(pattern, new NoOpConsumerRebalanceListener());
+        } finally {
+            consumer.close();
+        }
+    }
+
+    @Test(expected = IllegalArgumentException.class)
     public void testSeekNegative() {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testSeekNegative");
@@ -127,6 +206,59 @@ public class KafkaConsumerTest {
         try {
             consumer.assign(Arrays.asList(new TopicPartition("nonExistTopic", 0)));
             consumer.seek(new TopicPartition("nonExistTopic", 0), -1);
+        } finally {
+            consumer.close();
+        }
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testAssignOnNullTopicPartition() {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testAssignOnNullTopicPartition");
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
+        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
+        try {
+            consumer.assign(null);
+        } finally {
+            consumer.close();
+        }
+    }
+
+    @Test
+    public void testAssignOnEmptyTopicPartition() {
+        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
+
+        consumer.assign(Collections.<TopicPartition>emptyList());
+        assertTrue(consumer.subscription().isEmpty());
+        assertTrue(consumer.assignment().isEmpty());
+
+        consumer.close();
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testAssignOnNullTopicInPartition() {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testAssignOnNullTopicInPartition");
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
+        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
+        try {
+            consumer.assign(Arrays.asList(new TopicPartition(null, 0)));
+        } finally {
+            consumer.close();
+        }
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testAssignOnEmptyTopicInPartition() {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testAssignOnEmptyTopicInPartition");
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
+        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
+        try {
+            consumer.assign(Arrays.asList(new TopicPartition("  ", 0)));
         } finally {
             consumer.close();
         }

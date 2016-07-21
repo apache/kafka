@@ -23,11 +23,10 @@ import kafka.log.LogConfig
 import kafka.server.ConfigType
 import kafka.utils._
 import kafka.utils.ZkUtils._
-
 import java.util.Random
 import java.util.Properties
 import org.apache.kafka.common.Node
-import org.apache.kafka.common.errors.{ReplicaNotAvailableException, InvalidTopicException, LeaderNotAvailableException}
+import org.apache.kafka.common.errors.{ReplicaNotAvailableException, InvalidTopicException, LeaderNotAvailableException, InvalidPartitionsException, InvalidReplicationFactorException, TopicExistsException, InvalidReplicaAssignmentException}
 import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 import org.apache.kafka.common.requests.MetadataResponse
 
@@ -110,11 +109,11 @@ object AdminUtils extends Logging {
                               fixedStartIndex: Int = -1,
                               startPartitionId: Int = -1): Map[Int, Seq[Int]] = {
     if (nPartitions <= 0)
-      throw new AdminOperationException("number of partitions must be larger than 0")
+      throw new InvalidPartitionsException("number of partitions must be larger than 0")
     if (replicationFactor <= 0)
-      throw new AdminOperationException("replication factor must be larger than 0")
+      throw new InvalidReplicationFactorException("replication factor must be larger than 0")
     if (replicationFactor > brokerMetadatas.size)
-      throw new AdminOperationException(s"replication factor: $replicationFactor larger than available brokers: ${brokerMetadatas.size}")
+      throw new InvalidReplicationFactorException(s"replication factor: $replicationFactor larger than available brokers: ${brokerMetadatas.size}")
     if (brokerMetadatas.forall(_.rack.isEmpty))
       assignReplicasToBrokersRackUnaware(nPartitions, replicationFactor, brokerMetadatas.map(_.id), fixedStartIndex,
         startPartitionId)
@@ -250,7 +249,7 @@ object AdminUtils extends Logging {
                     checkBrokerAvailable: Boolean = true,
                     rackAwareMode: RackAwareMode = RackAwareMode.Enforced) {
     val existingPartitionsReplicaList = zkUtils.getReplicaAssignmentForTopics(List(topic))
-    if (existingPartitionsReplicaList.size == 0)
+    if (existingPartitionsReplicaList.isEmpty)
       throw new AdminOperationException("The topic %s does not exist".format(topic))
 
     val existingReplicaListForPartitionZero = existingPartitionsReplicaList.find(p => p._1.partition == 0) match {
@@ -274,8 +273,8 @@ object AdminUtils extends Logging {
           existingPartitionsReplicaList.size, checkBrokerAvailable)
 
     // check if manual assignment has the right replication factor
-    val unmatchedRepFactorList = newPartitionReplicaList.values.filter(p => (p.size != existingReplicaListForPartitionZero.size))
-    if (unmatchedRepFactorList.size != 0)
+    val unmatchedRepFactorList = newPartitionReplicaList.values.filter(p => p.size != existingReplicaListForPartitionZero.size)
+    if (unmatchedRepFactorList.nonEmpty)
       throw new AdminOperationException("The replication factor in manual replication assignment " +
         " is not equal to the existing replication factor for the topic " + existingReplicaListForPartitionZero.size)
 
@@ -291,9 +290,9 @@ object AdminUtils extends Logging {
     val ret = new mutable.HashMap[Int, List[Int]]()
     var partitionId = startPartitionId
     partitionList = partitionList.takeRight(partitionList.size - partitionId)
-    for (i <- 0 until partitionList.size) {
+    for (i <- partitionList.indices) {
       val brokerList = partitionList(i).split(":").map(s => s.trim().toInt)
-      if (brokerList.size <= 0)
+      if (brokerList.isEmpty)
         throw new AdminOperationException("replication factor must be larger than 0")
       if (brokerList.size != brokerList.toSet.size)
         throw new AdminOperationException("duplicate brokers in replica assignment: " + brokerList)
@@ -411,7 +410,6 @@ object AdminUtils extends Logging {
                                                      update: Boolean = false) {
     // validate arguments
     Topic.validate(topic)
-    require(partitionReplicaAssignment.values.map(_.size).toSet.size == 1, "All partitions should have the same number of replicas.")
 
     val topicPath = getTopicPath(topic)
 
@@ -427,7 +425,14 @@ object AdminUtils extends Logging {
       }
     }
 
-    partitionReplicaAssignment.values.foreach(reps => require(reps.size == reps.toSet.size, "Duplicate replica assignment found: "  + partitionReplicaAssignment))
+    if (partitionReplicaAssignment.values.map(_.size).toSet.size != 1)
+      throw new InvalidReplicaAssignmentException("All partitions should have the same number of replicas")
+
+    partitionReplicaAssignment.values.foreach(reps =>
+      if (reps.size != reps.toSet.size)
+        throw new InvalidReplicaAssignmentException("Duplicate replica assignment found: " + partitionReplicaAssignment)
+    )
+
 
     // Configs only matter if a topic is being created. Changing configs via AlterTopic is not supported
     if (!update) {
@@ -443,7 +448,7 @@ object AdminUtils extends Logging {
   private def writeTopicPartitionAssignment(zkUtils: ZkUtils, topic: String, replicaAssignment: Map[Int, Seq[Int]], update: Boolean) {
     try {
       val zkPath = getTopicPath(topic)
-      val jsonPartitionData = zkUtils.replicaAssignmentZkData(replicaAssignment.map(e => (e._1.toString -> e._2)))
+      val jsonPartitionData = zkUtils.replicaAssignmentZkData(replicaAssignment.map(e => e._1.toString -> e._2))
 
       if (!update) {
         info("Topic creation " + jsonPartitionData.toString)

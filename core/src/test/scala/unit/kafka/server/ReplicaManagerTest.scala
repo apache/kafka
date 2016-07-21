@@ -24,19 +24,18 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.api.{FetchResponsePartitionData, PartitionFetchInfo}
 import kafka.cluster.Broker
 import kafka.common.TopicAndPartition
-import kafka.message.{MessageSet, ByteBufferMessageSet, Message}
+import kafka.message.{ByteBufferMessageSet, Message, MessageSet}
 import kafka.utils.{MockScheduler, MockTime, TestUtils, ZkUtils}
 import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.LeaderAndIsrRequest
-import org.apache.kafka.common.requests.LeaderAndIsrRequest.PartitionState
+import org.apache.kafka.common.requests.{LeaderAndIsrRequest, PartitionState}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{MockTime => JMockTime}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.EasyMock
 import org.junit.Assert.{assertEquals, assertTrue}
-import org.junit.{Test, Before, After}
+import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
 import scala.collection.Map
