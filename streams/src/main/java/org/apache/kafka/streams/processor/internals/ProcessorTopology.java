@@ -95,7 +95,7 @@ public class ProcessorTopology {
 
         // recursively print children
         for (ProcessorNode child : children) {
-            sb.append("\t\t\t" + child.toString());
+            sb.append("\t\t\t\t" + child.toString());
             sb.append(childrenToString(child.children()));
         }
         return sb.toString();
@@ -111,7 +111,7 @@ public class ProcessorTopology {
 
         // start from sources
         for (SourceNode source : sourceByTopics.values()) {
-            sb.append("\t\t\t" + source.toString());
+            sb.append("\t\t\t\t" + source.toString());
             sb.append(childrenToString(source.children()));
             sb.append("\n");
         }
