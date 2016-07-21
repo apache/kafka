@@ -75,7 +75,8 @@ public class StreamTaskTest {
                 }
             },
             Collections.<String, SinkNode>emptyMap(),
-            Collections.<StateStoreSupplier>emptyList()
+            Collections.<StateStoreSupplier>emptyList(),
+            Collections.<String, String>emptyMap()
     );
     private File baseDir;
     private StateDirectory stateDirectory;

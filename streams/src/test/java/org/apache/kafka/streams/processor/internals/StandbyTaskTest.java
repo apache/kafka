@@ -77,7 +77,8 @@ public class StandbyTaskTest {
             Utils.<StateStoreSupplier>mkList(
                     new MockStateStoreSupplier(storeName1, false),
                     new MockStateStoreSupplier(storeName2, true)
-            )
+            ),
+            Collections.<String, String>emptyMap()
     );
 
     private final TopicPartition ktable = new TopicPartition("ktable1", 0);
@@ -88,7 +89,12 @@ public class StandbyTaskTest {
             Collections.<String, SinkNode>emptyMap(),
             Utils.<StateStoreSupplier>mkList(
                     new MockStateStoreSupplier(ktable.topic(), true, false)
-            )
+            ),
+            new HashMap<String, String>() {
+            {
+                put("ktable1", ktable.topic());
+            }
+        }
     );
     private File baseDir;
     private StateDirectory stateDirectory;

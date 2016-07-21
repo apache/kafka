@@ -22,7 +22,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
 import java.util.Set;
 public class ProcessorTopology {
 
@@ -30,23 +29,17 @@ public class ProcessorTopology {
     private final Map<String, SourceNode> sourceByTopics;
     private final Map<String, SinkNode> sinkByTopics;
     private final List<StateStoreSupplier> stateStoreSuppliers;
-    private final Map<String, String> sinkNameToTopic;
-
+    private final Map<String, String> sourceStoreToSourceTopic;
     public ProcessorTopology(List<ProcessorNode> processorNodes,
                              Map<String, SourceNode> sourceByTopics,
                              Map<String, SinkNode> sinkByTopics,
-                             List<StateStoreSupplier> stateStoreSuppliers) {
+                             List<StateStoreSupplier> stateStoreSuppliers,
+                             Map<String, String> sourceStoreToSourceTopic) {
         this.processorNodes = Collections.unmodifiableList(processorNodes);
         this.sourceByTopics = Collections.unmodifiableMap(sourceByTopics);
         this.sinkByTopics   = Collections.unmodifiableMap(sinkByTopics);
         this.stateStoreSuppliers = Collections.unmodifiableList(stateStoreSuppliers);
-
-        // pre-process sink nodes to get reverse mapping
-        sinkNameToTopic = new HashMap<>();
-        for (String topic : sinkByTopics.keySet()) {
-            SinkNode sink = sinkByTopics.get(topic);
-            sinkNameToTopic.put(sink.name(), topic);
-        }
+        this.sourceStoreToSourceTopic = sourceStoreToSourceTopic;
     }
 
     public Set<String> sourceTopics() {
@@ -79,6 +72,10 @@ public class ProcessorTopology {
 
     public List<StateStoreSupplier> stateStoreSuppliers() {
         return stateStoreSuppliers;
+    }
+
+    public Map<String, String> sourceStoreToSourceTopic() {
+        return sourceStoreToSourceTopic;
     }
 
     private String childrenToString(List<ProcessorNode<?, ?>> children) {
