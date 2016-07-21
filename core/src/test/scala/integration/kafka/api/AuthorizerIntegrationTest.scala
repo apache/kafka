@@ -19,6 +19,7 @@ import java.util.concurrent.ExecutionException
 import java.util.{ArrayList, Collections, Properties}
 
 import kafka.cluster.EndPoint
+import kafka.common
 import kafka.common.TopicAndPartition
 import kafka.integration.KafkaServerTestHarness
 import kafka.security.auth._
@@ -38,7 +39,6 @@ import org.junit.{After, Assert, Before, Test}
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.Buffer
-import org.apache.kafka.common.internals.TopicConstants
 
 class AuthorizerIntegrationTest extends KafkaServerTestHarness {
   val topic = "topic"
@@ -149,7 +149,7 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
       consumers += TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group, securityProtocol = SecurityProtocol.PLAINTEXT)
 
     // create the consumer offset topic
-    TestUtils.createTopic(zkUtils, TopicConstants.GROUP_METADATA_TOPIC_NAME,
+    TestUtils.createTopic(zkUtils, common.Topic.GroupMetadataTopicName,
       1,
       1,
       servers,
