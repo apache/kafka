@@ -258,6 +258,7 @@ class GroupCoordinator(val brokerId: Int,
 
           case AwaitingSync =>
             group.get(memberId).awaitingSyncCallback = responseCallback
+            // FIXME: is below needed?
             completeAndScheduleNextHeartbeatExpiration(group, group.get(memberId))
 
             // if this is the leader, then we can attempt to persist state and transition to stable
@@ -368,11 +369,15 @@ class GroupCoordinator(val brokerId: Int,
                   responseCallback(Errors.REBALANCE_IN_PROGRESS.code)
 
               case PreparingRebalance =>
-                if (group.has(memberId) && generationId == group.generationId) {
+                if (!group.has(memberId)) {
+                  responseCallback(Errors.UNKNOWN_MEMBER_ID.code)
+                } else if (generationId != group.generationId) {
+                  responseCallback(Errors.ILLEGAL_GENERATION.code)
+                } else {
                   val member = group.get(memberId)
                   completeAndScheduleNextHeartbeatExpiration(group, member)
+                  responseCallback(Errors.REBALANCE_IN_PROGRESS.code)
                 }
-                responseCallback(Errors.REBALANCE_IN_PROGRESS.code)
 
               case Stable =>
                 if (!group.has(memberId)) {

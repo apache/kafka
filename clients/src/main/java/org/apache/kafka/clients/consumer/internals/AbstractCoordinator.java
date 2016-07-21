@@ -285,8 +285,8 @@ public abstract class AbstractCoordinator implements Closeable {
                         joinFuture = null;
                         state = MemberState.STABLE;
                         needsJoinPrepare = true;
-                        onJoinComplete(generation, memberId, protocol, value);
                         heartbeatThread.enable();
+                        onJoinComplete(generation, memberId, protocol, value);
                     }
 
                     @Override
@@ -749,8 +749,9 @@ public abstract class AbstractCoordinator implements Closeable {
         private boolean enabled = false;
         private boolean closed = false;
         private RequestFuture<Void> findCoordinatorFuture;
-
         private AtomicReference<RuntimeException> failed = new AtomicReference<>(null);
+
+
 
         public void enable() {
             synchronized (AbstractCoordinator.this) {
@@ -847,7 +848,8 @@ public abstract class AbstractCoordinator implements Closeable {
                             // probably make sure the coordinator is still healthy.
                             coordinatorDead();
                         } else if (heartbeat.pollTimeoutExpired(now)) {
-                            // the poll timeout has expired, so we explicitly leave the group
+                            // the poll timeout has expired, which means that the foreground thread has stalled
+                            // in between calls to poll(), so we explicitly leave the group.
                             maybeLeaveGroup();
                         } else if (!heartbeat.shouldHeartbeat(now)) {
                             awaitMs(heartbeat.timeToNextHeartbeat(now));
@@ -862,12 +864,19 @@ public abstract class AbstractCoordinator implements Closeable {
 
                                 @Override
                                 public void onFailure(RuntimeException e) {
-                                    log.debug("Heartbeat to coordinator {} failed", coordinator, e);
-                                    heartbeat.failHeartbeat();
+                                    if (e instanceof RebalanceInProgressException) {
+                                        // it is valid to continue heartbeating while the group is rebalancing. This
+                                        // ensures that the coordinator keeps the member in the group for as long
+                                        // as the duration of the rebalance timeout. If we stop sending heartbeats,
+                                        // however, then the session timeout may expire before we can rejoin.
+                                        heartbeat.receiveHeartbeat(time.milliseconds());
+                                    } else {
+                                        heartbeat.failHeartbeat();
 
-                                    // wake up the thread if it's sleeping to reschedule the heartbeat
-                                    synchronized (AbstractCoordinator.this) {
-                                        AbstractCoordinator.this.notify();
+                                        // wake up the thread if it's sleeping to reschedule the heartbeat
+                                        synchronized (AbstractCoordinator.this) {
+                                            AbstractCoordinator.this.notify();
+                                        }
                                     }
                                 }
                             });
