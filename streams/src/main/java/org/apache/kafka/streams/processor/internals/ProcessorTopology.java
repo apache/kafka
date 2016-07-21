@@ -96,9 +96,7 @@ public class ProcessorTopology {
         // recursively print children
         for (ProcessorNode child : children) {
             sb.append("\t\t\t" + child.toString());
-            if (!sinkNameToTopic.containsKey(child.name())) {
-                sb.append(childrenToString(child.children()));
-            }
+            sb.append(childrenToString(child.children()));
         }
         return sb.toString();
     }
