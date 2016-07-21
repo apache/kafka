@@ -287,7 +287,9 @@ public final class Metadata {
         Set<String> unauthorizedTopics = new HashSet<>();
         Collection<PartitionInfo> partitionInfos = new ArrayList<>();
         List<Node> nodes = Collections.emptyList();
+        Set<String> internalTopics = Collections.<String>emptySet();
         if (cluster != null) {
+            internalTopics = cluster.internalTopics();
             unauthorizedTopics.addAll(cluster.unauthorizedTopics());
             unauthorizedTopics.retainAll(this.topics.keySet());
 
@@ -299,6 +301,6 @@ public final class Metadata {
             }
             nodes = cluster.nodes();
         }
-        return new Cluster(nodes, partitionInfos, unauthorizedTopics, new HashSet<>(cluster.internalTopics()));
+        return new Cluster(nodes, partitionInfos, unauthorizedTopics, internalTopics);
     }
 }
