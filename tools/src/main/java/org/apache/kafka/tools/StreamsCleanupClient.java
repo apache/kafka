@@ -26,6 +26,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
@@ -48,11 +49,20 @@ public class StreamsCleanupClient {
     private static OptionSpec<String> intermediateTopicsOption;
 
     private OptionSet options = null;
+    private final Properties consumerConfig = new Properties();
+    private final List<String> allTopics = new LinkedList<>();
 
     public int run(final String[] args) {
-        ZkUtils zkUtils = null;
+        return run(args, new Properties());
+    }
+
+    public int run(final String[] args, final Properties config) {
+        this.consumerConfig.clear();
+        this.consumerConfig.putAll(config);
 
         int exitCode = EXIT_CODE_SUCCESS;
+
+        ZkUtils zkUtils = null;
         try {
             parseArguments(args);
 
@@ -61,11 +71,12 @@ public class StreamsCleanupClient {
                 30000,
                 JaasUtils.isZkSecurityEnabled());
 
-            final List<String> allTopics = scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics());
+            this.allTopics.clear();
+            this.allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
 
             resetSourceTopicOffsets();
-            seekToEndIntermediateTopics(zkUtils, allTopics);
-            deleteInternalTopics(zkUtils, allTopics);
+            seekToEndIntermediateTopics();
+            deleteInternalTopics(zkUtils);
         } catch (final Exception e) {
             exitCode = EXIT_CODE_ERROR;
             System.err.println(e.getMessage());
@@ -85,12 +96,12 @@ public class StreamsCleanupClient {
             .ofType(String.class)
             .describedAs("id")
             .required();
-        bootstrapServerOption = optionParser.accepts("bootstrap-server", "Format: <host:port>")
+        bootstrapServerOption = optionParser.accepts("bootstrap-servers", "Comma separated list of broker urls with format: HOST1:PORT1,HOST2:PORT2")
             .withRequiredArg()
             .ofType(String.class)
             .defaultsTo("localhost:9092")
-            .describedAs("url");
-        zookeeperOption = optionParser.accepts("zookeeper", "Format: <host:port>")
+            .describedAs("urls");
+        zookeeperOption = optionParser.accepts("zookeeper", "Format: HOST:POST")
             .withRequiredArg()
             .ofType(String.class)
             .defaultsTo("localhost:2181")
@@ -118,74 +129,90 @@ public class StreamsCleanupClient {
         final List<String> sourceTopics = this.options.valuesOf(sourceTopicsOption);
 
         if (sourceTopics.size() == 0) {
-            System.out.println("No source topics specified.");
+            System.out.println("No source topics specified, skipping resetting source topic offsets.");
             return;
         }
 
         System.out.println("Resetting offsets to zero for topics " + sourceTopics);
 
         final Properties config = new Properties();
+        config.putAll(this.consumerConfig);
         config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, this.options.valueOf(bootstrapServerOption));
         config.setProperty(ConsumerConfig.GROUP_ID_CONFIG, this.options.valueOf(applicationIdOption));
         config.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
-        final KafkaConsumer<byte[], byte[]> client = new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
-        try {
-            client.subscribe(sourceTopics);
-            client.poll(1);
+        for (final String topic : sourceTopics) {
+            if (this.allTopics.contains(topic)) {
+                System.out.println("Topic: " + topic);
 
-            for (final TopicPartition partition : client.assignment()) {
-                client.seek(partition, 0);
-            }
-            client.commitSync();
-        } catch (final RuntimeException e) {
-            System.err.println("Resetting source topic offsets failed.");
-            throw e;
-        } finally {
-            client.close();
-        }
-    }
+                try (final KafkaConsumer<byte[], byte[]> client = new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
+                    client.subscribe(Collections.singleton(topic));
+                    client.poll(1);
 
-    private void seekToEndIntermediateTopics(final ZkUtils zkUtils, final List<String> allTopics) {
-        if (this.options.has(intermediateTopicsOption)) {
-            System.out.println("Seek-to-end for intermediate user topics.");
-
-            final Properties config = new Properties();
-            config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, this.options.valueOf(bootstrapServerOption));
-            config.setProperty(ConsumerConfig.GROUP_ID_CONFIG, this.options.valueOf(applicationIdOption));
-            config.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-
-            for (final String topic : this.options.valuesOf(intermediateTopicsOption)) {
-                if (allTopics.contains(topic)) {
-                    System.out.println("Topic: " + topic);
-
-                    final KafkaConsumer<byte[], byte[]> client = new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
-                    try {
-                        client.subscribe(Collections.singleton(topic));
-                        client.poll(1);
-
-                        final Set<TopicPartition> partitions = client.assignment();
-                        client.seekToEnd(partitions);
-                        client.commitSync();
-                    } catch (final RuntimeException e) {
-                        System.err.println("Seek to end for topic " + topic + " failed");
-                        throw e;
-                    } finally {
-                        client.close();
+                    final Set<TopicPartition> partitions = client.assignment();
+                    client.seekToBeginning(partitions);
+                    for (final TopicPartition p : partitions) {
+                        client.position(p);
                     }
+                    client.commitSync();
+                } catch (final RuntimeException e) {
+                    System.err.println("Resetting offsets for source topic " + topic + " failed.");
+                    throw e;
                 }
+            } else {
+                System.out.println("Topic " + topic + " not found. Skipping.");
             }
-
-            System.out.println("Done.");
-        } else {
-            System.out.println("No intermediate topics specified.");
         }
+
+        System.out.println("Done.");
     }
 
-    private void deleteInternalTopics(final ZkUtils zkUtils, final List<String> allTopics) {
-        System.out.println("Deleting internal topics.");
+    private void seekToEndIntermediateTopics() {
+        final List<String> intermediateTopics = this.options.valuesOf(intermediateTopicsOption);
 
-        for (final String topic : allTopics) {
+        if (intermediateTopics.size() == 0) {
+            System.out.println("No intermediate user topics specified, skipping seek-to-end for user topic offsets.");
+            return;
+        }
+
+        System.out.println("Seek-to-end for intermediate user topics " + intermediateTopics);
+
+        final Properties config = new Properties();
+        config.putAll(this.consumerConfig);
+        config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, this.options.valueOf(bootstrapServerOption));
+        config.setProperty(ConsumerConfig.GROUP_ID_CONFIG, this.options.valueOf(applicationIdOption));
+        config.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+
+        for (final String topic : intermediateTopics) {
+            if (this.allTopics.contains(topic)) {
+                System.out.println("Topic: " + topic);
+
+                try (final KafkaConsumer<byte[], byte[]> client = new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
+                    client.subscribe(Collections.singleton(topic));
+                    client.poll(1);
+
+                    final Set<TopicPartition> partitions = client.assignment();
+                    client.seekToEnd(partitions);
+                    for (final TopicPartition p : partitions) {
+                        client.position(p);
+                    }
+                    client.commitSync();
+                } catch (final RuntimeException e) {
+                    System.err.println("Seek-to-end for topic " + topic + " failed.");
+                    throw e;
+                }
+            } else {
+                System.out.println("Topic " + topic + " not found. Skipping.");
+            }
+        }
+
+        System.out.println("Done.");
+    }
+
+    private void deleteInternalTopics(final ZkUtils zkUtils) {
+        System.out.println("Deleting all internal/auto-created topics for application " + this.options.valueOf(applicationIdOption));
+
+        for (final String topic : this.allTopics) {
             if (isInternalStreamsTopic(topic)) {
                 final TopicCommand.TopicCommandOptions commandOptions = new TopicCommand.TopicCommandOptions(new String[]{
                     "--zookeeper", this.options.valueOf(zookeeperOption),
@@ -193,7 +220,7 @@ public class StreamsCleanupClient {
                 try {
                     TopicCommand.deleteTopic(zkUtils, commandOptions);
                 } catch (final RuntimeException e) {
-                    System.err.println("Deleting internal topic " + topic + " failed");
+                    System.err.println("Deleting internal topic " + topic + " failed.");
                     throw e;
                 }
             }

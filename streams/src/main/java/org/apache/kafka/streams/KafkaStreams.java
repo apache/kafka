@@ -51,7 +51,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * The computational logic can be specified either by using the {@link TopologyBuilder} class to define the a DAG topology of
  * {@link org.apache.kafka.streams.processor.Processor}s or by using the {@link org.apache.kafka.streams.kstream.KStreamBuilder}
  * class which provides the high-level {@link org.apache.kafka.streams.kstream.KStream} DSL to define the transformation.
- *
+ * <p>
  * The {@link KafkaStreams} class manages the lifecycle of a Kafka Streams instance. One stream instance can contain one or
  * more threads specified in the configs for the processing work.
  * <p>
@@ -64,7 +64,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Internally the {@link KafkaStreams} instance contains a normal {@link org.apache.kafka.clients.producer.KafkaProducer KafkaProducer}
  * and {@link org.apache.kafka.clients.consumer.KafkaConsumer KafkaConsumer} instance that is used for reading input and writing output.
  * <p>
- *
+ * <p>
  * A simple example might look like this:
  * <pre>
  *    Map&lt;String, Object&gt; props = new HashMap&lt;&gt;();
@@ -80,7 +80,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  *    KafkaStreams streams = new KafkaStreams(builder, config);
  *    streams.start();
  * </pre>
- *
  */
 
 @InterfaceStability.Unstable
@@ -111,41 +110,41 @@ public class KafkaStreams {
     /**
      * Construct the stream instance.
      *
-     * @param builder  the processor topology builder specifying the computational logic
-     * @param props    properties for the {@link StreamsConfig}
+     * @param builder the processor topology builder specifying the computational logic
+     * @param props   properties for the {@link StreamsConfig}
      */
-    public KafkaStreams(TopologyBuilder builder, Properties props) {
+    public KafkaStreams(final TopologyBuilder builder, final Properties props) {
         this(builder, new StreamsConfig(props), new DefaultKafkaClientSupplier());
     }
 
     /**
      * Construct the stream instance.
      *
-     * @param builder  the processor topology builder specifying the computational logic
-     * @param config   the stream configs
+     * @param builder the processor topology builder specifying the computational logic
+     * @param config  the stream configs
      */
-    public KafkaStreams(TopologyBuilder builder, StreamsConfig config) {
+    public KafkaStreams(final TopologyBuilder builder, final StreamsConfig config) {
         this(builder, config, new DefaultKafkaClientSupplier());
     }
 
     /**
      * Construct the stream instance.
      *
-     * @param builder         the processor topology builder specifying the computational logic
-     * @param config          the stream configs
-     * @param clientSupplier  the kafka clients supplier which provides underlying producer and consumer clients
-     * for this {@link KafkaStreams} instance
+     * @param builder        the processor topology builder specifying the computational logic
+     * @param config         the stream configs
+     * @param clientSupplier the kafka clients supplier which provides underlying producer and consumer clients
+     *                       for this {@link KafkaStreams} instance
      */
-    public KafkaStreams(TopologyBuilder builder, StreamsConfig config, KafkaClientSupplier clientSupplier) {
+    public KafkaStreams(final TopologyBuilder builder, final StreamsConfig config, final KafkaClientSupplier clientSupplier) {
         // create the metrics
-        Time time = new SystemTime();
+        final Time time = new SystemTime();
 
         this.processId = UUID.randomUUID();
 
         this.config = config;
 
         // The application ID is a required config and hence should always have value
-        String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+        final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
 
         builder.setApplicationId(applicationId);
 
@@ -153,11 +152,11 @@ public class KafkaStreams {
         if (clientId.length() <= 0)
             clientId = applicationId + "-" + STREAM_CLIENT_ID_SEQUENCE.getAndIncrement();
 
-        List<MetricsReporter> reporters = config.getConfiguredInstances(StreamsConfig.METRIC_REPORTER_CLASSES_CONFIG,
-                MetricsReporter.class);
+        final List<MetricsReporter> reporters = config.getConfiguredInstances(StreamsConfig.METRIC_REPORTER_CLASSES_CONFIG,
+            MetricsReporter.class);
         reporters.add(new JmxReporter(JMX_PREFIX));
 
-        MetricConfig metricConfig = new MetricConfig().samples(config.getInt(StreamsConfig.METRICS_NUM_SAMPLES_CONFIG))
+        final MetricConfig metricConfig = new MetricConfig().samples(config.getInt(StreamsConfig.METRICS_NUM_SAMPLES_CONFIG))
             .timeWindow(config.getLong(StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
                 TimeUnit.MILLISECONDS);
 
@@ -166,7 +165,7 @@ public class KafkaStreams {
         this.threads = new StreamThread[config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG)];
         final ArrayList<StateStoreProvider> storeProviders = new ArrayList<>();
         for (int i = 0; i < this.threads.length; i++) {
-            this.threads[i] = new StreamThread(builder, config, clientSupplier, applicationId, clientId, processId, metrics, time);
+            this.threads[i] = new StreamThread(builder, config, clientSupplier, applicationId, clientId, this.processId, this.metrics, time);
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
         }
 
@@ -175,19 +174,20 @@ public class KafkaStreams {
 
     /**
      * Start the stream instance by starting all its threads.
+     *
      * @throws IllegalStateException if process was already started
      */
     public synchronized void start() {
         log.debug("Starting Kafka Stream process");
 
-        if (state == CREATED) {
-            for (StreamThread thread : threads)
+        if (this.state == CREATED) {
+            for (final StreamThread thread : this.threads)
                 thread.start();
 
-            state = RUNNING;
+            this.state = RUNNING;
 
             log.info("Started Kafka Stream process");
-        } else if (state == RUNNING) {
+        } else if (this.state == RUNNING) {
             throw new IllegalStateException("This process was already started.");
         } else {
             throw new IllegalStateException("Cannot restart after closing.");
@@ -197,28 +197,29 @@ public class KafkaStreams {
     /**
      * Shutdown this stream instance by signaling all the threads to stop,
      * and then wait for them to join.
+     *
      * @throws IllegalStateException if process has not started yet
      */
     public synchronized void close() {
         log.debug("Stopping Kafka Stream process");
 
-        if (state == RUNNING) {
+        if (this.state == RUNNING) {
             // signal the threads to stop and wait
-            for (StreamThread thread : threads)
+            for (final StreamThread thread : this.threads)
                 thread.close();
 
-            for (StreamThread thread : threads) {
+            for (final StreamThread thread : this.threads) {
                 try {
                     thread.join();
-                } catch (InterruptedException ex) {
+                } catch (final InterruptedException ex) {
                     Thread.interrupted();
                 }
             }
         }
 
-        if (state != STOPPED) {
-            metrics.close();
-            state = STOPPED;
+        if (this.state != STOPPED) {
+            this.metrics.close();
+            this.state = STOPPED;
             log.info("Stopped Kafka Stream process");
         }
 
@@ -247,8 +248,8 @@ public class KafkaStreams {
      *
      * @throws IllegalStateException if instance is currently running
      */
-    public void localCleanUp() {
-        if (state == RUNNING) {
+    public void cleanUp() {
+        if (this.state == RUNNING) {
             throw new IllegalStateException("Cannot clean up while running.");
         }
 
@@ -268,8 +269,8 @@ public class KafkaStreams {
      *
      * @param eh the object to use as this thread's uncaught exception handler. If null then this thread has no explicit handler.
      */
-    public void setUncaughtExceptionHandler(Thread.UncaughtExceptionHandler eh) {
-        for (StreamThread thread : threads)
+    public void setUncaughtExceptionHandler(final Thread.UncaughtExceptionHandler eh) {
+        for (final StreamThread thread : this.threads)
             thread.setUncaughtExceptionHandler(eh);
     }
 

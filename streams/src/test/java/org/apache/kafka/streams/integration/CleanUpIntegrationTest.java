@@ -1,0 +1,242 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.streams.integration;
+
+import kafka.utils.ZkUtils;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.security.JaasUtils;
+import org.apache.kafka.common.serialization.LongDeserializer;
+import org.apache.kafka.common.serialization.LongSerializer;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.integration.utils.EmbeddedSingleNodeKafkaCluster;
+import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.tools.StreamsCleanupClient;
+import org.junit.Assert;
+import org.junit.BeforeClass;
+import org.junit.ClassRule;
+import org.junit.Test;
+
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Properties;
+import java.util.Set;
+
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
+
+
+/**
+ * Tests local state store and global application cleanup.
+ */
+public class CleanUpIntegrationTest {
+    @ClassRule
+    public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster();
+
+    private static final String APP_ID = "cleanup-integration-test";
+    private static final String INPUT_TOPIC = "inputTopic";
+    private static final String OUTPUT_TOPIC = "outputTopic";
+    private static final String INTERMEDIATE_USER_TOPIC = "userTopic";
+
+    @BeforeClass
+    public static void startKafkaCluster() throws Exception {
+        CLUSTER.createTopic(INPUT_TOPIC);
+        CLUSTER.createTopic(OUTPUT_TOPIC);
+        CLUSTER.createTopic(INTERMEDIATE_USER_TOPIC);
+    }
+
+    @Test(timeout = 120000)
+    public void testCleanUp() throws Exception {
+        final Properties streamsConfiguration = prepareTest();
+        final Properties resultTopicConsumerConfig = prepareResultConsumer();
+
+        prepareInputData();
+        final KStreamBuilder builder = setupTopology();
+
+        // RUN
+        KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
+        streams.start();
+        final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultTopicConsumerConfig, OUTPUT_TOPIC, 12);
+        Utils.sleep(10000);
+        streams.close();
+
+        // RESET
+        Utils.sleep(2000);
+        streams.cleanUp();
+        cleanGlobal();
+        Utils.sleep(2000);
+
+        // RE-RUN
+        streams = new KafkaStreams(setupTopology(), streamsConfiguration);
+        streams.start();
+        final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultTopicConsumerConfig, OUTPUT_TOPIC, 12);
+        streams.close();
+
+        //assertThat(result, equalTo(resultRerun));
+    }
+
+    private Properties prepareTest() throws Exception {
+        final Properties streamsConfiguration = new Properties();
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID);
+        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
+        streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 8);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1);
+        streamsConfiguration.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
+        streamsConfiguration.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 2000);
+        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
+
+        return streamsConfiguration;
+    }
+
+    private Properties prepareResultConsumer() {
+        final Properties resultTopicConsumerConfig = new Properties();
+        resultTopicConsumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        resultTopicConsumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, APP_ID + "-standard-consumer-" + OUTPUT_TOPIC);
+        resultTopicConsumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        resultTopicConsumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
+        resultTopicConsumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
+
+        return resultTopicConsumerConfig;
+    }
+
+    private void prepareInputData() throws Exception {
+        final Properties producerConfig = new Properties();
+        producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        producerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
+        producerConfig.put(ProducerConfig.RETRIES_CONFIG, 0);
+        producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
+        producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(0L, "aaa")), producerConfig, 0L);
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(1L, "bbb")), producerConfig, 1L);
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(0L, "ccc")), producerConfig, 2L);
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(1L, "ddd")), producerConfig, 3L);
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(0L, "eee")), producerConfig, 4L);
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(1L, "fff")), producerConfig, 5L);
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(0L, "ggg")), producerConfig, 6L);
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(1L, "hhh")), producerConfig, 7L);
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(0L, "iii")), producerConfig, 8L);
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(1L, "jjj")), producerConfig, 9L);
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(0L, "kkk")), producerConfig, 10L);
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(1L, "lll")), producerConfig, 11L);
+    }
+
+    private KStreamBuilder setupTopology() {
+        final KStreamBuilder builder = new KStreamBuilder();
+
+        final KStream<Long, String> input = builder.stream(INPUT_TOPIC);
+
+        // use map to trigger internal re-partitioning before groupByKey
+        final KTable<Long, Long> globalCounts = input
+            .map(new KeyValueMapper<Long, String, KeyValue<Long, String>>() {
+                @Override
+                public KeyValue<Long, String> apply(final Long key, final String value) {
+                    return new KeyValue<>(key, value);
+                }
+            })
+            .through(INTERMEDIATE_USER_TOPIC)      // todo removing this breaks the test; why?
+            .groupByKey()
+            .count("global-count");
+        globalCounts.foreach(new ForeachAction<Long, Long>() {
+            @Override
+            public void apply(final Long key, final Long value) {
+                System.out.println(key + ": " + value);
+            }
+        });
+        globalCounts.to(Serdes.Long(), Serdes.Long(), OUTPUT_TOPIC);
+
+        /*final KTable<Windowed<Long>, Long> windowedCounts = input
+            .through(INTERMEDIATE_USER_TOPIC)
+            .map(new KeyValueMapper<Long, String, KeyValue<Long, String>>() {
+                @Override
+                public KeyValue<Long, String> apply(final Long key, final String value) {
+                    Utils.sleep(1000);
+                    return new KeyValue<>(key, value);
+                }
+            })
+            .groupByKey()
+            .count(TimeWindows.of("count", 5));
+        windowedCounts.foreach(new ForeachAction<Windowed<Long>, Long>() {
+            @Override
+            public void apply(final Windowed<Long> key, final Long value) {
+                System.out.println(key + ": " + value);
+            }
+        });
+          */
+        return builder;
+    }
+
+    private void cleanGlobal() {
+        final Properties cleanUpConfig = new Properties();
+        cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
+        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 2000);
+
+        final int rc = new StreamsCleanupClient().run(new String[]{
+                "--application-id", APP_ID,
+                "--bootstrap-server", CLUSTER.bootstrapServers(),
+                "--zookeeper", CLUSTER.zKConnectString(),
+                "--source-topics", INPUT_TOPIC,
+                "--intermediate-topics", INTERMEDIATE_USER_TOPIC},
+            cleanUpConfig);
+        Assert.assertEquals(0, rc);
+
+        // Check if all internal topics got deleted
+        final Set<String> expectedTopics = new HashSet<>();
+        expectedTopics.add(INPUT_TOPIC);
+        expectedTopics.add(INTERMEDIATE_USER_TOPIC);
+        expectedTopics.add(OUTPUT_TOPIC);
+        expectedTopics.add("__consumer_offsets");
+
+        Set<String> allTopics;
+        ZkUtils zkUtils = null;
+        try {
+            zkUtils = ZkUtils.apply(CLUSTER.zKConnectString(),
+                30000,
+                30000,
+                JaasUtils.isZkSecurityEnabled());
+
+            do {
+                allTopics = new HashSet<>();
+                allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
+            } while (allTopics.size() != expectedTopics.size());
+        } finally {
+            if (zkUtils != null) {
+                zkUtils.close();
+            }
+        }
+        assertThat(allTopics, equalTo(expectedTopics));
+    }
+
+}
