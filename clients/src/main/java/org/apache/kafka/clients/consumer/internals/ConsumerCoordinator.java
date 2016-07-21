@@ -430,6 +430,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 if (interceptors != null)
                     interceptors.onCommit(offsets);
 
+                // since this callback could be invoked from the background thread, we store the
+                // completion so that it is only executed from the foreground thread (e.g. in poll() above)
                 synchronized (ConsumerCoordinator.this) {
                     completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, null));
                 }
@@ -442,6 +444,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 if (e instanceof RetriableException)
                     commitException = new RetriableCommitFailedException(e);
 
+                // since this callback could be invoked from the background thread, we store the
+                // completion so that it is only executed from the foreground thread (e.g. in poll() above)
                 synchronized (ConsumerCoordinator.this) {
                     completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, commitException));
                 }
