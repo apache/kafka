@@ -376,4 +376,12 @@ public class StreamTask extends AbstractTask implements Punctuator {
         }
     }
 
+    /**
+     * Produces a string representation contain useful information about a StreamTask.
+     * This is useful in debugging scenarios.
+     * @return A string representation of the StreamTask instance.
+     */
+    public String toString() {
+        return super.toString();
+    }
 }
