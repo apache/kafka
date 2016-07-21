@@ -230,8 +230,12 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     /**
-     * Ensure that the heartbeat thread is active and
-     * @param now
+     * Check the status of the heartbeat thread (if it is active) and indicate the liveness
+     * of the client. This must be called periodically after joining with {@link #ensureActiveGroup()}
+     * to ensure that the member stays in the group. If an interval of time longer than the
+     * provided rebalance timeout expires without calling this method, then the client will proactively
+     * leave the group.
+     * @param now current time in milliseconds
      */
     protected synchronized void pollHeartbeat(long now) {
         if (heartbeatThread != null) {
@@ -241,7 +245,6 @@ public abstract class AbstractCoordinator implements Closeable {
             heartbeat.poll(now);
         }
     }
-
 
     /**
      * Ensure that the group is active (i.e. joined and synced)
@@ -274,6 +277,9 @@ public abstract class AbstractCoordinator implements Closeable {
                 continue;
             }
 
+            // we store the join future in case we are woken up by the user after beginning the
+            // rebalance in the call to poll below. This ensures that we do not mistakenly attempt
+            // to rejoin before the pending rebalance has completed.
             if (joinFuture == null) {
                 state = MemberState.REBALANCING;
                 joinFuture = sendJoinGroupRequest();
@@ -511,6 +517,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                     future.raise(new GroupAuthorizationException(groupId));
                 } else {
+                    log.debug("Group coordinator lookup for group {} failed: {}", groupId, error.message());
                     future.raise(error);
                 }
             }
@@ -751,8 +758,6 @@ public abstract class AbstractCoordinator implements Closeable {
         private RequestFuture<Void> findCoordinatorFuture;
         private AtomicReference<RuntimeException> failed = new AtomicReference<>(null);
 
-
-
         public void enable() {
             synchronized (AbstractCoordinator.this) {
                 this.enabled = true;
@@ -840,7 +845,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
                                 @Override
                                 public void onFailure(RuntimeException e) {
-                                    log.debug("Group coordinator lookup for group {} failed", groupId, e);
+
                                 }
                             });
                         } else if (heartbeat.sessionTimeoutExpired(now)) {
