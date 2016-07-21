@@ -16,27 +16,37 @@
  */
 
 package org.apache.kafka.streams.processor.internals;
-
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Set;
-
 public class ProcessorTopology {
 
     private final List<ProcessorNode> processorNodes;
     private final Map<String, SourceNode> sourceByTopics;
+    private final Map<String, SinkNode> sinkByTopics;
     private final List<StateStoreSupplier> stateStoreSuppliers;
+    private final Map<String, String> sinkNameToTopic;
 
     public ProcessorTopology(List<ProcessorNode> processorNodes,
                              Map<String, SourceNode> sourceByTopics,
+                             Map<String, SinkNode> sinkByTopics,
                              List<StateStoreSupplier> stateStoreSuppliers) {
         this.processorNodes = Collections.unmodifiableList(processorNodes);
         this.sourceByTopics = Collections.unmodifiableMap(sourceByTopics);
+        this.sinkByTopics   = Collections.unmodifiableMap(sinkByTopics);
         this.stateStoreSuppliers = Collections.unmodifiableList(stateStoreSuppliers);
+
+        // pre-process sink nodes to get reverse mapping
+        sinkNameToTopic = new HashMap<>();
+        for (String topic : sinkByTopics.keySet()) {
+            SinkNode sink = sinkByTopics.get(topic);
+            sinkNameToTopic.put(sink.name(), topic);
+        }
     }
 
     public Set<String> sourceTopics() {
@@ -51,6 +61,18 @@ public class ProcessorTopology {
         return new HashSet<>(sourceByTopics.values());
     }
 
+    public Set<String> sinkTopics() {
+        return sinkByTopics.keySet();
+    }
+
+    public SinkNode sink(String topic) {
+        return sinkByTopics.get(topic);
+    }
+
+    public Set<SinkNode> sinks() {
+        return new HashSet<>(sinkByTopics.values());
+    }
+
     public List<ProcessorNode> processors() {
         return processorNodes;
     }
@@ -59,4 +81,40 @@ public class ProcessorTopology {
         return stateStoreSuppliers;
     }
 
+    private String childrenToString(List<ProcessorNode<?, ?>> children) {
+        if (children == null || children.isEmpty()) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder("children [");
+        for (ProcessorNode child : children) {
+            sb.append(child.name() + ",");
+        }
+        sb.setLength(sb.length() - 1);
+        sb.append("]\n");
+
+        // recursively print children
+        for (ProcessorNode child : children) {
+            sb.append("\t\t\t\t" + child.toString());
+            sb.append(childrenToString(child.children()));
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Produces a string representation contain useful information this topology.
+     * This is useful in debugging scenarios.
+     * @return A string representation of this instance.
+     */
+    public String toString() {
+        StringBuilder sb = new StringBuilder("ProcessorTopology:\n");
+
+        // start from sources
+        for (SourceNode source : sourceByTopics.values()) {
+            sb.append("\t\t\t\t" + source.toString());
+            sb.append(childrenToString(source.children()));
+            sb.append("\n");
+        }
+        return sb.toString();
+    }
 }

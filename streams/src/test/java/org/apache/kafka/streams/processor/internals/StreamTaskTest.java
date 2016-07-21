@@ -56,23 +56,25 @@ public class StreamTaskTest {
     private final Serializer<Integer> intSerializer = new IntegerSerializer();
     private final Deserializer<Integer> intDeserializer = new IntegerDeserializer();
     private final Serializer<byte[]> bytesSerializer = new ByteArraySerializer();
-
-    private final TopicPartition partition1 = new TopicPartition("topic1", 1);
-    private final TopicPartition partition2 = new TopicPartition("topic2", 1);
+    private final String[] topic1 = {"topic1"};
+    private final String[] topic2 = {"topic2"};
+    private final TopicPartition partition1 = new TopicPartition(topic1[0], 1);
+    private final TopicPartition partition2 = new TopicPartition(topic2[0], 1);
     private final Set<TopicPartition> partitions = Utils.mkSet(partition1, partition2);
 
-    private final MockSourceNode<Integer, Integer> source1 = new MockSourceNode<>(intDeserializer, intDeserializer);
-    private final MockSourceNode<Integer, Integer> source2 = new MockSourceNode<>(intDeserializer, intDeserializer);
+    private final MockSourceNode<Integer, Integer> source1 = new MockSourceNode<>(topic1, intDeserializer, intDeserializer);
+    private final MockSourceNode<Integer, Integer> source2 = new MockSourceNode<>(topic2, intDeserializer, intDeserializer);
     private final MockProcessorNode<Integer, Integer>  processor = new MockProcessorNode<>(10L);
 
     private final ProcessorTopology topology = new ProcessorTopology(
             Arrays.asList((ProcessorNode) source1, (ProcessorNode) source2, (ProcessorNode) processor),
             new HashMap<String, SourceNode>() {
                 {
-                    put("topic1", source1);
-                    put("topic2", source2);
+                    put(topic1[0], source1);
+                    put(topic2[0], source2);
                 }
             },
+            Collections.<String, SinkNode>emptyMap(),
             Collections.<StateStoreSupplier>emptyList()
     );
     private File baseDir;
