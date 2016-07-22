@@ -79,7 +79,7 @@ public class StreamsCleanupClient {
             deleteInternalTopics(zkUtils);
         } catch (final Exception e) {
             exitCode = EXIT_CODE_ERROR;
-            System.err.println(e.getMessage());
+            System.err.println("ERROR: " + e.getMessage());
         } finally {
             if (zkUtils != null) {
                 zkUtils.close();
@@ -96,7 +96,7 @@ public class StreamsCleanupClient {
             .ofType(String.class)
             .describedAs("id")
             .required();
-        bootstrapServerOption = optionParser.accepts("bootstrap-servers", "Comma separated list of broker urls with format: HOST1:PORT1,HOST2:PORT2")
+        bootstrapServerOption = optionParser.accepts("bootstrap-servers", "Comma-separated list of broker urls with format: HOST1:PORT1,HOST2:PORT2")
             .withRequiredArg()
             .ofType(String.class)
             .defaultsTo("localhost:9092")
@@ -106,12 +106,12 @@ public class StreamsCleanupClient {
             .ofType(String.class)
             .defaultsTo("localhost:2181")
             .describedAs("url");
-        sourceTopicsOption = optionParser.accepts("source-topics", "Comma separated list of user source topics")
+        sourceTopicsOption = optionParser.accepts("source-topics", "Comma-separated list of user source topics")
             .withRequiredArg()
             .ofType(String.class)
             .withValuesSeparatedBy(',')
             .describedAs("list");
-        intermediateTopicsOption = optionParser.accepts("intermediate-topics", "Comma separated list of intermediate user topics")
+        intermediateTopicsOption = optionParser.accepts("intermediate-topics", "Comma-separated list of intermediate user topics")
             .withRequiredArg()
             .ofType(String.class)
             .withValuesSeparatedBy(',')
@@ -156,7 +156,7 @@ public class StreamsCleanupClient {
                     }
                     client.commitSync();
                 } catch (final RuntimeException e) {
-                    System.err.println("Resetting offsets for source topic " + topic + " failed.");
+                    System.err.println("ERROR: Resetting offsets for source topic " + topic + " failed.");
                     throw e;
                 }
             } else {
@@ -198,7 +198,7 @@ public class StreamsCleanupClient {
                     }
                     client.commitSync();
                 } catch (final RuntimeException e) {
-                    System.err.println("Seek-to-end for topic " + topic + " failed.");
+                    System.err.println("ERROR: Seek-to-end for topic " + topic + " failed.");
                     throw e;
                 }
             } else {
@@ -220,7 +220,7 @@ public class StreamsCleanupClient {
                 try {
                     TopicCommand.deleteTopic(zkUtils, commandOptions);
                 } catch (final RuntimeException e) {
-                    System.err.println("Deleting internal topic " + topic + " failed.");
+                    System.err.println("ERROR: Deleting topic " + topic + " failed.");
                     throw e;
                 }
             }
