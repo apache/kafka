@@ -621,9 +621,9 @@ public class Utils {
                 for (File f : files)
                     delete(f);
             }
-            file.delete();
+            Files.delete(file.toPath());
         } else {
-            file.delete();
+            Files.delete(file.toPath());
         }
     }
 

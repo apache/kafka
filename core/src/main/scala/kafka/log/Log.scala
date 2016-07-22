@@ -152,18 +152,18 @@ class Log(val dir: File,
       val filename = file.getName
       if(filename.endsWith(DeletedFileSuffix) || filename.endsWith(CleanedFileSuffix)) {
         // if the file ends in .deleted or .cleaned, delete it
-        file.delete()
+        Files.delete(file.toPath())
       } else if(filename.endsWith(SwapFileSuffix)) {
         // we crashed in the middle of a swap operation, to recover:
         // if a log, delete the .index file, complete the swap operation later
         // if an index just delete it, it will be rebuilt
         val baseName = new File(CoreUtils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
         if(baseName.getPath.endsWith(IndexFileSuffix)) {
-          file.delete()
+          Files.delete(file.toPath())
         } else if(baseName.getPath.endsWith(LogFileSuffix)){
           // delete the index
           val index = new File(CoreUtils.replaceSuffix(baseName.getPath, LogFileSuffix, IndexFileSuffix))
-          index.delete()
+          Files.delete(index.toPath())
           swapFiles += file
         }
       }
@@ -177,7 +177,7 @@ class Log(val dir: File,
         val logFile = new File(file.getAbsolutePath.replace(IndexFileSuffix, LogFileSuffix))
         if(!logFile.exists) {
           warn("Found an orphaned index file, %s, with no corresponding log file.".format(file.getAbsolutePath))
-          file.delete()
+          Files.delete(file.toPath())
         }
       } else if(filename.endsWith(LogFileSuffix)) {
         // if its a log file, load the corresponding log segment
@@ -197,7 +197,7 @@ class Log(val dir: File,
           } catch {
             case e: java.lang.IllegalArgumentException =>
               warn("Found a corrupted index file, %s, deleting and rebuilding index. Error Message: %s".format(indexFile.getAbsolutePath, e.getMessage))
-              indexFile.delete()
+              Files.delete(indexFile.toPath())
               segment.recover(config.maxMessageSize)
           }
         }
@@ -648,7 +648,7 @@ class Log(val dir: File,
       val indexFile = indexFilename(dir, newOffset)
       for(file <- List(logFile, indexFile); if file.exists) {
         warn("Newly rolled segment file " + file.getName + " already exists; deleting it first")
-        file.delete()
+        Files.delete(file.toPath())
       }
 
       segments.lastEntry() match {

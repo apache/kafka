@@ -165,7 +165,7 @@ class LogManager(val logDirs: Array[File],
     try {
       for ((cleanShutdownFile, dirJobs) <- jobs) {
         dirJobs.foreach(_.get)
-        cleanShutdownFile.delete()
+        Files.delete(cleanShutdownFile.toPath())
       }
     } catch {
       case e: ExecutionException => {

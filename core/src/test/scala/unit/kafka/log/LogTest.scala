@@ -854,7 +854,7 @@ class LogTest extends JUnitSuite {
     recoveryPoint = log.logEndOffset
     log = new Log(logDir, config, 0L, time.scheduler, time)
     assertEquals(recoveryPoint, log.logEndOffset)
-    cleanShutdownFile.delete()
+    Files.delete(cleanShutdownFile.toPath())
   }
 
   @Test

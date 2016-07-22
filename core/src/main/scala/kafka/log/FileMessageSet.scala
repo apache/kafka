@@ -20,6 +20,7 @@ package kafka.log
 import java.io._
 import java.nio._
 import java.nio.channels._
+import java.nio.file.Files
 import java.util.concurrent.atomic._
 
 import kafka.utils._
@@ -325,9 +326,9 @@ class FileMessageSet private[kafka](@volatile var file: File,
    * Delete this message set from the filesystem
    * @return True iff this message set was deleted.
    */
-  def delete(): Boolean = {
+  def delete() {
     CoreUtils.swallow(channel.close())
-    file.delete()
+    Files.delete(file.toPath())
   }
 
   /**

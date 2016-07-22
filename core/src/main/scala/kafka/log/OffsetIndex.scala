@@ -23,6 +23,7 @@ import scala.math._
 import java.io._
 import java.nio._
 import java.nio.channels._
+import java.nio.file.Files
 import java.util.concurrent.locks._
 
 import kafka.utils._
@@ -329,11 +330,11 @@ class OffsetIndex(@volatile private[this] var _file: File, val baseOffset: Long,
   /**
    * Delete this index file
    */
-  def delete(): Boolean = {
+  def delete() {
     info("Deleting index " + _file.getAbsolutePath)
     if (Os.isWindows)
       CoreUtils.swallow(forceUnmap(mmap))
-    _file.delete()
+    Files.delete(_file.toPath())
   }
   
   /** The number of entries in this index */

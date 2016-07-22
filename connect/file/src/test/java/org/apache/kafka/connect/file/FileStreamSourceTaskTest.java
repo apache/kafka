@@ -30,6 +30,7 @@ import org.powermock.api.easymock.PowerMock;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -63,8 +64,7 @@ public class FileStreamSourceTaskTest {
 
     @After
     public void teardown() {
-        tempFile.delete();
-
+        Files.delete(tempFile.toPath());
         if (verifyMocks)
             PowerMock.verifyAll();
     }
