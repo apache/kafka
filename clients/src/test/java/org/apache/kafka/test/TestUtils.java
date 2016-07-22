@@ -56,6 +56,7 @@ public class TestUtils {
     /* A consistent random number generator to make tests repeatable */
     public static final Random SEEDED_RANDOM = new Random(192348092834L);
     public static final Random RANDOM = new Random();
+    public static final long DEFAULT_MAX_WAIT_MS = 15000;
 
     public static Cluster singletonCluster(Map<String, Integer> topicPartitionCounts) {
         return clusterWith(1, topicPartitionCounts);
@@ -230,7 +231,7 @@ public class TestUtils {
      *  uses default value of 15 seconds for timeout
      */
     public static void waitForCondition(TestCondition testCondition, String conditionDetails) throws InterruptedException {
-        waitForCondition(testCondition, 15000, conditionDetails);
+        waitForCondition(testCondition, DEFAULT_MAX_WAIT_MS, conditionDetails);
     }
 
     /**
