@@ -343,7 +343,7 @@ public class Fetcher<K, V> {
             Iterator<FetchCompletion> completedFetchesIterator = completedFetches.iterator();
 
             while (maxRecords > 0) {
-                if (nextInLineRecords == null) {
+                if (nextInLineRecords == null || nextInLineRecords.isConsumed()) {
                     if (!completedFetchesIterator.hasNext())
                         break;
 
@@ -352,8 +352,6 @@ public class Fetcher<K, V> {
                     nextInLineRecords = parseFetchedData(completion);
                 } else {
                     maxRecords -= append(drained, nextInLineRecords, maxRecords);
-                    if (nextInLineRecords.isConsumed())
-                        nextInLineRecords = null;
                 }
             }
             return drained;
@@ -464,7 +462,7 @@ public class Fetcher<K, V> {
 
     private Set<TopicPartition> fetchablePartitions() {
         Set<TopicPartition> fetchable = subscriptions.fetchablePartitions();
-        if (nextInLineRecords != null)
+        if (nextInLineRecords != null && !nextInLineRecords.isConsumed())
             fetchable.remove(nextInLineRecords.partition);
         for (FetchCompletion fetchCompletion : completedFetches)
             fetchable.remove(fetchCompletion.partition);

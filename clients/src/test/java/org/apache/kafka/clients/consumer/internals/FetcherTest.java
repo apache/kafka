@@ -64,7 +64,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
-import static javafx.scene.input.KeyCode.K;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
