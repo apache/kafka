@@ -68,6 +68,7 @@ public class TopologyBuilder {
     private final HashMap<String, Pattern> topicToPatterns = new HashMap<>();
     private final HashMap<String, String> nodeToSinkTopic = new HashMap<>();
     private final Map<String, Set<String>> stateStoreNameToSourceTopics = new HashMap<>();
+    private final HashMap<String, String> sourceStoreToSourceTopic = new HashMap<>();
     private SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
     private String applicationId;
 
@@ -158,7 +159,7 @@ public class TopologyBuilder {
         @SuppressWarnings("unchecked")
         @Override
         public ProcessorNode build(String applicationId) {
-            return new SourceNode(name, keyDeserializer, valDeserializer);
+            return new SourceNode(name, nodeToSourceTopics.get(name), keyDeserializer, valDeserializer);
         }
 
         private boolean isMatch(String topic) {
@@ -537,6 +538,19 @@ public class TopologyBuilder {
         return this;
     }
 
+    protected synchronized final TopologyBuilder connectSourceStoreAndTopic(String sourceStoreName, String topic) {
+        if (sourceStoreToSourceTopic != null) {
+            if (sourceStoreToSourceTopic.containsKey(sourceStoreName)) {
+                throw new TopologyBuilderException("Source store " + sourceStoreName + " is already added.");
+            }
+            sourceStoreToSourceTopic.put(sourceStoreName, topic);
+        } else {
+            throw new TopologyBuilderException("sourceStoreToSourceTopic is null");
+        }
+
+        return this;
+    }
+
     /**
      * Connects a list of processors.
      *
@@ -801,6 +815,7 @@ public class TopologyBuilder {
         return topicNames;
     }
 
+
     /**
      * Build the topology for the specified topic group. This is called automatically when passing this builder into the
      * {@link org.apache.kafka.streams.KafkaStreams#KafkaStreams(TopologyBuilder, org.apache.kafka.streams.StreamsConfig)} constructor.
@@ -823,6 +838,7 @@ public class TopologyBuilder {
         List<ProcessorNode> processorNodes = new ArrayList<>(nodeFactories.size());
         Map<String, ProcessorNode> processorMap = new HashMap<>();
         Map<String, SourceNode> topicSourceMap = new HashMap<>();
+        Map<String, SinkNode> topicSinkMap = new HashMap<>();
         Map<String, StateStoreSupplier> stateStoreMap = new HashMap<>();
 
         // create processor nodes in a topological order ("nodeFactories" is already topologically sorted)
@@ -853,8 +869,15 @@ public class TopologyBuilder {
                         }
                     }
                 } else if (factory instanceof SinkNodeFactory) {
-                    for (String parent : ((SinkNodeFactory) factory).parents) {
+                    SinkNodeFactory sinkNodeFactory = (SinkNodeFactory) factory;
+                    for (String parent : sinkNodeFactory.parents) {
                         processorMap.get(parent).addChild(node);
+                        if (internalTopicNames.contains(sinkNodeFactory.topic)) {
+                            // prefix the internal topic name with the application id
+                            topicSinkMap.put(applicationId + "-" + sinkNodeFactory.topic, (SinkNode) node);
+                        } else {
+                            topicSinkMap.put(sinkNodeFactory.topic, (SinkNode) node);
+                        }
                     }
                 } else {
                     throw new TopologyBuilderException("Unknown definition class: " + factory.getClass().getName());
@@ -862,7 +885,7 @@ public class TopologyBuilder {
             }
         }
 
-        return new ProcessorTopology(processorNodes, topicSourceMap, new ArrayList<>(stateStoreMap.values()));
+        return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap, new ArrayList<>(stateStoreMap.values()), sourceStoreToSourceTopic);
     }
 
     /**

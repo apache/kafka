@@ -61,7 +61,8 @@ public abstract class AbstractTask {
 
         // create the processor state manager
         try {
-            this.stateMgr = new ProcessorStateManager(applicationId, id, partitions, restoreConsumer, isStandby, stateDirectory);
+            this.stateMgr = new ProcessorStateManager(applicationId, id, partitions, restoreConsumer, isStandby, stateDirectory, topology.sourceStoreToSourceTopic());
+
         } catch (IOException e) {
             throw new ProcessorStateException("Error while creating the state manager", e);
         }
@@ -123,5 +124,32 @@ public abstract class AbstractTask {
 
     public StateStore getStore(final String name) {
         return stateMgr.getStore(name);
+    }
+
+    /**
+     * Produces a string representation contain useful information about a StreamTask.
+     * This is useful in debugging scenarios.
+     * @return A string representation of the StreamTask instance.
+     */
+    public String toString() {
+        StringBuilder sb = new StringBuilder("StreamsTask taskId:" + this.id() + "\n");
+
+        // print topology
+        if (topology != null) {
+            sb.append("\t\t\t" + topology.toString());
+        }
+
+        // print assigned partitions
+        if (partitions != null && !partitions.isEmpty()) {
+            sb.append("\t\t\tPartitions [");
+            for (TopicPartition topicPartition : partitions) {
+                sb.append(topicPartition.toString() + ",");
+            }
+            sb.setLength(sb.length() - 1);
+            sb.append("]");
+        }
+
+        sb.append("\n");
+        return sb.toString();
     }
 }
