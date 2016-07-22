@@ -57,11 +57,11 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
 
         The next step is to add the generated CA to the **clients' truststore** so that the clients can trust this CA:
         <pre>
-        keytool -keystore server.truststore.jks -alias CARoot <b>-import</b> -file ca-cert</pre>
-
-        <b>Note:</b> If you configure the Kafka brokers to require client authentication by setting ssl.client.auth to be "requested" or "required" on the <a href="#config_broker">Kafka brokers config</a> then you must provide a truststore for the Kafka brokers as well and it should have all the CA certificates that clients keys were signed by.
-        <pre>
         keytool -keystore client.truststore.jks -alias CARoot -import -file ca-cert</pre>
+
+        <b>Note:</b> If you configure the Kafka brokers to require client authentication by setting ssl.client.auth to be "requested" or "required" on the <a href="#config_broker">Kafka brokers config</a> then you must provide a truststore for the Kafka brokers as well and it should have all the CA certificates that clients' keys were signed by.
+        <pre>
+        keytool -keystore server.truststore.jks -alias CARoot <b>-import</b> -file ca-cert</pre>
 
         In contrast to the keystore in step 1 that stores each machine's own identity, the truststore of a client stores all the certificates that the client should trust. Importing a certificate into one's truststore also means trusting all certificates that are signed by that certificate. As the analogy above, trusting the government (CA) also means trusting all passports (certificates) that it has issued. This attribute is called the chain of trust, and it is particularly useful when deploying SSL on a large Kafka cluster. You can sign all certificates in the cluster with a single CA, and have all machines share the same truststore that trusts the CA. That way all machines can authenticate all other machines.</li>
 
