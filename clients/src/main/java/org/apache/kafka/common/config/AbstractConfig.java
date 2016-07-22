@@ -232,7 +232,7 @@ public class AbstractConfig {
             } else if (klass instanceof Class<?>) {
                 o = Utils.newInstance((Class<?>) klass);
             } else
-                throw new KafkaException("List contains element of type " + klass.getClass() + ": expected String or Class");
+                throw new KafkaException("List contains element of type " + klass.getClass() + ", expected String or Class");
             if (!t.isInstance(o))
                 throw new KafkaException(klass + " is not an instance of " + t.getName());
             if (o instanceof Configurable)
