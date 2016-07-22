@@ -329,7 +329,7 @@ class ConnectDistributedTest(Test):
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
         self.cc.start()
 
-        self.source = VerifiableSource(self.cc, tasks=num_tasks)
+        self.source = VerifiableSource(self.cc, tasks=num_tasks, throughput=100)
         self.source.start()
         self.sink = VerifiableSink(self.cc, tasks=num_tasks)
         self.sink.start()
