@@ -73,10 +73,12 @@ public class StandbyTaskTest {
     private final ProcessorTopology topology = new ProcessorTopology(
             Collections.<ProcessorNode>emptyList(),
             Collections.<String, SourceNode>emptyMap(),
+            Collections.<String, SinkNode>emptyMap(),
             Utils.<StateStoreSupplier>mkList(
                     new MockStateStoreSupplier(storeName1, false),
                     new MockStateStoreSupplier(storeName2, true)
-            )
+            ),
+            Collections.<String, String>emptyMap()
     );
 
     private final TopicPartition ktable = new TopicPartition("ktable1", 0);
@@ -84,9 +86,15 @@ public class StandbyTaskTest {
     private final ProcessorTopology ktableTopology = new ProcessorTopology(
             Collections.<ProcessorNode>emptyList(),
             Collections.<String, SourceNode>emptyMap(),
+            Collections.<String, SinkNode>emptyMap(),
             Utils.<StateStoreSupplier>mkList(
                     new MockStateStoreSupplier(ktable.topic(), true, false)
-            )
+            ),
+            new HashMap<String, String>() {
+            {
+                put("ktable1", ktable.topic());
+            }
+        }
     );
     private File baseDir;
     private StateDirectory stateDirectory;

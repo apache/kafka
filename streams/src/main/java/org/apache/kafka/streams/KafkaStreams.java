@@ -219,6 +219,22 @@ public class KafkaStreams {
     }
 
     /**
+     * Produces a string representation contain useful information about Kafka Streams
+     * Such as thread IDs, task IDs and a representation of the topology. This is useful
+     * in debugging scenarios.
+     * @return A string representation of the Kafka Streams instance.
+     */
+    public String toString() {
+        StringBuilder sb = new StringBuilder("KafkaStreams processID:" + this.processId + "\n");
+        for (int i = 0; i < this.threads.length; i++) {
+            sb.append("\t" + this.threads[i].toString());
+        }
+        sb.append("\n");
+
+        return sb.toString();
+    }
+
+    /**
      * Sets the handler invoked when a stream thread abruptly terminates due to an uncaught exception.
      *
      * @param eh the object to use as this thread's uncaught exception handler. If null then this thread has no explicit handler.

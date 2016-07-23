@@ -32,6 +32,7 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.errors.StreamsException;
 
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -364,7 +365,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     KTableValueGetterSupplier<K, V> valueGetterSupplier() {
         if (processorSupplier instanceof KTableSource) {
             KTableSource<K, V> source = (KTableSource<K, V>) processorSupplier;
-            materialize(source);
+            if (!source.isMaterialized()) {
+                throw new StreamsException("Source is not materialized");
+            }
             return new KTableSourceValueGetterSupplier<>(source.storeName);
         } else if (processorSupplier instanceof KStreamAggProcessorSupplier) {
             return ((KStreamAggProcessorSupplier<?, K, S, V>) processorSupplier).view();
@@ -378,7 +381,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         if (!sendOldValues) {
             if (processorSupplier instanceof KTableSource) {
                 KTableSource<K, ?> source = (KTableSource<K, V>) processorSupplier;
-                materialize(source);
+                if (!source.isMaterialized()) {
+                    throw new StreamsException("Source is not materialized");
+                }
                 source.enableSendingOldValues();
             } else if (processorSupplier instanceof KStreamAggProcessorSupplier) {
                 ((KStreamAggProcessorSupplier<?, K, S, V>) processorSupplier).enableSendingOldValues();
@@ -393,7 +398,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return sendOldValues;
     }
 
-    private void materialize(KTableSource<K, ?> source) {
+    public void materialize(KTableSource<K, ?> source) {
         synchronized (source) {
             if (!source.isMaterialized()) {
                 StateStoreSupplier storeSupplier =
