@@ -64,6 +64,8 @@ public class CleanUpIntegrationTest {
     private static final String OUTPUT_TOPIC = "outputTopic";
     private static final String INTERMEDIATE_USER_TOPIC = "userTopic";
 
+    private static final long consumerTimeout = 2000L;
+
     @BeforeClass
     public static void startKafkaCluster() throws Exception {
         CLUSTER.createTopic(INPUT_TOPIC);
@@ -83,14 +85,15 @@ public class CleanUpIntegrationTest {
         KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
         streams.start();
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultTopicConsumerConfig, OUTPUT_TOPIC, 12);
-        Utils.sleep(10000);
         streams.close();
 
         // RESET
-        Utils.sleep(2000);
+        // make sure Kafka Streams consumer group times out
+        Utils.sleep(consumerTimeout);
         streams.cleanUp();
         cleanGlobal();
-        Utils.sleep(2000);
+        // make sure CleanUpClient consumer group times out
+        Utils.sleep(consumerTimeout);
 
         // RE-RUN
         streams = new KafkaStreams(setupTopology(), streamsConfiguration);
@@ -98,7 +101,7 @@ public class CleanUpIntegrationTest {
         final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultTopicConsumerConfig, OUTPUT_TOPIC, 12);
         streams.close();
 
-        //assertThat(result, equalTo(resultRerun));
+        assertThat(result, equalTo(resultRerun));
     }
 
     private Properties prepareTest() throws Exception {
@@ -112,7 +115,7 @@ public class CleanUpIntegrationTest {
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 8);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1);
         streamsConfiguration.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
-        streamsConfiguration.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 2000);
+        streamsConfiguration.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + consumerTimeout);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
@@ -166,7 +169,7 @@ public class CleanUpIntegrationTest {
                     return new KeyValue<>(key, value);
                 }
             })
-            .through(INTERMEDIATE_USER_TOPIC)      // todo removing this breaks the test; why?
+            //.through(INTERMEDIATE_USER_TOPIC)
             .groupByKey()
             .count("global-count");
         globalCounts.foreach(new ForeachAction<Long, Long>() {
@@ -201,7 +204,7 @@ public class CleanUpIntegrationTest {
     private void cleanGlobal() {
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
-        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 2000);
+        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + consumerTimeout);
 
         final int rc = new StreamsCleanupClient().run(new String[]{
                 "--application-id", APP_ID,
