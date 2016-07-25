@@ -35,7 +35,7 @@ import java.util.Set;
  * {@link StreamsCleanupClient} resets a Kafka Streams application to the very beginning. Thus, an application can
  * reprocess the whole input from scratch.
  * <p>
- * This includes, setting source topic offsets to zero, skipping over all intermediate user topics,
+ * This includes, setting source and internal topic offsets to zero, skipping over all intermediate user topics,
  * and deleting all internally created topics.
  */
 public class StreamsCleanupClient {
@@ -74,7 +74,7 @@ public class StreamsCleanupClient {
             this.allTopics.clear();
             this.allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
 
-            resetSourceTopicOffsets();
+            resetSourceAndInternalTopicOffsets();
             seekToEndIntermediateTopics();
             deleteInternalTopics(zkUtils);
         } catch (final Exception e) {
@@ -125,15 +125,14 @@ public class StreamsCleanupClient {
         }
     }
 
-    private void resetSourceTopicOffsets() {
+    private void resetSourceAndInternalTopicOffsets() {
         final List<String> sourceTopics = this.options.valuesOf(sourceTopicsOption);
 
         if (sourceTopics.size() == 0) {
-            System.out.println("No source topics specified, skipping resetting source topic offsets.");
-            return;
+            System.out.println("No source topics specified.");
+        } else {
+            System.out.println("Resetting offsets to zero for source topics " + sourceTopics + " and all internal topics.");
         }
-
-        System.out.println("Resetting offsets to zero for topics " + sourceTopics);
 
         final Properties config = new Properties();
         config.putAll(this.consumerConfig);
@@ -141,8 +140,14 @@ public class StreamsCleanupClient {
         config.setProperty(ConsumerConfig.GROUP_ID_CONFIG, this.options.valueOf(applicationIdOption));
         config.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
-        for (final String topic : sourceTopics) {
-            if (this.allTopics.contains(topic)) {
+        for (final String srcTopic : sourceTopics) {
+            if (!this.allTopics.contains(srcTopic)) {
+                System.out.println("Source topic " + srcTopic + " not found. Skipping.");
+            }
+        }
+
+        for (final String topic : this.allTopics) {
+            if (sourceTopics.contains(topic) || isInternalTopic(topic)) {
                 System.out.println("Topic: " + topic);
 
                 try (final KafkaConsumer<byte[], byte[]> client = new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
@@ -156,11 +161,9 @@ public class StreamsCleanupClient {
                     }
                     client.commitSync();
                 } catch (final RuntimeException e) {
-                    System.err.println("ERROR: Resetting offsets for source topic " + topic + " failed.");
+                    System.err.println("ERROR: Resetting offsets for topic " + topic + " failed.");
                     throw e;
                 }
-            } else {
-                System.out.println("Topic " + topic + " not found. Skipping.");
             }
         }
 
@@ -213,7 +216,7 @@ public class StreamsCleanupClient {
         System.out.println("Deleting all internal/auto-created topics for application " + this.options.valueOf(applicationIdOption));
 
         for (final String topic : this.allTopics) {
-            if (isInternalStreamsTopic(topic)) {
+            if (isInternalTopic(topic)) {
                 final TopicCommand.TopicCommandOptions commandOptions = new TopicCommand.TopicCommandOptions(new String[]{
                     "--zookeeper", this.options.valueOf(zookeeperOption),
                     "--delete", "--topic", topic});
@@ -229,7 +232,7 @@ public class StreamsCleanupClient {
         System.out.println("Done.");
     }
 
-    private boolean isInternalStreamsTopic(final String topicName) {
+    private boolean isInternalTopic(final String topicName) {
         return topicName.startsWith(this.options.valueOf(applicationIdOption) + "-")
             && (topicName.endsWith("-changelog") || topicName.endsWith("-repartition"));
     }
