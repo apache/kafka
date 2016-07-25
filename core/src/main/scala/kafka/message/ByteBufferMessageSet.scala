@@ -17,7 +17,7 @@
 
 package kafka.message
 
-import kafka.utils.{IteratorTemplate, Logging}
+import kafka.utils.{CoreUtils, IteratorTemplate, Logging}
 import kafka.common.{KafkaException, LongRef}
 import java.nio.ByteBuffer
 import java.nio.channels._
@@ -92,29 +92,33 @@ object ByteBufferMessageSet {
       if (wrapperMessage.payload == null)
         throw new KafkaException(s"Message payload is null: $wrapperMessage")
       val inputStream = new ByteBufferBackedInputStream(wrapperMessage.payload)
-      val compressed = try {
-        new DataInputStream(CompressionFactory(wrapperMessage.compressionCodec, wrapperMessage.magic, inputStream))
-      } catch {
-        case ioe: IOException =>
-          throw new InvalidMessageException(s"Failed to instantiate input stream compressed with ${wrapperMessage.compressionCodec}", ioe)
-      }
       var lastInnerOffset = -1L
 
-      val messageAndOffsets = if (wrapperMessageAndOffset.message.magic > MagicValue_V0) {
+      val messageAndOffsets = {
+        val compressed = try {
+          new DataInputStream(CompressionFactory(wrapperMessage.compressionCodec, wrapperMessage.magic, inputStream))
+        } catch {
+          case ioe: IOException =>
+            throw new InvalidMessageException(s"Failed to instantiate input stream compressed with ${wrapperMessage.compressionCodec}", ioe)
+        }
         val innerMessageAndOffsets = new ArrayDeque[MessageAndOffset]()
         try {
           while (true)
-            innerMessageAndOffsets.add(readMessageFromStream())
+            innerMessageAndOffsets.add(readMessageFromStream(compressed))
         } catch {
           case eofe: EOFException =>
-            compressed.close()
+            // we don't do anything at all here, because the finally
+            // will close the compressed input stream, and we simply
+            // want to return the innerMessageAndOffsets
           case ioe: IOException =>
             throw new InvalidMessageException(s"Error while reading message from stream compressed with ${wrapperMessage.compressionCodec}", ioe)
+        } finally {
+          CoreUtils.swallow(compressed.close())
         }
-        Some(innerMessageAndOffsets)
-      } else None
+        innerMessageAndOffsets
+      }
 
-      private def readMessageFromStream(): MessageAndOffset = {
+      private def readMessageFromStream(compressed: DataInputStream): MessageAndOffset = {
         val innerOffset = compressed.readLong()
         val recordSize = compressed.readInt()
 
@@ -138,26 +142,17 @@ object ByteBufferMessageSet {
       }
 
       override def makeNext(): MessageAndOffset = {
-        messageAndOffsets match {
-          // Using inner offset and timestamps
-          case Some(innerMessageAndOffsets) =>
-            innerMessageAndOffsets.pollFirst() match {
-              case null => allDone()
-              case MessageAndOffset(message, offset) =>
-                val relativeOffset = offset - lastInnerOffset
-                val absoluteOffset = wrapperMessageOffset + relativeOffset
-                new MessageAndOffset(message, absoluteOffset)
+        messageAndOffsets.pollFirst() match {
+          case null => allDone()
+          case nextMessage@ MessageAndOffset(message, offset) => {
+            if (wrapperMessageAndOffset.message.magic > MagicValue_V0) {
+              val relativeOffset = offset - lastInnerOffset
+              val absoluteOffset = wrapperMessageOffset + relativeOffset
+              new MessageAndOffset(message, absoluteOffset)
+            } else {
+              nextMessage
             }
-          // Not using inner offset and timestamps
-          case None =>
-            try readMessageFromStream()
-            catch {
-              case eofe: EOFException =>
-                compressed.close()
-                allDone()
-              case ioe: IOException =>
-                throw new KafkaException(ioe)
-            }
+          }
         }
       }
     }
