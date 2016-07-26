@@ -42,25 +42,32 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * Higher level consumer access to the network layer with basic support for futures and
- * task scheduling. This class is not thread-safe, except for wakeup().
+ * Higher level consumer access to the network layer with basic support for request futures. This class
+ * is thread-safe, but provides no synchronization for response callbacks. This guarantees that no locks
+ * are held when they are invoked.
  */
 public class ConsumerNetworkClient implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(ConsumerNetworkClient.class);
 
+    // this lock protects concurrent access to the mutable state of this class (excluding the
+    // wakeup flag and the request completion queue below).
     private final ReentrantLock lock = new ReentrantLock();
 
     private final KafkaClient client;
-    private final AtomicBoolean wakeup = new AtomicBoolean(false);
     private final Map<Node, List<ClientRequest>> unsent = new HashMap<>();
-    private final ConcurrentLinkedQueue<RequestFutureCompletionHandler> pendingCompletion = new ConcurrentLinkedQueue<>();
     private final Metadata metadata;
     private final Time time;
     private final long retryBackoffMs;
     private final long unsentExpiryMs;
-
-    // this count is only accessed from the consumer's main thread
     private int wakeupDisabledCount = 0;
+
+    // when requests complete, they are transferred to this queue prior to invocation. The purpose
+    // is to avoid invoking them while holding the lock above.
+    private final ConcurrentLinkedQueue<RequestFutureCompletionHandler> pendingCompletion = new ConcurrentLinkedQueue<>();
+
+    // this flag allows the client to be safely woken up without waiting on the lock above. It is
+    // atomic to avoid the need to acquire the lock above in order to enable it concurrently.
+    private final AtomicBoolean wakeup = new AtomicBoolean(false);
 
     public ConsumerNetworkClient(KafkaClient client,
                                  Metadata metadata,

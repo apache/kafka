@@ -26,13 +26,13 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.RangeAssignor;
+import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
-import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
@@ -450,8 +450,9 @@ public class ConsumerCoordinatorTest {
         }, new LeaveGroupResponse(Errors.NONE.code()).toStruct());
         coordinator.maybeLeaveGroup();
         assertTrue(received.get());
-        assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, coordinator.memberId);
-        assertEquals(OffsetCommitRequest.DEFAULT_GENERATION_ID, coordinator.generation);
+
+        AbstractCoordinator.Generation generation = coordinator.generation();
+        assertNull(generation);
     }
 
     @Test(expected = KafkaException.class)

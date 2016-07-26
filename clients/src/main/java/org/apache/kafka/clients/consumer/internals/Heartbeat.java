@@ -21,7 +21,7 @@ public final class Heartbeat {
     private final long maxPollInterval;
     private final long retryBackoffMs;
 
-    private long lastHeartbeatSend;
+    private volatile long lastHeartbeatSend; // volatile since it is read by metrics
     private long lastHeartbeatReceive;
     private long lastSessionReset;
     private long lastPoll;
@@ -40,32 +40,32 @@ public final class Heartbeat {
         this.retryBackoffMs = retryBackoffMs;
     }
 
-    public synchronized void poll(long now) {
+    public void poll(long now) {
         this.lastPoll = now;
     }
 
-    public synchronized void sentHeartbeat(long now) {
+    public void sentHeartbeat(long now) {
         this.lastHeartbeatSend = now;
         this.heartbeatFailed = false;
     }
 
-    public synchronized void failHeartbeat() {
+    public void failHeartbeat() {
         this.heartbeatFailed = true;
     }
 
-    public synchronized void receiveHeartbeat(long now) {
+    public void receiveHeartbeat(long now) {
         this.lastHeartbeatReceive = now;
     }
 
-    public synchronized boolean shouldHeartbeat(long now) {
+    public boolean shouldHeartbeat(long now) {
         return timeToNextHeartbeat(now) == 0;
     }
     
-    public synchronized long lastHeartbeatSend() {
+    public long lastHeartbeatSend() {
         return this.lastHeartbeatSend;
     }
 
-    public synchronized long timeToNextHeartbeat(long now) {
+    public long timeToNextHeartbeat(long now) {
         long timeSinceLastHeartbeat = now - Math.max(lastHeartbeatSend, lastSessionReset);
         final long delayToNextHeartbeat;
         if (heartbeatFailed)
@@ -79,21 +79,21 @@ public final class Heartbeat {
             return delayToNextHeartbeat - timeSinceLastHeartbeat;
     }
 
-    public synchronized boolean sessionTimeoutExpired(long now) {
+    public boolean sessionTimeoutExpired(long now) {
         return now - Math.max(lastSessionReset, lastHeartbeatReceive) > sessionTimeout;
     }
 
-    public synchronized long interval() {
+    public long interval() {
         return heartbeatInterval;
     }
 
-    public synchronized void resetTimeouts(long now) {
+    public void resetTimeouts(long now) {
         this.lastSessionReset = now;
         this.lastPoll = now;
         this.heartbeatFailed = false;
     }
 
-    public synchronized boolean pollTimeoutExpired(long now) {
+    public boolean pollTimeoutExpired(long now) {
         return now - lastPoll > maxPollInterval;
     }
 
