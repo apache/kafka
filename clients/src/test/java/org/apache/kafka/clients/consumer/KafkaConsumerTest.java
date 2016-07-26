@@ -499,7 +499,7 @@ public class KafkaConsumerTest {
         long offset1 = 10000;
         long offset2 = 20000;
 
-        int rebalanceTimeoutMs = 60000;
+        int rebalanceTimeoutMs = 6000;
         int sessionTimeoutMs = 3000;
         int heartbeatIntervalMs = 2000;
         int autoCommitIntervalMs = 1000;
