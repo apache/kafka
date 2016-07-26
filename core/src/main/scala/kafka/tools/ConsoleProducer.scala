@@ -57,6 +57,7 @@ object ConsoleProducer {
           if (message != null)
             producer.send(message.topic, message.key, message.value)
         } while (message != null)
+        producer.close()
     } catch {
       case e: joptsimple.OptionException =>
         System.err.println(e.getMessage)
