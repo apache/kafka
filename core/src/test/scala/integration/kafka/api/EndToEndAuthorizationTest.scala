@@ -30,13 +30,17 @@ import kafka.utils._
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerRecord, ConsumerConfig}
 import org.apache.kafka.clients.producer.{ProducerRecord, ProducerConfig}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.{TopicPartition}
+import org.apache.kafka.common.{TopicPartition,KafkaException}
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.errors.{GroupAuthorizationException,TopicAuthorizationException}
+import org.apache.kafka.common.errors.{GroupAuthorizationException,TopicAuthorizationException,TimeoutException}
 import org.junit.Assert._
 import org.junit.{Test, After, Before}
 
 import scala.collection.JavaConverters._
+import scala.concurrent.{Await, Future}
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
+import scala.util.{Failure, Success}
 
 
 /**
@@ -171,9 +175,9 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     }
     super.setUp
     AclCommand.main(topicBrokerReadAclArgs)
-    servers.foreach( s =>
+    servers.foreach { s =>
       TestUtils.waitAndVerifyAcls(TopicBrokerReadAcl, s.apis.authorizer.get, new Resource(Topic, "*"))
-    )
+    }
     // create the test topic with all the brokers as replicas
     TestUtils.createTopic(zkUtils, topic, 1, 3, this.servers)
   }
@@ -209,10 +213,10 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   private def setAclsAndProduce() {
     AclCommand.main(produceAclArgs)
     AclCommand.main(consumeAclArgs)
-    servers.foreach(s => {
+    servers.foreach { s =>
       TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl, s.apis.authorizer.get, topicResource)
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, groupResource)
-    })
+    }
     //Produce records
     debug("Starting to send records")
     sendRecords(numRecords, tp)
@@ -232,16 +236,16 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
       sendRecords(numRecords, tp)
       fail("exception expected")
     } catch {
-      case e: org.apache.kafka.common.errors.TimeoutException => //expected
+      case e: TimeoutException => //expected
     }
   }
 
   @Test
   def testNoProduceAclWithDescribeAcl {
     AclCommand.main(describeAclArgs)
-    servers.foreach(s => {
+    servers.foreach { s =>
       TestUtils.waitAndVerifyAcls(TopicDescribeAcl, s.apis.authorizer.get, topicResource)
-    })
+    }
     //Produce records
     debug("Starting to send records")
     try{
@@ -265,11 +269,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
       consumeRecords(this.consumers.head)
       fail("exception expected")
     } catch {
-       case e: TestTimeoutException => //expected from consumeRecords()
-    } finally {
-      //to avoid a ConcurrentModificationException in tearDown()
-      //as the consumer is stuck in poll()
-      consumers.foreach(_.wakeup())
+       case e: KafkaException => //expected
     }
   }
   
@@ -282,27 +282,27 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
       consumeRecords(this.consumers.head)
       fail("exception expected")
     } catch {
-      case e: TestTimeoutException => //expected from consumeRecords()
+      case e: TestTimeoutException => //expected
     }
   } 
   
   private def noConsumeWithoutDescribeAclProlog {
     AclCommand.main(produceAclArgs)
     AclCommand.main(groupAclArgs)
-    servers.foreach(s => {
+    servers.foreach { s =>
       TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl, s.apis.authorizer.get, topicResource)
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, groupResource)
-    })
+    }
     //Produce records
     debug("Starting to send records")
     sendRecords(numRecords, tp)
 
-    //Deleting topic ACL without asking for console confirmation
+    //Deleting topic ACL
     AclCommand.main(deleteDescribeAclArgs)
     AclCommand.main(deleteWriteAclArgs)
-    servers.foreach(s => {
+    servers.foreach { s =>
       TestUtils.waitAndVerifyAcls(GroupReadAcl, servers.head.apis.authorizer.get, groupResource)
-    })
+    }
     
     debug("Finished sending and starting to consume records")
   }
@@ -340,10 +340,10 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   private def noConsumeAclWithDescribeAclProlog {
     AclCommand.main(produceAclArgs) 
     AclCommand.main(groupAclArgs)
-    servers.foreach(s => {
+    servers.foreach { s =>
       TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl, s.apis.authorizer.get, topicResource)
       TestUtils.waitAndVerifyAcls(GroupReadAcl, servers.head.apis.authorizer.get, groupResource)
-    })
+    }
     //Produce records
     debug("Starting to send records")
     sendRecords(numRecords, tp)
@@ -358,9 +358,9 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   @Test
   def testNoGroupAcl {
     AclCommand.main(produceAclArgs)
-    servers.foreach(s =>
+    servers.foreach { s =>
       TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl, s.apis.authorizer.get, topicResource)
-    )
+    }
     //Produce records
     debug("Starting to send records")
     sendRecords(numRecords, tp)
@@ -396,33 +396,19 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
     val maxIters = numRecords * 50
     
-    var caughtExc : Exception = null
-
-    val t = new java.lang.Thread() {
-      override def run () {
-        try {
-          var iters = 0
-            while (records.size < numRecords) {
-                for (record <- consumer.poll(50).asScala) {
-                    records.add(record)
-                }
-                if (iters > maxIters)
-                    throw new TestTimeoutException("Failed to consume the expected records after " + iters + " iterations.")
-                    iters += 1
-            }
-        } catch {
-          case e : Exception => caughtExc = e
+    val future = Future {
+      var iters = 0
+      while (records.size < numRecords) {
+        for (record <- consumer.poll(50).asScala) {
+          records.add(record)
         }
+        if (iters > maxIters)
+          throw new TestTimeoutException("Failed to consume the expected records after " + iters + " iterations.")
+        iters += 1
       }
+      records
     }
-    t.start()
-    t.join(10000L)
-    
-    if (caughtExc != null)
-      throw caughtExc
-    
-    if (records.isEmpty()) 
-        throw new TestTimeoutException("Failed to consume the expected records after 10000 millis.")
+    val result = Await.result(future, 10 seconds)
 
     for (i <- 0 until numRecords) {
       val record = records.get(i)
@@ -430,10 +416,9 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
       assertEquals(topic, record.topic())
       assertEquals(part, record.partition())
       assertEquals(offset.toLong, record.offset())
-    } 
+    }
   }
 }
 
-class TestTimeoutException (msg:String)
-  extends java.lang.RuntimeException (msg) {}
+class TestTimeoutException(msg:String) extends java.lang.RuntimeException (msg)
 

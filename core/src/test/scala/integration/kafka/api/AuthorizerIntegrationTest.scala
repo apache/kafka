@@ -37,6 +37,12 @@ import org.junit.{After, Assert, Before, Test}
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.Buffer
+import scala.concurrent.{Await, Future}
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
+import scala.util.{Failure, Success}
+
+import org.apache.kafka.common.KafkaException
 
 
 
@@ -283,9 +289,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   def testProduceWithNoTopicAccess() {
     try {
       sendRecords(numRecords, tp)
-      fail("sendRecords should have thrown")
+      fail("should have thrown exception")
     } catch {
-      case e: org.apache.kafka.common.errors.TimeoutException => //expected
+      case e: TimeoutException => //expected
     }
   }
 
@@ -294,7 +300,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)), topicResource)
     try {
       sendRecords(numRecords, tp)
-      fail("sendRecords should have thrown")
+      fail("should have thrown exception")
     } catch {
       case e: TopicAuthorizationException =>
         assertEquals(Collections.singleton(topic), e.unauthorizedTopics())
@@ -306,7 +312,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), topicResource)
     try {
       sendRecords(numRecords, tp)
-      fail("sendRecords should have thrown")
+      fail("should have thrown exception")
     } catch {
       case e: TopicAuthorizationException =>
         assertEquals(Collections.singleton(topic), e.unauthorizedTopics())
@@ -377,7 +383,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testConsumeWithNoTopicAccess() {
+  def testConsumeWithoutTopicDescribeAccess() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
     sendRecords(1, tp)
     removeAllAcls()
@@ -388,9 +394,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       consumeRecords(this.consumers.head)
       Assert.fail("should have thrown exception")
     } catch {
-      case e: TestTimeoutException => //expected
-    } finally {
-      this.consumers.foreach(_.wakeup())
+      case e: KafkaException => //expected
     }
   }
 
@@ -516,35 +520,11 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     this.consumers.head.position(tp)
   }
 
-  @Test(expected = classOf[TestTimeoutException])
+  @Test(expected = classOf[KafkaException])
   def testOffsetFetchWithNoTopicAccess() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
     this.consumers.head.assign(List(tp).asJava)
-
-    try {
-      var caughtExc : Exception = null
-      var positionSucceeded = false
-      val t = new java.lang.Thread() {
-        override def run () {
-          try {
-              AuthorizerIntegrationTest.this.consumers.head.position(tp) // consumer is stuck in org.apache.kafka.clients.consumer.internals.Fetcher.listOffset(TopicPartition, long)
-              positionSucceeded = true
-          } catch {
-            case e : Exception => caughtExc = e
-          }
-        }
-      }
-      t.start()
-      t.join(10000L)
-      
-      if (caughtExc != null)
-        throw caughtExc
-      
-      if (!positionSucceeded) 
-          throw new TestTimeoutException("Failed to position in 10000 millis.")
-    } finally {
-      this.consumers.foreach(_.wakeup())
-    }
+    this.consumers.head.position(tp)
   }
 
   @Test
@@ -619,7 +599,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val possibleErrorCodes = resources.flatMap { resourceType =>
       if(resourceType == Topic)
         // When completely unauthorized topic resources may return an INVALID_TOPIC_EXCEPTION to prevent leaking topic names
-        Seq(resourceType.errorCode, Errors.INVALID_TOPIC_EXCEPTION.code())
+        Seq(resourceType.errorCode, Errors.INVALID_TOPIC_EXCEPTION.code(), Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
       else
         Seq(resourceType.errorCode)
     }
@@ -661,35 +641,20 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
                              part: Int = part) {
     val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
     val maxIters = numRecords * 50
-    
-    var caughtExc : Exception = null
 
-    val t = new java.lang.Thread() {
-      override def run () {
-        println("in consumeRecords.Thread.run")
-        try {
-          var iters = 0
-            while (records.size < numRecords) {
-                for (record <- consumer.poll(50).asScala) {
-                    records.add(record)
-                }
-                if (iters > maxIters)
-                    throw new TestTimeoutException("Failed to consume the expected records after " + iters + " iterations.")
-                    iters += 1
-            }
-        } catch {
-          case e : Exception => caughtExc = e
+    val future = Future {
+      var iters = 0
+      while (records.size < numRecords) {
+        for (record <- consumer.poll(50).asScala) {
+          records.add(record)
         }
+        if (iters > maxIters)
+          throw new TestTimeoutException("Failed to consume the expected records after " + iters + " iterations.")
+        iters += 1
       }
+      records
     }
-    t.start()
-    t.join(10000L)
-    
-    if (caughtExc != null)
-      throw caughtExc
-    
-    if (records.isEmpty()) 
-        throw new TestTimeoutException("Failed to consume the expected records after 10000 millis.")
+    val result = Await.result(future, 10 seconds)
 
     for (i <- 0 until numRecords) {
       val record = records.get(i)
@@ -697,6 +662,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       assertEquals(topic, record.topic())
       assertEquals(part, record.partition())
       assertEquals(offset.toLong, record.offset())
-    } 
+    }
   }
+
 }
