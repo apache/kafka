@@ -674,7 +674,8 @@ object TestUtils extends Logging {
    *
    * @return The new leader or assertion failure if timeout is reached.
    */
-  def waitUntilLeaderIsElectedOrChanged(zkUtils: ZkUtils, topic: String, partition: Int, timeoutMs: Long = 5000L,
+  def waitUntilLeaderIsElectedOrChanged(zkUtils: ZkUtils, topic: String, partition: Int,
+                                        timeoutMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS,
                                         oldLeaderOpt: Option[Int] = None, newLeaderOpt: Option[Int] = None): Option[Int] = {
     require(!(oldLeaderOpt.isDefined && newLeaderOpt.isDefined), "Can't define both the old and the new leader")
     val startTime = System.currentTimeMillis()
@@ -786,7 +787,8 @@ object TestUtils extends Logging {
    * @param timeout The amount of time waiting on this condition before assert to fail
    * @return The leader of the partition.
    */
-  def waitUntilMetadataIsPropagated(servers: Seq[KafkaServer], topic: String, partition: Int, timeout: Long = 5000L): Int = {
+  def waitUntilMetadataIsPropagated(servers: Seq[KafkaServer], topic: String, partition: Int,
+                                    timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
     var leader: Int = -1
     TestUtils.waitUntilTrue(() =>
       servers.foldLeft(true) {
@@ -805,7 +807,8 @@ object TestUtils extends Logging {
     leader
   }
 
-  def waitUntilLeaderIsKnown(servers: Seq[KafkaServer], topic: String, partition: Int, timeout: Long = 5000L): Unit = {
+  def waitUntilLeaderIsKnown(servers: Seq[KafkaServer], topic: String, partition: Int,
+                             timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
     TestUtils.waitUntilTrue(() =>
       servers.exists { server =>
         server.replicaManager.getPartition(topic, partition).exists(_.leaderReplicaIfLocal().isDefined)
@@ -1073,7 +1076,7 @@ object TestUtils extends Logging {
 
   def waitAndVerifyAcls(expected: Set[Acl], authorizer: Authorizer, resource: Resource) = {
     TestUtils.waitUntilTrue(() => authorizer.getAcls(resource) == expected,
-      s"expected acls $expected but got ${authorizer.getAcls(resource)}", waitTime = 10000)
+      s"expected acls $expected but got ${authorizer.getAcls(resource)}", waitTime = JTestUtils.DEFAULT_MAX_WAIT_MS)
   }
 
   /**
