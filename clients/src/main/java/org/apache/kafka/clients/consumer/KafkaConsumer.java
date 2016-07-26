@@ -645,10 +645,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     ConsumerInterceptor.class);
             this.interceptors = interceptorList.isEmpty() ? null : new ConsumerInterceptors<>(interceptorList);
 
+            // the maximum time we can block in a call to NetworkClient.poll is limited by the frequency
+            // of periodic events (heartbeats and autocommits)
             boolean enableAutoCommit = config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
             int autoCommitIntervalMs = config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG);
             int heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
-            this.maxPollTimeoutMs = enableAutoCommit ? Math.min(autoCommitIntervalMs, heartbeatIntervalMs) : heartbeatIntervalMs;
+            this.maxPollTimeoutMs = (enableAutoCommit ? Math.min(autoCommitIntervalMs, heartbeatIntervalMs) : heartbeatIntervalMs) / 2;
 
             this.coordinator = new ConsumerCoordinator(this.client,
                     config.getString(ConsumerConfig.GROUP_ID_CONFIG),
@@ -741,7 +743,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.metadata = metadata;
         this.retryBackoffMs = retryBackoffMs;
         this.requestTimeoutMs = requestTimeoutMs;
-        this.maxPollTimeoutMs = autoCommitEnabled ? Math.min(autoCommitIntervalMs, heartbeatIntervalMs) : heartbeatIntervalMs;
+        this.maxPollTimeoutMs = (autoCommitEnabled ? Math.min(autoCommitIntervalMs, heartbeatIntervalMs) : heartbeatIntervalMs) / 2;
     }
 
     /**
@@ -1015,14 +1017,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         if (!subscriptions.hasAllFetchPositions())
             updateFetchPositions(this.subscriptions.missingFetchPositions());
 
-        // init any new fetches (won't resend pending fetches)
+        // if data is available already, return it immediately
         Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
-
-        // if data is available already, e.g. from a previous network client poll() call to commit,
-        // then just return it immediately
         if (!records.isEmpty())
             return records;
 
+        // send any new fetches (won't resend pending fetches)
         fetcher.sendFetches();
         client.poll(Math.min(maxPollTimeoutMs, timeout), time.milliseconds());
         return fetcher.fetchedRecords();
