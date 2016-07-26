@@ -59,7 +59,7 @@ public class MockSourceTask extends SourceTask {
         if (MockConnector.TASK_FAILURE.equals(mockMode)) {
             long now = System.currentTimeMillis();
             if (now > startTimeMs + failureDelayMs) {
-                log.debug("Triggering sink task failure");
+                log.debug("Triggering source task failure");
                 throw new RuntimeException();
             }
         }
