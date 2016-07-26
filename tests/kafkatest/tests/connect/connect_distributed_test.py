@@ -171,7 +171,7 @@ class ConnectDistributedTest(Test):
         connector.start()
 
         task_id = 0
-        wait_until(lambda: self.task_is_failed(connector, task_id), timeout_sec=15,
+        wait_until(lambda: self.task_is_failed(connector, task_id), timeout_sec=20,
                    err_msg="Failed to see task transition to the FAILED state")
 
         self.cc.restart_task(connector.name, task_id)
