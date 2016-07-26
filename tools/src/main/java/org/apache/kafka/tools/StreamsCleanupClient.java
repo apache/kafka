@@ -147,7 +147,7 @@ public class StreamsCleanupClient {
         }
 
         for (final String topic : this.allTopics) {
-            if (sourceTopics.contains(topic) || isInternalTopic(topic)) {
+            if (isSourceTopic(topic) || isInternalTopic(topic)) {
                 System.out.println("Topic: " + topic);
 
                 try (final KafkaConsumer<byte[], byte[]> client = new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
@@ -168,6 +168,10 @@ public class StreamsCleanupClient {
         }
 
         System.out.println("Done.");
+    }
+
+    private boolean isSourceTopic(final String topic) {
+        return this.options.valuesOf(sourceTopicsOption).contains(topic);
     }
 
     private void seekToEndIntermediateTopics() {

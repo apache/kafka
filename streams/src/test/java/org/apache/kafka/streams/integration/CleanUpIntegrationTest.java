@@ -66,7 +66,8 @@ public class CleanUpIntegrationTest {
     private static final String OUTPUT_TOPIC_2 = "outputTopic2";
     private static final String INTERMEDIATE_USER_TOPIC = "userTopic";
 
-    private static final long CONSUMER_TIMEOUT = 2000L;
+    private static final long STREAMS_CONSUMER_TIMEOUT = 2000L;
+    private static final long CLEANUP_CONSUMER_TIMEOUT = 2000L;
 
     @BeforeClass
     public static void startKafkaCluster() throws Exception {
@@ -77,7 +78,7 @@ public class CleanUpIntegrationTest {
     }
 
     @Test(timeout = 120000)
-    public void testCleanUp() throws Exception {
+    public void testReprocessingFromScratchAfterCleanUp() throws Exception {
         final Properties streamsConfiguration = prepareTest();
         final Properties resultTopicConsumerConfig = prepareResultConsumer();
 
@@ -88,18 +89,18 @@ public class CleanUpIntegrationTest {
         KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
         streams.start();
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultTopicConsumerConfig, OUTPUT_TOPIC, 10);
-        // receive only first values to make sure intermediate user topic is not consumer completely.
+        // receive only first values to make sure intermediate user topic is not consumed completely
+        // => required to test "seekToEnd" for intermediate topics
         final KeyValue<Object, Object> result2 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultTopicConsumerConfig, OUTPUT_TOPIC_2, 1).get(0);
 
         streams.close();
 
         // RESET
-        // make sure Kafka Streams consumer group times out
-        Utils.sleep(CONSUMER_TIMEOUT);
+        Utils.sleep(STREAMS_CONSUMER_TIMEOUT);
         streams.cleanUp();
         cleanGlobal();
-        // make sure CleanUpClient consumer group times out
-        Utils.sleep(CONSUMER_TIMEOUT);
+        assertInternalTopicsGotDeleted();
+        Utils.sleep(CLEANUP_CONSUMER_TIMEOUT);
 
         // RE-RUN
         streams = new KafkaStreams(setupTopology(), streamsConfiguration);
@@ -123,7 +124,7 @@ public class CleanUpIntegrationTest {
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 8);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1);
         streamsConfiguration.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
-        streamsConfiguration.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CONSUMER_TIMEOUT);
+        streamsConfiguration.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + STREAMS_CONSUMER_TIMEOUT);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
@@ -169,34 +170,34 @@ public class CleanUpIntegrationTest {
 
         // use map to trigger internal re-partitioning before groupByKey
         final KTable<Long, Long> globalCounts = input
-                                                    .map(new KeyValueMapper<Long, String, KeyValue<Long, String>>() {
-                                                        @Override
-                                                        public KeyValue<Long, String> apply(final Long key, final String value) {
-                                                            return new KeyValue<>(key, value);
-                                                        }
-                                                    })
-                                                    .groupByKey()
-                                                    .count("global-count");
+            .map(new KeyValueMapper<Long, String, KeyValue<Long, String>>() {
+                @Override
+                public KeyValue<Long, String> apply(final Long key, final String value) {
+                    return new KeyValue<>(key, value);
+                }
+            })
+            .groupByKey()
+            .count("global-count");
         globalCounts.to(Serdes.Long(), Serdes.Long(), OUTPUT_TOPIC);
 
         final KStream<Long, Long> windowedCounts = input
-                                                       .through(INTERMEDIATE_USER_TOPIC)
-                                                       .map(new KeyValueMapper<Long, String, KeyValue<Long, String>>() {
-                                                           @Override
-                                                           public KeyValue<Long, String> apply(final Long key, final String value) {
-                                                               Utils.sleep(1000);
-                                                               return new KeyValue<>(key, value);
-                                                           }
-                                                       })
-                                                       .groupByKey()
-                                                       .count(TimeWindows.of(35).advanceBy(10), "count")
-                                                       .toStream()
-                                                       .map(new KeyValueMapper<Windowed<Long>, Long, KeyValue<Long, Long>>() {
-                                                           @Override
-                                                           public KeyValue<Long, Long> apply(final Windowed<Long> key, final Long value) {
-                                                               return new KeyValue<>(key.window().start() + key.window().end(), value);
-                                                           }
-                                                       });
+            .through(INTERMEDIATE_USER_TOPIC)
+            .map(new KeyValueMapper<Long, String, KeyValue<Long, String>>() {
+                @Override
+                public KeyValue<Long, String> apply(final Long key, final String value) {
+                    Utils.sleep(1000);
+                    return new KeyValue<>(key, value);
+                }
+            })
+            .groupByKey()
+            .count(TimeWindows.of(35).advanceBy(10), "count")
+            .toStream()
+            .map(new KeyValueMapper<Windowed<Long>, Long, KeyValue<Long, Long>>() {
+                @Override
+                public KeyValue<Long, Long> apply(final Windowed<Long> key, final Long value) {
+                    return new KeyValue<>(key.window().start() + key.window().end(), value);
+                }
+            });
         windowedCounts.to(Serdes.Long(), Serdes.Long(), OUTPUT_TOPIC_2);
 
         return builder;
@@ -205,7 +206,7 @@ public class CleanUpIntegrationTest {
     private void cleanGlobal() {
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
-        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CONSUMER_TIMEOUT);
+        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
 
         final int rc = new StreamsCleanupClient().run(
             new String[]{
@@ -217,14 +218,15 @@ public class CleanUpIntegrationTest {
             },
             cleanUpConfig);
         Assert.assertEquals(0, rc);
+    }
 
-        // Check if all internal topics got deleted
-        final Set<String> expectedTopics = new HashSet<>();
-        expectedTopics.add(INPUT_TOPIC);
-        expectedTopics.add(INTERMEDIATE_USER_TOPIC);
-        expectedTopics.add(OUTPUT_TOPIC);
-        expectedTopics.add(OUTPUT_TOPIC_2);
-        expectedTopics.add("__consumer_offsets");
+    private void assertInternalTopicsGotDeleted() {
+        final Set<String> expectedRemainingTopicsAfterCleanup = new HashSet<>();
+        expectedRemainingTopicsAfterCleanup.add(INPUT_TOPIC);
+        expectedRemainingTopicsAfterCleanup.add(INTERMEDIATE_USER_TOPIC);
+        expectedRemainingTopicsAfterCleanup.add(OUTPUT_TOPIC);
+        expectedRemainingTopicsAfterCleanup.add(OUTPUT_TOPIC_2);
+        expectedRemainingTopicsAfterCleanup.add("__consumer_offsets");
 
         Set<String> allTopics;
         ZkUtils zkUtils = null;
@@ -238,13 +240,13 @@ public class CleanUpIntegrationTest {
                 Utils.sleep(100);
                 allTopics = new HashSet<>();
                 allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
-            } while (allTopics.size() != expectedTopics.size());
+            } while (allTopics.size() != expectedRemainingTopicsAfterCleanup.size());
         } finally {
             if (zkUtils != null) {
                 zkUtils.close();
             }
         }
-        assertThat(allTopics, equalTo(expectedTopics));
+        assertThat(allTopics, equalTo(expectedRemainingTopicsAfterCleanup));
     }
 
 }
