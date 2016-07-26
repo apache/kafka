@@ -563,7 +563,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * @return the current coordinator or null if it is unknown
      */
     protected synchronized Node coordinator() {
-        if (client.connectionFailed(coordinator)) {
+        if (coordinator != null && client.connectionFailed(coordinator)) {
             coordinatorDead();
             return null;
         }
