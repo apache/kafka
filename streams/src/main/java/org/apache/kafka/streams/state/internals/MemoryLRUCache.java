@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.github.jamm.MemoryMeter;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -55,6 +56,9 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     protected Map<K, V> map;
     private StateSerdes<K, V> serdes;
     private volatile boolean open = true;
+    private boolean isMaxCacheByMemory = false;
+    private int totalMemoryUsed = 0;
+    private MemoryMeter memoryMeter = new MemoryMeter();
 
     protected EldestEntryRemovalListener<K, V> listener;
 
@@ -72,10 +76,21 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
         this.map = new LinkedHashMap<K, V>(maxCacheSize + 1, 1.01f, true) {
             private static final long serialVersionUID = 1L;
 
+            //just for testing would limit cache size to ~ 2GB
+            @Override
+            public int size() {
+                 if (isMaxCacheByMemory) {
+                    return totalMemoryUsed;
+                 }
+                return super.size();
+            }
+
             @Override
             protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
                 if (size() > maxCacheSize) {
                     K key = eldest.getKey();
+                    totalMemoryUsed -= memoryMeter.measure(key);
+                    totalMemoryUsed -= memoryMeter.measure(eldest.getValue());
                     if (listener != null) listener.apply(key, eldest.getValue());
                     return true;
                 }
@@ -121,6 +136,11 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
         });
     }
 
+
+    public void setMaxCacheByMemory(boolean isByMemory) {
+        isMaxCacheByMemory = isByMemory;
+    }
+
     @Override
     public boolean persistent() {
         return false;
@@ -138,6 +158,10 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public synchronized void put(K key, V value) {
+        if (isMaxCacheByMemory) {
+            totalMemoryUsed += memoryMeter.measureDeep(key);
+            totalMemoryUsed += memoryMeter.measureDeep(value);
+        }
         this.map.put(key, value);
     }
 
