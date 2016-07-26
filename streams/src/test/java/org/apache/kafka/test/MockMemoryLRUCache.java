@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.test;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.internals.InMemoryKeyValueLoggedStore;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -31,6 +32,9 @@ import java.util.Map;
 
 /**
  * An in-memory LRU cache store based on HashSet and HashMap.
+ *
+ * This class has been modified from the original
+ * class to enable testing of caching objects by memory.
  *
  *  * Note that the use of array-typed keys is discouraged because they result in incorrect ordering behavior.
  * If you intend to work on byte arrays as key, for example, you may want to wrap them with the {@code Bytes} class,
@@ -42,7 +46,7 @@ import java.util.Map;
  *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
-public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
+public class MockMemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
     public interface EldestEntryRemovalListener<K, V> {
 
@@ -55,16 +59,20 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     protected Map<K, V> map;
     private StateSerdes<K, V> serdes;
     private volatile boolean open = true;
+    private boolean isMaxCacheByMemory = false;
+    private boolean isMeasureDeep = false;
+    private int totalMemoryUsed = 0;
+    private org.github.jamm.MemoryMeter memoryMeter = new org.github.jamm.MemoryMeter().withGuessing(org.github.jamm.MemoryMeter.Guess.FALLBACK_UNSAFE);
 
     protected EldestEntryRemovalListener<K, V> listener;
 
     // this is used for extended MemoryNavigableLRUCache only
-    public MemoryLRUCache(Serde<K> keySerde, Serde<V> valueSerde) {
+    public MockMemoryLRUCache(Serde<K> keySerde, Serde<V> valueSerde) {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
     }
 
-    public MemoryLRUCache(String name, final int maxCacheSize, Serde<K> keySerde, Serde<V> valueSerde) {
+    public MockMemoryLRUCache(String name, final int maxCacheSize, Serde<K> keySerde, Serde<V> valueSerde) {
         this(keySerde, valueSerde);
         this.name = name;
 
@@ -72,10 +80,28 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
         this.map = new LinkedHashMap<K, V>(maxCacheSize + 1, 1.01f, true) {
             private static final long serialVersionUID = 1L;
 
+            //just for testing would limit cache size to ~ 2GB
+            @Override
+            public int size() {
+                if (isMaxCacheByMemory) {
+                    return totalMemoryUsed;
+                }
+                return super.size();
+            }
+
             @Override
             protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
                 if (size() > maxCacheSize) {
                     K key = eldest.getKey();
+                    if (isMaxCacheByMemory) {
+                        if (isMeasureDeep) {
+                            totalMemoryUsed -= memoryMeter.measureDeep(key);
+                            totalMemoryUsed -= memoryMeter.measureDeep(eldest.getValue());
+                        } else {
+                            totalMemoryUsed -= memoryMeter.measure(key);
+                            totalMemoryUsed -= memoryMeter.measure(eldest.getValue());
+                        }
+                    }
                     if (listener != null) listener.apply(key, eldest.getValue());
                     return true;
                 }
@@ -88,7 +114,7 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
         return new InMemoryKeyValueLoggedStore<>(this.name, this, keySerde, valueSerde);
     }
 
-    public MemoryLRUCache<K, V> whenEldestRemoved(EldestEntryRemovalListener<K, V> listener) {
+    public MockMemoryLRUCache<K, V> whenEldestRemoved(EldestEntryRemovalListener<K, V> listener) {
         this.listener = listener;
 
         return this;
@@ -121,6 +147,15 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
         });
     }
 
+
+    public void setMaxCacheByMemory(boolean isByMemory) {
+        isMaxCacheByMemory = isByMemory;
+    }
+
+    public void setIsMeasureDeep(boolean isMeasureDeep) {
+        this.isMeasureDeep = isMeasureDeep;
+    }
+
     @Override
     public boolean persistent() {
         return false;
@@ -138,6 +173,16 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public synchronized void put(K key, V value) {
+        if (isMaxCacheByMemory) {
+            if (isMeasureDeep) {
+                totalMemoryUsed += memoryMeter.measureDeep(key);
+                totalMemoryUsed += memoryMeter.measureDeep(value);
+            } else {
+                totalMemoryUsed += memoryMeter.measure(key);
+                totalMemoryUsed += memoryMeter.measure(value);
+            }
+
+        }
         this.map.put(key, value);
     }
 

@@ -690,6 +690,7 @@ project(':streams') {
     testCompile project(':core')
     testCompile project(':core').sourceSets.test.output
     testCompile libs.junit
+    testCompile 'com.github.jbellis:jamm:0.3.1'
 
     testRuntime libs.slf4jlog4j
   }
