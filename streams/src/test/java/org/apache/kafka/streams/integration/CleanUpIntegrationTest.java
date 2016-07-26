@@ -185,6 +185,9 @@ public class CleanUpIntegrationTest {
             .map(new KeyValueMapper<Long, String, KeyValue<Long, String>>() {
                 @Override
                 public KeyValue<Long, String> apply(final Long key, final String value) {
+                    // must sleep long enough to avoid processing the whole intermediate topic before application gets stopped
+                    // => want to test "skip over" unprocessed records
+                    // increasing the sleep time only has disadvantage that test run time is increased
                     Utils.sleep(1000);
                     return new KeyValue<>(key, value);
                 }
@@ -208,16 +211,16 @@ public class CleanUpIntegrationTest {
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
 
-        final int rc = new StreamsCleanupClient().run(
+        final int exitCode = new StreamsCleanupClient().run(
             new String[]{
                 "--application-id", APP_ID,
                 "--bootstrap-server", CLUSTER.bootstrapServers(),
                 "--zookeeper", CLUSTER.zKConnectString(),
-                "--source-topics", INPUT_TOPIC,
+                "--input-topics", INPUT_TOPIC,
                 "--intermediate-topics", INTERMEDIATE_USER_TOPIC
             },
             cleanUpConfig);
-        Assert.assertEquals(0, rc);
+        Assert.assertEquals(0, exitCode);
     }
 
     private void assertInternalTopicsGotDeleted() {

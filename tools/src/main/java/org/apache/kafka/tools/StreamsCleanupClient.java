@@ -45,7 +45,7 @@ public class StreamsCleanupClient {
     private static OptionSpec<String> bootstrapServerOption;
     private static OptionSpec<String> zookeeperOption;
     private static OptionSpec<String> applicationIdOption;
-    private static OptionSpec<String> sourceTopicsOption;
+    private static OptionSpec<String> inputTopicsOption;
     private static OptionSpec<String> intermediateTopicsOption;
 
     private OptionSet options = null;
@@ -74,7 +74,7 @@ public class StreamsCleanupClient {
             this.allTopics.clear();
             this.allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
 
-            resetSourceAndInternalTopicOffsets();
+            resetInputAndInternalTopicOffsets();
             seekToEndIntermediateTopics();
             deleteInternalTopics(zkUtils);
         } catch (final Exception e) {
@@ -106,7 +106,7 @@ public class StreamsCleanupClient {
             .ofType(String.class)
             .defaultsTo("localhost:2181")
             .describedAs("url");
-        sourceTopicsOption = optionParser.accepts("source-topics", "Comma-separated list of user source topics")
+        inputTopicsOption = optionParser.accepts("input-topics", "Comma-separated list of user input topics")
             .withRequiredArg()
             .ofType(String.class)
             .withValuesSeparatedBy(',')
@@ -125,13 +125,13 @@ public class StreamsCleanupClient {
         }
     }
 
-    private void resetSourceAndInternalTopicOffsets() {
-        final List<String> sourceTopics = this.options.valuesOf(sourceTopicsOption);
+    private void resetInputAndInternalTopicOffsets() {
+        final List<String> inputTopics = this.options.valuesOf(inputTopicsOption);
 
-        if (sourceTopics.size() == 0) {
-            System.out.println("No source topics specified.");
+        if (inputTopics.size() == 0) {
+            System.out.println("No input topics specified.");
         } else {
-            System.out.println("Resetting offsets to zero for source topics " + sourceTopics + " and all internal topics.");
+            System.out.println("Resetting offsets to zero for input topics " + inputTopics + " and all internal topics.");
         }
 
         final Properties config = new Properties();
@@ -140,14 +140,14 @@ public class StreamsCleanupClient {
         config.setProperty(ConsumerConfig.GROUP_ID_CONFIG, this.options.valueOf(applicationIdOption));
         config.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
-        for (final String srcTopic : sourceTopics) {
-            if (!this.allTopics.contains(srcTopic)) {
-                System.out.println("Source topic " + srcTopic + " not found. Skipping.");
+        for (final String inTopic : inputTopics) {
+            if (!this.allTopics.contains(inTopic)) {
+                System.out.println("Input topic " + inTopic + " not found. Skipping.");
             }
         }
 
         for (final String topic : this.allTopics) {
-            if (isSourceTopic(topic) || isInternalTopic(topic)) {
+            if (isInputTopic(topic) || isInternalTopic(topic)) {
                 System.out.println("Topic: " + topic);
 
                 try (final KafkaConsumer<byte[], byte[]> client = new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
@@ -170,8 +170,8 @@ public class StreamsCleanupClient {
         System.out.println("Done.");
     }
 
-    private boolean isSourceTopic(final String topic) {
-        return this.options.valuesOf(sourceTopicsOption).contains(topic);
+    private boolean isInputTopic(final String topic) {
+        return this.options.valuesOf(inputTopicsOption).contains(topic);
     }
 
     private void seekToEndIntermediateTopics() {
