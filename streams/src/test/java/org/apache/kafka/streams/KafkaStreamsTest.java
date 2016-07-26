@@ -19,10 +19,15 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.test.MockMetricsReporter;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.io.File;
 import java.util.Properties;
+
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class KafkaStreamsTest {
 
@@ -42,7 +47,7 @@ public class KafkaStreamsTest {
         streams.start();
         final int newInitCount = MockMetricsReporter.INIT_COUNT.get();
         final int initCountDifference = newInitCount - oldInitCount;
-        Assert.assertTrue("some reporters should be initialized by calling start()", initCountDifference > 0);
+        assertTrue("some reporters should be initialized by calling start()", initCountDifference > 0);
 
         streams.close();
         Assert.assertEquals("each reporter initialized should also be closed",
@@ -109,7 +114,7 @@ public class KafkaStreamsTest {
     @Test
     public void testCleanup() throws Exception {
         final Properties props = new Properties();
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "testCannotStartTwice");
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "testLocalCleanup");
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
 
         final KStreamBuilder builder = new KStreamBuilder();
@@ -119,6 +124,40 @@ public class KafkaStreamsTest {
         streams.start();
         streams.close();
         streams.cleanUp();
+    }
+
+    @Test
+    public void testCleanupIsolation() throws Exception {
+        final KStreamBuilder builder = new KStreamBuilder();
+
+        final String appId_1 = "testIsolation-1";
+        final String appId_2 = "testIsolation-2";
+        final String stateDir = TestUtils.tempDirectory().getPath();
+        final File stateDirApp_1 = new File(stateDir + File.separator + appId_1);
+        final File stateDirApp_2 = new File(stateDir + File.separator + appId_2);
+
+        final Properties props = new Properties();
+        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir);
+
+        assertFalse(stateDirApp_1.exists());
+        assertFalse(stateDirApp_2.exists());
+
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, appId_1);
+        final KafkaStreams streams1 = new KafkaStreams(builder, props);
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, appId_2);
+        final KafkaStreams streams2 = new KafkaStreams(builder, props);
+
+        assertTrue(stateDirApp_1.exists());
+        assertTrue(stateDirApp_2.exists());
+
+        streams1.cleanUp();
+        assertFalse(stateDirApp_1.exists());
+        assertTrue(stateDirApp_2.exists());
+
+        streams2.cleanUp();
+        assertFalse(stateDirApp_1.exists());
+        assertFalse(stateDirApp_2.exists());
     }
 
     @Test(expected = IllegalStateException.class)
