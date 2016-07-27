@@ -28,6 +28,7 @@ import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.metrics.Metrics;
@@ -526,7 +527,7 @@ public class Fetcher<K, V> {
                 // current consumed position
                 Long position = subscriptions.position(tp);
                 if (position == null || position != fetchOffset) {
-                    log.debug("Discarding fetch response for partition {} since its offset {} does not match " +
+                    log.debug("Discarding stale fetch response for partition {} since its offset {} does not match " +
                             "the expected offset {}", tp, fetchOffset, position);
                     return null;
                 }
@@ -570,14 +571,14 @@ public class Fetcher<K, V> {
                     || partition.errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code()) {
                 this.metadata.requestUpdate();
             } else if (partition.errorCode == Errors.OFFSET_OUT_OF_RANGE.code()) {
-                if (subscriptions.hasDefaultOffsetResetPolicy()) {
-                    log.info("Fetch offset {} is out of range, resetting offset", fetchOffset);
+                if (fetchOffset != subscriptions.position(tp)) {
+                    log.debug("Discarding stale fetch response for partition {} since the fetched offset {}" +
+                            "does not match the current offset {}", tp, fetchOffset, subscriptions.position(tp));
+                } else if (subscriptions.hasDefaultOffsetResetPolicy()) {
+                    log.info("Fetch offset {} is out of range for partition {}, resetting offset", fetchOffset, tp);
                     subscriptions.needOffsetReset(tp);
                 } else if (fetchOffset == subscriptions.position(tp)) {
                     throw new OffsetOutOfRangeException(Collections.singletonMap(tp, fetchOffset));
-                } else {
-                    log.debug("Discarding out of range fetch response for partition {} since the fetched offset {}" +
-                            "does not match the current offset {}", tp, fetchOffset, subscriptions.position(tp));
                 }
             } else if (partition.errorCode == Errors.TOPIC_AUTHORIZATION_FAILED.code()) {
                 log.warn("Not authorized to read from topic {}.", tp.topic());
@@ -616,10 +617,8 @@ public class Fetcher<K, V> {
                                         keyByteArray == null ? ConsumerRecord.NULL_SIZE : keyByteArray.length,
                                         valueByteArray == null ? ConsumerRecord.NULL_SIZE : valueByteArray.length,
                                         key, value);
-        } catch (KafkaException e) {
-            throw e;
         } catch (RuntimeException e) {
-            throw new KafkaException("Error deserializing key/value for partition " + partition + " at offset " + logEntry.offset(), e);
+            throw new SerializationException("Error deserializing key/value for partition " + partition + " at offset " + logEntry.offset(), e);
         }
     }
 
@@ -717,7 +716,6 @@ public class Fetcher<K, V> {
         public final Sensor fetchLatency;
         public final Sensor recordsFetchLag;
         public final Sensor fetchThrottleTimeSensor;
-
 
         public FetchManagerMetrics(Metrics metrics, String metricGrpPrefix) {
             this.metrics = metrics;

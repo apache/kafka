@@ -151,16 +151,21 @@ public class FetcherTest {
 
     @Test
     public void testFetchedRecordsRaisesOnSerializationErrors() {
+        // raise an exception from somewhere in the middle of the fetch response
+        // so that we can verify that our position does not advance after raising
         ByteArrayDeserializer deserializer = new ByteArrayDeserializer() {
+            int i = 0;
             @Override
             public byte[] deserialize(String topic, byte[] data) {
-                throw new SerializationException();
+                if (i++ == 1)
+                    throw new SerializationException();
+                return data;
             }
         };
 
         Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, new Metrics(time), deserializer, deserializer);
 
-        subscriptions.assignFromUser(Arrays.asList(tp));
+        subscriptions.assignFromUser(Collections.singleton(tp));
         subscriptions.seek(tp, 1);
 
         client.prepareResponse(matchesOffset(tp, 1), fetchResponse(this.records.buffer(), Errors.NONE.code(), 100L, 0));
@@ -172,7 +177,7 @@ public class FetcherTest {
             fail("fetchedRecords should have raised");
         } catch (SerializationException e) {
             // the position should not advance beyond the failed record
-            assertEquals(1L, subscriptions.position(tp).longValue());
+            assertEquals(1, (long) subscriptions.position(tp));
         }
     }
 
@@ -350,6 +355,22 @@ public class FetcherTest {
         assertEquals(0, fetcher.fetchedRecords().size());
         assertTrue(subscriptions.isOffsetResetNeeded(tp));
         assertEquals(null, subscriptions.position(tp));
+    }
+
+    @Test
+    public void testStaleOutOfRangeError() {
+        // verify that an out of range error which arrives after a seek
+        // does not cause us to reset our position or throw an exception
+        subscriptions.assignFromUser(Arrays.asList(tp));
+        subscriptions.seek(tp, 0);
+
+        fetcher.sendFetches();
+        client.prepareResponse(fetchResponse(this.records.buffer(), Errors.OFFSET_OUT_OF_RANGE.code(), 100L, 0));
+        subscriptions.seek(tp, 1);
+        consumerClient.poll(0);
+        assertEquals(0, fetcher.fetchedRecords().size());
+        assertFalse(subscriptions.isOffsetResetNeeded(tp));
+        assertEquals(1, (long) subscriptions.position(tp));
     }
 
     @Test
