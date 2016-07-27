@@ -48,6 +48,8 @@ public class EmbeddedSingleNodeKafkaCluster extends ExternalResource {
         log.debug("ZooKeeper instance is running at {}", zKConnectString());
         brokerConfig.put(KafkaConfig$.MODULE$.ZkConnectProp(), zKConnectString());
         brokerConfig.put(KafkaConfig$.MODULE$.PortProp(), DEFAULT_BROKER_PORT);
+        brokerConfig.put(KafkaConfig$.MODULE$.DeleteTopicEnableProp(), true);
+        brokerConfig.put(KafkaConfig$.MODULE$.GroupMinSessionTimeoutMsProp(), 0);
 
         log.debug("Starting a Kafka instance on port {} ...", brokerConfig.getProperty(KafkaConfig$.MODULE$.PortProp()));
         broker = new KafkaEmbedded(brokerConfig);
@@ -125,4 +127,9 @@ public class EmbeddedSingleNodeKafkaCluster extends ExternalResource {
                             Properties topicConfig) {
         broker.createTopic(topic, partitions, replication, topicConfig);
     }
+
+    public void deleteTopic(String topic) {
+        broker.deleteTopic(topic);
+    }
+
 }
