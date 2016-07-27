@@ -118,8 +118,11 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
     public Future<Void> set(final Map<ByteBuffer, ByteBuffer> values, final Callback<Void> callback) {
         SetCallbackFuture producerCallback = new SetCallbackFuture(values.size(), callback);
 
-        for (Map.Entry<ByteBuffer, ByteBuffer> entry : values.entrySet())
-            offsetLog.send(entry.getKey().array(), entry.getValue().array(), producerCallback);
+        for (Map.Entry<ByteBuffer, ByteBuffer> entry : values.entrySet()) {
+            ByteBuffer key = entry.getKey();
+            ByteBuffer value = entry.getValue();
+            offsetLog.send(key == null ? null : key.array(), value == null ? null : value.array(), producerCallback);
+        }
 
         return producerCallback;
     }
