@@ -39,6 +39,7 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.LogEntry;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.TimestampType;
@@ -83,7 +84,7 @@ public class Fetcher<K, V> {
     private final Metadata metadata;
     private final FetchManagerMetrics sensors;
     private final SubscriptionState subscriptions;
-    private final List<FetchCompletion> completedFetches;
+    private final List<CompletedFetch> completedFetches;
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
 
@@ -132,13 +133,13 @@ public class Fetcher<K, V> {
                         public void onSuccess(ClientResponse resp) {
                             FetchResponse response = new FetchResponse(resp.responseBody());
                             Set<TopicPartition> partitions = new HashSet<>(response.responseData().keySet());
-                            FetchMetricAggregator metricAggregator = new FetchMetricAggregator(sensors, partitions);
+                            FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, partitions);
 
                             for (Map.Entry<TopicPartition, FetchResponse.PartitionData> entry : response.responseData().entrySet()) {
                                 TopicPartition partition = entry.getKey();
                                 long fetchOffset = request.fetchData().get(partition).offset;
                                 FetchResponse.PartitionData fetchData = entry.getValue();
-                                completedFetches.add(new FetchCompletion(partition, fetchOffset, fetchData, metricAggregator));
+                                completedFetches.add(new CompletedFetch(partition, fetchOffset, fetchData, metricAggregator));
                             }
 
                             sensors.fetchLatency.record(resp.requestLatencyMs());
@@ -340,63 +341,68 @@ public class Fetcher<K, V> {
             return Collections.emptyMap();
         } else {
             Map<TopicPartition, List<ConsumerRecord<K, V>>> drained = new HashMap<>();
-            int maxRecords = maxPollRecords;
-            Iterator<FetchCompletion> completedFetchesIterator = completedFetches.iterator();
+            int recordsRemaining = maxPollRecords;
+            Iterator<CompletedFetch> completedFetchesIterator = completedFetches.iterator();
 
-            while (maxRecords > 0) {
-                if (nextInLineRecords == null || nextInLineRecords.isConsumed()) {
+            while (recordsRemaining > 0) {
+                if (nextInLineRecords == null || nextInLineRecords.isEmpty()) {
                     if (!completedFetchesIterator.hasNext())
                         break;
 
-                    FetchCompletion completion = completedFetchesIterator.next();
+                    CompletedFetch completion = completedFetchesIterator.next();
                     completedFetchesIterator.remove();
                     nextInLineRecords = parseFetchedData(completion);
                 } else {
-                    maxRecords -= append(drained, nextInLineRecords, maxRecords);
+                    recordsRemaining -= append(drained, nextInLineRecords, recordsRemaining);
                 }
             }
+
             return drained;
         }
     }
 
     private int append(Map<TopicPartition, List<ConsumerRecord<K, V>>> drained,
-                       PartitionRecords<K, V> part,
+                       PartitionRecords<K, V> partitionRecords,
                        int maxRecords) {
-        if (!subscriptions.isAssigned(part.partition)) {
+        if (partitionRecords.isEmpty())
+            return 0;
+
+        if (!subscriptions.isAssigned(partitionRecords.partition)) {
             // this can happen when a rebalance happened before fetched records are returned to the consumer's poll call
-            log.debug("Not returning fetched records for partition {} since it is no longer assigned", part.partition);
+            log.debug("Not returning fetched records for partition {} since it is no longer assigned", partitionRecords.partition);
         } else {
             // note that the consumed position should always be available as long as the partition is still assigned
-            long position = subscriptions.position(part.partition);
-            if (!subscriptions.isFetchable(part.partition)) {
+            long position = subscriptions.position(partitionRecords.partition);
+            if (!subscriptions.isFetchable(partitionRecords.partition)) {
                 // this can happen when a partition is paused before fetched records are returned to the consumer's poll call
-                log.debug("Not returning fetched records for assigned partition {} since it is no longer fetchable", part.partition);
-            } else if (part.fetchOffset == position) {
-                List<ConsumerRecord<K, V>> partRecords = part.take(maxRecords);
+                log.debug("Not returning fetched records for assigned partition {} since it is no longer fetchable", partitionRecords.partition);
+            } else if (partitionRecords.fetchOffset == position) {
+                // we are ensured to have at least one record since we already checked for emptiness
+                List<ConsumerRecord<K, V>> partRecords = partitionRecords.take(maxRecords);
                 long nextOffset = partRecords.get(partRecords.size() - 1).offset() + 1;
 
                 log.trace("Returning fetched records at offset {} for assigned partition {} and update " +
-                        "position to {}", position, part.partition, nextOffset);
+                        "position to {}", position, partitionRecords.partition, nextOffset);
 
-                List<ConsumerRecord<K, V>> records = drained.get(part.partition);
+                List<ConsumerRecord<K, V>> records = drained.get(partitionRecords.partition);
                 if (records == null) {
                     records = partRecords;
-                    drained.put(part.partition, records);
+                    drained.put(partitionRecords.partition, records);
                 } else {
                     records.addAll(partRecords);
                 }
 
-                subscriptions.position(part.partition, nextOffset);
+                subscriptions.position(partitionRecords.partition, nextOffset);
                 return partRecords.size();
             } else {
                 // these records aren't next in line based on the last consumed position, ignore them
                 // they must be from an obsolete request
                 log.debug("Ignoring fetched records for {} at offset {} since the current position is {}",
-                        part.partition, part.fetchOffset, position);
+                        partitionRecords.partition, partitionRecords.fetchOffset, position);
             }
         }
 
-        part.discard();
+        partitionRecords.discard();
         return 0;
     }
 
@@ -463,10 +469,10 @@ public class Fetcher<K, V> {
 
     private Set<TopicPartition> fetchablePartitions() {
         Set<TopicPartition> fetchable = subscriptions.fetchablePartitions();
-        if (nextInLineRecords != null && !nextInLineRecords.isConsumed())
+        if (nextInLineRecords != null && !nextInLineRecords.isEmpty())
             fetchable.remove(nextInLineRecords.partition);
-        for (FetchCompletion fetchCompletion : completedFetches)
-            fetchable.remove(fetchCompletion.partition);
+        for (CompletedFetch completedFetch : completedFetches)
+            fetchable.remove(completedFetch.partition);
         return fetchable;
     }
 
@@ -509,10 +515,10 @@ public class Fetcher<K, V> {
     /**
      * The callback for fetch completion
      */
-    private PartitionRecords<K, V> parseFetchedData(FetchCompletion fetchCompletion) {
-        TopicPartition tp = fetchCompletion.partition;
-        FetchResponse.PartitionData partition = fetchCompletion.partitionData;
-        long fetchOffset = fetchCompletion.fetchedOffset;
+    private PartitionRecords<K, V> parseFetchedData(CompletedFetch completedFetch) {
+        TopicPartition tp = completedFetch.partition;
+        FetchResponse.PartitionData partition = completedFetch.partitionData;
+        long fetchOffset = completedFetch.fetchedOffset;
         int bytes = 0;
         int recordsCount = 0;
         PartitionRecords<K, V> parsedRecords = null;
@@ -548,8 +554,11 @@ public class Fetcher<K, V> {
 
                 if (!parsed.isEmpty()) {
                     log.trace("Adding fetched record for partition {} with offset {} to buffered record list", tp, position);
+                    recordsCount = parsed.size();
+                    parsedRecords = new PartitionRecords<>(fetchOffset, tp, parsed);
                     ConsumerRecord<K, V> record = parsed.get(parsed.size() - 1);
                     this.sensors.recordsFetchLag.record(partition.highWatermark - record.offset());
+                    this.sensors.recordTopicFetchMetrics(tp.topic(), bytes, parsed.size());
                 } else if (buffer.limit() > 0 && !skippedRecords) {
                     // we did not read a single message from a non-empty buffer
                     // because that message's size is larger than fetch size, in this case
@@ -560,13 +569,10 @@ public class Fetcher<K, V> {
                             + " whose size is larger than the fetch size "
                             + this.fetchSize
                             + " and hence cannot be ever returned."
-                            + " Increase the fetch size, or decrease the maximum message size the broker will allow.",
+                            + " Increase the fetch size on the client (using max.partition.fetch.bytes),"
+                            + " or decrease the maximum message size the broker will allow (using message.max.bytes).",
                             recordTooLargePartitions);
                 }
-
-                this.sensors.recordTopicFetchMetrics(tp.topic(), bytes, parsed.size());
-                recordsCount = parsed.size();
-                parsedRecords = new PartitionRecords<>(fetchOffset, tp, parsed);
             } else if (partition.errorCode == Errors.NOT_LEADER_FOR_PARTITION.code()
                     || partition.errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code()) {
                 this.metadata.requestUpdate();
@@ -577,7 +583,7 @@ public class Fetcher<K, V> {
                 } else if (subscriptions.hasDefaultOffsetResetPolicy()) {
                     log.info("Fetch offset {} is out of range for partition {}, resetting offset", fetchOffset, tp);
                     subscriptions.needOffsetReset(tp);
-                } else if (fetchOffset == subscriptions.position(tp)) {
+                } else {
                     throw new OffsetOutOfRangeException(Collections.singletonMap(tp, fetchOffset));
                 }
             } else if (partition.errorCode == Errors.TOPIC_AUTHORIZATION_FAILED.code()) {
@@ -589,7 +595,7 @@ public class Fetcher<K, V> {
                 throw new IllegalStateException("Unexpected error code " + partition.errorCode + " while fetching data");
             }
         } finally {
-            fetchCompletion.metricAggregator.record(tp, bytes, recordsCount);
+            completedFetch.metricAggregator.record(tp, bytes, recordsCount);
         }
 
         return parsedRecords;
@@ -617,15 +623,17 @@ public class Fetcher<K, V> {
                                         keyByteArray == null ? ConsumerRecord.NULL_SIZE : keyByteArray.length,
                                         valueByteArray == null ? ConsumerRecord.NULL_SIZE : valueByteArray.length,
                                         key, value);
+        } catch (InvalidRecordException e) {
+            throw e;
         } catch (RuntimeException e) {
             throw new SerializationException("Error deserializing key/value for partition " + partition + " at offset " + logEntry.offset(), e);
         }
     }
 
     private static class PartitionRecords<K, V> {
-        public long fetchOffset;
-        public TopicPartition partition;
-        public List<ConsumerRecord<K, V>> records;
+        private long fetchOffset;
+        private TopicPartition partition;
+        private List<ConsumerRecord<K, V>> records;
 
         public PartitionRecords(long fetchOffset, TopicPartition partition, List<ConsumerRecord<K, V>> records) {
             this.fetchOffset = fetchOffset;
@@ -633,7 +641,7 @@ public class Fetcher<K, V> {
             this.records = records;
         }
 
-        private boolean isConsumed() {
+        private boolean isEmpty() {
             return records == null || records.isEmpty();
         }
 
@@ -643,7 +651,7 @@ public class Fetcher<K, V> {
 
         private List<ConsumerRecord<K, V>> take(int n) {
             if (records == null)
-                return Collections.emptyList();
+                return new ArrayList<>();
 
             if (n >= records.size()) {
                 List<ConsumerRecord<K, V>> res = this.records;
@@ -665,16 +673,16 @@ public class Fetcher<K, V> {
         }
     }
 
-    private static class FetchCompletion {
+    private static class CompletedFetch {
         private final TopicPartition partition;
         private final long fetchedOffset;
         private final FetchResponse.PartitionData partitionData;
-        private final FetchMetricAggregator metricAggregator;
+        private final FetchResponseMetricAggregator metricAggregator;
 
-        public FetchCompletion(TopicPartition partition,
-                               long fetchedOffset,
-                               FetchResponse.PartitionData partitionData,
-                               FetchMetricAggregator metricAggregator) {
+        public CompletedFetch(TopicPartition partition,
+                              long fetchedOffset,
+                              FetchResponse.PartitionData partitionData,
+                              FetchResponseMetricAggregator metricAggregator) {
             this.partition = partition;
             this.fetchedOffset = fetchedOffset;
             this.partitionData = partitionData;
@@ -682,25 +690,35 @@ public class Fetcher<K, V> {
         }
     }
 
-    private static class FetchMetricAggregator {
+    /**
+     * Since we parse the message data for each partition from each fetch response lazily, fetch-level
+     * metrics need to be aggregated as the messages from each partition are parsed. This class is used
+     * to facilitate this incremental aggregation.
+     */
+    private static class FetchResponseMetricAggregator {
         private final FetchManagerMetrics sensors;
-        private final Set<TopicPartition> partitions;
+        private final Set<TopicPartition> unrecordedPartitions;
 
         private int totalBytes;
         private int totalRecords;
 
-        public FetchMetricAggregator(FetchManagerMetrics sensors,
-                                     Set<TopicPartition> partitions) {
+        public FetchResponseMetricAggregator(FetchManagerMetrics sensors,
+                                             Set<TopicPartition> partitions) {
             this.sensors = sensors;
-            this.partitions = partitions;
+            this.unrecordedPartitions = partitions;
         }
 
+        /**
+         * After each partition is parsed, we update the current metric totals with the total bytes
+         * and number of records parsed. After all partitions have reported, we write the metric.
+         */
         public void record(TopicPartition partition, int bytes, int records) {
-            partitions.remove(partition);
+            unrecordedPartitions.remove(partition);
             totalBytes += bytes;
             totalRecords += records;
 
-            if (partitions.isEmpty()) {
+            if (unrecordedPartitions.isEmpty()) {
+                // once all expected partitions from the fetch have reported in, record the metrics
                 sensors.bytesFetched.record(totalBytes);
                 sensors.recordsFetched.record(totalRecords);
             }

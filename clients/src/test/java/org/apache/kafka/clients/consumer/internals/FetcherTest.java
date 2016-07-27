@@ -130,7 +130,7 @@ public class FetcherTest {
         consumerClient.poll(0);
         records = fetcher.fetchedRecords().get(tp);
         assertEquals(3, records.size());
-        assertEquals(4L, (long) subscriptions.position(tp)); // this is the next fetching position
+        assertEquals(4L, subscriptions.position(tp).longValue()); // this is the next fetching position
         long offset = 1;
         for (ConsumerRecord<byte[], byte[]> record : records) {
             assertEquals(offset, record.offset());
@@ -177,13 +177,13 @@ public class FetcherTest {
             fail("fetchedRecords should have raised");
         } catch (SerializationException e) {
             // the position should not advance beyond the failed record
-            assertEquals(1, (long) subscriptions.position(tp));
+            assertEquals(1, subscriptions.position(tp).longValue());
         }
     }
 
     @Test
     public void testFetchMaxPollRecords() {
-        Fetcher<byte[], byte[]> fetcher = createFetcher(2, subscriptions, new Metrics(time));
+        Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, new Metrics(time), 2);
 
         List<ConsumerRecord<byte[], byte[]>> records;
         subscriptions.assignFromUser(Arrays.asList(tp));
@@ -196,7 +196,7 @@ public class FetcherTest {
         consumerClient.poll(0);
         records = fetcher.fetchedRecords().get(tp);
         assertEquals(2, records.size());
-        assertEquals(3L, (long) subscriptions.position(tp));
+        assertEquals(3L, subscriptions.position(tp).longValue());
         assertEquals(1, records.get(0).offset());
         assertEquals(2, records.get(1).offset());
 
@@ -204,14 +204,14 @@ public class FetcherTest {
         consumerClient.poll(0);
         records = fetcher.fetchedRecords().get(tp);
         assertEquals(1, records.size());
-        assertEquals(4L, (long) subscriptions.position(tp));
+        assertEquals(4L, subscriptions.position(tp).longValue());
         assertEquals(3, records.get(0).offset());
 
         fetcher.sendFetches();
         consumerClient.poll(0);
         records = fetcher.fetchedRecords().get(tp);
         assertEquals(2, records.size());
-        assertEquals(6L, (long) subscriptions.position(tp));
+        assertEquals(6L, subscriptions.position(tp).longValue());
         assertEquals(4, records.get(0).offset());
         assertEquals(5, records.get(1).offset());
     }
@@ -237,7 +237,7 @@ public class FetcherTest {
         consumerClient.poll(0);
         consumerRecords = fetcher.fetchedRecords().get(tp);
         assertEquals(3, consumerRecords.size());
-        assertEquals(31L, (long) subscriptions.position(tp)); // this is the next fetching position
+        assertEquals(31L, subscriptions.position(tp).longValue()); // this is the next fetching position
 
         assertEquals(15L, consumerRecords.get(0).offset());
         assertEquals(20L, consumerRecords.get(1).offset());
@@ -370,7 +370,7 @@ public class FetcherTest {
         consumerClient.poll(0);
         assertEquals(0, fetcher.fetchedRecords().size());
         assertFalse(subscriptions.isOffsetResetNeeded(tp));
-        assertEquals(1, (long) subscriptions.position(tp));
+        assertEquals(1, subscriptions.position(tp).longValue());
     }
 
     @Test
@@ -418,7 +418,7 @@ public class FetcherTest {
         // disconnects should have no affect on subscription state
         assertFalse(subscriptions.isOffsetResetNeeded(tp));
         assertTrue(subscriptions.isFetchable(tp));
-        assertEquals(0, (long) subscriptions.position(tp));
+        assertEquals(0, subscriptions.position(tp).longValue());
     }
 
     @Test
@@ -430,7 +430,7 @@ public class FetcherTest {
 
         fetcher.updateFetchPositions(Collections.singleton(tp));
         assertTrue(subscriptions.isFetchable(tp));
-        assertEquals(5, (long) subscriptions.position(tp));
+        assertEquals(5, subscriptions.position(tp).longValue());
     }
 
     @Test
@@ -443,7 +443,7 @@ public class FetcherTest {
         fetcher.updateFetchPositions(Collections.singleton(tp));
         assertFalse(subscriptions.isOffsetResetNeeded(tp));
         assertTrue(subscriptions.isFetchable(tp));
-        assertEquals(5, (long) subscriptions.position(tp));
+        assertEquals(5, subscriptions.position(tp).longValue());
     }
 
     @Test
@@ -456,7 +456,7 @@ public class FetcherTest {
         fetcher.updateFetchPositions(Collections.singleton(tp));
         assertFalse(subscriptions.isOffsetResetNeeded(tp));
         assertTrue(subscriptions.isFetchable(tp));
-        assertEquals(5, (long) subscriptions.position(tp));
+        assertEquals(5, subscriptions.position(tp).longValue());
     }
 
     @Test
@@ -469,7 +469,7 @@ public class FetcherTest {
         fetcher.updateFetchPositions(Collections.singleton(tp));
         assertFalse(subscriptions.isOffsetResetNeeded(tp));
         assertTrue(subscriptions.isFetchable(tp));
-        assertEquals(5, (long) subscriptions.position(tp));
+        assertEquals(5, subscriptions.position(tp).longValue());
     }
 
     @Test
@@ -487,7 +487,7 @@ public class FetcherTest {
         fetcher.updateFetchPositions(Collections.singleton(tp));
         assertFalse(subscriptions.isOffsetResetNeeded(tp));
         assertTrue(subscriptions.isFetchable(tp));
-        assertEquals(5, (long) subscriptions.position(tp));
+        assertEquals(5, subscriptions.position(tp).longValue());
     }
 
     @Test
@@ -625,15 +625,14 @@ public class FetcherTest {
         return new MetadataResponse(cluster.nodes(), MetadataResponse.NO_CONTROLLER_ID, Arrays.asList(topicMetadata));
     }
 
-    private Fetcher<byte[], byte[]> createFetcher(int maxPollRecords,
-                                                  SubscriptionState subscriptions,
-                                                  Metrics metrics) {
+    private Fetcher<byte[], byte[]> createFetcher(SubscriptionState subscriptions,
+                                                  Metrics metrics,
+                                                  int maxPollRecords) {
         return createFetcher(subscriptions, metrics, new ByteArrayDeserializer(), new ByteArrayDeserializer(), maxPollRecords);
     }
 
-
-    private  Fetcher<byte[], byte[]> createFetcher(SubscriptionState subscriptions, Metrics metrics) {
-        return createFetcher(Integer.MAX_VALUE, subscriptions, metrics);
+    private Fetcher<byte[], byte[]> createFetcher(SubscriptionState subscriptions, Metrics metrics) {
+        return createFetcher(subscriptions, metrics, Integer.MAX_VALUE);
     }
 
     private <K, V> Fetcher<K, V> createFetcher(SubscriptionState subscriptions,
@@ -642,7 +641,6 @@ public class FetcherTest {
                                                Deserializer<V> valueDeserializer) {
         return createFetcher(subscriptions, metrics, keyDeserializer, valueDeserializer, Integer.MAX_VALUE);
     }
-
 
     private <K, V> Fetcher<K, V> createFetcher(SubscriptionState subscriptions,
                                                Metrics metrics,
