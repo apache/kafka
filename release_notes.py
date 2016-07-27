@@ -1,0 +1,67 @@
+#!/usr/bin/env python
+
+from jira import JIRA
+import itertools, sys
+
+if len(sys.argv) < 2:
+    print >>sys.stderr, "Usage: release_notes.py <version>"
+    sys.exit(1)
+
+version = sys.argv[1]
+minor_version_dotless = "".join(version.split(".")[:3]) # i.e., 0.10.0 if version == 0.10.0.1
+
+JIRA_BASE_URL = 'https://issues.apache.org/jira'
+MAX_RESULTS = 100 # This is constrained for cloud instances so we need to fix this value
+
+def get_issues(jira, query, **kwargs):
+    """
+    Get all issues matching the JQL query from the JIRA instance. This handles expanding paginated results for you. Any additional keyword arguments are forwarded to the JIRA.search_issues call.
+    """
+    results = []
+    startAt = 0
+    new_results = None
+    while new_results == None or len(new_results) == MAX_RESULTS:
+        new_results = jira.search_issues(query, startAt=startAt, maxResults=MAX_RESULTS, **kwargs)
+        results += new_results
+        startAt += len(new_results)
+    return results
+
+def issue_link(issue):
+    return "%s/browse/%s" % (JIRA_BASE_URL, issue.key)
+
+
+if __name__ == "__main__":
+    apache = JIRA(JIRA_BASE_URL)
+    issues = get_issues(apache, 'project=KAFKA and fixVersion=%s' % version)
+    if not issues:
+        print >>sys.stderr, "Didn't find any issues for the target fix version"
+        sys.exit(1)
+
+    unresolved_issues = [issue for issue in issues if issue.fields.resolution is None]
+    if unresolved_issues:
+        for issue in unresolved_issues:
+            print >>sys.stderr, "Unresolved issue: %s %s" % (issue.key, issue_link(issue))
+        sys.exit(1)
+
+    # Get list of (issue type, [issues]) sorted by the issue ID type's , with each subset of issues sorted by their key so they are in
+    # increasing order of bug #
+    by_group = [(k,sorted(g, key=lambda issue: issue.id)) for k,g in itertools.groupby(sorted(issues, key=lambda issue: issue.fields.issuetype.id), lambda issue: issue.fields.issuetype.name)]
+
+    print "<h1>Release Notes - Kafka - Version %s</h1>" % version
+    print """<p>Below is a summary of the JIRA issues addressed in the %(version)s release of Kafka. For full documentation of the
+    release, a guide to get started, and information about the project, see the <a href="http://kafka.apache.org/">Kafka
+    project site</a>.</p>
+
+    <p><b>Note about upgrades:</b> Please carefully review the
+    <a href="http://kafka.apache.org/%(minor)s/documentation.html#upgrade">upgrade documentation</a> for this release thoroughly
+    before upgrading your cluster. The upgrade notes discuss any critical information about incompatibilities and breaking
+    changes, performance changes, and any other changes that might impact your production deployment of Kafka.</p>
+
+    <p>The documentation for the most recent release can be found at
+    <a href="http://kafka.apache.org/documentation.html">http://kafka.apache.org/documentation.html</a>.</p>""" % { 'version': version, 'minor': minor_version_dotless }
+    for itype, issues in by_group:
+        print "<h2>%s</h2>" % itype
+        print "<ul>"
+        for issue in issues:
+            print '<li>[<a href="%(link)s">%(key)s</a>] - %(summary)s</li>' % {'key': issue.key, 'link': issue_link(issue), 'summary': issue.fields.summary}
+        print "</ul>"
