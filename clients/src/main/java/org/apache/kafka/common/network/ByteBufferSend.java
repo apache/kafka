@@ -23,9 +23,9 @@ import java.nio.channels.GatheringByteChannel;
 public class ByteBufferSend implements Send {
 
     private final String destination;
+    private final int size;
     protected final ByteBuffer[] buffers;
     private int remaining;
-    private int size;
     private boolean pending = false;
 
     public ByteBufferSend(String destination, ByteBuffer... buffers) {

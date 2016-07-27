@@ -294,14 +294,26 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
   }
 
   /** Write the messages in this set to the given channel */
-  def writeTo(channel: GatheringByteChannel, offset: Long, size: Int): Int = {
-    // Ignore offset and size from input. We just want to write the whole buffer to the channel.
+  def writeFullyTo(channel: GatheringByteChannel): Int = {
     buffer.mark()
     var written = 0
-    while(written < sizeInBytes)
+    while (written < sizeInBytes)
       written += channel.write(buffer)
     buffer.reset()
     written
+  }
+
+  /** Write the messages in this set to the given channel starting at the given offset byte.
+    * Less than the complete amount may be written, but no more than maxSize can be. The number
+    * of bytes written is returned */
+  def writeTo(channel: GatheringByteChannel, offset: Long, maxSize: Int): Int = {
+    if (offset > Int.MaxValue)
+      throw new IllegalArgumentException(s"offset should not be larger than Int.MaxValue: $offset")
+    val dup = buffer.duplicate()
+    val position = offset.toInt
+    dup.position(position)
+    dup.limit(math.min(buffer.limit, position + maxSize))
+    channel.write(dup)
   }
 
   override def isMagicValueInAllWrapperMessages(expectedMagicValue: Byte): Boolean = {
