@@ -32,13 +32,25 @@ import java.util.Properties;
 import java.util.Set;
 
 /**
- * {@link StreamsCleanupClient} resets a Kafka Streams application to the very beginning. Thus, an application can
- * reprocess the whole input from scratch.
+ * {@link StreamsResetter} resets the processing state of a Kafka Streams application so that, for example, you can reprocess its input from scratch.
  * <p>
- * This includes, setting source and internal topic offsets to zero, skipping over all intermediate user topics,
- * and deleting all internally created topics.
+ * Resetting the processing state of an application includes the following actions:
+ * <ol>
+ * <li>setting the application's consumer offsets for input and internal topics to zero</li>
+ * <li>skip over all intermediate user topics (i.e., "seekToEnd" for consumers of intermediate topics)</li>
+ * <li>deleting any topics created internally by Kafka Streams for this application</li>
+ * </ol>
+ * <p>
+ * Do only use this tool if <strong>no</strong> application instance is running. Otherwise, the application will get into an invalid state and crash or produce wrong results.
+ * <p>
+ * If you run multiple application instances, running this tool once is sufficient.
+ * However, you need to call {@code KafkaStreams#cleanUp()} before re-starting any instance (to clean local state store directory).
+ * Otherwise, your application is in an invalid state.
+ * <p>
+ * User output topics will not be deleted or modified by this tool.
+ * If downstream applications consume intermediate or output topics, it is the user's responsibility to adjust those applications manually if required.
  */
-public class StreamsCleanupClient {
+public class StreamsResetter {
     private static final int EXIT_CODE_SUCCESS = 0;
     private static final int EXIT_CODE_ERROR = 1;
 
@@ -242,7 +254,7 @@ public class StreamsCleanupClient {
     }
 
     public static void main(final String[] args) {
-        System.exit(new StreamsCleanupClient().run(args));
+        System.exit(new StreamsResetter().run(args));
     }
 
 }

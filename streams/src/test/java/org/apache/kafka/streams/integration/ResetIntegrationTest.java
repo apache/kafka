@@ -37,7 +37,7 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.test.TestUtils;
-import org.apache.kafka.tools.StreamsCleanupClient;
+import org.apache.kafka.tools.StreamsResetter;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
@@ -56,7 +56,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 /**
  * Tests local state store and global application cleanup.
  */
-public class CleanUpIntegrationTest {
+public class ResetIntegrationTest {
     @ClassRule
     public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster();
 
@@ -211,7 +211,7 @@ public class CleanUpIntegrationTest {
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
 
-        final int exitCode = new StreamsCleanupClient().run(
+        final int exitCode = new StreamsResetter().run(
             new String[]{
                 "--application-id", APP_ID,
                 "--bootstrap-server", CLUSTER.bootstrapServers(),

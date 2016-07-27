@@ -130,34 +130,34 @@ public class KafkaStreamsTest {
     public void testCleanupIsolation() throws Exception {
         final KStreamBuilder builder = new KStreamBuilder();
 
-        final String appId_1 = "testIsolation-1";
-        final String appId_2 = "testIsolation-2";
+        final String appId1 = "testIsolation-1";
+        final String appId2 = "testIsolation-2";
         final String stateDir = TestUtils.tempDirectory().getPath();
-        final File stateDirApp_1 = new File(stateDir + File.separator + appId_1);
-        final File stateDirApp_2 = new File(stateDir + File.separator + appId_2);
+        final File stateDirApp1 = new File(stateDir + File.separator + appId1);
+        final File stateDirApp2 = new File(stateDir + File.separator + appId2);
 
         final Properties props = new Properties();
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir);
 
-        assertFalse(stateDirApp_1.exists());
-        assertFalse(stateDirApp_2.exists());
+        assertFalse(stateDirApp1.exists());
+        assertFalse(stateDirApp2.exists());
 
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, appId_1);
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, appId1);
         final KafkaStreams streams1 = new KafkaStreams(builder, props);
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, appId_2);
+        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, appId2);
         final KafkaStreams streams2 = new KafkaStreams(builder, props);
 
-        assertTrue(stateDirApp_1.exists());
-        assertTrue(stateDirApp_2.exists());
+        assertTrue(stateDirApp1.exists());
+        assertTrue(stateDirApp2.exists());
 
         streams1.cleanUp();
-        assertFalse(stateDirApp_1.exists());
-        assertTrue(stateDirApp_2.exists());
+        assertFalse(stateDirApp1.exists());
+        assertTrue(stateDirApp2.exists());
 
         streams2.cleanUp();
-        assertFalse(stateDirApp_1.exists());
-        assertFalse(stateDirApp_2.exists());
+        assertFalse(stateDirApp1.exists());
+        assertFalse(stateDirApp2.exists());
     }
 
     @Test(expected = IllegalStateException.class)
