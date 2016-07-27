@@ -77,7 +77,7 @@ public class ResetIntegrationTest {
         CLUSTER.createTopic(INTERMEDIATE_USER_TOPIC);
     }
 
-    @Test(timeout = 120000)
+    @Test
     public void testReprocessingFromScratchAfterCleanUp() throws Exception {
         final Properties streamsConfiguration = prepareTest();
         final Properties resultTopicConsumerConfig = prepareResultConsumer();
