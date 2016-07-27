@@ -118,7 +118,7 @@ public class ResetIntegrationTest {
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
-        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getPath());
         streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 8);
@@ -176,8 +176,7 @@ public class ResetIntegrationTest {
                     return new KeyValue<>(key, value);
                 }
             })
-            .groupByKey()
-            .count("global-count");
+            .countByKey("global-count");
         globalCounts.to(Serdes.Long(), Serdes.Long(), OUTPUT_TOPIC);
 
         final KStream<Long, Long> windowedCounts = input
@@ -192,8 +191,7 @@ public class ResetIntegrationTest {
                     return new KeyValue<>(key, value);
                 }
             })
-            .groupByKey()
-            .count(TimeWindows.of(35).advanceBy(10), "count")
+            .countByKey(TimeWindows.of("count", 35).advanceBy(10))
             .toStream()
             .map(new KeyValueMapper<Windowed<Long>, Long, KeyValue<Long, Long>>() {
                 @Override

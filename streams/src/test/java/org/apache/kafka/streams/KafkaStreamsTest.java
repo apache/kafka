@@ -132,7 +132,7 @@ public class KafkaStreamsTest {
 
         final String appId1 = "testIsolation-1";
         final String appId2 = "testIsolation-2";
-        final String stateDir = TestUtils.tempDirectory().getPath();
+        final String stateDir = TestUtils.tempDirectory("kafka-test").getPath();
         final File stateDirApp1 = new File(stateDir + File.separator + appId1);
         final File stateDirApp2 = new File(stateDir + File.separator + appId2);
 
