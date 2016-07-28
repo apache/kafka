@@ -42,6 +42,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.LogEntry;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
@@ -552,13 +553,14 @@ public class Fetcher<K, V> {
                     }
                 }
 
+                recordsCount = parsed.size();
+                this.sensors.recordTopicFetchMetrics(tp.topic(), bytes, recordsCount);
+
                 if (!parsed.isEmpty()) {
                     log.trace("Adding fetched record for partition {} with offset {} to buffered record list", tp, position);
-                    recordsCount = parsed.size();
                     parsedRecords = new PartitionRecords<>(fetchOffset, tp, parsed);
                     ConsumerRecord<K, V> record = parsed.get(parsed.size() - 1);
                     this.sensors.recordsFetchLag.record(partition.highWatermark - record.offset());
-                    this.sensors.recordTopicFetchMetrics(tp.topic(), bytes, parsed.size());
                 } else if (buffer.limit() > 0 && !skippedRecords) {
                     // we did not read a single message from a non-empty buffer
                     // because that message's size is larger than fetch size, in this case
@@ -605,28 +607,34 @@ public class Fetcher<K, V> {
      * Parse the record entry, deserializing the key / value fields if necessary
      */
     private ConsumerRecord<K, V> parseRecord(TopicPartition partition, LogEntry logEntry) {
+        Record record = logEntry.record();
+
+        if (this.checkCrcs && !record.isValid())
+            throw new InvalidRecordException("Record for partition " + partition + " at offset"
+                    + logEntry.offset() + " is corrupt (stored crc = " + record.checksum()
+                    + ", computed crc = "
+                    + record.computeChecksum()
+                    + ")");
+
         try {
-            if (this.checkCrcs)
-                logEntry.record().ensureValid();
             long offset = logEntry.offset();
-            long timestamp = logEntry.record().timestamp();
-            TimestampType timestampType = logEntry.record().timestampType();
-            ByteBuffer keyBytes = logEntry.record().key();
+            long timestamp = record.timestamp();
+            TimestampType timestampType = record.timestampType();
+            ByteBuffer keyBytes = record.key();
             byte[] keyByteArray = keyBytes == null ? null : Utils.toArray(keyBytes);
             K key = keyBytes == null ? null : this.keyDeserializer.deserialize(partition.topic(), keyByteArray);
-            ByteBuffer valueBytes = logEntry.record().value();
+            ByteBuffer valueBytes = record.value();
             byte[] valueByteArray = valueBytes == null ? null : Utils.toArray(valueBytes);
             V value = valueBytes == null ? null : this.valueDeserializer.deserialize(partition.topic(), valueByteArray);
 
             return new ConsumerRecord<>(partition.topic(), partition.partition(), offset,
-                                        timestamp, timestampType, logEntry.record().checksum(),
+                                        timestamp, timestampType, record.checksum(),
                                         keyByteArray == null ? ConsumerRecord.NULL_SIZE : keyByteArray.length,
                                         valueByteArray == null ? ConsumerRecord.NULL_SIZE : valueByteArray.length,
                                         key, value);
-        } catch (InvalidRecordException e) {
-            throw e;
         } catch (RuntimeException e) {
-            throw new SerializationException("Error deserializing key/value for partition " + partition + " at offset " + logEntry.offset(), e);
+            throw new SerializationException("Error deserializing key/value for partition " + partition +
+                    " at offset " + logEntry.offset(), e);
         }
     }
 

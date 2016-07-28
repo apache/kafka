@@ -39,6 +39,8 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.Compressor;
+import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.requests.FetchRequest;
@@ -176,8 +178,50 @@ public class FetcherTest {
             fetcher.fetchedRecords();
             fail("fetchedRecords should have raised");
         } catch (SerializationException e) {
-            // the position should not advance beyond the failed record
+            // the position should not advance since no data has been returned
             assertEquals(1, subscriptions.position(tp).longValue());
+        }
+    }
+
+    @Test
+    public void testParseInvalidRecord() {
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        Compressor compressor = new Compressor(buffer, CompressionType.NONE);
+
+        byte[] key = "foo".getBytes();
+        byte[] value = "baz".getBytes();
+        long offset = 0;
+        long timestamp = 500L;
+
+        int size = Record.recordSize(key, value);
+        long crc = Record.computeChecksum(timestamp, key, value, CompressionType.NONE, 0, -1);
+
+        // write one valid record
+        compressor.putLong(offset);
+        compressor.putInt(size);
+        Record.write(compressor, crc, Record.computeAttributes(CompressionType.NONE), timestamp, key, value, 0, -1);
+
+        // and one invalid record (note the crc)
+        compressor.putLong(offset);
+        compressor.putInt(size);
+        Record.write(compressor, crc + 1, Record.computeAttributes(CompressionType.NONE), timestamp, key, value, 0, -1);
+
+        compressor.close();
+        buffer.flip();
+
+        subscriptions.assignFromUser(Arrays.asList(tp));
+        subscriptions.seek(tp, 0);
+
+        // normal fetch
+        fetcher.sendFetches();
+        client.prepareResponse(fetchResponse(buffer, Errors.NONE.code(), 100L, 0));
+        consumerClient.poll(0);
+        try {
+            fetcher.fetchedRecords();
+            fail("fetchedRecords should have raised");
+        } catch (InvalidRecordException e) {
+            // the position should not advance since no data has been returned
+            assertEquals(0, subscriptions.position(tp).longValue());
         }
     }
 
