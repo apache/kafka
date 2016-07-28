@@ -50,19 +50,20 @@ public class ConsumerConfig extends AbstractConfig {
 
     /** <code>max.poll.interval.ms</code> */
     public static final String MAX_POLL_INTERVAL_MS_CONFIG = "max.poll.interval.ms";
-    private static final String MAX_POLL_INTERVAL_MS_DOC = "The maximum delay between invocations of poll(). This is used as a liveness check to ensure consumers are still alive while holding onto a partition assignment. If poll() is not called within each interval of this duration, then the group will rebalance and reassign the partitions to another member.";
+    private static final String MAX_POLL_INTERVAL_MS_DOC = "The maximum delay between invocations of poll(). This is " +
+            "used as a liveness check to ensure consumers are still alive while holding onto a partition assignment. " +
+            "If poll() is not called within each interval of this duration, then the group will rebalance and reassign " +
+            "the partitions to another member.";
 
     /**
      * <code>session.timeout.ms</code>
      */
     public static final String SESSION_TIMEOUT_MS_CONFIG = "session.timeout.ms";
-    private static final String SESSION_TIMEOUT_MS_DOC = "The timeout used to detect failures when using Kafka's " +
-            "group management facilities. When a consumer's heartbeat is not received within the session timeout, " +
-            "the broker will mark the consumer as failed and rebalance the group. Since heartbeats are sent only " +
-            "when poll() is invoked, a higher session timeout allows more time for message processing in the consumer's " +
-            "poll loop at the cost of a longer time to detect hard failures. See also <code>" + MAX_POLL_RECORDS_CONFIG + "</code> for " +
-            "another option to control the processing time in the poll loop. Note that the value must be in the " +
-            "allowable range as configured in the broker configuration by <code>group.min.session.timeout.ms</code> " +
+    private static final String SESSION_TIMEOUT_MS_DOC = "The timeout used to detect consumer failures when using " +
+            "Kafka's group management facility. The consumer sends periodic heartbeats to indicate its liveness " +
+            "to the broker. If no heartbeats are received by the broker before the expiration of this session timeout, " +
+            "then the broker will remove this consumer from the group and initiate a rebalance. Note that the value " +
+            "must be in the allowable range as configured in the broker configuration by <code>group.min.session.timeout.ms</code> " +
             "and <code>group.max.session.timeout.ms</code>.";
 
     /**
