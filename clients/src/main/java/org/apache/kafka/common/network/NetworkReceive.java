@@ -64,7 +64,7 @@ public class NetworkReceive implements Receive {
 
     @Override
     public boolean complete() {
-        return !size.hasRemaining() && !buffer.hasRemaining();
+        return !size.hasRemaining() && buffer != null && !buffer.hasRemaining();
     }
 
     public long readFrom(ScatteringByteChannel channel) throws IOException {
