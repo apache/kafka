@@ -42,7 +42,7 @@ import static org.apache.kafka.common.utils.Utils.toPositive;
  * to discover the locations of {@link org.apache.kafka.streams.processor.StateStore}s
  * in a KafkaStreams application
  */
-public class StreamsMetadataState implements PartitionsByHostStateChangeListener {
+public class StreamsMetadataState {
     private final TopologyBuilder builder;
     private final List<StreamsMetadata> allMetadata = new ArrayList<>();
     private final Map<String, List<TopicPartition>> partitionsByTopic = new HashMap<>();
@@ -179,7 +179,6 @@ public class StreamsMetadataState implements PartitionsByHostStateChangeListener
      * metadata
      * @param currentState  the current mapping of {@link HostInfo} -> {@link TopicPartition}s
      */
-    @Override
     public synchronized void onChange(final Map<HostInfo, Set<TopicPartition>> currentState) {
         rebuildPartitionsByTopic(currentState);
         rebuildInstances(currentState);

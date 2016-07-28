@@ -387,7 +387,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // assign tasks to clients
         states = TaskAssignor.assign(states, partitionsForTask.keySet(), numStandbyReplicas);
 
-        final List<AssignmentDetail> assignmentDetails = new ArrayList<>();
+        final List<AssignmentSupplier> assignmentSuppliers = new ArrayList<>();
+
         final Map<HostInfo, Set<TopicPartition>> endPointMap = new HashMap<>();
         for (Map.Entry<UUID, Set<String>> entry : consumersByClient.entrySet()) {
             UUID processId = entry.getKey();
@@ -445,11 +446,11 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 }
 
 
-                assignmentDetails.add(new AssignmentDetail(consumer,
-                                                           active,
-                                                           standby,
-                                                           endPointMap,
-                    activePartitions));
+                assignmentSuppliers.add(new AssignmentSupplier(consumer,
+                                                               active,
+                                                               standby,
+                                                               endPointMap,
+                                                               activePartitions));
 
                 i++;
             }
@@ -461,34 +462,32 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         prepareTopic(stateChangelogTopicToTaskIds, true /* compactTopic */, true);
 
         Map<String, Assignment> assignment = new HashMap<>();
-        for (AssignmentDetail assignmentDetail : assignmentDetails) {
-            assignment.put(assignmentDetail.consumer, assignmentDetail.createAssignment());
+        for (AssignmentSupplier assignmentSupplier : assignmentSuppliers) {
+            assignment.put(assignmentSupplier.consumer, assignmentSupplier.get());
         }
         return assignment;
     }
 
-    class AssignmentDetail {
-
+    class AssignmentSupplier {
         private final String consumer;
         private final List<TaskId> active;
         private final Map<TaskId, Set<TopicPartition>> standby;
         private final Map<HostInfo, Set<TopicPartition>> endPointMap;
         private final List<TopicPartition> activePartitions;
 
-        AssignmentDetail(final String consumer,
-                         final List<TaskId> active,
-                         final Map<TaskId, Set<TopicPartition>> standby,
-                         final Map<HostInfo, Set<TopicPartition>> endPointMap,
-                         final List<TopicPartition> activePartitions) {
+        AssignmentSupplier(final String consumer,
+                           final List<TaskId> active,
+                           final Map<TaskId, Set<TopicPartition>> standby,
+                           final Map<HostInfo, Set<TopicPartition>> endPointMap,
+                           final List<TopicPartition> activePartitions) {
             this.consumer = consumer;
-
             this.active = active;
             this.standby = standby;
             this.endPointMap = endPointMap;
             this.activePartitions = activePartitions;
         }
 
-        Assignment createAssignment() {
+        Assignment get() {
             return new Assignment(activePartitions, new AssignmentInfo(active,
                                                                        standby,
                                                                        endPointMap).encode());

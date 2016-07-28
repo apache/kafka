@@ -70,6 +70,7 @@ public class StreamThread extends Thread {
     private static final AtomicInteger STREAM_THREAD_ID_SEQUENCE = new AtomicInteger(1);
 
     public final PartitionGrouper partitionGrouper;
+    private final StreamsMetadataState streamsMetadataState;
     public final String applicationId;
     public final String clientId;
     public final UUID processId;
@@ -103,12 +104,6 @@ public class StreamThread extends Thread {
 
     private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
     private boolean processStandbyRecords = false;
-    private PartitionsByHostStateChangeListener partitionsByHostStateChangeListener = new PartitionsByHostStateChangeListener() {
-        @Override
-        public void onChange(final Map<HostInfo, Set<TopicPartition>> currentState) {
-            // no-op by default;
-        }
-    };
 
     final ConsumerRebalanceListener rebalanceListener = new ConsumerRebalanceListener() {
         @Override
@@ -117,7 +112,7 @@ public class StreamThread extends Thread {
                 addStreamTasks(assignment);
                 addStandbyTasks();
                 lastClean = time.milliseconds(); // start the cleaning cycle
-                partitionsByHostStateChangeListener.onChange(partitionAssignor.getPartitionsByHostState());
+                streamsMetadataState.onChange(partitionAssignor.getPartitionsByHostState());
             } catch (Throwable t) {
                 rebalanceException = t;
                 throw t;
@@ -135,7 +130,7 @@ public class StreamThread extends Thread {
             } finally {
                 // TODO: right now upon partition revocation, we always remove all the tasks;
                 // this behavior can be optimized to only remove affected tasks in the future
-                partitionsByHostStateChangeListener.onChange(Collections.<HostInfo, Set<TopicPartition>>emptyMap());
+                streamsMetadataState.onChange(Collections.<HostInfo, Set<TopicPartition>>emptyMap());
                 removeStreamTasks();
                 removeStandbyTasks();
             }
@@ -149,7 +144,8 @@ public class StreamThread extends Thread {
                         String clientId,
                         UUID processId,
                         Metrics metrics,
-                        Time time) {
+                        Time time,
+                        StreamsMetadataState streamsMetadataState) {
         super("StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement());
 
         this.applicationId = applicationId;
@@ -160,6 +156,7 @@ public class StreamThread extends Thread {
         this.clientId = clientId;
         this.processId = processId;
         this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
+        this.streamsMetadataState = streamsMetadataState;
 
         // set the producer and consumer clients
         String threadName = getName();
@@ -680,17 +677,6 @@ public class StreamThread extends Thread {
         } catch (Exception e) {
             log.error("Failed to remove standby tasks in thread [" + this.getName() + "]: ", e);
         }
-    }
-
-    public Map<HostInfo, Set<TopicPartition>> getPartitionsByHostState() {
-        if (partitionAssignor == null) {
-            return Collections.emptyMap();
-        }
-        return partitionAssignor.getPartitionsByHostState();
-    }
-
-    public void setPartitionsByHostStateChangeListener(final PartitionsByHostStateChangeListener partitionsByHostStateChangeListener) {
-        this.partitionsByHostStateChangeListener = partitionsByHostStateChangeListener;
     }
 
     private class StreamsMetricsImpl implements StreamsMetrics {

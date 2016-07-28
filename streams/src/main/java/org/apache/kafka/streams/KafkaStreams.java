@@ -110,7 +110,7 @@ public class KafkaStreams {
     // of the co-location of stream thread's consumers. It is for internal
     // usage only and should not be exposed to users at all.
     private final UUID processId;
-    private StreamsMetadataState kafkaStreamsInstances;
+    private StreamsMetadataState streamsMetadataState;
 
     /**
      * Construct the stream instance.
@@ -168,12 +168,19 @@ public class KafkaStreams {
 
         this.threads = new StreamThread[config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG)];
         final ArrayList<StateStoreProvider> storeProviders = new ArrayList<>();
+        streamsMetadataState = new StreamsMetadataState(builder);
         for (int i = 0; i < this.threads.length; i++) {
-            this.threads[i] = new StreamThread(builder, config, clientSupplier, applicationId, clientId, processId, metrics, time);
+            this.threads[i] = new StreamThread(builder,
+                                               config,
+                                               clientSupplier,
+                                               applicationId,
+                                               clientId,
+                                               processId,
+                                               metrics,
+                                               time,
+                                               streamsMetadataState);
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
         }
-        kafkaStreamsInstances = new StreamsMetadataState(builder);
-        threads[0].setPartitionsByHostStateChangeListener(kafkaStreamsInstances);
         this.queryableStoreProvider = new QueryableStoreProvider(storeProviders);
     }
 
@@ -263,7 +270,7 @@ public class KafkaStreams {
      */
     public Collection<StreamsMetadata> allMetadata() {
         validateIsRunning();
-        return kafkaStreamsInstances.getAllMetadata();
+        return streamsMetadataState.getAllMetadata();
     }
 
 
@@ -276,7 +283,7 @@ public class KafkaStreams {
      */
     public Collection<StreamsMetadata> allMetadataForStore(final String storeName) {
         validateIsRunning();
-        return kafkaStreamsInstances.getAllMetadataForStore(storeName);
+        return streamsMetadataState.getAllMetadataForStore(storeName);
     }
 
     /**
@@ -295,7 +302,7 @@ public class KafkaStreams {
                                               final K key,
                                               final Serializer<K> keySerializer) {
         validateIsRunning();
-        return kafkaStreamsInstances.getMetadataWithKey(storeName, key, keySerializer);
+        return streamsMetadataState.getMetadataWithKey(storeName, key, keySerializer);
     }
 
     /**
@@ -315,7 +322,7 @@ public class KafkaStreams {
                                               final K key,
                                               final StreamPartitioner<K, ?> partitioner) {
         validateIsRunning();
-        return kafkaStreamsInstances.getMetadataWithKey(storeName, key, partitioner);
+        return streamsMetadataState.getMetadataWithKey(storeName, key, partitioner);
     }
 
 
