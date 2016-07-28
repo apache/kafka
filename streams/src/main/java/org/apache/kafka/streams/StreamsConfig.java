@@ -282,6 +282,16 @@ public class StreamsConfig extends AbstractConfig {
         super(CONFIG, props);
     }
 
+    /**
+     * Get the configs specific to the Consumer. Properties using the prefix {@link StreamsConfig#CONSUMER_PREFIX}
+     * will be used in favor over their non-prefixed versions except in the case of {@link ConsumerConfig#BOOTSTRAP_SERVERS_CONFIG}
+     * where we always use the non-prefixed version as we only support reading/writing from/to the same Kafka Cluster
+     * @param streamThread   the {@link StreamThread} creating a consumer
+     * @param groupId        consumer groupId
+     * @param clientId       clientId
+     * @return  Map of the Consumer configuration.
+     * @throws ConfigException
+     */
     public Map<String, Object> getConsumerConfigs(StreamThread streamThread, String groupId, String clientId) throws ConfigException {
         final Map<String, Object> consumerProps = getClientPropsWithPrefix(CONSUMER_PREFIX);
 
@@ -349,11 +359,10 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     private Map<String, Object> getClientPropsWithPrefix(final String prefix) {
-        // to be backward compatible we first get all the props and then
-        // override them with the prefixed props
-        final Map<String, Object> consumerProps = this.originals();
-        consumerProps.putAll(this.originalsWithPrefix(prefix));
-        return consumerProps;
+        // To be backward compatible we first get all the originals.
+        final Map<String, Object> props = this.originals();
+        props.putAll(this.originalsWithPrefix(prefix));
+        return props;
     }
 
     public Serde keySerde() {
