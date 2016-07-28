@@ -39,7 +39,7 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
     <li> Update server.properties file on all brokers and add the following properties:
          <ul>
          <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. 0.8.2 or 0.9.0.0).</li>
-         <li>log.message.format.version=CURRENT_KAFKA_VERSION  (This is optional, but strongly recommended to ensure that Kafka cluster performance doesn't drop following the upgrade. See <a href="#upgrade_10_performance_impact">potential performance impact following the upgrade</a> for the details.)
+         <li>log.message.format.version=CURRENT_KAFKA_VERSION  (See <a href="#upgrade_10_performance_impact">potential performance impact following the upgrade</a> for the details on what this configuration does.)
          </ul>
     </li>
     <li> Upgrade the brokers. This can be done a broker at a time by simply bringing it down, updating the code, and restarting it. </li>
