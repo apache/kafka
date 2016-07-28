@@ -425,7 +425,7 @@ public interface KStream<K, V> {
     /**
      * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Outer Join.
      * If a record key is null it will not included in the resulting {@link KStream}
-     * Both of the joining {@link KStream}s will be materialized in local state stores with the given store names.
+     * Both of the joining {@link KStream}s will be materialized in local state stores with with auto-generated name ${storeName}.
      * Also a changelog topic named "${applicationId}-${storeName}-changelog" will be automatically created
      * in Kafka for each store for failure recovery, where "applicationID" is user-specified in the
      * {@link org.apache.kafka.streams.StreamsConfig}.
@@ -456,7 +456,7 @@ public interface KStream<K, V> {
     /**
      * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Outer Join
      * with default serializers and deserializers. If a record key is null it will not included in the resulting {@link KStream}
-     * Both of the joining {@link KStream}s will be materialized in local state stores with the given store names.
+     * Both of the joining {@link KStream}s will be materialized in local state stores with with auto-generated name ${storeName}.
      * Also a changelog topic named "${applicationId}-${storeName}-changelog" will be automatically created
      * in Kafka for each store for failure recovery, where "applicationID" is user-specified in the
      * {@link org.apache.kafka.streams.StreamsConfig}.
@@ -478,7 +478,7 @@ public interface KStream<K, V> {
     /**
      * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Left Join.
      * If a record key is null it will not included in the resulting {@link KStream}
-     * Both of the joining {@link KStream}s will be materialized in local state stores with the given store names.
+     * Both of the joining {@link KStream}s will be materialized in local state stores with with auto-generated name ${storeName}.
      * Also a changelog topic named "${applicationId}-${storeName}-changelog" will be automatically created
      * in Kafka for each store for failure recovery, where "applicationID" is user-specified in the
      * {@link org.apache.kafka.streams.StreamsConfig}.
@@ -509,7 +509,7 @@ public interface KStream<K, V> {
     /**
      * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Left Join
      * with default serializers and deserializers. If a record key is null it will not included in the resulting {@link KStream}
-     * Both of the joining {@link KStream}s will be materialized in local state stores with the given store names.
+     * Both of the joining {@link KStream}s will be materialized in local state stores with with auto-generated name ${storeName}.
      * Also a changelog topic named "${applicationId}-${storeName}-changelog" will be automatically created
      * in Kafka for each store for failure recovery, where "applicationID" is user-specified in the
      * {@link org.apache.kafka.streams.StreamsConfig}.
