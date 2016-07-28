@@ -50,6 +50,7 @@ public class EmbeddedSingleNodeKafkaCluster extends ExternalResource {
         brokerConfig.put(KafkaConfig$.MODULE$.PortProp(), DEFAULT_BROKER_PORT);
         brokerConfig.put(KafkaConfig$.MODULE$.DeleteTopicEnableProp(), true);
         brokerConfig.put(KafkaConfig$.MODULE$.LogCleanerDedupeBufferSizeProp(), 2 * 1024 * 1024L);
+        brokerConfig.put(KafkaConfig$.MODULE$.GroupMinSessionTimeoutMsProp(), 0);
 
         log.debug("Starting a Kafka instance on port {} ...", brokerConfig.getProperty(KafkaConfig$.MODULE$.PortProp()));
         broker = new KafkaEmbedded(brokerConfig);

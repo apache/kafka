@@ -1,3 +1,4 @@
+#!/bin/bash
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -13,9 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-group.id={{ group_id|default('test-consumer-group') }}
+if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then
+    export KAFKA_HEAP_OPTS="-Xmx512M"
+fi
 
-{% if client_id is defined and client_id is not none %}
-client.id={{ client_id }}
-{% endif %}
-
+exec $(dirname $0)/kafka-run-class.sh org.apache.kafka.tools.StreamsResetter "$@"
