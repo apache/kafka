@@ -61,9 +61,12 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
     message formats before 0.10.0. In this case, the broker is able to convert messages from the 0.10.0 format to an earlier format
     before sending the response to the consumer on an older version. However, the broker can't use zero-copy transfer in this case.
 
-    The effects of this conversion on a broker following the upgrade are quite significant. There has been reports in the Kafka community of brokers going from 20% cpu utilization to 100% utilization following the upgrade. Requiring an emergency upgrade of all the clients to bring performance back to normal.
+    Reports from the Kafka community on the performance impact have shown CPU utilization going from 20% before to 100% after an upgrade, which forced an immediate upgrade of all clients to bring performance back to normal.
 
     To avoid such message conversion before consumers are upgraded to 0.10.0.0, one can set log.message.format.version to 0.8.2 or 0.9.0 when upgrading the broker to 0.10.0.0. This way, the broker can still use zero-copy transfer to send the data to the old consumers. Once consumers are upgraded, one can change the message format to 0.10.0 on the broker and enjoy the new message format that includes new timestamp and improved compression.
+
+    The conversion is supported to ensure compatibility and can be useful to support a few apps that have not updated to newer clients yet, but is impractical to support all consumer traffic on even an overprovisioned cluster. Therefore it is critical to avoid the message conversion as much as possible when brokers have been upgraded but the majority of clients have not.
+    .
 </p>
 <p>
     For clients that are upgraded to 0.10.0.0, there is no performance impact.
