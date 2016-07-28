@@ -105,7 +105,8 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
 
   private def validateTopicIsDeleted(topic: String): Unit = {
     val metadata = sendMetadataRequest(new MetadataRequest(List(topic).asJava)).topicMetadata.asScala
-    assertFalse(s"The topic $topic should not exist", metadata.exists(p => p.topic.equals(topic) && p.error() == Errors.NONE))
+    TestUtils.waitUntilTrue (() => !metadata.exists(p => p.topic.equals(topic) && p.error() == Errors.NONE),
+      s"The topic $topic should not exist")
   }
 
   private def sendDeleteTopicsRequest(request: DeleteTopicsRequest, version: Short, socketServer: SocketServer = controllerSocketServer): DeleteTopicsResponse = {

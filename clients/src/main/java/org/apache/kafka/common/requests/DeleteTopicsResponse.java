@@ -37,6 +37,7 @@ public class DeleteTopicsResponse extends AbstractRequestResponse {
     /**
      * Possible error codes:
      *
+     * REQUEST_TIMED_OUT(7)
      * INVALID_TOPIC_EXCEPTION(17)
      * TOPIC_AUTHORIZATION_FAILED(29)
      * NOT_CONTROLLER(41)

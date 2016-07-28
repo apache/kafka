@@ -821,7 +821,7 @@ public class Protocol {
             "An array of topics to be deleted."),
         new Field("timeout",
             INT32,
-            "The time in ms to wait for a topic to be completely deleted on the controller node. Values <= 0 will trigger topic deletion and return immediatly"));
+            "The time in ms to wait for a topic to be completely deleted on the controller node. Values <= 0 will trigger topic deletion and return immediately"));
 
     public static final Schema DELETE_TOPICS_RESPONSE_V0 = new Schema(
         new Field("topic_error_codes",
