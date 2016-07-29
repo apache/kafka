@@ -115,6 +115,7 @@ object Defaults {
   val ReplicaFetchMaxBytes = ConsumerConfig.FetchSize
   val ReplicaFetchWaitMaxMs = 500
   val ReplicaFetchMinBytes = 1
+  val ReplicaFetchResponseMaxBytes = 10 * 1024 * 1024
   val NumReplicaFetchers = 1
   val ReplicaFetchBackoffMs = 1000
   val ReplicaHighWatermarkCheckpointIntervalMs = 5000L
@@ -280,6 +281,7 @@ object KafkaConfig {
   val ReplicaFetchMaxBytesProp = "replica.fetch.max.bytes"
   val ReplicaFetchWaitMaxMsProp = "replica.fetch.wait.max.ms"
   val ReplicaFetchMinBytesProp = "replica.fetch.min.bytes"
+  val ReplicaFetchResponseMaxBytesProp = "replica.fetch.response.max.bytes"
   val ReplicaFetchBackoffMsProp = "replica.fetch.backoff.ms"
   val NumReplicaFetchersProp = "num.replica.fetchers"
   val ReplicaHighWatermarkCheckpointIntervalMsProp = "replica.high.watermark.checkpoint.interval.ms"
@@ -475,10 +477,11 @@ object KafkaConfig {
   " the leader will remove the follower from isr"
   val ReplicaSocketTimeoutMsDoc = "The socket timeout for network requests. Its value should be at least replica.fetch.wait.max.ms"
   val ReplicaSocketReceiveBufferBytesDoc = "The socket receive buffer for network requests"
-  val ReplicaFetchMaxBytesDoc = "The number of bytes of messages to attempt to fetch"
+  val ReplicaFetchMaxBytesDoc = "The number of bytes of messages to attempt to fetch for each partition"
   val ReplicaFetchWaitMaxMsDoc = "max wait time for each fetcher request issued by follower replicas. This value should always be less than the " +
   "replica.lag.time.max.ms at all times to prevent frequent shrinking of ISR for low throughput topics"
   val ReplicaFetchMinBytesDoc = "Minimum bytes expected for each fetch response. If not enough bytes, wait up to replicaMaxWaitTimeMs"
+  val ReplicaFetchResponseMaxBytesDoc = "Maximum bytes expected for entire fetch response."
   val NumReplicaFetchersDoc = "Number of fetcher threads used to replicate messages from a source broker. " +
   "Increasing this value can increase the degree of I/O parallelism in the follower broker."
   val ReplicaFetchBackoffMsDoc = "The amount of time to sleep when fetch partition error occurs."
@@ -662,6 +665,7 @@ object KafkaConfig {
       .define(ReplicaFetchWaitMaxMsProp, INT, Defaults.ReplicaFetchWaitMaxMs, HIGH, ReplicaFetchWaitMaxMsDoc)
       .define(ReplicaFetchBackoffMsProp, INT, Defaults.ReplicaFetchBackoffMs, atLeast(0), MEDIUM, ReplicaFetchBackoffMsDoc)
       .define(ReplicaFetchMinBytesProp, INT, Defaults.ReplicaFetchMinBytes, HIGH, ReplicaFetchMinBytesDoc)
+      .define(ReplicaFetchResponseMaxBytesProp, INT, Defaults.ReplicaFetchResponseMaxBytes, atLeast(0), MEDIUM, ReplicaFetchResponseMaxBytesDoc)
       .define(NumReplicaFetchersProp, INT, Defaults.NumReplicaFetchers, HIGH, NumReplicaFetchersDoc)
       .define(ReplicaHighWatermarkCheckpointIntervalMsProp, LONG, Defaults.ReplicaHighWatermarkCheckpointIntervalMs, HIGH, ReplicaHighWatermarkCheckpointIntervalMsDoc)
       .define(FetchPurgatoryPurgeIntervalRequestsProp, INT, Defaults.FetchPurgatoryPurgeIntervalRequests, MEDIUM, FetchPurgatoryPurgeIntervalRequestsDoc)
@@ -866,6 +870,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val replicaFetchMaxBytes = getInt(KafkaConfig.ReplicaFetchMaxBytesProp)
   val replicaFetchWaitMaxMs = getInt(KafkaConfig.ReplicaFetchWaitMaxMsProp)
   val replicaFetchMinBytes = getInt(KafkaConfig.ReplicaFetchMinBytesProp)
+  val replicaFetchResponseMaxBytes = getInt(KafkaConfig.ReplicaFetchResponseMaxBytesProp)
   val replicaFetchBackoffMs = getInt(KafkaConfig.ReplicaFetchBackoffMsProp)
   val numReplicaFetchers = getInt(KafkaConfig.NumReplicaFetchersProp)
   val replicaHighWatermarkCheckpointIntervalMs = getLong(KafkaConfig.ReplicaHighWatermarkCheckpointIntervalMsProp)

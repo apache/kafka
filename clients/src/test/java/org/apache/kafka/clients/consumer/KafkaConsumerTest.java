@@ -1037,6 +1037,7 @@ public class KafkaConsumerTest {
         long requestTimeoutMs = 30000;
         boolean excludeInternalTopics = true;
         int minBytes = 1;
+        int maxBytes = Integer.MAX_VALUE;
         int maxWaitMs = 500;
         int fetchSize = 1024 * 1024;
         int maxPollRecords = Integer.MAX_VALUE;
@@ -1075,6 +1076,7 @@ public class KafkaConsumerTest {
         Fetcher<String, String> fetcher = new Fetcher<>(
                 consumerClient,
                 minBytes,
+                maxBytes,
                 maxWaitMs,
                 fetchSize,
                 maxPollRecords,

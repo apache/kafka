@@ -14,7 +14,7 @@ package org.apache.kafka.common.requests;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -24,7 +24,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.utils.CollectionUtils;
 
 public class FetchRequest extends AbstractRequest {
 
@@ -33,6 +32,7 @@ public class FetchRequest extends AbstractRequest {
     private static final String REPLICA_ID_KEY_NAME = "replica_id";
     private static final String MAX_WAIT_KEY_NAME = "max_wait_time";
     private static final String MIN_BYTES_KEY_NAME = "min_bytes";
+    private static final String RESPONSE_MAX_BYTES_KEY_NAME = "max_bytes";
     private static final String TOPICS_KEY_NAME = "topics";
 
     // topic level field names
@@ -44,10 +44,14 @@ public class FetchRequest extends AbstractRequest {
     private static final String FETCH_OFFSET_KEY_NAME = "fetch_offset";
     private static final String MAX_BYTES_KEY_NAME = "max_bytes";
 
+    // default values for current version
+    public static final int DEFAULT_RESPONSE_MAX_BYTES = Integer.MAX_VALUE;
+
     private final int replicaId;
     private final int maxWait;
     private final int minBytes;
-    private final Map<TopicPartition, PartitionData> fetchData;
+    private final int maxBytes;
+    private final LinkedHashMap<TopicPartition, PartitionData> fetchData;
 
     public static final class PartitionData {
         public final long offset;
@@ -59,29 +63,66 @@ public class FetchRequest extends AbstractRequest {
         }
     }
 
+    private static final class TopicAndPartitionData {
+        public final String topic;
+        public final LinkedHashMap<Integer, PartitionData> partitions;
+
+        public TopicAndPartitionData(String topic) {
+            this.topic = topic;
+            this.partitions = new LinkedHashMap<>();
+        }
+
+        public static final List<TopicAndPartitionData> groupByTopicOrdered(Map<TopicPartition, PartitionData> fetchData) {
+            List<TopicAndPartitionData> topics = new ArrayList<>();
+            for (Map.Entry<TopicPartition, PartitionData> topicEntry : fetchData.entrySet()) {
+                String topic = topicEntry.getKey().topic();
+                int partition = topicEntry.getKey().partition();
+                PartitionData partitionData = topicEntry.getValue();
+                if (topics.isEmpty() || topics.get(topics.size() - 1).topic != topic)
+                    topics.add(new TopicAndPartitionData(topic));
+                topics.get(topics.size() - 1).partitions.put(partition, partitionData);
+            }
+            return topics;
+        }
+    }
+
     /**
      * Create a non-replica fetch request
      */
     public FetchRequest(int maxWait, int minBytes, Map<TopicPartition, PartitionData> fetchData) {
-        this(CONSUMER_REPLICA_ID, maxWait, minBytes, fetchData);
+        this(ProtoUtils.latestVersion(ApiKeys.FETCH.id), CONSUMER_REPLICA_ID, maxWait, minBytes, fetchData, DEFAULT_RESPONSE_MAX_BYTES);
     }
+    public FetchRequest(int maxWait, int minBytes, Map<TopicPartition, PartitionData> fetchData, int maxBytes) {
+        this(ProtoUtils.latestVersion(ApiKeys.FETCH.id), CONSUMER_REPLICA_ID, maxWait, minBytes, fetchData, maxBytes);
+    }
+
 
     /**
      * Create a replica fetch request
      */
     public FetchRequest(int replicaId, int maxWait, int minBytes, Map<TopicPartition, PartitionData> fetchData) {
-        super(new Struct(CURRENT_SCHEMA));
-        Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupDataByTopic(fetchData);
+        this(ProtoUtils.latestVersion(ApiKeys.FETCH.id), replicaId, maxWait, minBytes, fetchData, DEFAULT_RESPONSE_MAX_BYTES);
+    }
+
+    public FetchRequest(int replicaId, int maxWait, int minBytes, Map<TopicPartition, PartitionData> fetchData, int maxBytes) {
+        this(ProtoUtils.latestVersion(ApiKeys.FETCH.id), replicaId, maxWait, minBytes, fetchData, maxBytes);
+    }
+
+    public FetchRequest(int version, int replicaId, int maxWait, int minBytes, Map<TopicPartition, PartitionData> fetchData, int maxBytes) {
+        super(new Struct(ProtoUtils.requestSchema(ApiKeys.FETCH.id, version)));
+        List<TopicAndPartitionData> topicsData = TopicAndPartitionData.groupByTopicOrdered(fetchData);
 
         struct.set(REPLICA_ID_KEY_NAME, replicaId);
         struct.set(MAX_WAIT_KEY_NAME, maxWait);
         struct.set(MIN_BYTES_KEY_NAME, minBytes);
+        if (version >= 3)
+            struct.set(RESPONSE_MAX_BYTES_KEY_NAME, maxBytes);
         List<Struct> topicArray = new ArrayList<Struct>();
-        for (Map.Entry<String, Map<Integer, PartitionData>> topicEntry : topicsData.entrySet()) {
+        for (TopicAndPartitionData topicEntry : topicsData) {
             Struct topicData = struct.instance(TOPICS_KEY_NAME);
-            topicData.set(TOPIC_KEY_NAME, topicEntry.getKey());
+            topicData.set(TOPIC_KEY_NAME, topicEntry.topic);
             List<Struct> partitionArray = new ArrayList<Struct>();
-            for (Map.Entry<Integer, PartitionData> partitionEntry : topicEntry.getValue().entrySet()) {
+            for (Map.Entry<Integer, PartitionData> partitionEntry : topicEntry.partitions.entrySet()) {
                 PartitionData fetchPartitionData = partitionEntry.getValue();
                 Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
                 partitionData.set(PARTITION_KEY_NAME, partitionEntry.getKey());
@@ -96,7 +137,8 @@ public class FetchRequest extends AbstractRequest {
         this.replicaId = replicaId;
         this.maxWait = maxWait;
         this.minBytes = minBytes;
-        this.fetchData = fetchData;
+        this.maxBytes = maxBytes;
+        this.fetchData = new LinkedHashMap<TopicPartition, PartitionData>(fetchData);
     }
 
     public FetchRequest(Struct struct) {
@@ -104,7 +146,11 @@ public class FetchRequest extends AbstractRequest {
         replicaId = struct.getInt(REPLICA_ID_KEY_NAME);
         maxWait = struct.getInt(MAX_WAIT_KEY_NAME);
         minBytes = struct.getInt(MIN_BYTES_KEY_NAME);
-        fetchData = new HashMap<TopicPartition, PartitionData>();
+        if (struct.hasField(RESPONSE_MAX_BYTES_KEY_NAME))
+            maxBytes = struct.getInt(RESPONSE_MAX_BYTES_KEY_NAME);
+        else
+            maxBytes = DEFAULT_RESPONSE_MAX_BYTES;
+        fetchData = new LinkedHashMap<TopicPartition, PartitionData>();
         for (Object topicResponseObj : struct.getArray(TOPICS_KEY_NAME)) {
             Struct topicResponse = (Struct) topicResponseObj;
             String topic = topicResponse.getString(TOPIC_KEY_NAME);
@@ -121,7 +167,7 @@ public class FetchRequest extends AbstractRequest {
 
     @Override
     public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
-        Map<TopicPartition, FetchResponse.PartitionData> responseData = new HashMap<TopicPartition, FetchResponse.PartitionData>();
+        Map<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<TopicPartition, FetchResponse.PartitionData>();
 
         for (Map.Entry<TopicPartition, PartitionData> entry: fetchData.entrySet()) {
             FetchResponse.PartitionData partitionResponse = new FetchResponse.PartitionData(Errors.forException(e).code(),
@@ -151,6 +197,10 @@ public class FetchRequest extends AbstractRequest {
 
     public int minBytes() {
         return minBytes;
+    }
+
+    public int maxBytes() {
+        return maxBytes;
     }
 
     public Map<TopicPartition, PartitionData> fetchData() {

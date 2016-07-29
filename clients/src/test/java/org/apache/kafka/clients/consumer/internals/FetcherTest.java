@@ -80,6 +80,7 @@ public class FetcherTest {
     private final String metricGroup = "consumer" + groupId + "-fetch-manager-metrics";
     private TopicPartition tp = new TopicPartition(topicName, 0);
     private int minBytes = 1;
+    private int maxBytes = Integer.MAX_VALUE;
     private int maxWaitMs = 0;
     private int fetchSize = 1000;
     private long retryBackoffMs = 100;
@@ -721,6 +722,7 @@ public class FetcherTest {
                                                int maxPollRecords) {
         return new Fetcher<>(consumerClient,
                 minBytes,
+                maxBytes,
                 maxWaitMs,
                 fetchSize,
                 maxPollRecords,

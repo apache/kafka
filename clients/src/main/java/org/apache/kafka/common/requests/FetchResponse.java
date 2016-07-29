@@ -25,7 +25,7 @@ import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -65,7 +65,7 @@ public class FetchResponse extends AbstractRequestResponse {
     public static final long INVALID_HIGHWATERMARK = -1L;
     public static final ByteBuffer EMPTY_RECORD_SET = ByteBuffer.allocate(0);
 
-    private final Map<TopicPartition, PartitionData> responseData;
+    private final LinkedHashMap<TopicPartition, PartitionData> responseData;
     private final int throttleTime;
 
     public static final class PartitionData {
@@ -87,7 +87,7 @@ public class FetchResponse extends AbstractRequestResponse {
     public FetchResponse(Map<TopicPartition, PartitionData> responseData) {
         super(new Struct(ProtoUtils.responseSchema(ApiKeys.FETCH.id, 0)));
         initCommonFields(responseData);
-        this.responseData = responseData;
+        this.responseData = new LinkedHashMap<TopicPartition, PartitionData>(responseData);
         this.throttleTime = DEFAULT_THROTTLE_TIME;
     }
 
@@ -100,13 +100,13 @@ public class FetchResponse extends AbstractRequestResponse {
         super(new Struct(CURRENT_SCHEMA));
         initCommonFields(responseData);
         struct.set(THROTTLE_TIME_KEY_NAME, throttleTime);
-        this.responseData = responseData;
+        this.responseData = new LinkedHashMap<TopicPartition, PartitionData>(responseData);
         this.throttleTime = throttleTime;
     }
 
     public FetchResponse(Struct struct) {
         super(struct);
-        responseData = new HashMap<TopicPartition, PartitionData>();
+        responseData = new LinkedHashMap<TopicPartition, PartitionData>();
         for (Object topicResponseObj : struct.getArray(RESPONSES_KEY_NAME)) {
             Struct topicResponse = (Struct) topicResponseObj;
             String topic = topicResponse.getString(TOPIC_KEY_NAME);

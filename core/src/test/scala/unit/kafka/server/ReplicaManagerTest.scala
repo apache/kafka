@@ -171,6 +171,7 @@ class ReplicaManagerTest {
         timeout = 1000,
         replicaId = -1,
         fetchMinBytes = 100000,
+        fetchMaxBytes = Int.MaxValue,
         fetchInfo = collection.immutable.Map(new TopicAndPartition(topic, 0) -> new PartitionFetchInfo(0, 100000)),
         responseCallback = fetchCallback)
 
@@ -240,6 +241,7 @@ class ReplicaManagerTest {
         timeout = 1000,
         replicaId = 1,
         fetchMinBytes = 0,
+        fetchMaxBytes = Int.MaxValue,
         fetchInfo = collection.immutable.Map(new TopicAndPartition(topic, 0) -> new PartitionFetchInfo(1, 100000)),
         responseCallback = fetchCallback)
         
@@ -254,6 +256,7 @@ class ReplicaManagerTest {
         timeout = 1000,
         replicaId = -1,
         fetchMinBytes = 0,
+        fetchMaxBytes = Int.MaxValue,
         fetchInfo = collection.immutable.Map(new TopicAndPartition(topic, 0) -> new PartitionFetchInfo(1, 100000)),
         responseCallback = fetchCallback)
           

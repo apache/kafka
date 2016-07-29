@@ -176,7 +176,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createFetchRequest = {
-    new requests.FetchRequest(5000, 100, Map(tp -> new requests.FetchRequest.PartitionData(0, 100)).asJava)
+    new requests.FetchRequest(5000, 100, Int.MaxValue, Map(tp -> new requests.FetchRequest.PartitionData(0, 100)).asJava)
   }
 
   private def createListOffsetsRequest = {

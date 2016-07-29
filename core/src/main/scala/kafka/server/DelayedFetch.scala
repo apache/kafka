@@ -37,6 +37,7 @@ case class FetchPartitionStatus(startOffsetMetadata: LogOffsetMetadata, fetchInf
  * The fetch metadata maintained by the delayed fetch operation
  */
 case class FetchMetadata(fetchMinBytes: Int,
+                         fetchMaxBytes: Int,
                          fetchOnlyLeader: Boolean,
                          fetchOnlyCommitted: Boolean,
                          isFromFollower: Boolean,
@@ -130,6 +131,7 @@ class DelayedFetch(delayMs: Long,
   override def onComplete() {
     val logReadResults = replicaManager.readFromLocalLog(fetchMetadata.fetchOnlyLeader,
       fetchMetadata.fetchOnlyCommitted,
+      fetchMetadata.fetchMaxBytes,
       fetchMetadata.fetchPartitionStatus.mapValues(status => status.fetchInfo))
 
     val fetchPartitionData = logReadResults.mapValues(result =>

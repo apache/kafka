@@ -432,6 +432,24 @@ public class Protocol {
     // Only the version number is incremented to indicate the client support message format V1 which uses
     // relative offset and has timestamp.
     public static final Schema FETCH_REQUEST_V2 = FETCH_REQUEST_V1;
+    // FETCH_REQUEST_V3 added top level max_bytes field - the total size of partition data to accumulate in response.
+    // The partition ordering is now relevant - partitions will be processed in order they appear in request.
+    public static final Schema FETCH_REQUEST_V3 = new Schema(new Field("replica_id",
+                                                                       INT32,
+                                                                       "Broker id of the follower. For normal consumers, use -1."),
+                                                             new Field("max_wait_time",
+                                                                       INT32,
+                                                                       "Maximum time in ms to wait for the response."),
+                                                             new Field("min_bytes",
+                                                                       INT32,
+                                                                       "Minimum bytes to accumulate in the response."),
+                                                             new Field("max_bytes",
+                                                                       INT32,
+                                                                       "Maximum bytes to accumulate in the response."),
+                                                             new Field("topics",
+                                                                       new ArrayOf(FETCH_REQUEST_TOPIC_V0),
+                                                                       "Topics to fetch."));
+
     public static final Schema FETCH_RESPONSE_PARTITION_V0 = new Schema(new Field("partition",
                                                                                   INT32,
                                                                                   "Topic partition id."),
@@ -458,9 +476,10 @@ public class Protocol {
     // record set only includes messages of v0 (magic byte 0). In v2, record set can include messages of v0 and v1
     // (magic byte 0 and 1). For details, see ByteBufferMessageSet.
     public static final Schema FETCH_RESPONSE_V2 = FETCH_RESPONSE_V1;
+    public static final Schema FETCH_RESPONSE_V3 = FETCH_RESPONSE_V2;
 
-    public static final Schema[] FETCH_REQUEST = new Schema[] {FETCH_REQUEST_V0, FETCH_REQUEST_V1, FETCH_REQUEST_V2};
-    public static final Schema[] FETCH_RESPONSE = new Schema[] {FETCH_RESPONSE_V0, FETCH_RESPONSE_V1, FETCH_RESPONSE_V2};
+    public static final Schema[] FETCH_REQUEST = new Schema[] {FETCH_REQUEST_V0, FETCH_REQUEST_V1, FETCH_REQUEST_V2, FETCH_REQUEST_V3};
+    public static final Schema[] FETCH_RESPONSE = new Schema[] {FETCH_RESPONSE_V0, FETCH_RESPONSE_V1, FETCH_RESPONSE_V2, FETCH_RESPONSE_V3};
 
     /* List groups api */
     public static final Schema LIST_GROUPS_REQUEST_V0 = new Schema();
