@@ -453,7 +453,10 @@ public abstract class AbstractCoordinator implements Closeable {
                     future.raise(error);
                 } else if (error == Errors.NOT_ENOUGH_REPLICAS
                         || error == Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND) {
-                    future.raise(new KafkaException("Unable to write to __consumer_offsets: " + error.message()));
+                    log.warn("Failure to write to __consumer_offsets topic: " + error.message());
+                    coordinatorDead();
+                    //convert to GROUP_COORDINATOR_NOT_AVAILABLE to let the client retry
+                    future.raise(Errors.GROUP_COORDINATOR_NOT_AVAILABLE);
                 } else {
                     future.raise(new KafkaException("Unexpected error from SyncGroup: " + error.message()));
                 }
