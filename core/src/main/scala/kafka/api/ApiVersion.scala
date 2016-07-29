@@ -51,7 +51,10 @@ object ApiVersion {
     "0.10.0-IV0" -> KAFKA_0_10_0_IV0,
     // 0.10.0-IV1 is introduced for KIP-36(rack awareness) and KIP-43(SASL handshake).
     "0.10.0-IV1" -> KAFKA_0_10_0_IV1,
-    "0.10.0" -> KAFKA_0_10_0_IV1
+    "0.10.0" -> KAFKA_0_10_0_IV1,
+    // 0.11.0-IV0 is introduced for version 3 of FetchRequest
+    "0.11.0-IV0" -> KAFKA_0_11_0_IV0,
+    "0.11.0" -> KAFKA_0_11_0_IV0
   )
 
   private val versionPattern = "\\.".r
@@ -110,4 +113,10 @@ case object KAFKA_0_10_0_IV1 extends ApiVersion {
   val version: String = "0.10.0-IV1"
   val messageFormatVersion: Byte = Message.MagicValue_V1
   val id: Int = 5
+}
+
+case object KAFKA_0_11_0_IV0 extends ApiVersion {
+  val version: String = "0.11.0-IV0"
+  val messageFormatVersion: Byte = Message.MagicValue_V1
+  val id: Int = 6
 }

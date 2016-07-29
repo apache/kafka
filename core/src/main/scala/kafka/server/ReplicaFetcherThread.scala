@@ -23,7 +23,7 @@ import kafka.admin.AdminUtils
 import kafka.cluster.BrokerEndPoint
 import kafka.log.LogConfig
 import kafka.message.ByteBufferMessageSet
-import kafka.api.{KAFKA_0_10_0_IV0, KAFKA_0_9_0}
+import kafka.api.{KAFKA_0_10_0_IV0, KAFKA_0_11_0_IV0, KAFKA_0_9_0}
 import kafka.common.{KafkaStorageException, TopicAndPartition}
 import ReplicaFetcherThread._
 import org.apache.kafka.clients.{ManualMetadataUpdater, NetworkClient, ClientRequest, ClientResponse}
@@ -56,13 +56,15 @@ class ReplicaFetcherThread(name: String,
   type PD = PartitionData
 
   private val fetchRequestVersion: Short =
-    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_0_IV0) 2
+    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV0) 3
+    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_0_IV0) 2
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_9_0) 1
     else 0
   private val socketTimeout: Int = brokerConfig.replicaSocketTimeoutMs
   private val replicaId = brokerConfig.brokerId
   private val maxWait = brokerConfig.replicaFetchWaitMaxMs
   private val minBytes = brokerConfig.replicaFetchMinBytes
+  private val limitBytes = /*brokerConfig.replicaFetchLimitBytes*/ 1234567
   private val fetchSize = brokerConfig.replicaFetchMaxBytes
 
   private def clientId = name
@@ -275,7 +277,7 @@ class ReplicaFetcherThread(name: String,
         requestMap(new TopicPartition(topic, partition)) = new JFetchRequest.PartitionData(partitionFetchState.offset, fetchSize)
     }
 
-    new FetchRequest(new JFetchRequest(replicaId, maxWait, minBytes, requestMap.asJava))
+    new FetchRequest(new JFetchRequest(replicaId, maxWait, minBytes, limitBytes, requestMap.asJava))
   }
 
 }

@@ -76,6 +76,7 @@ public class Fetcher<K, V> {
     private final ConsumerNetworkClient client;
     private final Time time;
     private final int minBytes;
+    private final int limitBytes;
     private final int maxWaitMs;
     private final int fetchSize;
     private final long retryBackoffMs;
@@ -92,6 +93,7 @@ public class Fetcher<K, V> {
 
     public Fetcher(ConsumerNetworkClient client,
                    int minBytes,
+                   int limitBytes,
                    int maxWaitMs,
                    int fetchSize,
                    int maxPollRecords,
@@ -109,6 +111,7 @@ public class Fetcher<K, V> {
         this.metadata = metadata;
         this.subscriptions = subscriptions;
         this.minBytes = minBytes;
+        this.limitBytes = limitBytes;
         this.maxWaitMs = maxWaitMs;
         this.fetchSize = fetchSize;
         this.maxPollRecords = maxPollRecords;
@@ -517,7 +520,7 @@ public class Fetcher<K, V> {
         Map<Node, FetchRequest> requests = new HashMap<>();
         for (Map.Entry<Node, Map<TopicPartition, FetchRequest.PartitionData>> entry : fetchable.entrySet()) {
             Node node = entry.getKey();
-            FetchRequest fetch = new FetchRequest(this.maxWaitMs, this.minBytes, entry.getValue());
+            FetchRequest fetch = new FetchRequest(this.maxWaitMs, this.minBytes, this.limitBytes, entry.getValue());
             requests.put(node, fetch);
         }
         return requests;
