@@ -88,7 +88,7 @@ public class WordCountIntegrationTest {
         // StreamsConfig configuration (so we can retrieve whatever state directory Streams came up
         // with automatically) we don't need to set this anymore and can update `purgeLocalStreamsState`
         // accordingly.
-        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, "/tmp/kafka-streams");
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, "/tmp/ks-word-count-test");
 
         KStreamBuilder builder = new KStreamBuilder();
 
