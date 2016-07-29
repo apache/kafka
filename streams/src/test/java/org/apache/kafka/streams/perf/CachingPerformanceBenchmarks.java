@@ -30,6 +30,30 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * This class is for performing benchmarks of storing objects vs bytes in the MemoryLRUCache.
+ *
+ * There are three types of measurements taken:
+ *
+ *    1. The current tracking max by size cache (Control).
+ *
+ *    2. The cache tracking size by max memory (Object). Both keys and values were used in keeping track of total memory.  The max
+ *       size for the cache was calculated by multiplying the memory of a key/value pair (taken using the MemoryMeter class from the jamm library
+ *       https://github.com/jbellis/jamm) by the max size specified in the Control/Bytes cache.  The MemoryMeter can be used with instrumentation
+ *       via "-javaagent:<path to>/jamm.jar" otherwise the size is guessed using sun.misc.Unsafe if not instrumented.
+ *
+ *    3. Storing bytes in the cache (Bytes). The max size of the cache in this case was done by size.
+ *       Both keys and values are serialized/deserialized.  The ObjectMapper class from the https://github.com/FasterXML/jackson-databind
+ *       project was used for serialization/deserialization.
+ *
+ *
+ *   The cache is set to a max size of 500,000 (or in the memory based cache 500,000 * key/value memory size as calculated using MemoryMeter).
+ *   Two rounds of 25 iterations each are run. In the first round 500,000 put/get combinations are performed to measure behaviour
+ *   when all records will fit in the cache. The second round has 1,000,000 put/get combinations to measure performance
+ *   taking evictions into account.  There are also some benchmarks for raw serialization and memory tracking included as well.
+ *
+ */
+
 
 public class CachingPerformanceBenchmarks {
 
