@@ -127,7 +127,7 @@ public class Protocol {
 
     public static final Schema PRODUCE_REQUEST_V0 = new Schema(new Field("acks",
                                                                    INT16,
-                                                                   "The number of nodes that should replicate the produce before returning. -1 indicates the full ISR."),
+                                                                   "The number of acknowledgments the producer requires the leader to have received before considering a request complete. Allowed values: 0 for no acknowledgments, 1 for only the leader and -1 for the full ISR."),
                                                                new Field("timeout", INT32, "The time to await a response in ms."),
                                                                new Field("topic_data", new ArrayOf(TOPIC_PRODUCE_DATA_V0)));
 
