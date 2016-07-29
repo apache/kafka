@@ -146,11 +146,17 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.metadata.addListener(new Metadata.Listener() {
             @Override
             public void onMetadataUpdate(Cluster cluster) {
-                // if we encounter any unauthorized topics, raise an exception to the user
-                if (!cluster.unauthorizedTopics().isEmpty())
-                    throw new TopicAuthorizationException(new HashSet<>(cluster.unauthorizedTopics()));
 
                 if (subscriptions.hasPatternSubscription()) {
+
+                    Set<String> unauthorizedTopics = new HashSet<String>();
+                    for (String topic : cluster.unauthorizedTopics()) {
+                        if (subscriptions.getSubscribedPattern().matcher(topic).matches())
+                            unauthorizedTopics.add(topic);
+                    }
+                    if (!unauthorizedTopics.isEmpty())
+                        throw new TopicAuthorizationException(unauthorizedTopics);
+
                     final List<String> topicsToSubscribe = new ArrayList<>();
 
                     for (String topic : cluster.topics())
@@ -160,6 +166,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
                     subscriptions.changeSubscription(topicsToSubscribe);
                     metadata.setTopics(subscriptions.groupSubscription());
+                } else if (!cluster.unauthorizedTopics().isEmpty()) {
+                    // if we encounter any unauthorized topics, raise an exception to the user
+                    throw new TopicAuthorizationException(new HashSet<>(cluster.unauthorizedTopics()));
                 }
 
                 // check if there are any changes to the metadata which should trigger a rebalance
