@@ -429,21 +429,28 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
     sendRecords(1, tp)
 
     //create a unmatched topic
-    val umMatchedTopic = "unmatched"
-    TestUtils.createTopic(zkUtils, umMatchedTopic, 1, 1, this.servers)
-    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)),  new Resource(Topic, umMatchedTopic))
-    sendRecords(1, new TopicPartition(umMatchedTopic, part))
+    val unmatchedTopic = "unmatched"
+    TestUtils.createTopic(zkUtils, unmatchedTopic, 1, 1, this.servers)
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)),  new Resource(Topic, unmatchedTopic))
+    sendRecords(1, new TopicPartition(unmatchedTopic, part))
     removeAllAcls()
 
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), topicResource)
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
-    this.consumers.head.subscribe(Pattern.compile(topicPattern), new NoOpConsumerRebalanceListener)
-    consumeRecords(this.consumers.head)
+    val consumer = consumers.head
+    consumer.subscribe(Pattern.compile(topicPattern), new NoOpConsumerRebalanceListener)
+    consumeRecords(consumer)
+
+    // set the subscription pattern to an internal topic that the consumer has no read permission for, but since
+    // `exclude.internal.topics` is true by default, the subscription should be empty and no authorization exception
+    // should be thrown
+    consumer.subscribe(Pattern.compile(TopicConstants.GROUP_METADATA_TOPIC_NAME), new NoOpConsumerRebalanceListener)
+    assertTrue(consumer.poll(50).isEmpty)
   }
 
 
   @Test
-  def testPatternSubscriptionWithInternalTopicFilterDisabled() {
+  def testPatternSubscriptionMatchingInternalTopicWithNoPermission() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
     sendRecords(1, tp)
     removeAllAcls()
@@ -453,10 +460,36 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
 
     val consumerConfig = new Properties
     consumerConfig.put(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG, "false")
-    val consumer = TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group, securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(consumerConfig))
-    consumer.subscribe(Pattern.compile(topicPattern), new NoOpConsumerRebalanceListener)
-    consumeRecords(consumer)
-    consumer.close()
+    val consumer = TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group,
+      securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(consumerConfig))
+    try {
+      consumer.subscribe(Pattern.compile(".*"), new NoOpConsumerRebalanceListener)
+      consumeRecords(consumer)
+      fail("should have thrown exception")
+    }
+    catch {
+      case e: TopicAuthorizationException =>
+        assertEquals(Collections.singleton(TopicConstants.GROUP_METADATA_TOPIC_NAME), e.unauthorizedTopics())
+    } finally consumer.close()
+  }
+
+  @Test
+  def testPatternSubscriptionNotMatchingInternalTopic() {
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
+    sendRecords(1, tp)
+    removeAllAcls()
+
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), topicResource)
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
+
+    val consumerConfig = new Properties
+    consumerConfig.put(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG, "false")
+    val consumer = TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group,
+      securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(consumerConfig))
+    try {
+      consumer.subscribe(Pattern.compile(topicPattern), new NoOpConsumerRebalanceListener)
+      consumeRecords(consumer)
+    } finally consumer.close()
   }
 
   @Test

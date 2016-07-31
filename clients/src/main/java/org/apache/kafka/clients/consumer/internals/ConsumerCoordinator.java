@@ -151,7 +151,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
                     Set<String> unauthorizedTopics = new HashSet<String>();
                     for (String topic : cluster.unauthorizedTopics()) {
-                        if (isMatches(topic))
+                        if (filterTopic(topic))
                             unauthorizedTopics.add(topic);
                     }
                     if (!unauthorizedTopics.isEmpty())
@@ -160,13 +160,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     final List<String> topicsToSubscribe = new ArrayList<>();
 
                     for (String topic : cluster.topics())
-                        if (isMatches(topic) && !(excludeInternalTopics && TopicConstants.INTERNAL_TOPICS.contains(topic)))
+                        if (filterTopic(topic))
                             topicsToSubscribe.add(topic);
 
                     subscriptions.changeSubscription(topicsToSubscribe);
                     metadata.setTopics(subscriptions.groupSubscription());
                 } else if (!cluster.unauthorizedTopics().isEmpty()) {
-                    // if we encounter any unauthorized topics, raise an exception to the user
                     throw new TopicAuthorizationException(new HashSet<>(cluster.unauthorizedTopics()));
                 }
 
@@ -183,8 +182,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         });
     }
 
-    private boolean isMatches(String topic) {
-        return subscriptions.getSubscribedPattern().matcher(topic).matches();
+    private boolean filterTopic(String topic) {
+        return subscriptions.getSubscribedPattern().matcher(topic).matches() &&
+                !(excludeInternalTopics && TopicConstants.INTERNAL_TOPICS.contains(topic));
     }
 
     private PartitionAssignor lookupAssignor(String name) {
