@@ -55,7 +55,7 @@ public class SimpleRecordTest {
     public void testIsValidWithFourBytesBuffer() {
         ByteBuffer buffer = ByteBuffer.allocate(4);
         Record record = new Record(buffer);
-        // it is a bit weird that we return `true` in this case, we could extend the definition of `isValid` to the
+        // it is a bit weird that we return `true` in this case, we could extend the definition of `isValid` to
         // something like the following to detect a clearly corrupt record:
         // return size() >= recordSize(0, 0) && checksum() == computeChecksum();
         assertTrue(record.isValid());

@@ -609,13 +609,14 @@ public class Fetcher<K, V> {
     private ConsumerRecord<K, V> parseRecord(TopicPartition partition, LogEntry logEntry) {
         Record record = logEntry.record();
 
-        if (this.checkCrcs)
+        if (this.checkCrcs) {
             try {
                 record.ensureValid();
             } catch (InvalidRecordException e) {
-                throw new InvalidRecordException("Record for partition " + partition + " at offset " + logEntry.offset()
+                throw new KafkaException("Record for partition " + partition + " at offset " + logEntry.offset()
                         + " is invalid, cause: " + e.getMessage());
             }
+        }
 
         try {
             long offset = logEntry.offset();
