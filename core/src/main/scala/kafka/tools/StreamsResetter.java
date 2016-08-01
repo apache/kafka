@@ -25,6 +25,7 @@ import kafka.utils.ZkUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 
@@ -37,6 +38,8 @@ import java.util.Set;
 
 /**
  * {@link StreamsResetter} resets the processing state of a Kafka Streams application so that, for example, you can reprocess its input from scratch.
+ * <p>
+ * <strong>This class is not part of public API. For backward compatibility, use the provided script in "bin/" instead of calling this class directly from your code.</strong>
  * <p>
  * Resetting the processing state of an application includes the following actions:
  * <ol>
@@ -54,6 +57,7 @@ import java.util.Set;
  * User output topics will not be deleted or modified by this tool.
  * If downstream applications consume intermediate or output topics, it is the user's responsibility to adjust those applications manually if required.
  */
+@InterfaceStability.Unstable
 public class StreamsResetter {
     private static final int EXIT_CODE_SUCCESS = 0;
     private static final int EXIT_CODE_ERROR = 1;
