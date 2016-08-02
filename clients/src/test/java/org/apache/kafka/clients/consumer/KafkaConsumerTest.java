@@ -205,7 +205,7 @@ public class KafkaConsumerTest {
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
         KafkaConsumer<byte[], byte[]> consumer = newConsumer();
         try {
-            consumer.assign(Arrays.asList(new TopicPartition("nonExistTopic", 0)));
+            consumer.assign(Collections.singletonList(new TopicPartition("nonExistTopic", 0)));
             consumer.seek(new TopicPartition("nonExistTopic", 0), -1);
         } finally {
             consumer.close();
@@ -245,7 +245,7 @@ public class KafkaConsumerTest {
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
         KafkaConsumer<byte[], byte[]> consumer = newConsumer();
         try {
-            consumer.assign(Arrays.asList(new TopicPartition(null, 0)));
+            consumer.assign(Collections.singletonList(new TopicPartition(null, 0)));
         } finally {
             consumer.close();
         }
@@ -259,7 +259,7 @@ public class KafkaConsumerTest {
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
         KafkaConsumer<byte[], byte[]> consumer = newConsumer();
         try {
-            consumer.assign(Arrays.asList(new TopicPartition("  ", 0)));
+            consumer.assign(Collections.singletonList(new TopicPartition("  ", 0)));
         } finally {
             consumer.close();
         }
@@ -338,7 +338,7 @@ public class KafkaConsumerTest {
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
                 sessionTimeoutMs, heartbeatIntervalMs, autoCommitIntervalMs);
 
-        consumer.subscribe(Arrays.asList(topic), new ConsumerRebalanceListener() {
+        consumer.subscribe(Collections.singletonList(topic), new ConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
 
@@ -361,7 +361,7 @@ public class KafkaConsumerTest {
         client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE.code()), coordinator);
 
         // sync group
-        client.prepareResponseFrom(syncGroupResponse(Arrays.asList(partition), Errors.NONE.code()), coordinator);
+        client.prepareResponseFrom(syncGroupResponse(Collections.singletonList(partition), Errors.NONE.code()), coordinator);
 
         // initial fetch
         client.prepareResponseFrom(fetchResponse(partition, 0, 0), node);
@@ -406,7 +406,7 @@ public class KafkaConsumerTest {
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
                 sessionTimeoutMs, heartbeatIntervalMs, autoCommitIntervalMs);
-        consumer.subscribe(Arrays.asList(topic), new ConsumerRebalanceListener() {
+        consumer.subscribe(Collections.singletonList(topic), new ConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
 
@@ -429,7 +429,7 @@ public class KafkaConsumerTest {
         client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE.code()), coordinator);
 
         // sync group
-        client.prepareResponseFrom(syncGroupResponse(Arrays.asList(partition), Errors.NONE.code()), coordinator);
+        client.prepareResponseFrom(syncGroupResponse(Collections.singletonList(partition), Errors.NONE.code()), coordinator);
 
         consumer.poll(0);
 
@@ -478,7 +478,7 @@ public class KafkaConsumerTest {
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
                 sessionTimeoutMs, heartbeatIntervalMs, autoCommitIntervalMs);
-        consumer.assign(Arrays.asList(partition1));
+        consumer.assign(Collections.singletonList(partition1));
 
         // lookup coordinator
         client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE.code(), node).toStruct(), node);
@@ -526,7 +526,7 @@ public class KafkaConsumerTest {
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
                 sessionTimeoutMs, heartbeatIntervalMs, autoCommitIntervalMs);
-        consumer.subscribe(Arrays.asList(topic), new ConsumerRebalanceListener() {
+        consumer.subscribe(Collections.singletonList(topic), new ConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
 
@@ -549,7 +549,7 @@ public class KafkaConsumerTest {
         client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE.code()), coordinator);
 
         // sync group
-        client.prepareResponseFrom(syncGroupResponse(Arrays.asList(partition), Errors.NONE.code()), coordinator);
+        client.prepareResponseFrom(syncGroupResponse(Collections.singletonList(partition), Errors.NONE.code()), coordinator);
 
         consumer.poll(0);
 
@@ -604,7 +604,7 @@ public class KafkaConsumerTest {
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
                 sessionTimeoutMs, heartbeatIntervalMs, autoCommitIntervalMs);
-        consumer.subscribe(Arrays.asList(topic), new ConsumerRebalanceListener() {
+        consumer.subscribe(Collections.singletonList(topic), new ConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
 
@@ -627,7 +627,7 @@ public class KafkaConsumerTest {
         client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE.code()), coordinator);
 
         // sync group
-        client.prepareResponseFrom(syncGroupResponse(Arrays.asList(partition), Errors.NONE.code()), coordinator);
+        client.prepareResponseFrom(syncGroupResponse(Collections.singletonList(partition), Errors.NONE.code()), coordinator);
 
         consumer.poll(0);
 
@@ -706,7 +706,7 @@ public class KafkaConsumerTest {
 
         OffsetResetStrategy autoResetStrategy = OffsetResetStrategy.EARLIEST;
         OffsetCommitCallback defaultCommitCallback = new ConsumerCoordinator.DefaultOffsetCommitCallback();
-        List<PartitionAssignor> assignors = Arrays.asList(assignor);
+        List<PartitionAssignor> assignors = Collections.singletonList(assignor);
         ConsumerInterceptors<String, String> interceptors = null;
 
         Metrics metrics = new Metrics();

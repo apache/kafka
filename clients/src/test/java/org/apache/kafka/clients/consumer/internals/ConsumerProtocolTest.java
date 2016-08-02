@@ -28,6 +28,7 @@ import org.junit.Test;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -79,7 +80,7 @@ public class ConsumerProtocolTest {
         buffer.flip();
 
         Subscription subscription = ConsumerProtocol.deserializeSubscription(buffer);
-        assertEquals(Arrays.asList("topic"), subscription.topics());
+        assertEquals(Collections.singletonList("topic"), subscription.topics());
     }
 
     @Test
@@ -127,7 +128,7 @@ public class ConsumerProtocolTest {
         buffer.flip();
 
         PartitionAssignor.Assignment assignment = ConsumerProtocol.deserializeAssignment(buffer);
-        assertEquals(toSet(Arrays.asList(new TopicPartition("foo", 1))), toSet(assignment.partitions()));
+        assertEquals(toSet(Collections.singletonList(new TopicPartition("foo", 1))), toSet(assignment.partitions()));
     }
 
     private static <T> Set<T> toSet(Collection<T> collection) {

@@ -15,6 +15,7 @@ package org.apache.kafka.common.network;
 import static org.junit.Assert.fail;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Map;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -305,10 +306,10 @@ public class SslTransportLayerTest {
     @Test
     public void testUnsupportedTLSVersion() throws Exception {
         String node = "0";
-        sslServerConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.2"));
+        sslServerConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList("TLSv1.2"));
         server = NetworkTestUtils.createEchoServer(SecurityProtocol.SSL, sslServerConfigs);
         
-        sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.1"));
+        sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList("TLSv1.1"));
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -323,10 +324,10 @@ public class SslTransportLayerTest {
     public void testUnsupportedCiphers() throws Exception {
         String node = "0";
         String[] cipherSuites = SSLContext.getDefault().getDefaultSSLParameters().getCipherSuites();
-        sslServerConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Arrays.asList(cipherSuites[0]));
+        sslServerConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuites[0]));
         server = NetworkTestUtils.createEchoServer(SecurityProtocol.SSL, sslServerConfigs);
         
-        sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Arrays.asList(cipherSuites[1]));
+        sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuites[1]));
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);

@@ -71,8 +71,8 @@ public class RequestResponseTest {
                 createListOffsetRequest().getErrorResponse(0, new UnknownServerException()),
                 createListOffsetResponse(),
                 MetadataRequest.allTopics(),
-                createMetadataRequest(Arrays.asList("topic1")),
-                createMetadataRequest(Arrays.asList("topic1")).getErrorResponse(1, new UnknownServerException()),
+                createMetadataRequest(Collections.singletonList("topic1")),
+                createMetadataRequest(Collections.singletonList("topic1")).getErrorResponse(1, new UnknownServerException()),
                 createMetadataResponse(1),
                 createOffsetCommitRequest(2),
                 createOffsetCommitRequest(2).getErrorResponse(2, new UnknownServerException()),
@@ -109,7 +109,7 @@ public class RequestResponseTest {
             checkSerialization(req, null);
 
         createMetadataResponse(0);
-        createMetadataRequest(Arrays.asList("topic1")).getErrorResponse(0, new UnknownServerException());
+        createMetadataRequest(Collections.singletonList("topic1")).getErrorResponse(0, new UnknownServerException());
         checkSerialization(createFetchRequest().getErrorResponse(0, new UnknownServerException()), 0);
         checkSerialization(createOffsetCommitRequest(0), 0);
         checkSerialization(createOffsetCommitRequest(0).getErrorResponse(0, new UnknownServerException()), 0);
@@ -252,7 +252,7 @@ public class RequestResponseTest {
     }
 
     private AbstractRequestResponse createListGroupsResponse() {
-        List<ListGroupsResponse.Group> groups = Arrays.asList(new ListGroupsResponse.Group("test-group", "consumer"));
+        List<ListGroupsResponse.Group> groups = Collections.singletonList(new ListGroupsResponse.Group("test-group", "consumer"));
         return new ListGroupsResponse(Errors.NONE.code(), groups);
     }
 
@@ -267,7 +267,7 @@ public class RequestResponseTest {
         DescribeGroupsResponse.GroupMember member = new DescribeGroupsResponse.GroupMember("memberId",
                 clientId, clientHost, empty, empty);
         DescribeGroupsResponse.GroupMetadata metadata = new DescribeGroupsResponse.GroupMetadata(Errors.NONE.code(),
-                "STABLE", "consumer", "roundrobin", Arrays.asList(member));
+                "STABLE", "consumer", "roundrobin", Collections.singletonList(member));
         return new DescribeGroupsResponse(Collections.singletonMap("test-group", metadata));
     }
 
@@ -287,7 +287,7 @@ public class RequestResponseTest {
 
     private AbstractRequestResponse createListOffsetResponse() {
         Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<>();
-        responseData.put(new TopicPartition("test", 0), new ListOffsetResponse.PartitionData(Errors.NONE.code(), Arrays.asList(100L)));
+        responseData.put(new TopicPartition("test", 0), new ListOffsetResponse.PartitionData(Errors.NONE.code(), Collections.singletonList(100L)));
         return new ListOffsetResponse(responseData);
     }
 
@@ -297,16 +297,16 @@ public class RequestResponseTest {
 
     private AbstractRequestResponse createMetadataResponse(int version) {
         Node node = new Node(1, "host1", 1001);
-        List<Node> replicas = Arrays.asList(node);
-        List<Node> isr = Arrays.asList(node);
+        List<Node> replicas = Collections.singletonList(node);
+        List<Node> isr = Collections.singletonList(node);
 
         List<MetadataResponse.TopicMetadata> allTopicMetadata = new ArrayList<>();
         allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, "__consumer_offsets", true,
-                Arrays.asList(new MetadataResponse.PartitionMetadata(Errors.NONE, 1, node, replicas, isr))));
+                Collections.singletonList(new MetadataResponse.PartitionMetadata(Errors.NONE, 1, node, replicas, isr))));
         allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, "topic2", false,
                 Collections.<MetadataResponse.PartitionMetadata>emptyList()));
 
-        return new MetadataResponse(Arrays.asList(node), MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata, version);
+        return new MetadataResponse(Collections.singletonList(node), MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata, version);
     }
 
     private AbstractRequest createOffsetCommitRequest(int version) {
@@ -330,7 +330,7 @@ public class RequestResponseTest {
     }
 
     private AbstractRequest createOffsetFetchRequest() {
-        return new OffsetFetchRequest("group1", Arrays.asList(new TopicPartition("test11", 1)));
+        return new OffsetFetchRequest("group1", Collections.singletonList(new TopicPartition("test11", 1)));
     }
 
     private AbstractRequestResponse createOffsetFetchResponse() {
@@ -353,7 +353,7 @@ public class RequestResponseTest {
     }
 
     private AbstractRequest createStopReplicaRequest(boolean deletePartitions) {
-        Set<TopicPartition> partitions = new HashSet<>(Arrays.asList(new TopicPartition("test", 0)));
+        Set<TopicPartition> partitions = new HashSet<>(Collections.singletonList(new TopicPartition("test", 0)));
         return new StopReplicaRequest(0, 1, deletePartitions, partitions);
     }
 
@@ -451,7 +451,7 @@ public class RequestResponseTest {
     }
 
     private AbstractRequestResponse createApiVersionResponse() {
-        List<ApiVersionsResponse.ApiVersion> apiVersions = Arrays.asList(new ApiVersionsResponse.ApiVersion((short) 0, (short) 0, (short) 2));
+        List<ApiVersionsResponse.ApiVersion> apiVersions = Collections.singletonList(new ApiVersionsResponse.ApiVersion((short) 0, (short) 0, (short) 2));
         return new ApiVersionsResponse(Errors.NONE.code(), apiVersions);
     }
 

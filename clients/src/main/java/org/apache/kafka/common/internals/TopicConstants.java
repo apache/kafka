@@ -29,5 +29,5 @@ public final class TopicConstants {
 
     // TODO: we store both group metadata and offset data here despite the topic name being offsets only
     public static final String GROUP_METADATA_TOPIC_NAME = "__consumer_offsets";
-    public static final Collection<String> INTERNAL_TOPICS = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList(GROUP_METADATA_TOPIC_NAME)));
+    public static final Collection<String> INTERNAL_TOPICS = Collections.unmodifiableSet(new HashSet<String>(Collections.singletonList(GROUP_METADATA_TOPIC_NAME)));
 }

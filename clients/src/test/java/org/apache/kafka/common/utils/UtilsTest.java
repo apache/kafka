@@ -66,7 +66,7 @@ public class UtilsTest {
     @Test
     public void testJoin() {
         assertEquals("", Utils.join(Collections.emptyList(), ","));
-        assertEquals("1", Utils.join(Arrays.asList("1"), ","));
+        assertEquals("1", Utils.join(Collections.singletonList("1"), ","));
         assertEquals("1,2,3", Utils.join(Arrays.asList(1, 2, 3), ","));
     }
 

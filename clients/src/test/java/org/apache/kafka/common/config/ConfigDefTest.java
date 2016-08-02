@@ -202,7 +202,7 @@ public class ConfigDefTest {
         String errorMessageC = "Missing required configuration \"c\" which has no default value.";
         ConfigValue configA = new ConfigValue("a", 1, Collections.<Object>emptyList(), Collections.<String>emptyList());
         ConfigValue configB = new ConfigValue("b", null, Collections.<Object>emptyList(), Arrays.asList(errorMessageB, errorMessageB));
-        ConfigValue configC = new ConfigValue("c", null, Collections.<Object>emptyList(), Arrays.asList(errorMessageC));
+        ConfigValue configC = new ConfigValue("c", null, Collections.<Object>emptyList(), Collections.singletonList(errorMessageC));
         ConfigValue configD = new ConfigValue("d", 10, Collections.<Object>emptyList(), Collections.<String>emptyList());
         expected.put("a", configA);
         expected.put("b", configB);
@@ -213,7 +213,7 @@ public class ConfigDefTest {
             .define("a", Type.INT, Importance.HIGH, "docs", "group", 1, Width.SHORT, "a", Arrays.asList("b", "c"), new IntegerRecommender(false))
             .define("b", Type.INT, Importance.HIGH, "docs", "group", 2, Width.SHORT, "b", new IntegerRecommender(true))
             .define("c", Type.INT, Importance.HIGH, "docs", "group", 3, Width.SHORT, "c", new IntegerRecommender(true))
-            .define("d", Type.INT, Importance.HIGH, "docs", "group", 4, Width.SHORT, "d", Arrays.asList("b"), new IntegerRecommender(false));
+            .define("d", Type.INT, Importance.HIGH, "docs", "group", 4, Width.SHORT, "d", Collections.singletonList("b"), new IntegerRecommender(false));
 
         Map<String, String> props = new HashMap<>();
         props.put("a", "1");
@@ -239,7 +239,7 @@ public class ConfigDefTest {
 
         ConfigValue configA = new ConfigValue("a", 1, Arrays.<Object>asList(1, 2, 3), Collections.<String>emptyList());
         ConfigValue configB = new ConfigValue("b", null, Arrays.<Object>asList(4, 5), Arrays.asList(errorMessageB, errorMessageB));
-        ConfigValue configC = new ConfigValue("c", null, Arrays.<Object>asList(4, 5), Arrays.asList(errorMessageC));
+        ConfigValue configC = new ConfigValue("c", null, Arrays.<Object>asList(4, 5), Collections.singletonList(errorMessageC));
         ConfigValue configD = new ConfigValue("d", 10, Arrays.<Object>asList(1, 2, 3), Collections.<String>emptyList());
 
         expected.put("a", configA);
@@ -251,7 +251,7 @@ public class ConfigDefTest {
             .define("a", Type.INT, Importance.HIGH, "docs", "group", 1, Width.SHORT, "a", Arrays.asList("b", "c"), new IntegerRecommender(false))
             .define("b", Type.INT, Importance.HIGH, "docs", "group", 2, Width.SHORT, "b", new IntegerRecommender(true))
             .define("c", Type.INT, Importance.HIGH, "docs", "group", 3, Width.SHORT, "c", new IntegerRecommender(true))
-            .define("d", Type.INT, Importance.HIGH, "docs", "group", 4, Width.SHORT, "d", Arrays.asList("b"), new IntegerRecommender(false));
+            .define("d", Type.INT, Importance.HIGH, "docs", "group", 4, Width.SHORT, "d", Collections.singletonList("b"), new IntegerRecommender(false));
 
         Map<String, String> props = new HashMap<>();
         props.put("a", "1");
@@ -273,9 +273,9 @@ public class ConfigDefTest {
         String errorMessageD = "d is referred in the dependents, but not defined.";
 
         ConfigValue configA = new ConfigValue("a", 1, Arrays.<Object>asList(1, 2, 3), Collections.<String>emptyList());
-        ConfigValue configB = new ConfigValue("b", null, Arrays.<Object>asList(4, 5), Arrays.asList(errorMessageB));
-        ConfigValue configC = new ConfigValue("c", null, Arrays.<Object>asList(4, 5), Arrays.asList(errorMessageC));
-        ConfigValue configD = new ConfigValue("d", null, Collections.emptyList(), Arrays.asList(errorMessageD));
+        ConfigValue configB = new ConfigValue("b", null, Arrays.<Object>asList(4, 5), Collections.singletonList(errorMessageB));
+        ConfigValue configC = new ConfigValue("c", null, Arrays.<Object>asList(4, 5), Collections.singletonList(errorMessageC));
+        ConfigValue configD = new ConfigValue("d", null, Collections.emptyList(), Collections.singletonList(errorMessageD));
         configD.visible(false);
 
         expected.put("a", configA);
@@ -303,7 +303,7 @@ public class ConfigDefTest {
     public void testValidateCannotParse() {
         Map<String, ConfigValue> expected = new HashMap<>();
         String errorMessageB = "Invalid value non_integer for configuration a: Not a number of type INT";
-        ConfigValue configA = new ConfigValue("a", null, Collections.emptyList(), Arrays.asList(errorMessageB));
+        ConfigValue configA = new ConfigValue("a", null, Collections.emptyList(), Collections.singletonList(errorMessageB));
         expected.put("a", configA);
 
         ConfigDef def = new ConfigDef().define("a", Type.INT, Importance.HIGH, "docs");

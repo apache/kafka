@@ -20,6 +20,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -49,7 +50,7 @@ public class MetricsTest {
 
     @Before
     public void setup() {
-        this.metrics = new Metrics(config, Arrays.asList((MetricsReporter) new JmxReporter()), time, true);
+        this.metrics = new Metrics(config, Collections.singletonList((MetricsReporter) new JmxReporter()), time, true);
     }
 
     @After
@@ -156,7 +157,7 @@ public class MetricsTest {
         assertEquals(1.0 + c1, p2, EPS);
         assertEquals(1.0 + c1 + c2, p1, EPS);
         assertEquals(Arrays.asList(child1, child2), metrics.childrenSensors().get(parent1));
-        assertEquals(Arrays.asList(child1), metrics.childrenSensors().get(parent2));
+        assertEquals(Collections.singletonList(child1), metrics.childrenSensors().get(parent2));
         assertNull(metrics.childrenSensors().get(grandchild));
     }
 

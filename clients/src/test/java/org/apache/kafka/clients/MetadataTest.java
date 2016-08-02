@@ -157,7 +157,7 @@ public class MetadataTest {
         });
 
         metadata.update(new Cluster(
-                Arrays.asList(new Node(0, "host1", 1000)),
+                Collections.singletonList(new Node(0, "host1", 1000)),
                 Arrays.asList(
                     new PartitionInfo("topic", 0, null, null, null),
                     new PartitionInfo("topic1", 0, null, null, null)),
@@ -193,7 +193,7 @@ public class MetadataTest {
         metadata.removeListener(listener);
 
         metadata.update(new Cluster(
-                Arrays.asList(new Node(0, "host1", 1000)),
+                Collections.singletonList(new Node(0, "host1", 1000)),
                 Arrays.asList(
                     new PartitionInfo("topic2", 0, null, null, null),
                     new PartitionInfo("topic3", 0, null, null, null)),
