@@ -697,16 +697,18 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                    Serde<K1> keySerde,
                                                    Serde<V1> lhsValueSerde,
                                                    Serde<V2> otherValueSerde) {
+            String otherWindowStreamName = topology.newName(WINDOWED_NAME);
+            String joinThisName = topology.newName(LEFTJOIN_NAME);
+
             StateStoreSupplier otherWindow =
-                createWindowedStateStore(windows, keySerde, otherValueSerde, name + "other");
+                createWindowedStateStore(windows, keySerde, otherValueSerde, joinThisName + "-store");
 
             KStreamJoinWindow<K1, V1>
                 otherWindowedStream = new KStreamJoinWindow<>(otherWindow.name(), windows.before + windows.after + 1, windows.maintainMs());
             KStreamKStreamJoin<K1, R, V1, V2>
                 joinThis = new KStreamKStreamJoin<>(otherWindow.name(), windows.before, windows.after, joiner, true);
 
-            String otherWindowStreamName = topology.newName(WINDOWED_NAME);
-            String joinThisName = topology.newName(LEFTJOIN_NAME);
+
 
             topology.addProcessor(otherWindowStreamName, otherWindowedStream, ((AbstractStream) other).name);
             topology.addProcessor(joinThisName, joinThis, ((AbstractStream) lhs).name);
