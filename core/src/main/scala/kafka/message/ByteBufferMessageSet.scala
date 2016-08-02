@@ -17,7 +17,7 @@
 
 package kafka.message
 
-import kafka.utils.{IteratorTemplate, Logging}
+import kafka.utils.{CoreUtils, IteratorTemplate, Logging}
 import kafka.common.{KafkaException, LongRef}
 import java.nio.ByteBuffer
 import java.nio.channels._
@@ -85,36 +85,45 @@ object ByteBufferMessageSet {
     new IteratorTemplate[MessageAndOffset] {
 
       val MessageAndOffset(wrapperMessage, wrapperMessageOffset) = wrapperMessageAndOffset
+
+      if (wrapperMessage.payload == null)
+        throw new KafkaException(s"Message payload is null: $wrapperMessage")
+
       val wrapperMessageTimestampOpt: Option[Long] =
         if (wrapperMessage.magic > MagicValue_V0) Some(wrapperMessage.timestamp) else None
       val wrapperMessageTimestampTypeOpt: Option[TimestampType] =
         if (wrapperMessage.magic > MagicValue_V0) Some(wrapperMessage.timestampType) else None
-      if (wrapperMessage.payload == null)
-        throw new KafkaException(s"Message payload is null: $wrapperMessage")
-      val inputStream = new ByteBufferBackedInputStream(wrapperMessage.payload)
-      val compressed = try {
-        new DataInputStream(CompressionFactory(wrapperMessage.compressionCodec, wrapperMessage.magic, inputStream))
-      } catch {
-        case ioe: IOException =>
-          throw new InvalidMessageException(s"Failed to instantiate input stream compressed with ${wrapperMessage.compressionCodec}", ioe)
-      }
+
       var lastInnerOffset = -1L
 
-      val messageAndOffsets = if (wrapperMessageAndOffset.message.magic > MagicValue_V0) {
+      val messageAndOffsets = {
+        val inputStream = new ByteBufferBackedInputStream(wrapperMessage.payload)
+        val compressed = try {
+          new DataInputStream(CompressionFactory(wrapperMessage.compressionCodec, wrapperMessage.magic, inputStream))
+        } catch {
+          case ioe: IOException =>
+            throw new InvalidMessageException(s"Failed to instantiate input stream compressed with ${wrapperMessage.compressionCodec}", ioe)
+        }
+
         val innerMessageAndOffsets = new ArrayDeque[MessageAndOffset]()
         try {
           while (true)
-            innerMessageAndOffsets.add(readMessageFromStream())
+            innerMessageAndOffsets.add(readMessageFromStream(compressed))
         } catch {
           case eofe: EOFException =>
-            compressed.close()
+            // we don't do anything at all here, because the finally
+            // will close the compressed input stream, and we simply
+            // want to return the innerMessageAndOffsets
           case ioe: IOException =>
             throw new InvalidMessageException(s"Error while reading message from stream compressed with ${wrapperMessage.compressionCodec}", ioe)
+        } finally {
+          CoreUtils.swallow(compressed.close())
         }
-        Some(innerMessageAndOffsets)
-      } else None
 
-      private def readMessageFromStream(): MessageAndOffset = {
+        innerMessageAndOffsets
+      }
+
+      private def readMessageFromStream(compressed: DataInputStream): MessageAndOffset = {
         val innerOffset = compressed.readLong()
         val recordSize = compressed.readInt()
 
@@ -138,25 +147,15 @@ object ByteBufferMessageSet {
       }
 
       override def makeNext(): MessageAndOffset = {
-        messageAndOffsets match {
-          // Using inner offset and timestamps
-          case Some(innerMessageAndOffsets) =>
-            innerMessageAndOffsets.pollFirst() match {
-              case null => allDone()
-              case MessageAndOffset(message, offset) =>
-                val relativeOffset = offset - lastInnerOffset
-                val absoluteOffset = wrapperMessageOffset + relativeOffset
-                new MessageAndOffset(message, absoluteOffset)
-            }
-          // Not using inner offset and timestamps
-          case None =>
-            try readMessageFromStream()
-            catch {
-              case eofe: EOFException =>
-                compressed.close()
-                allDone()
-              case ioe: IOException =>
-                throw new KafkaException(ioe)
+        messageAndOffsets.pollFirst() match {
+          case null => allDone()
+          case nextMessage@ MessageAndOffset(message, offset) =>
+            if (wrapperMessage.magic > MagicValue_V0) {
+              val relativeOffset = offset - lastInnerOffset
+              val absoluteOffset = wrapperMessageOffset + relativeOffset
+              new MessageAndOffset(message, absoluteOffset)
+            } else {
+              nextMessage
             }
         }
       }
@@ -295,14 +294,26 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
   }
 
   /** Write the messages in this set to the given channel */
-  def writeTo(channel: GatheringByteChannel, offset: Long, size: Int): Int = {
-    // Ignore offset and size from input. We just want to write the whole buffer to the channel.
+  def writeFullyTo(channel: GatheringByteChannel): Int = {
     buffer.mark()
     var written = 0
-    while(written < sizeInBytes)
+    while (written < sizeInBytes)
       written += channel.write(buffer)
     buffer.reset()
     written
+  }
+
+  /** Write the messages in this set to the given channel starting at the given offset byte.
+    * Less than the complete amount may be written, but no more than maxSize can be. The number
+    * of bytes written is returned */
+  def writeTo(channel: GatheringByteChannel, offset: Long, maxSize: Int): Int = {
+    if (offset > Int.MaxValue)
+      throw new IllegalArgumentException(s"offset should not be larger than Int.MaxValue: $offset")
+    val dup = buffer.duplicate()
+    val position = offset.toInt
+    dup.position(position)
+    dup.limit(math.min(buffer.limit, position + maxSize))
+    channel.write(dup)
   }
 
   override def isMagicValueInAllWrapperMessages(expectedMagicValue: Byte): Boolean = {

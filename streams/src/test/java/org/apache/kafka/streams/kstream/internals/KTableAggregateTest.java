@@ -62,9 +62,10 @@ public class KTableAggregateTest {
     @Test
     public void testAggBasic() throws Exception {
         final KStreamBuilder builder = new KStreamBuilder();
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
+        final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
 
-        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1);
+        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
         KTable<String, String> table2 = table1.groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper(),
                 stringSerde,
                 stringSerde
@@ -74,8 +75,7 @@ public class KTableAggregateTest {
                 stringSerde,
                 "topic1-Canonized");
 
-        MockProcessorSupplier<String, String> proc2 = new MockProcessorSupplier<>();
-        table2.toStream().process(proc2);
+        table2.toStream().process(proc);
 
         driver = new KStreamTestDriver(builder, stateDir);
 
@@ -96,24 +96,25 @@ public class KTableAggregateTest {
                 "C:0+5",
                 "D:0+6",
                 "B:0+2+4-2+7", "B:0+2+4-2+7-4",
-                "C:0+5+8", "C:0+5+8-5"), proc2.processed);
+                "C:0+5+8", "C:0+5+8-5"), proc.processed);
     }
 
     @Test
     public void testAggRepartition() throws Exception {
         final KStreamBuilder builder = new KStreamBuilder();
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
+        final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
 
-        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1);
+        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
         KTable<String, String> table2 = table1.groupBy(new KeyValueMapper<String, String, KeyValue<String, String>>() {
             @Override
                 public KeyValue<String, String> apply(String key, String value) {
                     if (key.equals("null")) {
-                        return KeyValue.pair(null, value + "s");
+                        return KeyValue.pair(null, value);
                     } else if (key.equals("NULL")) {
                         return null;
                     } else {
-                        return KeyValue.pair(value, value + "s");
+                        return KeyValue.pair(value, value);
                     }
                 }
             },
@@ -126,11 +127,12 @@ public class KTableAggregateTest {
                 stringSerde,
                 "topic1-Canonized");
 
-        MockProcessorSupplier<String, String> proc2 = new MockProcessorSupplier<>();
-        table2.toStream().process(proc2);
+        table2.toStream().process(proc);
 
         driver = new KStreamTestDriver(builder, stateDir);
 
+        driver.process(topic1, "A", "1");
+        driver.process(topic1, "A", null);
         driver.process(topic1, "A", "1");
         driver.process(topic1, "B", "2");
         driver.process(topic1, "null", "3");
@@ -139,11 +141,36 @@ public class KTableAggregateTest {
         driver.process(topic1, "B", "7");
 
         assertEquals(Utils.mkList(
-                "1:0+1s",
-                "2:0+2s",
-                "4:0+4s",
-                "2:0+2s-2s",
-                "7:0+7s",
-                "4:0+4s-4s"), proc2.processed);
+                "1:0+1",
+                "1:0+1-1",
+                "1:0+1-1+1",
+                "2:0+2",
+                "4:0+4",
+                "2:0+2-2",
+                "7:0+7",
+                "4:0+4-4"), proc.processed);
+    }
+
+    @Test
+    public void testCount() throws IOException {
+        final KStreamBuilder builder = new KStreamBuilder();
+        final String input = "count-test-input";
+        final MockProcessorSupplier<String, Long> proc = new MockProcessorSupplier<>();
+
+        builder.table(Serdes.String(), Serdes.String(), input, "anyStoreName")
+                .groupBy(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper(), stringSerde, stringSerde)
+                .count("count")
+                .toStream()
+                .process(proc);
+
+        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir);
+
+        driver.process(input, "A", "green");
+        driver.process(input, "B", "green");
+        driver.process(input, "A", "blue");
+        driver.process(input, "C", "yellow");
+        driver.process(input, "D", "green");
+
+        assertEquals(Utils.mkList("green:1", "green:2", "blue:1", "green:1", "yellow:1", "green:2"), proc.processed);
     }
 }

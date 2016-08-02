@@ -76,6 +76,8 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 return SaslHandshakeRequest.parse(buffer, versionId);
             case API_VERSIONS:
                 return ApiVersionsRequest.parse(buffer, versionId);
+            case CREATE_TOPICS:
+                return CreateTopicsRequest.parse(buffer, versionId);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `getRequest`, the " +
                         "code should be updated to do so.", apiKey));

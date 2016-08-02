@@ -142,6 +142,7 @@
     <subpackage name="integration">
       <allow pkg="kafka.admin" />
       <allow pkg="kafka.server" />
+      <allow pkg="kafka.tools" />
       <allow pkg="kafka.utils" />
       <allow pkg="kafka.zk" />
       <allow pkg="kafka.log" />
