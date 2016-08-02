@@ -98,4 +98,9 @@ public class KerberosShortNamer {
         throw new NoMatchingRule("No rules applied to " + toString());
     }
 
+    @Override
+    public String toString() {
+      return principalToLocalRules.toString();
+    }
+
 }
