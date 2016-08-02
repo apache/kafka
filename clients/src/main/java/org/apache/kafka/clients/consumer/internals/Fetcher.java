@@ -205,6 +205,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         @Override
                         public void onSuccess(ClientResponse resp) {
                             FetchResponse response = (FetchResponse) resp.responseBody();
+                            sensors.rawBytesFetched.record(
+                                    FetchResponse.sizeOf(request.desiredOrLatestVersion(), response.responseData()));
                             if (!matchesRequestedPartitions(request, response)) {
                                 // obviously we expect the broker to always send us valid responses, so this check
                                 // is mainly for test cases where mock fetch responses must be manually crafted.
@@ -1220,6 +1222,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private static class FetchManagerMetrics {
         private final Metrics metrics;
         private FetcherMetricsRegistry metricsRegistry;
+        private final Sensor rawBytesFetched;
         private final Sensor bytesFetched;
         private final Sensor recordsFetched;
         private final Sensor fetchLatency;
@@ -1230,6 +1233,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private FetchManagerMetrics(Metrics metrics, FetcherMetricsRegistry metricsRegistry) {
             this.metrics = metrics;
             this.metricsRegistry = metricsRegistry;
+
+            this.rawBytesFetched = metrics.sensor("raw-bytes-fetched");
+            this.rawBytesFetched.add(metrics.metricInstance(metricsRegistry.rawFetchSizeAvg), new Avg());
+            this.rawBytesFetched.add(metrics.metricInstance(metricsRegistry.rawFetchSizeMax), new Max());
+            this.rawBytesFetched.add(metrics.metricInstance(metricsRegistry.rawBytesConsumedRate), new Rate());
 
             this.bytesFetched = metrics.sensor("bytes-fetched");
             this.bytesFetched.add(metrics.metricInstance(metricsRegistry.fetchSizeAvg), new Avg());
