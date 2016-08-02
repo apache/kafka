@@ -323,6 +323,14 @@ public class StreamsConfig extends AbstractConfig {
     }
 
 
+    /**
+     * Get the consumer config for the restore-consumer. Properties using the prefix {@link StreamsConfig#CONSUMER_PREFIX}
+     * will be used in favor over their non-prefixed versions except in the case of {@link ConsumerConfig#BOOTSTRAP_SERVERS_CONFIG}
+     * where we always use the non-prefixed version as we only support reading/writing from/to the same Kafka Cluster
+     * @param clientId  clientId
+     * @return  Map of the Consumer configuration
+     * @throws ConfigException
+     */
     public Map<String, Object> getRestoreConsumerConfigs(String clientId) throws ConfigException {
         Map<String, Object> consumerProps = getClientPropsWithPrefix(CONSUMER_PREFIX);
 
@@ -348,6 +356,15 @@ public class StreamsConfig extends AbstractConfig {
         return props;
     }
 
+
+    /**
+     * Get the configs for the Producer. Properties using the prefix {@link StreamsConfig#PRODUCER_PREFIX}
+     * will be used in favor over their non-prefixed versions except in the case of {@link ProducerConfig#BOOTSTRAP_SERVERS_CONFIG}
+     * where we always use the non-prefixed version as we only support reading/writing from/to the same Kafka Cluster
+     * @param clientId  clientId
+     * @return  Map of the Consumer configuration
+     * @throws ConfigException
+     */
     public Map<String, Object> getProducerConfigs(String clientId) {
         // generate producer configs from original properties and overridden maps
         Map<String, Object> props = clientProps(ProducerConfig.configNames(), getClientPropsWithPrefix(PRODUCER_PREFIX), PRODUCER_DEFAULT_OVERRIDES);
