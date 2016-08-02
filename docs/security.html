@@ -55,7 +55,7 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
 		<li>Subject Alternative Name (SAN)
 	</ol>
 	<br>
-	Both fileds are valid, RFC-2818 recommends the use of SAN however. SAN is also more flexible, allowing for mutliple DNS entries to be decalred. This leaves the CN available for more meaningful authorization purposes. To add a SAN field  append the following argument -ext SAN=DNS:{FQDN} to the keytool command:
+	Both fields are valid, RFC-2818 recommends the use of SAN however. SAN is also more flexible, allowing for multiple DNS entries to be decalred. This leaves the CN available for more meaningful authorization purposes. To add a SAN field  append the following argument <pre> -ext SAN=DNS:{FQDN} </pre> to the keytool command:
 	<pre>
 	keytool -keystore server.keystore.jks -alias localhost -validity {validity} -genkey -ext SAN=DNS:{FQDN}
 	</pre>
