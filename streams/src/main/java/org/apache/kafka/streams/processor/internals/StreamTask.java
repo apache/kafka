@@ -152,51 +152,49 @@ public class StreamTask extends AbstractTask implements Punctuator {
      */
     @SuppressWarnings("unchecked")
     public int process() {
-        synchronized (this) {
-            // get the next record to process
-            StampedRecord record = partitionGroup.nextRecord(recordInfo);
+        // get the next record to process
+        StampedRecord record = partitionGroup.nextRecord(recordInfo);
 
-            // if there is no record to process, return immediately
-            if (record == null) {
-                requiresPoll = true;
-                return 0;
-            }
-
-            requiresPoll = false;
-
-            try {
-                // process the record by passing to the source node of the topology
-                this.currRecord = record;
-                this.currNode = recordInfo.node();
-                TopicPartition partition = recordInfo.partition();
-
-                log.debug("Start processing one record [{}]", currRecord);
-
-                this.currNode.process(currRecord.key(), currRecord.value());
-
-                log.debug("Completed processing one record [{}]", currRecord);
-
-                // update the consumed offset map after processing is done
-                consumedOffsets.put(partition, currRecord.offset());
-                commitOffsetNeeded = true;
-
-                // after processing this record, if its partition queue's buffered size has been
-                // decreased to the threshold, we can then resume the consumption on this partition
-                if (recordInfo.queue().size() == this.maxBufferedSize) {
-                    consumer.resume(singleton(partition));
-                    requiresPoll = true;
-                }
-
-                if (partitionGroup.topQueueSize() <= this.maxBufferedSize) {
-                    requiresPoll = true;
-                }
-            } finally {
-                this.currRecord = null;
-                this.currNode = null;
-            }
-
-            return partitionGroup.numBuffered();
+        // if there is no record to process, return immediately
+        if (record == null) {
+            requiresPoll = true;
+            return 0;
         }
+
+        requiresPoll = false;
+
+        try {
+            // process the record by passing to the source node of the topology
+            this.currRecord = record;
+            this.currNode = recordInfo.node();
+            TopicPartition partition = recordInfo.partition();
+
+            log.debug("Start processing one record [{}]", currRecord);
+
+            this.currNode.process(currRecord.key(), currRecord.value());
+
+            log.debug("Completed processing one record [{}]", currRecord);
+
+            // update the consumed offset map after processing is done
+            consumedOffsets.put(partition, currRecord.offset());
+            commitOffsetNeeded = true;
+
+            // after processing this record, if its partition queue's buffered size has been
+            // decreased to the threshold, we can then resume the consumption on this partition
+            if (recordInfo.queue().size() == this.maxBufferedSize) {
+                consumer.resume(singleton(partition));
+                requiresPoll = true;
+            }
+
+            if (partitionGroup.topQueueSize() <= this.maxBufferedSize) {
+                requiresPoll = true;
+            }
+        } finally {
+            this.currRecord = null;
+            this.currNode = null;
+        }
+
+        return partitionGroup.numBuffered();
     }
 
     public boolean requiresPoll() {
