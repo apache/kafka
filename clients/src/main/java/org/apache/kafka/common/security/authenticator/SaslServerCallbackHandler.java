@@ -89,7 +89,7 @@ public class SaslServerCallbackHandler implements AuthCallbackHandler {
             LOG.info("Setting authorizedID: {}", userName);
             ac.setAuthorizedID(userName);
         } catch (IOException e) {
-            LOG.error("Failed to set name based on Kerberos authentication rules.", e);
+            LOG.error("Failed to set name for [{}] based on Kerberos authentication rules.", kerberosName, e);
         }
     }
 
