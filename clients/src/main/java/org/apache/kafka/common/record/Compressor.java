@@ -242,7 +242,7 @@ public class Compressor {
 
     // the following two functions also need to be public since they are used in MemoryRecords.iteration
 
-    static public DataOutputStream wrapForOutput(ByteBufferOutputStream buffer, CompressionType type, int bufferSize) {
+    public static DataOutputStream wrapForOutput(ByteBufferOutputStream buffer, CompressionType type, int bufferSize) {
         try {
             switch (type) {
                 case NONE:
@@ -271,7 +271,7 @@ public class Compressor {
         }
     }
 
-    static public DataInputStream wrapForInput(ByteBufferInputStream buffer, CompressionType type, byte messageVersion) {
+    public static DataInputStream wrapForInput(ByteBufferInputStream buffer, CompressionType type, byte messageVersion) {
         try {
             switch (type) {
                 case NONE:
