@@ -41,6 +41,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       .withRequiredArg
       .describedAs("urls")
       .ofType(classOf[String])
+      .defaultsTo("localhost:2181")
       
     if(args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "This tool causes leadership for each partition to be transferred back to the 'preferred replica'," + 

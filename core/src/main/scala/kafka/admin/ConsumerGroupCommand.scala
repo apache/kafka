@@ -398,6 +398,7 @@ object ConsumerGroupCommand {
                              .withRequiredArg
                              .describedAs("urls")
                              .ofType(classOf[String])
+                             .defaultsTo("localhost:2181")
     val bootstrapServerOpt = parser.accepts("bootstrap-server", BootstrapServerDoc)
                                    .withRequiredArg
                                    .describedAs("server to connect to")

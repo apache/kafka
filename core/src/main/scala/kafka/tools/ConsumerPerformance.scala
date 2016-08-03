@@ -168,6 +168,7 @@ object ConsumerPerformance {
       .withRequiredArg
       .describedAs("urls")
       .ofType(classOf[String])
+      .defaultsTo("localhost:2181")
     val bootstrapServersOpt = parser.accepts("broker-list", "A broker list to use for connecting if using the new consumer.")
       .withRequiredArg()
       .describedAs("host")

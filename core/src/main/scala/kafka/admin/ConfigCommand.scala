@@ -143,6 +143,7 @@ object ConfigCommand {
             .withRequiredArg
             .describedAs("urls")
             .ofType(classOf[String])
+            .defaultsTo("localhost:2181")
     val alterOpt = parser.accepts("alter", "Alter the configuration for the entity.")
     val describeOpt = parser.accepts("describe", "List configs for the given entity.")
     val entityType = parser.accepts("entity-type", "Type of entity (topics/clients)")

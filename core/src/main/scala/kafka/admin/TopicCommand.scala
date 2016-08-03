@@ -279,6 +279,7 @@ object TopicCommand extends Logging {
                            .withRequiredArg
                            .describedAs("urls")
                            .ofType(classOf[String])
+                           .defaultsTo("localhost:2181")
     val listOpt = parser.accepts("list", "List all available topics.")
     val createOpt = parser.accepts("create", "Create a new topic.")
     val deleteOpt = parser.accepts("delete", "Delete a topic")
