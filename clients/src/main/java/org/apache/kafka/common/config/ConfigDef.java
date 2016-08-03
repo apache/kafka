@@ -539,7 +539,6 @@ public class ConfigDef {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private void validate(String name, Map<String, Object> parsed, Map<String, ConfigValue> configs) {
         if (!configKeys.containsKey(name)) {
             return;
@@ -961,6 +960,75 @@ public class ConfigDef {
     }
 
     /**
+     * Get the configs with new metadata(group, orderInGroup, dependents) formatted with reStructuredText, suitable for embedding in Sphinx
+     * documentation.
+     */
+    public String toEnrichedRst() {
+        List<ConfigKey> configs = sortedConfigsInGroup();
+        StringBuilder b = new StringBuilder();
+        String lastKeyGroupName = "";
+
+        for (ConfigKey def : configs) {
+
+            if (!def.group.equalsIgnoreCase(lastKeyGroupName)) {
+                b.append(def.group);
+                b.append("\n");
+                char[] underLine = new char[def.group.length()];
+                Arrays.fill(underLine, '^');
+                b.append(new String(underLine));
+                b.append("\n\n");
+            }
+            lastKeyGroupName = def.group;
+
+            b.append("``");
+            b.append(def.name);
+            b.append("``\n");
+
+            for (String docLine : def.documentation.split("\n")) {
+                if (docLine.length() == 0) {
+                    continue;
+                }
+                b.append("  ");
+                b.append(docLine);
+                b.append("\n\n");
+            }
+            b.append("  * Type: ");
+            b.append(def.type.toString().toLowerCase(Locale.ROOT));
+            b.append("\n");
+            if (def.defaultValue != null) {
+                b.append("  * Default: ");
+                if (def.type == Type.STRING) {
+                    b.append("\"");
+                    b.append(def.defaultValue);
+                    b.append("\"");
+                } else {
+                    b.append(def.defaultValue);
+                }
+                b.append("\n");
+            }
+            b.append("  * Importance: ");
+            b.append(def.importance.toString().toLowerCase(Locale.ROOT));
+            b.append("\n");
+
+            if (def.dependents != null && def.dependents.size() > 0) {
+                int j = 0;
+                b.append("  * Dependents: ");
+                for (String dependent : def.dependents) {
+                    b.append("``");
+                    b.append(dependent);
+                    if (++j == def.dependents.size())
+                        b.append("``");
+                    else
+                        b.append("``,");
+                }
+                b.append("\n");
+            }
+            b.append("\n");
+        }
+        return b.toString();
+    }
+
+    /**
      * Get a list of configs sorted into "natural" order: listing required fields first, then
      * ordering by importance, and finally by name.
      */
@@ -988,4 +1056,27 @@ public class ConfigDef {
         });
         return configs;
     }
+
+    /**
+     * Get a list of configs sorted into "group" order: listing group, then
+     * ordering by order in group.
+     */
+    private List<ConfigKey> sortedConfigsInGroup() {
+        // sort first with group, then by name
+        List<ConfigKey> configs = new ArrayList<>(this.configKeys.values());
+        Collections.sort(configs, new Comparator<ConfigKey>() {
+            public int compare(ConfigKey k1, ConfigKey k2) {
+                // sort by group
+                int cmp = k1.group.compareTo(k2.group);
+                if (cmp == 0) {
+                    // then sort with order in group
+                    return Integer.compare(k1.orderInGroup, k2.orderInGroup);
+                } else {
+                    return cmp;
+                }
+            }
+        });
+        return configs;
+    }
+
 }
