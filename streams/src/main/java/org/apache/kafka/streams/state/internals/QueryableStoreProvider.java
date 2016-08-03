@@ -42,7 +42,7 @@ public class QueryableStoreProvider {
     public <T> T getStore(final String storeName, final QueryableStoreType<T> queryableStoreType) {
         final List<T> allStores = new ArrayList<>();
         for (StateStoreProvider storeProvider : storeProviders) {
-            allStores.addAll(storeProvider.getStores(storeName, queryableStoreType));
+            allStores.addAll(storeProvider.stores(storeName, queryableStoreType));
         }
         if (allStores.isEmpty()) {
             return null;
