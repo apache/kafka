@@ -503,21 +503,24 @@ public class SimpleBenchmark {
         return new KafkaStreams(builder, props);
     }
 
+    private class CountDownAction<K, V> implements ForeachAction<K, V> {
+        private CountDownLatch latch;
+        CountDownAction(final CountDownLatch latch) {
+            this.latch = latch;
+        }
+        @Override
+        public void apply(K key, V value) {
+            this.latch.countDown();
+        }
+    }
+
     private KafkaStreams createKafkaStreamsKStreamKTableJoin(Properties streamConfig, String kStreamTopic, String kTableTopic, final long numRecordsExpected, File stateDir, String kafka, String zookeeper, final CountDownLatch latch) {
         final KStreamBuilder builder = new KStreamBuilder();
 
         final KStream<Long, byte[]> input1 = builder.stream(kStreamTopic);
         final KTable<Long, byte[]> input2 = builder.table(kTableTopic, kTableTopic + "-store");
 
-        ForeachAction<Long, byte[]> action =
-            new ForeachAction<Long, byte[]>() {
-                @Override
-                public void apply(Long key, byte[] value) {
-                    latch.countDown();
-                }
-            };
-
-        input1.leftJoin(input2, VALUE_JOINER).foreach(action);
+        input1.leftJoin(input2, VALUE_JOINER).foreach(new CountDownAction(latch));
 
         return new KafkaStreams(builder, streamConfig);
     }
@@ -528,15 +531,7 @@ public class SimpleBenchmark {
         final KTable<Long, byte[]> input1 = builder.table(kTableTopic1, kTableTopic1 + "-store");
         final KTable<Long, byte[]> input2 = builder.table(kTableTopic2, kTableTopic2 + "-store");
 
-        ForeachAction<Long, byte[]> action =
-            new ForeachAction<Long, byte[]>() {
-                @Override
-                public void apply(Long key, byte[] value) {
-                    latch.countDown();
-                }
-            };
-
-        input1.leftJoin(input2, VALUE_JOINER).foreach(action);
+        input1.leftJoin(input2, VALUE_JOINER).foreach(new CountDownAction(latch));
 
         return new KafkaStreams(builder, streamConfig);
     }
@@ -548,15 +543,7 @@ public class SimpleBenchmark {
         final KStream<Long, byte[]> input2 = builder.stream(kStreamTopic2);
         final long timeDifferenceMs = 10000L;
 
-        ForeachAction<Long, byte[]> action =
-            new ForeachAction<Long, byte[]>() {
-                @Override
-                public void apply(Long key, byte[] value) {
-                    latch.countDown();
-                }
-            };
-
-        input1.leftJoin(input2, VALUE_JOINER, JoinWindows.of(timeDifferenceMs)).foreach(action);
+        input1.leftJoin(input2, VALUE_JOINER, JoinWindows.of(timeDifferenceMs)).foreach(new CountDownAction(latch));
 
         return new KafkaStreams(builder, streamConfig);
     }
