@@ -100,7 +100,7 @@ public class KerberosShortNamer {
 
     @Override
     public String toString() {
-      return principalToLocalRules.toString();
+      return "KerberosShortNamer " + principalToLocalRules.toString();
     }
 
 }
