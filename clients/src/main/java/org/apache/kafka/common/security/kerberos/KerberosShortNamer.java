@@ -95,7 +95,7 @@ public class KerberosShortNamer {
             if (result != null)
                 return result;
         }
-        throw new NoMatchingRule("No rules applied to " + toString());
+        throw new NoMatchingRule("No rules " + principalToLocalRules + " applied to " + kerberosName);
     }
 
     @Override
