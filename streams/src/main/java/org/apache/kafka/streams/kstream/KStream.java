@@ -453,7 +453,7 @@ public interface KStream<K, V> {
      * @param <V2>      the value type of the new stream
      *
      * @return a {@link KStream} that contains join-records for each key and values computed by the given {@link ValueJoiner},
-     *         one for each matched record-pair with the same key and within the joining window intervals
+     *         one for each matched record-pair with the same key
      */
     <V1, V2> KStream<K, V2> leftJoin(KTable<K, V1> table, ValueJoiner<V, V1, V2> joiner);
 
