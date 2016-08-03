@@ -24,6 +24,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
@@ -126,15 +127,16 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         if (userEndPoint != null && !userEndPoint.isEmpty()) {
             final String[] hostPort = userEndPoint.split(":");
             if (hostPort.length != 2) {
-                log.warn("Config '{}' isn't in the correct host:pair format. This instance will not be available for discovery"
-                        , StreamsConfig.APPLICATION_SERVER_CONFIG);
+                throw new ConfigException(String.format("Config %s isn't in the correct format. Expected a host:port pair" +
+                                                       " but received %s",
+                                                        StreamsConfig.APPLICATION_SERVER_CONFIG, userEndPoint));
             } else {
                 try {
                     Integer.valueOf(hostPort[1]);
                     this.userEndPointConfig = userEndPoint;
                 } catch (NumberFormatException nfe) {
-                    log.warn("Invalid port '{}' supplied in '{}' for config '{}'. This instance will not be available for discovery"
-                            , hostPort[1], userEndPoint, StreamsConfig.APPLICATION_SERVER_CONFIG);
+                    throw new ConfigException(String.format("Invalid port %s supplied in %s for config %s",
+                                                           hostPort[1], userEndPoint, StreamsConfig.APPLICATION_SERVER_CONFIG));
                 }
             }
 

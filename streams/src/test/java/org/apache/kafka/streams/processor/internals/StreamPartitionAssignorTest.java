@@ -23,6 +23,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Utils;
@@ -36,6 +37,7 @@ import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -618,6 +620,60 @@ public class StreamPartitionAssignorTest {
         assertEquals(Utils.mkSet(new TopicPartition("topic1", 0),
                 new TopicPartition("topic1", 1),
                 new TopicPartition("topic1", 2)), topicPartitions);
+    }
+
+    @Test
+    public void shouldThrowExceptionIfApplicationServerConfigIsNotHostPortPair() throws Exception {
+        final Properties properties = configProps();
+        final String myEndPoint = "localhost";
+        properties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, myEndPoint);
+        final StreamsConfig config = new StreamsConfig(properties);
+        final UUID uuid1 = UUID.randomUUID();
+        final String client1 = "client1";
+        final TopologyBuilder builder = new TopologyBuilder();
+        final String applicationId = "application-id";
+        builder.setApplicationId(applicationId);
+
+        final MockClientSupplier clientSupplier = new MockClientSupplier();
+
+        final StreamThread streamThread = new StreamThread(builder, config, clientSupplier, applicationId, client1, uuid1,
+                                                           new Metrics(), new SystemTime(), new StreamsMetadataState(builder));
+
+        final StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
+
+        try {
+            partitionAssignor.configure(config.getConsumerConfigs(streamThread, applicationId, client1));
+            Assert.fail("expected to an exception due to invalid config");
+        } catch (ConfigException e) {
+            // pass
+        }
+    }
+
+    @Test
+    public void shouldThrowExceptionIfApplicationServerConfigPortIsNotAnInteger() throws Exception {
+        final Properties properties = configProps();
+        final String myEndPoint = "localhost:j87yhk";
+        properties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, myEndPoint);
+        final StreamsConfig config = new StreamsConfig(properties);
+        final UUID uuid1 = UUID.randomUUID();
+        final String client1 = "client1";
+        final TopologyBuilder builder = new TopologyBuilder();
+        final String applicationId = "application-id";
+        builder.setApplicationId(applicationId);
+
+        final MockClientSupplier clientSupplier = new MockClientSupplier();
+
+        final StreamThread streamThread = new StreamThread(builder, config, clientSupplier, applicationId, client1, uuid1,
+                                                           new Metrics(), new SystemTime(), new StreamsMetadataState(builder));
+
+        final StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
+
+        try {
+            partitionAssignor.configure(config.getConsumerConfigs(streamThread, applicationId, client1));
+            Assert.fail("expected to an exception due to invalid config");
+        } catch (ConfigException e) {
+            // pass
+        }
     }
 
     @Test
