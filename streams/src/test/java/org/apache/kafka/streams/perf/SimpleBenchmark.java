@@ -64,7 +64,7 @@ public class SimpleBenchmark {
 
     private static final String JOIN_TOPIC_1_PREFIX = "joinSourceTopic1";
     private static final String JOIN_TOPIC_2_PREFIX = "joinSourceTopic2";
-    private static final ValueJoiner valueJoiner = new ValueJoiner<byte[], byte[], byte[]>() {
+    private static final ValueJoiner VALUE_JOINER = new ValueJoiner<byte[], byte[], byte[]>() {
         @Override
         public byte[] apply(final byte[] value1, final byte[] value2) {
             if (value1 == null && value2 == null)
@@ -153,7 +153,7 @@ public class SimpleBenchmark {
      * KStream record joins to exactly one element in the KTable
      */
     public void kStreamKTableJoin(String kStreamTopic, String kTableTopic) throws Exception {
-        CountDownLatch latch = new CountDownLatch((int)numRecords);
+        CountDownLatch latch = new CountDownLatch((int) numRecords);
 
         // initialize topics
         System.out.println("Initializing kStreamTopic " + kStreamTopic);
@@ -175,7 +175,7 @@ public class SimpleBenchmark {
      * KStream record joins to exactly one element in the other KStream
      */
     public void kStreamKStreamJoin(String kStreamTopic1, String kStreamTopic2) throws Exception {
-        CountDownLatch latch = new CountDownLatch((int)numRecords);
+        CountDownLatch latch = new CountDownLatch((int) numRecords);
 
         // initialize topics
         System.out.println("Initializing kStreamTopic " + kStreamTopic1);
@@ -197,7 +197,7 @@ public class SimpleBenchmark {
      * KTable record joins to exactly one element in the other KTable
      */
     public void kTableKTableJoin(String kTableTopic1, String kTableTopic2) throws Exception {
-        CountDownLatch latch = new CountDownLatch((int)numRecords);
+        CountDownLatch latch = new CountDownLatch((int) numRecords);
 
         // initialize topics
         System.out.println("Initializing kTableTopic " + kTableTopic1);
@@ -367,11 +367,11 @@ public class SimpleBenchmark {
         long startTime = System.currentTimeMillis();
 
         if (sequential) key = 0;
-        else key = rand.nextInt((int)upperRange);
+        else key = rand.nextInt((int) upperRange);
         for (long i = 0; i < numRecords; i++) {
-            producer.send(new ProducerRecord<>(topic, (long)key, value));
+            producer.send(new ProducerRecord<>(topic, (long) key, value));
             if (sequential) key++;
-            else key = rand.nextInt((int)upperRange);
+            else key = rand.nextInt((int) upperRange);
         }
         producer.close();
 
@@ -517,7 +517,7 @@ public class SimpleBenchmark {
                 }
             };
 
-        input1.leftJoin(input2, valueJoiner).foreach(action);
+        input1.leftJoin(input2, VALUE_JOINER).foreach(action);
 
         return new KafkaStreams(builder, streamConfig);
     }
@@ -536,7 +536,7 @@ public class SimpleBenchmark {
                 }
             };
 
-        input1.leftJoin(input2, valueJoiner).foreach(action);
+        input1.leftJoin(input2, VALUE_JOINER).foreach(action);
 
         return new KafkaStreams(builder, streamConfig);
     }
@@ -546,7 +546,7 @@ public class SimpleBenchmark {
 
         final KStream<Long, byte[]> input1 = builder.stream(kStreamTopic1);
         final KStream<Long, byte[]> input2 = builder.stream(kStreamTopic2);
-        final long TIME_DIFFERENCE_MS = 10000L;
+        final long timeDifferenceMs = 10000L;
 
         ForeachAction<Long, byte[]> action =
             new ForeachAction<Long, byte[]>() {
@@ -556,7 +556,7 @@ public class SimpleBenchmark {
                 }
             };
 
-        input1.leftJoin(input2, valueJoiner, JoinWindows.of(TIME_DIFFERENCE_MS)).foreach(action);
+        input1.leftJoin(input2, VALUE_JOINER, JoinWindows.of(timeDifferenceMs)).foreach(action);
 
         return new KafkaStreams(builder, streamConfig);
     }
