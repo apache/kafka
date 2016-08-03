@@ -224,7 +224,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, baseTimestamp + i, "key".getBytes, "value".getBytes)
         producer.send(record, callback)
       }
-      producer.close(10000L, TimeUnit.MILLISECONDS)
+      producer.close(20000L, TimeUnit.MILLISECONDS)
       assertEquals(s"Should have offset $numRecords but only successfully sent ${callback.offset}", numRecords, callback.offset)
     } finally {
       producer.close()
@@ -408,11 +408,12 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, 0, null, "value".getBytes)
 
     // Test closing from sender thread.
-    class CloseCallback(producer: KafkaProducer[Array[Byte], Array[Byte]]) extends Callback {
+    class CloseCallback(producer: KafkaProducer[Array[Byte], Array[Byte]], sendRecords: Boolean) extends Callback {
       override def onCompletion(metadata: RecordMetadata, exception: Exception) {
         // Trigger another batch in accumulator before close the producer. These messages should
         // not be sent.
-        (0 until numRecords) map (i => producer.send(record))
+        if (sendRecords)
+          (0 until numRecords) foreach (i => producer.send(record))
         // The close call will be called by all the message callbacks. This tests idempotence of the close call.
         producer.close(0, TimeUnit.MILLISECONDS)
         // Test close with non zero timeout. Should not block at all.
@@ -423,7 +424,9 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       val producer = createProducer(brokerList, lingerMs = Long.MaxValue)
       try {
         // send message to partition 0
-        val responses = (0 until numRecords) map (i => producer.send(record, new CloseCallback(producer)))
+        // Only send the records in the first callback since we close the producer in the callback and no records
+        // can be sent afterwards.
+        val responses = (0 until numRecords) map (i => producer.send(record, new CloseCallback(producer, if (i == 0) true else false)))
         assertTrue("No request is complete.", responses.forall(!_.isDone()))
         // flush the messages.
         producer.flush()

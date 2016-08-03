@@ -142,17 +142,23 @@ public final class RecordBatch {
      */
     public boolean maybeExpire(int requestTimeoutMs, long retryBackoffMs, long now, long lingerMs, boolean isFull) {
         boolean expire = false;
+        String errorMessage = null;
 
-        if (!this.inRetry() && isFull && requestTimeoutMs < (now - this.lastAppendTime))
+        if (!this.inRetry() && isFull && requestTimeoutMs < (now - this.lastAppendTime)) {
             expire = true;
-        else if (!this.inRetry() && requestTimeoutMs < (now - (this.createdMs + lingerMs)))
+            errorMessage = (now - this.lastAppendTime) + " ms has passed since last append";
+        } else if (!this.inRetry() && requestTimeoutMs < (now - (this.createdMs + lingerMs))) {
             expire = true;
-        else if (this.inRetry() && requestTimeoutMs < (now - (this.lastAttemptMs + retryBackoffMs)))
+            errorMessage = (now - (this.createdMs + lingerMs)) + " ms has passed since batch creation";
+        } else if (this.inRetry() && requestTimeoutMs < (now - (this.lastAttemptMs + retryBackoffMs))) {
             expire = true;
+            errorMessage = (now - (this.lastAttemptMs + retryBackoffMs)) + " ms has passed since last attempt";
+        }
 
         if (expire) {
             this.records.close();
-            this.done(-1L, Record.NO_TIMESTAMP, new TimeoutException("Batch containing " + recordCount + " record(s) expired due to timeout while requesting metadata from brokers for " + topicPartition));
+            this.done(-1L, Record.NO_TIMESTAMP,
+                      new TimeoutException("Expiring " + recordCount + " record(s) for " + topicPartition + " due to " + errorMessage));
         }
 
         return expire;
