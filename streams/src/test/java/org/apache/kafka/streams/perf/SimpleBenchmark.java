@@ -64,6 +64,22 @@ public class SimpleBenchmark {
 
     private static final String JOIN_TOPIC_1_PREFIX = "joinSourceTopic1";
     private static final String JOIN_TOPIC_2_PREFIX = "joinSourceTopic2";
+    private static final ValueJoiner valueJoiner = new ValueJoiner<byte[], byte[], byte[]>() {
+        @Override
+        public byte[] apply(final byte[] value1, final byte[] value2) {
+            if (value1 == null && value2 == null)
+                return new byte[VALUE_SIZE];
+            if (value1 == null && value2 != null)
+                return value2;
+            if (value1 != null && value2 == null)
+                return value1;
+
+            byte[] tmp = new byte[value1.length + value2.length];
+            System.arraycopy(value1, 0, tmp, 0, value1.length);
+            System.arraycopy(value2, 0, tmp, value1.length, value2.length);
+            return tmp;
+        }
+    };
 
     private static long numRecords;
     private static Long endKey;
@@ -119,50 +135,39 @@ public class SimpleBenchmark {
         benchmark.kTableKTableJoin(JOIN_TOPIC_1_PREFIX + "kTableKTable", JOIN_TOPIC_2_PREFIX + "kTableKTable");
     }
 
+    private Properties setJoinProperties(final String applicationId) {
+        Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+        props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
+        props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, zookeeper);
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
+        props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArray().getClass());
+        return props;
+    }
+
     /**
      * Measure the performance of a KStream-KTable left join. The setup is such that each
      * KStream record joins to exactly one element in the KTable
      */
     public void kStreamKTableJoin(String kStreamTopic, String kTableTopic) throws Exception {
-        CountDownLatch latch = new CountDownLatch(1);
-        int valueSizeBytes = VALUE_SIZE;
+        CountDownLatch latch = new CountDownLatch((int)numRecords);
 
         // initialize topics
         System.out.println("Initializing kStreamTopic " + kStreamTopic);
-        produce(kStreamTopic, valueSizeBytes, "simple-benchmark-produce-kstream", numRecords, false, numRecords, false);
+        produce(kStreamTopic, VALUE_SIZE, "simple-benchmark-produce-kstream", numRecords, false, numRecords, false);
         System.out.println("Initializing kTableTopic " + kTableTopic);
-        produce(kTableTopic, valueSizeBytes, "simple-benchmark-produce-ktable", numRecords, true, numRecords, false);
+        produce(kTableTopic, VALUE_SIZE, "simple-benchmark-produce-ktable", numRecords, true, numRecords, false);
 
-        // perform join
-        final KafkaStreams streams = createKafkaStreamsKStreamKTableJoin(kStreamTopic, kTableTopic, numRecords, stateDir, kafka, zookeeper, latch);
+        // setup join
+        Properties props = setJoinProperties("simple-benchmark-kstream-ktable-join");
+        final KafkaStreams streams = createKafkaStreamsKStreamKTableJoin(props, kStreamTopic, kTableTopic,
+            numRecords, stateDir, kafka, zookeeper, latch);
 
-        Thread thread = new Thread() {
-            public void run() {
-                streams.start();
-            }
-        };
-        thread.start();
-
-        long startTime = System.currentTimeMillis();
-
-        while (latch.getCount() > 0) {
-            try {
-                latch.await();
-            } catch (InterruptedException ex) {
-                Thread.interrupted();
-            }
-        }
-        long endTime = System.currentTimeMillis();
-
-
-        System.out.println("Streams KStreamKTable LeftJoin Performance [MB/s joined]: " + megaBytePerSec(endTime - startTime, numRecords, KEY_SIZE + valueSizeBytes));
-
-        streams.close();
-        try {
-            thread.join();
-        } catch (Exception ex) {
-            // ignore
-        }
+        // run benchmark
+        runJoinBenchmark(streams, "Streams KStreamKTable LeftJoin Performance [MB/s joined]: ", latch);
     }
 
     /**
@@ -170,45 +175,21 @@ public class SimpleBenchmark {
      * KStream record joins to exactly one element in the other KStream
      */
     public void kStreamKStreamJoin(String kStreamTopic1, String kStreamTopic2) throws Exception {
-        CountDownLatch latch = new CountDownLatch(1);
-        int valueSizeBytes = VALUE_SIZE;
+        CountDownLatch latch = new CountDownLatch((int)numRecords);
 
         // initialize topics
         System.out.println("Initializing kStreamTopic " + kStreamTopic1);
-        produce(kStreamTopic1, valueSizeBytes, "simple-benchmark-produce-kstream-topic1", numRecords, true, numRecords, false);
+        produce(kStreamTopic1, VALUE_SIZE, "simple-benchmark-produce-kstream-topic1", numRecords, true, numRecords, false);
         System.out.println("Initializing kStreamTopic " + kStreamTopic2);
-        produce(kStreamTopic2, valueSizeBytes, "simple-benchmark-produce-kstream-topic2", numRecords, true, numRecords, false);
+        produce(kStreamTopic2, VALUE_SIZE, "simple-benchmark-produce-kstream-topic2", numRecords, true, numRecords, false);
 
-        // perform join
-        final KafkaStreams streams = createKafkaStreamsKStreamKStreamJoin(kStreamTopic1, kStreamTopic2, numRecords, stateDir, kafka, zookeeper, latch);
+        // setup join
+        Properties props = setJoinProperties("simple-benchmark-kstream-kstream-join");
+        final KafkaStreams streams = createKafkaStreamsKStreamKStreamJoin(props, kStreamTopic1, kStreamTopic2,
+            numRecords, stateDir, kafka, zookeeper, latch);
 
-        Thread thread = new Thread() {
-            public void run() {
-                streams.start();
-            }
-        };
-        thread.start();
-
-        long startTime = System.currentTimeMillis();
-
-        while (latch.getCount() > 0) {
-            try {
-                latch.await();
-            } catch (InterruptedException ex) {
-                Thread.interrupted();
-            }
-        }
-        long endTime = System.currentTimeMillis();
-
-
-        System.out.println("Streams KStreamKStream LeftJoin Performance [MB/s joined]: " + megaBytePerSec(endTime - startTime, numRecords, KEY_SIZE + valueSizeBytes));
-
-        streams.close();
-        try {
-            thread.join();
-        } catch (Exception ex) {
-            // ignore
-        }
+        // run benchmark
+        runJoinBenchmark(streams, "Streams KStreamKStream LeftJoin Performance [MB/s joined]: ", latch);
     }
 
     /**
@@ -216,24 +197,25 @@ public class SimpleBenchmark {
      * KTable record joins to exactly one element in the other KTable
      */
     public void kTableKTableJoin(String kTableTopic1, String kTableTopic2) throws Exception {
-        CountDownLatch latch = new CountDownLatch(1);
-        int valueSizeBytes = VALUE_SIZE;
+        CountDownLatch latch = new CountDownLatch((int)numRecords);
 
         // initialize topics
         System.out.println("Initializing kTableTopic " + kTableTopic1);
-        produce(kTableTopic1, valueSizeBytes, "simple-benchmark-produce-ktable-topic1", numRecords, true, numRecords, false);
+        produce(kTableTopic1, VALUE_SIZE, "simple-benchmark-produce-ktable-topic1", numRecords, true, numRecords, false);
         System.out.println("Initializing kTableTopic " + kTableTopic2);
-        produce(kTableTopic2, valueSizeBytes, "simple-benchmark-produce-ktable-topic2", numRecords, true, numRecords, false);
+        produce(kTableTopic2, VALUE_SIZE, "simple-benchmark-produce-ktable-topic2", numRecords, true, numRecords, false);
 
-        // perform join
-        final KafkaStreams streams = createKafkaStreamsKTableKTableJoin(kTableTopic1, kTableTopic2, numRecords, stateDir, kafka, zookeeper, latch);
+        // setup join
+        Properties props = setJoinProperties("simple-benchmark-ktable-ktable-join");
+        final KafkaStreams streams = createKafkaStreamsKTableKTableJoin(props, kTableTopic1, kTableTopic2,
+            numRecords, stateDir, kafka, zookeeper, latch);
 
-        Thread thread = new Thread() {
-            public void run() {
-                streams.start();
-            }
-        };
-        thread.start();
+        // run benchmark
+        runJoinBenchmark(streams, "Streams KTableKTable LeftJoin Performance [MB/s joined]: ", latch);
+    }
+
+    private void runJoinBenchmark(final KafkaStreams streams, final String nameOfBenchmark, final CountDownLatch latch) {
+        streams.start();
 
         long startTime = System.currentTimeMillis();
 
@@ -241,21 +223,17 @@ public class SimpleBenchmark {
             try {
                 latch.await();
             } catch (InterruptedException ex) {
-                Thread.interrupted();
+                //ignore
             }
         }
         long endTime = System.currentTimeMillis();
 
 
-        System.out.println("Streams KTableKTable LeftJoin Performance [MB/s joined]: " + megaBytePerSec(endTime - startTime, numRecords, KEY_SIZE + valueSizeBytes));
+        System.out.println(nameOfBenchmark + megaBytePerSec(endTime - startTime, numRecords, KEY_SIZE + VALUE_SIZE));
 
         streams.close();
-        try {
-            thread.join();
-        } catch (Exception ex) {
-            // ignore
-        }
     }
+
 
 
     public void processStream(String topic) {
@@ -525,152 +503,62 @@ public class SimpleBenchmark {
         return new KafkaStreams(builder, props);
     }
 
-    private KafkaStreams createKafkaStreamsKStreamKTableJoin(String kStreamTopic, String kTableTopic, final long numRecordsExpected, File stateDir, String kafka, String zookeeper, final CountDownLatch latch) {
-        Properties props = new Properties();
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "simple-benchmark-kstream-ktable-join");
-        props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
-        props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, zookeeper);
-        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
-        props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArray().getClass());
+    private KafkaStreams createKafkaStreamsKStreamKTableJoin(Properties streamConfig, String kStreamTopic, String kTableTopic, final long numRecordsExpected, File stateDir, String kafka, String zookeeper, final CountDownLatch latch) {
         final KStreamBuilder builder = new KStreamBuilder();
 
         final KStream<Long, byte[]> input1 = builder.stream(kStreamTopic);
         final KTable<Long, byte[]> input2 = builder.table(kTableTopic, kTableTopic + "-store");
 
-        final Long[] numRecordsProcessed = new Long[1];
-        numRecordsProcessed[0] = 0L;
         ForeachAction<Long, byte[]> action =
             new ForeachAction<Long, byte[]>() {
                 @Override
                 public void apply(Long key, byte[] value) {
-                    numRecordsProcessed[0]++;
-                    if (numRecordsExpected == numRecordsProcessed[0]) {
-                        latch.countDown();
-                    }
+                    latch.countDown();
                 }
             };
 
-        input1.leftJoin(input2,
-            new ValueJoiner<byte[], byte[], byte[]>() {
-                @Override
-                public byte[] apply(final byte[] value1, final byte[] value2) {
-                    if (value1 == null && value2 == null)
-                        return new byte[VALUE_SIZE];
-                    if (value1 == null && value2 != null)
-                        return value2;
-                    if (value1 != null && value2 == null)
-                        return value1;
+        input1.leftJoin(input2, valueJoiner).foreach(action);
 
-                    byte[] tmp = new byte[value1.length + value2.length];
-                    System.arraycopy(value1, 0, tmp, 0, value1.length);
-                    System.arraycopy(value2, 0, tmp, value1.length, value2.length);
-                    return tmp;
-                }
-            }).foreach(action);
-
-        return new KafkaStreams(builder, props);
+        return new KafkaStreams(builder, streamConfig);
     }
 
-    private KafkaStreams createKafkaStreamsKTableKTableJoin(String kTableTopic1, String kTableTopic2, final long numRecordsExpected, File stateDir, String kafka, String zookeeper, final CountDownLatch latch) {
-        Properties props = new Properties();
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "simple-benchmark-ktable-ktable-join");
-        props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
-        props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, zookeeper);
-        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
-        props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArray().getClass());
+    private KafkaStreams createKafkaStreamsKTableKTableJoin(Properties streamConfig, String kTableTopic1, String kTableTopic2, final long numRecordsExpected, File stateDir, String kafka, String zookeeper, final CountDownLatch latch) {
         final KStreamBuilder builder = new KStreamBuilder();
 
         final KTable<Long, byte[]> input1 = builder.table(kTableTopic1, kTableTopic1 + "-store");
         final KTable<Long, byte[]> input2 = builder.table(kTableTopic2, kTableTopic2 + "-store");
 
-        final Long[] numRecordsProcessed = new Long[1];
-        numRecordsProcessed[0] = 0L;
         ForeachAction<Long, byte[]> action =
             new ForeachAction<Long, byte[]>() {
                 @Override
                 public void apply(Long key, byte[] value) {
-                    numRecordsProcessed[0]++;
-                    if (numRecordsExpected == numRecordsProcessed[0]) {
-                        latch.countDown();
-                    }
+                    latch.countDown();
                 }
             };
 
-        input1.leftJoin(input2,
-            new ValueJoiner<byte[], byte[], byte[]>() {
-                @Override
-                public byte[] apply(final byte[] value1, final byte[] value2) {
-                    if (value1 == null && value2 == null)
-                        return new byte[VALUE_SIZE];
-                    if (value1 == null && value2 != null)
-                        return value2;
-                    if (value1 != null && value2 == null)
-                        return value1;
+        input1.leftJoin(input2, valueJoiner).foreach(action);
 
-                    byte[] tmp = new byte[value1.length + value2.length];
-                    System.arraycopy(value1, 0, tmp, 0, value1.length);
-                    System.arraycopy(value2, 0, tmp, value1.length, value2.length);
-                    return tmp;
-                }
-            }).foreach(action);
-
-        return new KafkaStreams(builder, props);
+        return new KafkaStreams(builder, streamConfig);
     }
 
-    private KafkaStreams createKafkaStreamsKStreamKStreamJoin(String kStreamTopic1, String kStreamTopic2, final long numRecordsExpected, File stateDir, String kafka, String zookeeper, final CountDownLatch latch) {
-        Properties props = new Properties();
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "simple-benchmark-kstream-kstream-join");
-        props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
-        props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, zookeeper);
-        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
-        props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArray().getClass());
+    private KafkaStreams createKafkaStreamsKStreamKStreamJoin(Properties streamConfig, String kStreamTopic1, String kStreamTopic2, final long numRecordsExpected, File stateDir, String kafka, String zookeeper, final CountDownLatch latch) {
         final KStreamBuilder builder = new KStreamBuilder();
 
         final KStream<Long, byte[]> input1 = builder.stream(kStreamTopic1);
         final KStream<Long, byte[]> input2 = builder.stream(kStreamTopic2);
         final long TIME_DIFFERENCE_MS = 10000L;
 
-        final Long[] numRecordsProcessed = new Long[1];
-        numRecordsProcessed[0] = 0L;
         ForeachAction<Long, byte[]> action =
             new ForeachAction<Long, byte[]>() {
                 @Override
                 public void apply(Long key, byte[] value) {
-                    numRecordsProcessed[0]++;
-                    if (numRecordsExpected == numRecordsProcessed[0]) {
-                        latch.countDown();
-                    }
+                    latch.countDown();
                 }
             };
 
-        input1.leftJoin(input2,
-            new ValueJoiner<byte[], byte[], byte[]>() {
-                @Override
-                public byte[] apply(final byte[] value1, final byte[] value2) {
-                    if (value1 == null && value2 == null)
-                        return new byte[VALUE_SIZE];
-                    if (value1 == null && value2 != null)
-                        return value2;
-                    if (value1 != null && value2 == null)
-                        return value1;
+        input1.leftJoin(input2, valueJoiner, JoinWindows.of(TIME_DIFFERENCE_MS)).foreach(action);
 
-                    byte[] tmp = new byte[value1.length + value2.length];
-                    System.arraycopy(value1, 0, tmp, 0, value1.length);
-                    System.arraycopy(value2, 0, tmp, value1.length, value2.length);
-                    return tmp;
-                }
-            }, JoinWindows.of(TIME_DIFFERENCE_MS)).foreach(action);
-
-        return new KafkaStreams(builder, props);
+        return new KafkaStreams(builder, streamConfig);
     }
 
     private KafkaStreams createKafkaStreamsWithStateStore(String topic, File stateDir, String kafka, String zookeeper, final CountDownLatch latch) {
