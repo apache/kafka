@@ -52,7 +52,7 @@ public class WrappingStoreProviderTest {
     @Test
     public void shouldFindKeyValueStores() throws Exception {
         List<ReadOnlyKeyValueStore<String, String>> results =
-                wrappingStoreProvider.getStores("kv", QueryableStoreTypes.<String, String>keyValueStore());
+                wrappingStoreProvider.stores("kv", QueryableStoreTypes.<String, String>keyValueStore());
         assertEquals(2, results.size());
     }
 
@@ -60,12 +60,12 @@ public class WrappingStoreProviderTest {
     public void shouldFindWindowStores() throws Exception {
         final List<ReadOnlyWindowStore<Object, Object>>
                 windowStores =
-                wrappingStoreProvider.getStores("window", windowStore());
+                wrappingStoreProvider.stores("window", windowStore());
         assertEquals(2, windowStores.size());
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfNoStoreOfTypeFound() throws Exception {
-        wrappingStoreProvider.getStores("doesn't exist", QueryableStoreTypes.keyValueStore());
+        wrappingStoreProvider.stores("doesn't exist", QueryableStoreTypes.keyValueStore());
     }
 }

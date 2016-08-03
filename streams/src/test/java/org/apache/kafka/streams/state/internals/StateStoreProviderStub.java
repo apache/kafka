@@ -28,7 +28,7 @@ public class StateStoreProviderStub implements StateStoreProvider {
 
     @SuppressWarnings("unchecked")
     @Override
-    public <T> List<T> getStores(final String storeName, final QueryableStoreType<T> queryableStoreType) {
+    public <T> List<T> stores(final String storeName, final QueryableStoreType<T> queryableStoreType) {
         if (stores.containsKey(storeName) && queryableStoreType.accepts(stores.get(storeName))) {
             return (List<T>) Collections.singletonList(stores.get(storeName));
         }
