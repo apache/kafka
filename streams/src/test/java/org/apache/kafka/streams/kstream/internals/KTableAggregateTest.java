@@ -139,7 +139,7 @@ public class KTableAggregateTest {
         driver.process(topic1, "B", "4");
         driver.process(topic1, "NULL", "5");
         driver.process(topic1, "B", "7");
-        
+
         assertEquals(Utils.mkList(
                 "1:0+1",
                 "1:0+1-1",
