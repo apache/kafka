@@ -202,27 +202,27 @@ object LogConfig {
     private final val serverDefaultConfigNames = mutable.Map[String, String]()
 
     def define(name: String, defType: ConfigDef.Type, defaultValue: Object, validator: ConfigDef.Validator,
-               importance: ConfigDef.Importance, doc: String, serverDefaultConfigName: String) = {
+               importance: ConfigDef.Importance, doc: String, serverDefaultConfigName: String): LogConfigDef = {
       super.define(name, defType, defaultValue, validator, importance, doc)
       serverDefaultConfigNames.put(name, serverDefaultConfigName)
       this
     }
 
     def define(name: String, defType: ConfigDef.Type, defaultValue: Object, importance: ConfigDef.Importance,
-               documentation: String, serverDefaultConfigName: String) = {
+               documentation: String, serverDefaultConfigName: String): LogConfigDef = {
       super.define(name, defType, defaultValue, importance, documentation)
       serverDefaultConfigNames.put(name, serverDefaultConfigName)
       this
     }
 
     def define(name: String, defType: ConfigDef.Type, importance: ConfigDef.Importance, documentation: String,
-               serverDefaultConfigName: String) = {
+               serverDefaultConfigName: String): LogConfigDef = {
       super.define(name, defType, importance, documentation)
       serverDefaultConfigNames.put(name, serverDefaultConfigName)
       this
     }
 
-    override def toHtmlTable() = {
+    override def toHtmlTable(): String = {
         val configs = super.sortedConfigs
         val b = new StringBuilder
         b.append("<table class=\"data-table\"><tbody>\n")
