@@ -30,6 +30,7 @@ import org.apache.kafka.common.utils.Utils
 import java.util.Locale
 
 import scala.collection.mutable
+import org.apache.kafka.common.config.ConfigDef.ConfigKey
 
 object Defaults {
   val SegmentSize = kafka.server.Defaults.LogSegmentBytes
@@ -218,56 +219,14 @@ object LogConfig {
       this
     }
 
-    override def toHtmlTable(): String = {
-        val configs = super.sortedConfigs
-        val b = new StringBuilder
-        b.append("<table class=\"data-table\"><tbody>\n")
-        b.append("<tr>\n")
-        b.append("<th>Name</th>\n")
-        b.append("<th>Description</th>\n")
-        b.append("<th>Type</th>\n")
-        b.append("<th>Default</th>\n")
-        b.append("<th>Valid Values</th>\n")
-        b.append("<th>Server Default Property</th>\n")
-        b.append("<th>Importance</th>\n")
-        b.append("</tr>\n")
-        for (config <- configs.asScala.toList) {
-            b.append("<tr>\n")
-            b.append("<td>")
-            b.append(config.name)
-            b.append("</td>")
-            b.append("<td>")
-            b.append(config.documentation)
-            b.append("</td>")
-            b.append("<td>")
-            b.append(config.`type`.toString().toLowerCase(Locale.ROOT))
-            b.append("</td>")
-            b.append("<td>")
-            if (config.hasDefault()) {
-                if (config.defaultValue == null)
-                    b.append("null")
-                else if (config.`type` == ConfigDef.Type.STRING && config.defaultValue.toString().isEmpty())
-                    b.append("\"\"")
-                else
-                    b.append(config.defaultValue)
-            } else
-                b.append("")
-            b.append("</td>")
-            b.append("<td>")
-            b.append(if (config.validator != null) config.validator.toString() else "")
-            b.append("</td>")
-            b.append("<td>")
-            b.append(serverDefaultConfigNames.get(config.name).get)
-            b.append("</td>")
-            b.append("<td>")
-            b.append(config.importance.toString().toLowerCase(Locale.ROOT))
-            b.append("</td>")
-            b.append("</tr>\n")
-        }
-        b.append("</tbody></table>")
-        b.toString
-    }
+    override def headers = List("Name", "Description", "Type", "Default", "Valid Values", "Server Default Property", "Importance").asJava
 
+    override def getConfigValue(key: ConfigKey, headerName: String): String = {
+      headerName match {
+      case "Server Default Property" => return serverDefaultConfigNames.get(key.name).get
+      case _ => return super.getConfigValue(key, headerName)
+      }
+    }
   }
 
   private val configDef: LogConfigDef = {
