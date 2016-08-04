@@ -88,10 +88,6 @@ public class KTableAggregateTest {
         driver.process(topic1, "B", "7");
         driver.process(topic1, "C", "8");
 
-        
-//        [A:0+1, B:0+2, A:0+1-1, A:0+1-1+3, B:0+2-2, B:0+2-2+4, C:0+5, D:0+6, B:0+2+4-2-4, B:0+2+4-2-4+7, C:0+5-5, C:0+5-5+8]> but was:
-//        [A:0+1, B:0+2, A:0+1-1, A:0+1-1+3, B:0+2-2, B:0+2-2+4, C:0+5, D:0+6, B:0+2-2+4-4, B:0+2-2+4-4+7, C:0+5-5, C:0+5-5+8]>
-
         assertEquals(Utils.mkList(
                 "A:0+1",
                 "B:0+2",
