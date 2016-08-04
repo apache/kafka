@@ -195,7 +195,7 @@ public class KTableAggregateTest {
 
                     @Override
                     public KeyValue<String, String> apply(String key, String value) {
-                        return KeyValue.pair(String.valueOf(key.charAt(0)), value);
+                        return KeyValue.pair(String.valueOf(key.charAt(0)), String.valueOf(key.charAt(1)));
                     }
                 }, stringSerde, stringSerde)
                 .aggregate(new Initializer<String>() {
@@ -228,10 +228,10 @@ public class KTableAggregateTest {
         driver.process(input, "12", "C");
 
         assertEquals(Utils.mkList(
-                 "1:A",
-                 "1:AB",
-                 "1:B",
-                 "1:", "1:C"
+                 "1:1",
+                 "1:12",
+                 "1:2",
+                 "1:", "1:2"
                  ), proc.processed);
     }
 }

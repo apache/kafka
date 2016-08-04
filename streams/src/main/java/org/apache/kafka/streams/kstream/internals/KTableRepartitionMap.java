@@ -85,7 +85,7 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
             if (oldPair != null && oldPair.key != null && oldPair.value != null) {
                 context().forward(oldPair.key, new Change<>(null, oldPair.value));
             }
-            
+
             if (newPair != null && newPair.key != null && newPair.value != null) {
                 context().forward(newPair.key, new Change<>(newPair.value, null));
             }
