@@ -233,8 +233,8 @@ object LogConfig {
         b.append("<th>Default</th>\n")
         b.append("<th>Valid Values</th>\n")
         b.append("<th>Server Default Property</th>\n")
-        b.append("<th>Importance</th>\n");
-        b.append("</tr>\n");
+        b.append("<th>Importance</th>\n")
+        b.append("</tr>\n")
         for (config <- configs.asScala.toList) {
             b.append("<tr>\n")
             b.append("<td>")
