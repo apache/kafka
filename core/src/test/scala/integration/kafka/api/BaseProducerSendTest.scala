@@ -426,7 +426,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         // send message to partition 0
         // Only send the records in the first callback since we close the producer in the callback and no records
         // can be sent afterwards.
-        val responses = (0 until numRecords) map (i => producer.send(record, new CloseCallback(producer, if (i == 0) true else false)))
+        val responses = (0 until numRecords) map (i => producer.send(record, new CloseCallback(producer, i == 0)))
         assertTrue("No request is complete.", responses.forall(!_.isDone()))
         // flush the messages.
         producer.flush()

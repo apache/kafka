@@ -149,10 +149,10 @@ public final class RecordBatch {
             errorMessage = (now - this.lastAppendTime) + " ms has passed since last append";
         } else if (!this.inRetry() && requestTimeoutMs < (now - (this.createdMs + lingerMs))) {
             expire = true;
-            errorMessage = (now - (this.createdMs + lingerMs)) + " ms has passed since batch creation";
+            errorMessage = (now - (this.createdMs + lingerMs)) + " ms has passed since batch creation plus linger time";
         } else if (this.inRetry() && requestTimeoutMs < (now - (this.lastAttemptMs + retryBackoffMs))) {
             expire = true;
-            errorMessage = (now - (this.lastAttemptMs + retryBackoffMs)) + " ms has passed since last attempt";
+            errorMessage = (now - (this.lastAttemptMs + retryBackoffMs)) + " ms has passed since last attempt plus backoff time";
         }
 
         if (expire) {
