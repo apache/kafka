@@ -21,6 +21,8 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
@@ -33,6 +35,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+
 
 import java.io.File;
 import java.io.IOException;
@@ -178,6 +181,57 @@ public class KTableAggregateTest {
                  "green:1", "blue:1",
                  "yellow:1",
                  "green:2"
+                 ), proc.processed);
+    }
+    
+    @Test
+    public void testRemoveOldBeforeAddNew() throws IOException {
+        final KStreamBuilder builder = new KStreamBuilder();
+        final String input = "count-test-input";
+        final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
+
+        builder.table(Serdes.String(), Serdes.String(), input, "anyStoreName")
+                .groupBy(new KeyValueMapper<String, String, KeyValue<String, String>>() {
+
+                    @Override
+                    public KeyValue<String, String> apply(String key, String value) {
+                        return KeyValue.pair(String.valueOf(key.charAt(0)), value);
+                    }
+                }, stringSerde, stringSerde)
+                .aggregate(new Initializer<String>() {
+
+                    @Override
+                    public String apply() {
+                        return "";
+                    }
+                }, new Aggregator<String, String, String>() {
+                    
+                    @Override
+                    public String apply(String aggKey, String value, String aggregate) {
+                        return aggregate + value;
+                    } 
+                }, new Aggregator<String, String, String>() {
+
+                    @Override
+                    public String apply(String key, String value, String aggregate) {
+                        return aggregate.replaceAll(value, "");
+                    }
+                }, "someStore")
+                .toStream()
+                .process(proc);
+
+        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir);
+
+        driver.process(input, "11", "A");
+        driver.process(input, "12", "B");
+        driver.process(input, "11", null);
+        driver.process(input, "12", "C");
+
+        assertEquals(Utils.mkList(
+                 "1:A",
+                 "1:AB",
+                 "1:B",
+                 "1:", "1:C"
                  ), proc.processed);
     }
 }
