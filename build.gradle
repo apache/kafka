@@ -681,6 +681,9 @@ project(':streams') {
     compile libs.rocksDBJni
     // this dependency should be removed after KIP-4
     compile (libs.zkclient) {
+      // users should be able to choose the logging implementation (and slf4j bridge)
+      exclude module: 'slf4j-log4j12'
+      exclude module: 'log4j'
       exclude module: 'jline'
       exclude module: 'netty'
     }
