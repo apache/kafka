@@ -88,15 +88,19 @@ public class KTableAggregateTest {
         driver.process(topic1, "B", "7");
         driver.process(topic1, "C", "8");
 
+        
+//        [A:0+1, B:0+2, A:0+1-1, A:0+1-1+3, B:0+2-2, B:0+2-2+4, C:0+5, D:0+6, B:0+2+4-2-4, B:0+2+4-2-4+7, C:0+5-5, C:0+5-5+8]> but was:
+//        [A:0+1, B:0+2, A:0+1-1, A:0+1-1+3, B:0+2-2, B:0+2-2+4, C:0+5, D:0+6, B:0+2-2+4-4, B:0+2-2+4-4+7, C:0+5-5, C:0+5-5+8]>
+
         assertEquals(Utils.mkList(
                 "A:0+1",
                 "B:0+2",
-                "A:0+1+3", "A:0+1+3-1",
-                "B:0+2+4", "B:0+2+4-2",
+                "A:0+1-1", "A:0+1-1+3",
+                "B:0+2-2", "B:0+2-2+4",
                 "C:0+5",
                 "D:0+6",
-                "B:0+2+4-2+7", "B:0+2+4-2+7-4",
-                "C:0+5+8", "C:0+5+8-5"), proc.processed);
+                "B:0+2-2+4-4", "B:0+2-2+4-4+7",
+                "C:0+5-5", "C:0+5-5+8"), proc.processed);
     }
 
     @Test
@@ -139,16 +143,17 @@ public class KTableAggregateTest {
         driver.process(topic1, "B", "4");
         driver.process(topic1, "NULL", "5");
         driver.process(topic1, "B", "7");
-
+        
         assertEquals(Utils.mkList(
                 "1:0+1",
                 "1:0+1-1",
                 "1:0+1-1+1",
-                "2:0+2",
-                "4:0+4",
-                "2:0+2-2",
-                "7:0+7",
-                "4:0+4-4"), proc.processed);
+                "2:0+2", 
+                  //noop
+                "2:0+2-2", "4:0+4",
+                  //noop
+                "4:0+4-4", "7:0+7"
+                ), proc.processed);
     }
 
     @Test
@@ -171,6 +176,12 @@ public class KTableAggregateTest {
         driver.process(input, "C", "yellow");
         driver.process(input, "D", "green");
 
-        assertEquals(Utils.mkList("green:1", "green:2", "blue:1", "green:1", "yellow:1", "green:2"), proc.processed);
+        assertEquals(Utils.mkList(
+                 "green:1",
+                 "green:2",
+                 "green:1", "blue:1",
+                 "yellow:1",
+                 "green:2"
+                 ), proc.processed);
     }
 }
