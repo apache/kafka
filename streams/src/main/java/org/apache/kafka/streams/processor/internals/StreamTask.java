@@ -63,7 +63,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     /**
      * Create {@link StreamTask} with its assigned partitions
-     *
      * @param id                    the ID of this task
      * @param applicationId         the ID of the stream processing application
      * @param partitions            the collection of assigned {@link TopicPartition}
@@ -73,6 +72,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * @param restoreConsumer       the instance of {@link Consumer} used when restoring state
      * @param config                the {@link StreamsConfig} specified by the user
      * @param metrics               the {@link StreamsMetrics} created by the thread
+     * @param stateDirectory        the {@link StateDirectory} created by the thread
      */
     public StreamTask(TaskId id,
                       String applicationId,
@@ -82,8 +82,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
                       Producer<byte[], byte[]> producer,
                       Consumer<byte[], byte[]> restoreConsumer,
                       StreamsConfig config,
-                      StreamsMetrics metrics) {
-        super(id, applicationId, partitions, topology, consumer, restoreConsumer, config, false);
+                      StreamsMetrics metrics,
+                      StateDirectory stateDirectory) {
+        super(id, applicationId, partitions, topology, consumer, restoreConsumer, false, stateDirectory);
         this.punctuationQueue = new PunctuationQueue();
         this.maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
 
@@ -151,51 +152,49 @@ public class StreamTask extends AbstractTask implements Punctuator {
      */
     @SuppressWarnings("unchecked")
     public int process() {
-        synchronized (this) {
-            // get the next record to process
-            StampedRecord record = partitionGroup.nextRecord(recordInfo);
+        // get the next record to process
+        StampedRecord record = partitionGroup.nextRecord(recordInfo);
 
-            // if there is no record to process, return immediately
-            if (record == null) {
-                requiresPoll = true;
-                return 0;
-            }
-
-            requiresPoll = false;
-
-            try {
-                // process the record by passing to the source node of the topology
-                this.currRecord = record;
-                this.currNode = recordInfo.node();
-                TopicPartition partition = recordInfo.partition();
-
-                log.debug("Start processing one record [{}]", currRecord);
-
-                this.currNode.process(currRecord.key(), currRecord.value());
-
-                log.debug("Completed processing one record [{}]", currRecord);
-
-                // update the consumed offset map after processing is done
-                consumedOffsets.put(partition, currRecord.offset());
-                commitOffsetNeeded = true;
-
-                // after processing this record, if its partition queue's buffered size has been
-                // decreased to the threshold, we can then resume the consumption on this partition
-                if (recordInfo.queue().size() == this.maxBufferedSize) {
-                    consumer.resume(singleton(partition));
-                    requiresPoll = true;
-                }
-
-                if (partitionGroup.topQueueSize() <= this.maxBufferedSize) {
-                    requiresPoll = true;
-                }
-            } finally {
-                this.currRecord = null;
-                this.currNode = null;
-            }
-
-            return partitionGroup.numBuffered();
+        // if there is no record to process, return immediately
+        if (record == null) {
+            requiresPoll = true;
+            return 0;
         }
+
+        requiresPoll = false;
+
+        try {
+            // process the record by passing to the source node of the topology
+            this.currRecord = record;
+            this.currNode = recordInfo.node();
+            TopicPartition partition = recordInfo.partition();
+
+            log.debug("Start processing one record [{}]", currRecord);
+
+            this.currNode.process(currRecord.key(), currRecord.value());
+
+            log.debug("Completed processing one record [{}]", currRecord);
+
+            // update the consumed offset map after processing is done
+            consumedOffsets.put(partition, currRecord.offset());
+            commitOffsetNeeded = true;
+
+            // after processing this record, if its partition queue's buffered size has been
+            // decreased to the threshold, we can then resume the consumption on this partition
+            if (recordInfo.queue().size() == this.maxBufferedSize) {
+                consumer.resume(singleton(partition));
+                requiresPoll = true;
+            }
+
+            if (partitionGroup.topQueueSize() <= this.maxBufferedSize) {
+                requiresPoll = true;
+            }
+        } finally {
+            this.currRecord = null;
+            this.currNode = null;
+        }
+
+        return partitionGroup.numBuffered();
     }
 
     public boolean requiresPoll() {
@@ -375,4 +374,12 @@ public class StreamTask extends AbstractTask implements Punctuator {
         }
     }
 
+    /**
+     * Produces a string representation contain useful information about a StreamTask.
+     * This is useful in debugging scenarios.
+     * @return A string representation of the StreamTask instance.
+     */
+    public String toString() {
+        return super.toString();
+    }
 }

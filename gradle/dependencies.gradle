@@ -37,14 +37,14 @@ versions += [
   metrics: "2.2.0",
   powermock: "1.6.4",
   reflections: "0.9.10",
-  rocksDB: "4.4.1",
+  rocksDB: "4.8.0",
   scalaTest: "2.2.6",
   scalaParserCombinators: "1.0.4",
   scoverage: "1.1.1",
   slf4j: "1.7.21",
   snappy: "1.1.2.6",
-  zkclient: "0.8",
-  zookeeper: "3.4.6",
+  zkclient: "0.9",
+  zookeeper: "3.4.8",
 ]
 
 // Add Scala version

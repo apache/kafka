@@ -20,14 +20,12 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.TaskId;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
@@ -53,8 +51,8 @@ public abstract class AbstractTask {
                            ProcessorTopology topology,
                            Consumer<byte[], byte[]> consumer,
                            Consumer<byte[], byte[]> restoreConsumer,
-                           StreamsConfig config,
-                           boolean isStandby) {
+                           boolean isStandby,
+                           StateDirectory stateDirectory) {
         this.id = id;
         this.applicationId = applicationId;
         this.partitions = new HashSet<>(partitions);
@@ -63,10 +61,8 @@ public abstract class AbstractTask {
 
         // create the processor state manager
         try {
-            File applicationStateDir = StreamThread.makeStateDir(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG));
-            File stateFile = new File(applicationStateDir.getCanonicalPath(), id.toString());
-            // if partitions is null, this is a standby task
-            this.stateMgr = new ProcessorStateManager(applicationId, id.partition, partitions, stateFile, restoreConsumer, isStandby);
+            this.stateMgr = new ProcessorStateManager(applicationId, id, partitions, restoreConsumer, isStandby, stateDirectory, topology.sourceStoreToSourceTopic());
+
         } catch (IOException e) {
             throw new ProcessorStateException("Error while creating the state manager", e);
         }
@@ -126,4 +122,34 @@ public abstract class AbstractTask {
         }
     }
 
+    public StateStore getStore(final String name) {
+        return stateMgr.getStore(name);
+    }
+
+    /**
+     * Produces a string representation contain useful information about a StreamTask.
+     * This is useful in debugging scenarios.
+     * @return A string representation of the StreamTask instance.
+     */
+    public String toString() {
+        StringBuilder sb = new StringBuilder("StreamsTask taskId:" + this.id() + "\n");
+
+        // print topology
+        if (topology != null) {
+            sb.append("\t\t\t" + topology.toString());
+        }
+
+        // print assigned partitions
+        if (partitions != null && !partitions.isEmpty()) {
+            sb.append("\t\t\tPartitions [");
+            for (TopicPartition topicPartition : partitions) {
+                sb.append(topicPartition.toString() + ",");
+            }
+            sb.setLength(sb.length() - 1);
+            sb.append("]");
+        }
+
+        sb.append("\n");
+        return sb.toString();
+    }
 }

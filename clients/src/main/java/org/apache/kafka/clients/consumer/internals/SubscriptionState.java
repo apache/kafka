@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -47,6 +47,13 @@ import java.util.regex.Pattern;
  */
 public class SubscriptionState {
 
+    private enum SubscriptionType {
+        NONE, AUTO_TOPICS, AUTO_PATTERN, USER_ASSIGNED
+    };
+
+    /* the type of subscription */
+    private SubscriptionType subscriptionType;
+
     /* the pattern user has requested */
     private Pattern subscribedPattern;
 
@@ -77,6 +84,19 @@ public class SubscriptionState {
     private static final String SUBSCRIPTION_EXCEPTION_MESSAGE =
         "Subscription to topics, partitions and pattern are mutually exclusive";
 
+    /**
+     * This method sets the subscription type if it is not already set (i.e. when it is NONE),
+     * or verifies that the subscription type is equal to the give type when it is set (i.e.
+     * when it is not NONE)
+     * @param type The given subscription type
+     */
+    private void setSubscriptionType(SubscriptionType type) {
+        if (this.subscriptionType == SubscriptionType.NONE)
+            this.subscriptionType = type;
+        else if (this.subscriptionType != type)
+            throw new IllegalStateException(SUBSCRIPTION_EXCEPTION_MESSAGE);
+    }
+
     public SubscriptionState(OffsetResetStrategy defaultResetStrategy) {
         this.defaultResetStrategy = defaultResetStrategy;
         this.subscription = new HashSet<>();
@@ -86,14 +106,14 @@ public class SubscriptionState {
         this.needsPartitionAssignment = false;
         this.needsFetchCommittedOffsets = true; // initialize to true for the consumers to fetch offset upon starting up
         this.subscribedPattern = null;
+        this.subscriptionType = SubscriptionType.NONE;
     }
 
     public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
 
-        if (!this.userAssignment.isEmpty() || this.subscribedPattern != null)
-            throw new IllegalStateException(SUBSCRIPTION_EXCEPTION_MESSAGE);
+        setSubscriptionType(SubscriptionType.AUTO_TOPICS);
 
         this.listener = listener;
 
@@ -122,7 +142,7 @@ public class SubscriptionState {
      * @param topics The topics to add to the group subscription
      */
     public void groupSubscribe(Collection<String> topics) {
-        if (!this.userAssignment.isEmpty())
+        if (this.subscriptionType == SubscriptionType.USER_ASSIGNED)
             throw new IllegalStateException(SUBSCRIPTION_EXCEPTION_MESSAGE);
         this.groupSubscription.addAll(topics);
     }
@@ -138,8 +158,7 @@ public class SubscriptionState {
      * whose input partitions are provided from the subscribed topics.
      */
     public void assignFromUser(Collection<TopicPartition> partitions) {
-        if (!this.subscription.isEmpty() || this.subscribedPattern != null)
-            throw new IllegalStateException(SUBSCRIPTION_EXCEPTION_MESSAGE);
+        setSubscriptionType(SubscriptionType.USER_ASSIGNED);
 
         this.userAssignment.clear();
         this.userAssignment.addAll(partitions);
@@ -151,6 +170,7 @@ public class SubscriptionState {
         this.assignment.keySet().retainAll(this.userAssignment);
 
         this.needsPartitionAssignment = false;
+        this.needsFetchCommittedOffsets = true;
     }
 
     /**
@@ -171,15 +191,14 @@ public class SubscriptionState {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
 
-        if (!this.subscription.isEmpty() || !this.userAssignment.isEmpty())
-            throw new IllegalStateException(SUBSCRIPTION_EXCEPTION_MESSAGE);
+        setSubscriptionType(SubscriptionType.AUTO_PATTERN);
 
         this.listener = listener;
         this.subscribedPattern = pattern;
     }
 
     public boolean hasPatternSubscription() {
-        return subscribedPattern != null;
+        return this.subscriptionType == SubscriptionType.AUTO_PATTERN;
     }
 
     public void unsubscribe() {
@@ -188,6 +207,7 @@ public class SubscriptionState {
         this.assignment.clear();
         this.needsPartitionAssignment = true;
         this.subscribedPattern = null;
+        this.subscriptionType = SubscriptionType.NONE;
     }
 
 
@@ -270,7 +290,7 @@ public class SubscriptionState {
     }
 
     public boolean partitionsAutoAssigned() {
-        return !this.subscription.isEmpty();
+        return this.subscriptionType == SubscriptionType.AUTO_TOPICS || this.subscriptionType == SubscriptionType.AUTO_PATTERN;
     }
 
     public void position(TopicPartition tp, long offset) {

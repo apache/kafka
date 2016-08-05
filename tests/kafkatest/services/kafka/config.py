@@ -46,8 +46,3 @@ class KafkaConfig(dict):
             s += "%s=%s\n" % (k, str(self[k]))
         return s
 
-
-
-
-
-

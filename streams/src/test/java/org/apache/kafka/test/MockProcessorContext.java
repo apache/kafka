@@ -189,6 +189,16 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         return this.timestamp;
     }
 
+    @Override
+    public Map<String, Object> appConfigs() {
+        return Collections.emptyMap();
+    }
+
+    @Override
+    public Map<String, Object> appConfigsWithPrefix(String prefix) {
+        return Collections.emptyMap();
+    }
+
     public Map<String, StateStore> allStateStores() {
         return Collections.unmodifiableMap(storeMap);
     }

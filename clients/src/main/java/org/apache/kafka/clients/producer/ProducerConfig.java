@@ -23,6 +23,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
@@ -74,7 +75,7 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>acks</code> */
     public static final String ACKS_CONFIG = "acks";
     private static final String ACKS_DOC = "The number of acknowledgments the producer requires the leader to have received before considering a request complete. This controls the "
-                                           + " durability of records that are sent. The following settings are common: "
+                                           + " durability of records that are sent. The following settings are allowed: "
                                            + " <ul>"
                                            + " <li><code>acks=0</code> If set to zero then the producer will not wait for any acknowledgment from the"
                                            + " server at all. The record will be immediately added to the socket buffer and considered sent. No guarantee can be"
@@ -159,14 +160,6 @@ public class ProducerConfig extends AbstractConfig {
                                                     + "not all memory the producer uses is used for buffering. Some additional memory will be used for compression (if "
                                                     + "compression is enabled) as well as for maintaining in-flight requests.";
 
-    /** <code>retries</code> */
-    public static final String RETRIES_CONFIG = "retries";
-    private static final String RETRIES_DOC = "Setting a value greater than zero will cause the client to resend any record whose send fails with a potentially transient error."
-                                              + " Note that this retry is no different than if the client resent the record upon receiving the "
-                                              + "error. Allowing retries will potentially change the ordering of records because if two records are "
-                                              + "sent to a single partition, and the first fails and is retried but the second succeeds, then the second record "
-                                              + "may appear first.";
-
     /** <code>retry.backoff.ms</code> */
     public static final String RETRY_BACKOFF_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
 
@@ -190,6 +183,14 @@ public class ProducerConfig extends AbstractConfig {
     private static final String MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_DOC = "The maximum number of unacknowledged requests the client will send on a single connection before blocking."
                                                                             + " Note that if this setting is set to be greater than 1 and there are failed sends, there is a risk of"
                                                                             + " message re-ordering due to retries (i.e., if retries are enabled).";
+
+    /** <code>retries</code> */
+    public static final String RETRIES_CONFIG = "retries";
+    private static final String RETRIES_DOC = "Setting a value greater than zero will cause the client to resend any record whose send fails with a potentially transient error."
+                                              + " Note that this retry is no different than if the client resent the record upon receiving the error."
+                                              + " Allowing retries without setting <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to 1 will potentially change the"
+                                              + " ordering of records because if two batches are sent to a single partition, and the first fails and is retried but the second"
+                                              + " succeeds, then the records in the second batch may appear first.";
 
     /** <code>key.serializer</code> */
     public static final String KEY_SERIALIZER_CLASS_CONFIG = "key.serializer";
@@ -231,8 +232,8 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(TIMEOUT_CONFIG, Type.INT, 30 * 1000, atLeast(0), Importance.MEDIUM, TIMEOUT_DOC)
                                 .define(LINGER_MS_CONFIG, Type.LONG, 0, atLeast(0L), Importance.MEDIUM, LINGER_MS_DOC)
                                 .define(CLIENT_ID_CONFIG, Type.STRING, "", Importance.MEDIUM, CommonClientConfigs.CLIENT_ID_DOC)
-                                .define(SEND_BUFFER_CONFIG, Type.INT, 128 * 1024, atLeast(0), Importance.MEDIUM, CommonClientConfigs.SEND_BUFFER_DOC)
-                                .define(RECEIVE_BUFFER_CONFIG, Type.INT, 32 * 1024, atLeast(0), Importance.MEDIUM, CommonClientConfigs.RECEIVE_BUFFER_DOC)
+                                .define(SEND_BUFFER_CONFIG, Type.INT, 128 * 1024, atLeast(-1), Importance.MEDIUM, CommonClientConfigs.SEND_BUFFER_DOC)
+                                .define(RECEIVE_BUFFER_CONFIG, Type.INT, 32 * 1024, atLeast(-1), Importance.MEDIUM, CommonClientConfigs.RECEIVE_BUFFER_DOC)
                                 .define(MAX_REQUEST_SIZE_CONFIG,
                                         Type.INT,
                                         1 * 1024 * 1024,
@@ -334,6 +335,10 @@ public class ProducerConfig extends AbstractConfig {
 
     ProducerConfig(Map<?, ?> props) {
         super(CONFIG, props);
+    }
+
+    public static Set<String> configNames() {
+        return CONFIG.names();
     }
 
     public static void main(String[] args) {

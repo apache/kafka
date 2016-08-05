@@ -24,16 +24,13 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.RandomAccessFile;
-import java.nio.channels.FileChannel;
-import java.nio.channels.FileLock;
-import java.nio.channels.OverlappingFileLockException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -51,13 +48,11 @@ public class ProcessorStateManager {
 
     public static final String STATE_CHANGELOG_TOPIC_SUFFIX = "-changelog";
     public static final String CHECKPOINT_FILE_NAME = ".checkpoint";
-    public static final String LOCK_FILE_NAME = ".lock";
 
     private final String applicationId;
     private final int defaultPartition;
     private final Map<String, TopicPartition> partitionForTopic;
     private final File baseDir;
-    private final FileLock directoryLock;
     private final Map<String, StateStore> stores;
     private final Set<String> loggingEnabled;
     private final Consumer<byte[], byte[]> restoreConsumer;
@@ -66,18 +61,23 @@ public class ProcessorStateManager {
     private final Map<TopicPartition, Long> offsetLimits;
     private final boolean isStandby;
     private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
+    private final Map<String, String> sourceStoreToSourceTopic;
+    private final TaskId taskId;
+    private final StateDirectory stateDirectory;
 
     /**
      * @throws IOException if any error happens while creating or locking the state directory
      */
-    public ProcessorStateManager(String applicationId, int defaultPartition, Collection<TopicPartition> sources, File baseDir, Consumer<byte[], byte[]> restoreConsumer, boolean isStandby) throws IOException {
+    public ProcessorStateManager(String applicationId, TaskId taskId, Collection<TopicPartition> sources, Consumer<byte[], byte[]> restoreConsumer, boolean isStandby,
+        StateDirectory stateDirectory, final Map<String, String> sourceStoreToSourceTopic) throws IOException {
         this.applicationId = applicationId;
-        this.defaultPartition = defaultPartition;
+        this.defaultPartition = taskId.partition;
+        this.taskId = taskId;
+        this.stateDirectory = stateDirectory;
         this.partitionForTopic = new HashMap<>();
         for (TopicPartition source : sources) {
             this.partitionForTopic.put(source.topic(), source);
         }
-        this.baseDir = baseDir;
         this.stores = new HashMap<>();
         this.loggingEnabled = new HashSet<>();
         this.restoreConsumer = restoreConsumer;
@@ -85,13 +85,10 @@ public class ProcessorStateManager {
         this.isStandby = isStandby;
         this.restoreCallbacks = isStandby ? new HashMap<String, StateRestoreCallback>() : null;
         this.offsetLimits = new HashMap<>();
+        this.baseDir  = stateDirectory.directoryForTask(taskId);
+        this.sourceStoreToSourceTopic = sourceStoreToSourceTopic;
 
-        // create the state directory for this task if missing (we won't create the parent directory)
-        createStateDirectory(baseDir);
-
-        // try to acquire the exclusive lock on the state directory
-        directoryLock = lockStateDirectory(baseDir, 5);
-        if (directoryLock == null) {
+        if (!stateDirectory.lock(taskId, 5)) {
             throw new IOException("Failed to lock the state directory: " + baseDir.getCanonicalPath());
         }
 
@@ -103,49 +100,9 @@ public class ProcessorStateManager {
         checkpoint.delete();
     }
 
-    private static void createStateDirectory(File stateDir) throws IOException {
-        if (!stateDir.exists()) {
-            stateDir.mkdir();
-        }
-    }
 
     public static String storeChangelogTopic(String applicationId, String storeName) {
         return applicationId + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
-    }
-
-    /**
-     * @throws IOException if any error happens when locking the state directory
-     */
-    public static FileLock lockStateDirectory(File stateDir) throws IOException {
-        return lockStateDirectory(stateDir, 0);
-    }
-
-    private static FileLock lockStateDirectory(File stateDir, int retry) throws IOException {
-        File lockFile = new File(stateDir, ProcessorStateManager.LOCK_FILE_NAME);
-        FileChannel channel = new RandomAccessFile(lockFile, "rw").getChannel();
-
-        FileLock lock = lockStateDirectory(channel);
-        while (lock == null && retry > 0) {
-            try {
-                Thread.sleep(200);
-            } catch (Exception ex) {
-                // do nothing
-            }
-            retry--;
-            lock = lockStateDirectory(channel);
-        }
-        if (lock == null) {
-            channel.close();
-        }
-        return lock;
-    }
-
-    private static FileLock lockStateDirectory(FileChannel channel) throws IOException {
-        try {
-            return channel.tryLock();
-        } catch (OverlappingFileLockException e) {
-            return null;
-        }
     }
 
     public File baseDir() {
@@ -158,20 +115,28 @@ public class ProcessorStateManager {
      * @throws StreamsException if the store's change log does not contain the partition
      */
     public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
-        if (store.name().equals(CHECKPOINT_FILE_NAME))
+
+        if (store.name().equals(CHECKPOINT_FILE_NAME)) {
             throw new IllegalArgumentException("Illegal store name: " + CHECKPOINT_FILE_NAME);
+        }
 
-        if (this.stores.containsKey(store.name()))
+        if (this.stores.containsKey(store.name())) {
             throw new IllegalArgumentException("Store " + store.name() + " has already been registered.");
+        }
 
-        if (loggingEnabled)
+        if (loggingEnabled) {
             this.loggingEnabled.add(store.name());
-
+        }
+        
         // check that the underlying change log topic exist or not
         String topic;
-        if (loggingEnabled)
+        if (loggingEnabled) {
             topic = storeChangelogTopic(this.applicationId, store.name());
-        else topic = store.name();
+        } else if (sourceStoreToSourceTopic != null && sourceStoreToSourceTopic.containsKey(store.name())) {
+            topic = sourceStoreToSourceTopic.get(store.name());
+        } else {
+            throw new IllegalArgumentException("Store is neither built from source topic, nor has a changelog.");
+        }
 
         // block until the partition is ready for this state changelog topic or time has elapsed
         int partition = getPartition(topic);
@@ -336,6 +301,8 @@ public class ProcessorStateManager {
      */
     public void close(Map<TopicPartition, Long> ackedOffsets) throws IOException {
         try {
+            // attempting to flush and close the stores, just in case they
+            // are not closed by a ProcessorNode yet
             if (!stores.isEmpty()) {
                 log.debug("Closing stores.");
                 for (Map.Entry<String, StateStore> entry : stores.entrySet()) {
@@ -374,8 +341,7 @@ public class ProcessorStateManager {
             }
         } finally {
             // release the state directory directoryLock
-            directoryLock.release();
-            directoryLock.channel().close();
+            stateDirectory.unlock(taskId);
         }
     }
 

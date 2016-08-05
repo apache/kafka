@@ -39,6 +39,7 @@ import static org.junit.Assert.assertTrue;
 public class KTableSourceTest {
 
     final private Serde<String> stringSerde = Serdes.String();
+    final private Serde<Integer> intSerde = Serdes.Integer();
 
     private KStreamTestDriver driver = null;
     private File stateDir = null;
@@ -62,12 +63,12 @@ public class KTableSourceTest {
 
         String topic1 = "topic1";
 
-        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1);
+        KTable<String, Integer> table1 = builder.table(stringSerde, intSerde, topic1, "anyStoreName");
 
-        MockProcessorSupplier<String, String> proc1 = new MockProcessorSupplier<>();
+        MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
         table1.toStream().process(proc1);
 
-        driver = new KStreamTestDriver(builder);
+        driver = new KStreamTestDriver(builder, stateDir);
 
         driver.process(topic1, "A", 1);
         driver.process(topic1, "B", 2);
@@ -85,7 +86,7 @@ public class KTableSourceTest {
 
         String topic1 = "topic1";
 
-        KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
+        KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
 
         KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
 
@@ -125,12 +126,12 @@ public class KTableSourceTest {
     }
 
     @Test
-    public void testNotSedingOldValue() throws IOException {
+    public void testNotSendingOldValue() throws IOException {
         final KStreamBuilder builder = new KStreamBuilder();
 
         String topic1 = "topic1";
 
-        KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
+        KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
 
         MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
 
@@ -160,12 +161,12 @@ public class KTableSourceTest {
     }
 
     @Test
-    public void testSedingOldValue() throws IOException {
+    public void testSendingOldValue() throws IOException {
         final KStreamBuilder builder = new KStreamBuilder();
 
         String topic1 = "topic1";
 
-        KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1);
+        KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
 
         table1.enableSendingOldValues();
 

@@ -36,18 +36,19 @@ public abstract class ConnectRecord {
     private final Object key;
     private final Schema valueSchema;
     private final Object value;
+    private final Long timestamp;
 
-    public ConnectRecord(String topic, Integer kafkaPartition, Schema valueSchema, Object value) {
-        this(topic, kafkaPartition, null, null, valueSchema, value);
-    }
-
-    public ConnectRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value) {
+    public ConnectRecord(String topic, Integer kafkaPartition,
+                         Schema keySchema, Object key,
+                         Schema valueSchema, Object value,
+                         Long timestamp) {
         this.topic = topic;
         this.kafkaPartition = kafkaPartition;
         this.keySchema = keySchema;
         this.key = key;
         this.valueSchema = valueSchema;
         this.value = value;
+        this.timestamp = timestamp;
     }
 
     public String topic() {
@@ -74,6 +75,10 @@ public abstract class ConnectRecord {
         return valueSchema;
     }
 
+    public Long timestamp() {
+        return timestamp;
+    }
+
     @Override
     public String toString() {
         return "ConnectRecord{" +
@@ -81,6 +86,7 @@ public abstract class ConnectRecord {
                 ", kafkaPartition=" + kafkaPartition +
                 ", key=" + key +
                 ", value=" + value +
+                ", timestamp=" + timestamp +
                 '}';
     }
 
@@ -105,6 +111,8 @@ public abstract class ConnectRecord {
             return false;
         if (value != null ? !value.equals(that.value) : that.value != null)
             return false;
+        if (timestamp != null ? !timestamp.equals(that.timestamp) : that.timestamp != null)
+            return false;
 
         return true;
     }
@@ -117,6 +125,7 @@ public abstract class ConnectRecord {
         result = 31 * result + (key != null ? key.hashCode() : 0);
         result = 31 * result + (valueSchema != null ? valueSchema.hashCode() : 0);
         result = 31 * result + (value != null ? value.hashCode() : 0);
+        result = 31 * result + (value != null ? timestamp.hashCode() : 0);
         return result;
     }
 }

@@ -24,14 +24,16 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.integration.utils.EmbeddedSingleNodeKafkaCluster;
+import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
-import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
+import org.apache.kafka.test.MockKeyValueMapper;
+import org.apache.kafka.test.TestUtils;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -41,8 +43,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
 
-import org.apache.kafka.streams.integration.utils.EmbeddedSingleNodeKafkaCluster;
-import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import kafka.admin.AdminUtils;
 import kafka.log.LogConfig;
 import kafka.utils.ZKStringSerializer$;
@@ -123,7 +123,7 @@ public class InternalTopicIntegrationTest {
         streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
         streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, "/tmp/kafka-streams");
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         KStreamBuilder builder = new KStreamBuilder();
 
@@ -135,12 +135,8 @@ public class InternalTopicIntegrationTest {
                 public Iterable<String> apply(String value) {
                     return Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+"));
                 }
-            }).map(new KeyValueMapper<String, String, KeyValue<String, String>>() {
-                @Override
-                public KeyValue<String, String> apply(String key, String value) {
-                    return new KeyValue<String, String>(value, value);
-                }
-            }).countByKey("Counts").toStream();
+            }).groupBy(MockKeyValueMapper.<String, String>SelectValueMapper())
+                .count("Counts").toStream();
 
         wordCounts.to(stringSerde, longSerde, DEFAULT_OUTPUT_TOPIC);
 

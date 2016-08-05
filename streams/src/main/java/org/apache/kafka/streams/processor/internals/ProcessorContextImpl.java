@@ -27,6 +27,7 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.io.File;
+import java.util.Map;
 
 public class ProcessorContextImpl implements ProcessorContext, RecordCollector.Supplier {
 
@@ -38,6 +39,7 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     private final RecordCollector collector;
     private final ProcessorStateManager stateMgr;
 
+    private final StreamsConfig config;
     private final Serde<?> keySerde;
     private final Serde<?> valSerde;
 
@@ -56,6 +58,7 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         this.collector = collector;
         this.stateMgr = stateMgr;
 
+        this.config = config;
         this.keySerde = config.keySerde();
         this.valSerde = config.valueSerde();
 
@@ -205,5 +208,15 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     @Override
     public void schedule(long interval) {
         task.schedule(interval);
+    }
+
+    @Override
+    public Map<String, Object> appConfigs() {
+        return config.originals();
+    }
+
+    @Override
+    public Map<String, Object> appConfigsWithPrefix(String prefix) {
+        return config.originalsWithPrefix(prefix);
     }
 }

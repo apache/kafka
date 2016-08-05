@@ -17,10 +17,16 @@
 
 <h3><a id="upgrade" href="#upgrade">1.5 Upgrading From Previous Versions</a></h3>
 
+<h5><a id="upgrade_1010_notable" href="#upgrade_1010_notable">Notable changes in 0.10.1.0</a></h5>
+
+<ul>
+    <li> The BrokerState "RunningAsController" (value 4) has been removed. Due to a bug, a broker would only be in this state briefly before transitioning out of it and hence the impact of the removal should be minimal. The recommended way to detect if a given broker is the controller is via the kafka.controller:type=KafkaController,name=ActiveControllerCount metric. </li>
+</ul>
+
 <h4><a id="upgrade_10" href="#upgrade_10">Upgrading from 0.8.x or 0.9.x to 0.10.0.0</a></h4>
-0.10.0.0 has <a href="#upgrade_10_breaking">potential breaking changes</a> (please review before upgrading) and
-there may be a <a href="#upgrade_10_performance_impact">performance impact during the upgrade</a>. Because new protocols
-are introduced, it is important to upgrade your Kafka clusters before upgrading your clients.
+0.10.0.0 has <a href="#upgrade_10_breaking">potential breaking changes</a> (please review before upgrading) and possible <a href="#upgrade_10_performance_impact">  performance impact following the upgrade</a>. By following the recommended rolling upgrade plan below, you guarantee no downtime and no performance impact during and following the upgrade.
+<br>
+Note: Because new protocols are introduced, it is important to upgrade your Kafka clusters before upgrading your clients.
 <p/>
 <b>Notes to clients with version 0.9.0.0: </b>Due to a bug introduced in 0.9.0.0,
 clients that depend on ZooKeeper (old Scala high-level Consumer and MirrorMaker if used with the old consumer) will not
@@ -30,20 +36,24 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
 <p><b>For a rolling upgrade:</b></p>
 
 <ol>
-    <li> Update server.properties file on all brokers and add the following property: inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. 0.8.2 or 0.9.0.0).
-         We recommend that users set log.message.format.version=CURRENT_KAFKA_VERSION as well to avoid a performance regression
-         during upgrade. See <a href="#upgrade_10_performance_impact">potential performance impact during upgrade</a> for the details.
+    <li> Update server.properties file on all brokers and add the following properties:
+         <ul>
+         <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. 0.8.2 or 0.9.0.0).</li>
+         <li>log.message.format.version=CURRENT_KAFKA_VERSION  (See <a href="#upgrade_10_performance_impact">potential performance impact following the upgrade</a> for the details on what this configuration does.)
+         </ul>
     </li>
     <li> Upgrade the brokers. This can be done a broker at a time by simply bringing it down, updating the code, and restarting it. </li>
-    <li> Once the entire cluster is upgraded, bump the protocol version by editing inter.broker.protocol.version and setting it to 0.10.0.0. </li>
+    <li> Once the entire cluster is upgraded, bump the protocol version by editing inter.broker.protocol.version and setting it to 0.10.0.0. NOTE: You shouldn't touch log.message.format.version yet - this parameter should only change once all consumers have been upgraded to 0.10.0.0 </li>
     <li> Restart the brokers one by one for the new protocol version to take effect. </li>
+    <li> Once all consumers have been upgraded to 0.10.0, change log.message.format.version to 0.10.0 on each broker and restart them one by one.
+    </li>
 </ol>
 
 <p><b>Note:</b> If you are willing to accept downtime, you can simply take all the brokers down, update the code and start all of them. They will start with the new protocol by default.
 
 <p><b>Note:</b> Bumping the protocol version and restarting can be done any time after the brokers were upgraded. It does not have to be immediately after.
 
-<h5><a id="upgrade_10_performance_impact" href="#upgrade_10_performance_impact">Potential performance impact during upgrade to 0.10.0.0</a></h5>
+<h5><a id="upgrade_10_performance_impact" href="#upgrade_10_performance_impact">Potential performance impact following upgrade to 0.10.0.0</a></h5>
 <p>
     The message format in 0.10.0 includes a new timestamp field and uses relative offsets for compressed messages.
     The on disk message format can be configured through log.message.format.version in the server.properties file.
@@ -51,9 +61,11 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
     message formats before 0.10.0. In this case, the broker is able to convert messages from the 0.10.0 format to an earlier format
     before sending the response to the consumer on an older version. However, the broker can't use zero-copy transfer in this case.
 
-    To avoid such message conversion before consumers are upgraded to 0.10.0.0, one can set the message format to
-    e.g. 0.9.0 when upgrading the broker to 0.10.0.0. This way, the broker can still use zero-copy transfer to send the
-    data to the old consumers. Once most consumers are upgraded, one can change the message format to 0.10.0 on the broker.
+    Reports from the Kafka community on the performance impact have shown CPU utilization going from 20% before to 100% after an upgrade, which forced an immediate upgrade of all clients to bring performance back to normal.
+
+    To avoid such message conversion before consumers are upgraded to 0.10.0.0, one can set log.message.format.version to 0.8.2 or 0.9.0 when upgrading the broker to 0.10.0.0. This way, the broker can still use zero-copy transfer to send the data to the old consumers. Once consumers are upgraded, one can change the message format to 0.10.0 on the broker and enjoy the new message format that includes new timestamp and improved compression.
+
+    The conversion is supported to ensure compatibility and can be useful to support a few apps that have not updated to newer clients yet, but is impractical to support all consumer traffic on even an overprovisioned cluster. Therefore it is critical to avoid the message conversion as much as possible when brokers have been upgraded but the majority of clients have not.
 </p>
 <p>
     For clients that are upgraded to 0.10.0.0, there is no performance impact.

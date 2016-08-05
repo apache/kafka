@@ -34,7 +34,6 @@ import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
@@ -47,9 +46,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.nio.channels.FileLock;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -60,8 +56,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
 
 import static java.util.Collections.singleton;
 
@@ -78,6 +76,7 @@ public class StreamThread extends Thread {
     protected final StreamsConfig config;
     protected final TopologyBuilder builder;
     protected final Set<String> sourceTopics;
+    protected final Pattern topicPattern;
     protected final Producer<byte[], byte[]> producer;
     protected final Consumer<byte[], byte[]> consumer;
     protected final Consumer<byte[], byte[]> restoreConsumer;
@@ -89,11 +88,11 @@ public class StreamThread extends Thread {
     private final Map<TopicPartition, StandbyTask> standbyTasksByPartition;
     private final Set<TaskId> prevTasks;
     private final Time time;
-    private final File stateDir;
     private final long pollTimeMs;
     private final long cleanTimeMs;
     private final long commitTimeMs;
     private final StreamsMetricsImpl sensors;
+    final StateDirectory stateDirectory;
 
     private StreamPartitionAssignor partitionAssignor = null;
 
@@ -103,18 +102,6 @@ public class StreamThread extends Thread {
 
     private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
     private boolean processStandbyRecords = false;
-
-    static File makeStateDir(String applicationId, String baseDirName) {
-        File baseDir = new File(baseDirName);
-        if (!baseDir.exists())
-            baseDir.mkdir();
-
-        File stateDir = new File(baseDir, applicationId);
-        if (!stateDir.exists())
-            stateDir.mkdir();
-
-        return stateDir;
-    }
 
     final ConsumerRebalanceListener rebalanceListener = new ConsumerRebalanceListener() {
         @Override
@@ -159,7 +146,8 @@ public class StreamThread extends Thread {
         this.applicationId = applicationId;
         this.config = config;
         this.builder = builder;
-        this.sourceTopics = builder.sourceTopics(applicationId);
+        this.sourceTopics = builder.sourceTopics();
+        this.topicPattern = builder.sourceTopicPattern();
         this.clientId = clientId;
         this.processId = processId;
         this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
@@ -177,7 +165,9 @@ public class StreamThread extends Thread {
                 config.getRestoreConsumerConfigs(threadClientId));
 
         // initialize the task list
-        this.activeTasks = new HashMap<>();
+        // activeTasks needs to be concurrent as it can be accessed
+        // by QueryableState
+        this.activeTasks = new ConcurrentHashMap<>();
         this.standbyTasks = new HashMap<>();
         this.activeTasksByPartition = new HashMap<>();
         this.standbyTasksByPartition = new HashMap<>();
@@ -186,8 +176,7 @@ public class StreamThread extends Thread {
         // standby ktables
         this.standbyRecords = new HashMap<>();
 
-        // read in task specific config values
-        this.stateDir = makeStateDir(this.applicationId, this.config.getString(StreamsConfig.STATE_DIR_CONFIG));
+        this.stateDirectory = new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG));
         this.pollTimeMs = config.getLong(StreamsConfig.POLL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
         this.cleanTimeMs = config.getLong(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
@@ -197,6 +186,7 @@ public class StreamThread extends Thread {
         this.time = time;
 
         this.sensors = new StreamsMetricsImpl(metrics);
+
 
         this.running = new AtomicBoolean(true);
     }
@@ -283,7 +273,12 @@ public class StreamThread extends Thread {
         long lastPoll = 0L;
         boolean requiresPoll = true;
 
-        consumer.subscribe(new ArrayList<>(sourceTopics), rebalanceListener);
+        if (topicPattern != null) {
+            consumer.subscribe(topicPattern, rebalanceListener);
+        } else {
+            consumer.subscribe(new ArrayList<>(sourceTopics), rebalanceListener);
+        }
+
 
         while (stillRunning()) {
             // try to fetch some records if necessary
@@ -463,44 +458,7 @@ public class StreamThread extends Thread {
         long now = time.milliseconds();
 
         if (now > lastClean + cleanTimeMs) {
-            File[] stateDirs = stateDir.listFiles();
-            if (stateDirs != null) {
-                for (File dir : stateDirs) {
-                    try {
-                        String dirName = dir.getName();
-                        TaskId id = TaskId.parse(dirName.substring(dirName.lastIndexOf("-") + 1));
-
-                        // try to acquire the exclusive lock on the state directory
-                        if (dir.exists()) {
-                            FileLock directoryLock = null;
-                            try {
-                                directoryLock = ProcessorStateManager.lockStateDirectory(dir);
-                                if (directoryLock != null) {
-                                    log.info("Deleting obsolete state directory {} for task {} after delayed {} ms.", dir.getAbsolutePath(), id, cleanTimeMs);
-                                    Utils.delete(dir);
-                                }
-                            } catch (FileNotFoundException e) {
-                                // the state directory may be deleted by another thread
-                            } catch (IOException e) {
-                                log.error("Failed to lock the state directory due to an unexpected exception", e);
-                            } finally {
-                                if (directoryLock != null) {
-                                    try {
-                                        directoryLock.release();
-                                        directoryLock.channel().close();
-                                    } catch (IOException e) {
-                                        log.error("Failed to release the state directory lock");
-                                    }
-                                }
-                            }
-                        }
-                    } catch (TaskIdFormatException e) {
-                        // there may be some unknown files that sits in the same directory,
-                        // we should ignore these files instead trying to delete them as well
-                    }
-                }
-            }
-
+            stateDirectory.cleanRemovedTasks();
             lastClean = now;
         }
     }
@@ -523,7 +481,7 @@ public class StreamThread extends Thread {
 
         HashSet<TaskId> tasks = new HashSet<>();
 
-        File[] stateDirs = stateDir.listFiles();
+        File[] stateDirs = stateDirectory.listTaskDirectories();
         if (stateDirs != null) {
             for (File dir : stateDirs) {
                 try {
@@ -547,7 +505,7 @@ public class StreamThread extends Thread {
 
         ProcessorTopology topology = builder.build(applicationId, id.topicGroupId);
 
-        return new StreamTask(id, applicationId, partitions, topology, consumer, producer, restoreConsumer, config, sensors);
+        return new StreamTask(id, applicationId, partitions, topology, consumer, producer, restoreConsumer, config, sensors, stateDirectory);
     }
 
     private void addStreamTasks(Collection<TopicPartition> assignment) {
@@ -618,7 +576,7 @@ public class StreamThread extends Thread {
         ProcessorTopology topology = builder.build(applicationId, id.topicGroupId);
 
         if (!topology.stateStoreSuppliers().isEmpty()) {
-            return new StandbyTask(id, applicationId, partitions, topology, consumer, restoreConsumer, config, sensors);
+            return new StandbyTask(id, applicationId, partitions, topology, consumer, restoreConsumer, config, sensors, stateDirectory);
         } else {
             return null;
         }
@@ -660,6 +618,39 @@ public class StreamThread extends Thread {
                 restoreConsumer.seekToBeginning(singleton(partition));
             }
         }
+    }
+
+
+    /**
+     * Produces a string representation contain useful information about a StreamThread.
+     * This is useful in debugging scenarios.
+     * @return A string representation of the StreamThread instance.
+     */
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder("StreamsThread appId:" + this.applicationId + "\n");
+        sb.append("\tStreamsThread clientId:" + clientId + "\n");
+
+        // iterate and print active tasks
+        if (activeTasks != null) {
+            sb.append("\tActive tasks:\n");
+            for (TaskId tId : activeTasks.keySet()) {
+                StreamTask task = activeTasks.get(tId);
+                sb.append("\t\t" + task.toString());
+            }
+        }
+
+        // iterate and print standby tasks
+        if (standbyTasks != null) {
+            sb.append("\tStandby tasks:\n");
+            for (TaskId tId : standbyTasks.keySet()) {
+                StandbyTask task = standbyTasks.get(tId);
+                sb.append("\t\t" + task.toString());
+            }
+            sb.append("\n");
+        }
+
+        return sb.toString();
     }
 
 

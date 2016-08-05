@@ -27,8 +27,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Random;
+import java.util.UUID;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -52,6 +56,7 @@ public class TestUtils {
     /* A consistent random number generator to make tests repeatable */
     public static final Random SEEDED_RANDOM = new Random(192348092834L);
     public static final Random RANDOM = new Random();
+    public static final long DEFAULT_MAX_WAIT_MS = 15000;
 
     public static Cluster singletonCluster(Map<String, Integer> topicPartitionCounts) {
         return clusterWith(1, topicPartitionCounts);
@@ -119,8 +124,17 @@ public class TestUtils {
      *
      * @param prefix The prefix of the temporary directory, if null using "kafka-" as default prefix
      */
-    public static File tempDirectory(String prefix) throws IOException {
+    public static File tempDirectory(String prefix) {
         return tempDirectory(null, prefix);
+    }
+
+    /**
+     * Create a temporary relative directory in the default temporary-file directory with a
+     * prefix of "kafka-"
+     * @return  the temporary directory just created.
+     */
+    public static File tempDirectory() {
+        return tempDirectory(null);
     }
 
     /**
@@ -129,10 +143,15 @@ public class TestUtils {
      * @param parent The parent folder path name, if null using the default temporary-file directory
      * @param prefix The prefix of the temporary directory, if null using "kafka-" as default prefix
      */
-    public static File tempDirectory(Path parent, String prefix) throws IOException {
-        final File file = parent == null ?
-                Files.createTempDirectory(prefix == null ? "kafka-" : prefix).toFile() :
-                Files.createTempDirectory(parent, prefix == null ? "kafka-" : prefix).toFile();
+    public static File tempDirectory(Path parent, String prefix) {
+        final File file;
+        prefix = prefix == null ? "kafka-" : prefix;
+        try {
+            file = parent == null ?
+                    Files.createTempDirectory(prefix).toFile() : Files.createTempDirectory(parent, prefix).toFile();
+        } catch (IOException ex) {
+            throw new RuntimeException("Failed to create a temp dir", ex);
+        }
         file.deleteOnExit();
 
         Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -161,6 +180,78 @@ public class TestUtils {
             memoryRecords.append(offset, record);
         memoryRecords.close();
         return memoryRecords.buffer();
+    }
+
+    public static Properties producerConfig(final String bootstrapServers,
+                                            final Class keySerializer,
+                                            final Class valueSerializer,
+                                            final Properties additional) {
+        final Properties properties = new Properties();
+        properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        properties.put(ProducerConfig.ACKS_CONFIG, "all");
+        properties.put(ProducerConfig.RETRIES_CONFIG, 0);
+        properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializer);
+        properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializer);
+        properties.putAll(additional);
+        return properties;
+    }
+
+    public static Properties producerConfig(final String bootstrapServers, Class keySerializer, Class valueSerializer) {
+        return producerConfig(bootstrapServers, keySerializer, valueSerializer, new Properties());
+    }
+
+    public static Properties consumerConfig(final String bootstrapServers,
+                                            final String groupId,
+                                            final Class keyDeserializer,
+                                            final Class valueDeserializer,
+                                            final Properties additional) {
+
+        final Properties consumerConfig = new Properties();
+        consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        consumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer);
+        consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer);
+        consumerConfig.putAll(additional);
+        return consumerConfig;
+    }
+
+    /**
+     * returns consumer config with random UUID for the Group ID
+     */
+    public static Properties consumerConfig(final String bootstrapServers, Class keyDeserializer, Class valueDeserializer) {
+        return consumerConfig(bootstrapServers,
+                              UUID.randomUUID().toString(),
+                              keyDeserializer,
+                              valueDeserializer,
+                              new Properties());
+    }
+
+    /**
+     *  uses default value of 15 seconds for timeout
+     */
+    public static void waitForCondition(TestCondition testCondition, String conditionDetails) throws InterruptedException {
+        waitForCondition(testCondition, DEFAULT_MAX_WAIT_MS, conditionDetails);
+    }
+
+    /**
+     * Wait for condition to be met for at most {@code maxWaitMs} and throw assertion failure otherwise.
+     * This should be used instead of {@code Thread.sleep} whenever possible as it allows a longer timeout to be used
+     * without unnecessarily increasing test time (as the condition is checked frequently). The longer timeout is needed to
+     * avoid transient failures due to slow or overloaded machines.
+     */
+    public static void waitForCondition(TestCondition testCondition, long maxWaitMs, String conditionDetails) throws InterruptedException {
+        long startTime = System.currentTimeMillis();
+
+
+        while (!testCondition.conditionMet() && ((System.currentTimeMillis() - startTime) < maxWaitMs)) {
+            Thread.sleep(Math.min(maxWaitMs, 100L));
+        }
+
+        if (!testCondition.conditionMet()) {
+            conditionDetails = conditionDetails != null ? conditionDetails : "";
+            throw new AssertionError("Condition not met within timeout " + maxWaitMs + ". " + conditionDetails);
+        }
     }
 
 }

@@ -539,7 +539,6 @@ public class ConfigDef {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private void validate(String name, Map<String, Object> parsed, Map<String, ConfigValue> configs) {
         if (!configKeys.containsKey(name)) {
             return;

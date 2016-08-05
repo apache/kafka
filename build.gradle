@@ -68,7 +68,7 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "2.13"
+  gradleVersion = "2.14.1"
   buildVersionFileName = "kafka-version.properties"
 
   userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
@@ -584,6 +584,9 @@ project(':clients') {
 
     testCompile libs.bcpkix
     testCompile libs.junit
+    testCompile libs.easymock
+    testCompile libs.powermock
+    testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
   }
@@ -682,10 +685,13 @@ project(':streams') {
   dependencies {
     compile project(':clients')
     compile project(':connect:json')  // this dependency should be removed after we unify data API
-    compile libs.slf4jlog4j
+    compile libs.slf4jApi
     compile libs.rocksDBJni
     // this dependency should be removed after KIP-4
     compile (libs.zkclient) {
+      // users should be able to choose the logging implementation (and slf4j bridge)
+      exclude module: 'slf4j-log4j12'
+      exclude module: 'log4j'
       exclude module: 'jline'
       exclude module: 'netty'
     }
@@ -695,6 +701,8 @@ project(':streams') {
     testCompile project(':core')
     testCompile project(':core').sourceSets.test.output
     testCompile libs.junit
+
+    testRuntime libs.slf4jlog4j
   }
 
   javadoc {
