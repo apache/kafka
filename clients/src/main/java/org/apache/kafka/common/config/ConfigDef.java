@@ -878,28 +878,28 @@ public class ConfigDef {
 
     protected String getConfigValue(ConfigKey key, String headerName) {
         switch (headerName) {
-        case "Name":
-            return key.name;
-        case "Description":
-            return key.documentation;
-        case "Type":
-            return key.type.toString().toLowerCase(Locale.ROOT);
-        case "Default":
-            if (key.hasDefault()) {
-                if (key.defaultValue == null)
-                    return "null";
-                else if (key.type == Type.STRING && key.defaultValue.toString().isEmpty())
-                    return "\"\"";
-                else
-                    return key.defaultValue.toString();
-            } else
-                return "";
-        case "Valid Values":
-            return key.validator != null ? key.validator.toString() : "";
-        case "Importance":
-            return key.importance.toString().toLowerCase(Locale.ROOT);
-        default:
-            throw new RuntimeException("Can't find value for header '" + headerName + "' in " + key.name);
+            case "Name":
+                return key.name;
+            case "Description":
+                return key.documentation;
+            case "Type":
+                return key.type.toString().toLowerCase(Locale.ROOT);
+            case "Default":
+                if (key.hasDefault()) {
+                    if (key.defaultValue == null)
+                        return "null";
+                    else if (key.type == Type.STRING && key.defaultValue.toString().isEmpty())
+                        return "\"\"";
+                    else
+                        return key.defaultValue.toString();
+                } else
+                    return "";
+            case "Valid Values":
+                return key.validator != null ? key.validator.toString() : "";
+            case "Importance":
+                return key.importance.toString().toLowerCase(Locale.ROOT);
+            default:
+                throw new RuntimeException("Can't find value for header '" + headerName + "' in " + key.name);
         }
     }
     
