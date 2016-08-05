@@ -68,9 +68,9 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
   @volatile private var numLogCleanRuns = 0
   newGauge("num-runs", new Gauge[Int] { def value = numLogCleanRuns })
 
-  /* a gauge for tracking the last time of logCleaner run */
-  @volatile private var logCleanLastRun : Long = System.currentTimeMillis
-  newGauge("last-run-time", new Gauge[Long] { def value = logCleanLastRun })
+  /* a gauge for tracking the time since the last log cleaner run, in milli seconds */
+  @volatile private var timeSinceLastRun : Long = System.currentTimeMillis
+  newGauge("time-since-last-run-ms", new Gauge[Long] { def value = System.currentTimeMillis - timeSinceLastRun })
 
   /* a gauge for tracking the number of filthy logs. A non zero value indicates
    * that the cleaner has not been successful in cleaning the logs. */
@@ -91,7 +91,7 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
   def grabFilthiestLog(): Option[LogToClean] = {
     inLock(lock) {
       this.numLogCleanRuns = this.numLogCleanRuns + 1
-      this.logCleanLastRun = System.currentTimeMillis
+      this.timeSinceLastRun = System.currentTimeMillis
       val lastClean = allCleanerCheckpoints()
       val dirtyLogs = logs.filter {
         case (topicAndPartition, log) => log.config.compact  // skip any logs marked for delete rather than dedupe
