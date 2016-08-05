@@ -21,6 +21,8 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
@@ -33,6 +35,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+
 
 import java.io.File;
 import java.io.IOException;
@@ -91,12 +94,12 @@ public class KTableAggregateTest {
         assertEquals(Utils.mkList(
                 "A:0+1",
                 "B:0+2",
-                "A:0+1+3", "A:0+1+3-1",
-                "B:0+2+4", "B:0+2+4-2",
+                "A:0+1-1", "A:0+1-1+3",
+                "B:0+2-2", "B:0+2-2+4",
                 "C:0+5",
                 "D:0+6",
-                "B:0+2+4-2+7", "B:0+2+4-2+7-4",
-                "C:0+5+8", "C:0+5+8-5"), proc.processed);
+                "B:0+2-2+4-4", "B:0+2-2+4-4+7",
+                "C:0+5-5", "C:0+5-5+8"), proc.processed);
     }
 
     @Test
@@ -144,11 +147,12 @@ public class KTableAggregateTest {
                 "1:0+1",
                 "1:0+1-1",
                 "1:0+1-1+1",
-                "2:0+2",
-                "4:0+4",
-                "2:0+2-2",
-                "7:0+7",
-                "4:0+4-4"), proc.processed);
+                "2:0+2", 
+                  //noop
+                "2:0+2-2", "4:0+4",
+                  //noop
+                "4:0+4-4", "7:0+7"
+                ), proc.processed);
     }
 
     @Test
@@ -171,6 +175,63 @@ public class KTableAggregateTest {
         driver.process(input, "C", "yellow");
         driver.process(input, "D", "green");
 
-        assertEquals(Utils.mkList("green:1", "green:2", "blue:1", "green:1", "yellow:1", "green:2"), proc.processed);
+        assertEquals(Utils.mkList(
+                 "green:1",
+                 "green:2",
+                 "green:1", "blue:1",
+                 "yellow:1",
+                 "green:2"
+                 ), proc.processed);
+    }
+    
+    @Test
+    public void testRemoveOldBeforeAddNew() throws IOException {
+        final KStreamBuilder builder = new KStreamBuilder();
+        final String input = "count-test-input";
+        final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
+
+        builder.table(Serdes.String(), Serdes.String(), input, "anyStoreName")
+                .groupBy(new KeyValueMapper<String, String, KeyValue<String, String>>() {
+
+                    @Override
+                    public KeyValue<String, String> apply(String key, String value) {
+                        return KeyValue.pair(String.valueOf(key.charAt(0)), String.valueOf(key.charAt(1)));
+                    }
+                }, stringSerde, stringSerde)
+                .aggregate(new Initializer<String>() {
+
+                    @Override
+                    public String apply() {
+                        return "";
+                    }
+                }, new Aggregator<String, String, String>() {
+                    
+                    @Override
+                    public String apply(String aggKey, String value, String aggregate) {
+                        return aggregate + value;
+                    } 
+                }, new Aggregator<String, String, String>() {
+
+                    @Override
+                    public String apply(String key, String value, String aggregate) {
+                        return aggregate.replaceAll(value, "");
+                    }
+                }, "someStore")
+                .toStream()
+                .process(proc);
+
+        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir);
+
+        driver.process(input, "11", "A");
+        driver.process(input, "12", "B");
+        driver.process(input, "11", null);
+        driver.process(input, "12", "C");
+
+        assertEquals(Utils.mkList(
+                 "1:1",
+                 "1:12",
+                 "1:2",
+                 "1:", "1:2"
+                 ), proc.processed);
     }
 }
