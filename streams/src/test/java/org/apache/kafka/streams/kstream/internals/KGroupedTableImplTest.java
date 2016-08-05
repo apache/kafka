@@ -72,7 +72,7 @@ public class KGroupedTableImplTest {
         driver.process(input, "C", "yellow");
         driver.process(input, "D", "green");
 
-        final List<String> expected = Arrays.asList("green:1", "green:2", "blue:1", "green:1", "yellow:1", "green:2");
+        final List<String> expected = Arrays.asList("green:1", "green:2", "green:1", "blue:1", "yellow:1", "green:2");
         final List<String> actual = processorSupplier.processed;
         assertEquals(expected, actual);
     }

@@ -34,6 +34,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+
 import java.io.File;
 import java.io.IOException;
 
@@ -74,8 +75,8 @@ public class KTableAggregateTest {
                 stringSerde,
                 "topic1-Canonized");
 
-        MockProcessorSupplier<String, String> proc2 = new MockProcessorSupplier<>();
-        table2.toStream().process(proc2);
+        MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
+        table2.toStream().process(proc);
 
         driver = new KStreamTestDriver(builder, stateDir);
 
@@ -91,12 +92,12 @@ public class KTableAggregateTest {
         assertEquals(Utils.mkList(
                 "A:0+1",
                 "B:0+2",
-                "A:0+1+3", "A:0+1+3-1",
-                "B:0+2+4", "B:0+2+4-2",
+                "A:0+1-1", "A:0+1-1+3",
+                "B:0+2-2", "B:0+2-2+4",
                 "C:0+5",
                 "D:0+6",
-                "B:0+2+4-2+7", "B:0+2+4-2+7-4",
-                "C:0+5+8", "C:0+5+8-5"), proc2.processed);
+                "B:0+2-2+4-4", "B:0+2-2+4-4+7",
+                "C:0+5-5", "C:0+5-5+8"), proc.processed);
     }
 
     @Test
@@ -109,11 +110,11 @@ public class KTableAggregateTest {
             @Override
                 public KeyValue<String, String> apply(String key, String value) {
                     if (key.equals("null")) {
-                        return KeyValue.pair(null, value + "s");
+                        return KeyValue.pair(null, value);
                     } else if (key.equals("NULL")) {
                         return null;
                     } else {
-                        return KeyValue.pair(value, value + "s");
+                        return KeyValue.pair(value, value);
                     }
                 }
             },
@@ -126,11 +127,13 @@ public class KTableAggregateTest {
                 stringSerde,
                 "topic1-Canonized");
 
-        MockProcessorSupplier<String, String> proc2 = new MockProcessorSupplier<>();
-        table2.toStream().process(proc2);
+        MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
+        table2.toStream().process(proc);
 
         driver = new KStreamTestDriver(builder, stateDir);
 
+        driver.process(topic1, "A", "1");
+        driver.process(topic1, "A", null);
         driver.process(topic1, "A", "1");
         driver.process(topic1, "B", "2");
         driver.process(topic1, "null", "3");
@@ -139,11 +142,14 @@ public class KTableAggregateTest {
         driver.process(topic1, "B", "7");
 
         assertEquals(Utils.mkList(
-                "1:0+1s",
-                "2:0+2s",
-                "4:0+4s",
-                "2:0+2s-2s",
-                "7:0+7s",
-                "4:0+4s-4s"), proc2.processed);
+                "1:0+1",
+                "1:0+1-1",
+                "1:0+1-1+1",
+                "2:0+2",
+                // noop
+                "2:0+2-2", "4:0+4",
+                // noop
+                "4:0+4-4", "7:0+7"
+                ), proc.processed);
     }
 }
