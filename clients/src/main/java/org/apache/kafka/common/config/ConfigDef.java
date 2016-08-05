@@ -872,6 +872,162 @@ public class ConfigDef {
         }
     }
 
+    public Builder define() {
+        return new Builder(this);
+    }
+
+
+    public class Builder {
+        final ConfigDef configDef;
+
+        public Builder(ConfigDef configDef) {
+            this.configDef = configDef;
+        }
+
+        String name;
+        ConfigDef.Type type;
+        Object defaultValue = NO_DEFAULT_VALUE;
+        ConfigDef.Validator validator;
+        ConfigDef.Importance importance;
+        String documentation;
+        String group;
+        int orderInGroup = -1;
+        ConfigDef.Width width = Width.NONE;
+        String displayName;
+        List<String> dependents = new ArrayList<>();
+        ConfigDef.Recommender recommender;
+
+        public String name() {
+            return this.name;
+        }
+
+        public Builder name(String name) {
+            this.name = name;
+            return this;
+        }
+
+        public ConfigDef.Type type() {
+            return this.type;
+        }
+
+        public Builder type(ConfigDef.Type type) {
+            this.type = type;
+            return this;
+        }
+
+        public Object defaultValue() {
+            return this.defaultValue;
+        }
+
+        public Builder defaultValue(Object defaultValue) {
+            this.defaultValue = defaultValue;
+            return this;
+        }
+
+        public ConfigDef.Validator validator() {
+            return this.validator;
+        }
+
+        public Builder validator(ConfigDef.Validator validator) {
+            this.validator = validator;
+            return this;
+        }
+
+        public ConfigDef.Importance importance() {
+            return this.importance;
+        }
+
+        public Builder importance(ConfigDef.Importance importance) {
+            this.importance = importance;
+            return this;
+        }
+
+        public String documentation() {
+            return this.documentation;
+        }
+
+        public Builder documentation(String documentation) {
+            this.documentation = documentation;
+            return this;
+        }
+
+        public String group() {
+            return this.group;
+        }
+
+        public Builder group(String group) {
+            this.group = group;
+            return this;
+        }
+
+        public int orderInGroup() {
+            return this.orderInGroup;
+        }
+
+        public Builder orderInGroup(int orderInGroup) {
+            this.orderInGroup = orderInGroup;
+            return this;
+        }
+
+        public ConfigDef.Width width() {
+            return this.width;
+        }
+
+        public Builder width(ConfigDef.Width width) {
+            this.width = width;
+            return this;
+        }
+
+        public String displayName() {
+            return this.displayName;
+        }
+
+        public Builder displayName(String displayName) {
+            this.displayName = displayName;
+            return this;
+        }
+
+        public List<String> dependents() {
+            return this.dependents;
+        }
+
+        public Builder dependents(List<String> dependents) {
+            this.dependents = dependents;
+            return this;
+        }
+
+        public Builder dependents(String... dependents) {
+            return dependents(Arrays.asList(dependents));
+        }
+
+        public ConfigDef.Recommender recommender() {
+            return this.recommender;
+        }
+
+        public Builder recommender(ConfigDef.Recommender recommender) {
+            this.recommender = recommender;
+            return this;
+        }
+
+
+        public ConfigDef build() {
+            return this.configDef.define(
+                name,
+                type,
+                defaultValue,
+                validator,
+                importance,
+                documentation,
+                group,
+                orderInGroup,
+                width,
+                displayName,
+                dependents,
+                recommender
+            );
+        }
+    }
+
     public String toHtmlTable() {
         List<ConfigKey> configs = sortedConfigs();
         StringBuilder b = new StringBuilder();

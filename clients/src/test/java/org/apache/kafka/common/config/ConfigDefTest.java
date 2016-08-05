@@ -363,4 +363,48 @@ public class ConfigDefTest {
             }
         }
     }
+
+    @Test
+    public void builder() {
+        ConfigDef expected = new ConfigDef().define("a", Type.INT, 5, Range.between(0, 14), Importance.HIGH, "docs")
+            .define("b", Type.LONG, Importance.HIGH, "docs")
+            .define("c", Type.STRING, "hello", Importance.HIGH, "docs")
+            .define("d", Type.LIST, Importance.HIGH, "docs")
+            .define("e", Type.DOUBLE, Importance.HIGH, "docs")
+            .define("f", Type.CLASS, Importance.HIGH, "docs")
+            .define("g", Type.BOOLEAN, Importance.HIGH, "docs")
+            .define("h", Type.BOOLEAN, Importance.HIGH, "docs")
+            .define("i", Type.BOOLEAN, Importance.HIGH, "docs")
+            .define("j", Type.PASSWORD, Importance.HIGH, "docs");
+        ConfigDef actual = new ConfigDef()
+            .define().name("a").type(Type.INT).defaultValue(5).validator(Range.between(0, 14)).importance(Importance.HIGH).documentation("docs").build()
+            .define().name("b").type(Type.LONG).importance(Importance.HIGH).documentation("docs").build()
+            .define().name("c").type(Type.STRING).defaultValue("hello").importance(Importance.HIGH).documentation("docs").build()
+            .define().name("d").type(Type.LIST).importance(Importance.HIGH).documentation("docs").build()
+            .define().name("e").type(Type.DOUBLE).importance(Importance.HIGH).documentation("docs").build()
+            .define().name("f").type(Type.CLASS).importance(Importance.HIGH).documentation("docs").build()
+            .define().name("g").type(Type.BOOLEAN).importance(Importance.HIGH).documentation("docs").build()
+            .define().name("h").type(Type.BOOLEAN).importance(Importance.HIGH).documentation("docs").build()
+            .define().name("i").type(Type.BOOLEAN).importance(Importance.HIGH).documentation("docs").build()
+            .define().name("j").type(Type.PASSWORD).importance(Importance.HIGH).documentation("docs").build();
+
+        assertEquals(expected.configKeys().keySet(), actual.configKeys().keySet());
+
+        for (String key:expected.configKeys().keySet()) {
+            ConfigDef.ConfigKey expectedConfigKey = expected.configKeys().get(key);
+            ConfigDef.ConfigKey actualConfigKey = actual.configKeys().get(key);
+
+            assertEquals(expectedConfigKey.defaultValue, actualConfigKey.defaultValue);
+            assertEquals(expectedConfigKey.dependents, actualConfigKey.dependents);
+            assertEquals(expectedConfigKey.documentation, actualConfigKey.documentation);
+            assertEquals(expectedConfigKey.group, actualConfigKey.group);
+            assertEquals(expectedConfigKey.name, actualConfigKey.name);
+            assertEquals(expectedConfigKey.importance, actualConfigKey.importance);
+            assertEquals(expectedConfigKey.orderInGroup, actualConfigKey.orderInGroup);
+            assertEquals(expectedConfigKey.type, actualConfigKey.type);
+            assertEquals(expectedConfigKey.width, actualConfigKey.width);
+        }
+
+
+    }
 }
