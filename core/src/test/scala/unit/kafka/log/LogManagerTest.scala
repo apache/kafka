@@ -158,6 +158,27 @@ class LogManagerTest {
     log.append(TestUtils.singleMessageSet("test".getBytes()))
   }
 
+  @Test
+  def testDoesntCleanLogsWithCompactDeletePolicy() {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.CompactDelete)
+    val log = logManager.createLog(TopicAndPartition(name, 0), LogConfig.fromProps(logConfig.originals, logProps))
+    var offset = 0L
+    for(i <- 0 until 200) {
+      var set = TestUtils.singleMessageSet("test".getBytes(), key="test".getBytes())
+      val info = log.append(set)
+      offset = info.lastOffset
+    }
+
+    val numSegments = log.numberOfSegments
+    assertTrue("There should be more than one segment now.", log.numberOfSegments > 1)
+
+    log.logSegments.foreach(_.log.file.setLastModified(time.milliseconds))
+
+    time.sleep(maxLogAgeMs + 1)
+    assertEquals("number of segments shouldn't have changed", numSegments, log.numberOfSegments)
+  }
+
   /**
    * Test that flush is invoked by the background scheduler thread.
    */

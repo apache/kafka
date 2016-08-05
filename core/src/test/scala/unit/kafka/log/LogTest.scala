@@ -35,7 +35,7 @@ class LogTest extends JUnitSuite {
 
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
-  val time = new MockTime(0)
+  val time = new MockTime()
   var config: KafkaConfig = null
   val logConfig = LogConfig()
 
@@ -326,6 +326,7 @@ class LogTest extends JUnitSuite {
       // first test a log segment starting at 0
       val logProps = new Properties()
       logProps.put(LogConfig.SegmentBytesProp, 100: java.lang.Integer)
+      logProps.put(LogConfig.RetentionMsProp, 0: java.lang.Integer)
       val log = new Log(logDir, LogConfig(logProps), recoveryPoint = 0L, time.scheduler, time = time)
       for(i <- 0 until messagesToAppend)
         log.append(TestUtils.singleMessageSet(i.toString.getBytes))
@@ -334,11 +335,11 @@ class LogTest extends JUnitSuite {
       assertEquals(currOffset, messagesToAppend)
 
       // time goes by; the log file is deleted
-      log.deleteOldSegments(_ => true)
+      log.deleteOldSegments()
 
       assertEquals("Deleting segments shouldn't have changed the logEndOffset", currOffset, log.logEndOffset)
       assertEquals("We should still have one segment left", 1, log.numberOfSegments)
-      assertEquals("Further collection shouldn't delete anything", 0, log.deleteOldSegments(_ => true))
+      assertEquals("Further collection shouldn't delete anything", 0, log.deleteOldSegments())
       assertEquals("Still no change in the logEndOffset", currOffset, log.logEndOffset)
       assertEquals("Should still be able to append and should get the logEndOffset assigned to the new append",
                    currOffset,
@@ -700,6 +701,7 @@ class LogTest extends JUnitSuite {
     logProps.put(LogConfig.SegmentIndexBytesProp, 1000: java.lang.Integer)
     logProps.put(LogConfig.IndexIntervalBytesProp, 10000: java.lang.Integer)
     logProps.put(LogConfig.FileDeleteDelayMsProp, asyncDeleteMs: java.lang.Integer)
+    logProps.put(LogConfig.RetentionMsProp, 0: java.lang.Integer)
     val config = LogConfig(logProps)
 
     val log = new Log(logDir,
@@ -715,7 +717,10 @@ class LogTest extends JUnitSuite {
     // files should be renamed
     val segments = log.logSegments.toArray
     val oldFiles = segments.map(_.log.file) ++ segments.map(_.index.file)
-    log.deleteOldSegments((s) => true)
+    // expire all segments
+    log.logSegments.foreach(_.lastModified = time.milliseconds - 1000L)
+
+    log.deleteOldSegments()
 
     assertEquals("Only one segment should remain.", 1, log.numberOfSegments)
     assertTrue("All log and index files should end in .deleted", segments.forall(_.log.file.getName.endsWith(Log.DeletedFileSuffix)) &&
@@ -739,6 +744,7 @@ class LogTest extends JUnitSuite {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, set.sizeInBytes * 5: java.lang.Integer)
     logProps.put(LogConfig.SegmentIndexBytesProp, 1000: java.lang.Integer)
+    logProps.put(LogConfig.RetentionMsProp, 0: java.lang.Integer)
     val config = LogConfig(logProps)
     var log = new Log(logDir,
                       config,
@@ -750,7 +756,7 @@ class LogTest extends JUnitSuite {
     for(i <- 0 until 100)
       log.append(set)
 
-    log.deleteOldSegments((s) => true)
+    log.deleteOldSegments()
     log.close()
 
     log = new Log(logDir,
@@ -936,6 +942,7 @@ class LogTest extends JUnitSuite {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, set.sizeInBytes * 5: java.lang.Integer)
     logProps.put(LogConfig.SegmentIndexBytesProp, 1000: java.lang.Integer)
+    logProps.put(LogConfig.RetentionMsProp, 0: java.lang.Integer)
     val config = LogConfig(logProps)
     val log = new Log(logDir,
       config,
@@ -947,7 +954,7 @@ class LogTest extends JUnitSuite {
     for (i <- 0 until 100)
       log.append(set)
 
-    log.deleteOldSegments(_ => true)
+    log.deleteOldSegments()
     assertEquals("The deleted segments should be gone.", 1, log.numberOfSegments)
 
     // append some messages to create some segments
@@ -956,6 +963,176 @@ class LogTest extends JUnitSuite {
 
     log.delete()
     assertEquals("The number of segments should be 0", 0, log.numberOfSegments)
-    assertEquals("The number of deleted segments shoud be zero.", 0, log.deleteOldSegments(_ => true))
+    assertEquals("The number of deleted segments shoud be zero.", 0, log.deleteOldSegments())
+  }
+
+  @Test
+  def shouldHaveSizeBasedSegmentsReadyToBeDeleted(): Unit = {
+    val set = TestUtils.singleMessageSet("test".getBytes)
+    val (_, log: Log) = createLog(set.sizeInBytes, retentionBytes = set.sizeInBytes * 10)
+
+    // append some messages to create some segments
+    for (i <- 0 until 15)
+      log.append(set)
+
+    assertTrue("There should be segments ready to be deleted", log.shouldDeleteSegments)
+  }
+
+  @Test
+  def shouldDeleteSizeBasedSegments(): Unit = {
+    val set = TestUtils.singleMessageSet("test".getBytes)
+    val (_, log: Log) = createLog(set.sizeInBytes, retentionBytes = set.sizeInBytes * 10)
+
+    // append some messages to create some segments
+    for (i <- 0 until 15)
+      log.append(set)
+
+    log.deleteOldSegments
+    assertEquals("should have 2 segments", 2,log.numberOfSegments)
+  }
+
+  @Test
+  def shouldNotDeleteSizeBasedSegmentsWhenUnderRetentionSize(): Unit = {
+    val set = TestUtils.singleMessageSet("test".getBytes)
+    val (_, log: Log) = createLog(set.sizeInBytes, retentionBytes = set.sizeInBytes * 15)
+
+    // append some messages to create some segments
+    for (i <- 0 until 15)
+      log.append(set)
+
+    log.deleteOldSegments
+    assertEquals("should have 3 segments", 3,log.numberOfSegments)
+  }
+
+  @Test
+  def shouldNotHaveSizeBasedSegmentsReadyToBeDeleted(): Unit = {
+    val set = TestUtils.singleMessageSet("test".getBytes)
+    val (_, log: Log) = createLog(set.sizeInBytes, retentionBytes = set.sizeInBytes * 10)
+
+    // append some messages to create some segments
+    for (i <- 0 until 8)
+      log.append(set)
+
+    assertFalse("There should be no segments ready to be deleted", log.shouldDeleteSegments)
+  }
+
+
+  @Test
+  def shouldHaveTimeBasedSegmentsReadyToBeDeleted(): Unit = {
+    val set = TestUtils.singleMessageSet("test".getBytes)
+    val (myTime: MockTime, log: Log) = createLog(set.sizeInBytes, retentionMs = 10)
+
+    // append some messages to create some segments
+    for (i <- 0 until 15)
+      log.append(set)
+
+    log.logSegments.head.lastModified = myTime.milliseconds - 20L
+    assertTrue("There should be segments ready to be deleted", log.shouldDeleteSegments)
+  }
+
+  @Test
+  def shouldNotHaveTimeBasedSegmentsReadyToBeDeleted(): Unit = {
+    val set = TestUtils.singleMessageSet("test".getBytes)
+    val (_, log: Log) = createLog(set.sizeInBytes, retentionMs = 10000)
+
+    // append some messages to create some segments
+    for (i <- 0 until 8)
+      log.append(set)
+
+    assertFalse("There should be no segments ready to be deleted", log.shouldDeleteSegments)
+  }
+
+  @Test
+  def shouldDeleteTimeBasedSegmentsReadyToBeDeleted(): Unit = {
+    val set = TestUtils.singleMessageSet("test".getBytes)
+    val (myTime: MockTime, log: Log) = createLog(set.sizeInBytes, retentionMs = 10000)
+
+    // append some messages to create some segments
+    for (i <- 0 until 15)
+      log.append(set)
+
+    log.logSegments.head.lastModified = myTime.milliseconds - 20000
+
+    log.deleteOldSegments
+    assertEquals("There should be 2 segments remaining", 2, log.numberOfSegments)
+  }
+
+  @Test
+  def shouldNotDeleteTimeBasedSegmentsWhenNoneReadyToBeDeleted(): Unit = {
+    val set = TestUtils.singleMessageSet("test".getBytes)
+    val (_, log: Log) = createLog(set.sizeInBytes, retentionMs = 10000)
+
+    // append some messages to create some segments
+    for (i <- 0 until 15)
+      log.append(set)
+
+    log.deleteOldSegments
+    assertEquals("There should be 3 segments remaining", 3, log.numberOfSegments)
+  }
+
+  @Test
+  def shouldNotHaveReadySegmentsWhenCleanupPolicyDoesntIncludeDelete(): Unit = {
+    val set = TestUtils.singleMessageSet("test".getBytes, key = "test".getBytes)
+    val (_, log: Log) = createLog(set.sizeInBytes, retentionMs = 10000, cleanupPolicy = "compact")
+
+    // append some messages to create some segments
+    for (i <- 0 until 15)
+      log.append(set)
+
+    assertFalse("cleanup.policy is compact so whe shouldn't have any segments ready for deletion"
+      ,log.shouldDeleteSegments)
+  }
+
+  @Test
+  def shouldNotDeleteSegmentsWhenPolicyDoesNotIncludeDelete(): Unit = {
+    val set = TestUtils.singleMessageSet("test".getBytes, key = "test".getBytes())
+    val (myTime: MockTime, log: Log) = createLog(set.sizeInBytes,
+      retentionMs = 10000,
+      cleanupPolicy = "compact")
+
+    // append some messages to create some segments
+    for (i <- 0 until 15)
+      log.append(set)
+
+    // mark oldest segment as older the retention.ms
+    log.logSegments.head.lastModified = myTime.milliseconds - 20000
+
+    val segments = log.numberOfSegments
+    log.deleteOldSegments
+    assertEquals("There should be 3 segments remaining", segments, log.numberOfSegments)
+  }
+
+  @Test
+  def shouldDeleteSegmentsReadyToBeDeletedWhenCleanupPolicyIsCompactAndDelete(): Unit = {
+    val set = TestUtils.singleMessageSet("test".getBytes, key = "test".getBytes)
+    val (myTime: MockTime, log: Log) = createLog(set.sizeInBytes,
+      retentionMs = 10000,
+      cleanupPolicy = "compact_and_delete")
+
+    // append some messages to create some segments
+    for (i <- 0 until 15)
+      log.append(set)
+
+    log.logSegments.head.lastModified = myTime.milliseconds - 20000
+
+    log.deleteOldSegments
+    assertEquals("There should be 2 segments remaining", 2, log.numberOfSegments)
+  }
+
+  def createLog(messageSizeInBytes: Int, retentionMs: Int = -1,
+                retentionBytes: Int = -1, cleanupPolicy: String = "delete"): (MockTime, Log) = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, messageSizeInBytes * 5: Integer)
+    logProps.put(LogConfig.RetentionMsProp, retentionMs: Integer)
+    logProps.put(LogConfig.RetentionBytesProp, retentionBytes: Integer)
+    logProps.put(LogConfig.CleanupPolicyProp, cleanupPolicy)
+    val config = LogConfig(logProps)
+    val myTime = new MockTime()
+    val log = new Log(logDir,
+      config,
+      recoveryPoint = 0L,
+      myTime.scheduler,
+      myTime)
+    (myTime, log)
   }
 }

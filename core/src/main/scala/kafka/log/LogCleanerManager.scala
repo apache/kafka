@@ -42,7 +42,7 @@ private[log] case object LogCleaningPaused extends LogCleaningState
  *  requested to be resumed.
  */
 private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[TopicAndPartition, Log]) extends Logging with KafkaMetricsGroup {
-  
+
   override val loggerName = classOf[LogCleaner].getName
 
   // package-private for testing
@@ -75,11 +75,11 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
     * every time off the full set of logs to allow logs to be dynamically added to the pool of logs
     * the log manager maintains.
     */
-  def grabFilthiestLog(): Option[LogToClean] = {
+  def grabFilthiestCompactedLog(): Option[LogToClean] = {
     inLock(lock) {
       val lastClean = allCleanerCheckpoints()
       val dirtyLogs = logs.filter {
-        case (topicAndPartition, log) => log.config.compact  // skip any logs marked for delete rather than dedupe
+        case (topicAndPartition, log) => log.config.compact  // match logs that are marked as compacted
       }.filterNot {
         case (topicAndPartition, log) => inProgress.contains(topicAndPartition) // skip any logs already in-progress
       }.map {
@@ -90,7 +90,9 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
           val firstDirtyOffset = {
             val offset = lastClean.getOrElse(topicAndPartition, logStartOffset)
             if (offset < logStartOffset) {
-              warn("Resetting first dirty offset to log start offset %d since the checkpointed offset %d is invalid."
+              // don't bother with the warning if compact_and_delete is enabled.
+              if (!isCompactAndDelete(log))
+                warn("Resetting first dirty offset to log start offset %d since the checkpointed offset %d is invalid."
                     .format(logStartOffset, offset))
               logStartOffset
             } else {
@@ -111,6 +113,29 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
         Some(filthiest)
       }
     }
+  }
+
+  /**
+    * Find any logs that are compact_and_delete that have segments
+    * ready for deletion
+    */
+  def logsReadyToBeTruncated(): Iterable[(TopicAndPartition, Log)] = {
+    inLock(lock) {
+      val toClean = logs.filterNot {
+        case (topicAndPartition, log) => inProgress.contains(topicAndPartition)
+      }.filter {
+        case (topicAndPartition, log) => isCompactAndDelete(log)
+      }.filter {
+        case (topicAndPartition, log) => log.shouldDeleteSegments
+      }
+      toClean.foreach{x => inProgress.put(x._1, LogCleaningInProgress)}
+      toClean
+    }
+
+  }
+
+  def isCompactAndDelete(log: Log): Boolean = {
+    log.config.compact && log.config.delete
   }
 
   /**
@@ -237,6 +262,12 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
         case s =>
           throw new IllegalStateException("In-progress partition %s cannot be in %s state.".format(topicAndPartition, s))
       }
+    }
+  }
+
+  def doneDeleting(topicAndPartition: TopicAndPartition): Unit = {
+    inLock(lock) {
+      inProgress.remove(topicAndPartition)
     }
   }
 }

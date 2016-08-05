@@ -562,7 +562,7 @@ class Log(val dir: File,
    * @param predicate A function that takes in a single log segment and returns true iff it is deletable
    * @return The number of segments deleted
    */
-  def deleteOldSegments(predicate: LogSegment => Boolean): Int = {
+  private def deleteOldSegments(predicate: LogSegment => Boolean): Int = {
     lock synchronized {
       //find any segments that match the user-supplied predicate UNLESS it is the final segment
       //and it is empty (since we would just end up re-creating it)
@@ -580,6 +580,64 @@ class Log(val dir: File,
       }
       numToDelete
     }
+  }
+
+  private class SizeBasedRetentionCheck(var diff: Long) {
+    def shouldDelete(segment: LogSegment) = {
+      if(diff - segment.size >= 0) {
+        diff -= segment.size
+        true
+      } else {
+        false
+      }
+    }
+  }
+
+  /**
+    * Delete any log segments that have either expired due to time based retention
+    * or because the log size is > retentionSize
+    */
+  def deleteOldSegments(): Int = {
+    if (!config.delete) return 0
+
+    var deleted = 0
+    if (config.retentionMs >= 0) {
+      val startMs = time.milliseconds
+      deleted += deleteOldSegments(startMs - _.lastModified > config.retentionMs)
+    }
+    if (config.retentionSize >= 0 && size > config.retentionSize) {
+      deleted += deleteOldSegments(new SizeBasedRetentionCheck(size - config.retentionSize).shouldDelete)
+    }
+    deleted
+  }
+
+  private def hasOldSegments(predicate: LogSegment => Boolean): Boolean = {
+    lock synchronized {
+      val lastEntry = segments.lastEntry
+      if (lastEntry == null) false
+      else logSegments.exists(s => predicate(s) && (s.baseOffset != lastEntry.getValue.baseOffset || s.size > 0))
+    }
+  }
+
+
+
+  def shouldDeleteSegments: Boolean = {
+    if (!config.delete) return false
+
+    def retentionMsExpired():Boolean = {
+      if(config.retentionMs < 0)
+        return false
+
+      val startMs = time.milliseconds
+      hasOldSegments(startMs - _.lastModified > config.retentionMs)
+    }
+
+    def retentionSizeBreached(): Boolean = {
+      if(config.retentionSize < 0 || size < config.retentionSize)
+        return false
+      hasOldSegments(new SizeBasedRetentionCheck(size - config.retentionSize).shouldDelete)
+    }
+    retentionMsExpired() || retentionSizeBreached()
   }
 
   /**

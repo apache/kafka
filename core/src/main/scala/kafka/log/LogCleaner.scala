@@ -226,10 +226,9 @@ class LogCleaner(val config: CleanerConfig,
      * Clean a log if there is a dirty log available, otherwise sleep for a bit
      */
     private def cleanOrSleep() {
-      cleanerManager.grabFilthiestLog() match {
+      val cleaned = cleanerManager.grabFilthiestCompactedLog() match {
         case None =>
-          // there are no cleanable logs, sleep a while
-          backOffWaitLatch.await(config.backOffMs, TimeUnit.MILLISECONDS)
+          false
         case Some(cleanable) =>
           // there's a log, clean it
           var endOffset = cleanable.firstDirtyOffset
@@ -241,7 +240,22 @@ class LogCleaner(val config: CleanerConfig,
           } finally {
             cleanerManager.doneCleaning(cleanable.topicPartition, cleanable.log.dir.getParentFile, endOffset)
           }
+          true
       }
+      val deleted = cleanerManager.logsReadyToBeTruncated() match {
+        case Nil => false
+        case ready =>
+          ready.foreach {log =>
+            try {
+              log._2.deleteOldSegments()
+            } finally {
+              cleanerManager.doneDeleting(log._1)
+            }
+          }
+          true
+      }
+      if (!cleaned && !deleted)
+        backOffWaitLatch.await(config.backOffMs, TimeUnit.MILLISECONDS)
     }
     
     /**
