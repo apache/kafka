@@ -66,8 +66,9 @@ class ConsoleConsumerTest(Test):
 
         # Verify that log output is happening
         wait_until(lambda: file_exists(node, ConsoleConsumer.LOG_FILE), timeout_sec=10,
-                   err_msg="Timed out waiting for logging to start.")
-        assert line_count(node, ConsoleConsumer.LOG_FILE) > 0
+                   err_msg="Timed out waiting for consumer log file to exist.")
+        wait_until(lambda: line_count(node, ConsoleConsumer.LOG_FILE) > 0, timeout_sec=1,
+                   backoff_sec=.25, err_msg="Timed out waiting for log entries to start.")
 
         # Verify no consumed messages
         assert line_count(node, ConsoleConsumer.STDOUT_CAPTURE) == 0
