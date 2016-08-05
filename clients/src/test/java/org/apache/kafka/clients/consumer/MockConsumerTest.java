@@ -22,6 +22,7 @@ import org.apache.kafka.common.record.TimestampType;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 
@@ -34,7 +35,7 @@ public class MockConsumerTest {
 
     @Test
     public void testSimpleMock() {
-        consumer.subscribe(Arrays.asList("test"), new NoOpConsumerRebalanceListener());
+        consumer.subscribe(Collections.singletonList("test"), new NoOpConsumerRebalanceListener());
         assertEquals(0, consumer.poll(1000).count());
         consumer.rebalance(Arrays.asList(new TopicPartition("test", 0), new TopicPartition("test", 1)));
         // Mock consumers need to seek manually since they cannot automatically reset offsets

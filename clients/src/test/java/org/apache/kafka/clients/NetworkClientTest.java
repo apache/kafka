@@ -56,7 +56,7 @@ public class NetworkClientTest {
     private NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE, reconnectBackoffMsTest, 
             64 * 1024, 64 * 1024, requestTimeoutMs, time);
     
-    private NetworkClient clientWithStaticNodes = new NetworkClient(selector, new ManualMetadataUpdater(Arrays.asList(node)),
+    private NetworkClient clientWithStaticNodes = new NetworkClient(selector, new ManualMetadataUpdater(Collections.singletonList(node)),
             "mock-static", Integer.MAX_VALUE, 0, 64 * 1024, 64 * 1024, requestTimeoutMs, time);
 
     @Before
@@ -68,7 +68,7 @@ public class NetworkClientTest {
     public void testSendToUnreadyNode() {
         RequestSend send = new RequestSend("5",
                                            client.nextRequestHeader(ApiKeys.METADATA),
-                                           new MetadataRequest(Arrays.asList("test")).toStruct());
+                                           new MetadataRequest(Collections.singletonList("test")).toStruct());
         ClientRequest request = new ClientRequest(time.milliseconds(), false, send, null);
         client.send(request, time.milliseconds());
         client.poll(1, time.milliseconds());

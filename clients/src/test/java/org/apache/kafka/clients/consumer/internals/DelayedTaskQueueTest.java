@@ -46,7 +46,7 @@ public class DelayedTaskQueueTest {
         assertEquals(5, scheduler.nextTimeout(5));
 
         scheduler.poll(10);
-        assertEquals(Arrays.asList(task2), executed);
+        assertEquals(Collections.singletonList(task2), executed);
         assertEquals(10, scheduler.nextTimeout(10));
 
         scheduler.poll(20);

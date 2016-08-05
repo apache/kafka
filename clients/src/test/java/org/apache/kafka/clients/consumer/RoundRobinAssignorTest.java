@@ -48,7 +48,7 @@ public class RoundRobinAssignorTest {
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(consumerId, Arrays.asList(topic)));
+                Collections.singletonMap(consumerId, Collections.singletonList(topic)));
 
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
         assertTrue(assignment.get(consumerId).isEmpty());
@@ -63,7 +63,7 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(topic, 3);
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(consumerId, Arrays.asList(topic)));
+                Collections.singletonMap(consumerId, Collections.singletonList(topic)));
         assertEquals(Arrays.asList(
                 new TopicPartition(topic, 0),
                 new TopicPartition(topic, 1),
@@ -81,7 +81,7 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(otherTopic, 3);
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(consumerId, Arrays.asList(topic)));
+                Collections.singletonMap(consumerId, Collections.singletonList(topic)));
         assertEquals(Arrays.asList(
                 new TopicPartition(topic, 0),
                 new TopicPartition(topic, 1),
@@ -116,11 +116,11 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(topic, 1);
 
         Map<String, List<String>> consumers = new HashMap<>();
-        consumers.put(consumer1, Arrays.asList(topic));
-        consumers.put(consumer2, Arrays.asList(topic));
+        consumers.put(consumer1, Collections.singletonList(topic));
+        consumers.put(consumer2, Collections.singletonList(topic));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
-        assertEquals(Arrays.asList(new TopicPartition(topic, 0)), assignment.get(consumer1));
+        assertEquals(Collections.singletonList(new TopicPartition(topic, 0)), assignment.get(consumer1));
         assertEquals(Collections.<TopicPartition>emptyList(), assignment.get(consumer2));
     }
 
@@ -134,12 +134,12 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(topic, 2);
 
         Map<String, List<String>> consumers = new HashMap<>();
-        consumers.put(consumer1, Arrays.asList(topic));
-        consumers.put(consumer2, Arrays.asList(topic));
+        consumers.put(consumer1, Collections.singletonList(topic));
+        consumers.put(consumer2, Collections.singletonList(topic));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
-        assertEquals(Arrays.asList(new TopicPartition(topic, 0)), assignment.get(consumer1));
-        assertEquals(Arrays.asList(new TopicPartition(topic, 1)), assignment.get(consumer2));
+        assertEquals(Collections.singletonList(new TopicPartition(topic, 0)), assignment.get(consumer1));
+        assertEquals(Collections.singletonList(new TopicPartition(topic, 1)), assignment.get(consumer2));
     }
 
     @Test
@@ -155,18 +155,18 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(topic2, 2);
 
         Map<String, List<String>> consumers = new HashMap<>();
-        consumers.put(consumer1, Arrays.asList(topic1));
+        consumers.put(consumer1, Collections.singletonList(topic1));
         consumers.put(consumer2, Arrays.asList(topic1, topic2));
-        consumers.put(consumer3, Arrays.asList(topic1));
+        consumers.put(consumer3, Collections.singletonList(topic1));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
-        assertEquals(Arrays.asList(
+        assertEquals(Collections.singletonList(
                 new TopicPartition(topic1, 0)), assignment.get(consumer1));
         assertEquals(Arrays.asList(
                 new TopicPartition(topic1, 1),
                 new TopicPartition(topic2, 0),
                 new TopicPartition(topic2, 1)), assignment.get(consumer2));
-        assertEquals(Arrays.asList(
+        assertEquals(Collections.singletonList(
                 new TopicPartition(topic1, 2)), assignment.get(consumer3));
     }
 
