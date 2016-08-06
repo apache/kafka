@@ -176,15 +176,7 @@ object LogConfig {
     "compaction</a> on the topic."
   val UncleanLeaderElectionEnableDoc = "Indicates whether to enable replicas not in the ISR set to be elected as" +
     " leader as a last resort, even though doing so may result in data loss"
-  val MinInSyncReplicasDoc = "When a producer sets acks to \"all\" (or \"-1\"), " +
-    "min.insync.replicas specifies the minimum number of replicas that must acknowledge " +
-    "a write for the write to be considered successful. If this minimum cannot be met, " +
-    "then the producer will raise an exception (either NotEnoughReplicas or " +
-    "NotEnoughReplicasAfterAppend).<br>When used together, min.insync.replicas and acks " +
-    "allow you to enforce greater durability guarantees. A typical scenario would be to " +
-    "create a topic with a replication factor of 3, set min.insync.replicas to 2, and " +
-    "produce with acks of \"all\". This will ensure that the producer raises an exception " +
-    "if a majority of replicas do not receive a write."
+  val MinInSyncReplicasDoc = KafkaConfig.MinInSyncReplicasDoc
   val CompressionTypeDoc = "Specify the final compression type for a given topic. This configuration accepts the " +
     "standard compression codecs ('gzip', 'snappy', lz4). It additionally accepts 'uncompressed' which is equivalent to " +
     "no compression; and 'producer' which means retain the original compression codec set by the producer."
@@ -224,8 +216,8 @@ object LogConfig {
 
     override def getConfigValue(key: ConfigKey, headerName: String): String = {
       headerName match {
-      case "Server Default Property" => return serverDefaultConfigNames.get(key.name).get
-      case _ => return super.getConfigValue(key, headerName)
+        case "Server Default Property" => serverDefaultConfigNames.get(key.name).get
+        case _ => super.getConfigValue(key, headerName)
       }
     }
   }
