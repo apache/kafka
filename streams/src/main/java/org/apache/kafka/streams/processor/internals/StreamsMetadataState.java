@@ -187,12 +187,9 @@ public class StreamsMetadataState {
     }
 
     private boolean hasPartitionsForAnyTopics(final Set<String> topicNames, final Set<TopicPartition> partitionForHost) {
-        for (String topic : topicNames) {
-            for (PartitionInfo partitionInfo : clusterMetadata.partitionsForTopic(topic)) {
-                final TopicPartition topicPartition = new TopicPartition(partitionInfo.topic(), partitionInfo.partition());
-                if (partitionForHost.contains(topicPartition)) {
-                    return true;
-                }
+        for (TopicPartition topicPartition : partitionForHost) {
+            if (topicNames.contains(topicPartition.topic())) {
+                return true;
             }
         }
         return false;
@@ -210,7 +207,7 @@ public class StreamsMetadataState {
             final Set<String> storesOnHost = new HashSet<>();
             for (Map.Entry<String, Set<String>> storeTopicEntry : stores.entrySet()) {
                 final Set<String> topicsForStore = storeTopicEntry.getValue();
-                if (hasPartitionsForAnyTopics(topicsForStore,   partitionsForHost)) {
+                if (hasPartitionsForAnyTopics(topicsForStore, partitionsForHost)) {
                     storesOnHost.add(storeTopicEntry.getKey());
                 }
             }
