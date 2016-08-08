@@ -120,7 +120,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     @property
     def security_config(self):
         return SecurityConfig(self.context, self.security_protocol, self.interbroker_security_protocol,
-                              zk_sasl = self.zk.zk_sasl,
+                              zk_sasl=self.zk.zk_sasl,
                               client_sasl_mechanism=self.client_sasl_mechanism, interbroker_sasl_mechanism=self.interbroker_sasl_mechanism)
 
     def open_port(self, protocol):

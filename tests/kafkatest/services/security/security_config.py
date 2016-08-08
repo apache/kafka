@@ -100,6 +100,9 @@ class SecurityConfig(TemplateRenderer):
     KRB5CONF_PATH = "/mnt/security/krb5.conf"
     KEYTAB_PATH = "/mnt/security/keytab"
 
+    # This is initialized only when the first instance of SecurityConfig is created
+    ssl_stores = None
+
     def __init__(self, context, security_protocol=None, interbroker_security_protocol=None,
                  client_sasl_mechanism=SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SASL_MECHANISM_GSSAPI,
                  zk_sasl=False, template_props=""):
@@ -113,6 +116,9 @@ class SecurityConfig(TemplateRenderer):
 
         self.context = context
         if not SecurityConfig.ssl_stores:
+            # This generates keystore/trustore files in a local scratch directory which gets
+            # automatically destroyed after the test is run
+            # Creating within the scratch directory allows us to run tests in parallel without fear of collision
             SecurityConfig.ssl_stores = SslStores(context.scratch_dir)
             SecurityConfig.ssl_stores.generate_ca()
             SecurityConfig.ssl_stores.generate_truststore()
