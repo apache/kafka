@@ -80,9 +80,10 @@ class SslStores(object):
 
     def runcmd(self, cmd):
         proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        proc.communicate()
+        stdout, stderr = proc.communicate()
+
         if proc.returncode != 0:
-            raise subprocess.CalledProcessError(proc.returncode, cmd)
+            raise RuntimeError("Command '%s' returned non-zero exit status %d: %s" % (cmd, proc.returncode, stderr))
 
 
 class SecurityConfig(TemplateRenderer):
