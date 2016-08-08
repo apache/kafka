@@ -17,17 +17,21 @@
 
 package kafka.utils
 
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.{TimeUnit, LinkedBlockingQueue}
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.{LinkedBlockingQueue, TimeUnit}
 
 /**
  * A blocking queue that have size limits on both number of elements and number of bytes.
  */
-class ByteBoundedBlockingQueue[E] (val queueNumMessageCapacity: Int, val queueByteCapacity: Int, sizeFunction: Option[(E) => Int])
+class ByteBoundedBlockingQueue[E] (val queueNumMessageCapacity: Int, val queueByteCapacity: Long, sizeFunction: (E) => Long)
     extends Iterable[E] {
+
+  if (sizeFunction == null)
+    throw new IllegalArgumentException("size function must be provided")
+
   private val queue = new LinkedBlockingQueue[E] (queueNumMessageCapacity)
-  private var currentByteSize = new AtomicInteger()
-  private val putLock = new Object
+  private val currentByteSize = new AtomicLong()
+  private val putLock = new Object()
 
   /**
    * Please refer to [[java.util.concurrent.BlockingQueue#offer]]
@@ -46,21 +50,19 @@ class ByteBoundedBlockingQueue[E] (val queueNumMessageCapacity: Int, val queueBy
     val startTime = SystemTime.nanoseconds
     val expireTime = startTime + unit.toNanos(timeout)
     putLock synchronized {
-      var timeoutNanos = expireTime - SystemTime.nanoseconds
-      while (currentByteSize.get() >= queueByteCapacity && timeoutNanos > 0) {
-        // ensure that timeoutNanos > 0, otherwise (per javadoc) we have to wait until the next notify
-        putLock.wait(timeoutNanos / 1000000, (timeoutNanos % 1000000).toInt)
-        timeoutNanos = expireTime - SystemTime.nanoseconds
+      var leftToWait = expireTime - SystemTime.nanoseconds
+      while (currentByteSize.get() >= queueByteCapacity && leftToWait > 0) {
+        // ensure that leftToWait > 0, otherwise (per javadoc) we have to wait until the next notify
+        putLock.wait(leftToWait / 1000000, (leftToWait % 1000000).toInt)
+        leftToWait = expireTime - SystemTime.nanoseconds
       }
       // only proceed if queue has capacity and not timeout
-      timeoutNanos = expireTime - SystemTime.nanoseconds
-      if (currentByteSize.get() < queueByteCapacity && timeoutNanos > 0) {
-        val success = queue.offer(e, timeoutNanos, TimeUnit.NANOSECONDS)
-        // only increase queue byte size if put succeeds
-        if (success)
-          currentByteSize.addAndGet(sizeFunction.get(e))
+      if (currentByteSize.get() < queueByteCapacity && leftToWait > 0) {
+        val success = queue.offer(e, leftToWait, TimeUnit.NANOSECONDS) //wait to clear numElements req.
+        // only increase queue byte size if offer succeeds
+        val sizeBytesAfter = if (success) currentByteSize.addAndGet(sizeFunction(e)) else currentByteSize.get()
         // wake up another thread in case multiple threads are waiting
-        if (currentByteSize.get() < queueByteCapacity)
+        if (sizeBytesAfter < queueByteCapacity)
           putLock.notify()
         success
       } else {
@@ -84,10 +86,10 @@ class ByteBoundedBlockingQueue[E] (val queueNumMessageCapacity: Int, val queueBy
         false
       } else {
         val success = queue.offer(e)
-        if (success)
-          currentByteSize.addAndGet(sizeFunction.get(e))
+        // only increase queue byte size if offer succeeds
+        val sizeBytesAfter = if (success) currentByteSize.addAndGet(sizeFunction(e)) else currentByteSize.get()
         // wake up another thread in case multiple threads are waiting
-        if (currentByteSize.get() < queueByteCapacity)
+        if (sizeBytesAfter < queueByteCapacity)
           putLock.notify()
         success
       }
@@ -98,22 +100,19 @@ class ByteBoundedBlockingQueue[E] (val queueNumMessageCapacity: Int, val queueBy
    * Please refer to [[java.util.concurrent.BlockingQueue#put]].
    * Put an element to the tail of the queue, block if queue is full
    * @param e The element to put into queue
-   * @return true on succeed, false on failure
    * @throws NullPointerException if element is null
    * @throws InterruptedException if interrupted during waiting
    */
-  def put(e: E): Boolean = {
+  def put(e: E): Unit = {
     if (e == null) throw new NullPointerException("Putting null element into queue.")
     putLock synchronized {
       if (currentByteSize.get() >= queueByteCapacity)
         putLock.wait()
-      val success = queue.offer(e)
-      if (success)
-        currentByteSize.addAndGet(sizeFunction.get(e))
+      queue.put(e)
+      val sizeBytesAfter = currentByteSize.addAndGet(sizeFunction(e))
       // wake up another thread in case multiple threads are waiting
-      if (currentByteSize.get() < queueByteCapacity)
+      if (sizeBytesAfter < queueByteCapacity)
         putLock.notify()
-      success
     }
   }
 
@@ -126,11 +125,7 @@ class ByteBoundedBlockingQueue[E] (val queueNumMessageCapacity: Int, val queueBy
    */
   def poll(timeout: Long, unit: TimeUnit): E = {
     val e = queue.poll(timeout, unit)
-    // only wake up waiting threads if the queue size drop under queueByteCapacity
-    if (e != null &&
-        currentByteSize.getAndAdd(-sizeFunction.get(e)) > queueByteCapacity &&
-        currentByteSize.get() < queueByteCapacity)
-      putLock.synchronized(putLock.notify())
+    itemRemoved(e)
     e
   }
 
@@ -141,11 +136,7 @@ class ByteBoundedBlockingQueue[E] (val queueNumMessageCapacity: Int, val queueBy
    */
   def poll(): E = {
     val e = queue.poll()
-    // only wake up waiting threads if the queue size drop under queueByteCapacity
-    if (e != null &&
-      currentByteSize.getAndAdd(-sizeFunction.get(e)) > queueByteCapacity &&
-      currentByteSize.get() < queueByteCapacity)
-      putLock.synchronized(putLock.notify())
+    itemRemoved(e)
     e
   }
 
@@ -156,11 +147,19 @@ class ByteBoundedBlockingQueue[E] (val queueNumMessageCapacity: Int, val queueBy
    */
   def take(): E = {
     val e = queue.take()
-    // only wake up waiting threads if the queue size drop under queueByteCapacity
-    if (currentByteSize.getAndAdd(-sizeFunction.get(e)) > queueByteCapacity &&
-        currentByteSize.get() < queueByteCapacity)
-      putLock.synchronized(putLock.notify())
+    itemRemoved(e)
     e
+  }
+
+  private def itemRemoved(item: E) : Unit = {
+    if (item != null) {
+      val elementSize = sizeFunction(item)
+      val newBytesSize = currentByteSize.addAndGet(-elementSize)
+      val oldByteSize = newBytesSize + elementSize
+      // only wake up waiting threads if the queue size drop under queueByteCapacity
+      if (oldByteSize > queueByteCapacity && newBytesSize < queueByteCapacity)
+        putLock.synchronized(putLock.notify())
+    }
   }
 
   /**
@@ -182,8 +181,7 @@ class ByteBoundedBlockingQueue[E] (val queueNumMessageCapacity: Int, val queueBy
       if (curr == null)
         throw new IllegalStateException("Iterator does not have a current element.")
       iter.remove()
-      if (currentByteSize.addAndGet(-sizeFunction.get(curr)) < queueByteCapacity)
-        putLock.synchronized(putLock.notify())
+      itemRemoved(curr)
     }
   }
 
@@ -202,7 +200,7 @@ class ByteBoundedBlockingQueue[E] (val queueNumMessageCapacity: Int, val queueBy
     // There is a potential race where after an element is put into the queue and before the size is added to
     // currentByteSize, it was taken out of the queue and the size was deducted from the currentByteSize,
     // in that case, currentByteSize would become negative, in that case, just put the queue size to be 0.
-    if (currSize > 0) currSize else 0
+    if (currSize > 0) currSize else 0L
   }
 
   /**
