@@ -83,7 +83,7 @@ class SslStores(object):
         stdout, stderr = proc.communicate()
 
         if proc.returncode != 0:
-            raise RuntimeError("Command '%s' returned non-zero exit status %d: %s" % (cmd, proc.returncode, stderr))
+            raise RuntimeError("Command '%s' returned non-zero exit status %d: %s" % (cmd, proc.returncode, stdout))
 
 
 class SecurityConfig(TemplateRenderer):
