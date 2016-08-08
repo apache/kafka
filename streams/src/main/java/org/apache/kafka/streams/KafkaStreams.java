@@ -33,10 +33,6 @@ import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.state.StreamsMetadata;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.Collection;
 import org.apache.kafka.streams.state.internals.QueryableStoreProvider;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.internals.StateStoreProvider;
@@ -44,11 +40,15 @@ import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProvider;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Kafka Streams allows for performing continuous computation on input coming from one or more input topics and
@@ -291,10 +291,10 @@ public class KafkaStreams {
 
 
     /**
-     * Find all of the instances of {@link StreamsMetadata} in a {@link KafkaStreams application}
+     * Find all of the instances of {@link StreamsMetadata} in the {@link KafkaStreams} application that this instance belongs to
      *
      * Note: this is a point in time view and it may change due to partition reassignment.
-     * @return collection containing all instances of {@link StreamsMetadata} in this application
+     * @return collection containing all instances of {@link StreamsMetadata} in the {@link KafkaStreams} application that this instance belongs to
      */
     public Collection<StreamsMetadata> allMetadata() {
         validateIsRunning();
@@ -303,7 +303,7 @@ public class KafkaStreams {
 
 
     /**
-     * Find the instances {@link StreamsMetadata} for a given storeName
+     * Find instances of {@link StreamsMetadata} that contains the given storeName
      *
      * Note: this is a point in time view and it may change due to partition reassignment.
      * @param storeName the storeName to find metadata for
@@ -315,7 +315,8 @@ public class KafkaStreams {
     }
 
     /**
-     * Find the {@link StreamsMetadata} for a given storeName and key.
+     * Find the {@link StreamsMetadata} instance that contains the given storeName
+     * and the corresponding hosted store instance contains the given key
      *
      * Note: the key may not exist in the {@link org.apache.kafka.streams.processor.StateStore},
      * this method provides a way of finding which host it would exist on.
@@ -334,7 +335,8 @@ public class KafkaStreams {
     }
 
     /**
-     * Find the {@link StreamsMetadata} for a given storeName and key.
+     * Find the {@link StreamsMetadata} instance that contains the given storeName
+     * and the corresponding hosted store instance contains the given key
      *
      * Note: the key may not exist in the {@link org.apache.kafka.streams.processor.StateStore},
      * this method provides a way of finding which host it would exist on.

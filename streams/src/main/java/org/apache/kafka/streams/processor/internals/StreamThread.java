@@ -112,7 +112,7 @@ public class StreamThread extends Thread {
                 addStreamTasks(assignment);
                 addStandbyTasks();
                 lastClean = time.milliseconds(); // start the cleaning cycle
-                streamsMetadataState.onChange(partitionAssignor.getPartitionsByHostState());
+                streamsMetadataState.onChange(partitionAssignor.getPartitionsByHostState(), partitionAssignor.clusterMetadata());
             } catch (Throwable t) {
                 rebalanceException = t;
                 throw t;
@@ -130,7 +130,7 @@ public class StreamThread extends Thread {
             } finally {
                 // TODO: right now upon partition revocation, we always remove all the tasks;
                 // this behavior can be optimized to only remove affected tasks in the future
-                streamsMetadataState.onChange(Collections.<HostInfo, Set<TopicPartition>>emptyMap());
+                streamsMetadataState.onChange(Collections.<HostInfo, Set<TopicPartition>>emptyMap(), partitionAssignor.clusterMetadata());
                 removeStreamTasks();
                 removeStandbyTasks();
             }

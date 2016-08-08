@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -30,9 +33,11 @@ import org.apache.kafka.streams.state.StreamsMetadata;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -54,6 +59,8 @@ public class StreamsMetadataStateTest {
     private TopicPartition topic1P1;
     private TopicPartition topic2P1;
     private TopicPartition topic4P0;
+    private List<PartitionInfo> partitionInfos;
+    private Cluster cluster;
 
     @Before
     public void before() {
@@ -94,8 +101,17 @@ public class StreamsMetadataStateTest {
         hostToPartitions.put(hostTwo, Utils.mkSet(topic2P0, topic1P1));
         hostToPartitions.put(hostThree, Collections.singleton(topic3P0));
 
+        partitionInfos = Arrays.asList(
+                new PartitionInfo("topic-one", 0, null, null, null),
+                new PartitionInfo("topic-one", 1, null, null, null),
+                new PartitionInfo("topic-two", 0, null, null, null),
+                new PartitionInfo("topic-two", 1, null, null, null),
+                new PartitionInfo("topic-three", 0, null, null, null),
+                new PartitionInfo("topic-four", 0, null, null, null));
+
+        cluster = new Cluster(Collections.<Node>emptyList(), partitionInfos, Collections.<String>emptySet());
         discovery = new StreamsMetadataState(builder);
-        discovery.onChange(hostToPartitions);
+        discovery.onChange(hostToPartitions, cluster);
     }
 
     @Test
@@ -126,7 +142,8 @@ public class StreamsMetadataStateTest {
         final TopicPartition tp5 = new TopicPartition("topic-five", 1);
         final HostInfo hostFour = new HostInfo("host-four", 8080);
         hostToPartitions.put(hostFour, Utils.mkSet(tp5));
-        discovery.onChange(hostToPartitions);
+
+        discovery.onChange(hostToPartitions, cluster.withPartitions(Collections.singletonMap(tp5, new PartitionInfo("topic-five", 1, null, null, null))));
 
         final StreamsMetadata expected = new StreamsMetadata(hostFour, Collections.<String>emptySet(),
                 Collections.singleton(tp5));
@@ -161,7 +178,8 @@ public class StreamsMetadataStateTest {
     public void shouldGetInstanceWithKey() throws Exception {
         final TopicPartition tp4 = new TopicPartition("topic-three", 1);
         hostToPartitions.put(hostTwo, Utils.mkSet(topic2P0, tp4));
-        discovery.onChange(hostToPartitions);
+
+        discovery.onChange(hostToPartitions, cluster.withPartitions(Collections.singletonMap(tp4, new PartitionInfo("topic-three", 1, null, null, null))));
 
         final StreamsMetadata expected = new StreamsMetadata(hostThree, Collections.singleton("table-three"),
                 Collections.singleton(topic3P0));
@@ -177,7 +195,7 @@ public class StreamsMetadataStateTest {
         final TopicPartition tp4 = new TopicPartition("topic-three", 1);
         hostToPartitions.put(hostTwo, Utils.mkSet(topic2P0, tp4));
 
-        discovery.onChange(hostToPartitions);
+        discovery.onChange(hostToPartitions, cluster.withPartitions(Collections.singletonMap(tp4, new PartitionInfo("topic-three", 1, null, null, null))));
 
         final StreamsMetadata expected = new StreamsMetadata(hostTwo, Utils.mkSet("table-two", "table-three", "merged-table"),
                 Utils.mkSet(topic2P0, tp4));
@@ -195,7 +213,7 @@ public class StreamsMetadataStateTest {
     public void shouldGetInstanceWithKeyWithMergedStreams() throws Exception {
         final TopicPartition topic2P2 = new TopicPartition("topic-two", 2);
         hostToPartitions.put(hostTwo, Utils.mkSet(topic2P0, topic1P1, topic2P2));
-        discovery.onChange(hostToPartitions);
+        discovery.onChange(hostToPartitions, cluster.withPartitions(Collections.singletonMap(topic2P2, new PartitionInfo("topic-two", 2, null, null, null))));
 
         final StreamsMetadata expected = new StreamsMetadata(hostTwo, Utils.mkSet("table-two", "table-one", "merged-table"),
                 Utils.mkSet(topic2P0, topic1P1, topic2P2));

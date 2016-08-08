@@ -608,7 +608,7 @@ public class TopologyBuilder {
         if (nodeFactory instanceof ProcessorNodeFactory) {
             ProcessorNodeFactory processorNodeFactory = (ProcessorNodeFactory) nodeFactory;
             processorNodeFactory.addStateStore(stateStoreName);
-            connectStateStoreNameToSourceTopics(stateStoreName, stateStoreFactory, processorNodeFactory);
+            connectStateStoreNameToSourceTopics(stateStoreName, processorNodeFactory);
         } else {
             throw new TopologyBuilderException("cannot connect a state store " + stateStoreName + " to a source node or a sink node.");
         }
@@ -629,7 +629,6 @@ public class TopologyBuilder {
     }
 
     private void connectStateStoreNameToSourceTopics(final String stateStoreName,
-                                                     final StateStoreFactory stateStoreFactory,
                                                      final ProcessorNodeFactory processorNodeFactory) {
 
         final Set<String> sourceTopics = findSourceTopicsForProcessorParents(processorNodeFactory.parents);
@@ -637,7 +636,7 @@ public class TopologyBuilder {
             throw new TopologyBuilderException("can't find source topic for state store " +
                     stateStoreName);
         }
-        stateStoreNameToSourceTopics.put(stateStoreFactory.supplier.name(),
+        stateStoreNameToSourceTopics.put(stateStoreName,
                 Collections.unmodifiableSet(sourceTopics));
     }
 
@@ -893,11 +892,11 @@ public class TopologyBuilder {
      * @return the unmodifiable set of topic names used by source nodes, which changes as new sources are added; never null
      */
     public synchronized Set<String> sourceTopics() {
-        Set<String> topics = internalSourceTopics(sourceTopicNames);
+        Set<String> topics = maybeDecorateInternalSourceTopics(sourceTopicNames);
         return Collections.unmodifiableSet(topics);
     }
 
-    private Set<String> internalSourceTopics(final Set<String> sourceTopicNames) {
+    private Set<String> maybeDecorateInternalSourceTopics(final Set<String> sourceTopicNames) {
         Set<String> topics = new HashSet<>();
         for (String topic : sourceTopicNames) {
             if (internalTopicNames.contains(topic)) {
@@ -955,7 +954,7 @@ public class TopologyBuilder {
     public Map<String, Set<String>> stateStoreNameToSourceTopics() {
         final Map<String, Set<String>> results = new HashMap<>();
         for (Map.Entry<String, Set<String>> entry : stateStoreNameToSourceTopics.entrySet()) {
-            results.put(entry.getKey(), internalSourceTopics(entry.getValue()));
+            results.put(entry.getKey(), maybeDecorateInternalSourceTopics(entry.getValue()));
 
         }
         return results;

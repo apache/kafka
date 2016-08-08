@@ -57,6 +57,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     private static final Logger log = LoggerFactory.getLogger(StreamPartitionAssignor.class);
     private String userEndPointConfig;
     private Map<HostInfo, Set<TopicPartition>> partitionsByHostState;
+    private Cluster metadataWithInternalTopics;
+
 
     private static class AssignedPartition implements Comparable<AssignedPartition> {
         public final TaskId taskId;
@@ -354,7 +356,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         internalPartitionInfos = prepareTopic(internalSourceTopicToTaskIds, false, false);
         internalSourceTopicToTaskIds.clear();
 
-        Cluster metadataWithInternalTopics = metadata;
+        metadataWithInternalTopics = metadata;
         if (internalTopicManager != null)
             metadataWithInternalTopics = metadata.withPartitions(internalPartitionInfos);
 
@@ -537,6 +539,10 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             return Collections.emptyMap();
         }
         return Collections.unmodifiableMap(partitionsByHostState);
+    }
+
+    public Cluster clusterMetadata() {
+        return metadataWithInternalTopics;
     }
 
     private void ensureCopartitioning(Collection<Set<String>> copartitionGroups, Map<Integer, Set<String>> internalTopicGroups, Cluster metadata) {

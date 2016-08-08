@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
@@ -29,7 +31,6 @@ import org.apache.kafka.streams.state.StreamsMetadata;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -45,7 +46,7 @@ import static org.apache.kafka.common.utils.Utils.toPositive;
 public class StreamsMetadataState {
     private final TopologyBuilder builder;
     private final List<StreamsMetadata> allMetadata = new ArrayList<>();
-    private final Map<String, List<TopicPartition>> partitionsByTopic = new HashMap<>();
+    private Cluster clusterMetadata;
 
     public StreamsMetadataState(final TopologyBuilder builder) {
         this.builder = builder;
@@ -77,9 +78,9 @@ public class StreamsMetadataState {
         }
 
         final ArrayList<StreamsMetadata> results = new ArrayList<>();
-        for (StreamsMetadata instance : allMetadata) {
-            if (instance.stateStoreNames().contains(storeName)) {
-                results.add(instance);
+        for (StreamsMetadata metadata : allMetadata) {
+            if (metadata.stateStoreNames().contains(storeName)) {
+                results.add(metadata);
             }
         }
         return results;
@@ -150,9 +151,9 @@ public class StreamsMetadataState {
 
         int numPartitions = 0;
         for (String topic : sourceTopics) {
-            final List<TopicPartition> topicPartitions = partitionsByTopic.get(topic);
-            if (topicPartitions.size() > numPartitions) {
-                numPartitions = topicPartitions.size();
+            final List<PartitionInfo> partitions = clusterMetadata.partitionsForTopic(topic);
+            if (partitions != null && partitions.size() > numPartitions) {
+                numPartitions = partitions.size();
             }
         }
 
@@ -178,16 +179,18 @@ public class StreamsMetadataState {
      * Respond to changes to the HostInfo -> TopicPartition mapping. Will rebuild the
      * metadata
      * @param currentState  the current mapping of {@link HostInfo} -> {@link TopicPartition}s
+     * @param clusterMetadata    the current clusterMetadata {@link Cluster}
      */
-    public synchronized void onChange(final Map<HostInfo, Set<TopicPartition>> currentState) {
-        rebuildPartitionsByTopic(currentState);
-        rebuildInstances(currentState);
+    public synchronized void onChange(final Map<HostInfo, Set<TopicPartition>> currentState, final Cluster clusterMetadata) {
+        this.clusterMetadata = clusterMetadata;
+        rebuildMetadata(currentState);
     }
 
-    private boolean hasPartitionsForAnyTopics(final Set<String> topicNames, final Set<TopicPartition> partitions) {
+    private boolean hasPartitionsForAnyTopics(final Set<String> topicNames, final Set<TopicPartition> partitionForHost) {
         for (String topic : topicNames) {
-            for (TopicPartition tp : partitionsByTopic.get(topic)) {
-                if (partitions.contains(tp)) {
+            for (PartitionInfo partitionInfo : clusterMetadata.partitionsForTopic(topic)) {
+                final TopicPartition topicPartition = new TopicPartition(partitionInfo.topic(), partitionInfo.partition());
+                if (partitionForHost.contains(topicPartition)) {
                     return true;
                 }
             }
@@ -195,20 +198,7 @@ public class StreamsMetadataState {
         return false;
     }
 
-
-    private void rebuildPartitionsByTopic(final Map<HostInfo, Set<TopicPartition>> currentState) {
-        partitionsByTopic.clear();
-        for (final Set<TopicPartition> topicPartitions : currentState.values()) {
-            for (TopicPartition topicPartition : topicPartitions) {
-                if (!partitionsByTopic.containsKey(topicPartition.topic())) {
-                    partitionsByTopic.put(topicPartition.topic(), new ArrayList<TopicPartition>());
-                }
-                partitionsByTopic.get(topicPartition.topic()).add(topicPartition);
-            }
-        }
-    }
-
-    private void rebuildInstances(final Map<HostInfo, Set<TopicPartition>> currentState) {
+    private void rebuildMetadata(final Map<HostInfo, Set<TopicPartition>> currentState) {
         allMetadata.clear();
         if (currentState.isEmpty()) {
             return;

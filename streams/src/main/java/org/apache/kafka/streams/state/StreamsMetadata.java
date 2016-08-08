@@ -84,7 +84,7 @@ public class StreamsMetadata {
 
     @Override
     public String toString() {
-        return "KafkaStreamsInstance{" +
+        return "StreamsMetadata{" +
                 "hostInfo=" + hostInfo +
                 ", stateStoreNames=" + stateStoreNames +
                 ", topicPartitions=" + topicPartitions +
