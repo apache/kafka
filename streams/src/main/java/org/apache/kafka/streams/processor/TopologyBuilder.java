@@ -39,6 +39,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -278,10 +279,15 @@ public class TopologyBuilder {
      * @throws TopologyBuilderException if processor is already added or if topics have already been registered by another source
      */
     public synchronized final TopologyBuilder addSource(String name, Deserializer keyDeserializer, Deserializer valDeserializer, String... topics) {
+        if (topics.length == 0) {
+            throw new TopologyBuilderException("You must provide at least one topic");
+        }
+        Objects.requireNonNull(name, "name must not be null");
         if (nodeFactories.containsKey(name))
             throw new TopologyBuilderException("Processor " + name + " is already added.");
 
         for (String topic : topics) {
+            Objects.requireNonNull(topic, "topic names cannot be null");
             if (sourceTopicNames.contains(topic))
                 throw new TopologyBuilderException("Topic " + topic + " has already been registered by another source.");
 
@@ -322,10 +328,8 @@ public class TopologyBuilder {
      */
 
     public synchronized final TopologyBuilder addSource(String name, Deserializer keyDeserializer, Deserializer valDeserializer, Pattern topicPattern) {
-
-        if (topicPattern == null) {
-            throw new TopologyBuilderException("Pattern can't be null");
-        }
+        Objects.requireNonNull(topicPattern, "topicPattern can't be null");
+        Objects.requireNonNull(name, "name can't be null");
 
         if (nodeFactories.containsKey(name)) {
             throw new TopologyBuilderException("Processor " + name + " is already added.");
@@ -435,6 +439,8 @@ public class TopologyBuilder {
      * @throws TopologyBuilderException if parent processor is not added yet, or if this processor's name is equal to the parent's name
      */
     public synchronized final <K, V> TopologyBuilder addSink(String name, String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, StreamPartitioner<K, V> partitioner, String... parentNames) {
+        Objects.requireNonNull(name, "name must not be null");
+        Objects.requireNonNull(topic, "topic must not be null");
         if (nodeFactories.containsKey(name))
             throw new TopologyBuilderException("Processor " + name + " is already added.");
 
@@ -467,6 +473,8 @@ public class TopologyBuilder {
      * @throws TopologyBuilderException if parent processor is not added yet, or if this processor's name is equal to the parent's name
      */
     public synchronized final TopologyBuilder addProcessor(String name, ProcessorSupplier supplier, String... parentNames) {
+        Objects.requireNonNull(name, "name must not be null");
+        Objects.requireNonNull(supplier, "supplier must not be null");
         if (nodeFactories.containsKey(name))
             throw new TopologyBuilderException("Processor " + name + " is already added.");
 
@@ -495,6 +503,7 @@ public class TopologyBuilder {
      * @throws TopologyBuilderException if state store supplier is already added
      */
     public synchronized final TopologyBuilder addStateStore(StateStoreSupplier supplier, boolean isInternal, String... processorNames) {
+        Objects.requireNonNull(supplier, "supplier can't be null");
         if (stateFactories.containsKey(supplier.name())) {
             throw new TopologyBuilderException("StateStore " + supplier.name() + " is already added.");
         }
@@ -528,6 +537,7 @@ public class TopologyBuilder {
      * @return this builder instance so methods can be chained together; never null
      */
     public synchronized final TopologyBuilder connectProcessorAndStateStores(String processorName, String... stateStoreNames) {
+        Objects.requireNonNull(processorName, "processorName can't be null");
         if (stateStoreNames != null) {
             for (String stateStoreName : stateStoreNames) {
                 connectProcessorAndStateStore(processorName, stateStoreName);
@@ -584,6 +594,7 @@ public class TopologyBuilder {
      * @return this builder instance so methods can be chained together; never null
      */
     public synchronized final TopologyBuilder addInternalTopic(String topicName) {
+        Objects.requireNonNull(topicName, "topicName can't be null");
         this.internalTopicNames.add(topicName);
 
         return this;
@@ -793,6 +804,7 @@ public class TopologyBuilder {
      * @see org.apache.kafka.streams.KafkaStreams#KafkaStreams(TopologyBuilder, org.apache.kafka.streams.StreamsConfig)
      */
     public synchronized ProcessorTopology build(String applicationId, Integer topicGroupId) {
+        Objects.requireNonNull(applicationId, "applicationId can't be null");
         Set<String> nodeGroup;
         if (topicGroupId != null) {
             nodeGroup = nodeGroups().get(topicGroupId);
@@ -910,6 +922,7 @@ public class TopologyBuilder {
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG}
      */
     public synchronized void setApplicationId(String applicationId) {
+        Objects.requireNonNull(applicationId, "applicationId can't be null");
         this.applicationId = applicationId;
     }
 }

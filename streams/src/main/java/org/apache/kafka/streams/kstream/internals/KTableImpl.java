@@ -37,6 +37,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -113,6 +114,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     @Override
     public KTable<K, V> filter(Predicate<K, V> predicate) {
+        Objects.requireNonNull(predicate, "predicate can't be null");
         String name = topology.newName(FILTER_NAME);
         KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this, predicate, false);
         topology.addProcessor(name, processorSupplier, this.name);
@@ -122,6 +124,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     @Override
     public KTable<K, V> filterNot(final Predicate<K, V> predicate) {
+        Objects.requireNonNull(predicate, "predicate can't be null");
         String name = topology.newName(FILTER_NAME);
         KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this, predicate, true);
 
@@ -132,6 +135,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     @Override
     public <V1> KTable<K, V1> mapValues(ValueMapper<V, V1> mapper) {
+        Objects.requireNonNull(mapper);
         String name = topology.newName(MAPVALUES_NAME);
         KTableProcessorSupplier<K, V, V1> processorSupplier = new KTableMapValues<>(this, mapper);
 
@@ -196,6 +200,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     @Override
     public void foreach(final ForeachAction<K, V> action) {
+        Objects.requireNonNull(action, "action can't be null");
         String name = topology.newName(FOREACH_NAME);
         KStreamForeach<K, Change<V>> processorSupplier = new KStreamForeach<>(new ForeachAction<K, Change<V>>() {
             @Override
@@ -212,6 +217,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                 StreamPartitioner<K, V> partitioner,
                                 String topic,
                                 final String storeName) {
+        Objects.requireNonNull(storeName, "storeName can't be null");
         to(keySerde, valSerde, partitioner, topic);
 
         return topology.table(keySerde, valSerde, topic, storeName);
@@ -274,6 +280,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     @SuppressWarnings("unchecked")
     @Override
     public <V1, R> KTable<K, R> join(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner) {
+        Objects.requireNonNull(other, "other can't be null");
+        Objects.requireNonNull(joiner, "joiner can't be null");
+
         Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
 
         String joinThisName = topology.newName(JOINTHIS_NAME);
@@ -297,6 +306,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     @SuppressWarnings("unchecked")
     @Override
     public <V1, R> KTable<K, R> outerJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner) {
+        Objects.requireNonNull(other, "other can't be null");
+        Objects.requireNonNull(joiner, "joiner can't be null");
+
         Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
 
         String joinThisName = topology.newName(OUTERTHIS_NAME);
@@ -320,6 +332,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     @SuppressWarnings("unchecked")
     @Override
     public <V1, R> KTable<K, R> leftJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner) {
+        Objects.requireNonNull(other, "other can't be null");
+        Objects.requireNonNull(joiner, "joiner can't be null");
         Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
 
         String joinThisName = topology.newName(LEFTTHIS_NAME);
@@ -345,6 +359,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                                   Serde<K1> keySerde,
                                                   Serde<V1> valueSerde) {
 
+        Objects.requireNonNull(selector, "selector can't be null");
         String selectName = topology.newName(SELECT_NAME);
 
         KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableRepartitionMap<>(this, selector);

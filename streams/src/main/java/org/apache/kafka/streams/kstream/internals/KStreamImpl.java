@@ -44,6 +44,7 @@ import java.io.PrintStream;
 import java.lang.reflect.Array;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V> {
@@ -104,6 +105,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public KStream<K, V> filter(Predicate<K, V> predicate) {
+        Objects.requireNonNull(predicate, "predicate can't be null");
         String name = topology.newName(FILTER_NAME);
 
         topology.addProcessor(name, new KStreamFilter<>(predicate, false), this.name);
@@ -113,6 +115,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public KStream<K, V> filterNot(final Predicate<K, V> predicate) {
+        Objects.requireNonNull(predicate, "predicate can't be null");
         String name = topology.newName(FILTER_NAME);
 
         topology.addProcessor(name, new KStreamFilter<>(predicate, true), this.name);
@@ -123,6 +126,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     @SuppressWarnings("unchecked")
     public <K1> KStream<K1, V> selectKey(final KeyValueMapper<K, V, K1> mapper) {
+        Objects.requireNonNull(mapper, "mapper can't be null");
         return new KStreamImpl<>(topology, internalSelectKey(mapper), sourceNodes, true);
     }
 
@@ -139,6 +143,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public <K1, V1> KStream<K1, V1> map(KeyValueMapper<K, V, KeyValue<K1, V1>> mapper) {
+        Objects.requireNonNull(mapper, "mapper can't be null");
         String name = topology.newName(MAP_NAME);
 
         topology.addProcessor(name, new KStreamMap<>(mapper), this.name);
@@ -149,6 +154,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public <V1> KStream<K, V1> mapValues(ValueMapper<V, V1> mapper) {
+        Objects.requireNonNull(mapper, "mapper can't be null");
         String name = topology.newName(MAPVALUES_NAME);
 
         topology.addProcessor(name, new KStreamMapValues<>(mapper), this.name);
@@ -200,6 +206,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
      */
     @Override
     public void writeAsText(String filePath, String streamName, Serde<K> keySerde, Serde<V> valSerde) {
+        Objects.requireNonNull(filePath, "filePath can't be null");
         String name = topology.newName(PRINTING_NAME);
         streamName = (streamName == null) ? this.name : streamName;
         try {
@@ -216,6 +223,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public <K1, V1> KStream<K1, V1> flatMap(KeyValueMapper<K, V, Iterable<KeyValue<K1, V1>>> mapper) {
+        Objects.requireNonNull(mapper, "mapper can't be null");
         String name = topology.newName(FLATMAP_NAME);
 
         topology.addProcessor(name, new KStreamFlatMap<>(mapper), this.name);
@@ -225,6 +233,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public <V1> KStream<K, V1> flatMapValues(ValueMapper<V, Iterable<V1>> mapper) {
+        Objects.requireNonNull(mapper, "mapper can't be null");
         String name = topology.newName(FLATMAPVALUES_NAME);
 
         topology.addProcessor(name, new KStreamFlatMapValues<>(mapper), this.name);
@@ -235,6 +244,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     @SuppressWarnings("unchecked")
     public KStream<K, V>[] branch(Predicate<K, V>... predicates) {
+        if (predicates.length == 0) {
+            throw new IllegalArgumentException("you must provide at least one predicate");
+        }
+        for (Predicate<K, V> predicate : predicates) {
+            Objects.requireNonNull(predicate, "predicates can't have null values");
+        }
         String branchName = topology.newName(BRANCH_NAME);
 
         topology.addProcessor(branchName, new KStreamBranch(predicates.clone()), this.name);
@@ -283,6 +298,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public void foreach(ForeachAction<K, V> action) {
+        Objects.requireNonNull(action, "action can't be null");
         String name = topology.newName(FOREACH_NAME);
 
         topology.addProcessor(name, new KStreamForeach<>(action), this.name);
@@ -321,6 +337,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @SuppressWarnings("unchecked")
     @Override
     public void to(Serde<K> keySerde, Serde<V> valSerde, StreamPartitioner<K, V> partitioner, String topic) {
+        Objects.requireNonNull(topic, "topic can't be null");
         String name = topology.newName(SINK_NAME);
 
         Serializer<K> keySerializer = keySerde == null ? null : keySerde.serializer();
@@ -336,6 +353,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public <K1, V1> KStream<K1, V1> transform(TransformerSupplier<K, V, KeyValue<K1, V1>> transformerSupplier, String... stateStoreNames) {
+        Objects.requireNonNull(transformerSupplier, "transformerSupplier can't be null");
         String name = topology.newName(TRANSFORM_NAME);
 
         topology.addProcessor(name, new KStreamTransform<>(transformerSupplier), this.name);
@@ -346,6 +364,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public <V1> KStream<K, V1> transformValues(ValueTransformerSupplier<V, V1> valueTransformerSupplier, String... stateStoreNames) {
+        Objects.requireNonNull(valueTransformerSupplier, "valueTransformSupplier can't be null");
         String name = topology.newName(TRANSFORMVALUES_NAME);
 
         topology.addProcessor(name, new KStreamTransformValues<>(valueTransformerSupplier), this.name);
@@ -430,6 +449,10 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                          Serde<V> thisValueSerde,
                                          Serde<V1> otherValueSerde,
                                          KStreamImplJoin join) {
+        Objects.requireNonNull(other, "other can't be null");
+        Objects.requireNonNull(joiner, "joiner can't be null");
+        Objects.requireNonNull(windows, "windows can't be null");
+
         KStreamImpl<K, V> joinThis = this;
         KStreamImpl<K, V1> joinOther = (KStreamImpl) other;
 
@@ -541,6 +564,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                           ValueJoiner<V, V1, R> joiner,
                                           Serde<K> keySerde,
                                           Serde<V> valueSerde) {
+        Objects.requireNonNull(other, "other can't be null");
+        Objects.requireNonNull(joiner, "joiner can't be null");
 
         if (repartitionRequired) {
             KStreamImpl<K, V> thisStreamRepartitioned = this.repartitionForJoin(keySerde,
@@ -574,6 +599,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                    Serde<K1> keySerde,
                                                    Serde<V> valSerde) {
 
+        Objects.requireNonNull(selector, "selector can't be null");
         String selectName = internalSelectKey(selector);
         return new KGroupedStreamImpl<>(topology,
                                         selectName,

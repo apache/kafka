@@ -29,6 +29,7 @@ import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.Stores;
 
 import java.util.Collections;
+import java.util.Objects;
 import java.util.Set;
 
 public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStream<K, V> {
@@ -55,6 +56,8 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
     @Override
     public KTable<K, V> reduce(final Reducer<V> reducer,
                                final String storeName) {
+        Objects.requireNonNull(reducer, "reducer can't be null");
+        Objects.requireNonNull(storeName, "storeName can't be null");
         return doAggregate(
             new KStreamReduce<K, V>(storeName, reducer),
             REDUCE_NAME,
@@ -67,6 +70,9 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
     public <W extends Window> KTable<Windowed<K>, V> reduce(Reducer<V> reducer,
                                                             Windows<W> windows,
                                                             final String storeName) {
+        Objects.requireNonNull(reducer, "reducer can't be null");
+        Objects.requireNonNull(windows, "windows can't be null");
+        Objects.requireNonNull(storeName, "storeName can't be null");
         return (KTable<Windowed<K>, V>) doAggregate(
             new KStreamWindowReduce<K, V, W>(windows, storeName, reducer),
             REDUCE_NAME,
@@ -79,6 +85,9 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
                                       final Aggregator<K, V, T> aggregator,
                                       final Serde<T> aggValueSerde,
                                       final String storeName) {
+        Objects.requireNonNull(initializer, "initializer can't be null");
+        Objects.requireNonNull(aggregator, "aggregator can't be null");
+        Objects.requireNonNull(storeName, "storeName can't be null");
         return doAggregate(
             new KStreamAggregate<>(storeName, initializer, aggregator),
             AGGREGATE_NAME,
@@ -92,6 +101,10 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
                                                                   final Windows<W> windows,
                                                                   final Serde<T> aggValueSerde,
                                                                   final String storeName) {
+        Objects.requireNonNull(initializer, "initializer can't be null");
+        Objects.requireNonNull(aggregator, "aggregator can't be null");
+        Objects.requireNonNull(windows, "windows can't be null");
+        Objects.requireNonNull(storeName, "storeName can't be null");
         return (KTable<Windowed<K>, T>) doAggregate(
             new KStreamWindowAggregate<>(windows, storeName, initializer, aggregator),
             AGGREGATE_NAME,

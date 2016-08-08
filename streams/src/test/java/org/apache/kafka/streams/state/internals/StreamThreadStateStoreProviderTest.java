@@ -65,7 +65,7 @@ public class StreamThreadStateStoreProviderTest {
     @Before
     public void before() throws IOException {
         final TopologyBuilder builder = new TopologyBuilder();
-        builder.addSource("the-source");
+        builder.addSource("the-source", "the-source");
         builder.addProcessor("the-processor", new MockProcessorSupplier());
         builder.addStateStore(Stores.create("kv-store")
                                   .withStringKeys()
