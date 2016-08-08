@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import os
+import random
 import uuid
 from io import open
 from os import remove, close
@@ -39,8 +40,23 @@ class MiniKdc(KafkaPathResolverMixin, Service):
     KEYTAB_FILE = "/mnt/minikdc/keytab"
     KRB5CONF_FILE = "/mnt/minikdc/krb5.conf"
     LOG_FILE = "/mnt/minikdc/minikdc.log"
-    LOCAL_KEYTAB_FILE = "/tmp/" + str(uuid.uuid4().get_hex()) + "_keytab"
-    LOCAL_KRB5CONF_FILE = "/tmp/" + str(uuid.uuid4().get_hex()) + "_krb5.conf"
+
+    LOCAL_KEYTAB_FILE = None
+    LOCAL_KRB5CONF_FILE = None
+
+    @staticmethod
+    def _keytab():
+        if MiniKdc.LOCAL_KEYTAB_FILE is None:
+            MiniKdc.LOCAL_KEYTAB_FILE = "/tmp/" + str(random.randint(1, 2**63 - 1)) + str(uuid.uuid4().get_hex()) + "_keytab"
+        return MiniKdc.LOCAL_KEYTAB_FILE
+
+    @staticmethod
+    def _krb5conf():
+        if MiniKdc.LOCAL_KRB5CONF_FILE is None:
+            MiniKdc.LOCAL_KRB5CONF_FILE = "/tmp/" + str(random.randint(1, 2**63 - 1)) + str(uuid.uuid4().get_hex()) + "_keytab"
+        return MiniKdc.LOCAL_KRB5CONF_FILE
+
+
 
     def __init__(self, context, kafka_nodes, extra_principals=""):
         super(MiniKdc, self).__init__(context, 1)
@@ -80,8 +96,10 @@ class MiniKdc(KafkaPathResolverMixin, Service):
             node.account.ssh(cmd)
             monitor.wait_until("MiniKdc Running", timeout_sec=60, backoff_sec=1, err_msg="MiniKdc didn't finish startup")
 
-        node.account.scp_from(MiniKdc.KEYTAB_FILE, MiniKdc.LOCAL_KEYTAB_FILE)
-        node.account.scp_from(MiniKdc.KRB5CONF_FILE, MiniKdc.LOCAL_KRB5CONF_FILE)
+        MiniKdc._keytab()
+        MiniKdc._krb5conf()
+        node.account.copy_from(MiniKdc.KEYTAB_FILE, MiniKdc.LOCAL_KEYTAB_FILE)
+        node.account.copy_from(MiniKdc.KRB5CONF_FILE, MiniKdc.LOCAL_KRB5CONF_FILE)
 
         # KDC is set to bind openly (via 0.0.0.0). Change krb5.conf to hold the specific KDC address
         self.replace_in_file(MiniKdc.LOCAL_KRB5CONF_FILE, '0.0.0.0', node.account.hostname)

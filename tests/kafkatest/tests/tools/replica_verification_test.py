@@ -16,8 +16,9 @@
 
 from ducktape.utils.util import wait_until
 from ducktape.tests.test import Test
-from kafkatest.services.verifiable_producer import VerifiableProducer
+from ducktape.mark.resource import cluster
 
+from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.replica_verification_tool import ReplicaVerificationTool
@@ -69,6 +70,7 @@ class ReplicaVerificationToolTest(Test):
     def stop_producer(self):
         self.producer.stop()
 
+    @cluster(num_nodes=5)
     def test_replica_lags(self, security_protocol='PLAINTEXT'):
         """
         Tests ReplicaVerificationTool

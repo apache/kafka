@@ -14,17 +14,21 @@
 # limitations under the License.
 
 from ducktape.tests.test import Test
+from ducktape.mark.resource import cluster
+from ducktape.utils.util import wait_until
+from ducktape.mark import matrix, parametrize
+from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.connect import ConnectDistributedService, VerifiableSource, VerifiableSink, ConnectRestError, MockSink, MockSource
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.security.security_config import SecurityConfig
-from ducktape.utils.util import wait_until
-from ducktape.mark import matrix
-import subprocess, itertools, time
+
+import itertools, time
 from collections import Counter, namedtuple
 import operator
+
 
 class ConnectDistributedTest(Test):
     """
@@ -155,6 +159,7 @@ class ConnectDistributedTest(Test):
         wait_until(lambda: self.connector_is_running(self.sink), timeout_sec=10,
                    err_msg="Failed to see connector transition to the RUNNING state")
 
+    @cluster(num_nodes=5)
     @matrix(delete_before_reconfig=[False, True])
     def test_bad_connector_class(self, delete_before_reconfig):
         """
@@ -192,6 +197,7 @@ class ConnectDistributedTest(Test):
         self.cc.set_connector_config(connector_name, config)
         wait_until(lambda: self.connector_is_running(connector), timeout_sec=10, err_msg="Failed to see connector transition to the RUNNING state")
 
+    @cluster(num_nodes=5)
     @matrix(connector_type=["source", "sink"])
     def test_restart_failed_task(self, connector_type):
         self.setup_services()
@@ -214,7 +220,6 @@ class ConnectDistributedTest(Test):
         
         wait_until(lambda: self.task_is_running(connector, task_id), timeout_sec=10,
                    err_msg="Failed to see task transition to the RUNNING state")
-
 
     def test_pause_and_resume_source(self):
         """
@@ -254,6 +259,7 @@ class ConnectDistributedTest(Test):
         wait_until(lambda: len(self.source.messages()) > num_messages, timeout_sec=30,
                    err_msg="Failed to produce messages after resuming source connector")
 
+    @cluster(num_nodes=5)
     def test_pause_and_resume_sink(self):
         """
         Verify that sink connectors stop consuming records when paused and begin again after
@@ -296,7 +302,7 @@ class ConnectDistributedTest(Test):
         wait_until(lambda: len(self.sink.received_messages()) > num_messages, timeout_sec=30,
                    err_msg="Failed to consume messages after resuming source connector")
 
-
+    @cluster(num_nodes=5)
     def test_pause_state_persistent(self):
         """
         Verify that paused state is preserved after a cluster restart.
@@ -321,7 +327,10 @@ class ConnectDistributedTest(Test):
             wait_until(lambda: self.is_paused(self.source, node), timeout_sec=30,
                        err_msg="Failed to see connector startup in PAUSED state")
 
-    @matrix(security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL])
+    @cluster(num_nodes=5)
+    @parametrize(security_protocol=SecurityConfig.PLAINTEXT)
+    @cluster(num_nodes=6)
+    @parametrize(security_protocol=SecurityConfig.SASL_SSL)
     def test_file_source_and_sink(self, security_protocol):
         """
         Tests that a basic file connector works across clean rolling bounces. This validates that the connector is
@@ -352,7 +361,7 @@ class ConnectDistributedTest(Test):
             node.account.ssh("echo -e -n " + repr(self.SECOND_INPUTS) + " >> " + self.INPUT_FILE)
         wait_until(lambda: self._validate_file_output(self.FIRST_INPUT_LIST + self.SECOND_INPUT_LIST), timeout_sec=70, err_msg="Sink output file never converged to the same state as the input file")
 
-
+    @cluster(num_nodes=5)
     @matrix(clean=[True, False])
     def test_bounce(self, clean):
         """
@@ -461,8 +470,6 @@ class ConnectDistributedTest(Test):
 
         assert success, "Found validation errors:\n" + "\n  ".join(errors)
 
-
-
     def _validate_file_output(self, input):
         input_set = set(input)
         # Output needs to be collected from all nodes because we can't be sure where the tasks will be scheduled.
@@ -474,8 +481,8 @@ class ConnectDistributedTest(Test):
 
     def _file_contents(self, node, file):
         try:
-            # Convert to a list here or the CalledProcessError may be returned during a call to the generator instead of
+            # Convert to a list here or the RemoteCommandError may be returned during a call to the generator instead of
             # immediately
             return list(node.account.ssh_capture("cat " + file))
-        except subprocess.CalledProcessError:
+        except RemoteCommandError:
             return []

@@ -14,6 +14,7 @@
 
 from ducktape.mark import parametrize
 from ducktape.utils.util import wait_until
+from ducktape.mark.resource import cluster
 
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.kafka import KafkaService
@@ -43,6 +44,7 @@ class ClientCompatibilityTestNewBroker(ProduceConsumeValidateTest):
         self.num_consumers = 1
         self.messages_per_producer = 1000
 
+    @cluster(num_nodes=6)
     @parametrize(producer_version=str(LATEST_0_8_2), consumer_version=str(LATEST_0_8_2), compression_types=["none"], timestamp_type=None)
     @parametrize(producer_version=str(LATEST_0_8_2), consumer_version=str(LATEST_0_9), compression_types=["none"], timestamp_type=None)
     @parametrize(producer_version=str(LATEST_0_9), consumer_version=str(TRUNK), compression_types=["none"], timestamp_type=None)

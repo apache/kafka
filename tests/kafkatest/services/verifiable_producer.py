@@ -16,10 +16,10 @@
 import json
 import os
 import signal
-import subprocess
 import time
 
 from ducktape.services.background_thread import BackgroundThreadService
+from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin, TOOLS_JAR_NAME, TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME
 from kafkatest.utils import is_int, is_int_with_prefix
@@ -190,7 +190,7 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
             cmd = "jps | grep -i VerifiableProducer | awk '{print $1}'"
             pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
-        except (subprocess.CalledProcessError, ValueError) as e:
+        except (RemoteCommandError, ValueError) as e:
             return []
 
     def alive(self, node):

@@ -18,11 +18,11 @@ import json
 import os.path
 import re
 import signal
-import subprocess
 import time
 
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
+from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from config import KafkaConfig
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
@@ -119,7 +119,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     @property
     def security_config(self):
-        return SecurityConfig(self.security_protocol, self.interbroker_security_protocol,
+        return SecurityConfig(self.context, self.security_protocol, self.interbroker_security_protocol,
                               zk_sasl = self.zk.zk_sasl,
                               client_sasl_mechanism=self.client_sasl_mechanism, interbroker_sasl_mechanism=self.interbroker_sasl_mechanism)
 
@@ -216,7 +216,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
             pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
-        except (subprocess.CalledProcessError, ValueError) as e:
+        except (RemoteCommandError, ValueError) as e:
             return []
 
     def signal_node(self, node, sig=signal.SIGTERM):

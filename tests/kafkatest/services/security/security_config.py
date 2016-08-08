@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import atexit
 import os
 import subprocess
 from tempfile import mkdtemp
@@ -22,21 +21,23 @@ from ducktape.template import TemplateRenderer
 from kafkatest.services.security.minikdc import MiniKdc
 import itertools
 
+
 class SslStores(object):
-    def __init__(self):
-        self.ca_and_truststore_dir = mkdtemp(dir="/tmp")
-        self.ca_crt_path = os.path.join(self.ca_and_truststore_dir, "test.ca.crt")
-        self.ca_jks_path = os.path.join(self.ca_and_truststore_dir, "test.ca.jks")
+    def __init__(self, local_scratch_dir):
+        self.ca_crt_path = os.path.join(local_scratch_dir, "test.ca.crt")
+        self.ca_jks_path = os.path.join(local_scratch_dir, "test.ca.jks")
         self.ca_passwd = "test-ca-passwd"
 
-        self.truststore_path = os.path.join(self.ca_and_truststore_dir, "test.truststore.jks")
+        self.truststore_path = os.path.join(local_scratch_dir, "test.truststore.jks")
         self.truststore_passwd = "test-ts-passwd"
         self.keystore_passwd = "test-ks-passwd"
         self.key_passwd = "test-key-passwd"
         # Allow upto one hour of clock skew between host and VMs
         self.startdate = "-1H"
-        # Register rmtree to run on exit
-        atexit.register(rmtree, self.ca_and_truststore_dir)
+
+        for file in [self.ca_crt_path, self.ca_jks_path, self.truststore_path]:
+            if os.path.exists(file):
+                os.remove(file)
 
     def generate_ca(self):
         """
@@ -99,11 +100,7 @@ class SecurityConfig(TemplateRenderer):
     KRB5CONF_PATH = "/mnt/security/krb5.conf"
     KEYTAB_PATH = "/mnt/security/keytab"
 
-    ssl_stores = SslStores()
-    ssl_stores.generate_ca()
-    ssl_stores.generate_truststore()
-
-    def __init__(self, security_protocol=None, interbroker_security_protocol=None,
+    def __init__(self, context, security_protocol=None, interbroker_security_protocol=None,
                  client_sasl_mechanism=SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SASL_MECHANISM_GSSAPI,
                  zk_sasl=False, template_props=""):
         """
@@ -113,6 +110,12 @@ class SecurityConfig(TemplateRenderer):
         template properties file is used. If no protocol is specified in the
         template properties either, PLAINTEXT is used as default.
         """
+
+        self.context = context
+        if not SecurityConfig.ssl_stores:
+            SecurityConfig.ssl_stores = SslStores(context.scratch_dir)
+            SecurityConfig.ssl_stores.generate_ca()
+            SecurityConfig.ssl_stores.generate_truststore()
 
         if security_protocol is None:
             security_protocol = self.get_property('security.protocol', template_props)
@@ -140,9 +143,8 @@ class SecurityConfig(TemplateRenderer):
             'sasl.kerberos.service.name' : 'kafka'
         }
 
-
     def client_config(self, template_props=""):
-        return SecurityConfig(self.security_protocol, client_sasl_mechanism=self.client_sasl_mechanism, template_props=template_props)
+        return SecurityConfig(self.context, self.security_protocol, client_sasl_mechanism=self.client_sasl_mechanism, template_props=template_props)
 
     def setup_ssl(self, node):
         node.account.ssh("mkdir -p %s" % SecurityConfig.CONFIG_DIR, allow_fail=False)

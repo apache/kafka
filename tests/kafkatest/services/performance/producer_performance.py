@@ -14,9 +14,9 @@
 # limitations under the License.
 
 import os
-import subprocess
 
 from ducktape.utils.util import wait_until
+from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.directory_layout.kafka_path import  TOOLS_JAR_NAME, TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME
 from kafkatest.services.monitor.jmx import JmxMixin
@@ -118,7 +118,7 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
             cmd = "jps | grep -i ProducerPerformance | awk '{print $1}'"
             pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
-        except (subprocess.CalledProcessError, ValueError) as e:
+        except (RemoteCommandError, ValueError) as e:
             return []
 
     def alive(self, node):
