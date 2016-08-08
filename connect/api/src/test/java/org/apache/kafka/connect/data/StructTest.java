@@ -60,7 +60,7 @@ public class StructTest {
     private static final Schema CYCLIC_SCHEMA = SchemaBuilder.struct()
             .name("node")
             .field("value", Schema.INT32_SCHEMA)
-            .optional().field("next", "node")
+            .optional().field("next", SchemaBuilder.type("node").optional())
             .build();
 
     private static final Schema REQUIRED_FIELD_SCHEMA = Schema.INT8_SCHEMA;

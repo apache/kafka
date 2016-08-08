@@ -23,6 +23,7 @@ import org.apache.kafka.connect.errors.SchemaBuilderException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -47,8 +48,31 @@ import java.util.Map;
  *     Here is an example of using a second SchemaBuilder to construct complex, nested types:
  *     <pre>
  *     Schema userListSchema = SchemaBuilder.array(
- *         SchemaBuilder.struct().name("com.example.User").field("username", Schema.STRING_SCHEMA).field("id", Schema.INT64_SCHEMA).build()
+ *         SchemaBuilder.struct().name("com.example.User")
+ *              .field("username", Schema.STRING_SCHEMA)
+ *              .field("id", Schema.INT64_SCHEMA)
+ *              .build()
  *     ).build();
+ *     </pre>
+ * </p>
+ * <p>
+ *     Here is an example of using a second SchemaBuilder to construct cyclic types:
+ *     <pre>
+ *     Schema dateSchema = SchemaBuilder.struct()
+ *         .name("com.example.LinkedList").version(1).doc("A linked list of strings")
+ *         .field("value", Schema.STRING_SCHEMA)
+ *         .field("next", SchemaBuilder.type("com.example.LinkedList").optional())
+ *         .build();
+ *     </pre>
+ * </p>
+ * <p>
+ *     Here is an example of using three SchemaBuilders to construct complex, cyclic types:
+ *     <pre>
+ *     Schema dateSchema = SchemaBuilder.struct()
+ *         .name("com.example.Tree").version(2).doc("A tree of string values with possibly many children")
+ *         .field("value", Schema.STRING_SCHEMA)
+ *         .field("children", SchemaBuilder.array(SchemaBuilder.type("com.example.Tree")).build())
+ *         .build();
  *     </pre>
  * </p>
  */
@@ -56,27 +80,26 @@ public class SchemaBuilder implements Schema {
     private static final String TYPE_FIELD = "type";
     private static final String OPTIONAL_FIELD = "optional";
     private static final String DEFAULT_FIELD = "default";
-    private static final String NAME_FIELD = "name";
-    private static final String VERSION_FIELD = "version";
-    private static final String DOC_FIELD = "doc";
-
+    protected static final String NAME_FIELD = "name";
+    protected static final String VERSION_FIELD = "version";
+    protected static final String DOC_FIELD = "doc";
 
     private final Type type;
-    private Boolean optional = null;
-    private Object defaultValue = null;
+    protected Boolean optional = null;
+    protected Object defaultValue = null;
 
     private List<Field> fields = null;
     private Schema keySchema = null;
     private Schema valueSchema = null;
 
-    private String name;
+    protected String name;
     private Integer version;
     // Optional human readable documentation describing this schema.
     private String doc;
     // Additional parameters for logical types.
     private Map<String, String> parameters;
 
-    private SchemaBuilder(Type type) {
+    protected SchemaBuilder(Type type) {
         this.type = type;
     }
 
@@ -233,6 +256,18 @@ public class SchemaBuilder implements Schema {
         return new SchemaBuilder(type);
     }
 
+    /**
+     * Create a SchemaBuilder for a named existing type.
+     *
+     * This creates a reference to an already defined schema type.
+     *
+     * @param name the schema type name
+     * @return a new SchemaBuilder
+     */
+    public static SchemaBuilder type(String name) {
+        return new FutureSchemaBuilder(name);
+    }
+
     // Primitive types
 
     /**
@@ -320,31 +355,8 @@ public class SchemaBuilder implements Schema {
         if (fields == null)
             fields = new ArrayList<>();
         int fieldIndex = fields.size();
-        fields.add(new Field(fieldName, fieldIndex, fieldSchema));
+        fields.add(new Field(fieldName, fieldIndex, fieldSchema.schema()));
         return this;
-    }
-
-    /**
-     * Add a field to the struct schema by name, that will be resolved later. Throws a SchemaBuilderException if this
-     * is not a struct schema.
-     * @param fieldName the name of the field to add
-     * @param schemaName the name of the schema for the field
-     * @param optional a flag if the schema is optional or not
-     * @return the SchemaBuilder
-     */
-    public SchemaBuilder field(String fieldName, String schemaName, boolean optional) {
-        return field(fieldName, new FutureSchema(schemaName, optional));
-    }
-
-    /**
-     * Add an optional field to the struct by name, that will be resolved later. Throws a SchemaBuilderException if this
-     * is not a struct schema.
-     * @param fieldName the name of the field to add
-     * @param schemaName the name of the schema for the field
-     * @return the SchemaBuilder
-     */
-    public SchemaBuilder field(String fieldName, String schemaName) {
-        return field(fieldName, schemaName, true);
     }
 
     /**
@@ -376,7 +388,7 @@ public class SchemaBuilder implements Schema {
      */
     public static SchemaBuilder array(Schema valueSchema) {
         SchemaBuilder builder = new SchemaBuilder(Type.ARRAY);
-        builder.valueSchema = valueSchema;
+        builder.valueSchema = valueSchema.schema();
         return builder;
     }
 
@@ -387,8 +399,8 @@ public class SchemaBuilder implements Schema {
      */
     public static SchemaBuilder map(Schema keySchema, Schema valueSchema) {
         SchemaBuilder builder = new SchemaBuilder(Type.MAP);
-        builder.keySchema = keySchema;
-        builder.valueSchema = valueSchema;
+        builder.keySchema = keySchema.schema();
+        builder.valueSchema = valueSchema.schema();
         return builder;
     }
 
@@ -435,5 +447,10 @@ public class SchemaBuilder implements Schema {
     private static void checkNotNull(String fieldName, Object val, String fieldToSet) {
         if (val == null)
             throw new SchemaBuilderException("Invalid SchemaBuilder call: " + fieldName + " must be specified to set " + fieldToSet);
+    }
+
+    @Override
+    public Object compareContext(LinkedList<Object> context) {
+        return this;
     }
 }

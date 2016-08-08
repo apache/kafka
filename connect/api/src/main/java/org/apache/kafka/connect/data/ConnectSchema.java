@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.ArrayList;
 import java.util.Objects;
+import java.util.LinkedList;
 
 public class ConnectSchema implements Schema {
     /**
@@ -76,8 +77,8 @@ public class ConnectSchema implements Schema {
 
     // The type of the field
     private final Type type;
-    private final boolean optional;
-    private final Object defaultValue;
+    protected final boolean optional;
+    protected final Object defaultValue;
 
     private final List<Field> fields;
     private final Map<String, Field> fieldsByName;
@@ -89,7 +90,7 @@ public class ConnectSchema implements Schema {
     // useful for structs to indicate the semantics of the struct and map it to some existing underlying
     // serializer-specific schema. However, can also be useful in specifying other logical types (e.g. a set is an array
     // with additional constraints).
-    private final String name;
+    protected final String name;
     private final Integer version;
     // Optional human readable documentation describing this schema.
     private final String doc;
@@ -285,43 +286,32 @@ public class ConnectSchema implements Schema {
     }
 
     @Override
-    public ConnectSchema schema() {
+    public Schema schema() {
         return this;
     }
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || !(o instanceof Schema)) return false;
-        Schema schema = (Schema) o;
-        return Objects.equals(optional, schema.isOptional()) &&
-                Objects.equals(type, schema.type()) &&
-                Objects.equals(defaultValue, schema.defaultValue()) &&
-                (type != Type.STRUCT ||
-                        Objects.equals(fields, schema.fields())) &&
-                (type != Type.MAP ||
-                        Objects.equals(keySchema, schema.keySchema())) &&
-                ((type != Type.MAP && type != Type.ARRAY) ||
-                        Objects.equals(valueSchema, schema.valueSchema())) &&
-                Objects.equals(name, schema.name()) &&
-                Objects.equals(version, schema.version()) &&
-                Objects.equals(doc, schema.doc()) &&
-                Objects.equals(parameters, schema.parameters());
+        return compareContext(new LinkedList<Object>()).equals(o);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(type, optional, defaultValue, fields, keySchema, valueSchema, name, version, doc, parameters);
+        return compareContext(new LinkedList<Object>()).hashCode();
     }
 
     @Override
     public String toString() {
         if (name != null)
-            return "Schema{" + name + ":" + type + "}";
+            return "Schema{" + name + ":" + type() + "}";
         else
-            return "Schema{" + type + "}";
+            return "Schema{" + type() + "}";
     }
 
+    @Override
+    public Object compareContext(LinkedList<Object> context) {
+        return new ComparisonContext(context);
+    }
 
     /**
      * Get the {@link Schema.Type} associated with the given class.
@@ -348,5 +338,88 @@ public class ConnectSchema implements Schema {
             }
         }
         return null;
+    }
+
+    /**
+     * Add thread safe context information in order to compare potentially cyclic
+     * schemas. The context maintains a list of already compared nodes to detect
+     * cycles and handle them appropriately.
+     */
+    class ComparisonContext {
+        private final LinkedList<Object> context;
+
+        public ComparisonContext(LinkedList<Object> context) {
+            this.context = context;
+        }
+
+        /**
+         * Compare the schema to the provided object, using the context to break cyclic comparisons.
+         * @param o
+         * @return
+         */
+        @Override
+        public boolean equals(Object o) {
+            for (Object c : context) {
+                if (c == ConnectSchema.this) return true;
+            }
+            if (this == o) return true;
+            if (o == null || !(o instanceof Schema)) return false;
+            Schema schema = (Schema) o;
+
+            context.addFirst(ConnectSchema.this);
+            boolean result =  Objects.equals(isOptional(), schema.isOptional()) &&
+                    Objects.equals(type(), schema.type()) &&
+                    Objects.equals(defaultValue(), schema.defaultValue()) &&
+                    Objects.equals(name(), schema.name()) &&
+                    Objects.equals(version(), schema.version()) &&
+                    Objects.equals(doc(), schema.doc()) &&
+                    Objects.equals(parameters(), schema.parameters()) &&
+                    (type() != Type.STRUCT || Objects.equals(fieldsWithContext(), schema.fields())) &&
+                    (type() != Type.MAP || Objects.equals(keySchema().compareContext(context), schema.keySchema())) &&
+                    ((type() != Type.MAP && type() != Type.ARRAY) || Objects.equals(valueSchema().compareContext(context), schema.valueSchema()));
+            context.removeFirst();
+
+            return result;
+        }
+
+        /**
+         * Get the hashcode of the schema, using the context to break cyclic hashing.
+         * @return
+         */
+        @Override
+        public int hashCode() {
+            for (Object c : context) {
+                if (c == ConnectSchema.this) return 0;
+            }
+
+            context.addFirst(this);
+            int result =  Objects.hash(
+                isOptional(),
+                type(),
+                defaultValue(),
+                (type() == type.STRUCT) ? fieldsWithContext() : null,
+                (type() == type.MAP) ? keySchema().compareContext(context) : null,
+                (type() == type.MAP || type() == type.ARRAY) ? valueSchema().compareContext(context) : null,
+                version(),
+                doc(),
+                parameters());
+            context.removeFirst();
+
+            return result;
+        }
+
+        /**
+         * Remap the list of fields to include the context of the comparison. This allows the
+         * fields to use the context when comparing their schema's.
+         * @return A new list of the fields comparison contexts
+         */
+        private List<Object> fieldsWithContext() {
+            if (fields() == null) return null;
+            List<Object> result = new ArrayList();
+            for (Field field: fields()) {
+                result.add(field.compareContext(context));
+            }
+            return result;
+        }
     }
 }

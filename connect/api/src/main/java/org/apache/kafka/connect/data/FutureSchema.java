@@ -23,15 +23,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-public class FutureSchema implements Schema {
+class FutureSchema extends ConnectSchema {
     private Schema child;
-    private final String name;
-    private final boolean optional;
 
-    public FutureSchema(String name, boolean optional) {
+    public FutureSchema(String name, boolean optional, Object defaultValue) {
+        super(null, optional, defaultValue, name, null, null);
         this.child = null;
-        this.name = name;
-        this.optional = optional;
     }
 
     private void checkChild() {
@@ -49,34 +46,14 @@ public class FutureSchema implements Schema {
         if (child == null) {
             if (parents != null) {
                 for (Schema parent : parents) {
-                    /*
-                     * Optionality (nullability) is used as an identifying characteristic because
-                     * it is embedded in the schema, as opposed to other systems where
-                     * optionality is assigned to the field where the schema is used.
-                     */
-                    if (parent.name() == name && parent.isOptional() == optional) {
+                    if (parent.name() == name) {
                         child = parent;
-                        return child;
+                        return this;
                     }
                 }
             }
-            return this;
         }
-        return child;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(name, optional);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if ((o == null) || ((child == null) && getClass() != o.getClass()) || !(o instanceof Schema)) return false;
-        Schema schema = (Schema) o;
-        return Objects.equals(name, schema.name()) &&
-                Objects.equals(optional, schema.isOptional());
+        return this;
     }
 
     @Override
@@ -90,15 +67,40 @@ public class FutureSchema implements Schema {
     }
 
     @Override
-    public Type type() {
-        checkChild();
-        return child.type();
+    public Object defaultValue() {
+        return defaultValue;
     }
 
     @Override
-    public Object defaultValue() {
+    public boolean equals(Object o) {
+        if (child == null) {
+            if (this == o) return true;
+            if (o == null || !(o instanceof FutureSchema)) return false;
+            FutureSchema schema = (FutureSchema) o;
+            return Objects.equals(name(), schema.name()) &&
+                Objects.equals(isOptional(), schema.isOptional()) &&
+                Objects.equals(defaultValue(), schema.defaultValue());
+        }
+        return super.equals(o);
+    }
+
+    @Override
+    public Schema schema() {
+        return this;
+    }
+
+    @Override
+    public int hashCode() {
+        if (child == null) {
+            return Objects.hash(name(), isOptional(), defaultValue());
+        }
+        return super.hashCode();
+    }
+
+    @Override
+    public Type type() {
         checkChild();
-        return child.defaultValue();
+        return child.type();
     }
 
     @Override
@@ -141,11 +143,5 @@ public class FutureSchema implements Schema {
     public Field field(String fieldName) {
         checkChild();
         return child.field(fieldName);
-    }
-
-    @Override
-    public Schema schema() {
-        checkChild();
-        return child.schema();
     }
 }

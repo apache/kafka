@@ -288,7 +288,7 @@ public class SchemaBuilderTest {
         Schema schemaA = SchemaBuilder.struct()
                 .name("A")
                 .field("value", Schema.INT8_SCHEMA)
-                .optional().field("next", "A")
+                .optional().field("next", SchemaBuilder.type("A").optional())
                 .build();
 
         assertEquals(schemaA.field("next").schema(), schemaA);
@@ -299,11 +299,11 @@ public class SchemaBuilderTest {
         Schema schemaA = SchemaBuilder.struct()
                 .name("A").optional()
                 .field("valueA", Schema.INT8_SCHEMA)
-                .field("b", "B")
+                .field("b", SchemaBuilder.type("B"))
                 .build();
 
         Schema schemaB = SchemaBuilder.struct()
-                .name("B").optional()
+                .name("B")
                 .field("valueB", Schema.STRING_SCHEMA)
                 .field("a", schemaA)
                 .build();

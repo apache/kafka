@@ -18,6 +18,7 @@
 package org.apache.kafka.connect.data;
 
 import java.util.Objects;
+import java.util.LinkedList;
 
 /**
  * <p>
@@ -62,16 +63,42 @@ public class Field {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        Field field = (Field) o;
-        return Objects.equals(index, field.index) &&
-                Objects.equals(name, field.name) &&
-                Objects.equals(schema, field.schema);
+        return new ComparisonContext(new LinkedList<>()).equals(o);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, index, schema);
+        return new ComparisonContext(new LinkedList<>()).hashCode();
+    }
+
+    public Object compareContext(LinkedList<Object> context) {
+        return new ComparisonContext(context);
+    }
+
+    /**
+     * Add thread safe context support in order to compare potentially cyclic
+     * schemas. The context is passed on to the field's schema.
+     */
+    class ComparisonContext {
+        private final LinkedList<Object> context;
+
+        public ComparisonContext(LinkedList<Object> context) {
+            this.context = context;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || !(o instanceof Field)) return false;
+            Field field = (Field) o;
+            return Objects.equals(index, field.index) &&
+                    Objects.equals(name, field.name) &&
+                    Objects.equals(schema.compareContext(context), field.schema);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(name, index, schema.compareContext(context));
+        }
     }
 }
