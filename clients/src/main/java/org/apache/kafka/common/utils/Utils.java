@@ -706,7 +706,8 @@ public class Utils {
      * value.
      *
      * Note: changing this method in the future will possibly cause partition selection not to be
-     * compatible with the existing messages already placed on a partition.
+     * compatible with the existing messages already placed on a partition since it is used
+     * in producer's {@link org.apache.kafka.clients.producer.internals.DefaultPartitioner}
      *
      * @param number a given number
      * @return a positive number.
