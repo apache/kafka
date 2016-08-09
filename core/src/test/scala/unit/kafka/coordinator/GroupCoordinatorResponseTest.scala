@@ -20,7 +20,7 @@ package kafka.coordinator
 import kafka.utils.timer.MockTimer
 import org.apache.kafka.common.record.Record
 import org.junit.Assert._
-import kafka.common.OffsetAndMetadata
+import kafka.common.{OffsetAndMetadata, Topic}
 import kafka.message.{Message, MessageSet}
 import kafka.server.{DelayedOperationPurgatory, ReplicaManager, KafkaConfig}
 import kafka.utils._
@@ -35,7 +35,6 @@ import java.util.concurrent.TimeUnit
 import scala.collection._
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future, Promise}
-import org.apache.kafka.common.internals.TopicConstants
 
 /**
  * Test GroupCoordinator responses
@@ -80,12 +79,12 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
 
     // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
     val ret = mutable.Map[String, Map[Int, Seq[Int]]]()
-    ret += (TopicConstants.GROUP_METADATA_TOPIC_NAME -> Map(0 -> Seq(1), 1 -> Seq(1)))
+    ret += (Topic.GroupMetadataTopicName -> Map(0 -> Seq(1), 1 -> Seq(1)))
 
     replicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
 
     zkUtils = EasyMock.createNiceMock(classOf[ZkUtils])
-    EasyMock.expect(zkUtils.getPartitionAssignmentForTopics(Seq(TopicConstants.GROUP_METADATA_TOPIC_NAME))).andReturn(ret)
+    EasyMock.expect(zkUtils.getPartitionAssignmentForTopics(Seq(Topic.GroupMetadataTopicName))).andReturn(ret)
     EasyMock.replay(zkUtils)
 
     timer = new MockTimer
@@ -307,7 +306,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     assertEquals(Errors.NONE.code, syncGroupErrorCode)
 
     EasyMock.reset(replicaManager)
-    EasyMock.expect(replicaManager.getPartition(TopicConstants.GROUP_METADATA_TOPIC_NAME, groupPartitionId)).andReturn(None)
+    EasyMock.expect(replicaManager.getPartition(Topic.GroupMetadataTopicName, groupPartitionId)).andReturn(None)
     EasyMock.expect(replicaManager.getMessageFormatVersion(EasyMock.anyObject())).andReturn(Some(Message.MagicValue_V1)).anyTimes()
     EasyMock.replay(replicaManager)
 
@@ -931,7 +930,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
       EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MessageSet]],
       EasyMock.capture(capturedArgument))).andAnswer(new IAnswer[Unit] {
       override def answer = capturedArgument.getValue.apply(
-        Map(new TopicPartition(TopicConstants.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
+        Map(new TopicPartition(Topic.GroupMetadataTopicName, groupPartitionId) ->
           new PartitionResponse(Errors.NONE.code, 0L, Record.NO_TIMESTAMP)
         )
       )})
@@ -1009,7 +1008,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
       EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MessageSet]],
       EasyMock.capture(capturedArgument))).andAnswer(new IAnswer[Unit] {
       override def answer = capturedArgument.getValue.apply(
-        Map(new TopicPartition(TopicConstants.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
+        Map(new TopicPartition(Topic.GroupMetadataTopicName, groupPartitionId) ->
           new PartitionResponse(Errors.NONE.code, 0L, Record.NO_TIMESTAMP)
         )
       )})
@@ -1023,7 +1022,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   private def leaveGroup(groupId: String, consumerId: String): LeaveGroupCallbackParams = {
     val (responseFuture, responseCallback) = setupHeartbeatCallback
 
-    EasyMock.expect(replicaManager.getPartition(TopicConstants.GROUP_METADATA_TOPIC_NAME, groupPartitionId)).andReturn(None)
+    EasyMock.expect(replicaManager.getPartition(Topic.GroupMetadataTopicName, groupPartitionId)).andReturn(None)
     EasyMock.expect(replicaManager.getMessageFormatVersion(EasyMock.anyObject())).andReturn(Some(Message.MagicValue_V1)).anyTimes()
     EasyMock.replay(replicaManager)
 

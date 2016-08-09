@@ -21,13 +21,14 @@ import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import kafka.utils.TestUtils
 import java.util.Properties
+
+import kafka.common.Topic
 import org.apache.kafka.clients.producer.KafkaProducer
 import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
 import org.junit.{After, Before}
+
 import scala.collection.mutable.Buffer
-import kafka.coordinator.GroupCoordinator
-import org.apache.kafka.common.internals.TopicConstants
 
 /**
  * A helper class for writing integration tests that involve producers, consumers, and servers
@@ -77,7 +78,7 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
     }
 
     // create the consumer offset topic
-    TestUtils.createTopic(zkUtils, TopicConstants.GROUP_METADATA_TOPIC_NAME,
+    TestUtils.createTopic(zkUtils, Topic.GroupMetadataTopicName,
       serverConfig.getProperty(KafkaConfig.OffsetsTopicPartitionsProp).toInt,
       serverConfig.getProperty(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
       servers,
