@@ -95,12 +95,12 @@ public class KerberosShortNamer {
             if (result != null)
                 return result;
         }
-        throw new NoMatchingRule("No rules " + principalToLocalRules + " applied to " + kerberosName);
+        throw new NoMatchingRule("No rules apply to " + kerberosName + ", rules " + principalToLocalRules);
     }
 
     @Override
     public String toString() {
-      return "KerberosShortNamer " + principalToLocalRules.toString();
+      return "KerberosShortNamer(principalToLocalRules = " + principalToLocalRules + ")";
     }
 
 }
