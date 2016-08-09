@@ -39,7 +39,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Higher level consumer access to the network layer with basic support for request futures. This class
@@ -49,10 +48,8 @@ import java.util.concurrent.locks.ReentrantLock;
 public class ConsumerNetworkClient implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(ConsumerNetworkClient.class);
 
-    // this lock protects concurrent access to the mutable state of this class (excluding the
-    // wakeup flag and the request completion queue below).
-    private final ReentrantLock lock = new ReentrantLock();
-
+    // the mutable state of this class is protected by the object's monitor (excluding the wakeup
+    // flag and the request completion queue below).
     private final KafkaClient client;
     private final Map<Node, List<ClientRequest>> unsent = new HashMap<>();
     private final Metadata metadata;
@@ -112,25 +109,19 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     private void put(Node node, ClientRequest request) {
-        lock.lock();
-        try {
+        synchronized (this) {
             List<ClientRequest> nodeUnsent = unsent.get(node);
             if (nodeUnsent == null) {
                 nodeUnsent = new ArrayList<>();
                 unsent.put(node, nodeUnsent);
             }
             nodeUnsent.add(request);
-        } finally {
-            lock.unlock();
         }
     }
 
     public Node leastLoadedNode() {
-        lock.lock();
-        try {
+        synchronized (this) {
             return client.leastLoadedNode(time.milliseconds());
-        } finally {
-            lock.unlock();
         }
     }
 
@@ -209,8 +200,7 @@ public class ConsumerNetworkClient implements Closeable {
      * @param now current time in milliseconds
      */
     public void poll(long timeout, long now) {
-        lock.lock();
-        try {
+        synchronized (this) {
             // send all the requests we can send now
             trySend(now);
 
@@ -232,8 +222,6 @@ public class ConsumerNetworkClient implements Closeable {
 
             // fail requests that couldn't be sent if they have expired
             failExpiredRequests(now);
-        } finally {
-            lock.unlock();
         }
 
         // called without the lock to avoid deadlock potential if handlers need to acquire locks
@@ -269,13 +257,10 @@ public class ConsumerNetworkClient implements Closeable {
      * @return The number of pending requests
      */
     public int pendingRequestCount(Node node) {
-        lock.lock();
-        try {
+        synchronized (this) {
             List<ClientRequest> pending = unsent.get(node);
             int unsentCount = pending == null ? 0 : pending.size();
             return unsentCount + client.inFlightRequestCount(node.idString());
-        } finally {
-            lock.unlock();
         }
     }
 
@@ -285,14 +270,11 @@ public class ConsumerNetworkClient implements Closeable {
      * @return The total count of pending requests
      */
     public int pendingRequestCount() {
-        lock.lock();
-        try {
+        synchronized (this) {
             int total = 0;
             for (List<ClientRequest> requests: unsent.values())
                 total += requests.size();
             return total + client.inFlightRequestCount();
-        } finally {
-            lock.unlock();
         }
     }
 
@@ -350,8 +332,7 @@ public class ConsumerNetworkClient implements Closeable {
 
     public void failUnsentRequests(Node node, RuntimeException e) {
         // clear unsent requests to node and fail their corresponding futures
-        lock.lock();
-        try {
+        synchronized (this) {
             List<ClientRequest> unsentRequests = unsent.remove(node);
             if (unsentRequests != null) {
                 for (ClientRequest request : unsentRequests) {
@@ -359,8 +340,6 @@ public class ConsumerNetworkClient implements Closeable {
                     handler.onFailure(e);
                 }
             }
-        } finally {
-            lock.unlock();
         }
 
         // called without the lock to avoid deadlock potential
@@ -393,18 +372,13 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     public void disableWakeups() {
-        lock.lock();
-        try {
+        synchronized (this) {
             wakeupDisabledCount++;
-        } finally {
-            lock.unlock();
         }
-
     }
 
     public void enableWakeups() {
-        lock.lock();
-        try {
+        synchronized (this) {
             if (wakeupDisabledCount <= 0)
                 throw new IllegalStateException("Cannot enable wakeups since they were never disabled");
 
@@ -414,18 +388,13 @@ public class ConsumerNetworkClient implements Closeable {
             // could be cleared by poll(0) while wakeups were disabled
             if (wakeupDisabledCount == 0 && wakeup.get())
                 this.client.wakeup();
-        } finally {
-            lock.unlock();
         }
     }
 
     @Override
     public void close() throws IOException {
-        lock.lock();
-        try {
+        synchronized (this) {
             client.close();
-        } finally {
-            lock.unlock();
         }
     }
 
@@ -435,11 +404,8 @@ public class ConsumerNetworkClient implements Closeable {
      * @param node Node to connect to if possible
      */
     public boolean connectionFailed(Node node) {
-        lock.lock();
-        try {
+        synchronized (this) {
             return client.connectionFailed(node);
-        } finally {
-            lock.unlock();
         }
     }
 
@@ -450,11 +416,8 @@ public class ConsumerNetworkClient implements Closeable {
      * @param node The node to connect to
      */
     public void tryConnect(Node node) {
-        lock.lock();
-        try {
+        synchronized (this) {
             client.ready(node, time.milliseconds());
-        } finally {
-            lock.unlock();
         }
     }
 
