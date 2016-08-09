@@ -102,10 +102,8 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         # Bounce again with ACLs for new mechanism
         self.set_authorizer_and_bounce(security_protocol, security_protocol)
 
-    @cluster(num_nodes=6)
-    @matrix(client_protocol=["SSL"])
-    @cluster(num_nodes=7)
-    @matrix(client_protocol=["SASL_PLAINTEXT", "SASL_SSL"])
+    @cluster(num_nodes=8)
+    @matrix(client_protocol=["SSL", "SASL_PLAINTEXT", "SASL_SSL"])
     def test_rolling_upgrade_phase_one(self, client_protocol):
         """
         Start with a PLAINTEXT cluster, open a SECURED port, via a rolling upgrade, ensuring we could produce
@@ -126,7 +124,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         self.create_producer_and_consumer()
         self.run_produce_consume_validate(lambda: time.sleep(1))
 
-    @cluster(num_nodes=7)
+    @cluster(num_nodes=8)
     @matrix(client_protocol=["SASL_SSL", "SSL", "SASL_PLAINTEXT"], broker_protocol=["SASL_SSL", "SSL", "SASL_PLAINTEXT"])
     def test_rolling_upgrade_phase_two(self, client_protocol, broker_protocol):
         """
@@ -147,7 +145,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         #Roll in the security protocol. Disable Plaintext. Ensure we can produce and Consume throughout
         self.run_produce_consume_validate(self.roll_in_secured_settings, client_protocol, broker_protocol)
 
-    @cluster(num_nodes=7)
+    @cluster(num_nodes=9)
     @parametrize(new_client_sasl_mechanism='PLAIN')
     def test_rolling_upgrade_sasl_mechanism_phase_one(self, new_client_sasl_mechanism):
         """
@@ -171,7 +169,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         self.create_producer_and_consumer()
         self.run_produce_consume_validate(lambda: time.sleep(1))
 
-    @cluster(num_nodes=7)
+    @cluster(num_nodes=8)
     @parametrize(new_sasl_mechanism='PLAIN')
     def test_rolling_upgrade_sasl_mechanism_phase_two(self, new_sasl_mechanism):
         """

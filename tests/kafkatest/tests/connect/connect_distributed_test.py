@@ -143,6 +143,7 @@ class ConnectDistributedTest(Test):
         status = self._connector_status(connector.name, node)
         return self._task_has_state(task_id, status, 'RUNNING')
 
+    @cluster(num_nodes=5)
     def test_restart_failed_connector(self):
         self.setup_services()
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
@@ -221,6 +222,7 @@ class ConnectDistributedTest(Test):
         wait_until(lambda: self.task_is_running(connector, task_id), timeout_sec=10,
                    err_msg="Failed to see task transition to the RUNNING state")
 
+    @cluster(num_nodes=5)
     def test_pause_and_resume_source(self):
         """
         Verify that source connectors stop producing records when paused and begin again after

@@ -71,8 +71,10 @@ class Log4jAppenderTest(Test):
                                         message_validator=self.custom_message_validator)
         self.consumer.start()
 
-    @cluster(num_nodes=3)
-    @matrix(security_protocol=['PLAINTEXT', 'SSL', 'SASL_PLAINTEXT', 'SASL_SSL'])
+    @cluster(num_nodes=4)
+    @matrix(security_protocol=['PLAINTEXT', 'SSL'])
+    @cluster(num_nodes=5)
+    @matrix(security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'])
     def test_log4j_appender(self, security_protocol='PLAINTEXT'):
         """
         Tests if KafkaLog4jAppender is producing to Kafka topic
