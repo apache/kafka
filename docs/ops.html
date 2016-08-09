@@ -689,6 +689,149 @@ We do graphing and alerting on the following metrics:
     </tr>
 </tbody></table>
 
+<h4><a id="selector_monitoring" href="#selector_monitoring">Common monitoring metrics for producer/consumer/connect</a></h4>
+
+The following metrics are available on producer/consumer/connector instances.  For specific metrics, please see following sections.
+
+<table class="data-table">
+  <tbody>
+    <tr>
+      <th>Metric/Attribute name</th>
+      <th>Description</th>
+      <th>Mbean name</th>
+    </tr>
+    <tr>
+      <td>connection-close-rate</td>
+      <td>Connections closed per second in the window.</td>
+      <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>connection-creation-rate</td>
+      <td>New connections established per second in the window.</td>
+      <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>network-io-rate</td>
+      <td>The average number of network operations (reads or writes) on all connections per second.</td>
+      <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>outgoing-byte-rate</td>
+      <td>The average number of outgoing bytes sent per second to all servers.</td>
+      <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>request-rate</td>
+      <td>The average number of requests sent per second.</td>
+      <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>request-size-avg</td>
+      <td>The average size of all requests in the window.</td>
+      <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>request-size-max</td>
+      <td>The maximum size of any request sent in the window.</td>
+      <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>incoming-byte-rate</td>
+      <td>Bytes/second read off all sockets.</td>
+      <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>response-rate</td>
+      <td>Responses received sent per second.</td>
+      <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>select-rate</td>
+      <td>Number of times the I/O layer checked for new I/O to perform per second.</td>
+      <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>io-wait-time-ns-avg</td>
+      <td>The average length of time the I/O thread spent waiting for a socket ready for reads or writes in nanoseconds.</td>
+      <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>io-wait-ratio</td>
+      <td>The fraction of time the I/O thread spent waiting.</td>
+      <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>io-time-ns-avg</td>
+      <td>The average length of time for I/O per select call in nanoseconds.</td>
+      <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>io-ratio</td>
+      <td>The fraction of time the I/O thread spent doing I/O.</td>
+      <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>connection-count</td>
+      <td>The current number of active connections.</td>
+      <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+    </tr>
+  </tbody>
+</table>
+
+<h4><a id="common_node_monitoring" href="#common_node_monitoring">Common Per-broker metrics for producer/consumer/connect</a></h4>
+
+The following metrics are available on producer/consumer/connector instances.  For specific metrics, please see following sections.
+
+<table class="data-table">
+  <tbody>
+    <tr>
+      <th>Metric/Attribute name</th>
+      <th>Description</th>
+      <th>Mbean name</th>
+    </tr>
+    <tr>
+      <td>outgoing-byte-rate</td>
+      <td>The average number of outgoing bytes sent per second for a node.</td>
+      <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+    </tr>
+    <tr>
+      <td>request-rate</td>
+      <td>The average number of requests sent per second for a node.</td>
+      <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+    </tr>
+    <tr>
+      <td>request-size-avg</td>
+      <td>The average size of all requests in the window for a node.</td>
+      <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+    </tr>
+    <tr>
+      <td>request-size-max</td>
+      <td>The maximum size of any request sent in the window for a node.</td>
+      <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+    </tr>
+    <tr>
+      <td>incoming-byte-rate</td>
+      <td>The average number of responses received per second for a node.</td>
+      <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+    </tr>
+    <tr>
+      <td>request-latency-avg</td>
+      <td>The average request latency in ms for a node.</td>
+      <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+    </tr>
+    <tr>
+      <td>request-latency-max</td>
+      <td>The maximum request latency in ms for a node.</td>
+      <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+    </tr>
+    <tr>
+      <td>response-rate</td>
+      <td>Responses received sent per second for a node.</td>
+      <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+    </tr>
+  </tbody>
+</table>
+
 <h4><a id="new_producer_monitoring" href="#new_producer_monitoring">New producer monitoring</a></h4>
 
 The following metrics are available on new producer instances.
@@ -794,121 +937,7 @@ The following metrics are available on new producer instances.
       <td>The age in seconds of the current producer metadata being used.</td>
       <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
     </tr>
-    <tr>
-      <td>connection-close-rate</td>
-      <td>Connections closed per second in the window.</td>
-      <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
-    </tr>
-    <tr>
-      <td>connection-creation-rate</td>
-      <td>New connections established per second in the window.</td>
-      <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
-    </tr>
-    <tr>
-      <td>network-io-rate</td>
-      <td>The average number of network operations (reads or writes) on all connections per second.</td>
-      <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
-    </tr>
-    <tr>
-      <td>outgoing-byte-rate</td>
-      <td>The average number of outgoing bytes sent per second to all servers.</td>
-      <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
-    </tr>
-    <tr>
-      <td>request-rate</td>
-      <td>The average number of requests sent per second.</td>
-      <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
-    </tr>
-    <tr>
-      <td>request-size-avg</td>
-      <td>The average size of all requests in the window.</td>
-      <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
-    </tr>
-    <tr>
-      <td>request-size-max</td>
-      <td>The maximum size of any request sent in the window.</td>
-      <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
-    </tr>
-    <tr>
-      <td>incoming-byte-rate</td>
-      <td>Bytes/second read off all sockets.</td>
-      <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
-    </tr>
-    <tr>
-      <td>response-rate</td>
-      <td>Responses received sent per second.</td>
-      <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
-    </tr>
-    <tr>
-      <td>select-rate</td>
-      <td>Number of times the I/O layer checked for new I/O to perform per second.</td>
-      <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
-    </tr>
-    <tr>
-      <td>io-wait-time-ns-avg</td>
-      <td>The average length of time the I/O thread spent waiting for a socket ready for reads or writes in nanoseconds.</td>
-      <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
-    </tr>
-    <tr>
-      <td>io-wait-ratio</td>
-      <td>The fraction of time the I/O thread spent waiting.</td>
-      <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
-    </tr>
-    <tr>
-      <td>io-time-ns-avg</td>
-      <td>The average length of time for I/O per select call in nanoseconds.</td>
-      <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
-    </tr>
-    <tr>
-      <td>io-ratio</td>
-      <td>The fraction of time the I/O thread spent doing I/O.</td>
-      <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
-    </tr>
-    <tr>
-      <td>connection-count</td>
-      <td>The current number of active connections.</td>
-      <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
-    </tr>
-    <tr>
-      <td>outgoing-byte-rate</td>
-      <td>The average number of outgoing bytes sent per second for a node.</td>
-      <td>kafka.producer:type=producer-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
-    </tr>
-    <tr>
-      <td>request-rate</td>
-      <td>The average number of requests sent per second for a node.</td>
-      <td>kafka.producer:type=producer-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
-    </tr>
-    <tr>
-      <td>request-size-avg</td>
-      <td>The average size of all requests in the window for a node.</td>
-      <td>kafka.producer:type=producer-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
-    </tr>
-    <tr>
-      <td>request-size-max</td>
-      <td>The maximum size of any request sent in the window for a node.</td>
-      <td>kafka.producer:type=producer-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
-    </tr>
-    <tr>
-      <td>incoming-byte-rate</td>
-      <td>The average number of responses received per second for a node.</td>
-      <td>kafka.producer:type=producer-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
-    </tr>
-    <tr>
-      <td>request-latency-avg</td>
-      <td>The average request latency in ms for a node.</td>
-      <td>kafka.producer:type=producer-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
-    </tr>
-    <tr>
-      <td>request-latency-max</td>
-      <td>The maximum request latency in ms for a node.</td>
-      <td>kafka.producer:type=producer-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
-    </tr>
-    <tr>
-      <td>response-rate</td>
-      <td>Responses received sent per second for a node.</td>
-      <td>kafka.producer:type=producer-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
-    </tr>
+
     <tr>
       <td>record-send-rate</td>
       <td>The average number of records sent per second for a topic.</td>
@@ -945,6 +974,194 @@ The following metrics are available on new producer instances.
       <td>kafka.producer:type=producer-topic-metrics,client-id=([-.\w]+)</td>
     </tr>
 </tbody></table>
+
+
+<h4><a id="new_consumer_monitoring" href="#new_consumer_monitoring">New consumer monitoring</a></h4>
+
+The following metrics are available on new consumer instances.
+
+<h5><a id="new_consumer_group_monitoring" href="#new_consumer_group_monitoring">Consumer Group Metrics</a></h5>
+<table class="data-table">
+  <tbody>
+    <tr>
+      <th>Metric/Attribute name</th>
+      <th>Description</th>
+      <th>Mbean name</th>
+    </tr>
+    <tr>
+      <td>commit-latency-avg</td>
+      <td>The average time taken for a commit request</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>commit-latency-max</td>
+      <td>The max time taken for a commit request</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>commit-rate</td>
+      <td>The number of commit calls per second</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>assigned-partitions</td>
+      <td>The number of partitions currently assigned to this consumer</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>heartbeat-response-time-max</td>
+      <td>The max time taken to receive a response to a heartbeat request</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>heartbeat-rate</td>
+      <td>The average number of heartbeats per second</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>join-time-avg</td>
+      <td>The average time taken for a group rejoin</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>join-time-max</td>
+      <td>The max time taken for a group rejoin</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>join-rate</td>
+      <td>The number of group joins per second</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>sync-time-avg</td>
+      <td>The average time taken for a group sync</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>sync-time-max</td>
+      <td>The max time taken for a group sync</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>sync-rate</td>
+      <td>The number of group syncs per second</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>last-heartbeat-seconds-ago</td>
+      <td>The number of seconds since the last controller heartbeat</td>
+      <td>kafka.consumer:type=consumer-coordinator-metrics,client-id=([-.\w]+)</td>
+    </tr>
+  </tbody>
+</table>
+
+<h5><a id="new_consumer_fetch_monitoring" href="#new_consumer_fetch_monitoring">Consumer Fetch Metrics</a></h5>
+
+<table class="data-table">
+  <tbody>
+    <tr>
+      <th>Metric/Attribute name</th>
+      <th>Description</th>
+      <th>Mbean name</th>
+    </tr>
+    <tr>
+      <td>fetch-size-avg</td>
+      <td>The average number of bytes fetched per request</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>fetch-size-max</td>
+      <td>The maximum number of bytes fetched per request</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>bytes-consumed-rate</td>
+      <td>The average number of bytes consumed per second</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>records-per-request-avg</td>
+      <td>The average number of records in each request</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>records-consumed-rate</td>
+      <td>The average number of records consumed per second</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>fetch-latency-avg</td>
+      <td>The average time taken for a fetch request</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>fetch-latency-max</td>
+      <td>The max time taken for a fetch request</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>fetch-rate</td>
+      <td>The number of fetch requests per second</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>records-lag-max</td>
+      <td>The maximum lag in terms of number of records for any partition in this window</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>fetch-throttle-time-avg</td>
+      <td>The average throttle time in ms</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>fetch-throttle-time-max</td>
+      <td>The maximum throttle time in ms</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+)</td>
+    </tr>
+  </tbody>
+</table>
+
+
+<h5><a id="topic_fetch_monitoring" href="#topic_fetch_monitoring">Topic-level Fetch Metrics</a></h5>
+
+<table class="data-table">
+  <tbody>
+    <tr>
+      <th>Metric/Attribute name</th>
+      <th>Description</th>
+      <th>Mbean name</th>
+    </tr>
+    <tr>
+      <td>fetch-size-avg</td>
+      <td>The average number of bytes fetched per request for a specific topic.</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+),topic=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>fetch-size-max</td>
+      <td>The maximum number of bytes fetched per request for a specific topic.</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+),topic=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>bytes-consumed-rate</td>
+      <td>The average number of bytes consumed per second for a specific topic.</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+),topic=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>records-per-request-avg</td>
+      <td>The average number of records in each request for a specific topic.</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+),topic=([-.\w]+)</td>
+    </tr>
+    <tr>
+      <td>records-consumed-rate</td>
+      <td>The average number of records consumed per second for a specific topic.</td>
+      <td>kafka.consumer:type=consumer-fetch-manager-metrics,client-id=([-.\w]+),topic=([-.\w]+)</td>
+    </tr>
+  </tbody>
+</table>
+
+<h5><a id="others_monitoring" href="#others_monitoring">Others</a></h5>
 
 We recommend monitoring GC time and other stats and various server stats such as CPU utilization, I/O service time, etc.
 

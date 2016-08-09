@@ -31,6 +31,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
+import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
@@ -107,5 +109,67 @@ public class StreamsConfigTest {
         List<String> actualBootstrapServers = config.getList(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
         assertEquals(expectedBootstrapServers, actualBootstrapServers);
     }
+
+    @Test
+    public void shouldSupportPrefixedConsumerConfigs() throws Exception {
+        props.put(consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
+        props.put(consumerPrefix(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG), 1);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.getConsumerConfigs(null, "groupId", "clientId");
+        assertEquals("earliest", consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG));
+        assertEquals(1, consumerConfigs.get(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG));
+    }
+
+    @Test
+    public void shouldSupportPrefixedRestoreConsumerConfigs() throws Exception {
+        props.put(consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
+        props.put(consumerPrefix(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG), 1);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.getRestoreConsumerConfigs("clientId");
+        assertEquals("earliest", consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG));
+        assertEquals(1, consumerConfigs.get(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG));
+    }
+
+
+    @Test
+    public void shouldSupportPrefixedProducerConfigs() throws Exception {
+        props.put(producerPrefix(ProducerConfig.BUFFER_MEMORY_CONFIG), 10);
+        props.put(producerPrefix(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG), 1);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final Map<String, Object> configs = streamsConfig.getProducerConfigs("client");
+        assertEquals(10, configs.get(ProducerConfig.BUFFER_MEMORY_CONFIG));
+        assertEquals(1, configs.get(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG));
+    }
+
+    @Test
+    public void shouldBeSupportNonPrefixedConsumerConfigs() throws Exception {
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG, 1);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.getConsumerConfigs(null, "groupId", "clientId");
+        assertEquals("earliest", consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG));
+        assertEquals(1, consumerConfigs.get(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG));
+    }
+
+    @Test
+    public void shouldBeSupportNonPrefixedRestoreConsumerConfigs() throws Exception {
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG, 1);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.getRestoreConsumerConfigs("groupId");
+        assertEquals("earliest", consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG));
+        assertEquals(1, consumerConfigs.get(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG));
+    }
+
+    @Test
+    public void shouldSupportNonPrefixedProducerConfigs() throws Exception {
+        props.put(ProducerConfig.BUFFER_MEMORY_CONFIG, 10);
+        props.put(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG, 1);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final Map<String, Object> configs = streamsConfig.getProducerConfigs("client");
+        assertEquals(10, configs.get(ProducerConfig.BUFFER_MEMORY_CONFIG));
+        assertEquals(1, configs.get(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG));
+    }
+
 
 }

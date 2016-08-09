@@ -19,13 +19,13 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import kafka.utils.{TestUtils, Logging, ShutdownableThread}
+import kafka.common.Topic
 import kafka.server.KafkaConfig
 import java.util.ArrayList
 import org.junit.Assert._
 import org.junit.{Before, Test}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
-import org.apache.kafka.common.internals.TopicConstants
 import org.apache.kafka.clients.producer.KafkaProducer
 
 /**
@@ -192,7 +192,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     // get metadata for the topic
     var parts: Seq[PartitionInfo] = null
     while (parts == null)
-      parts = consumer0.partitionsFor(TopicConstants.GROUP_METADATA_TOPIC_NAME).asScala
+      parts = consumer0.partitionsFor(Topic.GroupMetadataTopicName).asScala
     assertEquals(1, parts.size)
     assertNotNull(parts.head.leader())
 

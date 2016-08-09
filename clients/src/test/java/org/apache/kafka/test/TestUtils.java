@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -52,6 +53,9 @@ public class TestUtils {
     public static final String LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
     public static final String DIGITS = "0123456789";
     public static final String LETTERS_AND_DIGITS = LETTERS + DIGITS;
+
+    public static final String GROUP_METADATA_TOPIC_NAME = "__consumer_offsets";
+    public static final Set<String> INTERNAL_TOPICS = Collections.singleton(GROUP_METADATA_TOPIC_NAME);
 
     /* A consistent random number generator to make tests repeatable */
     public static final Random SEEDED_RANDOM = new Random(192348092834L);
@@ -77,7 +81,7 @@ public class TestUtils {
             for (int i = 0; i < partitions; i++)
                 parts.add(new PartitionInfo(topic, i, ns[i % ns.length], ns, ns));
         }
-        return new Cluster(asList(ns), parts, Collections.<String>emptySet());
+        return new Cluster(asList(ns), parts, Collections.<String>emptySet(), INTERNAL_TOPICS);
     }
 
     public static Cluster clusterWith(int nodes, String topic, int partitions) {

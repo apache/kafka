@@ -47,6 +47,12 @@ public class StreamsConfig extends AbstractConfig {
 
     private static final ConfigDef CONFIG;
 
+    // Prefix used to isolate consumer configs from producer configs.
+    public static final String CONSUMER_PREFIX = "consumer.";
+
+    // Prefix used to isolate producer configs from consumer configs.
+    public static final String PRODUCER_PREFIX = "producer.";
+
     /** <code>state.dir</code> */
     public static final String STATE_DIR_CONFIG = "state.dir";
     private static final String STATE_DIR_DOC = "Directory location for state store.";
@@ -120,6 +126,7 @@ public class StreamsConfig extends AbstractConfig {
 
     public static final String ROCKSDB_CONFIG_SETTER_CLASS_CONFIG = "rocksdb.config.setter";
     public static final String ROCKSDB_CONFIG_SETTER_CLASS_DOC = "A Rocks DB config setter class that implements the <code>RocksDBConfigSetter</code> interface";
+
 
 
     static {
@@ -251,23 +258,55 @@ public class StreamsConfig extends AbstractConfig {
         public static final String STREAM_THREAD_INSTANCE = "__stream.thread.instance__";
     }
 
+    /**
+     * Prefix a property with {@link StreamsConfig#CONSUMER_PREFIX}. This is used to isolate consumer configs
+     * from producer configs
+     * @param consumerProp
+     * @return CONSUMER_PREFIX + consumerProp
+     */
+    public static String consumerPrefix(final String consumerProp) {
+        return CONSUMER_PREFIX + consumerProp;
+    }
+
+    /**
+     * Prefix a property with {@link StreamsConfig#PRODUCER_PREFIX}. This is used to isolate producer configs
+     * from consumer configs
+     * @param producerProp
+     * @return PRODUCER_PREFIX + consumerProp
+     */
+    public static String producerPrefix(final String producerProp) {
+        return PRODUCER_PREFIX + producerProp;
+    }
+
     public StreamsConfig(Map<?, ?> props) {
         super(CONFIG, props);
     }
 
+    /**
+     * Get the configs specific to the Consumer. Properties using the prefix {@link StreamsConfig#CONSUMER_PREFIX}
+     * will be used in favor over their non-prefixed versions except in the case of {@link ConsumerConfig#BOOTSTRAP_SERVERS_CONFIG}
+     * where we always use the non-prefixed version as we only support reading/writing from/to the same Kafka Cluster
+     * @param streamThread   the {@link StreamThread} creating a consumer
+     * @param groupId        consumer groupId
+     * @param clientId       clientId
+     * @return  Map of the Consumer configuration.
+     * @throws ConfigException
+     */
     public Map<String, Object> getConsumerConfigs(StreamThread streamThread, String groupId, String clientId) throws ConfigException {
-        Map<String, Object> originals = this.originals();
+        final Map<String, Object> consumerProps = getClientPropsWithPrefix(CONSUMER_PREFIX);
 
         // disable auto commit and throw exception if there is user overridden values,
         // this is necessary for streams commit semantics
-        if (originals.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
+        if (consumerProps.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
             throw new ConfigException("Unexpected user-specified consumer config " + ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG
                     + ", as the streams client will always turn off auto committing.");
         }
 
         // generate consumer configs from original properties and overridden maps
-        Map<String, Object> props = clientProps(ConsumerConfig.configNames(), originals, CONSUMER_DEFAULT_OVERRIDES);
+        Map<String, Object> props = clientProps(ConsumerConfig.configNames(), consumerProps, CONSUMER_DEFAULT_OVERRIDES);
 
+        // bootstrap.servers should be from StreamsConfig
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, this.originals().get(BOOTSTRAP_SERVERS_CONFIG));
         // add client id with stream client id prefix, and group id
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-consumer");
@@ -283,18 +322,30 @@ public class StreamsConfig extends AbstractConfig {
         return props;
     }
 
+
+    /**
+     * Get the consumer config for the restore-consumer. Properties using the prefix {@link StreamsConfig#CONSUMER_PREFIX}
+     * will be used in favor over their non-prefixed versions except in the case of {@link ConsumerConfig#BOOTSTRAP_SERVERS_CONFIG}
+     * where we always use the non-prefixed version as we only support reading/writing from/to the same Kafka Cluster
+     * @param clientId  clientId
+     * @return  Map of the Consumer configuration
+     * @throws ConfigException
+     */
     public Map<String, Object> getRestoreConsumerConfigs(String clientId) throws ConfigException {
-        Map<String, Object> originals = this.originals();
+        Map<String, Object> consumerProps = getClientPropsWithPrefix(CONSUMER_PREFIX);
 
         // disable auto commit and throw exception if there is user overridden values,
         // this is necessary for streams commit semantics
-        if (originals.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
+        if (consumerProps.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
             throw new ConfigException("Unexpected user-specified consumer config " + ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG
                     + ", as the streams client will always turn off auto committing.");
         }
 
         // generate consumer configs from original properties and overridden maps
-        Map<String, Object> props = clientProps(ConsumerConfig.configNames(), originals, CONSUMER_DEFAULT_OVERRIDES);
+        Map<String, Object> props = clientProps(ConsumerConfig.configNames(), consumerProps, CONSUMER_DEFAULT_OVERRIDES);
+
+        // bootstrap.servers should be from StreamsConfig
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, this.originals().get(BOOTSTRAP_SERVERS_CONFIG));
 
         // no need to set group id for a restore consumer
         props.remove(ConsumerConfig.GROUP_ID_CONFIG);
@@ -305,13 +356,29 @@ public class StreamsConfig extends AbstractConfig {
         return props;
     }
 
+
+    /**
+     * Get the configs for the Producer. Properties using the prefix {@link StreamsConfig#PRODUCER_PREFIX}
+     * will be used in favor over their non-prefixed versions except in the case of {@link ProducerConfig#BOOTSTRAP_SERVERS_CONFIG}
+     * where we always use the non-prefixed version as we only support reading/writing from/to the same Kafka Cluster
+     * @param clientId  clientId
+     * @return  Map of the Consumer configuration
+     * @throws ConfigException
+     */
     public Map<String, Object> getProducerConfigs(String clientId) {
         // generate producer configs from original properties and overridden maps
-        Map<String, Object> props = clientProps(ProducerConfig.configNames(), this.originals(), PRODUCER_DEFAULT_OVERRIDES);
-
+        Map<String, Object> props = clientProps(ProducerConfig.configNames(), getClientPropsWithPrefix(PRODUCER_PREFIX), PRODUCER_DEFAULT_OVERRIDES);
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, this.originals().get(BOOTSTRAP_SERVERS_CONFIG));
         // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-producer");
 
+        return props;
+    }
+
+    private Map<String, Object> getClientPropsWithPrefix(final String prefix) {
+        // To be backward compatible we first get all the originals.
+        final Map<String, Object> props = this.originals();
+        props.putAll(this.originalsWithPrefix(prefix));
         return props;
     }
 

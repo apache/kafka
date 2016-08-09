@@ -252,9 +252,12 @@ public class MetadataResponse extends AbstractRequestResponse {
      * @return the cluster snapshot
      */
     public Cluster cluster() {
+        Set<String> internalTopics = new HashSet<>();
         List<PartitionInfo> partitions = new ArrayList<>();
         for (TopicMetadata metadata : topicMetadata) {
             if (metadata.error == Errors.NONE) {
+                if (metadata.isInternal)
+                    internalTopics.add(metadata.topic);
                 for (PartitionMetadata partitionMetadata : metadata.partitionMetadata)
                     partitions.add(new PartitionInfo(
                             metadata.topic,
@@ -265,7 +268,7 @@ public class MetadataResponse extends AbstractRequestResponse {
             }
         }
 
-        return new Cluster(this.brokers, partitions, topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED));
+        return new Cluster(this.brokers, partitions, topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED), internalTopics);
     }
 
     /**

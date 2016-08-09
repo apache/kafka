@@ -48,7 +48,6 @@ import java.util.concurrent.locks.ReentrantLock
 
 import com.yammer.metrics.core.Gauge
 import kafka.utils.CoreUtils.inLock
-import org.apache.kafka.common.internals.TopicConstants
 
 
 class GroupMetadataManager(val brokerId: Int,
@@ -153,9 +152,9 @@ class GroupMetadataManager(val brokerId: Int,
       val tombstone = new Message(bytes = null, key = GroupMetadataManager.groupMetadataKey(group.groupId),
         timestamp = timestamp, magicValue = magicValue)
 
-      val partitionOpt = replicaManager.getPartition(TopicConstants.GROUP_METADATA_TOPIC_NAME, groupPartition)
+      val partitionOpt = replicaManager.getPartition(Topic.GroupMetadataTopicName, groupPartition)
       partitionOpt.foreach { partition =>
-        val appendPartition = TopicAndPartition(TopicConstants.GROUP_METADATA_TOPIC_NAME, groupPartition)
+        val appendPartition = TopicAndPartition(Topic.GroupMetadataTopicName, groupPartition)
 
         trace("Marking group %s as deleted.".format(group.groupId))
 
@@ -182,7 +181,7 @@ class GroupMetadataManager(val brokerId: Int,
       timestamp = timestamp,
       magicValue = magicValue)
 
-    val groupMetadataPartition = new TopicPartition(TopicConstants.GROUP_METADATA_TOPIC_NAME, partitionFor(group.groupId))
+    val groupMetadataPartition = new TopicPartition(Topic.GroupMetadataTopicName, partitionFor(group.groupId))
 
     val groupMetadataMessageSet = Map(groupMetadataPartition ->
       new ByteBufferMessageSet(config.offsetsTopicCompressionCodec, message))
@@ -268,7 +267,7 @@ class GroupMetadataManager(val brokerId: Int,
       )
     }.toSeq
 
-    val offsetTopicPartition = new TopicPartition(TopicConstants.GROUP_METADATA_TOPIC_NAME, partitionFor(group.groupId))
+    val offsetTopicPartition = new TopicPartition(Topic.GroupMetadataTopicName, partitionFor(group.groupId))
 
     val offsetsAndMetadataMessageSet = Map(offsetTopicPartition ->
       new ByteBufferMessageSet(config.offsetsTopicCompressionCodec, messages:_*))
@@ -378,7 +377,7 @@ class GroupMetadataManager(val brokerId: Int,
    */
   def loadGroupsForPartition(offsetsPartition: Int,
                              onGroupLoaded: GroupMetadata => Unit) {
-    val topicPartition = TopicAndPartition(TopicConstants.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
+    val topicPartition = TopicAndPartition(Topic.GroupMetadataTopicName, offsetsPartition)
     scheduler.schedule(topicPartition.toString, loadGroupsAndOffsets)
 
     def loadGroupsAndOffsets() {
@@ -520,7 +519,7 @@ class GroupMetadataManager(val brokerId: Int,
    */
   def removeGroupsForPartition(offsetsPartition: Int,
                                onGroupUnloaded: GroupMetadata => Unit) {
-    val topicPartition = TopicAndPartition(TopicConstants.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
+    val topicPartition = TopicAndPartition(Topic.GroupMetadataTopicName, offsetsPartition)
     scheduler.schedule(topicPartition.toString, removeGroupsAndOffsets)
 
     def removeGroupsAndOffsets() {
@@ -543,10 +542,10 @@ class GroupMetadataManager(val brokerId: Int,
       }
 
       if (numOffsetsRemoved > 0) info("Removed %d cached offsets for %s on follower transition."
-        .format(numOffsetsRemoved, TopicAndPartition(TopicConstants.GROUP_METADATA_TOPIC_NAME, offsetsPartition)))
+        .format(numOffsetsRemoved, TopicAndPartition(Topic.GroupMetadataTopicName, offsetsPartition)))
 
       if (numGroupsRemoved > 0) info("Removed %d cached groups for %s on follower transition."
-        .format(numGroupsRemoved, TopicAndPartition(TopicConstants.GROUP_METADATA_TOPIC_NAME, offsetsPartition)))
+        .format(numGroupsRemoved, TopicAndPartition(Topic.GroupMetadataTopicName, offsetsPartition)))
     }
   }
 
@@ -568,9 +567,9 @@ class GroupMetadataManager(val brokerId: Int,
             new Message(bytes = null, key = commitKey, timestamp = timestamp, magicValue = magicValue)
           }.toBuffer
 
-          val partitionOpt = replicaManager.getPartition(TopicConstants.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
+          val partitionOpt = replicaManager.getPartition(Topic.GroupMetadataTopicName, offsetsPartition)
           partitionOpt.foreach { partition =>
-            val appendPartition = TopicAndPartition(TopicConstants.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
+            val appendPartition = TopicAndPartition(Topic.GroupMetadataTopicName, offsetsPartition)
             trace("Marked %d offsets in %s for deletion.".format(tombstones.size, appendPartition))
 
             try {
@@ -600,7 +599,7 @@ class GroupMetadataManager(val brokerId: Int,
   }
 
   private def getHighWatermark(partitionId: Int): Long = {
-    val partitionOpt = replicaManager.getPartition(TopicConstants.GROUP_METADATA_TOPIC_NAME, partitionId)
+    val partitionOpt = replicaManager.getPartition(Topic.GroupMetadataTopicName, partitionId)
 
     val hw = partitionOpt.map { partition =>
       partition.leaderReplicaIfLocal().map(_.highWatermark.messageOffset).getOrElse(-1L)
@@ -630,7 +629,7 @@ class GroupMetadataManager(val brokerId: Int,
    * If the topic does not exist, the configured partition count is returned.
    */
   private def getOffsetsTopicPartitionCount = {
-    val topic = TopicConstants.GROUP_METADATA_TOPIC_NAME
+    val topic = Topic.GroupMetadataTopicName
     val topicData = zkUtils.getPartitionAssignmentForTopics(Seq(topic))
     if (topicData(topic).nonEmpty)
       topicData(topic).size
@@ -639,7 +638,7 @@ class GroupMetadataManager(val brokerId: Int,
   }
 
   private def getMessageFormatVersionAndTimestamp(partition: Int): (Byte, Long) = {
-    val groupMetadataTopicAndPartition = new TopicAndPartition(TopicConstants.GROUP_METADATA_TOPIC_NAME, partition)
+    val groupMetadataTopicAndPartition = new TopicAndPartition(Topic.GroupMetadataTopicName, partition)
     val messageFormatVersion = replicaManager.getMessageFormatVersion(groupMetadataTopicAndPartition).getOrElse {
       throw new IllegalArgumentException(s"Message format version for partition $groupMetadataTopicPartitionCount not found")
     }
