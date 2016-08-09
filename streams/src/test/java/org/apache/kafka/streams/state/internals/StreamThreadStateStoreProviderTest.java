@@ -66,7 +66,7 @@ public class StreamThreadStateStoreProviderTest {
     @Before
     public void before() throws IOException {
         final TopologyBuilder builder = new TopologyBuilder();
-        builder.addSource("the-source", "source-topic");
+        builder.addSource("the-source", "the-source");
         builder.addProcessor("the-processor", new MockProcessorSupplier(), "the-source");
         builder.addStateStore(Stores.create("kv-store")
                                   .withStringKeys()
@@ -125,7 +125,7 @@ public class StreamThreadStateStoreProviderTest {
     @Test
     public void shouldFindKeyValueStores() throws Exception {
         List<ReadOnlyKeyValueStore<String, String>> kvStores =
-            provider.getStores("kv-store", QueryableStoreTypes.<String, String>keyValueStore());
+            provider.stores("kv-store", QueryableStoreTypes.<String, String>keyValueStore());
         assertEquals(2, kvStores.size());
     }
 
@@ -133,33 +133,33 @@ public class StreamThreadStateStoreProviderTest {
     public void shouldFindWindowStores() throws Exception {
         final List<ReadOnlyWindowStore<Object, Object>>
             windowStores =
-            provider.getStores("window-store", windowStore());
+            provider.stores("window-store", windowStore());
         assertEquals(2, windowStores.size());
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfWindowStoreClosed() throws Exception {
         taskOne.getStore("window-store").close();
-        provider.getStores("window-store", QueryableStoreTypes.windowStore());
+        provider.stores("window-store", QueryableStoreTypes.windowStore());
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfKVStoreClosed() throws Exception {
         taskOne.getStore("kv-store").close();
-        provider.getStores("kv-store", QueryableStoreTypes.keyValueStore());
+        provider.stores("kv-store", QueryableStoreTypes.keyValueStore());
     }
 
     @Test
     public void shouldReturnEmptyListIfNoStoresFoundWithName() throws Exception {
-        assertEquals(Collections.emptyList(), provider.getStores("not-a-store", QueryableStoreTypes
+        assertEquals(Collections.emptyList(), provider.stores("not-a-store", QueryableStoreTypes
             .keyValueStore()));
     }
 
 
     @Test
     public void shouldReturnEmptyListIfStoreExistsButIsNotOfTypeValueStore() throws Exception {
-        assertEquals(Collections.emptyList(), provider.getStores("window-store",
-                                                                 QueryableStoreTypes.keyValueStore()));
+        assertEquals(Collections.emptyList(), provider.stores("window-store",
+                                                              QueryableStoreTypes.keyValueStore()));
     }
 
     private StreamTask createStreamsTask(final String applicationId,

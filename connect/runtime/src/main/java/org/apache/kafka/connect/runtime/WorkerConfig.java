@@ -139,9 +139,9 @@ public class WorkerConfig extends AbstractConfig {
                 .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS,
                         Importance.HIGH, VALUE_CONVERTER_CLASS_DOC)
                 .define(INTERNAL_KEY_CONVERTER_CLASS_CONFIG, Type.CLASS,
-                        Importance.HIGH, INTERNAL_KEY_CONVERTER_CLASS_DOC)
+                        Importance.LOW, INTERNAL_KEY_CONVERTER_CLASS_DOC)
                 .define(INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS,
-                        Importance.HIGH, INTERNAL_VALUE_CONVERTER_CLASS_DOC)
+                        Importance.LOW, INTERNAL_VALUE_CONVERTER_CLASS_DOC)
                 .define(TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG, Type.LONG,
                         TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DEFAULT, Importance.LOW,
                         TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DOC)

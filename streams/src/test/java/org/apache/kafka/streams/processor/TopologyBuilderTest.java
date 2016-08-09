@@ -331,6 +331,71 @@ public class TopologyBuilderTest {
         assertEquals(mkSet("source-5"), nodeNames(topology2.processors()));
     }
 
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullNameWhenAddingSink() throws Exception {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.addSink(null, "topic");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullTopicWhenAddingSink() throws Exception {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.addSink("name", null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullNameWhenAddingProcessor() throws Exception {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.addProcessor(null, new ProcessorSupplier() {
+            @Override
+            public Processor get() {
+                return null;
+            }
+        });
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullProcessorSupplier() throws Exception {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.addProcessor("name", null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullNameWhenAddingSource() throws Exception {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.addSource(null, Pattern.compile(".*"));
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullProcessorNameWhenConnectingProcessorAndStateStores() throws Exception {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.connectProcessorAndStateStores(null, "store");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAddNullInternalTopic() throws Exception {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.addInternalTopic(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullApplicationIdOnBuild() throws Exception {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.build(null, 1);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotSetApplicationIdToNull() throws Exception {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.setApplicationId(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAddNullStateStoreSupplier() throws Exception {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.addStateStore(null, true);
+    }
+
     private Set<String> nodeNames(Collection<ProcessorNode> nodes) {
         Set<String> nodeNames = new HashSet<>();
         for (ProcessorNode node : nodes) {

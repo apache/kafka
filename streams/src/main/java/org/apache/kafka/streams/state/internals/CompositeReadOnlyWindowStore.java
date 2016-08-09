@@ -42,7 +42,7 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
 
     @Override
     public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
-        final List<ReadOnlyWindowStore<K, V>> stores = provider.getStores(storeName, windowStoreType);
+        final List<ReadOnlyWindowStore<K, V>> stores = provider.stores(storeName, windowStoreType);
         for (ReadOnlyWindowStore<K, V> windowStore : stores) {
             final WindowStoreIterator<V> result = windowStore.fetch(key, timeFrom, timeTo);
             if (!result.hasNext()) {

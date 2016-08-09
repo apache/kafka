@@ -18,9 +18,14 @@
 package kafka.common
 
 import util.matching.Regex
-import org.apache.kafka.common.internals.TopicConstants.INTERNAL_TOPICS
+
+import scala.collection.immutable
 
 object Topic {
+
+  val GroupMetadataTopicName = "__consumer_offsets"
+  val InternalTopics = immutable.Set(GroupMetadataTopicName)
+
   val legalChars = "[a-zA-Z0-9\\._\\-]"
   private val maxNameLength = 249
   private val rgx = new Regex(legalChars + "+")
@@ -63,6 +68,6 @@ object Topic {
   }
 
   def isInternal(topic: String): Boolean =
-    INTERNAL_TOPICS.contains(topic)
+    InternalTopics.contains(topic)
 
 }

@@ -45,8 +45,26 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
             <li>keystore: the keystore file that stores the certificate. The keystore file contains the private key of the certificate; therefore, it needs to be kept safely.</li>
             <li>validity: the valid time of the certificate in days.</li>
         </ol>
-        Ensure that common name (CN) matches exactly with the fully qualified domain name (FQDN) of the server. The client compares the CN with the DNS domain name to ensure that it is indeed connecting to the desired server, not the malicious one.</li>
+        <br>
+	Note: By default the property <code>ssl.endpoint.identification.algorithm</code> is not defined, so hostname verification is not performed. In order to enable hostname verification, set the following property:
 
+	<pre>	ssl.endpoint.identification.algorithm=HTTPS </pre>
+
+	Once enabled, clients will verify the server's fully qualified domain name (FQDN) against one of the following two fields:
+	<ol>
+		<li>Common Name (CN)
+		<li>Subject Alternative Name (SAN)
+	</ol>
+	<br>
+	Both fields are valid, RFC-2818 recommends the use of SAN however. SAN is also more flexible, allowing for multiple DNS entries to be declared. Another advantage is that the CN can be set to a more meaningful value for authorization purposes. To add a SAN field  append the following argument <code> -ext SAN=DNS:{FQDN} </code> to the keytool command:
+	<pre>
+	keytool -keystore server.keystore.jks -alias localhost -validity {validity} -genkey -ext SAN=DNS:{FQDN}
+	</pre>
+	The following command can be run afterwards to verify the contents of the generated certificate:
+	<pre>
+	keytool -list -v -keystore server.keystore.jks
+	</pre>
+    </li>
     <li><h4><a id="security_ssl_ca" href="#security_ssl_ca">Creating your own CA</a></h4>
         After the first step, each machine in the cluster has a public-private key pair, and a certificate to identify the machine. The certificate, however, is unsigned, which means that an attacker can create such a certificate to pretend to be any machine.<p>
         Therefore, it is important to prevent forged certificates by signing them for each machine in the cluster. A certificate authority (CA) is responsible for signing certificates. CA works likes a government that issues passports—the government stamps (signs) each passport so that the passport becomes difficult to forge. Other governments verify the stamps to ensure the passport is authentic. Similarly, the CA signs the certificates, and the cryptography guarantees that a signed certificate is computationally difficult to forge. Thus, as long as the CA is a genuine and trusted authority, the clients have high assurance that they are connecting to the authentic machines.

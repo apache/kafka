@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.internals.KStreamImpl;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
@@ -137,6 +138,16 @@ public class KStreamBuilderTest {
         merged.groupByKey().count("my-table");
         final Map<String, Set<String>> actual = builder.stateStoreNameToSourceTopics();
         assertEquals(Utils.mkSet("topic-1", "topic-2"), actual.get("my-table"));
+    }
+
+    @Test(expected = TopologyBuilderException.class)
+    public void shouldThrowExceptionWhenNoTopicPresent() throws Exception {
+        new KStreamBuilder().stream();
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowExceptionWhenTopicNamesAreNull() throws Exception {
+        new KStreamBuilder().stream(Serdes.String(), Serdes.String(), null, null);
     }
 
 }
