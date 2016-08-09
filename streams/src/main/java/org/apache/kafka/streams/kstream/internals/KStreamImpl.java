@@ -449,7 +449,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                          Serde<V> thisValueSerde,
                                          Serde<V1> otherValueSerde,
                                          KStreamImplJoin join) {
-        Objects.requireNonNull(other, "other can't be null");
+        Objects.requireNonNull(other, "other KStream can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(windows, "windows can't be null");
 
@@ -564,7 +564,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                           ValueJoiner<V, V1, R> joiner,
                                           Serde<K> keySerde,
                                           Serde<V> valueSerde) {
-        Objects.requireNonNull(other, "other can't be null");
+        Objects.requireNonNull(other, "other KTable can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
 
         if (repartitionRequired) {
