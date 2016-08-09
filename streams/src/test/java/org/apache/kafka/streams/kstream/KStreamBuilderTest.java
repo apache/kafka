@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.internals.KStreamImpl;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
@@ -86,6 +87,16 @@ public class KStreamBuilderTest {
         driver.process(topic1, "D", "dd");
 
         assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd"), processorSupplier.processed);
+    }
+
+    @Test(expected = TopologyBuilderException.class)
+    public void shouldThrowExceptionWhenNoTopicPresent() throws Exception {
+        new KStreamBuilder().stream();
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowExceptionWhenTopicNamesAreNull() throws Exception {
+        new KStreamBuilder().stream(Serdes.String(), Serdes.String(), null, null);
     }
 
 }
