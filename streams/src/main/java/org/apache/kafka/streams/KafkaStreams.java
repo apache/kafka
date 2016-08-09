@@ -316,10 +316,14 @@ public class KafkaStreams {
 
     /**
      * Find the {@link StreamsMetadata} instance that contains the given storeName
-     * and the corresponding hosted store instance contains the given key
+     * and the corresponding hosted store instance contains the given key. This will use
+     * the {@link org.apache.kafka.streams.processor.internals.DefaultStreamPartitioner} to
+     * locate the partition. If a custom partitioner has been used please use
+     * {@link KafkaStreams#metadataForKey(String, Object, StreamPartitioner)}
      *
      * Note: the key may not exist in the {@link org.apache.kafka.streams.processor.StateStore},
      * this method provides a way of finding which host it would exist on.
+     *
      * Note: this is a point in time view and it may change due to partition reassignment.
      * @param storeName         Name of the store
      * @param key               Key to use to for partition

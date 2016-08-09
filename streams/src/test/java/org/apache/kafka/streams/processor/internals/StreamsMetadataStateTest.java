@@ -163,8 +163,8 @@ public class StreamsMetadataStateTest {
         assertTrue("expected " + actual + " to contain " + two, actual.contains(two));
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void shouldThrowIllegalArgumentExceptionIfStoreNameIsNullOnGetAllInstancesWithStore() throws Exception {
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowIfStoreNameIsNullOnGetAllInstancesWithStore() throws Exception {
         discovery.getAllMetadataForStore(null);
     }
 
@@ -237,24 +237,24 @@ public class StreamsMetadataStateTest {
         assertNull(actual);
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void shouldThrowIllegalArgumentExceptionWhenKeyIsNull() throws Exception {
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowWhenKeyIsNull() throws Exception {
         discovery.getMetadataWithKey("table-three", null, Serdes.String().serializer());
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void shouldThrowIllegalArgumentExceptionWhenSerializerIsNull() throws Exception {
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowWhenSerializerIsNull() throws Exception {
         discovery.getMetadataWithKey("table-three", "key", (Serializer) null);
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void shouldThrowIllegalArgumentExceptionIfStoreNameIsNull() throws Exception {
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowIfStoreNameIsNull() throws Exception {
         discovery.getMetadataWithKey(null, "key", Serdes.String().serializer());
     }
 
     @SuppressWarnings("unchecked")
-    @Test(expected = IllegalArgumentException.class)
-    public void shouldThrowIllegalArgumentExceptionIfStreamPartitionerIsNull() throws Exception {
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowIfStreamPartitionerIsNull() throws Exception {
         discovery.getMetadataWithKey(null, "key", (StreamPartitioner) null);
     }
 

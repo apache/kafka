@@ -20,7 +20,6 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -34,9 +33,9 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.toPositive;
 
 /**
  * Provides access to the {@link StreamsMetadata} in a KafkaStreams application. This can be used
@@ -69,9 +68,8 @@ public class StreamsMetadataState {
      * @return A collection of {@link StreamsMetadata} that have the provided storeName
      */
     public synchronized Collection<StreamsMetadata> getAllMetadataForStore(final String storeName) {
-        if (storeName == null) {
-            throw new IllegalArgumentException("storeName cannot be null");
-        }
+        Objects.requireNonNull(storeName, "storeName cannot be null");
+
         final Set<String> sourceTopics = builder.stateStoreNameToSourceTopics().get(storeName);
         if (sourceTopics == null) {
             return Collections.emptyList();
@@ -87,12 +85,15 @@ public class StreamsMetadataState {
     }
 
     /**
-     * Find the {@link StreamsMetadata}s for a given storeName and key.
+     * Find the {@link StreamsMetadata}s for a given storeName and key. This method will use the
+     * {@link DefaultStreamPartitioner} to locate the store. If a custom partitioner has been used
+     * please use {@link StreamsMetadataState#getMetadataWithKey(String, Object, StreamPartitioner)}
+     *
      * Note: the key may not exist in the {@link org.apache.kafka.streams.processor.StateStore},
      * this method provides a way of finding which {@link StreamsMetadata} it would exist on.
      *
      * @param storeName     Name of the store
-     * @param key           Key to use to for partition
+     * @param key           Key to use
      * @param keySerializer Serializer for the key
      * @param <K>           key type
      * @return The {@link StreamsMetadata} for the storeName and key
@@ -100,30 +101,34 @@ public class StreamsMetadataState {
     public synchronized <K> StreamsMetadata getMetadataWithKey(final String storeName,
                                                                final K key,
                                                                final Serializer<K> keySerializer) {
-        if (keySerializer == null) {
-            throw new IllegalArgumentException("keySerializer cannot be null");
-        }
+        Objects.requireNonNull(keySerializer, "keySerializer can't be null");
+        Objects.requireNonNull(storeName, "storeName can't be null");
+        Objects.requireNonNull(key, "key can't be null");
 
-        // To find the correct instance for a given key we need to use the same partitioning
-        // strategy that was used when producing the messages. In this case we create a StreamPartitioner
-        // that works the same as org.apache.kafka.clients.producer.internals.DefaultPartitioner
-        return getMetadataWithKey(storeName, key, new StreamPartitioner<K, Object>() {
-            @Override
-            public Integer partition(final K key, final Object value, final int numPartitions) {
-                final String sourceTopic = builder.stateStoreNameToSourceTopics().get(storeName).iterator().next();
-                final byte[] bytes = keySerializer.serialize(sourceTopic, key);
-                return toPositive(Utils.murmur2(bytes)) % numPartitions;
-            }
-        });
+        final SourceTopicsInfo sourceTopicsInfo = getSourceTopicsInfo(storeName);
+        if (sourceTopicsInfo == null) {
+            return null;
+        }
+        return getStreamsMetadataForKey(storeName,
+                                        key,
+                                        new DefaultStreamPartitioner<>(keySerializer,
+                                                                       clusterMetadata,
+                                                                       sourceTopicsInfo.topicWithMostPartitions),
+                                        sourceTopicsInfo);
     }
+
+
+
+
 
     /**
      * Find the {@link StreamsMetadata}s for a given storeName and key.
+     *
      * Note: the key may not exist in the {@link StateStore},
      * this method provides a way of finding which {@link StreamsMetadata} it would exist on.
      *
      * @param storeName   Name of the store
-     * @param key         Key to use to for partition
+     * @param key         Key to use
      * @param partitioner partitioner to use to find correct partition for key
      * @param <K>         key type
      * @return The {@link StreamsMetadata} for the storeName and key
@@ -131,48 +136,15 @@ public class StreamsMetadataState {
     public synchronized <K> StreamsMetadata getMetadataWithKey(final String storeName,
                                                                final K key,
                                                                final StreamPartitioner<K, ?> partitioner) {
-        if (storeName == null) {
-            throw new IllegalArgumentException("storeName cannot be null");
-        }
+        Objects.requireNonNull(storeName, "storeName can't be null");
+        Objects.requireNonNull(key, "key can't be null");
+        Objects.requireNonNull(partitioner, "partitioner can't be null");
 
-        if (key == null) {
-            throw new IllegalArgumentException("key cannot be null");
-        }
-
-        if (partitioner == null) {
-            throw new IllegalArgumentException("partitioner cannot be null");
-        }
-
-        final Set<String> sourceTopics = builder.stateStoreNameToSourceTopics().get(storeName);
-        if (sourceTopics == null) {
+        SourceTopicsInfo sourceTopicsInfo = getSourceTopicsInfo(storeName);
+        if (sourceTopicsInfo == null) {
             return null;
         }
-
-
-        int numPartitions = 0;
-        for (String topic : sourceTopics) {
-            final List<PartitionInfo> partitions = clusterMetadata.partitionsForTopic(topic);
-            if (partitions != null && partitions.size() > numPartitions) {
-                numPartitions = partitions.size();
-            }
-        }
-
-        final Integer partition = partitioner.partition(key, null, numPartitions);
-        final Set<TopicPartition> matchingPartitions = new HashSet<>();
-        for (String sourceTopic : sourceTopics) {
-            matchingPartitions.add(new TopicPartition(sourceTopic, partition));
-        }
-
-        for (StreamsMetadata streamsMetadata : allMetadata) {
-            final Set<String> stateStoreNames = streamsMetadata.stateStoreNames();
-            final Set<TopicPartition> topicPartitions = new HashSet<>(streamsMetadata.topicPartitions());
-            topicPartitions.retainAll(matchingPartitions);
-            if (stateStoreNames.contains(storeName)
-                    && !topicPartitions.isEmpty()) {
-                return streamsMetadata;
-            }
-        }
-        return null;
+        return getStreamsMetadataForKey(storeName, key, partitioner, sourceTopicsInfo);
     }
 
     /**
@@ -212,6 +184,54 @@ public class StreamsMetadataState {
                 }
             }
             allMetadata.add(new StreamsMetadata(key, storesOnHost, partitionsForHost));
+        }
+    }
+
+    private <K> StreamsMetadata getStreamsMetadataForKey(final String storeName,
+                                                         final K key,
+                                                         final StreamPartitioner<K, ?> partitioner,
+                                                         final SourceTopicsInfo sourceTopicsInfo) {
+
+        final Integer partition = partitioner.partition(key, null, sourceTopicsInfo.maxPartitions);
+        final Set<TopicPartition> matchingPartitions = new HashSet<>();
+        for (String sourceTopic : sourceTopicsInfo.sourceTopics) {
+            matchingPartitions.add(new TopicPartition(sourceTopic, partition));
+        }
+
+        for (StreamsMetadata streamsMetadata : allMetadata) {
+            final Set<String> stateStoreNames = streamsMetadata.stateStoreNames();
+            final Set<TopicPartition> topicPartitions = new HashSet<>(streamsMetadata.topicPartitions());
+            topicPartitions.retainAll(matchingPartitions);
+            if (stateStoreNames.contains(storeName)
+                    && !topicPartitions.isEmpty()) {
+                return streamsMetadata;
+            }
+        }
+        return null;
+    }
+
+    private SourceTopicsInfo getSourceTopicsInfo(final String storeName) {
+        final Set<String> sourceTopics = builder.stateStoreNameToSourceTopics().get(storeName);
+        if (sourceTopics == null || sourceTopics.isEmpty()) {
+            return null;
+        }
+        return new SourceTopicsInfo(sourceTopics);
+    }
+
+    private class SourceTopicsInfo {
+        private final Set<String> sourceTopics;
+        private int maxPartitions;
+        private String topicWithMostPartitions;
+
+        private SourceTopicsInfo(final Set<String> sourceTopics) {
+            this.sourceTopics = sourceTopics;
+            for (String topic : sourceTopics) {
+                final List<PartitionInfo> partitions = clusterMetadata.partitionsForTopic(topic);
+                if (partitions != null && partitions.size() > maxPartitions) {
+                    maxPartitions = partitions.size();
+                    topicWithMostPartitions = partitions.get(0).topic();
+                }
+            }
         }
     }
 }
