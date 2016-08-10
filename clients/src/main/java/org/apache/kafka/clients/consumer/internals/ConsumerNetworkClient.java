@@ -200,6 +200,9 @@ public class ConsumerNetworkClient implements Closeable {
      * @param now current time in milliseconds
      */
     public void poll(long timeout, long now) {
+        // there may be handlers which need to be invoked if we woke up the previous call to poll
+        firePendingCompletedRequests();
+
         synchronized (this) {
             // send all the requests we can send now
             trySend(now);
@@ -207,14 +210,16 @@ public class ConsumerNetworkClient implements Closeable {
             // ensure we don't poll any longer than the deadline for
             // the next scheduled task
             client.poll(timeout, now);
-            maybeTriggerWakeup();
-
             now = time.milliseconds();
 
             // handle any disconnects by failing the active requests. note that disconnects must
             // be checked immediately following poll since any subsequent call to client.ready()
             // will reset the disconnect status
             checkDisconnects(now);
+
+            // trigger wakeups after checking for disconnects so that the callbacks will be ready
+            // to be fired on the next call to poll()
+            maybeTriggerWakeup();
 
             // try again to send requests since buffer space may have been
             // cleared or a connect finished in the poll

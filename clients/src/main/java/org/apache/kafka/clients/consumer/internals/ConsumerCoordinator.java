@@ -112,8 +112,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 time,
                 retryBackoffMs);
         this.metadata = metadata;
-        this.metadata.requestUpdate();
-
         this.metadataSnapshot = new MetadataSnapshot(subscriptions, metadata.fetch());
         this.subscriptions = subscriptions;
         this.defaultOffsetCommitCallback = defaultOffsetCommitCallback;
@@ -121,15 +119,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.autoCommitIntervalMs = autoCommitIntervalMs;
         this.assignors = assignors;
         this.completedOffsetCommits = new ConcurrentLinkedQueue<>();
-
-        addMetadataListener();
-
-        if (autoCommitEnabled)
-            this.nextAutoCommitDeadline = time.milliseconds() + autoCommitIntervalMs;
-
         this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix);
         this.interceptors = interceptors;
         this.excludeInternalTopics = excludeInternalTopics;
+
+        this.metadata.requestUpdate();
+        addMetadataListener();
     }
 
     @Override

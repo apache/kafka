@@ -731,7 +731,7 @@ public class KafkaConsumerTest {
                                                       KafkaClient client,
                                                       Metadata metadata,
                                                       PartitionAssignor assignor,
-                                                      int rebalanceTimeoutms,
+                                                      int rebalanceTimeoutMs,
                                                       int sessionTimeoutMs,
                                                       int heartbeatIntervalMs,
                                                       int autoCommitIntervalMs) {
@@ -764,7 +764,7 @@ public class KafkaConsumerTest {
         ConsumerCoordinator consumerCoordinator = new ConsumerCoordinator(
                 consumerClient,
                 groupId,
-                rebalanceTimeoutms,
+                rebalanceTimeoutMs,
                 sessionTimeoutMs,
                 heartbeatIntervalMs,
                 assignors,
