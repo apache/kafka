@@ -191,12 +191,12 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     @Override
     public Map<String, Object> appConfigs() {
-        return null;
+        return Collections.emptyMap();
     }
 
     @Override
     public Map<String, Object> appConfigsWithPrefix(String prefix) {
-        return null;
+        return Collections.emptyMap();
     }
 
     public Map<String, StateStore> allStateStores() {

@@ -39,6 +39,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -67,6 +68,8 @@ public class TopologyBuilder {
     private final HashMap<String, Pattern> nodeToSourcePatterns = new LinkedHashMap<>();
     private final HashMap<String, Pattern> topicToPatterns = new HashMap<>();
     private final HashMap<String, String> nodeToSinkTopic = new HashMap<>();
+    private final Map<String, Set<String>> stateStoreNameToSourceTopics = new HashMap<>();
+    private final HashMap<String, String> sourceStoreToSourceTopic = new HashMap<>();
     private SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
     private String applicationId;
 
@@ -157,7 +160,7 @@ public class TopologyBuilder {
         @SuppressWarnings("unchecked")
         @Override
         public ProcessorNode build(String applicationId) {
-            return new SourceNode(name, keyDeserializer, valDeserializer);
+            return new SourceNode(name, nodeToSourceTopics.get(name), keyDeserializer, valDeserializer);
         }
 
         private boolean isMatch(String topic) {
@@ -277,10 +280,15 @@ public class TopologyBuilder {
      * @throws TopologyBuilderException if processor is already added or if topics have already been registered by another source
      */
     public synchronized final TopologyBuilder addSource(String name, Deserializer keyDeserializer, Deserializer valDeserializer, String... topics) {
+        if (topics.length == 0) {
+            throw new TopologyBuilderException("You must provide at least one topic");
+        }
+        Objects.requireNonNull(name, "name must not be null");
         if (nodeFactories.containsKey(name))
             throw new TopologyBuilderException("Processor " + name + " is already added.");
 
         for (String topic : topics) {
+            Objects.requireNonNull(topic, "topic names cannot be null");
             if (sourceTopicNames.contains(topic))
                 throw new TopologyBuilderException("Topic " + topic + " has already been registered by another source.");
 
@@ -321,10 +329,8 @@ public class TopologyBuilder {
      */
 
     public synchronized final TopologyBuilder addSource(String name, Deserializer keyDeserializer, Deserializer valDeserializer, Pattern topicPattern) {
-
-        if (topicPattern == null) {
-            throw new TopologyBuilderException("Pattern can't be null");
-        }
+        Objects.requireNonNull(topicPattern, "topicPattern can't be null");
+        Objects.requireNonNull(name, "name can't be null");
 
         if (nodeFactories.containsKey(name)) {
             throw new TopologyBuilderException("Processor " + name + " is already added.");
@@ -434,6 +440,8 @@ public class TopologyBuilder {
      * @throws TopologyBuilderException if parent processor is not added yet, or if this processor's name is equal to the parent's name
      */
     public synchronized final <K, V> TopologyBuilder addSink(String name, String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, StreamPartitioner<K, V> partitioner, String... parentNames) {
+        Objects.requireNonNull(name, "name must not be null");
+        Objects.requireNonNull(topic, "topic must not be null");
         if (nodeFactories.containsKey(name))
             throw new TopologyBuilderException("Processor " + name + " is already added.");
 
@@ -466,6 +474,8 @@ public class TopologyBuilder {
      * @throws TopologyBuilderException if parent processor is not added yet, or if this processor's name is equal to the parent's name
      */
     public synchronized final TopologyBuilder addProcessor(String name, ProcessorSupplier supplier, String... parentNames) {
+        Objects.requireNonNull(name, "name must not be null");
+        Objects.requireNonNull(supplier, "supplier must not be null");
         if (nodeFactories.containsKey(name))
             throw new TopologyBuilderException("Processor " + name + " is already added.");
 
@@ -494,6 +504,7 @@ public class TopologyBuilder {
      * @throws TopologyBuilderException if state store supplier is already added
      */
     public synchronized final TopologyBuilder addStateStore(StateStoreSupplier supplier, boolean isInternal, String... processorNames) {
+        Objects.requireNonNull(supplier, "supplier can't be null");
         if (stateFactories.containsKey(supplier.name())) {
             throw new TopologyBuilderException("StateStore " + supplier.name() + " is already added.");
         }
@@ -527,10 +538,24 @@ public class TopologyBuilder {
      * @return this builder instance so methods can be chained together; never null
      */
     public synchronized final TopologyBuilder connectProcessorAndStateStores(String processorName, String... stateStoreNames) {
+        Objects.requireNonNull(processorName, "processorName can't be null");
         if (stateStoreNames != null) {
             for (String stateStoreName : stateStoreNames) {
                 connectProcessorAndStateStore(processorName, stateStoreName);
             }
+        }
+
+        return this;
+    }
+
+    protected synchronized final TopologyBuilder connectSourceStoreAndTopic(String sourceStoreName, String topic) {
+        if (sourceStoreToSourceTopic != null) {
+            if (sourceStoreToSourceTopic.containsKey(sourceStoreName)) {
+                throw new TopologyBuilderException("Source store " + sourceStoreName + " is already added.");
+            }
+            sourceStoreToSourceTopic.put(sourceStoreName, topic);
+        } else {
+            throw new TopologyBuilderException("sourceStoreToSourceTopic is null");
         }
 
         return this;
@@ -570,6 +595,7 @@ public class TopologyBuilder {
      * @return this builder instance so methods can be chained together; never null
      */
     public synchronized final TopologyBuilder addInternalTopic(String topicName) {
+        Objects.requireNonNull(topicName, "topicName can't be null");
         this.internalTopicNames.add(topicName);
 
         return this;
@@ -591,10 +617,38 @@ public class TopologyBuilder {
 
         NodeFactory nodeFactory = nodeFactories.get(processorName);
         if (nodeFactory instanceof ProcessorNodeFactory) {
-            ((ProcessorNodeFactory) nodeFactory).addStateStore(stateStoreName);
+            ProcessorNodeFactory processorNodeFactory = (ProcessorNodeFactory) nodeFactory;
+            processorNodeFactory.addStateStore(stateStoreName);
+            connectStateStoreNameToSourceTopics(stateStoreName, processorNodeFactory);
         } else {
             throw new TopologyBuilderException("cannot connect a state store " + stateStoreName + " to a source node or a sink node.");
         }
+    }
+
+
+    private Set<String> findSourceTopicsForProcessorParents(String [] parents) {
+        final Set<String> sourceTopics = new HashSet<>();
+        for (String parent : parents) {
+            NodeFactory nodeFactory = nodeFactories.get(parent);
+            if (nodeFactory instanceof SourceNodeFactory) {
+                sourceTopics.addAll(Arrays.asList(((SourceNodeFactory) nodeFactory).getTopics()));
+            } else if (nodeFactory instanceof ProcessorNodeFactory) {
+                sourceTopics.addAll(findSourceTopicsForProcessorParents(((ProcessorNodeFactory) nodeFactory).parents));
+            }
+        }
+        return sourceTopics;
+    }
+
+    private void connectStateStoreNameToSourceTopics(final String stateStoreName,
+                                                     final ProcessorNodeFactory processorNodeFactory) {
+
+        final Set<String> sourceTopics = findSourceTopicsForProcessorParents(processorNodeFactory.parents);
+        if (sourceTopics.isEmpty()) {
+            throw new TopologyBuilderException("can't find source topic for state store " +
+                    stateStoreName);
+        }
+        stateStoreNameToSourceTopics.put(stateStoreName,
+                Collections.unmodifiableSet(sourceTopics));
     }
 
     /**
@@ -771,6 +825,7 @@ public class TopologyBuilder {
         return topicNames;
     }
 
+
     /**
      * Build the topology for the specified topic group. This is called automatically when passing this builder into the
      * {@link org.apache.kafka.streams.KafkaStreams#KafkaStreams(TopologyBuilder, org.apache.kafka.streams.StreamsConfig)} constructor.
@@ -778,6 +833,7 @@ public class TopologyBuilder {
      * @see org.apache.kafka.streams.KafkaStreams#KafkaStreams(TopologyBuilder, org.apache.kafka.streams.StreamsConfig)
      */
     public synchronized ProcessorTopology build(String applicationId, Integer topicGroupId) {
+        Objects.requireNonNull(applicationId, "applicationId can't be null");
         Set<String> nodeGroup;
         if (topicGroupId != null) {
             nodeGroup = nodeGroups().get(topicGroupId);
@@ -793,6 +849,7 @@ public class TopologyBuilder {
         List<ProcessorNode> processorNodes = new ArrayList<>(nodeFactories.size());
         Map<String, ProcessorNode> processorMap = new HashMap<>();
         Map<String, SourceNode> topicSourceMap = new HashMap<>();
+        Map<String, SinkNode> topicSinkMap = new HashMap<>();
         Map<String, StateStoreSupplier> stateStoreMap = new HashMap<>();
 
         // create processor nodes in a topological order ("nodeFactories" is already topologically sorted)
@@ -823,8 +880,15 @@ public class TopologyBuilder {
                         }
                     }
                 } else if (factory instanceof SinkNodeFactory) {
-                    for (String parent : ((SinkNodeFactory) factory).parents) {
+                    SinkNodeFactory sinkNodeFactory = (SinkNodeFactory) factory;
+                    for (String parent : sinkNodeFactory.parents) {
                         processorMap.get(parent).addChild(node);
+                        if (internalTopicNames.contains(sinkNodeFactory.topic)) {
+                            // prefix the internal topic name with the application id
+                            topicSinkMap.put(applicationId + "-" + sinkNodeFactory.topic, (SinkNode) node);
+                        } else {
+                            topicSinkMap.put(sinkNodeFactory.topic, (SinkNode) node);
+                        }
                     }
                 } else {
                     throw new TopologyBuilderException("Unknown definition class: " + factory.getClass().getName());
@@ -832,7 +896,7 @@ public class TopologyBuilder {
             }
         }
 
-        return new ProcessorTopology(processorNodes, topicSourceMap, new ArrayList<>(stateStoreMap.values()));
+        return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap, new ArrayList<>(stateStoreMap.values()), sourceStoreToSourceTopic);
     }
 
     /**
@@ -840,20 +904,25 @@ public class TopologyBuilder {
      * @return the unmodifiable set of topic names used by source nodes, which changes as new sources are added; never null
      */
     public synchronized Set<String> sourceTopics() {
+        Set<String> topics = maybeDecorateInternalSourceTopics(sourceTopicNames);
+        return Collections.unmodifiableSet(topics);
+    }
+
+    private Set<String> maybeDecorateInternalSourceTopics(final Set<String> sourceTopicNames) {
         Set<String> topics = new HashSet<>();
         for (String topic : sourceTopicNames) {
             if (internalTopicNames.contains(topic)) {
                 if (applicationId == null) {
                     throw new TopologyBuilderException("there are internal topics and "
                                                        + "applicationId is null. Call "
-                                                       + "setApplicationId before sourceTopics");
+                                                       + "setApplicationId first");
                 }
                 topics.add(applicationId + "-" + topic);
             } else {
                 topics.add(topic);
             }
         }
-        return Collections.unmodifiableSet(topics);
+        return topics;
     }
 
     public synchronized Pattern sourceTopicPattern() {
@@ -882,11 +951,25 @@ public class TopologyBuilder {
 
     /**
      * Set the applicationId. This is required before calling
-     * {@link #sourceTopics}, {@link #topicGroups} and {@link #copartitionSources}
+     * {@link #sourceTopics}, {@link #topicGroups}, {@link #copartitionSources}, and
+     * {@link #stateStoreNameToSourceTopics}
      * @param applicationId   the streams applicationId. Should be the same as set by
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG}
      */
     public synchronized void setApplicationId(String applicationId) {
+        Objects.requireNonNull(applicationId, "applicationId can't be null");
         this.applicationId = applicationId;
+    }
+
+    /**
+     * @return a mapping from state store name to a Set of source Topics.
+     */
+    public Map<String, Set<String>> stateStoreNameToSourceTopics() {
+        final Map<String, Set<String>> results = new HashMap<>();
+        for (Map.Entry<String, Set<String>> entry : stateStoreNameToSourceTopics.entrySet()) {
+            results.put(entry.getKey(), maybeDecorateInternalSourceTopics(entry.getValue()));
+
+        }
+        return results;
     }
 }

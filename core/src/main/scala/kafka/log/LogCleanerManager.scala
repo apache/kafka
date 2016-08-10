@@ -90,7 +90,7 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
           val firstDirtyOffset = {
             val offset = lastClean.getOrElse(topicAndPartition, logStartOffset)
             if (offset < logStartOffset) {
-              error("Resetting first dirty offset to log start offset %d since the checkpointed offset %d is invalid."
+              warn("Resetting first dirty offset to log start offset %d since the checkpointed offset %d is invalid."
                     .format(logStartOffset, offset))
               logStartOffset
             } else {

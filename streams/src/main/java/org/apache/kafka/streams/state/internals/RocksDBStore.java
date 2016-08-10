@@ -19,13 +19,16 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.StateSerdes;
 
 import org.rocksdb.BlockBasedTableConfig;
@@ -44,6 +47,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 
@@ -84,7 +88,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     private RocksDB db;
 
-    // the following option objects will be created at constructor and disposed at close()
+    // the following option objects will be created in the constructor and closed in the close() method
     private Options options;
     private WriteOptions wOptions;
     private FlushOptions fOptions;
@@ -121,7 +125,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
 
-        // initialize the rocksdb options
+        // initialize the default rocksdb options
         BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
         tableConfig.setBlockCacheSize(BLOCK_CACHE_SIZE);
         tableConfig.setBlockSize(BLOCK_SIZE);
@@ -158,6 +162,12 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @SuppressWarnings("unchecked")
     public void openDB(ProcessorContext context) {
+        final Map<String, Object> configs = context.appConfigs();
+        final Class<RocksDBConfigSetter> configSetterClass = (Class<RocksDBConfigSetter>) configs.get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG);
+        if (configSetterClass != null) {
+            final RocksDBConfigSetter configSetter = Utils.newInstance(configSetterClass);
+            configSetter.setConfig(name, options, configs);
+        }
         // we need to construct the serde while opening DB since
         // it is also triggered by windowed DB segments without initialization
         this.serdes = new StateSerdes<>(name,
@@ -339,9 +349,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     // this function is only called in flushCache()
     private void putAllInternal(List<KeyValue<byte[], byte[]>> entries) {
-        WriteBatch batch = new WriteBatch();
-
-        try {
+        try (WriteBatch batch = new WriteBatch()) {
             for (KeyValue<byte[], byte[]> entry : entries) {
                 batch.put(entry.key, entry.value);
             }
@@ -349,8 +357,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             db.write(wOptions, batch);
         } catch (RocksDBException e) {
             throw new ProcessorStateException("Error while batch writing to store " + this.name, e);
-        } finally {
-            batch.dispose();
         }
     }
 
@@ -503,9 +509,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         }
         open = false;
         flush();
-        options.dispose();
-        wOptions.dispose();
-        fOptions.dispose();
+        options.close();
+        wOptions.close();
+        fOptions.close();
         db.close();
 
         options = null;
@@ -559,7 +565,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         @Override
         public void close() {
-            iter.dispose();
+            iter.close();
         }
 
     }

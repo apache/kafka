@@ -46,6 +46,8 @@ public class SubscriptionStateTest {
         state.assignFromUser(Arrays.asList(tp0));
         assertEquals(Collections.singleton(tp0), state.assignedPartitions());
         assertFalse(state.partitionAssignmentNeeded());
+        assertFalse(state.hasAllFetchPositions());
+        assertTrue(state.refreshCommitsNeeded());
         state.committed(tp0, new OffsetAndMetadata(1));
         state.seek(tp0, 1);
         assertTrue(state.isFetchable(tp0));

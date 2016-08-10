@@ -21,11 +21,14 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Map;
 
 public class MockSinkTask extends SinkTask {
+    private static final Logger log = LoggerFactory.getLogger(MockSinkTask.class);
 
     private String mockMode;
     private long startTimeMs;
@@ -47,6 +50,9 @@ public class MockSinkTask extends SinkTask {
             this.failureDelayMs = MockConnector.DEFAULT_FAILURE_DELAY_MS;
             if (delayMsString != null)
                 failureDelayMs = Long.parseLong(delayMsString);
+
+            log.debug("Started MockSinkTask at {} with failure scheduled in {} ms", startTimeMs, failureDelayMs);
+            setTimeout();
         }
     }
 
@@ -54,8 +60,11 @@ public class MockSinkTask extends SinkTask {
     public void put(Collection<SinkRecord> records) {
         if (MockConnector.TASK_FAILURE.equals(mockMode)) {
             long now = System.currentTimeMillis();
-            if (now > startTimeMs + failureDelayMs)
+            if (now > startTimeMs + failureDelayMs) {
+                log.debug("Triggering sink task failure");
                 throw new RuntimeException();
+            }
+            setTimeout();
         }
     }
 
@@ -67,5 +76,13 @@ public class MockSinkTask extends SinkTask {
     @Override
     public void stop() {
 
+    }
+
+    private void setTimeout() {
+        // Set a reasonable minimum delay. Since this mock task may not actually consume any data from Kafka, it may only
+        // see put() calls triggered by wakeups for offset commits. To make sure we aren't tied to the offset commit
+        // interval, we force a wakeup every 250ms or after the failure delay, whichever is smaller. This is not overly
+        // aggressive but ensures any scheduled tasks this connector performs are reasonably close to the target time.
+        context.timeout(Math.min(failureDelayMs, 250));
     }
 }

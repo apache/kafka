@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.TaskId;
@@ -28,6 +29,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
@@ -35,9 +37,11 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
@@ -57,12 +61,13 @@ public class StreamThreadStateStoreProviderTest {
     private StreamTask taskTwo;
     private StreamThreadStateStoreProvider provider;
     private StateDirectory stateDirectory;
+    private File stateDir;
 
     @Before
     public void before() throws IOException {
         final TopologyBuilder builder = new TopologyBuilder();
-        builder.addSource("the-source");
-        builder.addProcessor("the-processor", new MockProcessorSupplier());
+        builder.addSource("the-source", "the-source");
+        builder.addProcessor("the-processor", new MockProcessorSupplier(), "the-source");
         builder.addStateStore(Stores.create("kv-store")
                                   .withStringKeys()
                                   .withStringValues().inMemory().build(), "the-processor");
@@ -77,7 +82,8 @@ public class StreamThreadStateStoreProviderTest {
         final String applicationId = "applicationId";
         properties.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        final String stateConfigDir = TestUtils.tempDirectory().getPath();
+        stateDir = TestUtils.tempDirectory();
+        final String stateConfigDir = stateDir.getPath();
         properties.put(StreamsConfig.STATE_DIR_CONFIG,
                 stateConfigDir);
 
@@ -101,7 +107,7 @@ public class StreamThreadStateStoreProviderTest {
         thread = new StreamThread(builder, streamsConfig, clientSupplier,
                                   applicationId,
                                   "clientId", UUID.randomUUID(), new Metrics(),
-                                  new SystemTime()) {
+                                  new SystemTime(), new StreamsMetadataState(builder)) {
             @Override
             public Map<TaskId, StreamTask> tasks() {
                 return tasks;
@@ -111,10 +117,15 @@ public class StreamThreadStateStoreProviderTest {
 
     }
 
+    @After
+    public void cleanUp() {
+        Utils.delete(stateDir);
+    }
+    
     @Test
     public void shouldFindKeyValueStores() throws Exception {
         List<ReadOnlyKeyValueStore<String, String>> kvStores =
-            provider.getStores("kv-store", QueryableStoreTypes.<String, String>keyValueStore());
+            provider.stores("kv-store", QueryableStoreTypes.<String, String>keyValueStore());
         assertEquals(2, kvStores.size());
     }
 
@@ -122,33 +133,33 @@ public class StreamThreadStateStoreProviderTest {
     public void shouldFindWindowStores() throws Exception {
         final List<ReadOnlyWindowStore<Object, Object>>
             windowStores =
-            provider.getStores("window-store", windowStore());
+            provider.stores("window-store", windowStore());
         assertEquals(2, windowStores.size());
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfWindowStoreClosed() throws Exception {
         taskOne.getStore("window-store").close();
-        provider.getStores("window-store", QueryableStoreTypes.windowStore());
+        provider.stores("window-store", QueryableStoreTypes.windowStore());
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfKVStoreClosed() throws Exception {
         taskOne.getStore("kv-store").close();
-        provider.getStores("kv-store", QueryableStoreTypes.keyValueStore());
+        provider.stores("kv-store", QueryableStoreTypes.keyValueStore());
     }
 
     @Test
     public void shouldReturnEmptyListIfNoStoresFoundWithName() throws Exception {
-        assertEquals(Collections.emptyList(), provider.getStores("not-a-store", QueryableStoreTypes
+        assertEquals(Collections.emptyList(), provider.stores("not-a-store", QueryableStoreTypes
             .keyValueStore()));
     }
 
 
     @Test
     public void shouldReturnEmptyListIfStoreExistsButIsNotOfTypeValueStore() throws Exception {
-        assertEquals(Collections.emptyList(), provider.getStores("window-store",
-                                                                 QueryableStoreTypes.keyValueStore()));
+        assertEquals(Collections.emptyList(), provider.stores("window-store",
+                                                              QueryableStoreTypes.keyValueStore()));
     }
 
     private StreamTask createStreamsTask(final String applicationId,

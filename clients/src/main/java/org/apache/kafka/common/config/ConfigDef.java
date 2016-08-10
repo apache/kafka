@@ -539,7 +539,6 @@ public class ConfigDef {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private void validate(String name, Map<String, Object> parsed, Map<String, ConfigValue> configs) {
         if (!configKeys.containsKey(name)) {
             return;
@@ -873,46 +872,57 @@ public class ConfigDef {
         }
     }
 
+    protected List<String> headers() {
+        return Arrays.asList("Name", "Description", "Type", "Default", "Valid Values", "Importance");
+    }
+
+    protected String getConfigValue(ConfigKey key, String headerName) {
+        switch (headerName) {
+            case "Name":
+                return key.name;
+            case "Description":
+                return key.documentation;
+            case "Type":
+                return key.type.toString().toLowerCase(Locale.ROOT);
+            case "Default":
+                if (key.hasDefault()) {
+                    if (key.defaultValue == null)
+                        return "null";
+                    else if (key.type == Type.STRING && key.defaultValue.toString().isEmpty())
+                        return "\"\"";
+                    else
+                        return key.defaultValue.toString();
+                } else
+                    return "";
+            case "Valid Values":
+                return key.validator != null ? key.validator.toString() : "";
+            case "Importance":
+                return key.importance.toString().toLowerCase(Locale.ROOT);
+            default:
+                throw new RuntimeException("Can't find value for header '" + headerName + "' in " + key.name);
+        }
+    }
+    
     public String toHtmlTable() {
         List<ConfigKey> configs = sortedConfigs();
         StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");
         b.append("<tr>\n");
-        b.append("<th>Name</th>\n");
-        b.append("<th>Description</th>\n");
-        b.append("<th>Type</th>\n");
-        b.append("<th>Default</th>\n");
-        b.append("<th>Valid Values</th>\n");
-        b.append("<th>Importance</th>\n");
+        // print column headers
+        for (String headerName : headers()) {
+            b.append("<th>");
+            b.append(headerName);
+            b.append("</th>\n");
+        }
         b.append("</tr>\n");
         for (ConfigKey def : configs) {
             b.append("<tr>\n");
-            b.append("<td>");
-            b.append(def.name);
-            b.append("</td>");
-            b.append("<td>");
-            b.append(def.documentation);
-            b.append("</td>");
-            b.append("<td>");
-            b.append(def.type.toString().toLowerCase(Locale.ROOT));
-            b.append("</td>");
-            b.append("<td>");
-            if (def.hasDefault()) {
-                if (def.defaultValue == null)
-                    b.append("null");
-                else if (def.type == Type.STRING && def.defaultValue.toString().isEmpty())
-                    b.append("\"\"");
-                else
-                    b.append(def.defaultValue);
-            } else
-                b.append("");
-            b.append("</td>");
-            b.append("<td>");
-            b.append(def.validator != null ? def.validator.toString() : "");
-            b.append("</td>");
-            b.append("<td>");
-            b.append(def.importance.toString().toLowerCase(Locale.ROOT));
-            b.append("</td>");
+            // print column values
+            for (String headerName : headers()) {
+                b.append("<td>");
+                b.append(getConfigValue(def, headerName));
+                b.append("</td>");
+            }
             b.append("</tr>\n");
         }
         b.append("</tbody></table>");
@@ -964,7 +974,7 @@ public class ConfigDef {
      * Get a list of configs sorted into "natural" order: listing required fields first, then
      * ordering by importance, and finally by name.
      */
-    private List<ConfigKey> sortedConfigs() {
+    protected List<ConfigKey> sortedConfigs() {
         // sort first required fields, then by importance, then name
         List<ConfigKey> configs = new ArrayList<>(this.configKeys.values());
         Collections.sort(configs, new Comparator<ConfigKey>() {

@@ -33,8 +33,8 @@ public class MockSourceNode<K, V> extends SourceNode<K, V> {
     public final ArrayList<K> keys = new ArrayList<>();
     public final ArrayList<V> values = new ArrayList<>();
 
-    public MockSourceNode(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
-        super(NAME + INDEX.getAndIncrement(), keyDeserializer, valDeserializer);
+    public MockSourceNode(String[] topics, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
+        super(NAME + INDEX.getAndIncrement(), topics, keyDeserializer, valDeserializer);
     }
 
     @Override

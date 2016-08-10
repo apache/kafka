@@ -33,24 +33,6 @@ import java.util.Set;
 
 public class UpdateMetadataRequest extends AbstractRequest {
 
-    public static final class PartitionState {
-        public final int controllerEpoch;
-        public final int leader;
-        public final int leaderEpoch;
-        public final List<Integer> isr;
-        public final int zkVersion;
-        public final Set<Integer> replicas;
-
-        public PartitionState(int controllerEpoch, int leader, int leaderEpoch, List<Integer> isr, int zkVersion, Set<Integer> replicas) {
-            this.controllerEpoch = controllerEpoch;
-            this.leader = leader;
-            this.leaderEpoch = leaderEpoch;
-            this.isr = isr;
-            this.zkVersion = zkVersion;
-            this.replicas = replicas;
-        }
-    }
-
     public static final class Broker {
         public final int id;
         public final Map<SecurityProtocol, EndPoint> endPoints;

@@ -170,6 +170,7 @@ public class SubscriptionState {
         this.assignment.keySet().retainAll(this.userAssignment);
 
         this.needsPartitionAssignment = false;
+        this.needsFetchCommittedOffsets = true;
     }
 
     /**

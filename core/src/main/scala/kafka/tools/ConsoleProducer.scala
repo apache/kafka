@@ -87,7 +87,7 @@ object ConsoleProducer {
     props.put("queue.buffering.max.ms", config.sendTimeout.toString)
     props.put("queue.buffering.max.messages", config.queueSize.toString)
     props.put("queue.enqueue.timeout.ms", config.queueEnqueueTimeoutMs.toString)
-    props.put("request.required.acks", config.requestRequiredAcks.toString)
+    props.put("request.required.acks", config.requestRequiredAcks)
     props.put("request.timeout.ms", config.requestTimeoutMs.toString)
     props.put("key.serializer.class", config.keyEncoderClass)
     props.put("serializer.class", config.valueEncoderClass)
@@ -116,7 +116,7 @@ object ConsoleProducer {
     props.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, config.retryBackoffMs.toString)
     props.put(ProducerConfig.METADATA_MAX_AGE_CONFIG, config.metadataExpiryMs.toString)
     props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, config.maxBlockMs.toString)
-    props.put(ProducerConfig.ACKS_CONFIG, config.requestRequiredAcks.toString)
+    props.put(ProducerConfig.ACKS_CONFIG, config.requestRequiredAcks)
     props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, config.requestTimeoutMs.toString)
     props.put(ProducerConfig.RETRIES_CONFIG, config.messageSendMaxRetries.toString)
     props.put(ProducerConfig.LINGER_MS_CONFIG, config.sendTimeout.toString)
@@ -178,8 +178,8 @@ object ConsoleProducer {
     val requestRequiredAcksOpt = parser.accepts("request-required-acks", "The required acks of the producer requests")
       .withRequiredArg
       .describedAs("request required acks")
-      .ofType(classOf[java.lang.Integer])
-      .defaultsTo(0)
+      .ofType(classOf[java.lang.String])
+      .defaultsTo("0")
     val requestTimeoutMsOpt = parser.accepts("request-timeout-ms", "The ack timeout of the producer requests. Value must be non-negative and non-zero")
       .withRequiredArg
       .describedAs("request timeout ms")

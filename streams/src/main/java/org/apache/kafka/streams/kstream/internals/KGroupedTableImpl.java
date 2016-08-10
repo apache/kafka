@@ -32,6 +32,7 @@ import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.Stores;
 
 import java.util.Collections;
+import java.util.Objects;
 
 /**
  * The implementation class of {@link KGroupedTable}.
@@ -65,6 +66,10 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                       Serde<T> aggValueSerde,
                                       String storeName) {
 
+        Objects.requireNonNull(initializer, "initializer can't be null");
+        Objects.requireNonNull(adder, "adder can't be null");
+        Objects.requireNonNull(subtractor, "subtractor can't be null");
+        Objects.requireNonNull(storeName, "storeName can't be null");
         ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(storeName, initializer, adder, subtractor);
         return doAggregate(aggregateSupplier, aggValueSerde, AGGREGATE_NAME, storeName);
     }
@@ -121,6 +126,9 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     public KTable<K, V> reduce(Reducer<V> adder,
                                Reducer<V> subtractor,
                                String storeName) {
+        Objects.requireNonNull(adder, "adder can't be null");
+        Objects.requireNonNull(subtractor, "subtractor can't be null");
+        Objects.requireNonNull(storeName, "storeName can't be null");
         ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableReduce<>(storeName, adder, subtractor);
         return doAggregate(aggregateSupplier, valSerde, REDUCE_NAME, storeName);
     }

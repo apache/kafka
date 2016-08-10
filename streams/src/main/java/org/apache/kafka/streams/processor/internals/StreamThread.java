@@ -42,6 +42,7 @@ import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
+import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,6 +69,7 @@ public class StreamThread extends Thread {
     private static final AtomicInteger STREAM_THREAD_ID_SEQUENCE = new AtomicInteger(1);
 
     public final PartitionGrouper partitionGrouper;
+    private final StreamsMetadataState streamsMetadataState;
     public final String applicationId;
     public final String clientId;
     public final UUID processId;
@@ -110,6 +112,7 @@ public class StreamThread extends Thread {
                 addStreamTasks(assignment);
                 addStandbyTasks();
                 lastCleanMs = time.milliseconds(); // start the cleaning cycle
+                streamsMetadataState.onChange(partitionAssignor.getPartitionsByHostState(), partitionAssignor.clusterMetadata());
             } catch (Throwable t) {
                 rebalanceException = t;
                 throw t;
@@ -127,6 +130,7 @@ public class StreamThread extends Thread {
             } finally {
                 // TODO: right now upon partition revocation, we always remove all the tasks;
                 // this behavior can be optimized to only remove affected tasks in the future
+                streamsMetadataState.onChange(Collections.<HostInfo, Set<TopicPartition>>emptyMap(), partitionAssignor.clusterMetadata());
                 removeStreamTasks();
                 removeStandbyTasks();
             }
@@ -140,7 +144,8 @@ public class StreamThread extends Thread {
                         String clientId,
                         UUID processId,
                         Metrics metrics,
-                        Time time) {
+                        Time time,
+                        StreamsMetadataState streamsMetadataState) {
         super("StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement());
 
         this.applicationId = applicationId;
@@ -151,6 +156,7 @@ public class StreamThread extends Thread {
         this.clientId = clientId;
         this.processId = processId;
         this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
+        this.streamsMetadataState = streamsMetadataState;
 
         // set the producer and consumer clients
         String threadName = getName();
@@ -530,6 +536,8 @@ public class StreamThread extends Thread {
         return tasks;
     }
 
+
+
     protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitions) {
         sensors.taskCreationSensor.record();
 
@@ -648,6 +656,39 @@ public class StreamThread extends Thread {
                 restoreConsumer.seekToBeginning(singleton(partition));
             }
         }
+    }
+
+
+    /**
+     * Produces a string representation contain useful information about a StreamThread.
+     * This is useful in debugging scenarios.
+     * @return A string representation of the StreamThread instance.
+     */
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder("StreamsThread appId:" + this.applicationId + "\n");
+        sb.append("\tStreamsThread clientId:" + clientId + "\n");
+
+        // iterate and print active tasks
+        if (activeTasks != null) {
+            sb.append("\tActive tasks:\n");
+            for (TaskId tId : activeTasks.keySet()) {
+                StreamTask task = activeTasks.get(tId);
+                sb.append("\t\t" + task.toString());
+            }
+        }
+
+        // iterate and print standby tasks
+        if (standbyTasks != null) {
+            sb.append("\tStandby tasks:\n");
+            for (TaskId tId : standbyTasks.keySet()) {
+                StandbyTask task = standbyTasks.get(tId);
+                sb.append("\t\t" + task.toString());
+            }
+            sb.append("\n");
+        }
+
+        return sb.toString();
     }
 
 

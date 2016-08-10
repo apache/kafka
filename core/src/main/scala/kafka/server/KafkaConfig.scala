@@ -444,14 +444,24 @@ object KafkaConfig {
     "Some examples are: 0.8.2, 0.9.0.0, 0.10.0, check ApiVersion for more details. By setting a particular message format version, the " +
     "user is certifying that all the existing messages on disk are smaller or equal than the specified version. Setting this value incorrectly " +
     "will cause consumers with older versions to break as they will receive messages with a format that they don't understand."
+
   val LogMessageTimestampTypeDoc = "Define whether the timestamp in the message is message create time or log append time. The value should be either " +
     "`CreateTime` or `LogAppendTime`"
+
   val LogMessageTimestampDifferenceMaxMsDoc = "The maximum difference allowed between the timestamp when a broker receives " +
-    "a message and the timestamp specified in the message. If message.timestamp.type=CreateTime, a message will be rejected " +
-    "if the difference in timestamp exceeds this threshold. This configuration is ignored if message.timestamp.type=LogAppendTime."
+    "a message and the timestamp specified in the message. If log.message.timestamp.type=CreateTime, a message will be rejected " +
+    "if the difference in timestamp exceeds this threshold. This configuration is ignored if log.message.timestamp.type=LogAppendTime."
   val NumRecoveryThreadsPerDataDirDoc = "The number of threads per data directory to be used for log recovery at startup and flushing at shutdown"
   val AutoCreateTopicsEnableDoc = "Enable auto creation of topic on the server"
-  val MinInSyncReplicasDoc = "define the minimum number of replicas in ISR needed to satisfy a produce request with acks=all (or -1)"
+  val MinInSyncReplicasDoc = "When a producer sets acks to \"all\" (or \"-1\"), " +
+    "min.insync.replicas specifies the minimum number of replicas that must acknowledge " +
+    "a write for the write to be considered successful. If this minimum cannot be met, " +
+    "then the producer will raise an exception (either NotEnoughReplicas or " +
+    "NotEnoughReplicasAfterAppend).<br>When used together, min.insync.replicas and acks " +
+    "allow you to enforce greater durability guarantees. A typical scenario would be to " +
+    "create a topic with a replication factor of 3, set min.insync.replicas to 2, and " +
+    "produce with acks of \"all\". This will ensure that the producer raises an exception " +
+    "if a majority of replicas do not receive a write."
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMsDoc = "The socket timeout for controller-to-broker channels"
   val ControllerMessageQueueSizeDoc = "The buffer size for controller-to-broker-channels"

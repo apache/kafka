@@ -37,7 +37,7 @@ versions += [
   metrics: "2.2.0",
   powermock: "1.6.4",
   reflections: "0.9.10",
-  rocksDB: "4.4.1",
+  rocksDB: "4.8.0",
   scalaTest: "2.2.6",
   scalaParserCombinators: "1.0.4",
   scoverage: "1.1.1",

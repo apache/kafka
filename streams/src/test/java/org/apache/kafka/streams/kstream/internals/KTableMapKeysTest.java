@@ -26,10 +26,14 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -39,6 +43,7 @@ public class KTableMapKeysTest {
 
     final private Serde<String> stringSerde = new Serdes.StringSerde();
     final private Serde<Integer>  integerSerde = new Serdes.IntegerSerde();
+    private File stateDir = null;
     private KStreamTestDriver driver = null;
 
 
@@ -48,6 +53,11 @@ public class KTableMapKeysTest {
             driver.close();
         }
         driver = null;
+    }
+
+    @Before
+     public void setUp() throws IOException {
+        stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
     @Test
@@ -82,7 +92,7 @@ public class KTableMapKeysTest {
 
         convertedStream.process(processor);
 
-        driver = new KStreamTestDriver(builder);
+        driver = new KStreamTestDriver(builder, stateDir);
 
         for (int i = 0;  i < originalKeys.length; i++) {
             driver.process(topic1, originalKeys[i], values[i]);
