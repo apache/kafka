@@ -309,12 +309,10 @@ class OffsetIndex(@volatile private[this] var _file: File, val baseOffset: Long,
   private def forceUnmap(m: MappedByteBuffer) {
     try {
       m match {
-        case buffer: DirectBuffer => {
+        case buffer: DirectBuffer =>
           val bufferCleaner = buffer.cleaner()
-          if (bufferCleaner != null) {
+          if (bufferCleaner != null)
             bufferCleaner.clean()
-          }
-        }
         case _ =>
       }
     } catch {
