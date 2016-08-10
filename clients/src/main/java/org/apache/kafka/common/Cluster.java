@@ -84,6 +84,7 @@ public final class Cluster {
 
     /**
      * Create an empty cluster instance with no nodes and no topic-partitions.
+     * @return Cluster Empty cluster with no nodes and no topic-partitions
      */
     public static Cluster empty() {
         return new Cluster(new ArrayList<Node>(0), new ArrayList<PartitionInfo>(0));

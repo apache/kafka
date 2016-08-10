@@ -30,6 +30,7 @@ public class Node {
 
     /**
      * The node id of this node
+     * @return id The integer id of the node
      */
     public int id() {
         return id;
@@ -37,6 +38,7 @@ public class Node {
 
     /**
      * The host name for this node
+     * @return host The string value of host
      */
     public String host() {
         return host;
@@ -44,6 +46,7 @@ public class Node {
 
     /**
      * The port for this node
+     * @return port The integer port of this node
      */
     public int port() {
         return port;

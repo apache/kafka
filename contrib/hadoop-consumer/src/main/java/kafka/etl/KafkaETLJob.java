@@ -33,6 +33,12 @@ public class KafkaETLJob {
     public static final String HADOOP_PREFIX = "hadoop-conf.";
     /**
      * Create a job configuration
+     * @param name The job name
+     * @param topic The topic name
+     * @param props Properties object
+     * @param classobj Job class
+     * @return JobConf Job Configuration
+     * @throws Exception On any error
      */
     @SuppressWarnings("rawtypes")
     public static JobConf createJobConf(String name, String topic, Props props, Class classobj) 
@@ -57,6 +63,11 @@ public class KafkaETLJob {
     
     /**
      * Helper function to initialize a job configuration
+     * @param name Job name
+     * @param props The properties object
+     * @param classobj Job Class for classloading
+     * @return JobConf Job Configuration from properties
+     * @throws Exception On any error.
      */
     public static JobConf getJobConf(String name, Props props, Class classobj) throws Exception {
         JobConf conf = new JobConf();

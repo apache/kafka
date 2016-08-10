@@ -67,6 +67,7 @@ public final class ProducerRecord<K, V> {
 
     /**
      * The topic this record is being sent to
+     * @return topic The string topic this record is sent to
      */
     public String topic() {
         return topic;
@@ -74,6 +75,7 @@ public final class ProducerRecord<K, V> {
 
     /**
      * The key (or null if no key is specified)
+     * @return key The key (or null if no key is specified)
      */
     public K key() {
         return key;
@@ -88,6 +90,7 @@ public final class ProducerRecord<K, V> {
 
     /**
      * The partition to which the record will be sent (or null if no partition was specified)
+     * @return partition The integer partition to to which the record will be sent
      */
     public Integer partition() {
         return partition;

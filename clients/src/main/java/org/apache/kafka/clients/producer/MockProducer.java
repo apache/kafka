@@ -67,6 +67,7 @@ public class MockProducer implements Producer<byte[],byte[]> {
      * Create a new mock producer with invented metadata the given autoComplete setting.
      * 
      * Equivalent to {@link #MockProducer(Cluster, boolean) new MockProducer(null, autoComplete)}
+     * @param autoComplete auto Complete if true
      */
     public MockProducer(boolean autoComplete) {
         this(Cluster.empty(), autoComplete);
@@ -143,6 +144,7 @@ public class MockProducer implements Producer<byte[],byte[]> {
 
     /**
      * Get the list of sent records since the last call to {@link #clear()}
+     * @return List of ProducerRecord<byte[], byte[]>
      */
     public synchronized List<ProducerRecord<byte[], byte[]>> history() {
         return new ArrayList<ProducerRecord<byte[], byte[]>>(this.sent);
@@ -167,7 +169,7 @@ public class MockProducer implements Producer<byte[],byte[]> {
 
     /**
      * Complete the earliest uncompleted call with the given error.
-     * 
+     * @param e The RunTimeException
      * @return true if there was an uncompleted call to complete
      */
     public synchronized boolean errorNext(RuntimeException e) {

@@ -23,11 +23,13 @@ public interface Metric {
 
     /**
      * A name for this metric
+     * @return MetricName The MetricName object
      */
     public MetricName metricName();
 
     /**
      * The value of the metric
+     * @return value The double value of the metric
      */
     public double value();
 
