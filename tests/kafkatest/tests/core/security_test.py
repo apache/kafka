@@ -67,6 +67,9 @@ class SecurityTest(ProduceConsumeValidateTest):
     def test_client_ssl_endpoint_validation_failure(self, security_protocol, interbroker_security_protocol):
         """
         Test that invalid hostname in certificate results in connection failures.
+        When security_protocol=SSL, client SSL handshakes are expected to fail due to hostname verification failure.
+        When security_protocol=PLAINTEXT and interbroker_security_protocol=SSL, controller connections fail
+        with hostname verification failure. Hence clients are expected to fail with LEADER_NOT_AVAILABLE.
         """
 
         self.kafka.security_protocol = security_protocol
