@@ -109,6 +109,10 @@ public class StreamsConfig extends AbstractConfig {
     public static final String VALUE_SERDE_CLASS_CONFIG = "value.serde";
     public static final String VALUE_SERDE_CLASS_DOC = "Serializer / deserializer class for value that implements the <code>Serde</code> interface.";
 
+    /**<code>user.endpoint</code> */
+    public static final String APPLICATION_SERVER_CONFIG = "application.server";
+    public static final String APPLICATION_SERVER_DOC = "A host:port pair pointing to an embedded user defined endpoint that can be used for discovering the locations of state stores within a single KafkaStreams application";
+
     /** <code>metrics.sample.window.ms</code> */
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
 
@@ -225,6 +229,11 @@ public class StreamsConfig extends AbstractConfig {
                                         atLeast(1),
                                         Importance.LOW,
                                         CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
+                                .define(APPLICATION_SERVER_CONFIG,
+                                        Type.STRING,
+                                        "",
+                                        Importance.LOW,
+                                        APPLICATION_SERVER_DOC)
                                 .define(ROCKSDB_CONFIG_SETTER_CLASS_CONFIG,
                                         Type.CLASS,
                                         null,
@@ -319,6 +328,7 @@ public class StreamsConfig extends AbstractConfig {
         if (!getString(ZOOKEEPER_CONNECT_CONFIG).equals(""))
             props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, getString(ZOOKEEPER_CONNECT_CONFIG));
 
+        props.put(APPLICATION_SERVER_CONFIG, getString(APPLICATION_SERVER_CONFIG));
         return props;
     }
 

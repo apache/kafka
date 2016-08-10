@@ -68,6 +68,7 @@ public class TopologyBuilder {
     private final HashMap<String, Pattern> nodeToSourcePatterns = new LinkedHashMap<>();
     private final HashMap<String, Pattern> topicToPatterns = new HashMap<>();
     private final HashMap<String, String> nodeToSinkTopic = new HashMap<>();
+    private final Map<String, Set<String>> stateStoreNameToSourceTopics = new HashMap<>();
     private final HashMap<String, String> sourceStoreToSourceTopic = new HashMap<>();
     private SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
     private String applicationId;
@@ -616,10 +617,38 @@ public class TopologyBuilder {
 
         NodeFactory nodeFactory = nodeFactories.get(processorName);
         if (nodeFactory instanceof ProcessorNodeFactory) {
-            ((ProcessorNodeFactory) nodeFactory).addStateStore(stateStoreName);
+            ProcessorNodeFactory processorNodeFactory = (ProcessorNodeFactory) nodeFactory;
+            processorNodeFactory.addStateStore(stateStoreName);
+            connectStateStoreNameToSourceTopics(stateStoreName, processorNodeFactory);
         } else {
             throw new TopologyBuilderException("cannot connect a state store " + stateStoreName + " to a source node or a sink node.");
         }
+    }
+
+
+    private Set<String> findSourceTopicsForProcessorParents(String [] parents) {
+        final Set<String> sourceTopics = new HashSet<>();
+        for (String parent : parents) {
+            NodeFactory nodeFactory = nodeFactories.get(parent);
+            if (nodeFactory instanceof SourceNodeFactory) {
+                sourceTopics.addAll(Arrays.asList(((SourceNodeFactory) nodeFactory).getTopics()));
+            } else if (nodeFactory instanceof ProcessorNodeFactory) {
+                sourceTopics.addAll(findSourceTopicsForProcessorParents(((ProcessorNodeFactory) nodeFactory).parents));
+            }
+        }
+        return sourceTopics;
+    }
+
+    private void connectStateStoreNameToSourceTopics(final String stateStoreName,
+                                                     final ProcessorNodeFactory processorNodeFactory) {
+
+        final Set<String> sourceTopics = findSourceTopicsForProcessorParents(processorNodeFactory.parents);
+        if (sourceTopics.isEmpty()) {
+            throw new TopologyBuilderException("can't find source topic for state store " +
+                    stateStoreName);
+        }
+        stateStoreNameToSourceTopics.put(stateStoreName,
+                Collections.unmodifiableSet(sourceTopics));
     }
 
     /**
@@ -875,20 +904,25 @@ public class TopologyBuilder {
      * @return the unmodifiable set of topic names used by source nodes, which changes as new sources are added; never null
      */
     public synchronized Set<String> sourceTopics() {
+        Set<String> topics = maybeDecorateInternalSourceTopics(sourceTopicNames);
+        return Collections.unmodifiableSet(topics);
+    }
+
+    private Set<String> maybeDecorateInternalSourceTopics(final Set<String> sourceTopicNames) {
         Set<String> topics = new HashSet<>();
         for (String topic : sourceTopicNames) {
             if (internalTopicNames.contains(topic)) {
                 if (applicationId == null) {
                     throw new TopologyBuilderException("there are internal topics and "
                                                        + "applicationId is null. Call "
-                                                       + "setApplicationId before sourceTopics");
+                                                       + "setApplicationId first");
                 }
                 topics.add(applicationId + "-" + topic);
             } else {
                 topics.add(topic);
             }
         }
-        return Collections.unmodifiableSet(topics);
+        return topics;
     }
 
     public synchronized Pattern sourceTopicPattern() {
@@ -917,12 +951,25 @@ public class TopologyBuilder {
 
     /**
      * Set the applicationId. This is required before calling
-     * {@link #sourceTopics}, {@link #topicGroups} and {@link #copartitionSources}
+     * {@link #sourceTopics}, {@link #topicGroups}, {@link #copartitionSources}, and
+     * {@link #stateStoreNameToSourceTopics}
      * @param applicationId   the streams applicationId. Should be the same as set by
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG}
      */
     public synchronized void setApplicationId(String applicationId) {
         Objects.requireNonNull(applicationId, "applicationId can't be null");
         this.applicationId = applicationId;
+    }
+
+    /**
+     * @return a mapping from state store name to a Set of source Topics.
+     */
+    public Map<String, Set<String>> stateStoreNameToSourceTopics() {
+        final Map<String, Set<String>> results = new HashMap<>();
+        for (Map.Entry<String, Set<String>> entry : stateStoreNameToSourceTopics.entrySet()) {
+            results.put(entry.getKey(), maybeDecorateInternalSourceTopics(entry.getValue()));
+
+        }
+        return results;
     }
 }

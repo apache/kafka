@@ -404,4 +404,39 @@ public class TopologyBuilderTest {
         return nodeNames;
     }
 
+    @Test
+    public void shouldAssociateStateStoreNameWhenStateStoreSupplierIsInternal() throws Exception {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.addSource("source", "topic");
+        builder.addProcessor("processor", new MockProcessorSupplier(), "source");
+        builder.addStateStore(new MockStateStoreSupplier("store", false), true, "processor");
+        final Map<String, Set<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToSourceTopics();
+        assertEquals(1, stateStoreNameToSourceTopic.size());
+        assertEquals(Collections.singleton("topic"), stateStoreNameToSourceTopic.get("store"));
+    }
+
+    @Test
+    public void shouldAssociateStateStoreNameWhenStateStoreSupplierIsExternal() throws Exception {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.addSource("source", "topic");
+        builder.addProcessor("processor", new MockProcessorSupplier(), "source");
+        builder.addStateStore(new MockStateStoreSupplier("store", false), false, "processor");
+        final Map<String, Set<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToSourceTopics();
+        assertEquals(1, stateStoreNameToSourceTopic.size());
+        assertEquals(Collections.singleton("topic"), stateStoreNameToSourceTopic.get("store"));
+    }
+
+    @Test
+    public void shouldCorrectlyMapStateStoreToInternalTopics() throws Exception {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.setApplicationId("appId");
+        builder.addInternalTopic("internal-topic");
+        builder.addSource("source", "internal-topic");
+        builder.addProcessor("processor", new MockProcessorSupplier(), "source");
+        builder.addStateStore(new MockStateStoreSupplier("store", false), true, "processor");
+        final Map<String, Set<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToSourceTopics();
+        assertEquals(1, stateStoreNameToSourceTopic.size());
+        assertEquals(Collections.singleton("appId-internal-topic"), stateStoreNameToSourceTopic.get("store"));
+    }
+
 }
