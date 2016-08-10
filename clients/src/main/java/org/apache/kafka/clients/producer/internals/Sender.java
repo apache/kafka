@@ -457,13 +457,13 @@ public class Sender implements Runnable {
             });
         }
 
-        public void maybeRegisterTopicMetrics(String topic) {
+        private void maybeRegisterTopicMetrics(String topic) {
             // if one sensor of the metrics has been registered for the topic,
             // then all other sensors should have been registered; and vice versa
             String topicRecordsCountName = "topic." + topic + ".records-per-batch";
             Sensor topicRecordCount = this.metrics.getSensor(topicRecordsCountName);
             if (topicRecordCount == null) {
-                Map<String, String> metricTags = new LinkedHashMap<String, String>();
+                Map<String, String> metricTags = new LinkedHashMap<String, String>(1);
                 metricTags.put("topic", topic);
                 String metricGrpName = "producer-topic-metrics";
 

@@ -80,11 +80,11 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.restoreTime = this.metrics.addLatencySensor(metricScope, name, "restore");
 
         // register and possibly restore the state from the logs
-        long startNs = time.nanoseconds();
+        long startMs = time.milliseconds();
         try {
             inner.init(context, root);
         } finally {
-            this.metrics.recordLatency(this.restoreTime, startNs, time.nanoseconds());
+            this.metrics.recordLatencyMs(this.restoreTime, startMs, time.milliseconds());
         }
     }
 
@@ -100,51 +100,51 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public V get(K key) {
-        long startNs = time.nanoseconds();
+        long startMs = time.milliseconds();
         try {
             return this.inner.get(key);
         } finally {
-            this.metrics.recordLatency(this.getTime, startNs, time.nanoseconds());
+            this.metrics.recordLatencyMs(this.getTime, startMs, time.milliseconds());
         }
     }
 
     @Override
     public void put(K key, V value) {
-        long startNs = time.nanoseconds();
+        long startMs = time.milliseconds();
         try {
             this.inner.put(key, value);
         } finally {
-            this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
+            this.metrics.recordLatencyMs(this.putTime, startMs, time.milliseconds());
         }
     }
 
     @Override
     public V putIfAbsent(K key, V value) {
-        long startNs = time.nanoseconds();
+        long startMs = time.milliseconds();
         try {
             return this.inner.putIfAbsent(key, value);
         } finally {
-            this.metrics.recordLatency(this.putIfAbsentTime, startNs, time.nanoseconds());
+            this.metrics.recordLatencyMs(this.putIfAbsentTime, startMs, time.milliseconds());
         }
     }
 
     @Override
     public void putAll(List<KeyValue<K, V>> entries) {
-        long startNs = time.nanoseconds();
+        long startMs = time.milliseconds();
         try {
             this.inner.putAll(entries);
         } finally {
-            this.metrics.recordLatency(this.putAllTime, startNs, time.nanoseconds());
+            this.metrics.recordLatencyMs(this.putAllTime, startMs, time.milliseconds());
         }
     }
 
     @Override
     public V delete(K key) {
-        long startNs = time.nanoseconds();
+        long startMs = time.milliseconds();
         try {
             return this.inner.delete(key);
         } finally {
-            this.metrics.recordLatency(this.deleteTime, startNs, time.nanoseconds());
+            this.metrics.recordLatencyMs(this.deleteTime, startMs, time.milliseconds());
         }
     }
 
@@ -170,11 +170,11 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void flush() {
-        long startNs = time.nanoseconds();
+        long startMs = time.milliseconds();
         try {
             this.inner.flush();
         } finally {
-            this.metrics.recordLatency(this.flushTime, startNs, time.nanoseconds());
+            this.metrics.recordLatencyMs(this.flushTime, startMs, time.milliseconds());
         }
     }
 
@@ -182,12 +182,12 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
         private final KeyValueIterator<K1, V1> iter;
         private final Sensor sensor;
-        private final long startNs;
+        private final long startMs;
 
         public MeteredKeyValueIterator(KeyValueIterator<K1, V1> iter, Sensor sensor) {
             this.iter = iter;
             this.sensor = sensor;
-            this.startNs = time.nanoseconds();
+            this.startMs = time.milliseconds();
         }
 
         @Override
@@ -210,7 +210,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
             try {
                 iter.close();
             } finally {
-                metrics.recordLatency(this.sensor, this.startNs, time.nanoseconds());
+                metrics.recordLatencyMs(this.sensor, this.startMs, time.milliseconds());
             }
         }
     }
