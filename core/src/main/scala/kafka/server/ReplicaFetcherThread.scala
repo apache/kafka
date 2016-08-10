@@ -119,6 +119,8 @@ class ReplicaFetcherThread(name: String,
 
       if (fetchOffset != replica.logEndOffset.messageOffset)
         throw new RuntimeException("Offset mismatch for partition %s: fetched offset = %d, log end offset = %d.".format(topicAndPartition, fetchOffset, replica.logEndOffset.messageOffset))
+      if (!messageSet.isEmpty && messageSet.head.offset < replica.logEndOffset.messageOffset)
+        throw new RuntimeException("Offset error for partition %s: first offset in message set = %d, must not be less than log end offset = %d.".format(topicAndPartition, messageSet.head.offset, replica.logEndOffset.messageOffset))
       if (logger.isTraceEnabled)
         trace("Follower %d has replica log end offset %d for partition %s. Received %d messages and leader hw %d"
           .format(replica.brokerId, replica.logEndOffset.messageOffset, topicAndPartition, messageSet.sizeInBytes, partitionData.highWatermark))
