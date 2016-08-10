@@ -123,6 +123,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.interceptors = interceptors;
         this.excludeInternalTopics = excludeInternalTopics;
 
+        if (autoCommitEnabled)
+            this.nextAutoCommitDeadline = time.milliseconds() + autoCommitIntervalMs;
+
         this.metadata.requestUpdate();
         addMetadataListener();
     }
@@ -244,7 +247,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         if (subscriptions.partitionsAutoAssigned() && needRejoin()) {
-            // Due to a race condition between the initial metadata fetch and the initial rebalance, we need to ensure that
+            // due to a race condition between the initial metadata fetch and the initial rebalance, we need to ensure that
             // the metadata is fresh before joining initially, and then request the metadata update. If metadata update arrives
             // while the rebalance is still pending (for example, when the join group is still inflight), then we will lose
             // track of the fact that we need to rebalance again to reflect the change to the topic subscription. Without
@@ -259,6 +262,21 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         pollHeartbeat(now);
         maybeAutoCommitOffsetsAsync(now);
+    }
+
+    /**
+     * Return the time to the next needed invocation of {@link #poll(long)}.
+     * @param now current time in milliseconds
+     * @return the maximum time in milliseconds the caller should wait before the next invocation of poll()
+     */
+    public long timeToNextPoll(long now) {
+        if (!autoCommitEnabled)
+            return timeToNextHeartbeat(now);
+
+        if (now > nextAutoCommitDeadline)
+            return 0;
+
+        return Math.min(nextAutoCommitDeadline - now, timeToNextHeartbeat(now));
     }
 
     @Override

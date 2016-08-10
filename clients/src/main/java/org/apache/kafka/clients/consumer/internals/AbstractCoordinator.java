@@ -239,6 +239,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * provided rebalance timeout expires without calling this method, then the client will proactively
      * leave the group.
      * @param now current time in milliseconds
+     * @throws RuntimeException for unexpected errors raised from the heartbeat thread
      */
     protected synchronized void pollHeartbeat(long now) {
         if (heartbeatThread != null) {
@@ -254,6 +255,13 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
+    protected synchronized long timeToNextHeartbeat(long now) {
+        // if we have not joined the group, we don't need to send heartbeats
+        if (state == MemberState.UNJOINED)
+            return Long.MAX_VALUE;
+        return heartbeat.timeToNextHeartbeat(now);
+    }
+
     /**
      * Ensure that the group is active (i.e. joined and synced)
      */
@@ -265,6 +273,8 @@ public abstract class AbstractCoordinator implements Closeable {
         if (!needRejoin())
             return;
 
+        // call onJoinPrepare if needed. We set a flag to make sure that we do not call it a second
+        // time if the client is woken up before a pending rebalance completes.
         if (needsJoinPrepare) {
             onJoinPrepare(generation.generationId, generation.memberId);
             needsJoinPrepare = false;
@@ -546,16 +556,8 @@ public abstract class AbstractCoordinator implements Closeable {
      * Check if we know who the coordinator is and we have an active connection
      * @return true if the coordinator is unknown
      */
-    public synchronized boolean coordinatorUnknown() {
-        if (coordinator == null)
-            return true;
-
-        if (client.connectionFailed(coordinator)) {
-            coordinatorDead();
-            return true;
-        }
-
-        return false;
+    public boolean coordinatorUnknown() {
+        return coordinator() == null;
     }
 
     /**
