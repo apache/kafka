@@ -18,6 +18,7 @@
 package kafka.log
 
 import java.io._
+import java.nio.file.Files
 import java.util.Properties
 
 import org.apache.kafka.common.errors.{CorruptRecordException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException}
@@ -322,7 +323,7 @@ class LogTest extends JUnitSuite {
   @Test
   def testThatGarbageCollectingSegmentsDoesntChangeOffset() {
     for(messagesToAppend <- List(0, 1, 25)) {
-      logDir.mkdirs()
+      Files.createDirectory(logDir.toPath())
       // first test a log segment starting at 0
       val logProps = new Properties()
       logProps.put(LogConfig.SegmentBytesProp, 100: java.lang.Integer)
@@ -799,7 +800,7 @@ class LogTest extends JUnitSuite {
     val recoveryPoint = 50L
     for(iteration <- 0 until 50) {
       // create a log and write some messages to it
-      logDir.mkdirs()
+      Files.createDirectory(logDir.toPath())
       var log = new Log(logDir,
                         config,
                         recoveryPoint = 0L,
@@ -853,7 +854,7 @@ class LogTest extends JUnitSuite {
     recoveryPoint = log.logEndOffset
     log = new Log(logDir, config, 0L, time.scheduler, time)
     assertEquals(recoveryPoint, log.logEndOffset)
-    cleanShutdownFile.delete()
+    Files.delete(cleanShutdownFile.toPath())
   }
 
   @Test

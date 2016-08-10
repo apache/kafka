@@ -80,7 +80,7 @@ object TestUtils extends Logging {
    */
   def tempRelativeDir(parent: String): File = {
     val parentFile = new File(parent)
-    parentFile.mkdirs()
+    Files.createDirectory(parentFile.toPath())
 
     JTestUtils.tempDirectory(parentFile.toPath, null)
   }

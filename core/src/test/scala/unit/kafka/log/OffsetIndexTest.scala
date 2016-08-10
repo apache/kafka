@@ -18,6 +18,8 @@
 package kafka.log
 
 import java.io._
+import java.io.File
+import java.nio.file.Files
 import org.junit.Assert._
 import java.util.{Collections, Arrays}
 import org.junit._
@@ -40,7 +42,7 @@ class OffsetIndexTest extends JUnitSuite {
   @After
   def teardown() {
     if(this.idx != null)
-      this.idx.file.delete()
+      Files.delete(this.idx.file.toPath())
   }
   
   @Test
@@ -166,7 +168,7 @@ class OffsetIndexTest extends JUnitSuite {
   
   def nonExistantTempFile(): File = {
     val file = TestUtils.tempFile()
-    file.delete()
+    Files.delete(file.toPath())
     file
   }
 }

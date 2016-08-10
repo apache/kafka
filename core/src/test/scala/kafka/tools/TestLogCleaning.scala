@@ -21,6 +21,7 @@ import joptsimple.OptionParser
 import java.util.Properties
 import java.util.Random
 import java.io._
+import java.nio.file.Files
 import kafka.consumer._
 import kafka.serializer._
 import kafka.utils._
@@ -129,8 +130,8 @@ object TestLogCleaning {
     
     println("De-duplicating and validating output files...")
     validateOutput(producedDataFile, consumedDataFile)
-    producedDataFile.delete()
-    consumedDataFile.delete()
+    Files.delete(producedDataFile.toPath())
+    Files.delete(consumedDataFile.toPath())
   }
   
   def dumpLog(dir: File) {
@@ -180,8 +181,8 @@ object TestLogCleaning {
     require(!consumed.hasNext, "Additional values consumed not found in producer log.")
     require(mismatched == 0, "Non-zero number of row mismatches.")
     // if all the checks worked out we can delete the deduped files
-    producedDedupedFile.delete()
-    consumedDedupedFile.delete()
+    Files.delete(producedDedupedFile.toPath())
+    Files.delete(consumedDedupedFile.toPath())
   }
   
   def valuesIterator(reader: BufferedReader) = {

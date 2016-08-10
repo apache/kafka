@@ -28,6 +28,7 @@ import org.powermock.api.easymock.PowerMock;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -65,7 +66,7 @@ public class FileOffsetBackingStoreTest {
 
     @After
     public void teardown() {
-        tempFile.delete();
+    	Files.delete(tempFile.toPath());
     }
 
     @Test

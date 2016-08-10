@@ -18,6 +18,7 @@
 
 import org.junit.Assert._
 import java.util.concurrent.atomic._
+import java.nio.file.Files
 
 import kafka.common.LongRef
 import org.junit.{After, Test}
@@ -36,7 +37,7 @@ class LogSegmentTest {
     val msFile = TestUtils.tempFile()
     val ms = new FileMessageSet(msFile)
     val idxFile = TestUtils.tempFile()
-    idxFile.delete()
+    Files.delete(idxFile.toPath())
     val idx = new OffsetIndex(idxFile, offset, 1000)
     val seg = new LogSegment(ms, idx, offset, 10, 0, SystemTime)
     segments += seg

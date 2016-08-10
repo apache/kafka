@@ -43,6 +43,7 @@ import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
 
 import java.io.File;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -224,7 +225,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private RocksDB openDB(File dir, Options options, int ttl) {
         try {
             if (ttl == TTL_NOT_USED) {
-                dir.getParentFile().mkdirs();
+                Files.createDirectory(dir.getParentFile().toPath());
                 return RocksDB.open(options, dir.getAbsolutePath());
             } else {
                 throw new UnsupportedOperationException("Change log is not supported for store " + this.name + " since it is TTL based.");

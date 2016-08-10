@@ -19,6 +19,7 @@ package kafka.log
 
 import java.io.{DataOutputStream, File}
 import java.nio._
+import java.nio.file.Files
 import java.util.Date
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
@@ -364,9 +365,9 @@ private[log] class Cleaner(val id: Int,
                                  deleteHorizonMs: Long) {
     // create a new segment with the suffix .cleaned appended to both the log and index name
     val logFile = new File(segments.head.log.file.getPath + Log.CleanedFileSuffix)
-    logFile.delete()
+    Files.delete(logFile.toPath())
     val indexFile = new File(segments.head.index.file.getPath + Log.CleanedFileSuffix)
-    indexFile.delete()
+    Files.delete(indexFile.toPath())
     val messages = new FileMessageSet(logFile, fileAlreadyExists = false, initFileSize = log.initFileSize(), preallocate = log.config.preallocate)
     val index = new OffsetIndex(indexFile, segments.head.baseOffset, segments.head.index.maxIndexSize)
     val cleaned = new LogSegment(messages, index, segments.head.baseOffset, segments.head.indexIntervalBytes, log.config.randomSegmentJitter, time)
