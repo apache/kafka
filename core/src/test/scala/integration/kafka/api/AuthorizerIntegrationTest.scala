@@ -547,6 +547,15 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, deleteResponse.errors.asScala.head._2)
   }
 
+  @Test
+  def testDeleteWithWildCardAuth() {
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Delete)), new Resource(Topic, "b"))
+    val response = send(deleteTopicsRequest, ApiKeys.DELETE_TOPICS)
+    val deleteResponse = DeleteTopicsResponse.parse(response)
+
+    assertEquals(Errors.NONE, deleteResponse.errors.asScala.head._2)
+  }
+
   def removeAllAcls() = {
     servers.head.apis.authorizer.get.getAcls().keys.foreach { resource =>
       servers.head.apis.authorizer.get.removeAcls(resource)
