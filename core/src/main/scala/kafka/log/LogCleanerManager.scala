@@ -158,6 +158,7 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
           inProgress.put(topicPartition, LogCleaningPaused)
         case Some(state) =>
           state match {
+            case LogCleaningPaused => {}
             case LogCleaningInProgress =>
               inProgress.put(topicPartition, LogCleaningAborted)
             case s =>
