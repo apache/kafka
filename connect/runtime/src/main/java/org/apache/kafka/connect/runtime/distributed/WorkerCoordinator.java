@@ -64,6 +64,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
      */
     public WorkerCoordinator(ConsumerNetworkClient client,
                              String groupId,
+                             int rebalanceTimeoutMs,
                              int sessionTimeoutMs,
                              int heartbeatIntervalMs,
                              Metrics metrics,
@@ -75,7 +76,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                              WorkerRebalanceListener listener) {
         super(client,
                 groupId,
-                sessionTimeoutMs, // FIXME: What should Connect use for the rebalance timeout?
+                rebalanceTimeoutMs,
                 sessionTimeoutMs,
                 heartbeatIntervalMs,
                 metrics,

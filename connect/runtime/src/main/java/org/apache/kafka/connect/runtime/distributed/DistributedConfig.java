@@ -61,6 +61,15 @@ public class DistributedConfig extends WorkerConfig {
             "than 1/3 of that value. It can be adjusted even lower to control the expected time for normal rebalances.";
 
     /**
+     * <code>rebalance.timeout.ms</code>
+     */
+    public static final String REBALANCE_TIMEOUT_MS_CONFIG = "rebalance.timeout.ms";
+    private static final String REBALANCE_TIMEOUT_MS_DOC = "The maximum allowed time for each worker to join the group " +
+            "once a rebalance has begun. This is basically a limit on the amount of time needed for all tasks to " +
+            "flush any pending data and commit offsets. If the timeout is exceeded, then the worker will be removed " +
+            "from the group, which will cause offset commit failures.";
+
+    /**
      * <code>worker.sync.timeout.ms</code>
      */
     public static final String WORKER_SYNC_TIMEOUT_MS_CONFIG = "worker.sync.timeout.ms";
@@ -99,9 +108,14 @@ public class DistributedConfig extends WorkerConfig {
                 .define(GROUP_ID_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, GROUP_ID_DOC)
                 .define(SESSION_TIMEOUT_MS_CONFIG,
                         ConfigDef.Type.INT,
-                        30000,
+                        10000,
                         ConfigDef.Importance.HIGH,
                         SESSION_TIMEOUT_MS_DOC)
+                .define(REBALANCE_TIMEOUT_MS_CONFIG,
+                        ConfigDef.Type.INT,
+                        60000,
+                        ConfigDef.Importance.HIGH,
+                        REBALANCE_TIMEOUT_MS_DOC)
                 .define(HEARTBEAT_INTERVAL_MS_CONFIG,
                         ConfigDef.Type.INT,
                         3000,
