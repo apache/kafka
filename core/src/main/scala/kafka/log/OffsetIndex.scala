@@ -311,6 +311,7 @@ class OffsetIndex(@volatile private[this] var _file: File, val baseOffset: Long,
       m match {
         case buffer: DirectBuffer =>
           val bufferCleaner = buffer.cleaner()
+          /* cleaner can be null if the mapped region has size 0 */
           if (bufferCleaner != null)
             bufferCleaner.clean()
         case _ =>
