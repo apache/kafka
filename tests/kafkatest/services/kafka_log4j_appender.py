@@ -35,6 +35,7 @@ class KafkaLog4jAppender(KafkaPathResolverMixin, BackgroundThreadService):
         self.max_messages = max_messages
         self.security_protocol = security_protocol
         self.security_config = SecurityConfig(self.context, security_protocol)
+        self.stop_timeout_sec = 30
 
     def _worker(self, idx, node):
         cmd = self.start_cmd(node)

@@ -25,11 +25,13 @@ from ducktape.utils.util import wait_until
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin, TOOLS_JAR_NAME, TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME
 from kafkatest.utils import is_int, is_int_with_prefix
 from kafkatest.version import TRUNK, LATEST_0_8_2
+from kafkatest.utils.remote_account import line_count
 
 
 class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
     PERSISTENT_ROOT = "/mnt/verifiable_producer"
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_producer.stdout")
+    STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_producer.stderr")
     LOG_DIR = os.path.join(PERSISTENT_ROOT, "logs")
     LOG_FILE = os.path.join(LOG_DIR, "verifiable_producer.log")
     LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
@@ -38,6 +40,9 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
     logs = {
         "verifiable_producer_stdout": {
             "path": STDOUT_CAPTURE,
+            "collect_default": False},
+        "verifiable_producer_stderr": {
+            "path": STDERR_CAPTURE,
             "collect_default": False},
         "verifiable_producer_log": {
             "path": LOG_FILE,
@@ -118,14 +123,20 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
         node.account.ssh(cmd)
 
         # Ensure that STDOUT_CAPTURE exists before try to read from it
-        wait_until(lambda: self.alive(node) and node.account.isfile(VerifiableProducer.STDOUT_CAPTURE),
-                   timeout_sec=3, err_msg="%s: VerifiableProducer took too long to start" % node.account)
+        # Note that if max_messages is configured, it's possible for the process to exit before this
+        # wait_until condition is checked
+        start = time.time()
+        wait_until(lambda: node.account.isfile(VerifiableProducer.STDOUT_CAPTURE) and
+                           line_count(node, VerifiableProducer.STDOUT_CAPTURE) > 0,
+                   timeout_sec=10, err_msg="%s: VerifiableProducer took too long to start" % node.account)
+        self.logger.debug("%s: VerifiableProducer took %s seconds to start" % (node.account, time.time() - start))
 
         with node.account.open(VerifiableProducer.STDOUT_CAPTURE, 'r') as f:
             while True:
                 line = f.readline()
                 if line == '' and not self.alive(node):
-                    # The process is gone, and we've reached the end of the output file
+                    # The process is gone, and we've reached the end of the output file, so we don't expect
+                    # any more output to appear in the STDOUT_CAPTURE file
                     break
 
                 line = line.strip()
@@ -192,10 +203,10 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
         if self.message_validator == is_int_with_prefix:
             cmd += " --value-prefix %s" % str(idx)
         if self.acks is not None:
-            cmd += " --acks %s\n" % str(self.acks)
+            cmd += " --acks %s " % str(self.acks)
 
         cmd += " --producer.config %s" % VerifiableProducer.CONFIG_FILE
-        cmd += " 2>> %s 1>> %s &" % (VerifiableProducer.STDOUT_CAPTURE, VerifiableProducer.STDOUT_CAPTURE)
+        cmd += " 2>> %s 1>> %s &" % (VerifiableProducer.STDERR_CAPTURE, VerifiableProducer.STDOUT_CAPTURE)
         return cmd
 
     def kill_node(self, node, clean_shutdown=True, allow_fail=False):
