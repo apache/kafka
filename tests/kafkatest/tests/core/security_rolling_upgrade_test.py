@@ -103,7 +103,9 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         self.set_authorizer_and_bounce(security_protocol, security_protocol)
 
     @cluster(num_nodes=8)
-    @matrix(client_protocol=["SSL", "SASL_PLAINTEXT", "SASL_SSL"])
+    @matrix(client_protocol=["SSL"])
+    @cluster(num_nodes=9)
+    @matrix(client_protocol=["SASL_PLAINTEXT", "SASL_SSL"])
     def test_rolling_upgrade_phase_one(self, client_protocol):
         """
         Start with a PLAINTEXT cluster, open a SECURED port, via a rolling upgrade, ensuring we could produce

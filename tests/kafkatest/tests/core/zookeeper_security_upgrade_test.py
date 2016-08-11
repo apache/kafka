@@ -96,7 +96,7 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
     @cluster(num_nodes=6)
     @matrix(security_protocol=["PLAINTEXT", "SSL"])
     @cluster(num_nodes=7)
-    @matrix(["SASL_SSL", "SASL_PLAINTEXT"])
+    @matrix(security_protocol=["SASL_SSL", "SASL_PLAINTEXT"])
     def test_zk_security_upgrade(self, security_protocol):
         self.zk.start()
         self.kafka.security_protocol = security_protocol

@@ -19,7 +19,6 @@ from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.performance.streams_performance import StreamsSimpleBenchmarkService
 
 
-@cluster(num_nodes=3)
 class StreamsSimpleBenchmarkTest(KafkaTest):
     """
     Simple benchmark of Kafka Streams.
@@ -30,6 +29,7 @@ class StreamsSimpleBenchmarkTest(KafkaTest):
 
         self.driver = StreamsSimpleBenchmarkService(test_context, self.kafka, 1000000L)
 
+    @cluster(num_nodes=3)
     def test_simple_benchmark(self):
         """
         Run simple Kafka Streams benchmark

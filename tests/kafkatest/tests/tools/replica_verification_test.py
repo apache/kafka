@@ -70,7 +70,7 @@ class ReplicaVerificationToolTest(Test):
     def stop_producer(self):
         self.producer.stop()
 
-    @cluster(num_nodes=5)
+    @cluster(num_nodes=6)
     def test_replica_lags(self, security_protocol='PLAINTEXT'):
         """
         Tests ReplicaVerificationTool
