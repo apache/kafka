@@ -101,8 +101,8 @@ public final class Metadata {
     }
 
     /**
-     * Add the topic to maintain in the metadata. If topic expiry is enabled, expiry will
-     * time be reset on the next update.
+     * Add the topic to maintain in the metadata. If topic expiry is enabled, expiry time
+     * will be reset on the next update.
      */
     public synchronized void add(String topic) {
         topics.put(topic, TOPIC_EXPIRY_NEEDS_UPDATE);
