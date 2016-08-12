@@ -329,19 +329,35 @@ class AuthorizerIntegrationTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testConsumeWithNoGroupAccess(): Unit = {
+  def testSimpleConsumeWithOffsetLookupAndNoGroupAccess(): Unit = {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
     sendRecords(1, tp)
     removeAllAcls()
 
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), topicResource)
     try {
+      // note this still depends on group access because we haven't set offsets explicitly, which means
+      // they will first be fetched from the consumer coordinator (which requires group access)
       this.consumers.head.assign(List(tp).asJava)
       consumeRecords(this.consumers.head)
       Assert.fail("should have thrown exception")
     } catch {
       case e: GroupAuthorizationException => assertEquals(group, e.groupId())
     }
+  }
+
+  @Test
+  def testSimpleConsumeWithExplicitSeekAndNoGroupAccess(): Unit = {
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
+    sendRecords(1, tp)
+    removeAllAcls()
+
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), topicResource)
+
+    // in this case, we do an explicit seek, so there should be no need to query the coordinator at all
+    this.consumers.head.assign(List(tp).asJava)
+    this.consumers.head.seekToBeginning(List(tp).asJava)
+    consumeRecords(this.consumers.head)
   }
 
   @Test

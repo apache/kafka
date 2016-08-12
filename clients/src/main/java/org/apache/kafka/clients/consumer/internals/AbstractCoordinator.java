@@ -98,6 +98,8 @@ public abstract class AbstractCoordinator implements Closeable {
     protected String protocol;
     protected int generation;
 
+    private RequestFuture<Void> findCoordinatorFuture = null;
+
     /**
      * Initialize the coordination manager.
      */
@@ -175,7 +177,7 @@ public abstract class AbstractCoordinator implements Closeable {
      */
     public void ensureCoordinatorReady() {
         while (coordinatorUnknown()) {
-            RequestFuture<Void> future = sendGroupCoordinatorRequest();
+            RequestFuture<Void> future = lookupCoordinator();
             client.poll(future);
 
             if (future.failed()) {
@@ -189,8 +191,25 @@ public abstract class AbstractCoordinator implements Closeable {
                 coordinatorDead();
                 time.sleep(retryBackoffMs);
             }
-
         }
+    }
+
+    protected RequestFuture<Void> lookupCoordinator() {
+        if (findCoordinatorFuture == null) {
+            findCoordinatorFuture = sendGroupCoordinatorRequest();
+            findCoordinatorFuture.addListener(new RequestFutureListener<Void>() {
+                @Override
+                public void onSuccess(Void value) {
+                    findCoordinatorFuture = null;
+                }
+
+                @Override
+                public void onFailure(RuntimeException e) {
+                    findCoordinatorFuture = null;
+                }
+            });
+        }
+        return findCoordinatorFuture;
     }
 
     /**
@@ -205,6 +224,10 @@ public abstract class AbstractCoordinator implements Closeable {
      * Ensure that the group is active (i.e. joined and synced)
      */
     public void ensureActiveGroup() {
+        // always ensure that the coordinator is ready because we may have been disconnected
+        // when sending heartbeats and does not necessarily require us to rejoin the group.
+        ensureCoordinatorReady();
+
         if (!needRejoin())
             return;
 

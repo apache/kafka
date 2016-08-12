@@ -970,9 +970,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The fetched records (may be empty)
      */
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(long timeout) {
-        // TODO: Sub-requests should take into account the poll timeout (KAFKA-1894)
-        coordinator.ensureCoordinatorReady();
-
         // ensure we have partitions assigned if we expect to
         if (subscriptions.partitionsAutoAssigned())
             coordinator.ensurePartitionAssignment();
@@ -1402,11 +1399,22 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             defined
      */
     private void updateFetchPositions(Set<TopicPartition> partitions) {
-        // refresh commits for all assigned partitions
-        coordinator.refreshCommittedOffsetsIfNeeded();
+        // lookup any positions for partitions which are awaiting reset (which may be the
+        // case if the user called seekToBeginning or seekToEnd. We do this check first to
+        // avoid an unnecessary lookup of committed offsets (which typically occurs when
+        // the user is manually assigning partitions and managing their own offsets).
+        fetcher.resetOffsetsIfNeeded(partitions);
 
-        // then do any offset lookups in case some positions are not known
-        fetcher.updateFetchPositions(partitions);
+        if (!subscriptions.hasAllFetchPositions()) {
+            // if we still don't have offsets for all partitions, then we should either seek
+            // to the last committed position or reset using the auto reset policy
+
+            // first refresh commits for all assigned partitions
+            coordinator.refreshCommittedOffsetsIfNeeded();
+
+            // then do any offset lookups in case some positions are not known
+            fetcher.updateFetchPositions(partitions);
+        }
     }
 
     /*
