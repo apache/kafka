@@ -82,6 +82,7 @@ public class StreamThread extends Thread {
     protected final Consumer<byte[], byte[]> consumer;
     protected final Consumer<byte[], byte[]> restoreConsumer;
 
+    private final String threadClientId;
     private final AtomicBoolean running;
     private final Map<TaskId, StreamTask> activeTasks;
     private final Map<TaskId, StandbyTask> standbyTasks;
@@ -160,7 +161,7 @@ public class StreamThread extends Thread {
 
         // set the producer and consumer clients
         String threadName = getName();
-        String threadClientId = clientId + "-" + threadName;
+        threadClientId = clientId + "-" + getName();
         log.info("Creating producer client for stream thread [{}]", threadName);
         this.producer = clientSupplier.getProducer(config.getProducerConfigs(threadClientId));
         log.info("Creating consumer client for stream thread [{}]", threadName);
@@ -725,9 +726,8 @@ public class StreamThread extends Thread {
         public StreamsMetricsImpl(Metrics metrics) {
             this.metrics = metrics;
             this.metricGrpName = "stream-metrics";
-            String clientMetricsId = clientId + "-" + getName();
-            sensorNamePrefix = "thread." + clientMetricsId;
-            this.metricTags = Collections.singletonMap("client-id", clientMetricsId);
+            this.sensorNamePrefix = "thread." + threadClientId;
+            this.metricTags = Collections.singletonMap("client-id", threadClientId);
 
             this.commitTimeSensor = metrics.sensor(sensorNamePrefix + ".commit-time");
             this.commitTimeSensor.add(metrics.metricName("commit-time-avg", metricGrpName, "The average commit time in ms", metricTags), new Avg());
