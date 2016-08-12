@@ -23,6 +23,14 @@ public class RetriableCommitFailedException extends RetriableException {
     private static final long serialVersionUID = 1L;
 
     public RetriableCommitFailedException(Throwable t) {
-        super("Commit offsets failed with retriable exception. You should retry committing offsets.", t);
+        super("Offset commit failed with a retriable exception. You should retry committing offsets.", t);
+    }
+
+    public RetriableCommitFailedException(String message) {
+        super(message);
+    }
+
+    public RetriableCommitFailedException(String message, Throwable t) {
+        super(message, t);
     }
 }

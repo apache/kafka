@@ -90,7 +90,7 @@ public class KafkaConsumerTest {
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
         final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
         try {
-            KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<byte[], byte[]>(
+            KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(
                     props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
         } catch (KafkaException e) {
             assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());

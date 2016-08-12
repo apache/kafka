@@ -177,13 +177,8 @@ public abstract class AbstractCoordinator implements Closeable {
      */
     public void ensureCoordinatorReady() {
         while (coordinatorUnknown()) {
-            if (findCoordinatorFuture == null)
-                findCoordinatorFuture = sendGroupCoordinatorRequest();
-
-            client.poll(findCoordinatorFuture);
-
-            RequestFuture<Void> future = findCoordinatorFuture;
-            findCoordinatorFuture = null;
+            RequestFuture<Void> future = lookupCoordinator();
+            client.poll(future);
 
             if (future.failed()) {
                 if (future.isRetriable())
@@ -200,8 +195,20 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     protected RequestFuture<Void> lookupCoordinator() {
-        if (findCoordinatorFuture == null || findCoordinatorFuture.isDone())
+        if (findCoordinatorFuture == null || findCoordinatorFuture.isDone()) {
             findCoordinatorFuture = sendGroupCoordinatorRequest();
+            findCoordinatorFuture.addListener(new RequestFutureListener<Void>() {
+                @Override
+                public void onSuccess(Void value) {
+                    findCoordinatorFuture = null;
+                }
+
+                @Override
+                public void onFailure(RuntimeException e) {
+                    findCoordinatorFuture = null;
+                }
+            });
+        }
         return findCoordinatorFuture;
     }
 
