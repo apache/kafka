@@ -56,8 +56,13 @@ class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
    */
   def blockingReady(node: Node, timeout: Long)(implicit time: JTime): Boolean = {
     require(timeout >=0, "timeout should be >= 0")
-    client.ready(node, time.milliseconds()) || pollUntil(timeout) { (_, now) =>
-      if (client.isReady(node, now))
+
+    // poll once to receive pending disconnects
+    val now = time.milliseconds()
+    client.poll(0, now)
+
+    client.ready(node, now) || pollUntil(timeout) { (_, now) =>
+      if (client.ready(node, now))
         true
       else if (client.connectionFailed(node))
         throw new IOException(s"Connection to $node failed")
