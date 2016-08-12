@@ -195,7 +195,7 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     protected RequestFuture<Void> lookupCoordinator() {
-        if (findCoordinatorFuture == null || findCoordinatorFuture.isDone()) {
+        if (findCoordinatorFuture == null) {
             findCoordinatorFuture = sendGroupCoordinatorRequest();
             findCoordinatorFuture.addListener(new RequestFutureListener<Void>() {
                 @Override
