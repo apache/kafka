@@ -774,7 +774,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         TargetState initialState = configState.targetState(taskId.connector());
         Map<String, String> configs = configState.taskConfig(taskId);
         TaskConfig taskConfig = new TaskConfig(configs);
-        worker.startTask(taskId, taskConfig, this, initialState);
+        Map<String, String> connConfigs = configState.connectorConfig(taskId.connector());
+        ConnectorConfig connConfig = new ConnectorConfig(connConfigs);
+        worker.startTask(taskId, taskConfig, connConfig, this, initialState);
     }
 
     // Helper for starting a connector with the given name, which will extract & parse the config, generate connector
