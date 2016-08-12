@@ -19,6 +19,7 @@ package kafka.server
 import java.util.Properties
 
 import kafka.admin.AdminUtils
+import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
@@ -109,6 +110,49 @@ class AdminManager(val config: KafkaConfig,
       val delayedCreateKeys = createInfo.keys.map(new TopicKey(_)).toSeq
       // try to complete the request immediately, otherwise put it into the purgatory
       topicPurgatory.tryCompleteElseWatch(delayedCreate, delayedCreateKeys)
+    }
+  }
+
+  /**
+    * Delete topics and wait until the topics have been completely deleted.
+    * The callback function will be triggered either when timeout, error or the topics are deleted.
+    */
+  def deleteTopics(timeout: Int,
+                   topics: Set[String],
+                   responseCallback: Map[String, Errors] => Unit) {
+
+    // 1. map over topics calling the asynchronous delete
+    val metadata = topics.map { topic =>
+        try {
+          AdminUtils.deleteTopic(zkUtils, topic)
+          DeleteTopicMetadata(topic, Errors.NONE)
+        } catch {
+          case e: TopicAlreadyMarkedForDeletionException =>
+            // swallow the exception, and still track deletion allowing multiple calls to wait for deletion
+            DeleteTopicMetadata(topic, Errors.NONE)
+          case e: Throwable =>
+            error(s"Error processing delete topic request for topic $topic", e)
+            DeleteTopicMetadata(topic, Errors.forException(e))
+        }
+    }
+
+    // 2. if timeout <= 0 or no topics can proceed return immediately
+    if (timeout <= 0 || !metadata.exists(_.error == Errors.NONE)) {
+      val results = metadata.map { deleteTopicMetadata =>
+        // ignore topics that already have errors
+        if (deleteTopicMetadata.error == Errors.NONE) {
+          (deleteTopicMetadata.topic, Errors.REQUEST_TIMED_OUT)
+        } else {
+          (deleteTopicMetadata.topic, deleteTopicMetadata.error)
+        }
+      }.toMap
+      responseCallback(results)
+    } else {
+      // 3. else pass the topics and errors to the delayed operation and set the keys
+      val delayedDelete = new DelayedDeleteTopics(timeout, metadata.toSeq, this, responseCallback)
+      val delayedDeleteKeys = topics.map(new TopicKey(_)).toSeq
+      // try to complete the request immediately, otherwise put it into the purgatory
+      topicPurgatory.tryCompleteElseWatch(delayedDelete, delayedDeleteKeys)
     }
   }
 }
