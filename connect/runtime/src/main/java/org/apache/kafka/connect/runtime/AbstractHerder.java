@@ -325,7 +325,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
         boolean required = false;
         String defaultValue;
-        if (configKey.defaultValue == ConfigDef.NO_DEFAULT_VALUE) {
+        if (ConfigDef.NO_DEFAULT_VALUE.equals(configKey.defaultValue)) {
             defaultValue = (String) configKey.defaultValue;
             required = true;
         } else {
