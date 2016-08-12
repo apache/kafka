@@ -21,6 +21,8 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
+import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
+import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -28,6 +30,7 @@ import org.apache.kafka.streams.processor.internals.QuickUnion;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor.SubscriptionUpdates;
+import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -53,7 +56,6 @@ import java.util.regex.Pattern;
  * instance that will then {@link org.apache.kafka.streams.KafkaStreams#start() begin consuming, processing, and producing records}.
  */
 public class TopologyBuilder {
-
     // node factories in a topological order
     private final LinkedHashMap<String, NodeFactory> nodeFactories = new LinkedHashMap<>();
 
@@ -224,10 +226,10 @@ public class TopologyBuilder {
     public static class TopicsInfo {
         public Set<String> sinkTopics;
         public Set<String> sourceTopics;
-        public Set<String> interSourceTopics;
-        public Set<String> stateChangelogTopics;
+        public Map<String, InternalTopicConfig> interSourceTopics;
+        public Map<String, InternalTopicConfig> stateChangelogTopics;
 
-        public TopicsInfo(Set<String> sinkTopics, Set<String> sourceTopics, Set<String> interSourceTopics, Set<String> stateChangelogTopics) {
+        public TopicsInfo(Set<String> sinkTopics, Set<String> sourceTopics, Map<String, InternalTopicConfig> interSourceTopics, Map<String, InternalTopicConfig> stateChangelogTopics) {
             this.sinkTopics = sinkTopics;
             this.sourceTopics = sourceTopics;
             this.interSourceTopics = interSourceTopics;
@@ -248,6 +250,16 @@ public class TopologyBuilder {
         public int hashCode() {
             long n = ((long) sourceTopics.hashCode() << 32) | (long) stateChangelogTopics.hashCode();
             return (int) (n % 0xFFFFFFFFL);
+        }
+
+        @Override
+        public String toString() {
+            return "TopicsInfo{" +
+                    "sinkTopics=" + sinkTopics +
+                    ", sourceTopics=" + sourceTopics +
+                    ", interSourceTopics=" + interSourceTopics +
+                    ", stateChangelogTopics=" + stateChangelogTopics +
+                    '}';
         }
     }
 
@@ -594,7 +606,6 @@ public class TopologyBuilder {
             throw new TopologyBuilderException("Source store " + sourceStoreName + " is already added.");
         }
         sourceStoreToSourceTopic.put(sourceStoreName, topic);
-
         return this;
     }
 
@@ -842,8 +853,8 @@ public class TopologyBuilder {
         for (Map.Entry<Integer, Set<String>> entry : nodeGroups.entrySet()) {
             Set<String> sinkTopics = new HashSet<>();
             Set<String> sourceTopics = new HashSet<>();
-            Set<String> internalSourceTopics = new HashSet<>();
-            Set<String> stateChangelogTopics = new HashSet<>();
+            Map<String, InternalTopicConfig> internalSourceTopics = new HashMap<>();
+            Map<String, InternalTopicConfig> stateChangelogTopics = new HashMap<>();
             for (String node : entry.getValue()) {
                 // if the node is a source node, add to the source topics
                 String[] topics = nodeToSourceTopics.get(node);
@@ -853,7 +864,7 @@ public class TopologyBuilder {
                         if (this.internalTopicNames.contains(topic)) {
                             // prefix the internal topic name with the application id
                             String internalTopic = decorateTopic(topic);
-                            internalSourceTopics.add(internalTopic);
+                            internalSourceTopics.put(internalTopic, new InternalTopicConfig(internalTopic));
                             sourceTopics.add(internalTopic);
                         } else {
                             sourceTopics.add(topic);
@@ -875,16 +886,25 @@ public class TopologyBuilder {
                 // if the node is connected to a state, add to the state topics
                 for (StateStoreFactory stateFactory : stateFactories.values()) {
                     if (stateFactory.isInternal && stateFactory.users.contains(node)) {
-                        // prefix the change log topic name with the application id
-                        stateChangelogTopics.add(ProcessorStateManager.storeChangelogTopic(applicationId, stateFactory.supplier.name()));
+                        final String name = ProcessorStateManager.storeChangelogTopic(applicationId, stateFactory.supplier.name());
+                        final InternalTopicConfig internalTopicConfig = new InternalTopicConfig(name, InternalTopicManager.COMPACT);
+
+                        // If it is a Window Store then we want to set the cleanup.policy to compact,delete
+                        // and the retentionMs window retention + StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG
+                        if (stateFactory.supplier instanceof RocksDBWindowStoreSupplier) {
+                            final RocksDBWindowStoreSupplier windowStoreSupplier = (RocksDBWindowStoreSupplier) stateFactory.supplier;
+                            internalTopicConfig.setCleanupPolicy(InternalTopicManager.COMPACT_AND_DELETE);
+                            internalTopicConfig.setRetentionMs(windowStoreSupplier.retentionPeriod());
+                        }
+                        stateChangelogTopics.put(name, internalTopicConfig);
                     }
                 }
             }
             topicGroups.put(entry.getKey(), new TopicsInfo(
                     Collections.unmodifiableSet(sinkTopics),
                     Collections.unmodifiableSet(sourceTopics),
-                    Collections.unmodifiableSet(internalSourceTopics),
-                    Collections.unmodifiableSet(stateChangelogTopics)));
+                    Collections.unmodifiableMap(internalSourceTopics),
+                    Collections.unmodifiableMap(stateChangelogTopics)));
         }
 
         return Collections.unmodifiableMap(topicGroups);

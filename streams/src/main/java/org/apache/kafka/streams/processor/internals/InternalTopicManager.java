@@ -36,7 +36,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
 public class InternalTopicManager {
 
@@ -48,11 +48,16 @@ public class InternalTopicManager {
     private static final String ZK_DELETE_TOPIC_PATH = "/admin/delete_topics";
     private static final String ZK_ENTITY_CONFIG_PATH = "/config/topics";
     // TODO: the following LogConfig dependency should be removed after KIP-4
-    private static final String CLEANUP_POLICY_PROP = "cleanup.policy";
-    private static final String COMPACT = "compact";
+    public static final String CLEANUP_POLICY_PROP = "cleanup.policy";
+    public static final String COMPACT = "compact";
+    public static final String DELETE = "delete";
+    public static final String COMPACT_AND_DELETE = "compact,delete";
+    public static final String RETENTION_MS = "retention.ms";
+    public static final Long WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
 
     private final ZkClient zkClient;
     private final int replicationFactor;
+    private final long windowChangeLogAdditionalRetention;
 
     private class ZKStringSerializer implements ZkSerializer {
 
@@ -87,22 +92,24 @@ public class InternalTopicManager {
     public InternalTopicManager() {
         this.zkClient = null;
         this.replicationFactor = 0;
+        this.windowChangeLogAdditionalRetention = WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT;
     }
 
-    public InternalTopicManager(String zkConnect, int replicationFactor) {
+    public InternalTopicManager(String zkConnect, final int replicationFactor, long windowChangeLogAdditionalRetention) {
         this.zkClient = new ZkClient(zkConnect, 30 * 1000, 30 * 1000, new ZKStringSerializer());
         this.replicationFactor = replicationFactor;
+        this.windowChangeLogAdditionalRetention = windowChangeLogAdditionalRetention;
     }
 
-    public void makeReady(String topic, int numPartitions, boolean compactTopic) {
+    public void makeReady(InternalTopicConfig topic, int numPartitions) {
         boolean topicNotReady = true;
 
         while (topicNotReady) {
-            Map<Integer, List<Integer>> topicMetadata = getTopicMetadata(topic);
+            Map<Integer, List<Integer>> topicMetadata = getTopicMetadata(topic.name());
 
             if (topicMetadata == null) {
                 try {
-                    createTopic(topic, numPartitions, replicationFactor, compactTopic);
+                    createTopic(topic, numPartitions, replicationFactor);
                 } catch (ZkNodeExistsException e) {
                     // ignore and continue
                 }
@@ -110,14 +117,14 @@ public class InternalTopicManager {
                 if (topicMetadata.size() > numPartitions) {
                     // else if topic exists with more #.partitions than needed, delete in order to re-create it
                     try {
-                        deleteTopic(topic);
+                        deleteTopic(topic.name());
                     } catch (ZkNodeExistsException e) {
                         // ignore and continue
                     }
                 } else if (topicMetadata.size() < numPartitions) {
                     // else if topic exists with less #.partitions than needed, add partitions
                     try {
-                        addPartitions(topic, numPartitions - topicMetadata.size(), replicationFactor, topicMetadata);
+                        addPartitions(topic.name(), numPartitions - topicMetadata.size(), replicationFactor, topicMetadata);
                     } catch (ZkNoNodeException e) {
                         // ignore and continue
                     }
@@ -163,9 +170,8 @@ public class InternalTopicManager {
         }
     }
 
-    private void createTopic(String topic, int numPartitions, int replicationFactor, boolean compactTopic) throws ZkNodeExistsException {
-        log.debug("Creating topic {} with {} partitions from ZK in partition assignor.", topic, numPartitions);
-        Properties prop = new Properties();
+    private void createTopic(InternalTopicConfig topic, int numPartitions, int replicationFactor) throws ZkNodeExistsException {
+        log.debug("Creating topic {} with {} partitions from ZK in partition assignor.", topic.name(), numPartitions);
         ObjectMapper mapper = new ObjectMapper();
         List<Integer> brokers = getBrokers();
         int numBrokers = brokers.size();
@@ -185,14 +191,13 @@ public class InternalTopicManager {
             assignment.put(i, brokerList);
         }
         // write out config first just like in AdminUtils.scala createOrUpdateTopicPartitionAssignmentPathInZK()
-        if (compactTopic) {
-            prop.put(CLEANUP_POLICY_PROP, COMPACT);
+        if (topic.isCompacted()) {
             try {
                 Map<String, Object> dataMap = new HashMap<>();
                 dataMap.put("version", 1);
-                dataMap.put("config", prop);
+                dataMap.put("config", topic.toProperties(windowChangeLogAdditionalRetention));
                 String data = mapper.writeValueAsString(dataMap);
-                zkClient.createPersistent(ZK_ENTITY_CONFIG_PATH + "/" + topic, data, ZooDefs.Ids.OPEN_ACL_UNSAFE);
+                zkClient.createPersistent(ZK_ENTITY_CONFIG_PATH + "/" + topic.name(), data, ZooDefs.Ids.OPEN_ACL_UNSAFE);
             } catch (JsonProcessingException e) {
                 throw new StreamsException("Error while creating topic config in ZK for internal topic " + topic, e);
             }
@@ -205,7 +210,7 @@ public class InternalTopicManager {
             dataMap.put("partitions", assignment);
             String data = mapper.writeValueAsString(dataMap);
 
-            zkClient.createPersistent(ZK_TOPIC_PATH + "/" + topic, data, ZooDefs.Ids.OPEN_ACL_UNSAFE);
+            zkClient.createPersistent(ZK_TOPIC_PATH + "/" + topic.name(), data, ZooDefs.Ids.OPEN_ACL_UNSAFE);
         } catch (JsonProcessingException e) {
             throw new StreamsException("Error while creating topic metadata in ZK for internal topic " + topic, e);
         }

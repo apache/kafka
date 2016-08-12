@@ -64,4 +64,7 @@ public class RocksDBWindowStoreSupplier<K, V> implements StateStoreSupplier {
         return new MeteredWindowStore<>(store.enableLogging(), "rocksdb-window", time);
     }
 
+    public long retentionPeriod() {
+        return retentionPeriod;
+    }
 }
