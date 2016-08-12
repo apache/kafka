@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
@@ -29,9 +28,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class CreateTopicsResponse extends AbstractRequestResponse {
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.CREATE_TOPICS.id);
-
+public class DeleteTopicsResponse extends AbstractRequestResponse {
+    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.DELETE_TOPICS.id);
     private static final String TOPIC_ERROR_CODES_KEY_NAME = "topic_error_codes";
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
@@ -41,19 +39,12 @@ public class CreateTopicsResponse extends AbstractRequestResponse {
      *
      * REQUEST_TIMED_OUT(7)
      * INVALID_TOPIC_EXCEPTION(17)
-     * CLUSTER_AUTHORIZATION_FAILED(31)
-     * TOPIC_ALREADY_EXISTS(36)
-     * INVALID_PARTITIONS(37)
-     * INVALID_REPLICATION_FACTOR(38)
-     * INVALID_REPLICA_ASSIGNMENT(39)
-     * INVALID_CONFIG(40)
+     * TOPIC_AUTHORIZATION_FAILED(29)
      * NOT_CONTROLLER(41)
-     * INVALID_REQUEST(42)
      */
-
     private final Map<String, Errors> errors;
 
-    public CreateTopicsResponse(Map<String, Errors> errors) {
+    public DeleteTopicsResponse(Map<String, Errors> errors) {
         super(new Struct(CURRENT_SCHEMA));
 
         List<Struct> topicErrorCodeStructs = new ArrayList<>(errors.size());
@@ -68,7 +59,7 @@ public class CreateTopicsResponse extends AbstractRequestResponse {
         this.errors = errors;
     }
 
-    public CreateTopicsResponse(Struct struct) {
+    public DeleteTopicsResponse(Struct struct) {
         super(struct);
 
         Object[] topicErrorCodesStructs = struct.getArray(TOPIC_ERROR_CODES_KEY_NAME);
@@ -87,11 +78,11 @@ public class CreateTopicsResponse extends AbstractRequestResponse {
         return errors;
     }
 
-    public static CreateTopicsResponse parse(ByteBuffer buffer) {
-        return new CreateTopicsResponse(CURRENT_SCHEMA.read(buffer));
+    public static DeleteTopicsResponse parse(ByteBuffer buffer) {
+        return new DeleteTopicsResponse(CURRENT_SCHEMA.read(buffer));
     }
 
-    public static CreateTopicsResponse parse(ByteBuffer buffer, int version) {
-        return new CreateTopicsResponse(ProtoUtils.responseSchema(ApiKeys.CREATE_TOPICS.id, version).read(buffer));
+    public static DeleteTopicsResponse parse(ByteBuffer buffer, int version) {
+        return new DeleteTopicsResponse(ProtoUtils.responseSchema(ApiKeys.DELETE_TOPICS.id, version).read(buffer));
     }
 }
