@@ -772,10 +772,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private void startTask(ConnectorTaskId taskId) {
         log.info("Starting task {}", taskId);
         TargetState initialState = configState.targetState(taskId.connector());
-        Map<String, String> configs = configState.taskConfig(taskId);
-        TaskConfig taskConfig = new TaskConfig(configs);
-        Map<String, String> connConfigs = configState.connectorConfig(taskId.connector());
-        ConnectorConfig connConfig = new ConnectorConfig(connConfigs);
+        TaskConfig taskConfig = new TaskConfig(configState.taskConfig(taskId));
+        ConnectorConfig connConfig = new ConnectorConfig(configState.connectorConfig(taskId.connector()));
         worker.startTask(taskId, taskConfig, connConfig, this, initialState);
     }
 

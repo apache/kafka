@@ -206,12 +206,11 @@ public class StandaloneHerder extends AbstractHerder {
         if (!configState.contains(taskId.connector()))
             cb.onCompletion(new NotFoundException("Connector " + taskId.connector() + " not found", null), null);
 
-        Map<String, String> taskConfigs = configState.taskConfig(taskId);
-        if (taskConfigs == null)
+        Map<String, String> taskConfigProps = configState.taskConfig(taskId);
+        if (taskConfigProps == null)
             cb.onCompletion(new NotFoundException("Task " + taskId + " not found", null), null);
-        TaskConfig taskConfig = new TaskConfig(taskConfigs);
-        Map<String, String> connConfigs = configState.connectorConfig(taskId.connector());
-        ConnectorConfig connConfig = new ConnectorConfig(connConfigs);
+        TaskConfig taskConfig = new TaskConfig(taskConfigProps);
+        ConnectorConfig connConfig = new ConnectorConfig(configState.connectorConfig(taskId.connector()));
 
         TargetState targetState = configState.targetState(taskId.connector());
         try {
