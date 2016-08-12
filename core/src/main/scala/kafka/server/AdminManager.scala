@@ -148,7 +148,7 @@ class AdminManager(val config: KafkaConfig,
       }.toMap
       responseCallback(results)
     } else {
-      // 3. else pass the assignments and errors to the delayed operation and set the keys
+      // 3. else pass the topics and errors to the delayed operation and set the keys
       val delayedDelete = new DelayedDeleteTopics(timeout, metadata.toSeq, this, responseCallback)
       val delayedDeleteKeys = topics.map(new TopicKey(_)).toSeq
       // try to complete the request immediately, otherwise put it into the purgatory
