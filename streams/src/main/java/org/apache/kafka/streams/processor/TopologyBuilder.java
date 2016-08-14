@@ -849,14 +849,8 @@ public class TopologyBuilder {
                     // if some of the topics are internal, add them to the internal topics
                     for (String topic : topics) {
                         if (this.internalTopicNames.contains(topic)) {
-                            if (applicationId == null) {
-                                throw new TopologyBuilderException("There are internal topics and"
-                                        + " applicationId hasn't been "
-                                        + "set. Call setApplicationId "
-                                        + "first");
-                            }
                             // prefix the internal topic name with the application id
-                            String internalTopic = applicationId + "-" + topic;
+                            String internalTopic = decorateTopic(topic);
                             internalSourceTopics.add(internalTopic);
                             sourceTopics.add(internalTopic);
                         } else {
@@ -870,7 +864,7 @@ public class TopologyBuilder {
                 if (topic != null) {
                     if (internalTopicNames.contains(topic)) {
                         // prefix the change log topic name with the application id
-                        sinkTopics.add(applicationId + "-" + topic);
+                        sinkTopics.add(decorateTopic(topic));
                     } else {
                         sinkTopics.add(topic);
                     }
@@ -880,7 +874,7 @@ public class TopologyBuilder {
                 for (StateStoreFactory stateFactory : stateFactories.values()) {
                     if (stateFactory.isInternal && stateFactory.users.contains(node)) {
                         // prefix the change log topic name with the application id
-                        stateChangelogTopics.add(applicationId + "-" + stateFactory.supplier.name() + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX);
+                        stateChangelogTopics.add(ProcessorStateManager.storeChangelogTopic(applicationId, stateFactory.supplier.name()));
                     }
                 }
             }
