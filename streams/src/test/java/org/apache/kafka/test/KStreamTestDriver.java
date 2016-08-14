@@ -57,7 +57,8 @@ public class KStreamTestDriver {
                              File stateDir,
                              Serde<?> keySerde,
                              Serde<?> valSerde) {
-        this.topology = builder.build("X", null);
+        builder.setApplicationId("TestDriver");
+        this.topology = builder.build(null);
         this.stateDir = stateDir;
         this.context = new MockProcessorContext(this, stateDir, keySerde, valSerde, new MockRecordCollector());
         this.context.setTime(0L);

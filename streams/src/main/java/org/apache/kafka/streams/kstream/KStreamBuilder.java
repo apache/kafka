@@ -92,7 +92,6 @@ public class KStreamBuilder extends TopologyBuilder {
         return new KStreamImpl<>(this, name, Collections.singleton(name), false);
     }
 
-
     /**
      * Create a {@link KStream} instance from the specified Pattern.
      * <p>
