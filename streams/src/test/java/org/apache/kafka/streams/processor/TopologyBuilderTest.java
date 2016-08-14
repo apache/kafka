@@ -190,13 +190,13 @@ public class TopologyBuilderTest {
 
         StateStoreSupplier supplier = new MockStateStoreSupplier("store-1", false);
         builder.addStateStore(supplier);
-        suppliers = builder.build("X", null).stateStoreSuppliers();
+        suppliers = builder.build(null).stateStoreSuppliers();
         assertEquals(0, suppliers.size());
 
         builder.addSource("source-1", "topic-1");
         builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
         builder.connectProcessorAndStateStores("processor-1", "store-1");
-        suppliers = builder.build("X", null).stateStoreSuppliers();
+        suppliers = builder.build(null).stateStoreSuppliers();
         assertEquals(1, suppliers.size());
         assertEquals(supplier.name(), suppliers.get(0).name());
     }
@@ -281,9 +281,9 @@ public class TopologyBuilderTest {
         builder.addProcessor("processor-2", new MockProcessorSupplier(), "source-2", "processor-1");
         builder.addProcessor("processor-3", new MockProcessorSupplier(), "source-3", "source-4");
 
-        ProcessorTopology topology0 = builder.build("X", 0);
-        ProcessorTopology topology1 = builder.build("X", 1);
-        ProcessorTopology topology2 = builder.build("X", 2);
+        ProcessorTopology topology0 = builder.build(0);
+        ProcessorTopology topology1 = builder.build(1);
+        ProcessorTopology topology2 = builder.build(2);
 
         assertEquals(mkSet("source-1", "source-2", "processor-1", "processor-2"), nodeNames(topology0.processors()));
         assertEquals(mkSet("source-3", "source-4", "processor-3"), nodeNames(topology1.processors()));
