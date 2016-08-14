@@ -562,7 +562,7 @@ public class TopologyBuilder {
                 for (StateStoreFactory stateFactory : stateFactories.values()) {
                     if (stateFactory.isInternal && stateFactory.users.contains(node)) {
                         // prefix the change log topic name with the application id
-                        stateChangelogTopics.add(applicationId + "-" + stateFactory.supplier.name() + ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX);
+                        stateChangelogTopics.add(ProcessorStateManager.storeChangelogTopic(applicationId, stateFactory.supplier.name()));
                     }
                 }
             }
@@ -647,7 +647,7 @@ public class TopologyBuilder {
             for (String node : nodeNames) {
                 String[] topics = nodeToSourceTopics.get(node);
                 if (topics != null)
-                    copartitionGroup.addAll(Arrays.asList(topics));
+                    copartitionGroup.addAll(maybeDecorateInternalSourceTopics(topics));
             }
             list.add(Collections.unmodifiableSet(copartitionGroup));
         }
@@ -698,7 +698,7 @@ public class TopologyBuilder {
                     for (String topic : ((SourceNodeFactory) factory).topics) {
                         if (internalTopicNames.contains(topic)) {
                             // prefix the internal topic name with the application id
-                            topicSourceMap.put(applicationId + "-" + topic, (SourceNode) node);
+                            topicSourceMap.put(decorateTopic(topic), (SourceNode) node);
                         } else {
                             topicSourceMap.put(topic, (SourceNode) node);
                         }
@@ -721,14 +721,7 @@ public class TopologyBuilder {
      * @return the unmodifiable set of topic names used by source nodes, which changes as new sources are added; never null
      */
     public synchronized Set<String> sourceTopics() {
-        Set<String> topics = new HashSet<>();
-        for (String topic : sourceTopicNames) {
-            if (internalTopicNames.contains(topic)) {
-                topics.add(decorateTopic(topic));
-            } else {
-                topics.add(topic);
-            }
-        }
+        Set<String> topics = maybeDecorateInternalSourceTopics(sourceTopicNames);
         return Collections.unmodifiableSet(topics);
     }
 
