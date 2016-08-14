@@ -713,4 +713,30 @@ public class TopologyBuilder {
         }
         return Collections.unmodifiableSet(topics);
     }
+
+    private Set<String> maybeDecorateInternalSourceTopics(final Set<String> sourceTopics) {
+        return maybeDecorateInternalSourceTopics(sourceTopics.toArray(new String[sourceTopics.size()]));
+    }
+
+    private Set<String> maybeDecorateInternalSourceTopics(String ... sourceTopics) {
+        final Set<String> decoratedTopics = new HashSet<>();
+        for (String topic : sourceTopics) {
+            if (internalTopicNames.contains(topic)) {
+                decoratedTopics.add(decorateTopic(topic));
+            } else {
+                decoratedTopics.add(topic);
+            }
+        }
+        return decoratedTopics;
+    }
+
+    private String decorateTopic(String topic) {
+        if (applicationId == null) {
+            throw new TopologyBuilderException("there are internal topics and "
+                    + "applicationId hasn't been set. Call "
+                    + "setApplicationId first");
+        }
+
+        return applicationId + "-" + topic;
+    }
 }
