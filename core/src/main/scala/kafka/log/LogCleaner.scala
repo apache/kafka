@@ -536,7 +536,7 @@ private[log] class Cleaner(val id: Int,
     if(readBuffer.capacity >= maxIoBufferSize || writeBuffer.capacity >= maxIoBufferSize)
       throw new IllegalStateException("This log contains a message larger than maximum allowable size of %s.".format(maxIoBufferSize))
     val newSize = math.min(this.readBuffer.capacity * 2, maxIoBufferSize)
-    info("Growing cleaner I/O buffers from " + readBuffer.capacity + "bytes to " + newSize + " bytes.")
+    info("Growing cleaner I/O buffers from " + readBuffer.capacity + " bytes to " + newSize + " bytes.")
     this.readBuffer = ByteBuffer.allocate(newSize)
     this.writeBuffer = ByteBuffer.allocate(newSize)
   }
@@ -632,6 +632,7 @@ private[log] class Cleaner(val id: Int,
     var position = 0
     var offset = segment.baseOffset
     val maxDesiredMapSize = (map.slots * this.dupBufferLoadFactor).toInt
+    info("Updating offset map for segment %s of partition %s...".format(segment.baseOffset, topicAndPartition))
     while (position < segment.log.sizeInBytes) {
       checkDone(topicAndPartition)
       readBuffer.clear()
