@@ -757,9 +757,7 @@ public class StreamThread extends Thread {
         }
 
         @Override
-        public void recordLatencyNs(Sensor sensor, long startNs, long endNs) {
-            // this nanosecond to millisecond transformation may cause some drift,
-            // on Linux it is about 10 milliseconds per second in worst case.
+        public void recordLatency(Sensor sensor, long startNs, long endNs) {
             sensor.record(endNs - startNs, timerStartedMs);
         }
 

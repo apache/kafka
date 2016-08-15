@@ -183,7 +183,7 @@ public class ProcessorTopologyTestDriver {
                 }
 
                 @Override
-                public void recordLatencyNs(Sensor sensor, long startNs, long endNs) {
+                public void recordLatency(Sensor sensor, long startNs, long endNs) {
                     // do nothing
                 }
             }, new StateDirectory(applicationId, TestUtils.tempDirectory().getPath()));

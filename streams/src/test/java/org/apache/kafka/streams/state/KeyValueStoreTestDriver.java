@@ -185,7 +185,7 @@ public class KeyValueStoreTestDriver<K, V> {
         }
 
         @Override
-        public void recordLatencyNs(Sensor sensor, long startNs, long endNs) {
+        public void recordLatency(Sensor sensor, long startNs, long endNs) {
         }
     };
     private final RecordCollector recordCollector;

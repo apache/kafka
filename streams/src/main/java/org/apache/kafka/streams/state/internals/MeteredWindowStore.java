@@ -65,7 +65,7 @@ public class MeteredWindowStore<K, V> implements WindowStore<K, V> {
         try {
             inner.init(context, root);
         } finally {
-            this.metrics.recordLatencyNs(this.restoreTime, startNs, time.nanoseconds());
+            this.metrics.recordLatency(this.restoreTime, startNs, time.nanoseconds());
         }
     }
 
@@ -90,7 +90,7 @@ public class MeteredWindowStore<K, V> implements WindowStore<K, V> {
         try {
             this.inner.put(key, value);
         } finally {
-            this.metrics.recordLatencyNs(this.putTime, startNs, time.nanoseconds());
+            this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
         }
     }
 
@@ -100,7 +100,7 @@ public class MeteredWindowStore<K, V> implements WindowStore<K, V> {
         try {
             this.inner.put(key, value, timestamp);
         } finally {
-            this.metrics.recordLatencyNs(this.putTime, startNs, time.nanoseconds());
+            this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
         }
     }
 
@@ -115,7 +115,7 @@ public class MeteredWindowStore<K, V> implements WindowStore<K, V> {
         try {
             this.inner.flush();
         } finally {
-            this.metrics.recordLatencyNs(this.flushTime, startNs, time.nanoseconds());
+            this.metrics.recordLatency(this.flushTime, startNs, time.nanoseconds());
         }
     }
 
@@ -151,7 +151,7 @@ public class MeteredWindowStore<K, V> implements WindowStore<K, V> {
             try {
                 iter.close();
             } finally {
-                metrics.recordLatencyNs(this.sensor, this.startNs, time.nanoseconds());
+                metrics.recordLatency(this.sensor, this.startNs, time.nanoseconds());
             }
         }
 
