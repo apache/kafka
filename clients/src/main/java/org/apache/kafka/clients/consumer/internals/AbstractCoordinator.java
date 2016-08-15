@@ -784,9 +784,13 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     private class HeartbeatThread extends Thread {
+        // this controls the interval between client polls by the heartbeat thread. It's basically the minimum
+        // time that it will take to observe an expected network event, such as the response to a heartbeat or
+        // a disconnect from the coordinator.
+        private static final long POLL_INTERVAL_MS = 50L;
+
         private boolean enabled = false;
         private boolean closed = false;
-        private RequestFuture<Void> findCoordinatorFuture;
         private AtomicReference<RuntimeException> failed = new AtomicReference<>(null);
 
         public void enable() {
@@ -821,6 +825,8 @@ public abstract class AbstractCoordinator implements Closeable {
         @Override
         public void run() {
             try {
+                RequestFuture findCoordinatorFuture = null;
+
                 while (true) {
                     synchronized (AbstractCoordinator.this) {
                         if (closed)
@@ -842,12 +848,10 @@ public abstract class AbstractCoordinator implements Closeable {
                         long now = time.milliseconds();
 
                         if (coordinatorUnknown()) {
-                            if (findCoordinatorFuture != null && !findCoordinatorFuture.isDone()) {
-                                AbstractCoordinator.this.wait(retryBackoffMs);
-                                continue;
-                            }
-
-                            findCoordinatorFuture = sendGroupCoordinatorRequest();
+                            if (findCoordinatorFuture == null || findCoordinatorFuture.isDone())
+                                findCoordinatorFuture = lookupCoordinator();
+                            else
+                                AbstractCoordinator.this.wait(POLL_INTERVAL_MS);
                         } else if (heartbeat.sessionTimeoutExpired(now)) {
                             // the session timeout has expired without seeing a successful heartbeat, so we should
                             // probably make sure the coordinator is still healthy.
@@ -857,11 +861,11 @@ public abstract class AbstractCoordinator implements Closeable {
                             // in between calls to poll(), so we explicitly leave the group.
                             maybeLeaveGroup();
                         } else if (!heartbeat.shouldHeartbeat(now)) {
-                            AbstractCoordinator.this.wait(heartbeat.timeToNextHeartbeat(now));
+                            AbstractCoordinator.this.wait(POLL_INTERVAL_MS);
                         } else {
                             heartbeat.sentHeartbeat(now);
-                            RequestFuture<Void> future = sendHeartbeatRequest();
-                            future.addListener(new RequestFutureListener<Void>() {
+
+                            sendHeartbeatRequest().addListener(new RequestFutureListener<Void>() {
                                 @Override
                                 public void onSuccess(Void value) {
                                     synchronized (AbstractCoordinator.this) {
