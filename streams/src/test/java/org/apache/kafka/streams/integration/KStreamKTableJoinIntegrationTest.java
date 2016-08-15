@@ -211,9 +211,6 @@ public class KStreamKTableJoinIntegrationTest {
             }, "ClicksPerRegionUnwindowed");
 
         // Write the (continuously updating) results to the output topic.
-        userClicksStream.print(stringSerde, longSerde, "userClicks");
-        userRegionsTable.print(stringSerde, stringSerde, "userRegion");
-        clicksPerRegion.print(stringSerde, longSerde, "clicksPerRegion");
         clicksPerRegion.to(stringSerde, longSerde, OUTPUT_TOPIC);
 
         KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);

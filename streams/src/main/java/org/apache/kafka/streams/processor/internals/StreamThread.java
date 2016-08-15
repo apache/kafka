@@ -98,7 +98,7 @@ public class StreamThread extends Thread {
 
     private StreamPartitionAssignor partitionAssignor = null;
 
-    private long currTimeMs;
+    private long timerStartedMs;
     private long lastCleanMs;
     private long lastCommitMs;
     private Throwable rebalanceException = null;
@@ -189,9 +189,9 @@ public class StreamThread extends Thread {
         this.cleanTimeMs = config.getLong(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
 
         this.time = time;
-        this.currTimeMs = time.milliseconds();
+        this.timerStartedMs = time.milliseconds();
         this.lastCleanMs = Long.MAX_VALUE; // the cleaning cycle won't start until partition assignment
-        this.lastCommitMs = currTimeMs;
+        this.lastCommitMs = timerStartedMs;
 
         this.sensors = new StreamsMetricsImpl(metrics);
 
@@ -283,10 +283,10 @@ public class StreamThread extends Thread {
      * @return latency
      */
     private long computeLatency() {
-        long previousTimeMs = this.currTimeMs;
-        this.currTimeMs = time.milliseconds();
+        long previousTimeMs = this.timerStartedMs;
+        this.timerStartedMs = time.milliseconds();
 
-        return Math.max(this.currTimeMs - previousTimeMs, 0);
+        return Math.max(this.timerStartedMs - previousTimeMs, 0);
     }
 
     private void runLoop() {
@@ -305,7 +305,7 @@ public class StreamThread extends Thread {
 
 
         while (stillRunning()) {
-            this.currTimeMs = time.milliseconds();
+            this.timerStartedMs = time.milliseconds();
 
             // try to fetch some records if necessary
             if (requiresPoll) {
@@ -357,7 +357,7 @@ public class StreamThread extends Thread {
 
                     // if pollTimeMs has passed since the last poll, we poll to respond to a possible rebalance
                     // even when we paused all partitions.
-                    if (lastPoll + this.pollTimeMs < this.currTimeMs)
+                    if (lastPoll + this.pollTimeMs < this.timerStartedMs)
                         requiresPoll = true;
 
                 } else {
@@ -760,7 +760,7 @@ public class StreamThread extends Thread {
         public void recordLatencyNs(Sensor sensor, long startNs, long endNs) {
             // this nanosecond to millisecond transformation may cause some drift,
             // on Linux it is about 10 milliseconds per second in worst case.
-            sensor.record(endNs - startNs, currTimeMs);
+            sensor.record(endNs - startNs, timerStartedMs);
         }
 
         /**
