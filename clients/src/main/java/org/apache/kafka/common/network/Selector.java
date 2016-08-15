@@ -297,7 +297,9 @@ public class Selector implements Selectable {
         long endIo = time.nanoseconds();
         this.sensors.ioTime.record(endIo - endSelect, time.milliseconds());
 
-        maybeCloseOldestConnection(endIo);
+        // we use the time at the end of select to ensure that we don't close any connections that
+        // have just been processed in pollSelectionKeys
+        maybeCloseOldestConnection(endSelect);
     }
 
     private void pollSelectionKeys(Iterable<SelectionKey> selectionKeys,
