@@ -61,8 +61,12 @@ class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
     val now = time.milliseconds()
     client.poll(0, now)
 
-    client.ready(node, now) || pollUntil(timeout) { (_, now) =>
-      if (client.ready(node, now))
+    client.ready(node, now) || pollUntil(timeout) { now =>
+      // note that this will be invoked in pollUntil() before the first call to poll(). If the call to
+      // ready() does not initiate a new connection because the node is blacked out, then we treat this
+      // as a new disconnect and raise the IOException. This lets the caller backoff and retry instead of
+      // unnecessarily blocking in poll() until the timeout has expired.
+      if (client.isReady(node, now))
         true
       else if (client.connectionFailed(node))
         throw new IOException(s"Connection to $node failed")
@@ -106,16 +110,16 @@ class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
    * This method is useful for implementing blocking behaviour on top of the non-blocking `NetworkClient`, use it with
    * care.
    */
-  private def pollUntil(timeout: Long)(predicate: (Seq[ClientResponse], Long) => Boolean)(implicit time: JTime): Boolean = {
+  private def pollUntil(timeout: Long)(predicate: Long => Boolean)(implicit time: JTime): Boolean = {
     val methodStartTime = time.milliseconds()
     val timeoutExpiryTime = methodStartTime + timeout
 
     @tailrec
     def recursivePoll(iterationStartTime: Long): Boolean = {
-      val pollTimeout = timeoutExpiryTime - iterationStartTime
-      val responses = client.poll(pollTimeout, iterationStartTime).asScala
-      if (predicate(responses, iterationStartTime)) true
+      if (predicate(iterationStartTime)) true
       else {
+        val pollTimeout = timeoutExpiryTime - iterationStartTime
+        client.poll(pollTimeout, iterationStartTime).asScala
         val afterPollTime = time.milliseconds()
         if (afterPollTime < timeoutExpiryTime) recursivePoll(afterPollTime)
         else false
