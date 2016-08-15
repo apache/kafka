@@ -100,7 +100,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
       )
       val selector = new Selector(
         NetworkReceive.UNLIMITED,
-        -1, // disable idle connection expiration
+        Selector.NO_IDLE_TIMEOUT_MS,
         metrics,
         time,
         "controller-channel",

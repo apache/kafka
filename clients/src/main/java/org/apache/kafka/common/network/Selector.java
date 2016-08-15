@@ -77,6 +77,7 @@ import org.slf4j.LoggerFactory;
  */
 public class Selector implements Selectable {
 
+    public static final long NO_IDLE_TIMEOUT_MS = -1;
     private static final Logger log = LoggerFactory.getLogger(Selector.class);
 
     private final java.nio.channels.Selector nioSelector;
@@ -100,8 +101,8 @@ public class Selector implements Selectable {
     /**
      * Create a new nioSelector
      *
-     * @param maxReceiveSize Max size in bytes of a single network receive
-     * @param connectionMaxIdleMs Max idle connection time (negative values disable idle timeout)
+     * @param maxReceiveSize Max size in bytes of a single network receive (use {@link NetworkReceive#UNLIMITED} for no limit)
+     * @param connectionMaxIdleMs Max idle connection time (use {@link #NO_IDLE_TIMEOUT_MS} to disable idle timeout)
      * @param metrics Registry for Selector metrics
      * @param time Time implementation
      * @param metricGrpPrefix Prefix for the group of metrics registered by Selector
