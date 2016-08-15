@@ -119,7 +119,7 @@ class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
       if (predicate(iterationStartTime)) true
       else {
         val pollTimeout = timeoutExpiryTime - iterationStartTime
-        client.poll(pollTimeout, iterationStartTime).asScala
+        client.poll(pollTimeout, iterationStartTime)
         val afterPollTime = time.milliseconds()
         if (afterPollTime < timeoutExpiryTime) recursivePoll(afterPollTime)
         else false
