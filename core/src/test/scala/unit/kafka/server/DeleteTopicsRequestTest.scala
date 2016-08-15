@@ -73,7 +73,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
 
     // Timeout
     TestUtils.createTopic(zkUtils, timeoutTopic, 5, 2, servers)
-    validateErrorDeleteTopicRequests(new DeleteTopicsRequest(Set(timeoutTopic).asJava, 1),
+    validateErrorDeleteTopicRequests(new DeleteTopicsRequest(Set(timeoutTopic).asJava, 0),
       Map(timeoutTopic -> Errors.REQUEST_TIMED_OUT))
     // The topic should still get deleted eventually
     TestUtils.waitUntilTrue(() => !servers.head.metadataCache.contains(timeoutTopic), s"Topic $timeoutTopic is never deleted")
