@@ -155,6 +155,18 @@ public class Fetcher<K, V> {
     }
 
     /**
+     * Lookup and set offsets for any partitions which are awaiting an explicit reset.
+     * @param partitions the partitions to reset
+     */
+    public void resetOffsetsIfNeeded(Set<TopicPartition> partitions) {
+        for (TopicPartition tp : partitions) {
+            // TODO: If there are several offsets to reset, we could submit offset requests in parallel
+            if (subscriptions.isAssigned(tp) && subscriptions.isOffsetResetNeeded(tp))
+                resetOffset(tp);
+        }
+    }
+
+    /**
      * Update the fetch positions for the provided partitions.
      * @param partitions the partitions to update positions for
      * @throws NoOffsetForPartitionException If no offset is stored for a given partition and no reset policy is available
@@ -165,7 +177,6 @@ public class Fetcher<K, V> {
             if (!subscriptions.isAssigned(tp) || subscriptions.isFetchable(tp))
                 continue;
 
-            // TODO: If there are several offsets to reset, we could submit offset requests in parallel
             if (subscriptions.isOffsetResetNeeded(tp)) {
                 resetOffset(tp);
             } else if (subscriptions.committed(tp) == null) {

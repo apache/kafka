@@ -43,6 +43,7 @@ import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.GroupCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.JoinGroupResponse;
+import org.apache.kafka.common.requests.ListOffsetResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
@@ -89,7 +90,7 @@ public class KafkaConsumerTest {
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
         final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
         try {
-            KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<byte[], byte[]>(
+            KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(
                     props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
         } catch (KafkaException e) {
             assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());
@@ -455,6 +456,38 @@ public class KafkaConsumerTest {
     }
 
     @Test
+    public void verifyNoCoordinatorLookupForManualAssignmentWithSeek() {
+        String topic = "topic";
+        final TopicPartition partition = new TopicPartition(topic, 0);
+        int sessionTimeoutMs = 3000;
+        int heartbeatIntervalMs = 2000;
+        int autoCommitIntervalMs = 1000;
+
+        Time time = new MockTime();
+        MockClient client = new MockClient(time);
+        Cluster cluster = TestUtils.singletonCluster(topic, 1);
+        Node node = cluster.nodes().get(0);
+        client.setNode(node);
+        Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+        metadata.update(cluster, time.milliseconds());
+        PartitionAssignor assignor = new RoundRobinAssignor();
+
+        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
+                sessionTimeoutMs, heartbeatIntervalMs, autoCommitIntervalMs);
+        consumer.assign(Arrays.asList(partition));
+        consumer.seekToBeginning(Arrays.asList(partition));
+
+        // there shouldn't be any need to lookup the coordinator or fetch committed offsets.
+        // we just lookup the starting position and send the record fetch.
+        client.prepareResponse(listOffsetsResponse(Collections.singletonMap(partition, 50L), Errors.NONE.code()));
+        client.prepareResponse(fetchResponse(partition, 50L, 5));
+
+        ConsumerRecords<String, String> records = consumer.poll(0);
+        assertEquals(5, records.count());
+        assertEquals(55L, consumer.position(partition));
+    }
+
+    @Test
     public void testCommitsFetchedDuringAssign() {
         String topic = "topic";
         final TopicPartition partition1 = new TopicPartition(topic, 0);
@@ -667,6 +700,15 @@ public class KafkaConsumerTest {
             partitionData.put(entry.getKey(), new OffsetFetchResponse.PartitionData(entry.getValue(), "", error));
         }
         return new OffsetFetchResponse(partitionData).toStruct();
+    }
+
+    private Struct listOffsetsResponse(Map<TopicPartition, Long> offsets, short error) {
+        Map<TopicPartition, ListOffsetResponse.PartitionData> partitionData = new HashMap<>();
+        for (Map.Entry<TopicPartition, Long> partitionOffset : offsets.entrySet()) {
+            partitionData.put(partitionOffset.getKey(), new ListOffsetResponse.PartitionData(error,
+                    Collections.singletonList(partitionOffset.getValue())));
+        }
+        return new ListOffsetResponse(partitionData).toStruct();
     }
 
     private Struct fetchResponse(TopicPartition tp, long fetchOffset, int count) {
