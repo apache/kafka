@@ -21,16 +21,10 @@ import kafka.utils._
 import kafka.utils.timer._
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.metrics.KafkaMetricsGroup
-
-import java.util.LinkedList
-import java.util.concurrent._
 import java.util.concurrent.atomic._
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
-import org.apache.kafka.common.utils.Utils
-
 import scala.collection._
-
 import com.yammer.metrics.core.Gauge
 
 
@@ -292,54 +286,47 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
    */
   private class Watchers(val key: Any) {
 
-    private[this] val operations = new LinkedList[T]()
+    private[this] var operations = List[T]()
 
-    def watched: Int = operations synchronized operations.size
+    def watched: Int = synchronized(operations.size)
 
     // add the element to watch
     def watch(t: T) {
-      operations synchronized operations.add(t)
+      synchronized {
+        operations = t :: operations
+      }
     }
 
     // traverse the list and try to complete some watched elements
     def tryCompleteWatched(): Int = {
+      val ops = synchronized(operations)
 
-      var completed = 0
-      operations synchronized {
-        val iter = operations.iterator()
-        while (iter.hasNext) {
-          val curr = iter.next()
-          if (curr.isCompleted) {
-            // another thread has completed this operation, just remove it
-            iter.remove()
-          } else if (curr synchronized curr.tryComplete()) {
-            completed += 1
-            iter.remove()
-          }
-        }
+      // call tryComplete without holding the lock to avoid potential deadlocks
+      var alreadyCompleted = 0
+      var completedNow = 0
+      for (op <- ops) {
+        if (op.isCompleted())
+          alreadyCompleted += 1
+        else if (op synchronized op.tryComplete())
+          completedNow += 1
       }
 
-      if (operations.size == 0)
-        removeKeyIfEmpty(key, this)
+      // purge if there are any completed operations
+      if (alreadyCompleted + completedNow > 0)
+        purgeCompleted()
 
-      completed
+      completedNow
     }
 
     // traverse the list and purge elements that are already completed by others
     def purgeCompleted(): Int = {
-      var purged = 0
-      operations synchronized {
-        val iter = operations.iterator()
-        while (iter.hasNext) {
-          val curr = iter.next()
-          if (curr.isCompleted) {
-            iter.remove()
-            purged += 1
-          }
-        }
+      val (purged, needRemoveKey) = synchronized {
+        val initialCount = operations.size
+        operations = operations.filterNot(_.isCompleted())
+        (initialCount - operations.size, operations.isEmpty)
       }
 
-      if (operations.size == 0)
+      if (needRemoveKey)
         removeKeyIfEmpty(key, this)
 
       purged
