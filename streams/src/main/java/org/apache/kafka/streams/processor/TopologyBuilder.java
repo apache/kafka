@@ -168,9 +168,12 @@ public class TopologyBuilder {
             for (String update : subscribedTopics) {
                 if (this.pattern == topicToPatterns.get(update)) {
                     matchedTopics.add(update);
-                    //not same pattern instance,but still matches not allowed
                 } else if (topicToPatterns.containsKey(update) && isMatch(update)) {
-                    throw new TopologyBuilderException("Topic " + update + " already matched check for overlapping regex patterns");
+                    // the same topic cannot be matched to more than one pattern
+                    // TODO: we should lift this requirement in the future
+                    throw new TopologyBuilderException("Topic " + update +
+                            " is already matched for another regex pattern " + topicToPatterns.get(update) +
+                            " and hence cannot be matched to this regex pattern " + pattern + " any more.");
                 } else if (isMatch(update)) {
                     topicToPatterns.put(update, this.pattern);
                     matchedTopics.add(update);
