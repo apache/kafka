@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.common.record;
 
+import java.io.Closeable;
 import java.io.DataInputStream;
 import java.io.EOFException;
 import java.io.IOException;
@@ -210,7 +211,7 @@ public class MemoryRecords implements Records {
         return builder.toString();
     }
 
-    public static class RecordsIterator extends AbstractIterator<LogEntry> {
+    public static class RecordsIterator extends AbstractIterator<LogEntry> implements Closeable {
         private final ByteBuffer buffer;
         private final DataInputStream stream;
         private final CompressionType type;
@@ -233,8 +234,8 @@ public class MemoryRecords implements Records {
          */
         @Override
         protected LogEntry makeNext() {
-            if (innerDone()) {
-                try {
+            try {
+                if (innerDone()) {
                     // read the offset
                     long offset = stream.readLong();
                     // read record size
@@ -271,18 +272,43 @@ public class MemoryRecords implements Records {
                         innerIter = new RecordsIterator(value, compression, true);
                         return innerIter.next();
                     }
-                } catch (EOFException e) {
-                    return allDone();
-                } catch (IOException e) {
-                    throw new KafkaException(e);
+                } else {
+                    return innerIter.next();
                 }
-            } else {
-                return innerIter.next();
+            } catch (EOFException e) {
+                try {
+                    close();
+                } catch (IOException ioe) {
+                    allDone();
+                    throw new KafkaException(ioe);
+                }
+                return allDone();
+            } catch (IOException e) {
+                try {
+                    close();
+                } catch (IOException ioe) {
+                    throw new KafkaException(ioe);
+                }
+                throw new KafkaException(e);
             }
         }
 
-        private boolean innerDone() {
-            return innerIter == null || !innerIter.hasNext();
+        private boolean innerDone() throws IOException {
+            if (innerIter == null) {
+                return true;
+            }
+            if (!innerIter.hasNext()) {
+                innerIter.close();
+                return true;
+            }
+            return false;
+        }
+
+        @Override
+        public void close() throws IOException {
+            if (stream != null) {
+                stream.close();
+            }
         }
     }
 }
