@@ -118,7 +118,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         streamThread = (StreamThread) o;
         streamThread.partitionAssignor(this);
 
-        this.topicGroups = streamThread.builder.topicGroups(streamThread.applicationId);
+        this.topicGroups = streamThread.builder.topicGroups();
 
         if (configs.containsKey(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG)) {
             internalTopicManager = new InternalTopicManager(
