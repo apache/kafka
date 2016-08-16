@@ -52,9 +52,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -121,6 +119,8 @@ public class RegexSourceIntegrationTest {
     public void testRegexMatchesTopicsAWhenCreated() throws Exception {
 
         final Serde<String> stringSerde = Serdes.String();
+        final List<String> expectedFirstAssignment = Arrays.asList("TEST-TOPIC-1");
+        final List<String> expectedSecondAssignment = Arrays.asList("TEST-TOPIC-1", "TEST-TOPIC-2");
 
         StreamsConfig streamsConfig = new StreamsConfig(streamsConfiguration);
 
@@ -146,41 +146,35 @@ public class RegexSourceIntegrationTest {
         TestCondition oneTopicAdded  = new TestCondition() {
             @Override
             public boolean conditionMet() {
-                List<String> assignedTopics = testStreamThread.assignedTopicPartitions.get(FIRST_UPDATE);
-                return assignedTopics != null && assignedTopics.contains("TEST-TOPIC-1") && !assignedTopics.contains("TEST-TOPIC-2");
+                return testStreamThread.assignedTopicPartitions.equals(expectedFirstAssignment);
             }
         };
 
         streamThreads[0] = testStreamThread;
         streams.start();
 
-        TestUtils.waitForCondition(oneTopicAdded,  STREAM_TASKS_NOT_UPDATED);
+        TestUtils.waitForCondition(oneTopicAdded, STREAM_TASKS_NOT_UPDATED);
 
         CLUSTER.createTopic("TEST-TOPIC-2");
 
         TestCondition secondTopicAdded  = new TestCondition() {
             @Override
             public boolean conditionMet() {
-                List<String> assignedTopics = testStreamThread.assignedTopicPartitions.get(SECOND_UPDATE);
-                return assignedTopics != null && assignedTopics.contains("TEST-TOPIC-1") && assignedTopics.contains("TEST-TOPIC-2");
+                return testStreamThread.assignedTopicPartitions.equals(expectedSecondAssignment);
             }
         };
 
-        TestUtils.waitForCondition(secondTopicAdded,  STREAM_TASKS_NOT_UPDATED);
+        TestUtils.waitForCondition(secondTopicAdded, STREAM_TASKS_NOT_UPDATED);
 
         streams.close();
-
-        List<String> expectedFirstAssignment = Arrays.asList("TEST-TOPIC-1");
-        List<String> expectedSecondAssignment = Arrays.asList("TEST-TOPIC-1", "TEST-TOPIC-2");
-
-        assertThat(testStreamThread.assignedTopicPartitions.get(FIRST_UPDATE), equalTo(expectedFirstAssignment));
-        assertThat(testStreamThread.assignedTopicPartitions.get(SECOND_UPDATE), equalTo(expectedSecondAssignment));
     }
 
     @Test
     public void testRegexMatchesTopicsAWhenDeleted() throws Exception {
 
         final Serde<String> stringSerde = Serdes.String();
+        final List<String> expectedFirstAssignment = Arrays.asList("TEST-TOPIC-A", "TEST-TOPIC-B");
+        final List<String> expectedSecondAssignment = Arrays.asList("TEST-TOPIC-B");
 
         StreamsConfig streamsConfig = new StreamsConfig(streamsConfiguration);
 
@@ -209,13 +203,12 @@ public class RegexSourceIntegrationTest {
         TestCondition bothTopicsAdded  = new TestCondition() {
             @Override
             public boolean conditionMet() {
-                List<String> assignedTopics = testStreamThread.assignedTopicPartitions.get(FIRST_UPDATE);
-                return assignedTopics != null && assignedTopics.contains("TEST-TOPIC-A") && assignedTopics.contains("TEST-TOPIC-B");
+                return testStreamThread.assignedTopicPartitions.equals(expectedFirstAssignment);
             }
         };
         streams.start();
 
-        TestUtils.waitForCondition(bothTopicsAdded,  STREAM_TASKS_NOT_UPDATED);
+        TestUtils.waitForCondition(bothTopicsAdded, STREAM_TASKS_NOT_UPDATED);
 
         CLUSTER.deleteTopic("TEST-TOPIC-A");
 
@@ -223,20 +216,13 @@ public class RegexSourceIntegrationTest {
         TestCondition oneTopicRemoved  = new TestCondition() {
             @Override
             public boolean conditionMet() {
-                List<String> assignedTopics = testStreamThread.assignedTopicPartitions.get(SECOND_UPDATE);
-                return assignedTopics != null && !assignedTopics.contains("TEST-TOPIC-A") && assignedTopics.contains("TEST-TOPIC-B");
+                return testStreamThread.assignedTopicPartitions.equals(expectedSecondAssignment);
             }
         };
 
-        TestUtils.waitForCondition(oneTopicRemoved,  STREAM_TASKS_NOT_UPDATED);
+        TestUtils.waitForCondition(oneTopicRemoved, STREAM_TASKS_NOT_UPDATED);
 
         streams.close();
-
-        List<String> expectedFirstAssignment = Arrays.asList("TEST-TOPIC-A", "TEST-TOPIC-B");
-        List<String> expectedSecondAssignment = Arrays.asList("TEST-TOPIC-B");
-
-        assertThat(testStreamThread.assignedTopicPartitions.get(FIRST_UPDATE), equalTo(expectedFirstAssignment));
-        assertThat(testStreamThread.assignedTopicPartitions.get(SECOND_UPDATE), equalTo(expectedSecondAssignment));
     }
 
 
@@ -291,7 +277,7 @@ public class RegexSourceIntegrationTest {
         assertThat(actualValues, equalTo(expectedReceivedValues));
     }
 
-    //TODO should be updated to expected = TopologyBuilderException after KAFKA-3708
+    // TODO should be updated to expected = TopologyBuilderException after KAFKA-3708
     @Test(expected = AssertionError.class)
     public void testNoMessagesSentExceptionFromOverlappingPatterns() throws Exception {
 
@@ -304,8 +290,8 @@ public class RegexSourceIntegrationTest {
         KStreamBuilder builder = new KStreamBuilder();
 
 
-        //  overlapping patterns here, no messages should be sent as TopologyBuilderException
-        //  will be thrown when the processor topology is built.
+        // overlapping patterns here, no messages should be sent as TopologyBuilderException
+        // will be thrown when the processor topology is built.
 
         KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("foo.*"));
         KStream<String, String> pattern2Stream = builder.stream(Pattern.compile("f.*"));
@@ -335,8 +321,7 @@ public class RegexSourceIntegrationTest {
 
     private class TestStreamThread extends StreamThread {
 
-        public Map<Integer, List<String>> assignedTopicPartitions = new HashMap<>();
-        private int index =  0;
+        public List<String> assignedTopicPartitions = new ArrayList<>();
 
         public TestStreamThread(TopologyBuilder builder, StreamsConfig config, KafkaClientSupplier clientSupplier, String applicationId, String clientId, UUID processId, Metrics metrics, Time time) {
             super(builder, config, clientSupplier, applicationId, clientId, processId, metrics, time, new StreamsMetadataState(builder));
@@ -344,15 +329,13 @@ public class RegexSourceIntegrationTest {
 
         @Override
         public StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitions) {
-            List<String> assignedTopics = new ArrayList<>();
+            assignedTopicPartitions.clear();
             for (TopicPartition partition : partitions) {
-                assignedTopics.add(partition.topic());
+                assignedTopicPartitions.add(partition.topic());
             }
-            Collections.sort(assignedTopics);
-            assignedTopicPartitions.put(index++, assignedTopics);
+            Collections.sort(assignedTopicPartitions);
             return super.createStreamTask(id, partitions);
         }
 
     }
-
 }
