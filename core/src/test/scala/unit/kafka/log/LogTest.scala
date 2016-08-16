@@ -756,6 +756,8 @@ class LogTest extends JUnitSuite {
     for(i <- 0 until 100)
       log.append(set)
 
+    // expire all segments
+    log.logSegments.foreach(_.lastModified = time.milliseconds - 1000)
     log.deleteOldSegments()
     log.close()
 
@@ -954,6 +956,8 @@ class LogTest extends JUnitSuite {
     for (i <- 0 until 100)
       log.append(set)
 
+    // expire all segments
+    log.logSegments.foreach(_.lastModified = time.milliseconds - 1000)
     log.deleteOldSegments()
     assertEquals("The deleted segments should be gone.", 1, log.numberOfSegments)
 
@@ -1053,7 +1057,7 @@ class LogTest extends JUnitSuite {
 
     log.logSegments.head.lastModified = myTime.milliseconds - 20000
 
-    log.deleteOldSegments
+    log.deleteOldSegments()
     assertEquals("There should be 2 segments remaining", 2, log.numberOfSegments)
   }
 
@@ -1066,7 +1070,7 @@ class LogTest extends JUnitSuite {
     for (i <- 0 until 15)
       log.append(set)
 
-    log.deleteOldSegments
+    log.deleteOldSegments()
     assertEquals("There should be 3 segments remaining", 3, log.numberOfSegments)
   }
 
@@ -1098,7 +1102,7 @@ class LogTest extends JUnitSuite {
     log.logSegments.head.lastModified = myTime.milliseconds - 20000
 
     val segments = log.numberOfSegments
-    log.deleteOldSegments
+    log.deleteOldSegments()
     assertEquals("There should be 3 segments remaining", segments, log.numberOfSegments)
   }
 
@@ -1115,7 +1119,7 @@ class LogTest extends JUnitSuite {
 
     log.logSegments.head.lastModified = myTime.milliseconds - 20000
 
-    log.deleteOldSegments
+    log.deleteOldSegments()
     assertEquals("There should be 2 segments remaining", 2, log.numberOfSegments)
   }
 
