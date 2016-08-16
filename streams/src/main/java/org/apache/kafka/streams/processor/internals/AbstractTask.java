@@ -25,6 +25,8 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.state.internals.MemoryLRUCache;
+import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -41,7 +43,7 @@ public abstract class AbstractTask {
     protected final ProcessorStateManager stateMgr;
     protected final Set<TopicPartition> partitions;
     protected ProcessorContext processorContext;
-
+    protected final MemoryLRUCacheBytes cache;
     /**
      * @throws ProcessorStateException if the state manager cannot be created
      */
@@ -52,12 +54,14 @@ public abstract class AbstractTask {
                            Consumer<byte[], byte[]> consumer,
                            Consumer<byte[], byte[]> restoreConsumer,
                            boolean isStandby,
-                           StateDirectory stateDirectory) {
+                           StateDirectory stateDirectory,
+                           final MemoryLRUCacheBytes cache) {
         this.id = id;
         this.applicationId = applicationId;
         this.partitions = new HashSet<>(partitions);
         this.topology = topology;
         this.consumer = consumer;
+        this.cache = cache;
 
         // create the processor state manager
         try {
@@ -97,6 +101,8 @@ public abstract class AbstractTask {
     public final ProcessorContext context() {
         return processorContext;
     }
+
+    public final MemoryLRUCacheBytes cache() { return cache; }
 
     public abstract void commit();
 

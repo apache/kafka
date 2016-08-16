@@ -56,7 +56,7 @@ public class StandbyTask extends AbstractTask {
                        Consumer<byte[], byte[]> restoreConsumer,
                        StreamsConfig config,
                        StreamsMetrics metrics, final StateDirectory stateDirectory) {
-        super(id, applicationId, partitions, topology, consumer, restoreConsumer, true, stateDirectory);
+        super(id, applicationId, partitions, topology, consumer, restoreConsumer, true, stateDirectory, null);
 
         // initialize the topology with its own context
         this.processorContext = new StandbyContextImpl(id, applicationId, config, stateMgr, metrics);

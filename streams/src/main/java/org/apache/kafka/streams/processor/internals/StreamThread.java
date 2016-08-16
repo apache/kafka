@@ -43,6 +43,7 @@ import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.HostInfo;
+import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -105,6 +106,9 @@ public class StreamThread extends Thread {
     private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
     private boolean processStandbyRecords = false;
 
+    private final long cacheSizeBytes;
+    private MemoryLRUCacheBytes cache;
+
     final ConsumerRebalanceListener rebalanceListener = new ConsumerRebalanceListener() {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> assignment) {
@@ -157,7 +161,9 @@ public class StreamThread extends Thread {
         this.processId = processId;
         this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
         this.streamsMetadataState = streamsMetadataState;
-
+        this.cacheSizeBytes = config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
+            config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
+        this.cache = new MemoryLRUCacheBytes(cacheSizeBytes);
         // set the producer and consumer clients
         String threadName = getName();
         String threadClientId = clientId + "-" + threadName;
@@ -513,7 +519,7 @@ public class StreamThread extends Thread {
 
         ProcessorTopology topology = builder.build(applicationId, id.topicGroupId);
 
-        return new StreamTask(id, applicationId, partitions, topology, consumer, producer, restoreConsumer, config, sensors, stateDirectory);
+        return new StreamTask(id, applicationId, partitions, topology, consumer, producer, restoreConsumer, config, sensors, stateDirectory, cache);
     }
 
     private void addStreamTasks(Collection<TopicPartition> assignment) {

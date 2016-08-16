@@ -25,6 +25,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes;
 
 import java.io.File;
 import java.util.Map;
@@ -42,7 +43,7 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     private final StreamsConfig config;
     private final Serde<?> keySerde;
     private final Serde<?> valSerde;
-
+    private final MemoryLRUCacheBytes cache;
     private boolean initialized;
 
     @SuppressWarnings("unchecked")
@@ -51,7 +52,8 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
                                 StreamsConfig config,
                                 RecordCollector collector,
                                 ProcessorStateManager stateMgr,
-                                StreamsMetrics metrics) {
+                                StreamsMetrics metrics,
+                                final MemoryLRUCacheBytes cache) {
         this.id = id;
         this.task = task;
         this.metrics = metrics;
@@ -61,7 +63,7 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         this.config = config;
         this.keySerde = config.keySerde();
         this.valSerde = config.valueSerde();
-
+        this.cache = cache;
         this.initialized = false;
     }
 
@@ -134,6 +136,11 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         //    throw new TopologyBuilderException("Processor " + node.name() + " has no access to StateStore " + name);
 
         return stateMgr.getStore(name);
+    }
+
+    @Override
+    public MemoryLRUCacheBytes getCache() {
+        return cache;
     }
 
     /**

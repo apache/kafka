@@ -26,6 +26,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -83,8 +84,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
                       Consumer<byte[], byte[]> restoreConsumer,
                       StreamsConfig config,
                       StreamsMetrics metrics,
-                      StateDirectory stateDirectory) {
-        super(id, applicationId, partitions, topology, consumer, restoreConsumer, false, stateDirectory);
+                      StateDirectory stateDirectory,
+                      MemoryLRUCacheBytes cache) {
+        super(id, applicationId, partitions, topology, consumer, restoreConsumer, false, stateDirectory, cache);
         this.punctuationQueue = new PunctuationQueue();
         this.maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
 
@@ -110,7 +112,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         log.info("Creating restoration consumer client for stream task #" + id());
 
         // initialize the topology with its own context
-        this.processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics);
+        this.processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics, cache);
 
         // initialize the state stores
         initializeStateStores();

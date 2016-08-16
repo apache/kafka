@@ -23,12 +23,14 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes;
 
 public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K, K, V, T> {
 
     private final String storeName;
     private final Initializer<T> initializer;
     private final Aggregator<K, V, T> aggregator;
+
 
     private boolean sendOldValues = false;
 
@@ -51,12 +53,13 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
     private class KStreamAggregateProcessor extends AbstractProcessor<K, V> {
 
         private KeyValueStore<K, T> store;
+        private MemoryLRUCacheBytes cache;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
-
+            cache = context.getCache();
             store = (KeyValueStore<K, T>) context.getStateStore(storeName);
         }
 

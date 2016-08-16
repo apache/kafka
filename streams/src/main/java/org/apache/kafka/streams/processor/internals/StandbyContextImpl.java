@@ -24,7 +24,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-
+import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes;
 import java.io.File;
 import java.util.Map;
 
@@ -118,6 +118,11 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
     @Override
     public StateStore getStateStore(String name) {
         throw new UnsupportedOperationException("this should not happen: getStateStore() not supported in standby tasks.");
+    }
+
+    @Override
+    public MemoryLRUCacheBytes getCache() {
+        throw new UnsupportedOperationException("this should not happen: getCache() not supported in standby tasks.");
     }
 
     /**

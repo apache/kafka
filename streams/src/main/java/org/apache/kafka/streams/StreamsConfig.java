@@ -131,6 +131,9 @@ public class StreamsConfig extends AbstractConfig {
     public static final String ROCKSDB_CONFIG_SETTER_CLASS_CONFIG = "rocksdb.config.setter";
     public static final String ROCKSDB_CONFIG_SETTER_CLASS_DOC = "A Rocks DB config setter class that implements the <code>RocksDBConfigSetter</code> interface";
 
+    /** <code>cache.max.bytes.buffering</code> */
+    public static final String CACHE_MAX_BYTES_BUFFERING_CONFIG = "cache.max.bytes.buffering";
+    public static final String CACHE_MAX_BYTES_BUFFERING_DOC = "Maximum number of memory bytes to be used for buffering across all threads";
 
 
     static {
@@ -238,7 +241,13 @@ public class StreamsConfig extends AbstractConfig {
                                         Type.CLASS,
                                         null,
                                         Importance.LOW,
-                                        ROCKSDB_CONFIG_SETTER_CLASS_DOC);
+                                        ROCKSDB_CONFIG_SETTER_CLASS_DOC)
+                                .define(CACHE_MAX_BYTES_BUFFERING_CONFIG,
+                                        Type.LONG,
+                                        10 * 1024 * 1024L,
+                                        atLeast(0),
+                                        Importance.LOW,
+                                        CACHE_MAX_BYTES_BUFFERING_DOC);
     }
 
     // this is the list of configs for underlying clients
