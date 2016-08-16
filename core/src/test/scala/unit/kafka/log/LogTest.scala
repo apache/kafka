@@ -1007,7 +1007,7 @@ class LogTest extends JUnitSuite {
   @Test
   def shouldNotHaveSizeBasedSegmentsReadyToBeDeleted(): Unit = {
     val set = TestUtils.singleMessageSet("test".getBytes)
-    val (_, log: Log) = createLog(set.sizeInBytes, retentionBytes = set.sizeInBytes * 10)
+    val (_, log) = createLog(set.sizeInBytes, retentionBytes = set.sizeInBytes * 10)
 
     // append some messages to create some segments
     for (i <- 0 until 8)
@@ -1020,7 +1020,7 @@ class LogTest extends JUnitSuite {
   @Test
   def shouldHaveTimeBasedSegmentsReadyToBeDeleted(): Unit = {
     val set = TestUtils.singleMessageSet("test".getBytes)
-    val (myTime: MockTime, log: Log) = createLog(set.sizeInBytes, retentionMs = 10)
+    val (myTime, log) = createLog(set.sizeInBytes, retentionMs = 10)
 
     // append some messages to create some segments
     for (i <- 0 until 15)
@@ -1033,7 +1033,7 @@ class LogTest extends JUnitSuite {
   @Test
   def shouldNotHaveTimeBasedSegmentsReadyToBeDeleted(): Unit = {
     val set = TestUtils.singleMessageSet("test".getBytes)
-    val (_, log: Log) = createLog(set.sizeInBytes, retentionMs = 10000)
+    val (_, log) = createLog(set.sizeInBytes, retentionMs = 10000)
 
     // append some messages to create some segments
     for (i <- 0 until 8)
@@ -1045,7 +1045,7 @@ class LogTest extends JUnitSuite {
   @Test
   def shouldDeleteTimeBasedSegmentsReadyToBeDeleted(): Unit = {
     val set = TestUtils.singleMessageSet("test".getBytes)
-    val (myTime: MockTime, log: Log) = createLog(set.sizeInBytes, retentionMs = 10000)
+    val (myTime, log) = createLog(set.sizeInBytes, retentionMs = 10000)
 
     // append some messages to create some segments
     for (i <- 0 until 15)
@@ -1060,7 +1060,7 @@ class LogTest extends JUnitSuite {
   @Test
   def shouldNotDeleteTimeBasedSegmentsWhenNoneReadyToBeDeleted(): Unit = {
     val set = TestUtils.singleMessageSet("test".getBytes)
-    val (_, log: Log) = createLog(set.sizeInBytes, retentionMs = 10000)
+    val (_, log) = createLog(set.sizeInBytes, retentionMs = 10000)
 
     // append some messages to create some segments
     for (i <- 0 until 15)
@@ -1073,7 +1073,7 @@ class LogTest extends JUnitSuite {
   @Test
   def shouldNotHaveReadySegmentsWhenCleanupPolicyDoesntIncludeDelete(): Unit = {
     val set = TestUtils.singleMessageSet("test".getBytes, key = "test".getBytes)
-    val (_, log: Log) = createLog(set.sizeInBytes, retentionMs = 10000, cleanupPolicy = "compact")
+    val (_, log) = createLog(set.sizeInBytes, retentionMs = 10000, cleanupPolicy = "compact")
 
     // append some messages to create some segments
     for (i <- 0 until 15)
@@ -1086,7 +1086,7 @@ class LogTest extends JUnitSuite {
   @Test
   def shouldNotDeleteSegmentsWhenPolicyDoesNotIncludeDelete(): Unit = {
     val set = TestUtils.singleMessageSet("test".getBytes, key = "test".getBytes())
-    val (myTime: MockTime, log: Log) = createLog(set.sizeInBytes,
+    val (myTime, log) = createLog(set.sizeInBytes,
       retentionMs = 10000,
       cleanupPolicy = "compact")
 
@@ -1105,7 +1105,7 @@ class LogTest extends JUnitSuite {
   @Test
   def shouldDeleteSegmentsReadyToBeDeletedWhenCleanupPolicyIsCompactAndDelete(): Unit = {
     val set = TestUtils.singleMessageSet("test".getBytes, key = "test".getBytes)
-    val (myTime: MockTime, log: Log) = createLog(set.sizeInBytes,
+    val (myTime, log) = createLog(set.sizeInBytes,
       retentionMs = 10000,
       cleanupPolicy = "compact_and_delete")
 

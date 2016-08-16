@@ -245,12 +245,13 @@ class LogCleaner(val config: CleanerConfig,
       val deleted = cleanerManager.logsReadyToBeTruncated() match {
         case Nil => false
         case ready =>
-          ready.foreach {log =>
-            try {
-              log._2.deleteOldSegments()
-            } finally {
-              cleanerManager.doneDeleting(log._1)
-            }
+          ready.foreach {
+            case(topicPartition, log) =>
+              try {
+                log.deleteOldSegments()
+              } finally {
+                cleanerManager.doneDeleting(topicPartition)
+              }
           }
           true
       }

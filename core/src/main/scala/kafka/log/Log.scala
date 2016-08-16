@@ -582,7 +582,7 @@ class Log(val dir: File,
     }
   }
 
-  private class SizeBasedRetentionCheck(var diff: Long) {
+  private class SizeBasedRetentionCheck(private var diff: Long) {
     def shouldDelete(segment: LogSegment) = {
       if(diff - segment.size >= 0) {
         diff -= segment.size

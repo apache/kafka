@@ -79,9 +79,9 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
     inLock(lock) {
       val lastClean = allCleanerCheckpoints()
       val dirtyLogs = logs.filter {
-        case (topicAndPartition, log) => log.config.compact  // match logs that are marked as compacted
+        case (_, log) => log.config.compact  // match logs that are marked as compacted
       }.filterNot {
-        case (topicAndPartition, log) => inProgress.contains(topicAndPartition) // skip any logs already in-progress
+        case (topicAndPartition, _) => inProgress.contains(topicAndPartition) // skip any logs already in-progress
       }.map {
         case (topicAndPartition, log) => // create a LogToClean instance for each
           // if the log segments are abnormally truncated and hence the checkpointed offset
