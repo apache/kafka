@@ -87,7 +87,7 @@ public class TopologyBuilder {
             this.name = name;
         }
 
-        public abstract ProcessorNode build(String applicationId);
+        public abstract ProcessorNode build();
     }
 
     private static class ProcessorNodeFactory extends NodeFactory {
@@ -107,7 +107,7 @@ public class TopologyBuilder {
 
         @SuppressWarnings("unchecked")
         @Override
-        public ProcessorNode build(String applicationId) {
+        public ProcessorNode build() {
             return new ProcessorNode(name, supplier.get(), stateStoreNames);
         }
     }
@@ -126,7 +126,7 @@ public class TopologyBuilder {
 
         @SuppressWarnings("unchecked")
         @Override
-        public ProcessorNode build(String applicationId) {
+        public ProcessorNode build() {
             return new SourceNode(name, keyDeserializer, valDeserializer);
         }
     }
@@ -149,10 +149,10 @@ public class TopologyBuilder {
 
         @SuppressWarnings("unchecked")
         @Override
-        public ProcessorNode build(String applicationId) {
+        public ProcessorNode build() {
             if (internalTopicNames.contains(topic)) {
                 // prefix the internal topic name with the application id
-                return new SinkNode(name, applicationId + "-" + topic, keySerializer, valSerializer, partitioner);
+                return new SinkNode(name, decorateTopic(topic), keySerializer, valSerializer, partitioner);
             } else {
                 return new SinkNode(name, topic, keySerializer, valSerializer, partitioner);
             }
@@ -681,7 +681,7 @@ public class TopologyBuilder {
         // create processor nodes in a topological order ("nodeFactories" is already topologically sorted)
         for (NodeFactory factory : nodeFactories.values()) {
             if (nodeGroup == null || nodeGroup.contains(factory.name)) {
-                ProcessorNode node = factory.build(applicationId);
+                ProcessorNode node = factory.build();
                 processorNodes.add(node);
                 processorMap.put(node.name(), node);
 
