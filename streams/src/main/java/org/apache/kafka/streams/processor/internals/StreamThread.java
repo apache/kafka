@@ -161,7 +161,7 @@ public class StreamThread extends Thread {
 
         // set the producer and consumer clients
         String threadName = getName();
-        threadClientId = clientId + "-" + getName();
+        threadClientId = clientId + "-" + threadName;
         log.info("Creating producer client for stream thread [{}]", threadName);
         this.producer = clientSupplier.getProducer(config.getProducerConfigs(threadClientId));
         log.info("Creating consumer client for stream thread [{}]", threadName);
