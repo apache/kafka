@@ -29,6 +29,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
@@ -65,8 +66,8 @@ public class StreamThreadStateStoreProviderTest {
     @Before
     public void before() throws IOException {
         final TopologyBuilder builder = new TopologyBuilder();
-        builder.addSource("the-source");
-        builder.addProcessor("the-processor", new MockProcessorSupplier());
+        builder.addSource("the-source", "the-source");
+        builder.addProcessor("the-processor", new MockProcessorSupplier(), "the-source");
         builder.addStateStore(Stores.create("kv-store")
                                   .withStringKeys()
                                   .withStringValues().inMemory().build(), "the-processor");
@@ -106,7 +107,7 @@ public class StreamThreadStateStoreProviderTest {
         thread = new StreamThread(builder, streamsConfig, clientSupplier,
                                   applicationId,
                                   "clientId", UUID.randomUUID(), new Metrics(),
-                                  new SystemTime()) {
+                                  new SystemTime(), new StreamsMetadataState(builder)) {
             @Override
             public Map<TaskId, StreamTask> tasks() {
                 return tasks;
@@ -124,7 +125,7 @@ public class StreamThreadStateStoreProviderTest {
     @Test
     public void shouldFindKeyValueStores() throws Exception {
         List<ReadOnlyKeyValueStore<String, String>> kvStores =
-            provider.getStores("kv-store", QueryableStoreTypes.<String, String>keyValueStore());
+            provider.stores("kv-store", QueryableStoreTypes.<String, String>keyValueStore());
         assertEquals(2, kvStores.size());
     }
 
@@ -132,33 +133,33 @@ public class StreamThreadStateStoreProviderTest {
     public void shouldFindWindowStores() throws Exception {
         final List<ReadOnlyWindowStore<Object, Object>>
             windowStores =
-            provider.getStores("window-store", windowStore());
+            provider.stores("window-store", windowStore());
         assertEquals(2, windowStores.size());
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfWindowStoreClosed() throws Exception {
         taskOne.getStore("window-store").close();
-        provider.getStores("window-store", QueryableStoreTypes.windowStore());
+        provider.stores("window-store", QueryableStoreTypes.windowStore());
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfKVStoreClosed() throws Exception {
         taskOne.getStore("kv-store").close();
-        provider.getStores("kv-store", QueryableStoreTypes.keyValueStore());
+        provider.stores("kv-store", QueryableStoreTypes.keyValueStore());
     }
 
     @Test
     public void shouldReturnEmptyListIfNoStoresFoundWithName() throws Exception {
-        assertEquals(Collections.emptyList(), provider.getStores("not-a-store", QueryableStoreTypes
+        assertEquals(Collections.emptyList(), provider.stores("not-a-store", QueryableStoreTypes
             .keyValueStore()));
     }
 
 
     @Test
     public void shouldReturnEmptyListIfStoreExistsButIsNotOfTypeValueStore() throws Exception {
-        assertEquals(Collections.emptyList(), provider.getStores("window-store",
-                                                                 QueryableStoreTypes.keyValueStore()));
+        assertEquals(Collections.emptyList(), provider.stores("window-store",
+                                                              QueryableStoreTypes.keyValueStore()));
     }
 
     private StreamTask createStreamsTask(final String applicationId,
@@ -217,8 +218,7 @@ public class StreamThreadStateStoreProviderTest {
         }
 
         @Override
-        public void recordLatency(final Sensor sensor, final long startNs,
-                                  final long endNs) {
+        public void recordLatency(final Sensor sensor, final long startNs, final long endNs) {
 
         }
     }

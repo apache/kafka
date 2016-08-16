@@ -32,7 +32,6 @@ import org.apache.kafka.common.utils.Utils
 import scala.collection.JavaConversions._
 import scala.collection._
 import org.apache.kafka.clients.consumer.{ConsumerConfig => NewConsumerConfig}
-import org.apache.kafka.common.internals.TopicConstants
 
 
 object TopicCommand extends Logging {
@@ -138,7 +137,7 @@ object TopicCommand extends Logging {
       }
 
       if(opts.options.has(opts.partitionsOpt)) {
-        if (topic == TopicConstants.GROUP_METADATA_TOPIC_NAME) {
+        if (topic == Topic.GroupMetadataTopicName) {
           throw new IllegalArgumentException("The number of partitions for the offsets topic cannot be changed.")
         }
         println("WARNING: If partitions are increased for a topic that has a key, the partition " +

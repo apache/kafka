@@ -49,7 +49,7 @@ public class SubscriptionState {
 
     private enum SubscriptionType {
         NONE, AUTO_TOPICS, AUTO_PATTERN, USER_ASSIGNED
-    };
+    }
 
     /* the type of subscription */
     private SubscriptionType subscriptionType;

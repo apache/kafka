@@ -33,6 +33,7 @@ import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
+import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -52,6 +53,8 @@ public class KTableImplTest {
 
     private KStreamTestDriver driver = null;
     private File stateDir = null;
+    private KStreamBuilder builder;
+    private KTable<String, String> table;
 
     @After
     public void tearDown() {
@@ -64,6 +67,8 @@ public class KTableImplTest {
     @Before
     public void setUp() throws IOException {
         stateDir = TestUtils.tempDirectory("kafka-test");
+        builder = new KStreamBuilder();
+        table = builder.table("test", "test");
     }
 
     @Test
@@ -356,4 +361,85 @@ public class KTableImplTest {
         assertNotNull(((ChangedSerializer) ((SinkNode) driver.processor("KSTREAM-SINK-0000000007")).valueSerializer()).inner());
         assertNotNull(((ChangedDeserializer) ((SourceNode) driver.processor("KSTREAM-SOURCE-0000000008")).valueDeserializer()).inner());
     }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullSelectorOnToStream() throws Exception {
+        table.toStream(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullTopicOnTo() throws Exception {
+        table.to(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullPredicateOnFilter() throws Exception {
+        table.filter(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullPredicateOnFilterNot() throws Exception {
+        table.filterNot(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullMapperOnMapValues() throws Exception {
+        table.mapValues(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullFilePathOnWriteAsText() throws Exception {
+        table.writeAsText(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullActionOnForEach() throws Exception {
+        table.foreach(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullTopicInThrough() throws Exception {
+        table.through(null, "store");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullStoreInThrough() throws Exception {
+        table.through("topic", null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullSelectorOnGroupBy() throws Exception {
+        table.groupBy(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullOtherTableOnJoin() throws Exception {
+        table.join(null, MockValueJoiner.STRING_JOINER);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullJoinerJoin() throws Exception {
+        table.join(table, null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullOtherTableOnOuterJoin() throws Exception {
+        table.outerJoin(null, MockValueJoiner.STRING_JOINER);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullJoinerOnOuterJoin() throws Exception {
+        table.outerJoin(table, null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullJoinerOnLeftJoin() throws Exception {
+        table.leftJoin(table, null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullOtherTableOnLeftJoin() throws Exception {
+        table.leftJoin(null, MockValueJoiner.STRING_JOINER);
+    }
+
 }

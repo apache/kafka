@@ -308,14 +308,18 @@ object AdminUtils extends Logging {
   }
 
   def deleteTopic(zkUtils: ZkUtils, topic: String) {
-    try {
-      zkUtils.createPersistentPath(getDeleteTopicPath(topic))
-    } catch {
-      case e1: ZkNodeExistsException => throw new TopicAlreadyMarkedForDeletionException(
-        "topic %s is already marked for deletion".format(topic))
-      case e2: Throwable => throw new AdminOperationException(e2.toString)
+      if (topicExists(zkUtils, topic)) {
+        try {
+          zkUtils.createPersistentPath(getDeleteTopicPath(topic))
+        } catch {
+          case e1: ZkNodeExistsException => throw new TopicAlreadyMarkedForDeletionException(
+            "topic %s is already marked for deletion".format(topic))
+          case e2: Throwable => throw new AdminOperationException(e2)
+        }
+      } else {
+        throw new InvalidTopicException("topic %s to delete does not exist".format(topic))
+      }
     }
-  }
 
   def isConsumerGroupActive(zkUtils: ZkUtils, group: String) = {
     zkUtils.getConsumersInGroup(group).nonEmpty
@@ -487,7 +491,7 @@ object AdminUtils extends Logging {
    *
    */
   def changeTopicConfig(zkUtils: ZkUtils, topic: String, configs: Properties) {
-    if(!topicExists(zkUtils, topic))
+    if (!topicExists(zkUtils, topic))
       throw new AdminOperationException("Topic \"%s\" does not exist.".format(topic))
     // remove the topic overrides
     LogConfig.validate(configs)
@@ -526,7 +530,7 @@ object AdminUtils extends Logging {
   def fetchEntityConfig(zkUtils: ZkUtils, entityType: String, entity: String): Properties = {
     val str: String = zkUtils.zkClient.readData(getEntityConfigPath(entityType, entity), true)
     val props = new Properties()
-    if(str != null) {
+    if (str != null) {
       Json.parseFull(str) match {
         case None => // there are no config overrides
         case Some(mapAnon: Map[_, _]) =>
@@ -559,16 +563,19 @@ object AdminUtils extends Logging {
   def fetchTopicMetadataFromZk(topic: String, zkUtils: ZkUtils): MetadataResponse.TopicMetadata =
     fetchTopicMetadataFromZk(topic, zkUtils, new mutable.HashMap[Int, Broker])
 
-  def fetchTopicMetadataFromZk(topics: Set[String], zkUtils: ZkUtils): Set[MetadataResponse.TopicMetadata] = {
+  def fetchTopicMetadataFromZk(topics: Set[String], zkUtils: ZkUtils): Set[MetadataResponse.TopicMetadata] =
+    fetchTopicMetadataFromZk(topics, zkUtils, SecurityProtocol.PLAINTEXT)
+
+  def fetchTopicMetadataFromZk(topics: Set[String], zkUtils: ZkUtils, protocol: SecurityProtocol): Set[MetadataResponse.TopicMetadata] = {
     val cachedBrokerInfo = new mutable.HashMap[Int, Broker]()
-    topics.map(topic => fetchTopicMetadataFromZk(topic, zkUtils, cachedBrokerInfo))
+    topics.map(topic => fetchTopicMetadataFromZk(topic, zkUtils, cachedBrokerInfo, protocol))
   }
 
   private def fetchTopicMetadataFromZk(topic: String,
                                        zkUtils: ZkUtils,
                                        cachedBrokerInfo: mutable.HashMap[Int, Broker],
                                        protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): MetadataResponse.TopicMetadata = {
-    if(zkUtils.pathExists(getTopicPath(topic))) {
+    if (zkUtils.pathExists(getTopicPath(topic))) {
       val topicPartitionAssignment = zkUtils.getPartitionAssignmentForTopics(List(topic)).get(topic).get
       val sortedPartitions = topicPartitionAssignment.toList.sortWith((m1, m2) => m1._1 < m2._1)
       val partitionMetadata = sortedPartitions.map { partitionMap =>
@@ -597,10 +604,10 @@ object AdminUtils extends Logging {
           } catch {
             case e: Throwable => throw new ReplicaNotAvailableException(e)
           }
-          if(replicaInfo.size < replicas.size)
+          if (replicaInfo.size < replicas.size)
             throw new ReplicaNotAvailableException("Replica information not available for following brokers: " +
               replicas.filterNot(replicaInfo.map(_.id).contains(_)).mkString(","))
-          if(isrInfo.size < inSyncReplicas.size)
+          if (isrInfo.size < inSyncReplicas.size)
             throw new ReplicaNotAvailableException("In Sync Replica information not available for following brokers: " +
               inSyncReplicas.filterNot(isrInfo.map(_.id).contains(_)).mkString(","))
           new MetadataResponse.PartitionMetadata(Errors.NONE, partition, leaderInfo, replicaInfo.asJava, isrInfo.asJava)

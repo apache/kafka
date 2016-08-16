@@ -19,8 +19,8 @@ package kafka.server
 
 import java.util.Properties
 
+import kafka.common.Topic
 import kafka.utils.TestUtils
-import org.apache.kafka.common.internals.TopicConstants
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
 import org.junit.Assert._
@@ -67,7 +67,7 @@ class MetadataRequestTest extends BaseRequestTest {
 
   @Test
   def testIsInternal() {
-    val internalTopic = TopicConstants.GROUP_METADATA_TOPIC_NAME
+    val internalTopic = Topic.GroupMetadataTopicName
     val notInternalTopic = "notInternal"
     // create the topics
     TestUtils.createTopic(zkUtils, internalTopic, 3, 2, servers)
@@ -82,6 +82,8 @@ class MetadataRequestTest extends BaseRequestTest {
 
     assertTrue("internalTopic should show isInternal", internalTopicMetadata.isInternal)
     assertFalse("notInternalTopic topic not should show isInternal", notInternalTopicMetadata.isInternal)
+
+    assertEquals(Set(internalTopic).asJava, metadataResponse.cluster.internalTopics)
   }
 
   @Test

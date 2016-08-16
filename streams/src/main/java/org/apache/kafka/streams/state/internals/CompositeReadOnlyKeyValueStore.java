@@ -46,7 +46,7 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
 
     @Override
     public V get(final K key) {
-        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.getStores(storeName, storeType);
+        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.stores(storeName, storeType);
         for (ReadOnlyKeyValueStore<K, V> store : stores) {
             V result = store.get(key);
             if (result != null) {
@@ -64,7 +64,7 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
                 return store.range(from, to);
             }
         };
-        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.getStores(storeName, storeType);
+        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.stores(storeName, storeType);
         return new CompositeKeyValueIterator(stores.iterator(), nextIteratorFunction);
     }
 
@@ -76,13 +76,13 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
                 return store.all();
             }
         };
-        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.getStores(storeName, storeType);
+        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.stores(storeName, storeType);
         return new CompositeKeyValueIterator(stores.iterator(), nextIteratorFunction);
     }
 
     @Override
     public long approximateNumEntries() {
-        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.getStores(storeName, storeType);
+        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.stores(storeName, storeType);
         long total = 0;
         for (ReadOnlyKeyValueStore<K, V> store : stores) {
             total += store.approximateNumEntries();

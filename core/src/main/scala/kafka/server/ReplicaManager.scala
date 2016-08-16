@@ -34,7 +34,6 @@ import org.apache.kafka.common.errors.{ControllerMovedException, CorruptRecordEx
                                         RecordBatchTooLargeException, RecordTooLargeException, ReplicaNotAvailableException,
                                         UnknownTopicOrPartitionException}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.internals.TopicConstants
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{LeaderAndIsrRequest, PartitionState, StopReplicaRequest, UpdateMetadataRequest}
@@ -539,7 +538,7 @@ class ReplicaManager(val config: KafkaConfig,
           val initialLogEndOffset = localReplica.logEndOffset
           val logReadInfo = localReplica.log match {
             case Some(log) =>
-              val adjustedFetchSize = if (TopicConstants.INTERNAL_TOPICS.contains(topic) && !readOnlyCommitted) Math.max(fetchSize, log.config.maxMessageSize) else fetchSize
+              val adjustedFetchSize = if (Topic.isInternal(topic) && !readOnlyCommitted) Math.max(fetchSize, log.config.maxMessageSize) else fetchSize
               log.read(offset, adjustedFetchSize, maxOffsetOpt)
             case None =>
               error("Leader for partition [%s,%d] does not have a local log".format(topic, partition))

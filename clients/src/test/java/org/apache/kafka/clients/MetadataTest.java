@@ -134,6 +134,7 @@ public class MetadataTest {
                 Arrays.asList(
                     new PartitionInfo("topic", 0, null, null, null),
                     new PartitionInfo("topic1", 0, null, null, null)),
+                Collections.<String>emptySet(),
                 Collections.<String>emptySet()),
             100);
 
@@ -161,6 +162,7 @@ public class MetadataTest {
                 Arrays.asList(
                     new PartitionInfo("topic", 0, null, null, null),
                     new PartitionInfo("topic1", 0, null, null, null)),
+                Collections.<String>emptySet(),
                 Collections.<String>emptySet()),
             100);
 
@@ -187,6 +189,7 @@ public class MetadataTest {
                 Arrays.asList(
                     new PartitionInfo("topic", 0, null, null, null),
                     new PartitionInfo("topic1", 0, null, null, null)),
+                Collections.<String>emptySet(),
                 Collections.<String>emptySet()),
             100);
 
@@ -197,6 +200,7 @@ public class MetadataTest {
                 Arrays.asList(
                     new PartitionInfo("topic2", 0, null, null, null),
                     new PartitionInfo("topic3", 0, null, null, null)),
+                Collections.<String>emptySet(),
                 Collections.<String>emptySet()),
             100);
 

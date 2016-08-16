@@ -32,20 +32,19 @@ import kafka.log._
 import kafka.message.{ByteBufferMessageSet, Message, MessageSet}
 import kafka.network._
 import kafka.network.RequestChannel.{Response, Session}
-import kafka.security.auth.{Authorizer, ClusterAction, Create, Describe, Group, Operation, Read, Resource, Topic, Write}
+import kafka.security.auth
+import kafka.security.auth.{Authorizer, ClusterAction, Create, Describe, Group, Operation, Read, Resource, Write, Delete}
 import kafka.utils.{Logging, SystemTime, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidTopicException, NotLeaderForPartitionException, UnknownTopicOrPartitionException, TopicExistsException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, Protocol, SecurityProtocol}
-import org.apache.kafka.common.requests.{ApiVersionsResponse, DescribeGroupsRequest, DescribeGroupsResponse, GroupCoordinatorRequest, GroupCoordinatorResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsResponse, ListOffsetRequest, ListOffsetResponse, MetadataRequest, MetadataResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetFetchRequest, OffsetFetchResponse, ProduceRequest, ProduceResponse, ResponseHeader, ResponseSend, StopReplicaRequest, StopReplicaResponse, SyncGroupRequest, SyncGroupResponse, UpdateMetadataRequest, UpdateMetadataResponse, CreateTopicsRequest, CreateTopicsResponse}
+import org.apache.kafka.common.requests.{ApiVersionsResponse, DescribeGroupsRequest, DescribeGroupsResponse, GroupCoordinatorRequest, GroupCoordinatorResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsResponse, ListOffsetRequest, ListOffsetResponse, MetadataRequest, MetadataResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetFetchRequest, OffsetFetchResponse, ProduceRequest, ProduceResponse, ResponseHeader, ResponseSend, SaslHandshakeResponse, StopReplicaRequest, StopReplicaResponse, SyncGroupRequest, SyncGroupResponse, UpdateMetadataRequest, UpdateMetadataResponse, CreateTopicsRequest, CreateTopicsResponse, DeleteTopicsRequest, DeleteTopicsResponse}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{Node, TopicPartition}
-import org.apache.kafka.common.internals.TopicConstants
 
 import scala.collection._
 import scala.collection.JavaConverters._
-import org.apache.kafka.common.requests.SaslHandshakeResponse
 
 /**
  * Logic to handle the various Kafka requests
@@ -94,6 +93,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
         case ApiKeys.CREATE_TOPICS => handleCreateTopicsRequest(request)
+        case ApiKeys.DELETE_TOPICS => handleDeleteTopicsRequest(request)
         case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
     } catch {
@@ -131,11 +131,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         // this callback is invoked under the replica state change lock to ensure proper order of
         // leadership changes
         updatedLeaders.foreach { partition =>
-          if (partition.topic == TopicConstants.GROUP_METADATA_TOPIC_NAME)
+          if (partition.topic == Topic.GroupMetadataTopicName)
             coordinator.handleGroupImmigration(partition.partitionId)
         }
         updatedFollowers.foreach { partition =>
-          if (partition.topic == TopicConstants.GROUP_METADATA_TOPIC_NAME)
+          if (partition.topic == Topic.GroupMetadataTopicName)
             coordinator.handleGroupEmigration(partition.partitionId)
         }
       }
@@ -238,7 +238,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val filteredRequestInfo = offsetCommitRequest.offsetData.asScala.toMap -- invalidRequestsInfo.keys
 
       val (authorizedRequestInfo, unauthorizedRequestInfo) = filteredRequestInfo.partition {
-        case (topicPartition, offsetMetadata) => authorize(request.session, Read, new Resource(Topic, topicPartition.topic))
+        case (topicPartition, offsetMetadata) => authorize(request.session, Read, new Resource(auth.Topic, topicPartition.topic))
       }
 
       // the callback for sending an offset commit response
@@ -335,7 +335,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val numBytesAppended = request.header.sizeOf + produceRequest.sizeOf
 
     val (authorizedRequestInfo, unauthorizedRequestInfo) = produceRequest.partitionRecords.asScala.partition {
-      case (topicPartition, _) => authorize(request.session, Write, new Resource(Topic, topicPartition.topic))
+      case (topicPartition, _) => authorize(request.session, Write, new Resource(auth.Topic, topicPartition.topic))
     }
 
     // the callback for sending a produce response
@@ -430,7 +430,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val fetchRequest = request.requestObj.asInstanceOf[FetchRequest]
 
     val (authorizedRequestInfo, unauthorizedRequestInfo) = fetchRequest.requestInfo.partition {
-      case (topicAndPartition, _) => authorize(request.session, Read, new Resource(Topic, topicAndPartition.topic))
+      case (topicAndPartition, _) => authorize(request.session, Read, new Resource(auth.Topic, topicAndPartition.topic))
     }
 
     val unauthorizedPartitionData = unauthorizedRequestInfo.mapValues { _ =>
@@ -518,7 +518,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val offsetRequest = request.body.asInstanceOf[ListOffsetRequest]
 
     val (authorizedRequestInfo, unauthorizedRequestInfo) = offsetRequest.offsetData.asScala.partition {
-      case (topicPartition, _) => authorize(request.session, Describe, new Resource(Topic, topicPartition.topic))
+      case (topicPartition, _) => authorize(request.session, Describe, new Resource(auth.Topic, topicPartition.topic))
     }
 
     val unauthorizedResponseStatus = unauthorizedRequestInfo.mapValues(_ =>
@@ -636,14 +636,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       AdminUtils.createTopic(zkUtils, topic, numPartitions, replicationFactor, properties, RackAwareMode.Safe)
       info("Auto creation of topic %s with %d partitions and replication factor %d is successful"
         .format(topic, numPartitions, replicationFactor))
-      new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, topic, common.Topic.isInternal(topic),
+      new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, topic, Topic.isInternal(topic),
         java.util.Collections.emptyList())
     } catch {
       case e: TopicExistsException => // let it go, possibly another broker created this topic
-        new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, topic, common.Topic.isInternal(topic),
+        new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, topic, Topic.isInternal(topic),
           java.util.Collections.emptyList())
       case itex: InvalidTopicException =>
-        new MetadataResponse.TopicMetadata(Errors.INVALID_TOPIC_EXCEPTION, topic, common.Topic.isInternal(topic),
+        new MetadataResponse.TopicMetadata(Errors.INVALID_TOPIC_EXCEPTION, topic, Topic.isInternal(topic),
           java.util.Collections.emptyList())
     }
   }
@@ -655,12 +655,12 @@ class KafkaApis(val requestChannel: RequestChannel,
         Math.min(config.offsetsTopicReplicationFactor.toInt, aliveBrokers.length)
       else
         config.offsetsTopicReplicationFactor.toInt
-    createTopic(TopicConstants.GROUP_METADATA_TOPIC_NAME, config.offsetsTopicPartitions,
+    createTopic(Topic.GroupMetadataTopicName, config.offsetsTopicPartitions,
       offsetsTopicReplicationFactor, coordinator.offsetsTopicConfigs)
   }
 
   private def getOrCreateGroupMetadataTopic(securityProtocol: SecurityProtocol): MetadataResponse.TopicMetadata = {
-    val topicMetadata = metadataCache.getTopicMetadata(Set(TopicConstants.GROUP_METADATA_TOPIC_NAME), securityProtocol)
+    val topicMetadata = metadataCache.getTopicMetadata(Set(Topic.GroupMetadataTopicName), securityProtocol)
     topicMetadata.headOption.getOrElse(createGroupMetadataTopic())
   }
 
@@ -671,7 +671,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       val nonExistentTopics = topics -- topicResponses.map(_.topic).toSet
       val responsesForNonExistentTopics = nonExistentTopics.map { topic =>
-        if (topic == TopicConstants.GROUP_METADATA_TOPIC_NAME) {
+        if (topic == Topic.GroupMetadataTopicName) {
           createGroupMetadataTopic()
         } else if (config.autoCreateTopicsEnable) {
           createTopic(topic, config.numPartitions, config.defaultReplicationFactor)
@@ -706,7 +706,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
     var (authorizedTopics, unauthorizedTopics) =
-      topics.partition(topic => authorize(request.session, Describe, new Resource(Topic, topic)))
+      topics.partition(topic => authorize(request.session, Describe, new Resource(auth.Topic, topic)))
 
     if (authorizedTopics.nonEmpty) {
       val nonExistingTopics = metadataCache.getNonExistingTopics(authorizedTopics)
@@ -721,7 +721,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val unauthorizedTopicMetadata = unauthorizedTopics.map(topic =>
-      new MetadataResponse.TopicMetadata(Errors.TOPIC_AUTHORIZATION_FAILED, topic, common.Topic.isInternal(topic),
+      new MetadataResponse.TopicMetadata(Errors.TOPIC_AUTHORIZATION_FAILED, topic, Topic.isInternal(topic),
         java.util.Collections.emptyList()))
 
     // In version 0, we returned an error when brokers with replicas were unavailable,
@@ -767,7 +767,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       new OffsetFetchResponse(results.asJava)
     } else {
       val (authorizedTopicPartitions, unauthorizedTopicPartitions) = offsetFetchRequest.partitions.asScala.partition { topicPartition =>
-        authorize(request.session, Describe, new Resource(Topic, topicPartition.topic))
+        authorize(request.session, Describe, new Resource(auth.Topic, topicPartition.topic))
       }
       val unauthorizedTopicResponse = new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.TOPIC_AUTHORIZATION_FAILED.code)
       val unauthorizedStatus = unauthorizedTopicPartitions.map(topicPartition => (topicPartition, unauthorizedTopicResponse)).toMap
@@ -1089,6 +1089,49 @@ class KafkaApis(val requestChannel: RequestChannel,
         validTopics,
         sendResponseWithDuplicatesCallback
       )
+    }
+  }
+
+  def handleDeleteTopicsRequest(request: RequestChannel.Request) {
+    val deleteTopicRequest = request.body.asInstanceOf[DeleteTopicsRequest]
+
+    val (authorizedTopics, unauthorizedTopics) = deleteTopicRequest.topics.asScala.partition( topic =>
+      authorize(request.session, Delete, new Resource(auth.Topic, topic))
+    )
+
+    val unauthorizedResults = unauthorizedTopics.map ( topic =>
+      // Avoid leaking that the topic exists if the user is not authorized to describe the topic
+      if (authorize(request.session, Describe, new Resource(auth.Topic, topic))) {
+        (topic, Errors.TOPIC_AUTHORIZATION_FAILED)
+      } else {
+        (topic, Errors.INVALID_TOPIC_EXCEPTION)
+      }
+    ).toMap
+
+    def sendResponseCallback(results: Map[String, Errors]): Unit = {
+      val completeResults = results ++ unauthorizedResults
+      val respHeader = new ResponseHeader(request.header.correlationId)
+      val responseBody = new DeleteTopicsResponse(completeResults.asJava)
+      trace(s"Sending delete topics response $responseBody for correlation id ${request.header.correlationId} to client ${request.header.clientId}.")
+      requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, respHeader, responseBody)))
+    }
+
+    if (!controller.isActive()) {
+      val results = deleteTopicRequest.topics.asScala.map { case topic =>
+        (topic, Errors.NOT_CONTROLLER)
+      }.toMap
+      sendResponseCallback(results)
+    } else {
+      // If no authorized topics return immediatly
+      if (authorizedTopics.isEmpty)
+        sendResponseCallback(Map())
+      else {
+        adminManager.deleteTopics(
+          deleteTopicRequest.timeout.toInt,
+          authorizedTopics,
+          sendResponseCallback
+        )
+      }
     }
   }
 

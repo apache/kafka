@@ -28,7 +28,6 @@ import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.internals.TopicConstants;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -155,7 +154,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
                     for (String topic : cluster.topics())
                         if (subscriptions.getSubscribedPattern().matcher(topic).matches() &&
-                                !(excludeInternalTopics && TopicConstants.INTERNAL_TOPICS.contains(topic)))
+                                !(excludeInternalTopics && cluster.internalTopics().contains(topic)))
                             topicsToSubscribe.add(topic);
 
                     subscriptions.changeSubscription(topicsToSubscribe);
@@ -367,7 +366,36 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
 
-    public void commitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
+    public void commitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
+        if (!coordinatorUnknown()) {
+            doCommitOffsetsAsync(offsets, callback);
+        } else {
+            // we don't know the current coordinator, so try to find it and then send the commit
+            // or fail (we don't want recursive retries which can cause offset commits to arrive
+            // out of order). Note that there may be multiple offset commits chained to the same
+            // coordinator lookup request. This is fine because the listeners will be invoked in
+            // the same order that they were added. Note also that AbstractCoordinator prevents
+            // multiple concurrent coordinator lookup requests.
+            lookupCoordinator().addListener(new RequestFutureListener<Void>() {
+                @Override
+                public void onSuccess(Void value) {
+                    doCommitOffsetsAsync(offsets, callback);
+                }
+
+                @Override
+                public void onFailure(RuntimeException e) {
+                    callback.onComplete(offsets, new RetriableCommitFailedException(e));
+                }
+            });
+        }
+
+        // ensure the commit has a chance to be transmitted (without blocking on its completion).
+        // Note that commits are treated as heartbeats by the coordinator, so there is no need to
+        // explicitly allow heartbeats through delayed task execution.
+        client.pollNoWakeup();
+    }
+
+    private void doCommitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
         this.subscriptions.needRefreshCommits();
         RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
         final OffsetCommitCallback cb = callback == null ? defaultOffsetCommitCallback : callback;
@@ -382,17 +410,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             @Override
             public void onFailure(RuntimeException e) {
                 if (e instanceof RetriableException) {
-                    cb.onComplete(offsets, new RetriableCommitFailedException("Commit offsets failed with retriable exception. You should retry committing offsets.", e));
+                    cb.onComplete(offsets, new RetriableCommitFailedException(e));
                 } else {
                     cb.onComplete(offsets, e);
                 }
             }
         });
-
-        // ensure the commit has a chance to be transmitted (without blocking on its completion).
-        // Note that commits are treated as heartbeats by the coordinator, so there is no need to
-        // explicitly allow heartbeats through delayed task execution.
-        client.pollNoWakeup();
     }
 
     /**

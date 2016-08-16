@@ -109,6 +109,7 @@ public class SimpleBenchmark {
         final File rocksdbDir = new File(stateDir, "rocksdb-test");
         rocksdbDir.mkdir();
 
+        // Note: this output is needed for automated tests and must not be removed
         System.out.println("SimpleBenchmark instance started");
         System.out.println("kafka=" + kafka);
         System.out.println("zookeeper=" + zookeeper);
@@ -385,6 +386,7 @@ public class SimpleBenchmark {
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
         KafkaConsumer<Integer, byte[]> consumer = new KafkaConsumer<>(props);
 
@@ -403,7 +405,10 @@ public class SimpleBenchmark {
                     break;
             } else {
                 for (ConsumerRecord<Integer, byte[]> record : records) {
-                    key = record.key();
+                    Integer recKey = record.key();
+
+                    if (key == null || key < recKey)
+                        key = recKey;
                 }
             }
         }

@@ -37,5 +37,5 @@ public interface StateStoreProvider {
      * @param <T>                   The type of the Store
      * @return  List of the instances of the store in this topology. Empty List if not found
      */
-    <T> List<T> getStores(String storeName, QueryableStoreType<T> queryableStoreType);
+    <T> List<T> stores(String storeName, QueryableStoreType<T> queryableStoreType);
 }

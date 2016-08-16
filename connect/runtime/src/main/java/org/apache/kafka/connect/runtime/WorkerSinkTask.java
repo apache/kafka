@@ -425,9 +425,6 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private void openPartitions(Collection<TopicPartition> partitions) {
-        if (partitions.isEmpty())
-            return;
-
         task.open(partitions);
     }
 
