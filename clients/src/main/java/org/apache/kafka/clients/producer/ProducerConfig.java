@@ -307,6 +307,11 @@ public class ProducerConfig extends AbstractConfig {
                                         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+                                .define(CommonClientConfigs.EXECUTABLE_PASSWORD_ENABLE_CONFIG,
+                                        Type.BOOLEAN,
+                                        CommonClientConfigs.DEFAULT_EXECUTABLE_PASSWORD_ENABLE,
+                                        Importance.LOW,
+                                        CommonClientConfigs.EXECUTABLE_PASSWORD_ENABLE_DOC)
                                 .withClientSslSupport()
                                 .withClientSaslSupport();
 

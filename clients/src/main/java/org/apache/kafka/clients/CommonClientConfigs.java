@@ -13,6 +13,7 @@
 
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 
@@ -78,6 +79,10 @@ public class CommonClientConfigs {
                                                          + "for the response of a request. If the response is not received before the timeout "
                                                          + "elapses the client will resend the request if necessary or fail the request if "
                                                          + "retries are exhausted.";
+
+    public static final String EXECUTABLE_PASSWORD_ENABLE_CONFIG = ConfigDef.EXECUTABLE_PASSWORD_ENABLE_CONFIG;
+    public static final String EXECUTABLE_PASSWORD_ENABLE_DOC = "Pass executables as password, instead of plaintext.";
+    public static final Boolean DEFAULT_EXECUTABLE_PASSWORD_ENABLE = false;
 
     private static List<String> nonTestingSecurityProtocolNames() {
         List<String> names = new ArrayList<>();
