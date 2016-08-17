@@ -340,7 +340,7 @@ class LogTest extends JUnitSuite {
       try {
           Files.createDirectory(logDir.toPath())    
       } catch {
-        case e: IOException => throw new KafkaException("Error in creating new directory '%s'".format(logDir), e)
+        case e: IOException => //this is good
       }
       // first test a log segment starting at 0
       val logProps = new Properties()
@@ -923,7 +923,7 @@ class LogTest extends JUnitSuite {
       try {
           Files.createDirectory(logDir.toPath())    
       } catch {
-        case e: IOException => throw new KafkaException("Error in creating new directory '%s'".format(logDir), e)
+        case e: IOException => //this is good
       }
       var log = new Log(logDir,
                         config,
