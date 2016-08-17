@@ -103,6 +103,13 @@ public class ConsumerConfig extends AbstractConfig {
     private static final String FETCH_MIN_BYTES_DOC = "The minimum amount of data the server should return for a fetch request. If insufficient data is available the request will wait for that much data to accumulate before answering the request. The default setting of 1 byte means that fetch requests are answered as soon as a single byte of data is available or the fetch request times out waiting for data to arrive. Setting this to something greater than 1 will cause the server to wait for larger amounts of data to accumulate which can improve server throughput a bit at the cost of some additional latency.";
 
     /**
+     * <code>fetch.limit.bytes</code>
+     */
+    public static final String FETCH_LIMIT_BYTES_CONFIG = "fetch.limit.bytes";
+    private static final String FETCH_LIMIT_BYTES_DOC = "The maximum amount of data the server should return for a fetch request. The default 0 means no limit.";
+    public static final int DEFAULT_FETCH_LIMIT_BYTES = 0;
+
+    /**
      * <code>fetch.max.wait.ms</code>
      */
     public static final String FETCH_MAX_WAIT_MS_CONFIG = "fetch.max.wait.ms";
@@ -255,6 +262,12 @@ public class ConsumerConfig extends AbstractConfig {
                                         atLeast(0),
                                         Importance.HIGH,
                                         FETCH_MIN_BYTES_DOC)
+                                .define(FETCH_LIMIT_BYTES_CONFIG,
+                                        Type.INT,
+                                        DEFAULT_FETCH_LIMIT_BYTES,
+                                        atLeast(0),
+                                        Importance.MEDIUM,
+                                        FETCH_LIMIT_BYTES_DOC)
                                 .define(FETCH_MAX_WAIT_MS_CONFIG,
                                         Type.INT,
                                         500,
