@@ -382,12 +382,6 @@ public class TopologyBuilderTest {
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullApplicationIdOnBuild() throws Exception {
-        final TopologyBuilder builder = new TopologyBuilder();
-        builder.build(1);
-    }
-
-    @Test(expected = NullPointerException.class)
     public void shouldNotSetApplicationIdToNull() throws Exception {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.setApplicationId(null);
