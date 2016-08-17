@@ -18,11 +18,12 @@
 package kafka.log
 
 import java.io._
+import java.nio.file.Files
 import java.util.Properties
 
 import org.apache.kafka.common.errors.{CorruptRecordException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException}
 import kafka.api.ApiVersion
-import kafka.common.LongRef
+import kafka.common._
 import org.junit.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.{After, Before, Test}
@@ -336,7 +337,11 @@ class LogTest extends JUnitSuite {
   @Test
   def testThatGarbageCollectingSegmentsDoesntChangeOffset() {
     for(messagesToAppend <- List(0, 1, 25)) {
-      logDir.mkdirs()
+      try {
+          Files.createDirectory(logDir.toPath())    
+      } catch {
+        case e: IOException => throw new KafkaException("Error in creating new directory '%s'".format(logDir), e)
+      }
       // first test a log segment starting at 0
       val logProps = new Properties()
       logProps.put(LogConfig.SegmentBytesProp, 100: java.lang.Integer)
@@ -915,7 +920,11 @@ class LogTest extends JUnitSuite {
     val recoveryPoint = 50L
     for(iteration <- 0 until 50) {
       // create a log and write some messages to it
-      logDir.mkdirs()
+      try {
+          Files.createDirectory(logDir.toPath())    
+      } catch {
+        case e: IOException => throw new KafkaException("Error in creating new directory '%s'".format(logDir), e)
+      }
       var log = new Log(logDir,
                         config,
                         recoveryPoint = 0L,
