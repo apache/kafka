@@ -752,7 +752,6 @@ public class TopologyBuilder {
      * @see org.apache.kafka.streams.KafkaStreams#KafkaStreams(TopologyBuilder, org.apache.kafka.streams.StreamsConfig)
      */
     public synchronized ProcessorTopology build(Integer topicGroupId) {
-        Objects.requireNonNull(applicationId, "applicationId can't be null");
         Set<String> nodeGroup;
         if (topicGroupId != null) {
             nodeGroup = nodeGroups().get(topicGroupId);
