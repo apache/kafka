@@ -27,6 +27,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes;
 
 import java.io.File;
 import java.util.Collections;
@@ -107,6 +108,11 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     @Override
     public Serde<?> valueSerde() {
         return this.valSerde;
+    }
+
+    @Override
+    public MemoryLRUCacheBytes getCache() {
+        return null;
     }
 
     @Override

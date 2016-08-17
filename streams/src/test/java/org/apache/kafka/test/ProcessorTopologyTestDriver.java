@@ -186,7 +186,7 @@ public class ProcessorTopologyTestDriver {
                 public void recordLatency(Sensor sensor, long startNs, long endNs) {
                     // do nothing
                 }
-            }, new StateDirectory(applicationId, TestUtils.tempDirectory().getPath()));
+            }, new StateDirectory(applicationId, TestUtils.tempDirectory().getPath()), null);
     }
 
     /**

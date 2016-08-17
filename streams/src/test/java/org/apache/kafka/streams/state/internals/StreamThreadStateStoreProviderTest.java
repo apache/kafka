@@ -172,7 +172,7 @@ public class StreamThreadStateStoreProviderTest {
                               clientSupplier.consumer,
                               clientSupplier.producer,
                               clientSupplier.restoreConsumer,
-                              streamsConfig, new TheStreamMetrics(), stateDirectory) {
+                              streamsConfig, new TheStreamMetrics(), stateDirectory, null) {
             @Override
             protected void initializeOffsetLimits() {
 

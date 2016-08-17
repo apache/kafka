@@ -133,7 +133,7 @@ public class StreamThreadTest {
                               Consumer<byte[], byte[]> restoreConsumer,
                               StreamsConfig config,
                               StateDirectory stateDirectory) {
-            super(id, applicationId, partitions, topology, consumer, producer, restoreConsumer, config, null, stateDirectory);
+            super(id, applicationId, partitions, topology, consumer, producer, restoreConsumer, config, null, stateDirectory, null);
         }
 
         @Override

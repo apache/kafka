@@ -119,7 +119,7 @@ public class StreamTaskTest {
     @Test
     public void testProcessOrder() throws Exception {
         StreamsConfig config = createConfig(baseDir);
-        StreamTask task = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer, producer, restoreStateConsumer, config, null, stateDirectory);
+        StreamTask task = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer, producer, restoreStateConsumer, config, null, stateDirectory, null);
 
         task.addRecords(partition1, records(
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
@@ -166,7 +166,7 @@ public class StreamTaskTest {
     @Test
     public void testPauseResume() throws Exception {
         StreamsConfig config = createConfig(baseDir);
-        StreamTask task = new StreamTask(new TaskId(1, 1), "applicationId", partitions, topology, consumer, producer, restoreStateConsumer, config, null, stateDirectory);
+        StreamTask task = new StreamTask(new TaskId(1, 1), "applicationId", partitions, topology, consumer, producer, restoreStateConsumer, config, null, stateDirectory, null);
 
         task.addRecords(partition1, records(
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
@@ -225,7 +225,7 @@ public class StreamTaskTest {
     @Test
     public void testMaybePunctuate() throws Exception {
         StreamsConfig config = createConfig(baseDir);
-        StreamTask task = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer, producer, restoreStateConsumer, config, null, stateDirectory);
+        StreamTask task = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer, producer, restoreStateConsumer, config, null, stateDirectory, null);
 
         task.addRecords(partition1, records(
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), 20, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue),
