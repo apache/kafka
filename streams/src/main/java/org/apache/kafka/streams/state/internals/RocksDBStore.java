@@ -96,7 +96,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     private Set<K> cacheDirtyKeys = null;
     private boolean cachingEnabled = false;
-    private MemoryLRUCacheBytes<K, MemoryLRUCacheBytesEntry> cache = null;
+    private MemoryLRUCacheBytes<Bytes, MemoryLRUCacheBytesEntry> cache = null;
     private StoreChangeLogger<Bytes, byte[]> changeLogger;
     private StoreChangeLogger.ValueGetter<Bytes, byte[]> getter;
 
@@ -175,9 +175,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             if (this.cache == null) {
                 throw new ProcessorStateException("Error getting cache in store " + this.name);
             }
-            this.cache.addEldestRemovedListener(new MemoryLRUCacheBytes.EldestEntryRemovalListener<K, MemoryLRUCacheBytesEntry>() {
+            this.cache.addEldestRemovedListener(new MemoryLRUCacheBytes.EldestEntryRemovalListener<Bytes, MemoryLRUCacheBytesEntry>() {
                 @Override
-                public void apply(K key, MemoryLRUCacheBytesEntry entry) {
+                public void apply(Bytes key, MemoryLRUCacheBytesEntry entry) {
                     // flush all the dirty entries to RocksDB if this evicted entry is dirty
                     if (entry.isDirty) {
                         flushCache();
@@ -242,7 +242,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     public synchronized V get(K key) {
         validateStoreOpen();
         if (cache != null) {
-            MemoryLRUCacheBytesEntry<V> entry = cache.get(key);
+            MemoryLRUCacheBytesEntry<V> entry = cache.get(Bytes.wrap(serdes.rawMergeStoreNameKey(key, name)));
             if (entry == null) {
                 byte[] byteValue = getInternal(serdes.rawKey(key));
                 //Check value for null, to avoid  deserialization error
@@ -250,7 +250,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                     return null;
                 } else {
                     V value = serdes.valueFrom(byteValue);
-                    cache.put(key, new MemoryLRUCacheBytesEntry(value));
+                    cache.put(Bytes.wrap(serdes.rawMergeStoreNameKey(key, name)), new MemoryLRUCacheBytesEntry(value));
                     return value;
                 }
             } else {
@@ -287,7 +287,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         validateStoreOpen();
         if (cache != null) {
             cacheDirtyKeys.add(key);
-            cache.put(key, new MemoryLRUCacheBytesEntry(value, true));
+            cache.put(Bytes.wrap(serdes.rawMergeStoreNameKey(key, name)), new MemoryLRUCacheBytesEntry(value, true));
         } else {
             byte[] rawKey = serdes.rawKey(key);
             byte[] rawValue = serdes.rawValue(value);
@@ -420,7 +420,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             List<byte[]> deleteBatch = new ArrayList<>(cache.size());
 
             for (K key : cacheDirtyKeys) {
-                MemoryLRUCacheBytesEntry<V> entry = cache.get(key);
+                MemoryLRUCacheBytesEntry<V> entry = cache.get(Bytes.wrap(serdes.rawMergeStoreNameKey(key, name)));
 
                 if (entry != null) {
                     entry.isDirty = false;

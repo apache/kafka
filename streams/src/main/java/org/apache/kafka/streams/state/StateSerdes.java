@@ -167,6 +167,22 @@ public final class StateSerdes<K, V> {
     }
 
     /**
+     * Serialize the given key. Merge it with the store name to return a new key
+     *
+     * @param key  the key to be serialized
+     * @param storeName the name of the state store
+     * @return     the serialized key
+     */
+    public byte[] rawMergeStoreNameKey(K key, final String storeName) {
+        byte[] storeNameBytes = storeName.getBytes();
+        byte[] keyBytes = keySerde.serializer().serialize(stateName, key);
+        byte[] merged = new byte[storeNameBytes.length + keyBytes.length];
+        System.arraycopy(storeNameBytes, 0, merged, 0, storeNameBytes.length);
+        System.arraycopy(keyBytes, 0, merged, storeNameBytes.length, keyBytes.length);
+        return merged;
+    }
+
+    /**
      * Serialize the given value.
      *
      * @param value  the value to be serialized
