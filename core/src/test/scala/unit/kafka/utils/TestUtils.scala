@@ -84,7 +84,7 @@ object TestUtils extends Logging {
     try {
         Files.createDirectory(parentFile.toPath())    
     } catch {
-      case e: IOException => throw new KafkaException("Error in creating new directory '%s'".format(parentFile), e)
+      case e: IOException => //this is good
     }
     JTestUtils.tempDirectory(parentFile.toPath, null)
   }

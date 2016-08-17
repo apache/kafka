@@ -224,7 +224,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
       try {
           Files.createDirectory(dir.toPath())    
       } catch {
-        case e: IOException => throw new KafkaException("Error in creating new directory '%s'".format(dir), e)
+        case e: IOException => //this is good
       }
       
       val log = new Log(dir = dir,
