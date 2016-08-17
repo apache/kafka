@@ -390,7 +390,6 @@ object FileMessageSet
   def openChannel(file: File, mutable: Boolean, fileAlreadyExists: Boolean = false, initFileSize: Int = 0, preallocate: Boolean = false): FileChannel = {
     if (mutable) {
       if (fileAlreadyExists)
-        //new RandomAccessFile(file, "rw").getChannel()
         FileChannel.open(file.toPath, StandardOpenOption.WRITE, StandardOpenOption.READ)
       else {
         if (preallocate) {
