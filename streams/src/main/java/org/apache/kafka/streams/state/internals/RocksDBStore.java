@@ -160,6 +160,10 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                 keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                 valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
+        // we need to check if cache is created (although there is already a check in init())
+        // since windowed DB segments do not actually call init()
+        initCaching(context);
+
         this.dbDir = new File(new File(context.stateDir(), parentDir), this.name);
         this.db = openDB(this.dbDir, this.options, TTL_SECONDS);
         open = true;
@@ -170,25 +174,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         openDB(context);
 
         this.changeLogger = this.loggingEnabled ? new StoreChangeLogger<>(name, context, WindowStoreUtils.INNER_SERDES) : null;
-        if (this.cachingEnabled) {
-            this.cache = context.getCache();
-            if (this.cache == null) {
-                throw new ProcessorStateException("Error getting cache in store " + this.name);
-            }
-            this.cache.addEldestRemovedListener(new MemoryLRUCacheBytes.EldestEntryRemovalListener<Bytes, MemoryLRUCacheBytesEntry>() {
-                @Override
-                public void apply(Bytes key, MemoryLRUCacheBytesEntry entry) {
-                    // flush all the dirty entries to RocksDB if this evicted entry is dirty
-                    if (entry.isDirty) {
-                        flushCache();
-                    }
-                }
-            });
-            this.cacheDirtyKeys = new HashSet<>();
-        }  else {
-            this.cache = null;
-            this.cacheDirtyKeys = null;
-        }
+        initCaching(context);
 
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
@@ -206,6 +192,35 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                 putInternal(key, value);
             }
         });
+    }
+
+    /**
+     * Initialize caching. This method may be called multiple times per RocksDb instance, e.g.,
+     * from the init() and openDB() methods
+     * @param context
+     */
+    private void initCaching(ProcessorContext context) {
+        if (this.cachingEnabled) {
+            if (this.cache == null) {
+                this.cache = context.getCache();
+                if (this.cache == null) {
+                    throw new ProcessorStateException("Error getting cache in store " + this.name);
+                }
+                this.cache.addEldestRemovedListener(new MemoryLRUCacheBytes.EldestEntryRemovalListener<Bytes, MemoryLRUCacheBytesEntry>() {
+                    @Override
+                    public void apply(Bytes key, MemoryLRUCacheBytesEntry entry) {
+                        // flush all the dirty entries to RocksDB if this evicted entry is dirty
+                        if (entry.isDirty) {
+                            flushCache();
+                        }
+                    }
+                });
+                this.cacheDirtyKeys = new HashSet<>();
+            }
+        }  else {
+            this.cache = null;
+            this.cacheDirtyKeys = null;
+        }
     }
 
     private RocksDB openDB(File dir, Options options, int ttl) {

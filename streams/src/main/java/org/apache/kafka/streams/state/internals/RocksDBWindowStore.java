@@ -51,15 +51,18 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     public static final long MIN_SEGMENT_INTERVAL = 60 * 1000; // one minute
 
     private static final long USE_CURRENT_TIMESTAMP = -1L;
-
+    private boolean cachingEnabled = false;
     private volatile boolean open = false;
 
     // use the Bytes wrapper for underlying rocksDB keys since they are used for hashing data structures
     private static class Segment extends RocksDBStore<Bytes, byte[]> {
         public final long id;
 
-        Segment(String segmentName, String windowName, long id) {
+        Segment(String segmentName, String windowName, long id, boolean cachingEnabled) {
             super(segmentName, windowName, WindowStoreUtils.INNER_KEY_SERDE, WindowStoreUtils.INNER_VALUE_SERDE);
+            if (cachingEnabled) {
+                enableCaching();
+            }
             this.id = id;
         }
 
@@ -173,6 +176,12 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
     public RocksDBWindowStore<K, V> enableLogging() {
         loggingEnabled = true;
+
+        return this;
+    }
+
+    public RocksDBWindowStore<K, V> enableCaching() {
+        cachingEnabled = true;
 
         return this;
     }
@@ -388,7 +397,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
                 cleanup();
             }
             if (!segments.containsKey(key)) {
-                final Segment newSegment = new Segment(segmentName(segmentId), name, segmentId);
+                final Segment newSegment = new Segment(segmentName(segmentId), name, segmentId, cachingEnabled);
                 newSegment.openDB(context);
                 segments.put(key, newSegment);
             }

@@ -59,7 +59,8 @@ public class RocksDBWindowStoreSupplier<K, V> implements StateStoreSupplier {
     }
 
     public StateStore get() {
-        RocksDBWindowStore<K, V> store = new RocksDBWindowStore<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde);
+        RocksDBWindowStore<K, V> store = new RocksDBWindowStore<>(name, retentionPeriod, numSegments,
+            retainDuplicates, keySerde, valueSerde).enableCaching();
 
         return new MeteredWindowStore<>(store.enableLogging(), "rocksdb-window", time);
     }
