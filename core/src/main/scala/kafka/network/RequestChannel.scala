@@ -25,6 +25,7 @@ import java.util.concurrent._
 import com.yammer.metrics.core.Gauge
 import kafka.api._
 import kafka.metrics.KafkaMetricsGroup
+import kafka.server.QuotaId
 import kafka.utils.{Logging, SystemTime}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidRequestException
@@ -44,7 +45,9 @@ object RequestChannel extends Logging {
     RequestSend.serialize(emptyRequestHeader, emptyProduceRequest.toStruct)
   }
 
-  case class Session(principal: KafkaPrincipal, clientAddress: InetAddress)
+  case class Session(principal: KafkaPrincipal, clientAddress: InetAddress) {
+    val sanitizedUser = QuotaId.sanitize(principal.getName)
+  }
 
   case class Request(processor: Int, connectionId: String, session: Session, private var buffer: ByteBuffer, startTimeMs: Long, securityProtocol: SecurityProtocol) {
     // These need to be volatile because the readers are in the network thread and the writers are in the request

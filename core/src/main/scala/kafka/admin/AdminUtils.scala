@@ -41,6 +41,7 @@ import org.I0Itec.zkclient.exception.ZkNodeExistsException
 trait AdminUtilities {
   def changeTopicConfig(zkUtils: ZkUtils, topic: String, configs: Properties)
   def changeClientIdConfig(zkUtils: ZkUtils, clientId: String, configs: Properties)
+  def changeUserOrUserClientIdConfig(zkUtils: ZkUtils, sanitizedEntityName: String, configs: Properties)
   def changeBrokerConfig(zkUtils: ZkUtils, brokerIds: Seq[Int], configs: Properties)
   def fetchEntityConfig(zkUtils: ZkUtils,entityType: String, entityName: String): Properties
 }
@@ -449,7 +450,7 @@ object AdminUtils extends Logging with AdminUtilities {
     if (!update) {
       // write out the config if there is any, this isn't transactional with the partition assignments
       LogConfig.validate(config)
-      writeEntityConfig(zkUtils, ConfigType.Topic, topic, config)
+      writeEntityConfig(zkUtils, getEntityConfigPath(ConfigType.Topic, topic), config)
     }
 
     // create the partition assignment
@@ -476,7 +477,9 @@ object AdminUtils extends Logging with AdminUtilities {
   }
 
   /**
-   * Update the config for a client and create a change notification so the change will propagate to other brokers
+   * Update the config for a client and create a change notification so the change will propagate to other brokers.
+   * If clientId is <default>, default clientId config is updated. ClientId configs are used only if <user, clientId>
+   * and <user> configs are not specified.
    *
    * @param zkUtils Zookeeper utilities used to write the config to ZK
    * @param clientId: The clientId for which configs are being changed
@@ -486,6 +489,21 @@ object AdminUtils extends Logging with AdminUtilities {
    */
   def changeClientIdConfig(zkUtils: ZkUtils, clientId: String, configs: Properties) {
     changeEntityConfig(zkUtils, ConfigType.Client, clientId, configs)
+  }
+
+  /**
+   * Update the config for a <user> or <user, clientId> and create a change notification so the change will propagate to other brokers.
+   * User and/or clientId components of the path may be <default>, indicating that the configuration is the default
+   * value to be applied if a more specific override is not configured.
+   *
+   * @param zkUtils Zookeeper utilities used to write the config to ZK
+   * @param sanitizedEntityName: <sanitizedUserPrincipal> or <sanitizedUserPrincipal>/clients/<clientId>
+   * @param configs: The final set of configs that will be applied to the topic. If any new configs need to be added or
+   *                 existing configs need to be deleted, it should be done prior to invoking this API
+   *
+   */
+  def changeUserOrUserClientIdConfig(zkUtils: ZkUtils, sanitizedEntityName: String, configs: Properties) {
+    changeEntityConfig(zkUtils, ConfigType.User, sanitizedEntityName, configs)
   }
 
   /**
@@ -520,37 +538,41 @@ object AdminUtils extends Logging with AdminUtilities {
     }
   }
 
-  private def changeEntityConfig(zkUtils: ZkUtils, entityType: String, entityName: String, configs: Properties) {
+  private def changeEntityConfig(zkUtils: ZkUtils, rootEntityType: String, fullSanitizedEntityName: String, configs: Properties) {
+    val sanitizedEntityPath = rootEntityType + '/' + fullSanitizedEntityName
+    val entityConfigPath = getEntityConfigPath(rootEntityType, fullSanitizedEntityName)
     // write the new config--may not exist if there were previously no overrides
-    writeEntityConfig(zkUtils, entityType, entityName, configs)
+    writeEntityConfig(zkUtils, entityConfigPath, configs)
 
     // create the change notification
     val seqNode = ZkUtils.EntityConfigChangesPath + "/" + EntityConfigChangeZnodePrefix
-    val content = Json.encode(getConfigChangeZnodeData(entityType, entityName))
+    val content = Json.encode(getConfigChangeZnodeData(sanitizedEntityPath))
     zkUtils.zkClient.createPersistentSequential(seqNode, content)
   }
 
-  def getConfigChangeZnodeData(entityType: String, entityName: String) : Map[String, Any] = {
-    Map("version" -> 1, "entity_type" -> entityType, "entity_name" -> entityName)
+  def getConfigChangeZnodeData(sanitizedEntityPath: String) : Map[String, Any] = {
+    Map("version" -> 2, "entity_path" -> sanitizedEntityPath)
   }
 
   /**
-   * Write out the topic config to zk, if there is any
+   * Write out the entity config to zk, if there is any
    */
-  private def writeEntityConfig(zkUtils: ZkUtils, entityType: String, entityName: String, config: Properties) {
+  private def writeEntityConfig(zkUtils: ZkUtils, entityPath: String, config: Properties) {
     val configMap: mutable.Map[String, String] = {
       import JavaConversions._
       config
     }
     val map = Map("version" -> 1, "config" -> configMap)
-    zkUtils.updatePersistentPath(getEntityConfigPath(entityType, entityName), Json.encode(map))
+    zkUtils.updatePersistentPath(entityPath, Json.encode(map))
   }
 
   /**
-   * Read the entity (topic or client) config (if any) from zk
+   * Read the entity (topic, broker, client, user or <user, client>) config (if any) from zk
+   * sanitizedEntityName is <topic>, <broker>, <client-id>, <user> or <user>/clients/<client-id>.
    */
-  def fetchEntityConfig(zkUtils: ZkUtils, entityType: String, entity: String): Properties = {
-    val str: String = zkUtils.zkClient.readData(getEntityConfigPath(entityType, entity), true)
+  def fetchEntityConfig(zkUtils: ZkUtils, rootEntityType: String, sanitizedEntityName: String): Properties = {
+    val entityConfigPath = getEntityConfigPath(rootEntityType, sanitizedEntityName)
+    val str: String = zkUtils.zkClient.readData(entityConfigPath, true)
     val props = new Properties()
     if (str != null) {
       Json.parseFull(str) match {
@@ -564,13 +586,12 @@ object AdminUtils extends Logging with AdminUtilities {
                 configTup match {
                   case (k: String, v: String) =>
                     props.setProperty(k, v)
-                  case _ => throw new IllegalArgumentException("Invalid " + entityType + " config: " + str)
+                  case _ => throw new IllegalArgumentException(s"Invalid ${entityConfigPath} config: ${str}")
                 }
-            case _ => throw new IllegalArgumentException("Invalid " + entityType + " config: " + str)
+            case _ => throw new IllegalArgumentException(s"Invalid ${entityConfigPath} config: ${str}")
           }
 
-        case o => throw new IllegalArgumentException("Unexpected value in config:(%s), entity_type: (%s), entity: (%s)"
-                                                             .format(str, entityType, entity))
+        case o => throw new IllegalArgumentException(s"Unexpected value in config:(${str}), entity_config_path: ${entityConfigPath}")
       }
     }
     props
@@ -581,6 +602,23 @@ object AdminUtils extends Logging with AdminUtilities {
 
   def fetchAllEntityConfigs(zkUtils: ZkUtils, entityType: String): Map[String, Properties] =
     zkUtils.getAllEntitiesWithConfig(entityType).map(entity => (entity, fetchEntityConfig(zkUtils, entityType, entity))).toMap
+
+  def fetchAllChildEntityConfigs(zkUtils: ZkUtils, rootEntityType: String, childEntityType: String): Map[String, Properties] = {
+    def entityPaths(zkUtils: ZkUtils, rootPath: Option[String]): Seq[String] = {
+      val root = rootPath match {
+        case Some(path) => rootEntityType + '/' + rootPath
+        case None => rootEntityType
+      }
+      val entityNames = zkUtils.getAllEntitiesWithConfig(root)
+      rootPath match {
+        case Some(path) => entityNames.map(entityName => path + '/' + entityName)
+        case None => entityNames
+      }
+    }
+    entityPaths(zkUtils, None)
+      .flatMap(entity => entityPaths(zkUtils, Some(entity + '/' + childEntityType)))
+      .map(entityPath => (entityPath, fetchEntityConfig(zkUtils, rootEntityType, entityPath))).toMap
+  }
 
   def fetchTopicMetadataFromZk(topic: String, zkUtils: ZkUtils): MetadataResponse.TopicMetadata =
     fetchTopicMetadataFromZk(topic, zkUtils, new mutable.HashMap[Int, Broker])
