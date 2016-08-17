@@ -247,12 +247,11 @@ public class TestUtils {
     public static void waitForCondition(TestCondition testCondition, long maxWaitMs, String conditionDetails) throws InterruptedException {
         long startTime = System.currentTimeMillis();
 
-        boolean conditionMet;
-        while (!(conditionMet = testCondition.conditionMet()) && ((System.currentTimeMillis() - startTime) < maxWaitMs)) {
+        while (!testCondition.conditionMet() && ((System.currentTimeMillis() - startTime) < maxWaitMs)) {
             Thread.sleep(Math.min(maxWaitMs, 100L));
         }
 
-        if (!conditionMet) {
+        if (!testCondition.conditionMet()) {
             conditionDetails = conditionDetails != null ? conditionDetails : "";
             throw new AssertionError("Condition not met within timeout " + maxWaitMs + ". " + conditionDetails);
         }
