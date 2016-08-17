@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
+import kafka.admin.AdminClient;
 import kafka.tools.StreamsResetter;
 import kafka.utils.ZkUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -37,8 +38,11 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+import org.junit.After;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -70,6 +74,10 @@ public class ResetIntegrationTest {
     private static final long STREAMS_CONSUMER_TIMEOUT = 2000L;
     private static final long CLEANUP_CONSUMER_TIMEOUT = 2000L;
 
+    private final WaitUntilConsumerGroupGotClosed consumerGroupInactive = new WaitUntilConsumerGroupGotClosed();
+
+    private AdminClient adminClient = null;
+
     @BeforeClass
     public static void startKafkaCluster() throws Exception {
         CLUSTER.createTopic(INPUT_TOPIC);
@@ -77,6 +85,19 @@ public class ResetIntegrationTest {
         CLUSTER.createTopic(OUTPUT_TOPIC_2);
         CLUSTER.createTopic(OUTPUT_TOPIC_2_RERUN);
         CLUSTER.createTopic(INTERMEDIATE_USER_TOPIC);
+    }
+
+    @Before
+    public void prepare() {
+        this.adminClient = AdminClient.createSimplePlaintext(CLUSTER.bootstrapServers());
+    }
+
+    @After
+    public void cleanup() {
+        if (this.adminClient != null) {
+            this.adminClient.close();
+            this.adminClient = null;
+        }
     }
 
     @Test
@@ -96,13 +117,16 @@ public class ResetIntegrationTest {
         final KeyValue<Object, Object> result2 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultTopicConsumerConfig, OUTPUT_TOPIC_2, 1).get(0);
 
         streams.close();
+        TestUtils.waitForCondition(this.consumerGroupInactive, 5 * STREAMS_CONSUMER_TIMEOUT,
+            "Streams Application consumer group did not time out after " + (5 * STREAMS_CONSUMER_TIMEOUT) + " ms.");
 
         // RESET
-        Utils.sleep(STREAMS_CONSUMER_TIMEOUT);
         streams.cleanUp();
         cleanGlobal();
+        TestUtils.waitForCondition(this.consumerGroupInactive, 5 * CLEANUP_CONSUMER_TIMEOUT,
+            "Reset Tool consumer group did not time out after " + (5 * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
+
         assertInternalTopicsGotDeleted();
-        Utils.sleep(CLEANUP_CONSUMER_TIMEOUT);
 
         // RE-RUN
         streams = new KafkaStreams(setupTopology(OUTPUT_TOPIC_2_RERUN), streamsConfiguration);
@@ -184,12 +208,15 @@ public class ResetIntegrationTest {
         final KStream<Long, Long> windowedCounts = input
             .through(INTERMEDIATE_USER_TOPIC)
             .map(new KeyValueMapper<Long, String, KeyValue<Long, String>>() {
+                private long sleep = 1000;
+
                 @Override
                 public KeyValue<Long, String> apply(final Long key, final String value) {
                     // must sleep long enough to avoid processing the whole intermediate topic before application gets stopped
                     // => want to test "skip over" unprocessed records
                     // increasing the sleep time only has disadvantage that test run time is increased
-                    Utils.sleep(1000);
+                    Utils.sleep(this.sleep);
+                    this.sleep *= 2;
                     return new KeyValue<>(key, value);
                 }
             })
@@ -251,6 +278,13 @@ public class ResetIntegrationTest {
             }
         }
         assertThat(allTopics, equalTo(expectedRemainingTopicsAfterCleanup));
+    }
+
+    private class WaitUntilConsumerGroupGotClosed implements TestCondition {
+        @Override
+        public boolean conditionMet() {
+            return ResetIntegrationTest.this.adminClient.describeGroup(APP_ID).members().isEmpty();
+        }
     }
 
 }

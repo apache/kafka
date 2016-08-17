@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.test;
 
-import static java.util.Arrays.asList;
+import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.File;
 import java.io.IOException;
@@ -28,10 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
-import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.utils.Utils;
+import static java.util.Arrays.asList;
 
 
 /**
@@ -49,51 +49,51 @@ public class TestUtils {
     public static final Random SEEDED_RANDOM = new Random(192348092834L);
     public static final Random RANDOM = new Random();
 
-    public static Cluster singletonCluster(Map<String, Integer> topicPartitionCounts) {
+    public static Cluster singletonCluster(final Map<String, Integer> topicPartitionCounts) {
         return clusterWith(1, topicPartitionCounts);
     }
 
-    public static Cluster singletonCluster(String topic, int partitions) {
+    public static Cluster singletonCluster(final String topic, final int partitions) {
         return clusterWith(1, topic, partitions);
     }
 
-    public static Cluster clusterWith(int nodes, Map<String, Integer> topicPartitionCounts) {
-        Node[] ns = new Node[nodes];
+    public static Cluster clusterWith(final int nodes, final Map<String, Integer> topicPartitionCounts) {
+        final Node[] ns = new Node[nodes];
         for (int i = 0; i < nodes; i++)
             ns[i] = new Node(i, "localhost", 1969);
-        List<PartitionInfo> parts = new ArrayList<>();
-        for (Map.Entry<String, Integer> topicPartition : topicPartitionCounts.entrySet()) {
-            String topic = topicPartition.getKey();
-            int partitions = topicPartition.getValue();
+        final List<PartitionInfo> parts = new ArrayList<>();
+        for (final Map.Entry<String, Integer> topicPartition : topicPartitionCounts.entrySet()) {
+            final String topic = topicPartition.getKey();
+            final int partitions = topicPartition.getValue();
             for (int i = 0; i < partitions; i++)
                 parts.add(new PartitionInfo(topic, i, ns[i % ns.length], ns, ns));
         }
         return new Cluster(asList(ns), parts, Collections.<String>emptySet());
     }
 
-    public static Cluster clusterWith(int nodes, String topic, int partitions) {
+    public static Cluster clusterWith(final int nodes, final String topic, final int partitions) {
         return clusterWith(nodes, Collections.singletonMap(topic, partitions));
     }
 
     /**
      * Generate an array of random bytes
-     * 
+     *
      * @param size The size of the array
      */
-    public static byte[] randomBytes(int size) {
-        byte[] bytes = new byte[size];
+    public static byte[] randomBytes(final int size) {
+        final byte[] bytes = new byte[size];
         SEEDED_RANDOM.nextBytes(bytes);
         return bytes;
     }
 
     /**
      * Generate a random string of letters and digits of the given length
-     * 
+     *
      * @param len The length of the string
      * @return The random string
      */
-    public static String randomString(int len) {
-        StringBuilder b = new StringBuilder();
+    public static String randomString(final int len) {
+        final StringBuilder b = new StringBuilder();
         for (int i = 0; i < len; i++)
             b.append(LETTERS_AND_DIGITS.charAt(SEEDED_RANDOM.nextInt(LETTERS_AND_DIGITS.length())));
         return b.toString();
@@ -104,7 +104,7 @@ public class TestUtils {
      * suffix to generate its name.
      */
     public static File tempFile() throws IOException {
-        File file = File.createTempFile("kafka", ".tmp");
+        final File file = File.createTempFile("kafka", ".tmp");
         file.deleteOnExit();
 
         return file;
@@ -115,7 +115,7 @@ public class TestUtils {
      *
      * @param prefix The prefix of the temporary directory, if null using "kafka-" as default prefix
      */
-    public static File tempDirectory(String prefix) throws IOException {
+    public static File tempDirectory(final String prefix) throws IOException {
         return tempDirectory(null, prefix);
     }
 
@@ -125,10 +125,10 @@ public class TestUtils {
      * @param parent The parent folder path name, if null using the default temporary-file directory
      * @param prefix The prefix of the temporary directory, if null using "kafka-" as default prefix
      */
-    public static File tempDirectory(Path parent, String prefix) throws IOException {
+    public static File tempDirectory(final Path parent, final String prefix) throws IOException {
         final File file = parent == null ?
-                Files.createTempDirectory(prefix == null ? "kafka-" : prefix).toFile() :
-                Files.createTempDirectory(parent, prefix == null ? "kafka-" : prefix).toFile();
+            Files.createTempDirectory(prefix == null ? "kafka-" : prefix).toFile() :
+            Files.createTempDirectory(parent, prefix == null ? "kafka-" : prefix).toFile();
         file.deleteOnExit();
 
         Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -139,6 +139,26 @@ public class TestUtils {
         });
 
         return file;
+    }
+
+    /**
+     * Wait for condition to be met for at most {@code maxWaitMs} and throw assertion failure otherwise.
+     * This should be used instead of {@code Thread.sleep} whenever possible as it allows a longer timeout to be used
+     * without unnecessarily increasing test time (as the condition is checked frequently). The longer timeout is needed to
+     * avoid transient failures due to slow or overloaded machines.
+     */
+    public static void waitForCondition(final TestCondition testCondition, final long maxWaitMs, String conditionDetails) throws InterruptedException {
+        final long startTime = System.currentTimeMillis();
+
+
+        while (!testCondition.conditionMet() && ((System.currentTimeMillis() - startTime) < maxWaitMs)) {
+            Thread.sleep(Math.min(maxWaitMs, 100L));
+        }
+
+        if (!testCondition.conditionMet()) {
+            conditionDetails = conditionDetails != null ? conditionDetails : "";
+            throw new AssertionError("Condition not met within timeout " + maxWaitMs + ". " + conditionDetails);
+        }
     }
 
 }
