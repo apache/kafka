@@ -23,6 +23,7 @@ import scala.math._
 import java.io._
 import java.nio._
 import java.nio.channels._
+import java.nio.file.StandardOpenOption
 import java.util.concurrent.locks._
 
 import kafka.utils._
@@ -74,7 +75,8 @@ class OffsetIndex(@volatile private[this] var _file: File, val baseOffset: Long,
 
       /* memory-map the file */
       val len = raf.length()
-      val idx = raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, len)
+      CoreUtils.swallow(raf.close())
+      val idx = FileChannel.open(_file.toPath, StandardOpenOption.WRITE, StandardOpenOption.READ).map(FileChannel.MapMode.READ_WRITE, 0, len)
 
       /* set the position in the index for the next entry */
       if (newlyCreated)
@@ -98,7 +100,7 @@ class OffsetIndex(@volatile private[this] var _file: File, val baseOffset: Long,
 
   @volatile
   private[this] var _lastOffset = readLastEntry.offset
-  
+
   debug("Loaded index file %s with maxEntries = %d, maxIndexSize = %d, entries = %d, lastOffset = %d, file position = %d"
     .format(_file.getAbsolutePath, _maxEntries, maxIndexSize, _entries, _lastOffset, mmap.position))
 
@@ -128,8 +130,8 @@ class OffsetIndex(@volatile private[this] var _file: File, val baseOffset: Long,
    * and return a pair holding this offset and its corresponding physical file position.
    * 
    * @param targetOffset The offset to look up.
-   * 
-   * @return The offset found and the corresponding file position for this offset. 
+   *
+   * @return The offset found and the corresponding file position for this offset.
    * If the target offset is smaller than the least entry in the index (or the index is empty),
    * the pair (baseOffset, 0) is returned.
    */
@@ -150,7 +152,6 @@ class OffsetIndex(@volatile private[this] var _file: File, val baseOffset: Long,
    * 
    * @param idx The index buffer
    * @param targetOffset The offset to look for
-   * 
    * @return The slot found or -1 if the least entry in the index is larger than the target offset or the index is empty
    */
   private def indexSlotFor(idx: ByteBuffer, targetOffset: Long): Int = {
@@ -189,6 +190,7 @@ class OffsetIndex(@volatile private[this] var _file: File, val baseOffset: Long,
   
   /**
    * Get the nth offset mapping from the index
+   *
    * @param n The entry number in the index
    * @return The offset/position pair at that entry
    */
@@ -288,13 +290,14 @@ class OffsetIndex(@volatile private[this] var _file: File, val baseOffset: Long,
       val raf = new RandomAccessFile(_file, "rw")
       val roundedNewSize = roundToExactMultiple(newSize, 8)
       val position = mmap.position
-      
+
       /* Windows won't let us modify the file length while the file is mmapped :-( */
       if (Os.isWindows)
         forceUnmap(mmap)
       try {
         raf.setLength(roundedNewSize)
-        mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
+        CoreUtils.swallow(raf.close())
+        mmap = FileChannel.open(_file.toPath, StandardOpenOption.WRITE, StandardOpenOption.READ).map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
         _maxEntries = mmap.limit / 8
         mmap.position(position)
       } finally {
