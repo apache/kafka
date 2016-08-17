@@ -26,8 +26,24 @@ pushd %~dp0..\..
 set BASE_DIR=%CD%
 popd
 
+
+
+IF exist %BASE_DIR%\config\kafka-env.cmd (
+  call %BASE_DIR%\config\kafka-env.cmd
+)
+
+IF not exist "%JAVA_HOME%\bin\java.exe" (
+  echo Error: JAVA_HOME is incorrectly set.
+  goto :eof
+)
+
+
+IF ["%LOG_DIR%"] EQU [""] (
+  set LOG_DIR=%BASE_DIR%\logs
+)
+
 IF ["%SCALA_VERSION%"] EQU [""] (
-  set SCALA_VERSION=2.10.6
+  set SCALA_VERSION=2.10.5
 )
 
 IF ["%SCALA_BINARY_VERSION%"] EQU [""] (
@@ -54,8 +70,11 @@ for %%i in (%BASE_DIR%\examples\build\libs\kafka-examples-*.jar) do (
 	call :concat %%i
 )
 
+
 rem Classpath addition for release
-call :concat %BASE_DIR%\libs\*
+for %%i in (%BASE_DIR%\libs\*.jar) do (
+	call :concat %%i
+)
 
 rem Classpath addition for core
 for %%i in (%BASE_DIR%\core\build\libs\kafka_%SCALA_BINARY_VERSION%*.jar) do (
