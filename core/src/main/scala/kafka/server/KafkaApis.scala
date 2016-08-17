@@ -235,24 +235,19 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
     } else {
 
-      val (nonExistingRequestsInfo, existingTopicsRequestsInfo) = offsetCommitRequest.offsetData.asScala.toMap.partition {
-        case (topicPartition, _) => !metadataCache.contains(topicPartition.topic)
+      val (existingOrAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) = offsetCommitRequest.offsetData.asScala.toMap.partition {
+        case (topicPartition, _) => metadataCache.contains(topicPartition.topic) && authorize(request.session, Describe, new Resource(auth.Topic, topicPartition.topic))
       }
 
-      // treat topics with Describe ACL as if they were non-existent
-      val (filteredRequestInfo, unauthorizedForDescribeRequestInfo) = existingTopicsRequestsInfo.partition {
-        case (topicPartition, offsetMetadata) => authorize(request.session, Describe, new Resource(auth.Topic, topicPartition.topic))
-      }
-
-      val (authorizedRequestInfo, unauthorizedRequestInfo) = filteredRequestInfo.partition {
-        case (topicPartition, offsetMetadata) => authorize(request.session, Read, new Resource(auth.Topic, topicPartition.topic))
+      val (authorizedTopics, unauthorizedForReadTopics) = existingOrAuthorizedForDescribeTopics.partition {
+        case (topicPartition, _) => authorize(request.session, Read, new Resource(auth.Topic, topicPartition.topic))
       }
 
       // the callback for sending an offset commit response
       def sendResponseCallback(commitStatus: immutable.Map[TopicPartition, Short]) {
-        val mergedCommitStatus = commitStatus ++ unauthorizedRequestInfo.mapValues(_ => Errors.TOPIC_AUTHORIZATION_FAILED.code)
-        var combinedCommitStatus = mergedCommitStatus.mapValues(new JShort(_)) ++ nonExistingRequestsInfo.map(_._1 -> new JShort(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)) 
-        combinedCommitStatus = combinedCommitStatus ++ unauthorizedForDescribeRequestInfo.mapValues(_ => Errors.UNKNOWN_TOPIC_OR_PARTITION.code).mapValues(new JShort(_))
+        var combinedCommitStatus = commitStatus.mapValues(new JShort(_)) ++
+          unauthorizedForReadTopics.mapValues(_ => new JShort(Errors.TOPIC_AUTHORIZATION_FAILED.code)) ++
+          nonExistingOrUnauthorizedForDescribeTopics.mapValues(_ => new JShort(Errors.UNKNOWN_TOPIC_OR_PARTITION.code))
 
         combinedCommitStatus.foreach { case (topicPartition, errorCode) =>
           if (errorCode != Errors.NONE.code) {
@@ -265,11 +260,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
       }
 
-      if (authorizedRequestInfo.isEmpty)
+      if (authorizedTopics.isEmpty)
         sendResponseCallback(Map.empty)
       else if (header.apiVersion == 0) {
         // for version 0 always store offsets to ZK
-        val responseInfo = authorizedRequestInfo.map {
+        val responseInfo = authorizedTopics.map {
           case (topicPartition, partitionData) =>
             val topicDirs = new ZKGroupTopicDirs(offsetCommitRequest.groupId, topicPartition.topic)
             try {
@@ -306,7 +301,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         //   - If v2 we use the default expiration timestamp
         val currentTimestamp = SystemTime.milliseconds
         val defaultExpireTimestamp = offsetRetention + currentTimestamp
-        val partitionData = authorizedRequestInfo.mapValues { partitionData =>
+        val partitionData = authorizedTopics.mapValues { partitionData =>
           val metadata = if (partitionData.metadata == null) OffsetMetadata.NoMetadata else partitionData.metadata
           new OffsetAndMetadata(
             offsetMetadata = OffsetMetadata(partitionData.offset, metadata),
@@ -786,7 +781,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         } else if (config.autoCreateTopicsEnable) {
           createTopic(topic, config.numPartitions, config.defaultReplicationFactor)
         } else {
-          new MetadataResponse.TopicMetadata(Errors.UNKNOWN_TOPIC_OR_PARTITION, topic, common.Topic.isInternal(topic),
+          new MetadataResponse.TopicMetadata(Errors.UNKNOWN_TOPIC_OR_PARTITION, topic, false,
             java.util.Collections.emptyList())
         }
       }
@@ -832,12 +827,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    val uncreatableTopicMetadata = unauthorizedForCreateTopics.map(topic =>
+    val unauthorizedForCreateTopicMetadata = unauthorizedForCreateTopics.map(topic =>
       new MetadataResponse.TopicMetadata(Errors.TOPIC_AUTHORIZATION_FAILED, topic, common.Topic.isInternal(topic),
         java.util.Collections.emptyList()))
 
     // do not disclose the existence of unauthorized topics
-    val unauthorizedTopicMetadata =
+    val unauthorizedForDescribeTopicMetadata =
       // In case of all topics, don't include unauthorized topics
       if ((requestVersion == 0 && (metadataRequest.topics() == null || metadataRequest.topics().isEmpty)) || (metadataRequest.isAllTopics))
         Set.empty[MetadataResponse.TopicMetadata]
@@ -854,7 +849,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       else
         getTopicMetadata(authorizedTopics, request.securityProtocol, errorUnavailableEndpoints)
 
-    val completeTopicMetadata = topicMetadata ++ uncreatableTopicMetadata ++ unauthorizedTopicMetadata
+    val completeTopicMetadata = topicMetadata ++ unauthorizedForCreateTopicMetadata ++ unauthorizedForDescribeTopicMetadata
 
     val brokers = metadataCache.getAliveBrokers
 
@@ -1217,7 +1212,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }.toMap
       sendResponseCallback(results)
     } else {
-      // If no authorized topics return immediatly
+      // If no authorized topics return immediately
       if (authorizedTopics.isEmpty)
         sendResponseCallback(Map())
       else {

@@ -15,6 +15,7 @@ package kafka.api
 import java.nio.ByteBuffer
 import java.util
 import java.util.concurrent.ExecutionException
+import java.util.regex.Pattern
 import java.util.{ArrayList, Collections, Properties}
 
 import kafka.common
@@ -22,9 +23,9 @@ import kafka.common.TopicAndPartition
 import kafka.security.auth._
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerRecord, KafkaConsumer, OffsetAndMetadata}
+import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
+import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.requests._
@@ -44,14 +45,13 @@ import scala.util.{Failure, Success}
 
 import org.apache.kafka.common.KafkaException
 
-
-
 class AuthorizerIntegrationTest extends BaseRequestTest {
 
   override def numBrokers: Int = 1
   val brokerId: Integer = 0
 
   val topic = "topic"
+  val topicPattern = "topic.*"
   val createTopic = "topic-new"
   val deleteTopic = "topic-delete"
   val part = 0
@@ -411,7 +411,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       consumeRecords(this.consumers.head)
       Assert.fail("should have thrown exception")
     } catch {
-      case e: TopicAuthorizationException => assertEquals(Collections.singleton(topic), e.unauthorizedTopics());
+      case e: TopicAuthorizationException => assertEquals(Collections.singleton(topic), e.unauthorizedTopics())
     }
   }
 
@@ -429,7 +429,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       Assert.fail("should have thrown exception")
     } catch {
       case e: TopicAuthorizationException =>
-        assertEquals(Collections.singleton(topic), e.unauthorizedTopics());
+        assertEquals(Collections.singleton(topic), e.unauthorizedTopics())
     }
   }
 
@@ -446,6 +446,83 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
+  def testPatternSubscriptionWithNoTopicAccess() {
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
+    sendRecords(1, tp)
+    removeAllAcls()
+
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
+    this.consumers.head.subscribe(Pattern.compile(topicPattern), new NoOpConsumerRebalanceListener)
+    this.consumers.head.poll(50)
+    assertTrue(this.consumers.head.subscription().isEmpty())
+  }
+
+  @Test
+  def testPatternSubscriptionWithTopicAndGroupRead() {
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
+    sendRecords(1, tp)
+
+    //create a unmatched topic
+    val unmatchedTopic = "unmatched"
+    TestUtils.createTopic(zkUtils, unmatchedTopic, 1, 1, this.servers)
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)),  new Resource(Topic, unmatchedTopic))
+    sendRecords(1, new TopicPartition(unmatchedTopic, part))
+    removeAllAcls()
+
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), topicResource)
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
+    val consumer = consumers.head
+    consumer.subscribe(Pattern.compile(topicPattern), new NoOpConsumerRebalanceListener)
+    consumeRecords(consumer)
+
+    // set the subscription pattern to an internal topic that the consumer has no read permission for, but since
+    // `exclude.internal.topics` is true by default, the subscription should be empty and no authorization exception
+    // should be thrown
+    consumer.subscribe(Pattern.compile(kafka.common.Topic.GroupMetadataTopicName), new NoOpConsumerRebalanceListener)
+    assertTrue(consumer.poll(50).isEmpty)
+  }
+
+  @Test
+  def testPatternSubscriptionMatchingInternalTopicWithNoPermission() {
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
+    sendRecords(1, tp)
+    removeAllAcls()
+
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), topicResource)
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
+
+    val consumerConfig = new Properties
+    consumerConfig.put(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG, "false")
+    val consumer = TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group,
+      securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(consumerConfig))
+    try {
+      consumer.subscribe(Pattern.compile(".*"), new NoOpConsumerRebalanceListener)
+      consumeRecords(consumer)
+    } catch {
+      case e: TestTimeoutException => //expected
+    } finally consumer.close()
+  }
+
+  @Test
+  def testPatternSubscriptionNotMatchingInternalTopic() {
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
+    sendRecords(1, tp)
+    removeAllAcls()
+
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), topicResource)
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
+
+    val consumerConfig = new Properties
+    consumerConfig.put(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG, "false")
+    val consumer = TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group,
+      securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(consumerConfig))
+    try {
+      consumer.subscribe(Pattern.compile(topicPattern), new NoOpConsumerRebalanceListener)
+      consumeRecords(consumer)
+    } finally consumer.close()
+}
+
+  @Test
   def testCreatePermissionNeededToReadFromNonExistentTopic() {
     val newTopic = "newTopic"
     val topicPartition = new TopicPartition(newTopic, 0)
@@ -459,7 +536,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       Assert.fail("should have thrown exception")
     } catch {
       case e: TopicAuthorizationException =>
-        assertEquals(Collections.singleton(newTopic), e.unauthorizedTopics());
+        assertEquals(Collections.singleton(newTopic), e.unauthorizedTopics())
     }
 
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), newTopicResource)
@@ -545,7 +622,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   @Test
   def testListOffsetsWithNoTopicAccess() {
-    val partitionInfos = this.consumers.head.partitionsFor(topic);
+    val partitionInfos = this.consumers.head.partitionsFor(topic)
     assertNull(partitionInfos)
   }
 
