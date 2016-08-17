@@ -26,7 +26,9 @@ class FetchRequest(correlationId: Int,
                    clientId: String,
                    maxWait: Int,
                    minBytes: Int,
-                   requestInfo: java.util.Map[TopicAndPartition, PartitionFetchInfo]) {
+                   requestInfo: java.util.Map[TopicAndPartition, PartitionFetchInfo],
+                   versionId: Short = kafka.api.FetchRequest.CurrentVersion,
+                   replicaId: Int = Request.OrdinaryConsumerId) {
 
   val underlying = {
     val scalaMap: Map[TopicAndPartition, PartitionFetchInfo] = {
@@ -34,9 +36,10 @@ class FetchRequest(correlationId: Int,
       (requestInfo: mutable.Map[TopicAndPartition, PartitionFetchInfo]).toMap
     }
     kafka.api.FetchRequest(
+      versionId = versionId,
       correlationId = correlationId,
       clientId = clientId,
-      replicaId = Request.OrdinaryConsumerId,
+      replicaId = replicaId,
       maxWait = maxWait,
       minBytes = minBytes,
       requestInfo = scalaMap
