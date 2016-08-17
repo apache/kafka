@@ -281,7 +281,7 @@ public abstract class AbstractCoordinator implements Closeable {
         }
 
         if (heartbeatThread == null) {
-            heartbeatThread = new HeartbeatThread();
+            heartbeatThread = new HeartbeatThread(retryBackoffMs);
             heartbeatThread.start();
         }
 
@@ -784,14 +784,14 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     private class HeartbeatThread extends Thread {
-        // this controls the interval between client polls by the heartbeat thread. It's basically the minimum
-        // time that it will take to observe an expected network event, such as the response to a heartbeat or
-        // a disconnect from the coordinator.
-        private static final long POLL_INTERVAL_MS = 50L;
-
+        private final long retryBackoffMs;
         private boolean enabled = false;
         private boolean closed = false;
         private AtomicReference<RuntimeException> failed = new AtomicReference<>(null);
+
+        public HeartbeatThread(long retryBackoffMs) {
+            this.retryBackoffMs = retryBackoffMs;
+        }
 
         public void enable() {
             synchronized (AbstractCoordinator.this) {
@@ -851,7 +851,7 @@ public abstract class AbstractCoordinator implements Closeable {
                             if (findCoordinatorFuture == null || findCoordinatorFuture.isDone())
                                 findCoordinatorFuture = lookupCoordinator();
                             else
-                                AbstractCoordinator.this.wait(POLL_INTERVAL_MS);
+                                AbstractCoordinator.this.wait(retryBackoffMs);
                         } else if (heartbeat.sessionTimeoutExpired(now)) {
                             // the session timeout has expired without seeing a successful heartbeat, so we should
                             // probably make sure the coordinator is still healthy.
@@ -861,7 +861,9 @@ public abstract class AbstractCoordinator implements Closeable {
                             // in between calls to poll(), so we explicitly leave the group.
                             maybeLeaveGroup();
                         } else if (!heartbeat.shouldHeartbeat(now)) {
-                            AbstractCoordinator.this.wait(POLL_INTERVAL_MS);
+                            // poll again after waiting for the retry backoff in case the heartbeat failed or the
+                            // coordinator disconnected
+                            AbstractCoordinator.this.wait(retryBackoffMs);
                         } else {
                             heartbeat.sentHeartbeat(now);
 
