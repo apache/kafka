@@ -101,6 +101,7 @@ public class FetcherTest {
 
     @Before
     public void setup() throws Exception {
+        metadata.add(topicName);
         metadata.update(cluster, time.milliseconds());
         client.setNode(node);
 

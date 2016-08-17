@@ -85,6 +85,7 @@ public class SenderTest {
                             CLIENT_ID,
                             REQUEST_TIMEOUT);
 
+        metadata.add(tp.topic());
         metadata.update(cluster, time.milliseconds());
     }
 
