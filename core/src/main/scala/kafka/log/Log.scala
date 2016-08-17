@@ -23,6 +23,7 @@ import kafka.common._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{BrokerTopicStats, FetchDataInfo, LogOffsetMetadata}
 import java.io.{File, IOException}
+import java.nio.file.Files
 import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap}
 import java.util.concurrent.atomic._
 import java.text.NumberFormat
@@ -139,7 +140,13 @@ class Log(val dir: File,
   /* Load the log segments from the log files on disk */
   private def loadSegments() {
     // create the log directory if it doesn't exist
-    dir.mkdirs()
+    if (!Files.exists(dir.toPath())) {
+      try {
+          Files.createDirectory(dir.toPath())    
+      } catch {
+        case e: IOException => throw new KafkaException("Error in creating new directory.", e)
+      }
+    }
     var swapFiles = Set[File]()
 
     // first do a pass through the files in the log directory and remove any temporary files
