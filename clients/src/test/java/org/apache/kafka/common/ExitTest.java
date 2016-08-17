@@ -12,7 +12,7 @@
  */
 package org.apache.kafka.common;
 
-import org.apache.kafka.common.errors.FatalExitException;
+import org.apache.kafka.common.errors.FatalExitError;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Before;
 import org.junit.Test;
@@ -23,12 +23,12 @@ import org.powermock.modules.junit4.PowerMockRunner;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest({FatalExitException.class})
+@PrepareForTest({FatalExitError.class})
 public class ExitTest {
     @Before
     public void init() {
         // TODO: to be replaced with proper mocking
-        FatalExitException.testMode();
+        FatalExitError.testMode();
     }
 
     @Test
@@ -38,8 +38,8 @@ public class ExitTest {
             public void run() {
             }
         }, false);
-        t.getUncaughtExceptionHandler().uncaughtException(t, new FatalExitException(1));
-        /** if we reach this point it means that the {@link FatalExitException} is properly caught
+        t.getUncaughtExceptionHandler().uncaughtException(t, new FatalExitError(1));
+        /** if we reach this point it means that the {@link FatalExitError} is properly caught
          and yet it successfully disabled invoking {@link System.exit} for unit tests
          */
         assertTrue(true);

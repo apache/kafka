@@ -27,7 +27,7 @@ import kafka.api.{KAFKA_0_10_0_IV0, KAFKA_0_9_0}
 import kafka.common.{KafkaStorageException, TopicAndPartition}
 import ReplicaFetcherThread._
 import org.apache.kafka.clients.{ManualMetadataUpdater, NetworkClient, ClientRequest, ClientResponse}
-import org.apache.kafka.common.errors.FatalExitException
+import org.apache.kafka.common.errors.FatalExitError
 import org.apache.kafka.common.network.{LoginType, Selectable, ChannelBuilders, NetworkReceive, Selector, Mode}
 import org.apache.kafka.common.requests.{ListOffsetResponse, FetchResponse, RequestSend, AbstractRequest, ListOffsetRequest}
 import org.apache.kafka.common.requests.{FetchRequest => JFetchRequest}
@@ -179,7 +179,7 @@ class ReplicaFetcherThread(name: String,
         fatal("Exiting because log truncation is not allowed for partition %s,".format(topicAndPartition) +
           " Current leader %d's latest offset %d is less than replica %d's latest offset %d"
           .format(sourceBroker.id, leaderEndOffset, brokerConfig.brokerId, replica.logEndOffset.messageOffset))
-        throw new FatalExitException(1)
+        throw new FatalExitError(1)
       }
 
       warn("Replica %d for partition %s reset its fetch offset from %d to current leader %d's latest offset %d"

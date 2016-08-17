@@ -43,7 +43,7 @@ import java.util.Properties;
 import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
 
-import org.apache.kafka.common.errors.FatalExitException;
+import org.apache.kafka.common.errors.FatalExitError;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.kafka.common.KafkaException;
@@ -483,9 +483,9 @@ public class Utils {
         thread.setDaemon(daemon);
         thread.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             public void uncaughtException(Thread t, Throwable e) {
-                if (e instanceof FatalExitException) {
-                    log.error("Received FatalExitException ", e);
-                    ((FatalExitException) e).shutdownSystem();
+                if (e instanceof FatalExitError) {
+                    log.error("Received FatalExitError ", e);
+                    ((FatalExitError) e).shutdownSystem();
                 } else {
                     log.error("Uncaught exception in thread '" + t.getName() + "':", e);
                 }

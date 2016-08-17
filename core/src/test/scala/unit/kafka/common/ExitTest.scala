@@ -17,7 +17,7 @@
 package unit.kafka.common
 
 import kafka.utils.ShutdownableThread
-import org.apache.kafka.common.errors.FatalExitException
+import org.apache.kafka.common.errors.FatalExitError
 import org.junit.{Test, Before}
 import org.junit.Assert.assertTrue
 
@@ -25,16 +25,16 @@ class ExitTest {
   @Before
   def init() {
     // TODO: to be replaced with proper mocking
-    FatalExitException.testMode();
+    FatalExitError.testMode();
   }
 
   @Test
   def testSystemExitInShutdownableThread() {
     new ShutdownableThread("exit-test-thread") {
-      override def doWork(): Unit = throw new FatalExitException(1)
+      override def doWork(): Unit = throw new FatalExitError(1)
     }.run()
     /**
-     * if we reach this point it means that the {@link FatalExitException} is properly caught
+     * if we reach this point it means that the {@link FatalExitError} is properly caught
      * and yet it successfully disabled invoking {@link System.exit} for unit tests
      */
     assertTrue(true);

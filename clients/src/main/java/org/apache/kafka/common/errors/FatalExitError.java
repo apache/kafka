@@ -20,9 +20,9 @@ import org.slf4j.LoggerFactory;
  * caught at the highest level of the thread so that no shared lock would be held by the thread
  * when it calls {@link System#exit(int)}
  */
-public class FatalExitException extends RuntimeException {
+public class FatalExitError extends Error {
 
-    private static final Logger log = LoggerFactory.getLogger(FatalExitException.class);
+    private static final Logger log = LoggerFactory.getLogger(FatalExitError.class);
 
     private final static long serialVersionUID = 1L;
 
@@ -35,22 +35,22 @@ public class FatalExitException extends RuntimeException {
         testMode = true;
     }
 
-    public FatalExitException(int exitStatus, String message, Throwable cause) {
+    public FatalExitError(int exitStatus, String message, Throwable cause) {
         super(message, cause);
         this.exitStatus = exitStatus;
     }
 
-    public FatalExitException(int exitStatus, String message) {
+    public FatalExitError(int exitStatus, String message) {
         super(message);
         this.exitStatus = exitStatus;
     }
 
-    public FatalExitException(int exitStatus, Throwable cause) {
+    public FatalExitError(int exitStatus, Throwable cause) {
         super(cause);
         this.exitStatus = exitStatus;
     }
 
-    public FatalExitException(int exitStatus) {
+    public FatalExitError(int exitStatus) {
         super();
         this.exitStatus = exitStatus;
     }

@@ -20,7 +20,7 @@ package kafka.utils
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.CountDownLatch
 
-import org.apache.kafka.common.errors.FatalExitException
+import org.apache.kafka.common.errors.FatalExitError
 
 abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean = true)
         extends Thread(name) with Logging {
@@ -65,8 +65,8 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
         doWork()
       }
     } catch{
-      case fatalExitException: FatalExitException =>
-        fatalExitException.shutdownSystem()
+      case fatalExitError: FatalExitError =>
+        fatalExitError.shutdownSystem()
       case e: Throwable =>
         if(isRunning.get())
           error("Error due to ", e)
