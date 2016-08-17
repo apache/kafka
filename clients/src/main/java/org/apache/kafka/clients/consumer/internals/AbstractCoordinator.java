@@ -281,7 +281,7 @@ public abstract class AbstractCoordinator implements Closeable {
         }
 
         if (heartbeatThread == null) {
-            heartbeatThread = new HeartbeatThread(retryBackoffMs);
+            heartbeatThread = new HeartbeatThread();
             heartbeatThread.start();
         }
 
@@ -784,14 +784,9 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     private class HeartbeatThread extends Thread {
-        private final long retryBackoffMs;
         private boolean enabled = false;
         private boolean closed = false;
         private AtomicReference<RuntimeException> failed = new AtomicReference<>(null);
-
-        public HeartbeatThread(long retryBackoffMs) {
-            this.retryBackoffMs = retryBackoffMs;
-        }
 
         public void enable() {
             synchronized (AbstractCoordinator.this) {
