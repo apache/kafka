@@ -84,7 +84,7 @@ public class RocksDBWindowStoreTest {
         MockProcessorContext context = new MockProcessorContext(
                 null, baseDir,
                 byteArraySerde, byteArraySerde,
-                recordCollector);
+                recordCollector, null);
 
         final WindowStore<Integer, String> windowStore = createWindowStore(context);
         long currentTime = 0;
@@ -129,7 +129,7 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector);
+                    recordCollector, null);
 
             WindowStore<Integer, String> store = createWindowStore(context);
             try {
@@ -225,7 +225,7 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector);
+                    recordCollector, null);
 
             WindowStore<Integer, String> store = createWindowStore(context);
             try {
@@ -321,7 +321,7 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector);
+                    recordCollector, null);
 
             WindowStore<Integer, String> store = createWindowStore(context);
             try {
@@ -417,7 +417,7 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector);
+                    recordCollector, null);
 
             WindowStore<Integer, String> store = createWindowStore(context);
             try {
@@ -476,7 +476,7 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector);
+                    recordCollector, null);
 
             WindowStore<Integer, String> store = createWindowStore(context);
             RocksDBWindowStore<Integer, String> inner =
@@ -593,7 +593,7 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector);
+                    recordCollector, null);
 
             WindowStore<Integer, String> store = createWindowStore(context);
             try {
@@ -642,7 +642,7 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector);
+                    recordCollector, null);
 
             WindowStore<Integer, String> store = createWindowStore(context);
             RocksDBWindowStore<Integer, String> inner =
@@ -694,7 +694,7 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector);
+                    recordCollector, null);
 
             WindowStore<Integer, String> store = createWindowStore(context);
             RocksDBWindowStore<Integer, String> inner =
@@ -797,7 +797,7 @@ public class RocksDBWindowStoreTest {
             MockProcessorContext context = new MockProcessorContext(
                     null, baseDir,
                     byteArraySerde, byteArraySerde,
-                    recordCollector);
+                    recordCollector, null);
 
             File storeDir = new File(baseDir, windowName);
 

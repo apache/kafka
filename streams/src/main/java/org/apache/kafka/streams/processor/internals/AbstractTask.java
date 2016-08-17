@@ -25,7 +25,6 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.state.internals.MemoryLRUCache;
 import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes;
 
 import java.io.IOException;
@@ -102,7 +101,9 @@ public abstract class AbstractTask {
         return processorContext;
     }
 
-    public final MemoryLRUCacheBytes cache() { return cache; }
+    public final MemoryLRUCacheBytes cache() {
+        return cache;
+    }
 
     public abstract void commit();
 

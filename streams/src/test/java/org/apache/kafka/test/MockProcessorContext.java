@@ -42,38 +42,41 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     private final Serde<?> valSerde;
     private final RecordCollector.Supplier recordCollectorSupplier;
     private final File stateDir;
-
+    private final MemoryLRUCacheBytes cache;
     private Map<String, StateStore> storeMap = new HashMap<>();
     private Map<String, StateRestoreCallback> restoreFuncs = new HashMap<>();
 
     long timestamp = -1L;
 
     public MockProcessorContext(StateSerdes<?, ?> serdes, RecordCollector collector) {
-        this(null, null, serdes.keySerde(), serdes.valueSerde(), collector);
+        this(null, null, serdes.keySerde(), serdes.valueSerde(), collector, null);
     }
 
     public MockProcessorContext(KStreamTestDriver driver, File stateDir,
                                 Serde<?> keySerde,
                                 Serde<?> valSerde,
-                                final RecordCollector collector) {
+                                final RecordCollector collector,
+                                final MemoryLRUCacheBytes cache) {
         this(driver, stateDir, keySerde, valSerde,
                 new RecordCollector.Supplier() {
                     @Override
                     public RecordCollector recordCollector() {
                         return collector;
                     }
-                });
+                }, cache);
     }
 
     public MockProcessorContext(KStreamTestDriver driver, File stateDir,
                                 Serde<?> keySerde,
                                 Serde<?> valSerde,
-                                RecordCollector.Supplier collectorSupplier) {
+                                RecordCollector.Supplier collectorSupplier,
+                                final MemoryLRUCacheBytes cache) {
         this.driver = driver;
         this.stateDir = stateDir;
         this.keySerde = keySerde;
         this.valSerde = valSerde;
         this.recordCollectorSupplier = collectorSupplier;
+        this.cache = cache;
     }
 
     @Override
@@ -112,7 +115,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     @Override
     public MemoryLRUCacheBytes getCache() {
-        return null;
+        return cache;
     }
 
     @Override

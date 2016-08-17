@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes;
 
 import java.io.File;
 import java.util.HashSet;
@@ -41,6 +42,8 @@ public class KStreamTestDriver {
 
     private final ProcessorTopology topology;
     private final MockProcessorContext context;
+    private MemoryLRUCacheBytes cache;
+    private static final long DEFAULT_CACHE_SIZE_BYTES = 1 * 1024 * 1024L;
     public final File stateDir;
 
     private ProcessorNode currNode;
@@ -59,8 +62,10 @@ public class KStreamTestDriver {
                              Serde<?> valSerde) {
         this.topology = builder.build("X", null);
         this.stateDir = stateDir;
-        this.context = new MockProcessorContext(this, stateDir, keySerde, valSerde, new MockRecordCollector());
+        this.cache = new MemoryLRUCacheBytes(DEFAULT_CACHE_SIZE_BYTES);
+        this.context = new MockProcessorContext(this, stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
         this.context.setTime(0L);
+
 
         for (StateStoreSupplier stateStoreSupplier : topology.stateStoreSuppliers()) {
             StateStore store = stateStoreSupplier.get();

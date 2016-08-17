@@ -68,7 +68,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private static final int TTL_NOT_USED = -1;
 
     // TODO: these values should be configurable
-    private static final int DEFAULT_UNENCODED_CACHE_SIZE = 1000;
     private static final CompressionType COMPRESSION_TYPE = CompressionType.NO_COMPRESSION;
     private static final CompactionStyle COMPACTION_STYLE = CompactionStyle.UNIVERSAL;
     private static final long WRITE_BUFFER_SIZE = 32 * 1024 * 1024L;
@@ -94,10 +93,10 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private FlushOptions fOptions;
 
     private boolean loggingEnabled = false;
-    private int cacheSize = DEFAULT_UNENCODED_CACHE_SIZE;
 
-    private Set<K> cacheDirtyKeys;
-    private MemoryLRUCache<K, RocksDBCacheEntry> cache;
+    private Set<K> cacheDirtyKeys = null;
+    private boolean cachingEnabled = false;
+    private MemoryLRUCacheBytes<K, MemoryLRUCacheBytesEntry> cache = null;
     private StoreChangeLogger<Bytes, byte[]> changeLogger;
     private StoreChangeLogger.ValueGetter<Bytes, byte[]> getter;
 
@@ -109,11 +108,12 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         return this;
     }
 
-    public RocksDBStore<K, V> withCacheSize(int cacheSize) {
-        this.cacheSize = cacheSize;
+    public RocksDBStore<K, V> enableCaching() {
+        cachingEnabled = true;
 
         return this;
     }
+
 
     public RocksDBStore(String name, Serde<K> keySerde, Serde<V> valueSerde) {
         this(name, DB_FILE_DIR, keySerde, valueSerde);
@@ -146,20 +146,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         fOptions.setWaitForFlush(true);
     }
 
-    private class RocksDBCacheEntry {
-        public V value;
-        public boolean isDirty;
-
-        public RocksDBCacheEntry(V value) {
-            this(value, false);
-        }
-
-        public RocksDBCacheEntry(V value, boolean isDirty) {
-            this.value = value;
-            this.isDirty = isDirty;
-        }
-    }
-
     @SuppressWarnings("unchecked")
     public void openDB(ProcessorContext context) {
         final Map<String, Object> configs = context.appConfigs();
@@ -184,21 +170,22 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         openDB(context);
 
         this.changeLogger = this.loggingEnabled ? new StoreChangeLogger<>(name, context, WindowStoreUtils.INNER_SERDES) : null;
-
-        if (this.cacheSize > 0) {
-            this.cache = new MemoryLRUCache<K, RocksDBCacheEntry>(name, cacheSize, null, null)
-                    .whenEldestRemoved(new MemoryLRUCache.EldestEntryRemovalListener<K, RocksDBCacheEntry>() {
-                        @Override
-                        public void apply(K key, RocksDBCacheEntry entry) {
-                            // flush all the dirty entries to RocksDB if this evicted entry is dirty
-                            if (entry.isDirty) {
-                                flushCache();
-                            }
-                        }
-                    });
-
+        if (this.cachingEnabled) {
+            this.cache = context.getCache();
+            if (this.cache == null) {
+                throw new ProcessorStateException("Error getting cache in store " + this.name);
+            }
+            this.cache.addEldestRemovedListener(new MemoryLRUCacheBytes.EldestEntryRemovalListener<K, MemoryLRUCacheBytesEntry>() {
+                @Override
+                public void apply(K key, MemoryLRUCacheBytesEntry entry) {
+                    // flush all the dirty entries to RocksDB if this evicted entry is dirty
+                    if (entry.isDirty) {
+                        flushCache();
+                    }
+                }
+            });
             this.cacheDirtyKeys = new HashSet<>();
-        } else {
+        }  else {
             this.cache = null;
             this.cacheDirtyKeys = null;
         }
@@ -255,7 +242,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     public synchronized V get(K key) {
         validateStoreOpen();
         if (cache != null) {
-            RocksDBCacheEntry entry = cache.get(key);
+            MemoryLRUCacheBytesEntry<V> entry = cache.get(key);
             if (entry == null) {
                 byte[] byteValue = getInternal(serdes.rawKey(key));
                 //Check value for null, to avoid  deserialization error
@@ -263,7 +250,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                     return null;
                 } else {
                     V value = serdes.valueFrom(byteValue);
-                    cache.put(key, new RocksDBCacheEntry(value));
+                    cache.put(key, new MemoryLRUCacheBytesEntry(value));
                     return value;
                 }
             } else {
@@ -300,7 +287,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         validateStoreOpen();
         if (cache != null) {
             cacheDirtyKeys.add(key);
-            cache.put(key, new RocksDBCacheEntry(value, true));
+            cache.put(key, new MemoryLRUCacheBytesEntry(value, true));
         } else {
             byte[] rawKey = serdes.rawKey(key);
             byte[] rawValue = serdes.rawValue(value);
@@ -433,7 +420,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             List<byte[]> deleteBatch = new ArrayList<>(cache.size());
 
             for (K key : cacheDirtyKeys) {
-                RocksDBCacheEntry entry = cache.get(key);
+                MemoryLRUCacheBytesEntry<V> entry = cache.get(key);
 
                 if (entry != null) {
                     entry.isDirty = false;

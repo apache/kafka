@@ -25,12 +25,13 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * An in-memory LRU cache store based on HashSet and HashMap. XXX: just stub, does not work
+ * An in-memory LRU cache store based on HashSet and HashMap. XXX: the same as MemoryLRUCache for now.
  *
  *  * Note that the use of array-typed keys is discouraged because they result in incorrect ordering behavior.
  * If you intend to work on byte arrays as key, for example, you may want to wrap them with the {@code Bytes} class,
@@ -43,47 +44,95 @@ import java.util.Map;
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
 public class MemoryLRUCacheBytes<K, V> implements KeyValueStore<K, V> {
-    private final int DEFAULT_CAPACITY = 100;
-    private final float DEFAULT_LOAD = 0.75f;
     public interface EldestEntryRemovalListener<K, V> {
 
         void apply(K key, V value);
     }
+    private final Serde<K> keySerde;
 
+    private final Serde<V> valueSerde;
+    private String name;
     protected Map<K, V> map;
+    private StateSerdes<K, V> serdes;
     private volatile boolean open = true;
 
-    protected EldestEntryRemovalListener<K, V> listener;
+    protected List<MemoryLRUCacheBytes.EldestEntryRemovalListener<K, V>> listeners;
 
+    // this is used for extended MemoryNavigableLRUCache only
+    public MemoryLRUCacheBytes(Serde<K> keySerde, Serde<V> valueSerde) {
+        this.keySerde = keySerde;
+        this.valueSerde = valueSerde;
+        listeners = new ArrayList<>();
+    }
 
-    public MemoryLRUCacheBytes(final long maxCacheSizeBytes) {
-        this.map = new LinkedHashMap<K, V>(DEFAULT_CAPACITY, DEFAULT_LOAD, true) {
+    public MemoryLRUCacheBytes(long maxCacheSizeBytes) {
+        // TODO: implement, for now equivalent to entry-based cache
+        this("tmpName", 1000, null, null);
+    }
+
+    public MemoryLRUCacheBytes(String name, final int maxCacheSize, Serde<K> keySerde, Serde<V> valueSerde) {
+        this(keySerde, valueSerde);
+        this.name = name;
+
+        // leave room for one extra entry to handle adding an entry before the oldest can be removed
+        this.map = new LinkedHashMap<K, V>(maxCacheSize + 1, 1.01f, true) {
             private static final long serialVersionUID = 1L;
 
             @Override
             protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
+                if (size() > maxCacheSize) {
+                    K key = eldest.getKey();
+                    if (listeners != null) {
+                        for (MemoryLRUCacheBytes.EldestEntryRemovalListener<K, V> listener: listeners) {
+                            listener.apply(key, eldest.getValue());
+                        }
+                    }
+                    return true;
+                }
                 return false;
             }
         };
     }
 
+    public KeyValueStore<K, V> enableLogging() {
+        return new InMemoryKeyValueLoggedStore<>(this.name, this, keySerde, valueSerde);
+    }
 
-
-    public MemoryLRUCacheBytes<K, V> whenEldestRemoved(EldestEntryRemovalListener<K, V> listener) {
-        this.listener = listener;
+    public MemoryLRUCacheBytes<K, V> whenEldestRemoved(MemoryLRUCacheBytes.EldestEntryRemovalListener<K, V> listener) {
+        addEldestRemovedListener(listener);
 
         return this;
     }
 
+    public void addEldestRemovedListener(MemoryLRUCacheBytes.EldestEntryRemovalListener<K, V> listener) {
+        this.listeners.add(listener);
+    }
+
     @Override
     public String name() {
-        return null;
+        return this.name;
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public void init(ProcessorContext context, StateStore root) {
+        // construct the serde
+        this.serdes = new StateSerdes<>(name,
+            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
+        // register the store
+        context.register(root, true, new StateRestoreCallback() {
+            @Override
+            public void restore(byte[] key, byte[] value) {
+                // check value for null, to avoid  deserialization error.
+                if (value == null) {
+                    put(serdes.keyFrom(key), null);
+                } else {
+                    put(serdes.keyFrom(key), serdes.valueFrom(value));
+                }
+            }
+        });
     }
 
     @Override

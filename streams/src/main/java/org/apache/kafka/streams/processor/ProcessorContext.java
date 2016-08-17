@@ -91,7 +91,7 @@ public interface ProcessorContext {
     /**
      * Get the thread-global cache
      */
-     MemoryLRUCacheBytes getCache();
+    MemoryLRUCacheBytes getCache();
 
     /**
      * Schedules a periodic operation for processors. A processor may call this method during
