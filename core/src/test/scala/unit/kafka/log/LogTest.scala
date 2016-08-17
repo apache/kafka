@@ -967,7 +967,7 @@ class LogTest extends JUnitSuite {
 
     log.delete()
     assertEquals("The number of segments should be 0", 0, log.numberOfSegments)
-    assertEquals("The number of deleted segments shoud be zero.", 0, log.deleteOldSegments())
+    assertEquals("The number of deleted segments should be zero.", 0, log.deleteOldSegments())
   }
 
   @Test

@@ -564,12 +564,7 @@ class Log(val dir: File,
    */
   private def deleteOldSegments(predicate: LogSegment => Boolean): Int = {
     lock synchronized {
-      //find any segments that match the user-supplied predicate UNLESS it is the final segment
-      //and it is empty (since we would just end up re-creating it)
-      val lastEntry = segments.lastEntry
-      val deletable =
-        if (lastEntry == null) Seq.empty
-        else logSegments.takeWhile(s => predicate(s) && (s.baseOffset != lastEntry.getValue.baseOffset || s.size > 0))
+      val deletable = deletableSegments(predicate)
       val numToDelete = deletable.size
       if (numToDelete > 0) {
         // we must always have at least one segment, so if we are going to delete all the segments, create a new one first
@@ -582,15 +577,16 @@ class Log(val dir: File,
     }
   }
 
-  private class SizeBasedRetentionCheck(private var diff: Long) {
-    def shouldDelete(segment: LogSegment) = {
-      if(diff - segment.size >= 0) {
-        diff -= segment.size
-        true
-      } else {
-        false
-      }
-    }
+  /**
+    * Find any segments that match the user-supplied predicate UNLESS it is the final segment
+    * and it is empty (since we would just end up re-creating it)
+    * @param predicate A function that takes in a single log segment and returns true iff it is deletable
+    * @return the segments ready to be deleted
+    */
+  private def deletableSegments(predicate: LogSegment => Boolean) = {
+    val lastEntry = segments.lastEntry
+    if (lastEntry == null) Seq.empty
+    else logSegments.takeWhile(s => predicate(s) && (s.baseOffset != lastEntry.getValue.baseOffset || s.size > 0))
   }
 
   /**
@@ -599,45 +595,38 @@ class Log(val dir: File,
     */
   def deleteOldSegments(): Int = {
     if (!config.delete) return 0
-
-    var deleted = 0
-    if (config.retentionMs >= 0) {
-      val startMs = time.milliseconds
-      deleted += deleteOldSegments(startMs - _.lastModified > config.retentionMs)
-    }
-    if (config.retentionSize >= 0 && size > config.retentionSize) {
-      deleted += deleteOldSegments(new SizeBasedRetentionCheck(size - config.retentionSize).shouldDelete)
-    }
-    deleted
+    retentionMsExpiredSegments(deleteOldSegments) + retentionSizeBreachedSegments(deleteOldSegments)
   }
 
-  private def hasOldSegments(predicate: LogSegment => Boolean): Boolean = {
+  private def hasOldSegments(predicate: LogSegment => Boolean): Int = {
     lock synchronized {
-      val lastEntry = segments.lastEntry
-      if (lastEntry == null) false
-      else logSegments.exists(s => predicate(s) && (s.baseOffset != lastEntry.getValue.baseOffset || s.size > 0))
+      deletableSegments(predicate).size
     }
   }
 
+  private def retentionMsExpiredSegments(runWithPredicate: (LogSegment => Boolean) => Int) : Int = {
+    if (config.retentionMs < 0) return 0
+    val startMs = time.milliseconds
+    runWithPredicate(startMs - _.lastModified > config.retentionMs)
+  }
 
+  private def retentionSizeBreachedSegments(runWithPredicate: (LogSegment => Boolean) => Int) : Int = {
+    if (config.retentionSize < 0 || size < config.retentionSize) return 0
+    var diff = size - config.retentionSize
+    def shouldDelete(segment: LogSegment) = {
+      if (diff - segment.size >= 0) {
+        diff -= segment.size
+        true
+      } else {
+        false
+      }
+    }
+    runWithPredicate(shouldDelete)
+  }
 
   def shouldDeleteSegments: Boolean = {
     if (!config.delete) return false
-
-    def retentionMsExpired():Boolean = {
-      if(config.retentionMs < 0)
-        return false
-
-      val startMs = time.milliseconds
-      hasOldSegments(startMs - _.lastModified > config.retentionMs)
-    }
-
-    def retentionSizeBreached(): Boolean = {
-      if(config.retentionSize < 0 || size < config.retentionSize)
-        return false
-      hasOldSegments(new SizeBasedRetentionCheck(size - config.retentionSize).shouldDelete)
-    }
-    retentionMsExpired() || retentionSizeBreached()
+    retentionMsExpiredSegments(hasOldSegments) + retentionSizeBreachedSegments(hasOldSegments) > 0
   }
 
   /**

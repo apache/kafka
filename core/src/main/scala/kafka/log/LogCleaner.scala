@@ -28,6 +28,7 @@ import kafka.message._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 
+import scala.Iterable
 import scala.collection._
 
 /**
@@ -242,20 +243,16 @@ class LogCleaner(val config: CleanerConfig,
           }
           true
       }
-      val deleted = cleanerManager.logsReadyToBeTruncated() match {
-        case Nil => false
-        case ready =>
-          ready.foreach {
-            case(topicPartition, log) =>
-              try {
-                log.deleteOldSegments()
-              } finally {
-                cleanerManager.doneDeleting(topicPartition)
-              }
+      val truncated: Iterable[(TopicAndPartition, Log)] = cleanerManager.logsReadyToBeTruncated()
+      truncated.foreach{
+        case (topicPartition, log) =>
+          try {
+            log.deleteOldSegments()
+          } finally {
+            cleanerManager.doneDeleting(topicPartition)
           }
-          true
       }
-      if (!cleaned && !deleted)
+      if (!cleaned && truncated.isEmpty)
         backOffWaitLatch.await(config.backOffMs, TimeUnit.MILLISECONDS)
     }
     
