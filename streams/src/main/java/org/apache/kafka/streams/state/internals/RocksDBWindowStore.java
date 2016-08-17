@@ -186,6 +186,10 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         return this;
     }
 
+    public boolean isCachingEnabled() {
+        return cachingEnabled;
+    }
+
     @Override
     public String name() {
         return name;

@@ -114,6 +114,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         return this;
     }
 
+    public boolean isCachingEnabled() {
+        return cachingEnabled;
+    }
 
     public RocksDBStore(String name, Serde<K> keySerde, Serde<V> valueSerde) {
         this(name, DB_FILE_DIR, keySerde, valueSerde);

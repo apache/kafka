@@ -459,6 +459,37 @@ public class RocksDBWindowStoreTest {
     }
 
     @Test
+    public void testCachingEnabled() throws IOException {
+        File baseDir = Files.createTempDirectory("test").toFile();
+        try {
+            final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
+            Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerde.serializer(), byteArraySerde.serializer());
+            RecordCollector recordCollector = new RecordCollector(producer) {
+                @Override
+                public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
+                    changeLog.add(new KeyValue<>(
+                        keySerializer.serialize(record.topic(), record.key()),
+                        valueSerializer.serialize(record.topic(), record.value()))
+                    );
+                }
+            };
+
+            MockProcessorContext context = new MockProcessorContext(
+                null, baseDir,
+                byteArraySerde, byteArraySerde,
+                recordCollector, new MemoryLRUCacheBytes(DEFAULT_CACHE_SIZE_BYTES));
+
+            WindowStore<Integer, String> store = createWindowStore(context);
+            RocksDBWindowStore<Integer, String> inner =
+                (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
+
+            assertEquals(inner.isCachingEnabled(), true);
+        } finally {
+            Utils.delete(baseDir);
+        }
+    }
+
+    @Test
     public void testRolling() throws IOException {
         File baseDir = Files.createTempDirectory("test").toFile();
         try {
