@@ -316,7 +316,33 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public synchronized KeyValueIterator<K, V> range(K from, K to) {
+    public KeyValueIterator<K, V> range(K from, K to) {
+        if (from == null) {
+            throw new NullPointerException("Start key is null");
+        }
+        if (to == null) {
+            throw new NullPointerException("End key is null");
+        }
+        return rangeImpl(from, to);
+    }
+
+    @Override
+    public KeyValueIterator<K, V> rangeUntil(K to) {
+        if (to == null) {
+            throw new NullPointerException("End key is null");
+        }
+        return rangeImpl(null, to);
+    }
+
+    @Override
+    public KeyValueIterator<K, V> rangeFrom(K from) {
+        if (from == null) {
+            throw new NullPointerException("Start key is null");
+        }
+        return rangeImpl(from, null);
+    }
+
+    private synchronized KeyValueIterator<K, V> rangeImpl(K from, K to) {
         validateStoreOpen();
         // query rocksdb
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(db.newIterator(), serdes, from, to);

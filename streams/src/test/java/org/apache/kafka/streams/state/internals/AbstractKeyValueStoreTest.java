@@ -17,10 +17,6 @@
 
 package org.apache.kafka.streams.state.internals;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.fail;
-
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -30,6 +26,8 @@ import org.apache.kafka.test.MockProcessorContext;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+
+import static org.junit.Assert.*;
 
 public abstract class AbstractKeyValueStoreTest {
 
@@ -109,6 +107,16 @@ public abstract class AbstractKeyValueStoreTest {
                 else
                     fail("Unexpected entry: " + entry);
             }
+        }
+
+        // Check rangeUntil() ...
+        try (KeyValueIterator<Integer, String> iter = store.rangeUntil(2)) {
+            assertTrue(iter.hasNext());
+            assertEquals(new KeyValue<>(0, "zero"), iter.next());
+            assertTrue(iter.hasNext());
+            assertEquals(new KeyValue<>(1, "one"), iter.next());
+            assertTrue(iter.hasNext());
+            assertEquals(new KeyValue<>(2, "two"), iter.next());
         }
     }
 

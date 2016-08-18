@@ -63,6 +63,8 @@ public class InMemoryKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K
     }
 
     private static class MemoryStore<K, V> implements KeyValueStore<K, V> {
+        private static final boolean RANGE_FROM_INCLUSIVE = true;
+        private static final boolean RANGE_TO_INCLUSIVE = false;
         private final String name;
         private final Serde<K> keySerde;
         private final Serde<V> valueSerde;
@@ -155,7 +157,18 @@ public class InMemoryKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K
 
         @Override
         public synchronized KeyValueIterator<K, V> range(K from, K to) {
-            return new MemoryStoreIterator<>(this.map.subMap(from, true, to, false).entrySet().iterator());
+            //TODO - toInclusive should be true?
+            return new MemoryStoreIterator<>(this.map.subMap(from, RANGE_FROM_INCLUSIVE, to, RANGE_TO_INCLUSIVE).entrySet().iterator());
+        }
+
+        @Override
+        public synchronized KeyValueIterator<K, V> rangeUntil(K to) {
+            return new MemoryStoreIterator<>(this.map.headMap(to, RANGE_TO_INCLUSIVE).entrySet().iterator());
+        }
+
+        @Override
+        public synchronized KeyValueIterator<K, V> rangeFrom(K from) {
+            return new MemoryStoreIterator<>(this.map.tailMap(from, RANGE_FROM_INCLUSIVE).entrySet().iterator());
         }
 
         @Override

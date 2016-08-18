@@ -154,6 +154,16 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
+    public KeyValueIterator<K, V> rangeUntil(K to) {
+        return this.inner.rangeUntil(to);
+    }
+
+    @Override
+    public KeyValueIterator<K, V> rangeFrom(K from) {
+        return this.inner.rangeFrom(from);
+    }
+
+    @Override
     public KeyValueIterator<K, V> all() {
         return new MeteredKeyValueIterator<>(this.inner.all(), this.allTime);
     }

@@ -60,6 +60,16 @@ public class StateStoreTestUtils {
         }
 
         @Override
+        public KeyValueIterator<K, V> rangeUntil(final K to) {
+            return null;
+        }
+
+        @Override
+        public KeyValueIterator<K, V> rangeFrom(final K from) {
+            return null;
+        }
+
+        @Override
         public KeyValueIterator<K, V> all() {
             return null;
         }

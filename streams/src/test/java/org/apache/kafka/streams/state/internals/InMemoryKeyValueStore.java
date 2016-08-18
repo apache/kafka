@@ -27,6 +27,8 @@ import java.util.NoSuchElementException;
 import java.util.TreeMap;
 
 class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
+    private static final boolean RANGE_FROM_INCLUSIVE = true;
+    private static final boolean RANGE_TO_INCLUSIVE = false;
     private final TreeMap<K, V> map = new TreeMap<>();
     private final String name;
     private boolean open = true;
@@ -104,6 +106,16 @@ class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
     @Override
     public KeyValueIterator<K, V> range(final K from, final K to) {
         return new TheIterator(this.map.subMap(from, true, to, false).entrySet().iterator());
+    }
+
+    @Override
+    public KeyValueIterator<K, V> rangeUntil(final K to) {
+        return new TheIterator(this.map.headMap(to, RANGE_TO_INCLUSIVE).entrySet().iterator());
+    }
+
+    @Override
+    public KeyValueIterator<K, V> rangeFrom(final K from) {
+        return new TheIterator(this.map.tailMap(from, RANGE_FROM_INCLUSIVE).entrySet().iterator());
     }
 
     @Override

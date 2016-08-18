@@ -174,6 +174,22 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
      * @throws UnsupportedOperationException
      */
     @Override
+    public KeyValueIterator<K, V> rangeUntil(K to) {
+        throw new UnsupportedOperationException("MemoryLRUCache does not support rangeUtil() function.");
+    }
+
+    /**
+     * @throws UnsupportedOperationException
+     */
+    @Override
+    public KeyValueIterator<K, V> rangeFrom(K from) {
+        throw new UnsupportedOperationException("MemoryLRUCache does not support rangeFrom() function.");
+    }
+
+    /**
+     * @throws UnsupportedOperationException
+     */
+    @Override
     public KeyValueIterator<K, V> all() {
         throw new UnsupportedOperationException("MemoryLRUCache does not support all() function.");
     }

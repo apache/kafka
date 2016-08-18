@@ -79,6 +79,30 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
     }
 
     @Override
+    public KeyValueIterator<K, V> rangeUntil(final K to) {
+        final NextIteratorFunction<K, V> nextIteratorFunction = new NextIteratorFunction<K, V>() {
+            @Override
+            public KeyValueIterator<K, V> apply(final ReadOnlyKeyValueStore<K, V> store) {
+                return store.rangeUntil(to);
+            }
+        };
+        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.stores(storeName, storeType);
+        return new CompositeKeyValueIterator(stores.iterator(), nextIteratorFunction);
+    }
+
+    @Override
+    public KeyValueIterator<K, V> rangeFrom(final K from) {
+        final NextIteratorFunction<K, V> nextIteratorFunction = new NextIteratorFunction<K, V>() {
+            @Override
+            public KeyValueIterator<K, V> apply(final ReadOnlyKeyValueStore<K, V> store) {
+                return store.rangeFrom(from);
+            }
+        };
+        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.stores(storeName, storeType);
+        return new CompositeKeyValueIterator(stores.iterator(), nextIteratorFunction);
+    }
+
+    @Override
     public KeyValueIterator<K, V> all() {
         final NextIteratorFunction<K, V> nextIteratorFunction = new NextIteratorFunction<K, V>() {
             @Override
