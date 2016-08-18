@@ -501,17 +501,24 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         // comparator to be pluggable, and the default is lexicographic, so it's
         // safe to just force lexicographic comparator here for now.
         private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
-        private byte[] rawToKey;
+        private byte[] rawToKey = null;
 
         RocksDBRangeIterator(RocksIterator iter, StateSerdes<K, V> serdes, K from, K to) {
             super(iter, serdes);
-            iter.seek(serdes.rawKey(from));
-            this.rawToKey = serdes.rawKey(to);
+            if (from == null) {
+                iter.seekToFirst();
+            }
+            else {
+                iter.seek(serdes.rawKey(from));
+            }
+            if (to != null) {
+                this.rawToKey = serdes.rawKey(to);
+            }
         }
 
         @Override
         public synchronized boolean hasNext() {
-            return super.hasNext() && comparator.compare(super.peekRawKey(), this.rawToKey) <= 0;
+            return super.hasNext() && (this.rawToKey == null || comparator.compare(super.peekRawKey(), this.rawToKey) <= 0);
         }
     }
 

@@ -83,40 +83,47 @@ public abstract class AbstractKeyValueStoreTest {
         assertEquals(false, driver.flushedEntryRemoved(4));
         assertEquals(true, driver.flushedEntryRemoved(5));
 
-        // Check range iteration ...
-        try (KeyValueIterator<Integer, String> iter = store.range(2, 4)) {
-            while (iter.hasNext()) {
-                KeyValue<Integer, String> entry = iter.next();
-                if (entry.key.equals(2))
-                    assertEquals("two", entry.value);
-                else if (entry.key.equals(4))
-                    assertEquals("four", entry.value);
-                else
-                    fail("Unexpected entry: " + entry);
-            }
-        }
 
-        // Check range iteration ...
-        try (KeyValueIterator<Integer, String> iter = store.range(2, 6)) {
-            while (iter.hasNext()) {
-                KeyValue<Integer, String> entry = iter.next();
-                if (entry.key.equals(2))
-                    assertEquals("two", entry.value);
-                else if (entry.key.equals(4))
-                    assertEquals("four", entry.value);
-                else
-                    fail("Unexpected entry: " + entry);
+        try {
+            // Check range iteration ...
+            try (KeyValueIterator<Integer, String> iter = store.range(2, 4)) {
+                assertTrue("First row exists", iter.hasNext());
+                assertEquals(new KeyValue<>(2, "two"), iter.next());
+                assertTrue("Second row exists", iter.hasNext());
+                assertEquals(new KeyValue<>(4, "four"), iter.next());
+                assertFalse("No more rows", iter.hasNext());
             }
-        }
 
-        // Check rangeUntil() ...
-        try (KeyValueIterator<Integer, String> iter = store.rangeUntil(2)) {
-            assertTrue(iter.hasNext());
-            assertEquals(new KeyValue<>(0, "zero"), iter.next());
-            assertTrue(iter.hasNext());
-            assertEquals(new KeyValue<>(1, "one"), iter.next());
-            assertTrue(iter.hasNext());
-            assertEquals(new KeyValue<>(2, "two"), iter.next());
+            // Check range iteration ...
+            try (KeyValueIterator<Integer, String> iter = store.range(2, 6)) {
+                assertTrue("First row exists", iter.hasNext());
+                assertEquals(new KeyValue<>(2, "two"), iter.next());
+                assertTrue("Second row exists", iter.hasNext());
+                assertEquals(new KeyValue<>(4, "four"), iter.next());
+                assertFalse("No more rows", iter.hasNext());
+            }
+
+            // Check rangeUntil() ...
+            try (KeyValueIterator<Integer, String> iter = store.rangeUntil(2)) {
+                assertTrue("First row exists", iter.hasNext());
+                assertEquals(new KeyValue<>(0, "zero"), iter.next());
+                assertTrue("Second row exists", iter.hasNext());
+                assertEquals(new KeyValue<>(1, "one"), iter.next());
+                assertTrue("Third row exists", iter.hasNext());
+                assertEquals(new KeyValue<>(2, "two"), iter.next());
+                assertFalse("No more rows", iter.hasNext());
+            }
+
+            // Check rangeFrom()
+            try (KeyValueIterator<Integer, String> iter = store.rangeFrom(2)) {
+                assertTrue("First row exists", iter.hasNext());
+                assertEquals(new KeyValue<>(2, "two"), iter.next());
+                assertTrue("Second row exists", iter.hasNext());
+                assertEquals(new KeyValue<>(4, "four"), iter.next());
+                assertFalse("No more rows", iter.hasNext());
+            }
+        } finally {
+            store.close();
         }
     }
 

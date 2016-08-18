@@ -64,7 +64,7 @@ public class InMemoryKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K
 
     private static class MemoryStore<K, V> implements KeyValueStore<K, V> {
         private static final boolean RANGE_FROM_INCLUSIVE = true;
-        private static final boolean RANGE_TO_INCLUSIVE = false;
+        private static final boolean RANGE_TO_INCLUSIVE = true;
         private final String name;
         private final Serde<K> keySerde;
         private final Serde<V> valueSerde;

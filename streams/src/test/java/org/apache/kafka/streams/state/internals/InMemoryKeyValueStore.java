@@ -28,7 +28,7 @@ import java.util.TreeMap;
 
 class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private static final boolean RANGE_FROM_INCLUSIVE = true;
-    private static final boolean RANGE_TO_INCLUSIVE = false;
+    private static final boolean RANGE_TO_INCLUSIVE = true;
     private final TreeMap<K, V> map = new TreeMap<>();
     private final String name;
     private boolean open = true;
