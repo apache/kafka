@@ -65,6 +65,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * This class manage the fetching process with the brokers.
@@ -84,7 +85,7 @@ public class Fetcher<K, V> {
     private final Metadata metadata;
     private final FetchManagerMetrics sensors;
     private final SubscriptionState subscriptions;
-    private final List<CompletedFetch> completedFetches;
+    private final ConcurrentLinkedQueue<CompletedFetch> completedFetches;
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
 
@@ -115,7 +116,7 @@ public class Fetcher<K, V> {
         this.checkCrcs = checkCrcs;
         this.keyDeserializer = keyDeserializer;
         this.valueDeserializer = valueDeserializer;
-        this.completedFetches = new ArrayList<>();
+        this.completedFetches = new ConcurrentLinkedQueue<>();
         this.sensors = new FetchManagerMetrics(metrics, metricGrpPrefix);
         this.retryBackoffMs = retryBackoffMs;
     }
@@ -127,7 +128,8 @@ public class Fetcher<K, V> {
     public void sendFetches() {
         for (Map.Entry<Node, FetchRequest> fetchEntry: createFetchRequests().entrySet()) {
             final FetchRequest request = fetchEntry.getValue();
-            client.send(fetchEntry.getKey(), ApiKeys.FETCH, request)
+            final Node fetchTarget = fetchEntry.getKey();
+            client.send(fetchTarget, ApiKeys.FETCH, request)
                     .addListener(new RequestFutureListener<ClientResponse>() {
                         @Override
                         public void onSuccess(ClientResponse resp) {
@@ -148,9 +150,21 @@ public class Fetcher<K, V> {
 
                         @Override
                         public void onFailure(RuntimeException e) {
-                            log.debug("Fetch failed", e);
+                            log.debug("Fetch request to {} failed", fetchTarget, e);
                         }
                     });
+        }
+    }
+
+    /**
+     * Lookup and set offsets for any partitions which are awaiting an explicit reset.
+     * @param partitions the partitions to reset
+     */
+    public void resetOffsetsIfNeeded(Set<TopicPartition> partitions) {
+        for (TopicPartition tp : partitions) {
+            // TODO: If there are several offsets to reset, we could submit offset requests in parallel
+            if (subscriptions.isAssigned(tp) && subscriptions.isOffsetResetNeeded(tp))
+                resetOffset(tp);
         }
     }
 
@@ -165,7 +179,6 @@ public class Fetcher<K, V> {
             if (!subscriptions.isAssigned(tp) || subscriptions.isFetchable(tp))
                 continue;
 
-            // TODO: If there are several offsets to reset, we could submit offset requests in parallel
             if (subscriptions.isOffsetResetNeeded(tp)) {
                 resetOffset(tp);
             } else if (subscriptions.committed(tp) == null) {
@@ -342,16 +355,14 @@ public class Fetcher<K, V> {
         } else {
             Map<TopicPartition, List<ConsumerRecord<K, V>>> drained = new HashMap<>();
             int recordsRemaining = maxPollRecords;
-            Iterator<CompletedFetch> completedFetchesIterator = completedFetches.iterator();
 
             while (recordsRemaining > 0) {
                 if (nextInLineRecords == null || nextInLineRecords.isEmpty()) {
-                    if (!completedFetchesIterator.hasNext())
+                    CompletedFetch completedFetch = completedFetches.poll();
+                    if (completedFetch == null)
                         break;
 
-                    CompletedFetch completion = completedFetchesIterator.next();
-                    completedFetchesIterator.remove();
-                    nextInLineRecords = parseFetchedData(completion);
+                    nextInLineRecords = parseFetchedData(completedFetch);
                 } else {
                     recordsRemaining -= append(drained, nextInLineRecords, recordsRemaining);
                 }
@@ -499,6 +510,8 @@ public class Fetcher<K, V> {
                 long position = this.subscriptions.position(partition);
                 fetch.put(partition, new FetchRequest.PartitionData(position, this.fetchSize));
                 log.trace("Added fetch request for partition {} at offset {}", partition, position);
+            } else {
+                log.trace("Skipping fetch for partition {} because there is an inflight request to {}", partition, node);
             }
         }
 
@@ -796,8 +809,7 @@ public class Fetcher<K, V> {
             String name = "topic." + topic + ".bytes-fetched";
             Sensor bytesFetched = this.metrics.getSensor(name);
             if (bytesFetched == null) {
-                Map<String, String> metricTags = new HashMap<>(1);
-                metricTags.put("topic", topic.replace('.', '_'));
+                Map<String, String> metricTags = Collections.singletonMap("topic", topic.replace('.', '_'));
 
                 bytesFetched = this.metrics.sensor(name);
                 bytesFetched.add(this.metrics.metricName("fetch-size-avg",
@@ -835,4 +847,5 @@ public class Fetcher<K, V> {
             recordsFetched.record(records);
         }
     }
+
 }

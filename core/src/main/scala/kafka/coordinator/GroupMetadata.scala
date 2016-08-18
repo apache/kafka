@@ -190,8 +190,8 @@ private[coordinator] class GroupMetadata(val groupId: String, initialState: Grou
 
   def allMemberMetadata = members.values.toList
 
-  def rebalanceTimeout = members.values.foldLeft(0) {(timeout, member) =>
-    timeout.max(member.sessionTimeoutMs)
+  def rebalanceTimeoutMs = members.values.foldLeft(0) { (timeout, member) =>
+    timeout.max(member.rebalanceTimeoutMs)
   }
 
   // TODO: decide if ids should be predictable or random
