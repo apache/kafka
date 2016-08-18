@@ -697,10 +697,9 @@ project(':streams') {
     }
 
     // zkclient has a hard log4j dependency, we set it here as well to avoid copying an older
-    // version to the binary package; the following three dependencies should be removed after KIP-4
+    // version to the binary package; the following two dependencies should be removed after KIP-4
     // (along with the zkclient dependency)
     compile libs.log4j
-    compile libs.slf4jlog4j
     compile libs.jacksonDatabind
 
     testCompile project(':clients').sourceSets.test.output
@@ -749,6 +748,7 @@ project(':streams:examples') {
   dependencies {
     compile project(':streams')
     compile project(':connect:json')  // this dependency should be removed after we unify data API
+    compile libs.slf4jlog4j           // this dependency should be removed after KIP-4
   }
 
   javadoc {
