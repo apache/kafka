@@ -182,13 +182,13 @@ object DumpLogSegments {
     for(i <- 0 until timeIndex.entries) {
       val entry = timeIndex.entry(i)
       val position = index.lookup(entry.offset + timeIndex.baseOffset).position
-      var partialFileMessageSet: FileMessageSet = messageSet.read(position, Int.MaxValue)
+      val partialFileMessageSet: FileMessageSet = messageSet.read(position, Int.MaxValue)
       val shallowIter = partialFileMessageSet.iterator
       var maxTimestamp = Message.NoTimestamp
       // We first find the message by offset then check if the timestamp is correct.
       val wrapperMessageOpt = shallowIter.find(_.offset >= entry.offset + timeIndex.baseOffset)
       if (!wrapperMessageOpt.isDefined || wrapperMessageOpt.get.offset != entry.offset + timeIndex.baseOffset) {
-        timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset,
+        timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset + timeIndex.baseOffset,
           {if (wrapperMessageOpt.isDefined) wrapperMessageOpt.get.offset else -1})
       } else {
         val deepIter = getIterator(wrapperMessageOpt.get, isDeepIteration = true)
@@ -376,20 +376,27 @@ object DumpLogSegments {
 
     def recordMismatchTimeIndex(file: File, indexTimestamp: Long, logTimestamp: Long) {
       var misMatchesSeq = misMatchesForTimeIndexFilesMap.getOrElse(file.getAbsolutePath, new ArrayBuffer[(Long, Long)]())
+      if (misMatchesSeq.isEmpty)
+        misMatchesForTimeIndexFilesMap.put(file.getAbsolutePath, misMatchesSeq)
       misMatchesSeq += ((indexTimestamp, logTimestamp))
     }
 
     def recordOutOfOrderIndexTimestamp(file: File, indexTimestamp: Long, prevIndexTimestamp: Long) {
       var outOfOrderSeq = outOfOrderTimestamp.getOrElse(file.getAbsolutePath, new ArrayBuffer[(Long, Long)]())
+      if (outOfOrderSeq.isEmpty)
+        outOfOrderTimestamp.put(file.getAbsolutePath, outOfOrderSeq)
       outOfOrderSeq += ((indexTimestamp, prevIndexTimestamp))
     }
 
     def recordShallowOffsetNotFound(file: File, indexOffset: Long, logOffset: Long) {
       var shallowOffsetNotFoundSeq = shallowOffsetNotFound.getOrElse(file.getAbsolutePath, new ArrayBuffer[(Long, Long)]())
+      if (shallowOffsetNotFoundSeq.isEmpty)
+        shallowOffsetNotFound.put(file.getAbsolutePath, shallowOffsetNotFoundSeq)
       shallowOffsetNotFoundSeq += ((indexOffset, logOffset))
     }
 
     def printErrors() {
+      System.err.println("size = " + shallowOffsetNotFound.size)
       misMatchesForTimeIndexFilesMap.foreach {
         case (fileName, listOfMismatches) => {
           System.err.println("Found timestamp mismatch in :" + fileName)

@@ -192,8 +192,9 @@ class TimeIndex(file: File,
   }
 
   override def sanityCheck() {
-    val lastTimestamp = lastEntry.timestamp
-    val lastOffset = lastEntry.offset
+    val entry = lastEntry
+    val lastTimestamp = entry.timestamp
+    val lastOffset = entry.offset
     require(_entries == 0 || (lastTimestamp >= timestamp(mmap, 0)),
       s"Corrupt time index found, time index file (${file.getAbsolutePath}) has non-zero size but the last timestamp " +
           s"is $lastTimestamp which is no larger than the first timestamp ${timestamp(mmap, 0)}")

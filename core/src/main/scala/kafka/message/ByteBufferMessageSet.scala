@@ -469,7 +469,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
           if (messageFormatVersion == Message.MagicValue_V0)
             (Some(Message.NoTimestamp), -1L)
           else if (messageTimestampType == TimestampType.CREATE_TIME)
-            (Some(maxTimestamp), {if (targetCodec == NoCompressionCodec) offsetOfMaxTimestamp else offsetCounter.value})
+            (Some(maxTimestamp), {if (targetCodec == NoCompressionCodec) offsetOfMaxTimestamp else offsetCounter.value + validatedMessages.length - 1})
           else // Log append time
             (Some(now), {if (targetCodec == NoCompressionCodec) offsetCounter.value else offsetCounter.value + validatedMessages.length - 1})
         }
