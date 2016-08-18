@@ -691,10 +691,17 @@ project(':streams') {
     compile (libs.zkclient) {
       // users should be able to choose the logging implementation (and slf4j bridge)
       exclude module: 'slf4j-log4j12'
+      exclude module: 'log4j'
       exclude module: 'jline'
       exclude module: 'netty'
     }
-    compile libs.jacksonDatabind // this dependency should be removed after KIP-4
+
+    // zkclient has a hard log4j dependency, we set it here as well to avoid copying an older
+    // version to the binary package; the following three dependencies should be removed after KIP-4
+    // (along with the zkclient dependency)
+    compile libs.log4j
+    compile libs.slf4jlog4j
+    compile libs.jacksonDatabind
 
     testCompile project(':clients').sourceSets.test.output
     testCompile project(':core')
@@ -742,7 +749,6 @@ project(':streams:examples') {
   dependencies {
     compile project(':streams')
     compile project(':connect:json')  // this dependency should be removed after we unify data API
-    compile libs.slf4jlog4j
   }
 
   javadoc {
