@@ -27,7 +27,7 @@ public class FatalExitError extends Error {
     private final static long serialVersionUID = 1L;
 
     // TODO: remove this when we have System.exit disabled my mocking in tests
-    private static boolean testMode = true;
+    private static boolean testMode = false;
 
     protected int exitStatus;
 
