@@ -157,7 +157,6 @@ public class InMemoryKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K
 
         @Override
         public synchronized KeyValueIterator<K, V> range(K from, K to) {
-            //TODO - toInclusive should be true?
             return new MemoryStoreIterator<>(this.map.subMap(from, RANGE_FROM_INCLUSIVE, to, RANGE_TO_INCLUSIVE).entrySet().iterator());
         }
 
