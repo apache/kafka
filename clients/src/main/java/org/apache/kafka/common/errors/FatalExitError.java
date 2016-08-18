@@ -26,14 +26,7 @@ public class FatalExitError extends Error {
 
     private final static long serialVersionUID = 1L;
 
-    // TODO: remove this when we have System.exit disabled my mocking in tests
-    private static boolean testMode = false;
-
     protected int exitStatus;
-
-    public static void testMode() {
-        testMode = true;
-    }
 
     public FatalExitError(int exitStatus, String message, Throwable cause) {
         super(message, cause);
@@ -57,8 +50,6 @@ public class FatalExitError extends Error {
 
     public void shutdownSystem() {
         log.error("System.exit is invoked", this);
-        if (!testMode) {
-            System.exit(exitStatus);
-        }
+        System.exit(exitStatus);
     }
 }
