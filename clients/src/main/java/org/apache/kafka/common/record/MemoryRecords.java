@@ -245,30 +245,33 @@ public class MemoryRecords implements Records {
             this.shallow = true;
             this.stream = Compressor.wrapForInput(new ByteBufferInputStream(this.buffer), type, entry.record().magic());
             long wrapperRecordOffset = entry.offset();
-            // If relative offset is used, we need to decompress the entire message first to compute
-            // the absolute offset.
-            if (entry.record().magic() > Record.MAGIC_VALUE_V0) {
-                this.logEntries = new ArrayDeque<>();
-                long wrapperRecordTimestamp = entry.record().timestamp();
+
+            long wrapperRecordTimestamp = entry.record().timestamp();
+            this.logEntries = new ArrayDeque<>();
+            try {
                 while (true) {
                     try {
                         LogEntry logEntry = getNextEntryFromStream();
-                        Record recordWithTimestamp = new Record(logEntry.record().buffer(),
-                                                                wrapperRecordTimestamp,
-                                                                entry.record().timestampType());
+                        Record recordWithTimestamp = new Record(
+                            logEntry.record().buffer(),
+                            wrapperRecordTimestamp,
+                            entry.record().timestampType()
+                        );
                         logEntries.add(new LogEntry(logEntry.offset(), recordWithTimestamp));
                     } catch (EOFException e) {
                         break;
-                    } catch (IOException e) {
-                        throw new KafkaException(e);
                     }
                 }
                 this.absoluteBaseOffset = wrapperRecordOffset - logEntries.getLast().offset();
-            } else {
-                this.logEntries = null;
-                this.absoluteBaseOffset = -1;
+            } catch (IOException e) {
+                throw new KafkaException(e);
+            } finally {
+                try {
+                    stream.close();
+                } catch (IOException e) {
+                    // Is there an equivalent to CoreUtils.swallow() in the client?
+                }
             }
-
         }
 
         /*
