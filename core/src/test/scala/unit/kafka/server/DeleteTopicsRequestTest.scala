@@ -73,6 +73,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
 
     // Timeout
     TestUtils.createTopic(zkUtils, timeoutTopic, 5, 2, servers)
+    // Must be a 0ms timeout to avoid transient test failures. Even a timeout of 1ms has succeeded in the past.
     validateErrorDeleteTopicRequests(new DeleteTopicsRequest(Set(timeoutTopic).asJava, 0),
       Map(timeoutTopic -> Errors.REQUEST_TIMED_OUT))
     // The topic should still get deleted eventually
