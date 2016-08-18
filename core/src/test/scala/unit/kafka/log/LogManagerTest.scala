@@ -158,6 +158,11 @@ class LogManagerTest {
     log.append(TestUtils.singleMessageSet("test".getBytes()))
   }
 
+  /**
+    * Ensures that LogManager only runs on logs with cleanup.policy=delete as
+    * cleanup.policy=compact_and_delete is done by LogCleaner.CleanerThread.
+    * LogManager doesn't clean logs with compaction enabled.
+    */
   @Test
   def testDoesntCleanLogsWithCompactDeletePolicy() {
     val logProps = new Properties()

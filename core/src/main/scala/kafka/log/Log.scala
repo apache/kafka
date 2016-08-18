@@ -598,12 +598,6 @@ class Log(val dir: File,
     retentionMsExpiredSegments(deleteOldSegments) + retentionSizeBreachedSegments(deleteOldSegments)
   }
 
-  private def hasOldSegments(predicate: LogSegment => Boolean): Int = {
-    lock synchronized {
-      deletableSegments(predicate).size
-    }
-  }
-
   private def retentionMsExpiredSegments(runWithPredicate: (LogSegment => Boolean) => Int) : Int = {
     if (config.retentionMs < 0) return 0
     val startMs = time.milliseconds
@@ -626,7 +620,13 @@ class Log(val dir: File,
 
   def shouldDeleteSegments: Boolean = {
     if (!config.delete) return false
-    retentionMsExpiredSegments(hasOldSegments) + retentionSizeBreachedSegments(hasOldSegments) > 0
+
+    def countDeletableSegments(predicate: LogSegment => Boolean): Int = {
+      lock synchronized {
+        deletableSegments(predicate).size
+      }
+    }
+    retentionMsExpiredSegments(countDeletableSegments) + retentionSizeBreachedSegments(countDeletableSegments) > 0
   }
 
   /**

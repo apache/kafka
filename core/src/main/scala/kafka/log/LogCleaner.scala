@@ -243,7 +243,7 @@ class LogCleaner(val config: CleanerConfig,
           }
           true
       }
-      val truncated: Iterable[(TopicAndPartition, Log)] = cleanerManager.logsReadyToBeTruncated()
+      val truncated: Iterable[(TopicAndPartition, Log)] = cleanerManager.logsWithSegmentsReadyToBeDeleted()
       truncated.foreach{
         case (topicPartition, log) =>
           try {

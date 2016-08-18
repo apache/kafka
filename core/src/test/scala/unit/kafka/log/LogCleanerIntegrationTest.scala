@@ -91,30 +91,6 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     assertFalse(checkpoints.contains(topics(0)))
   }
 
-
-  @Test
-  def testDoesntCleanCleanupPolicyDeleteTopics() {
-    val set = TestUtils.singleMessageSet("test".getBytes, codec = codec)
-    val logProps  = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, set.sizeInBytes * 5: java.lang.Integer)
-    logProps.put(LogConfig.RetentionMsProp, 10000: java.lang.Integer)
-    logProps.put(LogConfig.CleanupPolicyProp, "delete")
-    val backOffMillis = 10L
-    cleaner = makeCleaner(parts = 1, propertyOverrides = logProps, logCleanerBackOffMillis = backOffMillis)
-    val log = cleaner.logs.get(topics(0))
-    for (i <- 0 until 15)
-      log.append(set)
-
-    log.logSegments.head.lastModified = time.milliseconds - 20000L
-
-    val segments = log.numberOfSegments
-    cleaner.startup()
-
-    Thread.sleep(2 * backOffMillis)
-
-    assertEquals("no segments should have been deleted", segments, log.numberOfSegments)
-  }
-
   @Test
   def testCleansCombinedCompactAndDeleteTopic() {
     val logProps  = new Properties()

@@ -119,7 +119,7 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
     * Find any logs that are compact_and_delete that have segments
     * ready for deletion
     */
-  def logsReadyToBeTruncated(): Iterable[(TopicAndPartition, Log)] = {
+  def logsWithSegmentsReadyToBeDeleted(): Iterable[(TopicAndPartition, Log)] = {
     inLock(lock) {
       val toClean = logs.filterNot {
         case (topicAndPartition, log) => inProgress.contains(topicAndPartition)
