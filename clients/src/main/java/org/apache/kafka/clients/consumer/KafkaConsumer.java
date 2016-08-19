@@ -801,7 +801,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         throw new IllegalArgumentException("Topic collection to subscribe to cannot contain null or empty topic");
                 }
                 log.debug("Subscribed to topic(s): {}", Utils.join(topics, ", "));
-                this.subscriptions.subscribe(topics, listener);
+                this.subscriptions.subscribe(new HashSet<>(topics), listener);
                 metadata.setTopics(subscriptions.groupSubscription());
             }
         } finally {
@@ -914,7 +914,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 }
 
                 log.debug("Subscribed to partition(s): {}", Utils.join(partitions, ", "));
-                this.subscriptions.assignFromUser(partitions);
+                this.subscriptions.assignFromUser(new HashSet<>(partitions));
                 metadata.setTopics(topics);
             }
         } finally {
@@ -1007,6 +1007,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
         long now = time.milliseconds();
         client.poll(Math.min(coordinator.timeToNextPoll(now), timeout), now);
+
+        // after the long poll, we should check whether the group needs to rebalance
+        // prior to returning data so that the group can stabilize faster
+        if (coordinator.needRejoin())
+            return Collections.emptyMap();
+
         return fetcher.fetchedRecords();
     }
 
