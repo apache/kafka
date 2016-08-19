@@ -112,7 +112,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private Node coordinator = null;
     private Generation generation = Generation.NO_GENERATION;
 
-    private volatile RequestFuture<Void> findCoordinatorFuture = null;
+    private RequestFuture<Void> findCoordinatorFuture = null;
 
     /**
      * Initialize the coordination manager.
@@ -206,23 +206,10 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
-    protected RequestFuture<Void> lookupCoordinator() {
-        RequestFuture<Void> future = findCoordinatorFuture;
-        if (future == null) {
-            findCoordinatorFuture = future = sendGroupCoordinatorRequest();
-            future.addListener(new RequestFutureListener<Void>() {
-                @Override
-                public void onSuccess(Void value) {
-                    findCoordinatorFuture = null;
-                }
-
-                @Override
-                public void onFailure(RuntimeException e) {
-                    findCoordinatorFuture = null;
-                }
-            });
-        }
-        return future;
+    protected synchronized RequestFuture<Void> lookupCoordinator() {
+        if (findCoordinatorFuture == null || findCoordinatorFuture.isDone())
+            findCoordinatorFuture = sendGroupCoordinatorRequest();
+        return findCoordinatorFuture;
     }
 
     /**
