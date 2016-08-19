@@ -20,6 +20,7 @@ import joptsimple.OptionException;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
+import kafka.admin.AdminClient;
 import kafka.admin.TopicCommand;
 import kafka.utils.ZkUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -82,9 +83,17 @@ public class StreamsResetter {
 
         int exitCode = EXIT_CODE_SUCCESS;
 
+        AdminClient adminClient = null;
         ZkUtils zkUtils = null;
         try {
             parseArguments(args);
+
+            adminClient = AdminClient.createSimplePlaintext(this.options.valueOf(bootstrapServerOption));
+            final String groupId = this.options.valueOf(applicationIdOption);
+            if (adminClient.describeConsumerGroup(groupId).get().size() != 0) {
+                throw new IllegalStateException("Consumer group '" + groupId + "' is still active. " +
+                    "Make sure to stop all running application instances before running the reset tool.");
+            }
 
             zkUtils = ZkUtils.apply(this.options.valueOf(zookeeperOption),
                 30000,
@@ -97,10 +106,13 @@ public class StreamsResetter {
             resetInputAndInternalTopicOffsets();
             seekToEndIntermediateTopics();
             deleteInternalTopics(zkUtils);
-        } catch (final Exception e) {
+        } catch (final Throwable e) {
             exitCode = EXIT_CODE_ERROR;
             System.err.println("ERROR: " + e.getMessage());
         } finally {
+            if (adminClient != null) {
+                adminClient.close();
+            }
             if (zkUtils != null) {
                 zkUtils.close();
             }
