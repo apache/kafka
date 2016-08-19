@@ -507,8 +507,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             super(iter, serdes);
             if (from == null) {
                 iter.seekToFirst();
-            }
-            else {
+            } else {
                 iter.seek(serdes.rawKey(from));
             }
             if (to != null) {
