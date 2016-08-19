@@ -383,7 +383,6 @@ public class ConsumerCoordinatorTest {
 
         coordinator.poll(time.milliseconds());
 
-        // we should still need to rejoin because of the new matching topic
         assertFalse(coordinator.needRejoin());
         assertEquals(updatedSubscriptionSet, subscriptions.subscription());
         assertEquals(newAssignmentSet, subscriptions.assignedPartitions());
