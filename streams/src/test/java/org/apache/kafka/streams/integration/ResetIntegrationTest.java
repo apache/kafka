@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
+import kafka.admin.AdminClient;
 import kafka.tools.StreamsResetter;
 import kafka.utils.ZkUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -62,6 +63,8 @@ public class ResetIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
+    private final AdminClient adminClient = AdminClient.createSimplePlaintext(CLUSTER.bootstrapServers());
+
     private static final String APP_ID = "cleanup-integration-test";
     private static final String INPUT_TOPIC = "inputTopic";
     private static final String OUTPUT_TOPIC = "outputTopic";
@@ -101,11 +104,11 @@ public class ResetIntegrationTest {
         streams.close();
 
         // RESET
-        Utils.sleep(STREAMS_CONSUMER_TIMEOUT);
+        waitUntilConsumerGroupGotClosed(STREAMS_CONSUMER_TIMEOUT);
         streams.cleanUp();
         cleanGlobal();
         assertInternalTopicsGotDeleted();
-        Utils.sleep(CLEANUP_CONSUMER_TIMEOUT);
+        waitUntilConsumerGroupGotClosed(CLEANUP_CONSUMER_TIMEOUT);
 
         // RE-RUN
         streams = new KafkaStreams(setupTopology(OUTPUT_TOPIC_2_RERUN), streamsConfiguration);
@@ -226,6 +229,16 @@ public class ResetIntegrationTest {
             },
             cleanUpConfig);
         Assert.assertEquals(0, exitCode);
+    }
+
+    private void waitUntilConsumerGroupGotClosed(final long sleep) {
+        int retryCounter = 0;
+        while (this.adminClient.describeConsumerGroup(APP_ID).size() != 0) {
+            if (++retryCounter > 5) {
+                throw new RuntimeException("Consumer group did not time out after " + (5 * sleep) + " ms.");
+            }
+            Utils.sleep(STREAMS_CONSUMER_TIMEOUT);
+        }
     }
 
     private void assertInternalTopicsGotDeleted() {
