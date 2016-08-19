@@ -50,6 +50,28 @@ public class FatalExitError extends Error {
 
     public void shutdownSystem() {
         log.error("System.exit is invoked", this);
+        Thread t = new Thread("shutdown-system-thread") {
+            @Override
+            public void run() {
+                doShutdownSystem();
+            }
+        };
+        this.setUncaughtExceptionHandler(t);
+        t.start();
+    }
+
+    // this method can be overridden for testing
+    protected void setUncaughtExceptionHandler(Thread t) {
+        t.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+            @Override
+            public void uncaughtException(Thread t, Throwable e) {
+                log.error("Uncaught exception while shutting down the process", e);
+            }
+        });
+    }
+
+    // this method can be overridden for testing
+    protected void doShutdownSystem() {
         System.exit(exitStatus);
     }
 }

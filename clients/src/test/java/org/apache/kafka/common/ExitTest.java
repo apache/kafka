@@ -19,6 +19,8 @@ import org.junit.Before;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class ExitTest {
 
@@ -42,14 +44,40 @@ public class ExitTest {
         }
     }
 
-    @Test(expected = ExitException4Test.class)
+    private static class FatalExitError4Test extends FatalExitError {
+        boolean shutdownIsInvoked;
+        Thread shutdownInvokerThread;
+        FatalExitError4Test(int exitStatus) {
+            super(exitStatus);
+        }
+        @Override
+        protected void setUncaughtExceptionHandler(Thread t) {
+            shutdownInvokerThread = t;
+            t.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+                @Override
+                public void uncaughtException(Thread t, Throwable e) {
+                    shutdownIsInvoked = e instanceof ExitException4Test;
+                }
+            });
+        }
+    };
+
+    @Test
     public void testSystemExitInUtilThreads() {
         Thread t = Utils.newThread("test-exit-thread", new Runnable() {
             @Override
             public void run() {
             }
         }, false);
-        t.getUncaughtExceptionHandler().uncaughtException(t, new FatalExitError(1));
+        FatalExitError4Test exitError = new FatalExitError4Test(1);
+        t.getUncaughtExceptionHandler().uncaughtException(t, exitError);
+        try {
+            exitError.shutdownInvokerThread.join(1000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+            fail();
+        }
+        assertTrue(exitError.shutdownIsInvoked);
     }
 }
 
