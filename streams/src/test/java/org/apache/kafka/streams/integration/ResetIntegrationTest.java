@@ -230,7 +230,7 @@ public class ResetIntegrationTest {
 
     private void waitUntilConsumerGroupGotClosed(final long sleep) {
         int retryCounter = 0;
-        while (this.adminClient.describeConsumerGroup(APP_ID).size() != 0) {
+        while (this.adminClient.describeConsumerGroup(APP_ID).get().size() != 0) {
             if (++retryCounter > 5) {
                 throw new RuntimeException("Consumer group did not time out after " + (5 * sleep) + " ms.");
             }
