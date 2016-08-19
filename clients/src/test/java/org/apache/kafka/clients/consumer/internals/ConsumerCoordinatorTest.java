@@ -66,11 +66,13 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
+import static java.util.Collections.singletonMap;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -324,6 +326,71 @@ public class ConsumerCoordinatorTest {
         assertEquals(Collections.emptySet(), rebalanceListener.revoked);
         assertEquals(1, rebalanceListener.assignedCount);
         assertEquals(singleton(tp), rebalanceListener.assigned);
+    }
+
+    @Test
+    public void testMetadataRefreshDuringRebalance() {
+        final String consumerId = "leader";
+        final String otherTopicName = "otherTopic";
+        TopicPartition otherPartition = new TopicPartition(otherTopicName, 0);
+
+        subscriptions.subscribe(Pattern.compile(".*"), rebalanceListener);
+        metadata.needMetadataForAllTopics(true);
+        metadata.update(cluster, time.milliseconds());
+
+        assertEquals(singleton(topicName), subscriptions.subscription());
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE.code()));
+        coordinator.ensureCoordinatorReady();
+
+        Map<String, List<String>> initialSubscription = singletonMap(consumerId, Arrays.asList(topicName));
+        partitionAssignor.prepare(singletonMap(consumerId, singletonList(tp)));
+
+        // the metadata will be updated in flight with a new topic added
+        final List<String> updatedSubscription = Arrays.asList(topicName, otherTopicName);
+        final Set<String> updatedSubscriptionSet = new HashSet<>(updatedSubscription);
+
+        client.prepareResponse(joinGroupLeaderResponse(1, consumerId, initialSubscription, Errors.NONE.code()));
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(ClientRequest request) {
+                final Map<String, Integer> updatedPartitions = new HashMap<>();
+                for (String topic : updatedSubscription)
+                    updatedPartitions.put(topic, 1);
+                metadata.update(TestUtils.clusterWith(1, updatedPartitions), time.milliseconds());
+                return true;
+            }
+        }, syncGroupResponse(singletonList(tp), Errors.NONE.code()));
+
+        List<TopicPartition> newAssignment = Arrays.asList(tp, otherPartition);
+        Set<TopicPartition> newAssignmentSet = new HashSet<>(newAssignment);
+
+        Map<String, List<String>> updatedSubscriptions = singletonMap(consumerId, Arrays.asList(topicName, otherTopicName));
+        partitionAssignor.prepare(singletonMap(consumerId, newAssignment));
+
+        // we expect to see a second rebalance with the new-found topics
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(ClientRequest request) {
+                JoinGroupRequest join = new JoinGroupRequest(request.request().body());
+                ProtocolMetadata protocolMetadata = join.groupProtocols().iterator().next();
+                PartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(protocolMetadata.metadata());
+                protocolMetadata.metadata().rewind();
+                return subscription.topics().containsAll(updatedSubscriptionSet);
+            }
+        }, joinGroupLeaderResponse(2, consumerId, updatedSubscriptions, Errors.NONE.code()));
+        client.prepareResponse(syncGroupResponse(newAssignment, Errors.NONE.code()));
+
+        coordinator.poll(time.milliseconds());
+
+        // we should still need to rejoin because of the new matching topic
+        assertFalse(coordinator.needRejoin());
+        assertEquals(updatedSubscriptionSet, subscriptions.subscription());
+        assertEquals(newAssignmentSet, subscriptions.assignedPartitions());
+        assertEquals(2, rebalanceListener.revokedCount);
+        assertEquals(singleton(tp), rebalanceListener.revoked);
+        assertEquals(2, rebalanceListener.assignedCount);
+        assertEquals(newAssignmentSet, rebalanceListener.assigned);
     }
 
     @Test

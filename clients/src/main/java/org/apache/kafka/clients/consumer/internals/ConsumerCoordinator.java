@@ -166,6 +166,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                             topicsToSubscribe.add(topic);
 
                     subscriptions.subscribeFromPattern(topicsToSubscribe);
+
+                    // note we still need to update the topics contained in the metadata. Although we have
+                    // specified that all topics should be fetched, only those set explicitly will be retained
                     metadata.setTopics(subscriptions.groupSubscription());
                 }
 

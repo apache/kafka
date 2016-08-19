@@ -270,16 +270,6 @@ public abstract class AbstractCoordinator implements Closeable {
         // when sending heartbeats and does not necessarily require us to rejoin the group.
         ensureCoordinatorReady();
 
-        if (!needRejoin())
-            return;
-
-        // call onJoinPrepare if needed. We set a flag to make sure that we do not call it a second
-        // time if the client is woken up before a pending rebalance completes.
-        if (needsJoinPrepare) {
-            onJoinPrepare(generation.generationId, generation.memberId);
-            needsJoinPrepare = false;
-        }
-
         if (heartbeatThread == null) {
             heartbeatThread = new HeartbeatThread();
             heartbeatThread.start();
@@ -287,6 +277,16 @@ public abstract class AbstractCoordinator implements Closeable {
 
         while (needRejoin()) {
             ensureCoordinatorReady();
+
+            // call onJoinPrepare if needed. We set a flag to make sure that we do not call it a second
+            // time if the client is woken up before a pending rebalance completes. This must be called
+            // on each iteration of the loop because an event requiring a rebalance (such as a metadata
+            // refresh which changes the matched subscription set) can occur while another rebalance is
+            // still in progress.
+            if (needsJoinPrepare) {
+                onJoinPrepare(generation.generationId, generation.memberId);
+                needsJoinPrepare = false;
+            }
 
             // ensure that there are no pending requests to the coordinator. This is important
             // in particular to avoid resending a pending JoinGroup request.
