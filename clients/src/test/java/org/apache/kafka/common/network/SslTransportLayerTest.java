@@ -252,7 +252,22 @@ public class SslTransportLayerTest {
 
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
     }
-    
+
+    /**
+     * Tests that an invalid SecureRandom implementation cannot be configured
+     */
+    @Test
+    public void testInvalidSecureRandomImplementation() throws Exception {
+        SslChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT);
+        try {
+            sslClientConfigs.put(SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG, "invalid");
+            channelBuilder.configure(sslClientConfigs);
+            fail("SSL channel configured with invalid SecureRandom implementation");
+        } catch (KafkaException e) {
+            // Expected exception
+        }
+    }
+
     /**
      * Tests that channels cannot be created if truststore cannot be loaded
      */
