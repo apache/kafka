@@ -18,16 +18,24 @@ package org.apache.kafka.streams.state.internals;
 /**
  * A cache entry
  */
-public class MemoryLRUCacheBytesEntry<V> {
+public class MemoryLRUCacheBytesEntry<K, V> {
+    public K key;
     public V value;
     public boolean isDirty;
+    private long sizeBytes = 0;
 
-    public MemoryLRUCacheBytesEntry(V value) {
-        this(value, false);
+    public MemoryLRUCacheBytesEntry(K key, V value, long sizeBytes) {
+        this(key, value, sizeBytes, false);
     }
 
-    public MemoryLRUCacheBytesEntry(V value, boolean isDirty) {
+    public MemoryLRUCacheBytesEntry(K key, V value, long sizeBytes, boolean isDirty) {
+        this.key = key;
         this.value = value;
         this.isDirty = isDirty;
+        this.sizeBytes = sizeBytes;
+    }
+
+    public long size() {
+        return sizeBytes;
     }
 }

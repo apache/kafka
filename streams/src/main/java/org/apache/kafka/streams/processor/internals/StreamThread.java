@@ -163,7 +163,7 @@ public class StreamThread extends Thread {
         this.streamsMetadataState = streamsMetadataState;
         this.cacheSizeBytes = config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
             config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
-        this.cache = new MemoryLRUCacheBytes(cacheSizeBytes);
+        this.cache = new MemoryLRUCacheBytes("cache", cacheSizeBytes);
         // set the producer and consumer clients
         String threadName = getName();
         String threadClientId = clientId + "-" + threadName;

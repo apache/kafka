@@ -216,7 +216,7 @@ public class KTableAggregateTest {
                     public String apply(String key, String value, String aggregate) {
                         return aggregate.replaceAll(value, "");
                     }
-                }, "someStore")
+                }, Serdes.String(), "someStore")
                 .toStream()
                 .process(proc);
 

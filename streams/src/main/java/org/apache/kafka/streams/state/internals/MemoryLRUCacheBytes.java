@@ -16,19 +16,17 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StateSerdes;
-
+import org.apache.kafka.common.utils.Bytes;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
+
 
 /**
  * An in-memory LRU cache store based on HashSet and HashMap. XXX: the same as MemoryLRUCache for now.
@@ -38,73 +36,37 @@ import java.util.Map;
  * i.e. use {@code RocksDBStore<Bytes, ...>} rather than {@code RocksDBStore<byte[], ...>}.
 
  *
- * @param <K> The key type
- * @param <V> The value type
- *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
-public class MemoryLRUCacheBytes<K, V> implements KeyValueStore<K, V> {
+public class MemoryLRUCacheBytes implements KeyValueStore<Bytes, MemoryLRUCacheBytesEntry<Bytes, byte[]>> {
+    static final int DEFAULT_CAPACITY = 1000;
+    static final float DEFAULT_LOAD = 0.75f;
+    private long maxCacheSizeBytes;
+    private long currentSizeBytes = 0;
+    private LRUNode head = null;
+    private LRUNode tail = null;
+
     public interface EldestEntryRemovalListener<K, V> {
 
         void apply(K key, V value);
     }
-    private final Serde<K> keySerde;
 
-    private final Serde<V> valueSerde;
     private String name;
-    protected Map<K, V> map;
-    private StateSerdes<K, V> serdes;
+    protected Map<Bytes, LRUNode> map;
+
     private volatile boolean open = true;
 
-    protected List<MemoryLRUCacheBytes.EldestEntryRemovalListener<K, V>> listeners;
+    protected List<MemoryLRUCacheBytes.EldestEntryRemovalListener<Bytes, MemoryLRUCacheBytesEntry>> listeners;
 
-    // this is used for extended MemoryNavigableLRUCache only
-    public MemoryLRUCacheBytes(Serde<K> keySerde, Serde<V> valueSerde) {
-        this.keySerde = keySerde;
-        this.valueSerde = valueSerde;
+
+    public MemoryLRUCacheBytes(String name, long maxCacheSizeBytes) {
+        this.name = name;
+        this.maxCacheSizeBytes = maxCacheSizeBytes;
+        this.map = new HashMap<>(DEFAULT_CAPACITY, DEFAULT_CAPACITY);
         listeners = new ArrayList<>();
     }
 
-    public MemoryLRUCacheBytes(long maxCacheSizeBytes) {
-        // TODO: implement, for now equivalent to entry-based cache
-        this("tmpName", 1000, null, null);
-    }
-
-    public MemoryLRUCacheBytes(String name, final int maxCacheSize, Serde<K> keySerde, Serde<V> valueSerde) {
-        this(keySerde, valueSerde);
-        this.name = name;
-
-        // leave room for one extra entry to handle adding an entry before the oldest can be removed
-        this.map = new LinkedHashMap<K, V>(maxCacheSize + 1, 1.01f, true) {
-            private static final long serialVersionUID = 1L;
-
-            @Override
-            protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
-                if (size() > maxCacheSize) {
-                    K key = eldest.getKey();
-                    if (listeners != null) {
-                        for (MemoryLRUCacheBytes.EldestEntryRemovalListener<K, V> listener: listeners) {
-                            listener.apply(key, eldest.getValue());
-                        }
-                    }
-                    return true;
-                }
-                return false;
-            }
-        };
-    }
-
-    public KeyValueStore<K, V> enableLogging() {
-        return new InMemoryKeyValueLoggedStore<>(this.name, this, keySerde, valueSerde);
-    }
-
-    public MemoryLRUCacheBytes<K, V> whenEldestRemoved(MemoryLRUCacheBytes.EldestEntryRemovalListener<K, V> listener) {
-        addEldestRemovedListener(listener);
-
-        return this;
-    }
-
-    public void addEldestRemovedListener(MemoryLRUCacheBytes.EldestEntryRemovalListener<K, V> listener) {
+    public void addEldestRemovedListener(MemoryLRUCacheBytes.EldestEntryRemovalListener<Bytes, MemoryLRUCacheBytesEntry> listener) {
         this.listeners.add(listener);
     }
 
@@ -116,23 +78,7 @@ public class MemoryLRUCacheBytes<K, V> implements KeyValueStore<K, V> {
     @Override
     @SuppressWarnings("unchecked")
     public void init(ProcessorContext context, StateStore root) {
-        // construct the serde
-        this.serdes = new StateSerdes<>(name,
-            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
-
-        // register the store
-        context.register(root, true, new StateRestoreCallback() {
-            @Override
-            public void restore(byte[] key, byte[] value) {
-                // check value for null, to avoid  deserialization error.
-                if (value == null) {
-                    put(serdes.keyFrom(key), null);
-                } else {
-                    put(serdes.keyFrom(key), serdes.valueFrom(value));
-                }
-            }
-        });
+        // do nothing
     }
 
     @Override
@@ -145,19 +91,62 @@ public class MemoryLRUCacheBytes<K, V> implements KeyValueStore<K, V> {
         return open;
     }
 
+
+
     @Override
-    public synchronized V get(K key) {
-        return this.map.get(key);
+    public synchronized MemoryLRUCacheBytesEntry<Bytes, byte[]> get(Bytes key) {
+        MemoryLRUCacheBytesEntry entry = null;
+        // get element
+        LRUNode node = this.map.get(key);
+        if (node != null) {
+            entry = node.entry();
+            updateLRU(node);
+        }
+
+        return entry;
+    }
+
+    private void callListeners(MemoryLRUCacheBytesEntry entry) {
+        for (MemoryLRUCacheBytes.EldestEntryRemovalListener listener : listeners) {
+            listener.apply(entry.key, entry);
+        }
+    }
+
+    /**
+     * Check if we have enough space in cache to accept new element
+     * @param newElement new element to be insterted
+     */
+    private void maybeEvict(LRUNode newElement) {
+        while (sizeBytes() + newElement.entry().size() > maxCacheSizeBytes) {
+            LRUNode removed = this.map.remove(tail.entry().key);
+            remove(tail);
+            currentSizeBytes -= removed.entry().size();
+            callListeners(removed.entry());
+        }
     }
 
     @Override
-    public synchronized void put(K key, V value) {
-        this.map.put(key, value);
+    public synchronized void put(Bytes key, MemoryLRUCacheBytesEntry<Bytes, byte[]> value) {
+        if (this.map.containsKey(key)) {
+            LRUNode node = this.map.get(key);
+            currentSizeBytes -= node.entry().size();
+            node.update(value);
+            updateLRU(node);
+
+        } else {
+            LRUNode node = new LRUNode(value);
+            // check if we need to evict anything
+            maybeEvict(node);
+            // put element
+            putHead(node);
+            this.map.put(key, node);
+        }
+        currentSizeBytes += value.size();
     }
 
     @Override
-    public synchronized V putIfAbsent(K key, V value) {
-        V originalValue = get(key);
+    public synchronized MemoryLRUCacheBytesEntry<Bytes, byte[]> putIfAbsent(Bytes key, MemoryLRUCacheBytesEntry<Bytes, byte[]> value) {
+        MemoryLRUCacheBytesEntry originalValue = get(key);
         if (originalValue == null) {
             put(key, value);
         }
@@ -165,31 +154,37 @@ public class MemoryLRUCacheBytes<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public void putAll(List<KeyValue<K, V>> entries) {
-        for (KeyValue<K, V> entry : entries)
+    public void putAll(List<KeyValue<Bytes, MemoryLRUCacheBytesEntry<Bytes, byte[]>>> entries) {
+        for (KeyValue<Bytes, MemoryLRUCacheBytesEntry<Bytes, byte[]>> entry : entries)
             put(entry.key, entry.value);
     }
 
     @Override
-    public synchronized V delete(K key) {
-        V value = this.map.remove(key);
-        return value;
+    public synchronized MemoryLRUCacheBytesEntry<Bytes, byte[]> delete(Bytes key) {
+        LRUNode node = this.map.get(key);
+
+        // remove from LRU list
+        remove(node);
+
+        // remove from map
+        LRUNode value = this.map.remove(key);
+        return value.entry();
     }
 
     /**
      * @throws UnsupportedOperationException
      */
     @Override
-    public KeyValueIterator<K, V> range(K from, K to) {
-        throw new UnsupportedOperationException("MemoryLRUCache does not support range() function.");
+    public KeyValueIterator<Bytes, MemoryLRUCacheBytesEntry<Bytes, byte[]>> range(Bytes from, Bytes to) {
+        throw new UnsupportedOperationException("MemoryLRUCacheBytes does not support range() function.");
     }
 
     /**
      * @throws UnsupportedOperationException
      */
     @Override
-    public KeyValueIterator<K, V> all() {
-        throw new UnsupportedOperationException("MemoryLRUCache does not support all() function.");
+    public KeyValueIterator<Bytes, MemoryLRUCacheBytesEntry<Bytes, byte[]>> all() {
+        throw new UnsupportedOperationException("MemoryLRUCacheBytes does not support all() function.");
     }
 
     @Override
@@ -210,4 +205,75 @@ public class MemoryLRUCacheBytes<K, V> implements KeyValueStore<K, V> {
     public int size() {
         return this.map.size();
     }
+
+    public long sizeBytes() {
+        return currentSizeBytes;
+    }
+
+
+    private void putHead(LRUNode node) {
+        node.next = head;
+        node.previous = null;
+        if (head != null) {
+            head.previous = node;
+        }
+        head = node;
+        if (tail == null) {
+            tail = head;
+        }
+    }
+    private void remove(LRUNode node) {
+        if (node.previous != null) {
+            node.previous.next = node.next;
+        } else {
+            head = node.next;
+        }
+        if (node.next != null) {
+            node.next.previous = node.previous;
+        } else {
+            tail = node.previous;
+        }
+    }
+
+    /**
+     * Update the LRU position of this node to be the head of list
+     * @param node
+     */
+    private void updateLRU(LRUNode node) {
+        remove(node);
+
+        putHead(node);
+    }
+
+    protected LRUNode head() {
+        return head;
+    }
+
+    protected LRUNode tail() {
+        return tail;
+    }
+
+
+    /**
+     * A simple wrapper class to implement a doubly-linked list around
+     * MemoryLRUCacheBytesEntry
+     */
+    protected class LRUNode {
+        private MemoryLRUCacheBytesEntry<Bytes, byte[]> entry;
+        private LRUNode previous;
+        private LRUNode next;
+        LRUNode(MemoryLRUCacheBytesEntry<Bytes, byte[]> entry) {
+            this.entry = entry;
+        }
+
+        public MemoryLRUCacheBytesEntry<Bytes, byte[]> entry() {
+            return entry;
+        }
+
+        public void update(MemoryLRUCacheBytesEntry<Bytes, byte[]> entry) {
+            this.entry = entry;
+        }
+    }
+
+
 }
