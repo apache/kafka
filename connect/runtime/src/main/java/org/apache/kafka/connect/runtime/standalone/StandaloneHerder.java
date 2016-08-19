@@ -206,14 +206,16 @@ public class StandaloneHerder extends AbstractHerder {
         if (!configState.contains(taskId.connector()))
             cb.onCompletion(new NotFoundException("Connector " + taskId.connector() + " not found", null), null);
 
-        Map<String, String> taskConfig = configState.taskConfig(taskId);
-        if (taskConfig == null)
+        Map<String, String> taskConfigProps = configState.taskConfig(taskId);
+        if (taskConfigProps == null)
             cb.onCompletion(new NotFoundException("Task " + taskId + " not found", null), null);
+        TaskConfig taskConfig = new TaskConfig(taskConfigProps);
+        ConnectorConfig connConfig = new ConnectorConfig(configState.connectorConfig(taskId.connector()));
 
         TargetState targetState = configState.targetState(taskId.connector());
         try {
             worker.stopAndAwaitTask(taskId);
-            worker.startTask(taskId, new TaskConfig(taskConfig), this, targetState);
+            worker.startTask(taskId, taskConfig, connConfig, this, targetState);
             cb.onCompletion(null, null);
         } catch (Exception e) {
             log.error("Failed to restart task {}", taskId, e);
@@ -270,11 +272,14 @@ public class StandaloneHerder extends AbstractHerder {
     }
 
     private void createConnectorTasks(String connName, TargetState initialState) {
+        Map<String, String> connConfigs = configState.connectorConfig(connName);
+        ConnectorConfig connConfig = new ConnectorConfig(connConfigs);
+
         for (ConnectorTaskId taskId : configState.tasks(connName)) {
             Map<String, String> taskConfigMap = configState.taskConfig(taskId);
-            TaskConfig config = new TaskConfig(taskConfigMap);
+            TaskConfig taskConfig = new TaskConfig(taskConfigMap);
             try {
-                worker.startTask(taskId, config, this, initialState);
+                worker.startTask(taskId, taskConfig, connConfig, this, initialState);
             } catch (Throwable e) {
                 log.error("Failed to add task {}: ", taskId, e);
                 // Swallow this so we can continue updating the rest of the tasks

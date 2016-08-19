@@ -23,7 +23,10 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -35,6 +38,7 @@ import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.MockTime;
 import org.apache.kafka.connect.util.ThreadedTest;
+import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
@@ -352,8 +356,8 @@ public class WorkerTest extends ThreadedTest {
                 EasyMock.eq(task),
                 EasyMock.anyObject(TaskStatus.Listener.class),
                 EasyMock.eq(TargetState.STARTED),
-                EasyMock.anyObject(Converter.class),
-                EasyMock.anyObject(Converter.class),
+                EasyMock.anyObject(JsonConverter.class),
+                EasyMock.anyObject(JsonConverter.class),
                 EasyMock.anyObject(KafkaProducer.class),
                 EasyMock.anyObject(OffsetStorageReader.class),
                 EasyMock.anyObject(OffsetStorageWriter.class),
@@ -380,7 +384,7 @@ public class WorkerTest extends ThreadedTest {
         worker = new Worker(WORKER_ID, new MockTime(), config, offsetBackingStore);
         worker.start();
         assertEquals(Collections.emptySet(), worker.taskIds());
-        worker.startTask(TASK_ID, new TaskConfig(origProps), taskStatusListener, TargetState.STARTED);
+        worker.startTask(TASK_ID, new TaskConfig(origProps), anyConnectorConfig(), taskStatusListener, TargetState.STARTED);
         assertEquals(new HashSet<>(Arrays.asList(TASK_ID)), worker.taskIds());
         worker.stopAndAwaitTask(TASK_ID);
         assertEquals(Collections.emptySet(), worker.taskIds());
@@ -420,8 +424,8 @@ public class WorkerTest extends ThreadedTest {
                 EasyMock.eq(task),
                 EasyMock.anyObject(TaskStatus.Listener.class),
                 EasyMock.eq(TargetState.STARTED),
-                EasyMock.anyObject(Converter.class),
-                EasyMock.anyObject(Converter.class),
+                EasyMock.anyObject(JsonConverter.class),
+                EasyMock.anyObject(JsonConverter.class),
                 EasyMock.anyObject(KafkaProducer.class),
                 EasyMock.anyObject(OffsetStorageReader.class),
                 EasyMock.anyObject(OffsetStorageWriter.class),
@@ -449,8 +453,75 @@ public class WorkerTest extends ThreadedTest {
 
         worker = new Worker(WORKER_ID, new MockTime(), config, offsetBackingStore);
         worker.start();
-        worker.startTask(TASK_ID, new TaskConfig(origProps), taskStatusListener, TargetState.STARTED);
+        worker.startTask(TASK_ID, new TaskConfig(origProps), anyConnectorConfig(), taskStatusListener, TargetState.STARTED);
         worker.stop();
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testConverterOverrides() throws Exception {
+        expectStartStorage();
+
+        TestSourceTask task = PowerMock.createMock(TestSourceTask.class);
+        WorkerSourceTask workerTask = PowerMock.createMock(WorkerSourceTask.class);
+        EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
+
+        PowerMock.mockStaticPartial(Worker.class, "instantiateTask");
+        PowerMock.expectPrivate(Worker.class, "instantiateTask", new Object[]{TestSourceTask.class}).andReturn(task);
+        EasyMock.expect(task.version()).andReturn("1.0");
+
+        Capture<TestConverter> keyConverter = EasyMock.newCapture();
+        Capture<TestConverter> valueConverter = EasyMock.newCapture();
+
+        PowerMock.expectNew(
+                WorkerSourceTask.class, EasyMock.eq(TASK_ID),
+                EasyMock.eq(task),
+                EasyMock.anyObject(TaskStatus.Listener.class),
+                EasyMock.eq(TargetState.STARTED),
+                EasyMock.capture(keyConverter),
+                EasyMock.capture(valueConverter),
+                EasyMock.anyObject(KafkaProducer.class),
+                EasyMock.anyObject(OffsetStorageReader.class),
+                EasyMock.anyObject(OffsetStorageWriter.class),
+                EasyMock.anyObject(WorkerConfig.class),
+                EasyMock.anyObject(Time.class))
+                .andReturn(workerTask);
+        Map<String, String> origProps = new HashMap<>();
+        origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
+        workerTask.initialize(new TaskConfig(origProps));
+        EasyMock.expectLastCall();
+        workerTask.run();
+        EasyMock.expectLastCall();
+
+        // Remove
+        workerTask.stop();
+        EasyMock.expectLastCall();
+        EasyMock.expect(workerTask.awaitStop(EasyMock.anyLong())).andStubReturn(true);
+        EasyMock.expectLastCall();
+
+        expectStopStorage();
+
+        PowerMock.replayAll();
+
+        worker = new Worker(WORKER_ID, new MockTime(), config, offsetBackingStore);
+        worker.start();
+        assertEquals(Collections.emptySet(), worker.taskIds());
+        Map<String, String> connProps = anyConnectorConfigMap();
+        connProps.put(ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
+        connProps.put("key.converter.extra.config", "foo");
+        connProps.put(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
+        connProps.put("value.converter.extra.config", "bar");
+        worker.startTask(TASK_ID, new TaskConfig(origProps), new ConnectorConfig(connProps), taskStatusListener, TargetState.STARTED);
+        assertEquals(new HashSet<>(Arrays.asList(TASK_ID)), worker.taskIds());
+        worker.stopAndAwaitTask(TASK_ID);
+        assertEquals(Collections.emptySet(), worker.taskIds());
+        // Nothing should be left, so this should effectively be a nop
+        worker.stop();
+
+        // Validate extra configs got passed through to overridden converters
+        assertEquals("foo", keyConverter.getValue().configs.get("extra.config"));
+        assertEquals("bar", valueConverter.getValue().configs.get("extra.config"));
 
         PowerMock.verifyAll();
     }
@@ -467,6 +538,17 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expectLastCall();
     }
 
+    private Map<String, String> anyConnectorConfigMap() {
+        Map<String, String> props = new HashMap<>();
+        props.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
+        props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, WorkerTestConnector.class.getName());
+        props.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
+        return props;
+    }
+
+    private ConnectorConfig anyConnectorConfig() {
+        return new ConnectorConfig(anyConnectorConfigMap());
+    }
 
     /* Name here needs to be unique as we are testing the aliasing mechanism */
     public static class WorkerTestConnector extends Connector {
@@ -525,6 +607,25 @@ public class WorkerTest extends ThreadedTest {
 
         @Override
         public void stop() {
+        }
+    }
+
+    public static class TestConverter implements Converter {
+        public Map<String, ?> configs;
+
+        @Override
+        public void configure(Map<String, ?> configs, boolean isKey) {
+            this.configs = configs;
+        }
+
+        @Override
+        public byte[] fromConnectData(String topic, Schema schema, Object value) {
+            return new byte[0];
+        }
+
+        @Override
+        public SchemaAndValue toConnectData(String topic, byte[] value) {
+            return null;
         }
     }
 }
