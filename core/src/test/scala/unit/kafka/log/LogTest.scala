@@ -35,7 +35,7 @@ class LogTest extends JUnitSuite {
 
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
-  val time = new MockTime(0)
+  val time = new MockTime(100)
   var config: KafkaConfig = null
   val logConfig = LogConfig()
 
@@ -87,6 +87,20 @@ class LogTest extends JUnitSuite {
       log.append(set)
       assertEquals("Changing time beyond rollMs and appending should create a new segment.", numSegments, log.numberOfSegments)
     }
+
+    time.sleep(log.config.segmentMs + 1)
+    val setWithTimestamp =
+      TestUtils.singleMessageSet(payload = "test".getBytes, timestamp = time.milliseconds + log.config.segmentMs + 1)
+    log.append(setWithTimestamp)
+    assertEquals("A new segment should have been rolled out", 5, log.numberOfSegments)
+
+    time.sleep(log.config.segmentMs + 1)
+    log.append(set)
+    assertEquals("Log should not roll because the roll should depend on the index of the first time index entry.", 5, log.numberOfSegments)
+
+    time.sleep(log.config.segmentMs + 1)
+    log.append(set)
+    assertEquals("Log should roll because the time since the timestamp of first time index entry has expired.", 6, log.numberOfSegments)
 
     val numSegments = log.numberOfSegments
     time.sleep(log.config.segmentMs + 1)
@@ -457,25 +471,61 @@ class LogTest extends JUnitSuite {
     val config = LogConfig(logProps)
     var log = new Log(logDir, config, recoveryPoint = 0L, time.scheduler, time)
     for(i <- 0 until numMessages)
-      log.append(TestUtils.singleMessageSet(TestUtils.randomBytes(messageSize)))
+      log.append(TestUtils.singleMessageSet(payload = TestUtils.randomBytes(messageSize),
+        timestamp = time.milliseconds + i * 10))
     assertEquals("After appending %d messages to an empty log, the log end offset should be %d".format(numMessages, numMessages), numMessages, log.logEndOffset)
     val lastIndexOffset = log.activeSegment.index.lastOffset
     val numIndexEntries = log.activeSegment.index.entries
     val lastOffset = log.logEndOffset
+    // After segment is closed, the last entry in the time index should be (largest timestamp -> last offset).
+    val lastTimeIndexOffset = log.logEndOffset - 1
+    val lastTimeIndexTimestamp  = log.activeSegment.largestTimestamp
+    // Depending on when the last time index entry is inserted, an entry may or may not be inserted into the time index.
+    val numTimeIndexEntries = log.activeSegment.timeIndex.entries + {
+      if (log.activeSegment.timeIndex.lastEntry.offset == log.logEndOffset - 1) 0 else 1
+    }
     log.close()
 
+    def verifyRecoveredLog(log: Log) {
+      assertEquals(s"Should have $numMessages messages when log is reopened w/o recovery", numMessages, log.logEndOffset)
+      assertEquals("Should have same last index offset as before.", lastIndexOffset, log.activeSegment.index.lastOffset)
+      assertEquals("Should have same number of index entries as before.", numIndexEntries, log.activeSegment.index.entries)
+      assertEquals("Should have same last time index timestamp", lastTimeIndexTimestamp, log.activeSegment.timeIndex.lastEntry.timestamp)
+      assertEquals("Should have same last time index offset", lastTimeIndexOffset, log.activeSegment.timeIndex.lastEntry.offset)
+      assertEquals("Should have same number of time index entries as before.", numTimeIndexEntries, log.activeSegment.timeIndex.entries)
+    }
+
     log = new Log(logDir, config, recoveryPoint = lastOffset, time.scheduler, time)
-    assertEquals("Should have %d messages when log is reopened w/o recovery".format(numMessages), numMessages, log.logEndOffset)
-    assertEquals("Should have same last index offset as before.", lastIndexOffset, log.activeSegment.index.lastOffset)
-    assertEquals("Should have same number of index entries as before.", numIndexEntries, log.activeSegment.index.entries)
+    verifyRecoveredLog(log)
     log.close()
 
     // test recovery case
     log = new Log(logDir, config, recoveryPoint = 0L, time.scheduler, time)
-    assertEquals("Should have %d messages when log is reopened with recovery".format(numMessages), numMessages, log.logEndOffset)
-    assertEquals("Should have same last index offset as before.", lastIndexOffset, log.activeSegment.index.lastOffset)
-    assertEquals("Should have same number of index entries as before.", numIndexEntries, log.activeSegment.index.entries)
+    verifyRecoveredLog(log)
     log.close()
+  }
+
+  /**
+   * Test building the time index on the follower by setting assignOffsets to false.
+   */
+  @Test
+  def testBuildTimeIndexWhenNotAssigningOffsets() {
+    val numMessages = 100
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 10000: java.lang.Integer)
+    logProps.put(LogConfig.IndexIntervalBytesProp, 1: java.lang.Integer)
+
+    val config = LogConfig(logProps)
+    val log = new Log(logDir, config, recoveryPoint = 0L, time.scheduler, time)
+
+    val messages = (0 until numMessages).map { i =>
+      new ByteBufferMessageSet(NoCompressionCodec, new LongRef(100 + i), new Message(i.toString.getBytes(), time.milliseconds + i, Message.MagicValue_V1))
+    }
+    messages.foreach(log.append(_, assignOffsets = false))
+    val timeIndexEntries = log.logSegments.foldLeft(0) { (entries, segment) => entries + segment.timeIndex.entries }
+    assertEquals(s"There should be ${numMessages - 1} time index entries", numMessages - 1, timeIndexEntries)
+    assertEquals(s"The last time index entry should have timestamp ${time.milliseconds + numMessages - 1}",
+      time.milliseconds + numMessages - 1, log.activeSegment.timeIndex.lastEntry.timestamp)
   }
 
   /**
@@ -492,19 +542,58 @@ class LogTest extends JUnitSuite {
     val config = LogConfig(logProps)
     var log = new Log(logDir, config, recoveryPoint = 0L, time.scheduler, time)
     for(i <- 0 until numMessages)
-      log.append(TestUtils.singleMessageSet(TestUtils.randomBytes(10)))
+      log.append(TestUtils.singleMessageSet(payload = TestUtils.randomBytes(10), timestamp = time.milliseconds + i * 10))
     val indexFiles = log.logSegments.map(_.index.file)
+    val timeIndexFiles = log.logSegments.map(_.timeIndex.file)
     log.close()
 
     // delete all the index files
     indexFiles.foreach(_.delete())
+    timeIndexFiles.foreach(_.delete())
 
     // reopen the log
     log = new Log(logDir, config, recoveryPoint = 0L, time.scheduler, time)
     assertEquals("Should have %d messages when log is reopened".format(numMessages), numMessages, log.logEndOffset)
-    for(i <- 0 until numMessages)
+    assertTrue("The index should have been rebuilt", log.logSegments.head.index.entries > 0)
+    assertTrue("The time index should have been rebuilt", log.logSegments.head.timeIndex.entries > 0)
+    for(i <- 0 until numMessages) {
       assertEquals(i, log.read(i, 100, None).messageSet.head.offset)
+      if (i == 0)
+        assertEquals(log.logSegments.head.baseOffset, log.fetchOffsetsByTimestamp(time.milliseconds + i * 10))
+      else
+        assertEquals(i, log.fetchOffsetsByTimestamp(time.milliseconds + i * 10))
+    }
     log.close()
+  }
+
+  /**
+   * Test that if messages format version of the messages in a segment is before 0.10.0, the time index should be empty.
+   */
+  @Test
+  def testRebuildTimeIndexForOldMessages() {
+    val numMessages = 200
+    val segmentSize = 200
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, segmentSize: java.lang.Integer)
+    logProps.put(LogConfig.IndexIntervalBytesProp, 1: java.lang.Integer)
+    logProps.put(LogConfig.MessageFormatVersionProp, "0.9.0")
+
+    val config = LogConfig(logProps)
+    var log = new Log(logDir, config, recoveryPoint = 0L, time.scheduler, time)
+    for(i <- 0 until numMessages)
+      log.append(TestUtils.singleMessageSet(payload = TestUtils.randomBytes(10), timestamp = time.milliseconds + i * 10))
+    val timeIndexFiles = log.logSegments.map(_.timeIndex.file)
+    log.close()
+
+    // Delete the time index.
+    timeIndexFiles.foreach(_.delete())
+
+    // The rebuilt time index should be empty
+    log = new Log(logDir, config, recoveryPoint = numMessages + 1, time.scheduler, time)
+    val segArray = log.logSegments.toArray
+    for (i <- 0 until segArray.size - 1)
+      assertEquals("The time index should be empty", 0, segArray(i).timeIndex.entries)
+
   }
 
   /**
@@ -521,8 +610,9 @@ class LogTest extends JUnitSuite {
     val config = LogConfig(logProps)
     var log = new Log(logDir, config, recoveryPoint = 0L, time.scheduler, time)
     for(i <- 0 until numMessages)
-      log.append(TestUtils.singleMessageSet(TestUtils.randomBytes(10)))
+      log.append(TestUtils.singleMessageSet(payload = TestUtils.randomBytes(10), timestamp = time.milliseconds + i * 10))
     val indexFiles = log.logSegments.map(_.index.file)
+    val timeIndexFiles = log.logSegments.map(_.timeIndex.file)
     log.close()
 
     // corrupt all the index files
@@ -532,11 +622,23 @@ class LogTest extends JUnitSuite {
       bw.close()
     }
 
+    // corrupt all the index files
+    for( file <- timeIndexFiles) {
+      val bw = new BufferedWriter(new FileWriter(file))
+      bw.write("  ")
+      bw.close()
+    }
+
     // reopen the log
     log = new Log(logDir, config, recoveryPoint = 200L, time.scheduler, time)
     assertEquals("Should have %d messages when log is reopened".format(numMessages), numMessages, log.logEndOffset)
-    for(i <- 0 until numMessages)
+    for(i <- 0 until numMessages) {
       assertEquals(i, log.read(i, 100, None).messageSet.head.offset)
+      if (i == 0)
+        assertEquals(log.logSegments.head.baseOffset, log.fetchOffsetsByTimestamp(time.milliseconds + i * 10))
+      else
+        assertEquals(i, log.fetchOffsetsByTimestamp(time.milliseconds + i * 10))
+    }
     log.close()
   }
 
@@ -602,27 +704,37 @@ class LogTest extends JUnitSuite {
    */
   @Test
   def testIndexResizingAtTruncation() {
-    val set = TestUtils.singleMessageSet("test".getBytes)
-    val setSize = set.sizeInBytes
+    val setSize = TestUtils.singleMessageSet(payload = "test".getBytes).sizeInBytes
     val msgPerSeg = 10
     val segmentSize = msgPerSeg * setSize  // each segment will be 10 messages
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, segmentSize: java.lang.Integer)
+    logProps.put(LogConfig.IndexIntervalBytesProp, (setSize - 1): java.lang.Integer)
     val config = LogConfig(logProps)
     val log = new Log(logDir, config, recoveryPoint = 0L, scheduler = time.scheduler, time = time)
     assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)
+
     for (i<- 1 to msgPerSeg)
-      log.append(set)
+      log.append(TestUtils.singleMessageSet(payload = "test".getBytes, timestamp = time.milliseconds + i))
     assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)
+
+    time.sleep(msgPerSeg)
     for (i<- 1 to msgPerSeg)
-      log.append(set)
+      log.append(TestUtils.singleMessageSet(payload = "test".getBytes, timestamp = time.milliseconds + i))
     assertEquals("There should be exactly 2 segment.", 2, log.numberOfSegments)
-    assertEquals("The index of the first segment should be trimmed to empty", 0, log.logSegments.toList.head.index.maxEntries)
+    val expectedEntries = msgPerSeg - 1
+
+    assertEquals(s"The index of the first segment should have $expectedEntries entries", expectedEntries, log.logSegments.toList.head.index.maxEntries)
+    assertEquals(s"The time index of the first segment should have $expectedEntries entries", expectedEntries, log.logSegments.toList.head.timeIndex.maxEntries)
+
     log.truncateTo(0)
     assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)
     assertEquals("The index of segment 1 should be resized to maxIndexSize", log.config.maxIndexSize/8, log.logSegments.toList.head.index.maxEntries)
+    assertEquals("The time index of segment 1 should be resized to maxIndexSize", log.config.maxIndexSize/12, log.logSegments.toList.head.timeIndex.maxEntries)
+
+    time.sleep(msgPerSeg)
     for (i<- 1 to msgPerSeg)
-      log.append(set)
+      log.append(TestUtils.singleMessageSet(payload = "test".getBytes, timestamp = time.milliseconds + i))
     assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)
   }
 
@@ -632,7 +744,9 @@ class LogTest extends JUnitSuite {
   @Test
   def testBogusIndexSegmentsAreRemoved() {
     val bogusIndex1 = Log.indexFilename(logDir, 0)
+    val bogusTimeIndex1 = Log.timeIndexFilename(logDir, 0)
     val bogusIndex2 = Log.indexFilename(logDir, 5)
+    val bogusTimeIndex2 = Log.timeIndexFilename(logDir, 5)
 
     val set = TestUtils.singleMessageSet("test".getBytes)
     val logProps = new Properties()
@@ -646,7 +760,9 @@ class LogTest extends JUnitSuite {
                       time)
 
     assertTrue("The first index file should have been replaced with a larger file", bogusIndex1.length > 0)
+    assertTrue("The first time index file should have been replaced with a larger file", bogusTimeIndex1.length > 0)
     assertFalse("The second index file should have been deleted.", bogusIndex2.exists)
+    assertFalse("The second time index file should have been deleted.", bogusTimeIndex2.exists)
 
     // check that we can append to the log
     for(i <- 0 until 10)
