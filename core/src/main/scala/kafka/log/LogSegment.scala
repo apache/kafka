@@ -56,7 +56,7 @@ class LogSegment(val log: FileMessageSet,
   private var bytesSinceLastIndexEntry = 0
 
   /* The timestamp we used for time based log rolling */
-  private var rollingBaseTimestamp: Option[Long] = None
+  private var rollingBasedTimestamp: Option[Long] = None
 
   /* The maximum timestamp we see so far */
   @volatile private var maxTimestampSoFar = timeIndex.lastEntry.timestamp
@@ -88,10 +88,11 @@ class LogSegment(val log: FileMessageSet,
   @nonthreadsafe
   def append(firstOffset: Long, largestTimestamp: Long, offsetOfLargestTimestamp: Long, messages: ByteBufferMessageSet) {
     if (messages.sizeInBytes > 0) {
-      trace("Inserting %d bytes at offset %d at position %d".format(messages.sizeInBytes, firstOffset, log.sizeInBytes()))
+      trace("Inserting %d bytes at offset %d at position %d with largest timestamp %d at offset %d"
+          .format(messages.sizeInBytes, firstOffset, log.sizeInBytes(), largestTimestamp, offsetOfLargestTimestamp))
       val physicalPosition = log.sizeInBytes()
       if (physicalPosition == 0)
-        rollingBaseTimestamp = Some(largestTimestamp)
+        rollingBasedTimestamp = Some(largestTimestamp)
       // append the messages
       log.append(messages)
       // Update the in memory max timestamp and corresponding offset.
@@ -269,7 +270,7 @@ class LogSegment(val log: FileMessageSet,
     val bytesTruncated = log.truncateTo(mapping.position)
     if(log.sizeInBytes == 0) {
       created = time.milliseconds
-      rollingBaseTimestamp = None
+      rollingBasedTimestamp = None
     }
     bytesSinceLastIndexEntry = 0
     // We may need to reload the max timestamp after truncation.
@@ -342,16 +343,16 @@ class LogSegment(val log: FileMessageSet,
    * the time is based on the create time of the segment. Otherwise the time is based on the timestamp of that message.
    */
   def timeWaitedForRoll(now: Long) : Long= {
-    // Load the timestamp of the first messsage into memory
-    if (!rollingBaseTimestamp.isDefined) {
+    // Load the timestamp of the first message into memory
+    if (!rollingBasedTimestamp.isDefined) {
       val iter = log.iterator
       if (iter.hasNext)
-        rollingBaseTimestamp = Some(iter.next.message.timestamp)
+        rollingBasedTimestamp = Some(iter.next.message.timestamp)
       else
         // If the log is empty, we return 0 as time waited.
-        return 0L
+        return now - created
     }
-    now - {if (rollingBaseTimestamp.get >= 0) rollingBaseTimestamp.get else created}
+    now - {if (rollingBasedTimestamp.get >= 0) rollingBasedTimestamp.get else created}
   }
 
   /**
@@ -392,11 +393,7 @@ class LogSegment(val log: FileMessageSet,
    * Close this log segment
    */
   def close() {
-    CoreUtils.swallow {
-      // We only append the max timestamp so far if there is one. Otherwise the time index would be empty.
-      // In the latter case, the largestTimestamp will be last modified time.
-      timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipFullCheck = true)
-    }
+    timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipFullCheck = true)
     CoreUtils.swallow(index.close)
     CoreUtils.swallow(timeIndex.close())
     CoreUtils.swallow(log.close)

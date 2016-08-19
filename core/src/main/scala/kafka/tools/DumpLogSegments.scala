@@ -396,7 +396,6 @@ object DumpLogSegments {
     }
 
     def printErrors() {
-      System.err.println("size = " + shallowOffsetNotFound.size)
       misMatchesForTimeIndexFilesMap.foreach {
         case (fileName, listOfMismatches) => {
           System.err.println("Found timestamp mismatch in :" + fileName)

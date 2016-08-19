@@ -465,7 +465,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
 
       if (!inPlaceAssignment) {
         // Cannot do in place assignment.
-        val (wrapperMessageTimestamp, offsetOfMaxTimestampInMessageSet) = {
+        val (largestTimestampOfMessageSet, offsetOfMaxTimestampInMessageSet) = {
           if (messageFormatVersion == Message.MagicValue_V0)
             (Some(Message.NoTimestamp), -1L)
           else if (messageTimestampType == TimestampType.CREATE_TIME)
@@ -474,13 +474,14 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
             (Some(now), {if (targetCodec == NoCompressionCodec) offsetCounter.value else offsetCounter.value + validatedMessages.length - 1})
         }
 
-        ValidationAndOffsetAssignResult(new ByteBufferMessageSet(compressionCodec = targetCodec,
-                                                                 offsetCounter = offsetCounter,
-                                                                 wrapperMessageTimestamp = wrapperMessageTimestamp,
-                                                                 timestampType = messageTimestampType,
-                                                                 messages = validatedMessages: _*),
-                                        offsetOfMaxTimestampInMessageSet,
-                                        wrapperMessageTimestamp.get, messageSizeMaybeChanged = true)
+        ValidationAndOffsetAssignResult(validatedMessages = new ByteBufferMessageSet(compressionCodec = targetCodec,
+                                                                                     offsetCounter = offsetCounter,
+                                                                                     wrapperMessageTimestamp = largestTimestampOfMessageSet,
+                                                                                     timestampType = messageTimestampType,
+                                                                                     messages = validatedMessages: _*),
+                                        maxTimestamp = largestTimestampOfMessageSet.get,
+                                        offsetOfMaxTimestamp = offsetOfMaxTimestampInMessageSet,
+                                        messageSizeMaybeChanged = true)
       } else {
         // Do not do re-compression but simply update the offset, timestamp and attributes field of the wrapper message.
         buffer.putLong(0, offsetCounter.addAndGet(validatedMessages.size) - 1)
@@ -510,8 +511,10 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
         }
         buffer.rewind()
         // For compressed messages,
-        ValidationAndOffsetAssignResult(this, buffer.getLong(timestampOffset), buffer.getLong(0),
-          messageSizeMaybeChanged = false)
+        ValidationAndOffsetAssignResult(validatedMessages = this,
+                                        maxTimestamp = buffer.getLong(timestampOffset),
+                                        offsetOfMaxTimestamp = buffer.getLong(0),
+                                        messageSizeMaybeChanged = false)
       }
     }
   }
@@ -552,8 +555,10 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
       newMessagePosition += MessageSet.LogOverhead + newMessageSize
     }
     newBuffer.rewind()
-    new ValidationAndOffsetAssignResult(new ByteBufferMessageSet(newBuffer), maxTimestamp, offsetOfMaxTimestamp,
-      messageSizeMaybeChanged = true)
+    new ValidationAndOffsetAssignResult(validatedMessages = new ByteBufferMessageSet(newBuffer),
+                                        maxTimestamp = maxTimestamp,
+                                        offsetOfMaxTimestamp = offsetOfMaxTimestamp,
+                                        messageSizeMaybeChanged = true)
   }
 
   private def validateNonCompressedMessagesAndAssignOffsetInPlace(offsetCounter: LongRef,
@@ -590,7 +595,10 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
       messagePosition += MessageSet.LogOverhead + messageSize
     }
     buffer.reset()
-    ValidationAndOffsetAssignResult(this, maxTimestamp, offsetOfMaxTimestamp, messageSizeMaybeChanged = false)
+    ValidationAndOffsetAssignResult(validatedMessages = this,
+                                    maxTimestamp = maxTimestamp,
+                                    offsetOfMaxTimestamp = offsetOfMaxTimestamp,
+                                    messageSizeMaybeChanged = false)
   }
 
   private def validateMessageKey(message: Message, compactedTopic: Boolean) {

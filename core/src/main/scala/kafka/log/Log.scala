@@ -344,7 +344,6 @@ class Log(val dir: File,
 
     // trim any invalid bytes or partial messages before appending it to the on-disk log
     var validMessages = trimInvalidBytes(messages, appendInfo)
-    var maxTimestampInMessageSet = appendInfo.maxTimestamp
 
     try {
       // they are valid, insert them in the log
@@ -368,7 +367,7 @@ class Log(val dir: File,
             case e: IOException => throw new KafkaException("Error in validating messages while appending to log '%s'".format(name), e)
           }
           validMessages = validateAndOffsetAssignResult.validatedMessages
-          maxTimestampInMessageSet = validateAndOffsetAssignResult.maxTimestamp
+          appendInfo.maxTimestamp = validateAndOffsetAssignResult.maxTimestamp
           appendInfo.offsetOfMaxTimestamp = validateAndOffsetAssignResult.offsetOfMaxTimestamp
           appendInfo.lastOffset = offset.value - 1
           if (config.messageTimestampType == TimestampType.LOG_APPEND_TIME)
@@ -405,7 +404,8 @@ class Log(val dir: File,
         val segment = maybeRoll(validMessages.sizeInBytes)
 
         // now append to the log
-        segment.append(appendInfo.firstOffset, maxTimestampInMessageSet, appendInfo.offsetOfMaxTimestamp, validMessages)
+        segment.append(firstOffset = appendInfo.firstOffset, largestTimestamp = appendInfo.maxTimestamp,
+          offsetOfLargestTimestamp = appendInfo.offsetOfMaxTimestamp, messages = validMessages)
 
         // increment the log end offset
         updateLogEndOffset(appendInfo.lastOffset + 1)

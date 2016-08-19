@@ -107,7 +107,7 @@ class TimeIndex(file: File,
     inLock(lock) {
       if (!skipFullCheck)
         require(!isFull, "Attempt to append to a full time index (size = " + _entries + ").")
-      // We do not throw exception when the offset equals to the offset of last entry. That means the we are trying
+      // We do not throw exception when the offset equals to the offset of last entry. That means we are trying
       // to insert the same time index entry as the last entry.
       // If the timestamp index entry to be inserted is the same as the last entry, we simply ignore the insertion
       // because that could happen in the following two scenarios:
@@ -120,9 +120,8 @@ class TimeIndex(file: File,
         throw new IllegalStateException("Attempt to append an timestamp (%d) to slot %d no larger than the last timestamp appended (%d) to %s."
             .format(timestamp, _entries, lastEntry.timestamp, file.getAbsolutePath))
       // We only append to the time index when the timestamp is greater than the last inserted timestamp.
-      // If the messages are in message format v0, the timestamp will always be NoTimestamp. In that case, the time
-      // index will be empty until the segment is closed. When closing the segment, the broker will insert a time
-      // index entry whose timestamp is the last modification time of the file, and the entry points to the base offset.
+      // If all the messages are in message format v0, the timestamp will always be NoTimestamp. In that case, the time
+      // index will be empty.
       if (timestamp > lastEntry.timestamp) {
         debug("Adding index entry %d => %d to %s.".format(timestamp, offset, file.getName))
         mmap.putLong(timestamp)
