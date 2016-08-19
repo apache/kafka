@@ -269,20 +269,6 @@ public class SslTransportLayerTest {
     }
 
     /**
-     * Tests that SecureRandom can be configured with SHA1PRNG
-     */
-    @Test
-    public void testSetSecureRandomSHA1PRNG() throws Exception {
-        SslChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT);
-        try {
-            sslClientConfigs.put(SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG, "SHA1PRNG");
-            channelBuilder.configure(sslClientConfigs);
-        } catch (KafkaException e) {
-            fail("SSL channel cannot be configured with SecureRandom SHA1PRNG implementation");
-        }
-    }
-    
-    /**
      * Tests that channels cannot be created if truststore cannot be loaded
      */
     @Test
