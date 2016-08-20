@@ -38,6 +38,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -62,6 +63,7 @@ public class ResetIntegrationTest {
     public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster();
 
     private final AdminClient adminClient = AdminClient.createSimplePlaintext(CLUSTER.bootstrapServers());
+    private final WaitUntilConsumerGroupGotClosed consumerGroupInactive = new WaitUntilConsumerGroupGotClosed();
 
     private static final String APP_ID = "cleanup-integration-test";
     private static final String INPUT_TOPIC = "inputTopic";
@@ -99,13 +101,16 @@ public class ResetIntegrationTest {
         final KeyValue<Object, Object> result2 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultTopicConsumerConfig, OUTPUT_TOPIC_2, 1).get(0);
 
         streams.close();
+        TestUtils.waitForCondition(this.consumerGroupInactive, 5 * STREAMS_CONSUMER_TIMEOUT,
+            "Streams Application consumer group did not time out after " + (5 * STREAMS_CONSUMER_TIMEOUT) + " ms.");
 
         // RESET
-        waitUntilConsumerGroupGotClosed(STREAMS_CONSUMER_TIMEOUT);
         streams.cleanUp();
         cleanGlobal();
+        TestUtils.waitForCondition(this.consumerGroupInactive, 5 * CLEANUP_CONSUMER_TIMEOUT,
+            "Reset Tool consumer group did not time out after " + (5 * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
+
         assertInternalTopicsGotDeleted();
-        waitUntilConsumerGroupGotClosed(CLEANUP_CONSUMER_TIMEOUT);
 
         // RE-RUN
         streams = new KafkaStreams(setupTopology(OUTPUT_TOPIC_2_RERUN), streamsConfiguration);
@@ -228,16 +233,6 @@ public class ResetIntegrationTest {
         Assert.assertEquals(0, exitCode);
     }
 
-    private void waitUntilConsumerGroupGotClosed(final long sleep) {
-        int retryCounter = 0;
-        while (this.adminClient.describeConsumerGroup(APP_ID).get().size() != 0) {
-            if (++retryCounter > 5) {
-                throw new RuntimeException("Consumer group did not time out after " + (5 * sleep) + " ms.");
-            }
-            Utils.sleep(STREAMS_CONSUMER_TIMEOUT);
-        }
-    }
-
     private void assertInternalTopicsGotDeleted() {
         final Set<String> expectedRemainingTopicsAfterCleanup = new HashSet<>();
         expectedRemainingTopicsAfterCleanup.add(INPUT_TOPIC);
@@ -266,6 +261,13 @@ public class ResetIntegrationTest {
             }
         }
         assertThat(allTopics, equalTo(expectedRemainingTopicsAfterCleanup));
+    }
+
+    private class WaitUntilConsumerGroupGotClosed implements TestCondition {
+        @Override
+        public boolean conditionMet() {
+            return ResetIntegrationTest.this.adminClient.describeConsumerGroup(APP_ID).get().size() == 0;
+        }
     }
 
 }
