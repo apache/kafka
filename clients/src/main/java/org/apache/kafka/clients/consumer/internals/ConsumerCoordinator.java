@@ -78,6 +78,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     // of offset commit requests, which may be invoked from the heartbeat thread
     private final ConcurrentLinkedQueue<OffsetCommitCompletion> completedOffsetCommits;
 
+    private boolean isLeader = false;
+    private Set<String> joinedSubscription;
     private MetadataSnapshot metadataSnapshot;
     private MetadataSnapshot assignmentSnapshot;
     private long nextAutoCommitDeadline;
@@ -137,9 +139,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     @Override
     public List<ProtocolMetadata> metadata() {
+        this.joinedSubscription = subscriptions.subscription();
         List<ProtocolMetadata> metadataList = new ArrayList<>();
         for (PartitionAssignor assignor : assignors) {
-            Subscription subscription = assignor.subscription(subscriptions.subscription());
+            Subscription subscription = assignor.subscription(joinedSubscription);
             ByteBuffer metadata = ConsumerProtocol.serializeSubscription(subscription);
             metadataList.add(new ProtocolMetadata(assignor.name(), metadata));
         }
@@ -155,26 +158,26 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     throw new TopicAuthorizationException(new HashSet<>(cluster.unauthorizedTopics()));
 
                 if (subscriptions.hasPatternSubscription()) {
-                    final List<String> topicsToSubscribe = new ArrayList<>();
+                    final Set<String> topicsToSubscribe = new HashSet<>();
 
                     for (String topic : cluster.topics())
                         if (subscriptions.getSubscribedPattern().matcher(topic).matches() &&
                                 !(excludeInternalTopics && cluster.internalTopics().contains(topic)))
                             topicsToSubscribe.add(topic);
 
-                    subscriptions.changeSubscription(topicsToSubscribe);
+                    subscriptions.subscribeFromPattern(topicsToSubscribe);
+
+                    // note we still need to update the topics contained in the metadata. Although we have
+                    // specified that all topics should be fetched, only those set explicitly will be retained
                     metadata.setTopics(subscriptions.groupSubscription());
                 }
 
                 // check if there are any changes to the metadata which should trigger a rebalance
                 if (subscriptions.partitionsAutoAssigned()) {
                     MetadataSnapshot snapshot = new MetadataSnapshot(subscriptions, cluster);
-                    if (!snapshot.equals(metadataSnapshot)) {
+                    if (!snapshot.equals(metadataSnapshot))
                         metadataSnapshot = snapshot;
-                        subscriptions.needReassignment();
-                    }
                 }
-
             }
         });
     }
@@ -192,12 +195,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                   String memberId,
                                   String assignmentStrategy,
                                   ByteBuffer assignmentBuffer) {
-        // if we were the assignor, then we need to make sure that there have been no metadata updates
-        // since the rebalance begin. Otherwise, we won't rebalance again until the next metadata change
-        if (assignmentSnapshot != null && !assignmentSnapshot.equals(metadataSnapshot)) {
-            subscriptions.needReassignment();
-            return;
-        }
+        // only the leader is responsible for monitoring for metadata changes (i.e. partition changes)
+        if (!isLeader)
+            assignmentSnapshot = null;
 
         PartitionAssignor assignor = lookupAssignor(assignmentStrategy);
         if (assignor == null)
@@ -246,13 +246,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             now = time.milliseconds();
         }
 
-        if (subscriptions.partitionsAutoAssigned() && needRejoin()) {
-            // due to a race condition between the initial metadata fetch and the initial rebalance, we need to ensure that
-            // the metadata is fresh before joining initially, and then request the metadata update. If metadata update arrives
-            // while the rebalance is still pending (for example, when the join group is still inflight), then we will lose
-            // track of the fact that we need to rebalance again to reflect the change to the topic subscription. Without
-            // ensuring that the metadata is fresh, any metadata update that changes the topic subscriptions and arrives with a
-            // rebalance in progress will essentially be ignored. See KAFKA-3949 for the complete description of the problem.
+        if (needRejoin()) {
+            // due to a race condition between the initial metadata fetch and the initial rebalance,
+            // we need to ensure that the metadata is fresh before joining initially. This ensures
+            // that we have matched the pattern against the cluster's topics at least once before joining.
             if (subscriptions.hasPatternSubscription())
                 client.ensureFreshMetadata();
 
@@ -303,6 +300,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // update metadata (if needed) and keep track of the metadata used for assignment so that
         // we can check after rebalance completion whether anything has changed
         client.ensureFreshMetadata();
+
+        isLeader = true;
         assignmentSnapshot = metadataSnapshot;
 
         log.debug("Performing assignment for group {} using strategy {} with subscriptions {}",
@@ -339,14 +338,24 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     listener.getClass().getName(), groupId, e);
         }
 
-        assignmentSnapshot = null;
-        subscriptions.needReassignment();
+        isLeader = false;
+        subscriptions.resetGroupSubscription();
     }
 
     @Override
-    protected boolean needRejoin() {
-        return subscriptions.partitionsAutoAssigned() &&
-                (super.needRejoin() || subscriptions.partitionAssignmentNeeded());
+    public boolean needRejoin() {
+        if (!subscriptions.partitionsAutoAssigned())
+            return false;
+
+        // we need to rejoin if we performed the assignment and metadata has changed
+        if (assignmentSnapshot != null && !assignmentSnapshot.equals(metadataSnapshot))
+            return true;
+
+        // we need to join if our subscription has changed since the last join
+        if (joinedSubscription != null && !joinedSubscription.equals(subscriptions.subscription()))
+            return true;
+
+        return super.needRejoin();
     }
 
     /**

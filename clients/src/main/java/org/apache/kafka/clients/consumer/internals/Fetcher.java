@@ -350,26 +350,22 @@ public class Fetcher<K, V> {
      *         the defaultResetPolicy is NONE
      */
     public Map<TopicPartition, List<ConsumerRecord<K, V>>> fetchedRecords() {
-        if (this.subscriptions.partitionAssignmentNeeded()) {
-            return Collections.emptyMap();
-        } else {
-            Map<TopicPartition, List<ConsumerRecord<K, V>>> drained = new HashMap<>();
-            int recordsRemaining = maxPollRecords;
+        Map<TopicPartition, List<ConsumerRecord<K, V>>> drained = new HashMap<>();
+        int recordsRemaining = maxPollRecords;
 
-            while (recordsRemaining > 0) {
-                if (nextInLineRecords == null || nextInLineRecords.isEmpty()) {
-                    CompletedFetch completedFetch = completedFetches.poll();
-                    if (completedFetch == null)
-                        break;
+        while (recordsRemaining > 0) {
+            if (nextInLineRecords == null || nextInLineRecords.isEmpty()) {
+                CompletedFetch completedFetch = completedFetches.poll();
+                if (completedFetch == null)
+                    break;
 
-                    nextInLineRecords = parseFetchedData(completedFetch);
-                } else {
-                    recordsRemaining -= append(drained, nextInLineRecords, recordsRemaining);
-                }
+                nextInLineRecords = parseFetchedData(completedFetch);
+            } else {
+                recordsRemaining -= append(drained, nextInLineRecords, recordsRemaining);
             }
-
-            return drained;
         }
+
+        return drained;
     }
 
     private int append(Map<TopicPartition, List<ConsumerRecord<K, V>>> drained,
