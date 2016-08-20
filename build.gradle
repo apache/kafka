@@ -874,8 +874,8 @@ project(':connect:runtime') {
     testCompile libs.junit
     testCompile libs.powermock
     testCompile libs.powermockEasymock
+    testCompile project(":connect:json")
 
-    testRuntime project(":connect:json")
     testRuntime libs.slf4jlog4j
   }
 

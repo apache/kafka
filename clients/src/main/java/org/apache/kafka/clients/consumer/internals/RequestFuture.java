@@ -196,7 +196,7 @@ public class RequestFuture<T> {
     }
 
     public static RequestFuture<Void> voidSuccess() {
-        RequestFuture<Void> future = new RequestFuture<Void>();
+        RequestFuture<Void> future = new RequestFuture<>();
         future.complete(null);
         return future;
     }

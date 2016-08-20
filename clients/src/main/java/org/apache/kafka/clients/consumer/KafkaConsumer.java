@@ -137,32 +137,31 @@ import java.util.regex.Pattern;
  * After subscribing to a set of topics, the consumer will automatically join the group when {@link #poll(long)} is
  * invoked. The poll API is designed to ensure consumer liveness. As long as you continue to call poll, the consumer
  * will stay in the group and continue to receive messages from the partitions it was assigned. Underneath the covers,
- * the poll API sends periodic heartbeats to the server; when you stop calling poll (perhaps because an exception was thrown),
- * then no heartbeats will be sent. If a period of the configured <i>session timeout</i> elapses before the server
- * has received a heartbeat, then the consumer will be kicked out of the group and its partitions will be reassigned.
- * This is designed to prevent situations where the consumer has failed, yet continues to hold onto the partitions
- * it was assigned (thus preventing active consumers in the group from taking them). To stay in the group, you
- * have to prove you are still alive by calling poll.
+ * the consumer sends periodic heartbeats to the server. If the consumer crashes or is unable to send heartbeats for
+ * a duration of <code>session.timeout.ms</code>, then the consumer will be considered dead and its partitions will
+ * be reassigned. It is also possible that the consumer could encounter a "livelock" situation where it is continuing
+ * to send heartbeats, but no progress is being made. To prevent the consumer from holding onto its partitions
+ * indefinitely in this case, we provide a liveness detection mechanism: basically if you don't call poll at least
+ * as frequently as the configured <code>poll.interval.ms</code>, then the client will proactively leave the group
+ * so that another consumer can take over its partitions. So to stay in the group, you must continue to call poll
  * <p>
  * The implication of this design is that message processing time in the poll loop must be bounded so that
- * heartbeats can be sent before expiration of the session timeout. What typically happens when processing time
- * exceeds the session timeout is that the consumer won't be able to commit offsets for any of the processed records.
- * For example, this is indicated by a {@link CommitFailedException} thrown from {@link #commitSync()}. This
- * guarantees that only active members of the group are allowed to commit offsets. If the consumer
- * has been kicked out of the group, then its partitions will have been assigned to another member, which will be
- * committing its own offsets as it handles new records. This gives offset commits an isolation guarantee.
+ * you always ensure that poll() is called at least once every poll interval. If not, then the consumer leaves
+ * the group, which typically results in an offset commit failure when the processing of the polled records
+ * finally completes (this is indicated by a {@link CommitFailedException} thrown from {@link #commitSync()}).
+ * This is a safety mechanism which guarantees that only active members of the group are able to commit offsets.
+ * If the consumer has been kicked out of the group, then its partitions will have been assigned to another member,
+ * which will be committing its own offsets as it handles new records. This gives offset commits an isolation guarantee.
  * <p>
- * The consumer provides two configuration settings to control this behavior:
+ * The consumer provides two configuration settings to control the behavior of the poll loop:
  * <ol>
- *     <li><code>session.timeout.ms</code>: By increasing the session timeout, you can give the consumer more
- *     time to handle a batch of records returned from {@link #poll(long)}. The only drawback is that it
- *     will take longer for the server to detect hard consumer failures, which can cause a delay before
- *     a rebalance can be completed. However, clean shutdown with {@link #close()} is not impacted since
- *     the consumer will send an explicit message to the server to leave the group and cause an immediate
- *     rebalance.</li>
- *     <li><code>max.poll.records</code>: Processing time in the poll loop is typically proportional to the number
- *     of records processed, so it's natural to want to set a limit on the number of records handled at once.
- *     This setting provides that. By default, there is essentially no limit.</li>
+ *     <li><code>max.poll.interval.ms</code>: By increasing the interval between expected polls, you can give
+ *     the consumer more time to handle a batch of records returned from {@link #poll(long)}. The drawback
+ *     is that increasing this value may delay a group rebalance since the consumer will only join the rebalance
+ *     inside the call to poll.</li>
+ *     <li><code>max.poll.records</code>: Use this setting to limit the total records returned from a single
+ *     call to poll. This can make it easier to predict the maximum that must be handled within each poll
+ *     interval.</li>
  * </ol>
  * <p>
  * For use cases where message processing time varies unpredictably, neither of these options may be viable.
@@ -187,7 +186,6 @@ import java.util.regex.Pattern;
  *     props.put(&quot;group.id&quot;, &quot;test&quot;);
  *     props.put(&quot;enable.auto.commit&quot;, &quot;true&quot;);
  *     props.put(&quot;auto.commit.interval.ms&quot;, &quot;1000&quot;);
- *     props.put(&quot;session.timeout.ms&quot;, &quot;30000&quot;);
  *     props.put(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
  *     props.put(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
  *     KafkaConsumer&lt;String, String&gt; consumer = new KafkaConsumer&lt;&gt;(props);
@@ -209,13 +207,6 @@ import java.util.regex.Pattern;
  * <p>
  * In this example the client is subscribing to the topics <i>foo</i> and <i>bar</i> as part of a group of consumers
  * called <i>test</i> as described above.
- * <p>
- * The broker will automatically detect failed processes in the <i>test</i> group by using a heartbeat mechanism. The
- * consumer will automatically ping the cluster periodically, which lets the cluster know that it is alive. Note that
- * the consumer is single-threaded, so periodic heartbeats can only be sent when {@link #poll(long)} is called. As long as
- * the consumer is able to do this it is considered alive and retains the right to consume from the partitions assigned
- * to it. If it stops heartbeating by failing to call {@link #poll(long)} for a period of time longer than <code>session.timeout.ms</code>
- * then it will be considered dead and its partitions will be assigned to another process.
  * <p>
  * The deserializer settings specify how to turn bytes into objects. For example, by specifying string deserializers, we
  * are saying that our record's key and value will just be simple strings.
@@ -242,7 +233,6 @@ import java.util.regex.Pattern;
  *     props.put(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
  *     props.put(&quot;group.id&quot;, &quot;test&quot;);
  *     props.put(&quot;enable.auto.commit&quot;, &quot;false&quot;);
- *     props.put(&quot;session.timeout.ms&quot;, &quot;30000&quot;);
  *     props.put(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
  *     props.put(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
  *     KafkaConsumer&lt;String, String&gt; consumer = new KafkaConsumer&lt;&gt;(props);
@@ -645,6 +635,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.interceptors = interceptorList.isEmpty() ? null : new ConsumerInterceptors<>(interceptorList);
             this.coordinator = new ConsumerCoordinator(this.client,
                     config.getString(ConsumerConfig.GROUP_ID_CONFIG),
+                    config.getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG),
                     config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG),
                     config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG),
                     assignors,
@@ -656,7 +647,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     retryBackoffMs,
                     new ConsumerCoordinator.DefaultOffsetCommitCallback(),
                     config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG),
-                    config.getLong(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
+                    config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
                     this.interceptors,
                     config.getBoolean(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG));
             if (keyDeserializer == null) {
@@ -715,6 +706,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                   Metrics metrics,
                   SubscriptionState subscriptions,
                   Metadata metadata,
+                  boolean autoCommitEnabled,
+                  int autoCommitIntervalMs,
+                  int heartbeatIntervalMs,
                   long retryBackoffMs,
                   long requestTimeoutMs) {
         this.clientId = clientId;
@@ -807,7 +801,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         throw new IllegalArgumentException("Topic collection to subscribe to cannot contain null or empty topic");
                 }
                 log.debug("Subscribed to topic(s): {}", Utils.join(topics, ", "));
-                this.subscriptions.subscribe(topics, listener);
+                this.subscriptions.subscribe(new HashSet<>(topics), listener);
                 metadata.setTopics(subscriptions.groupSubscription());
             }
         } finally {
@@ -920,7 +914,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 }
 
                 log.debug("Subscribed to partition(s): {}", Utils.join(partitions, ", "));
-                this.subscriptions.assignFromUser(partitions);
+                this.subscriptions.assignFromUser(new HashSet<>(partitions));
                 metadata.setTopics(topics);
             }
         } finally {
@@ -970,7 +964,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     //
                     // NOTE: since the consumed position has already been updated, we must not allow
                     // wakeups or any other errors to be triggered prior to returning the fetched records.
-                    // Additionally, pollNoWakeup does not allow automatic commits to get triggered.
                     fetcher.sendFetches();
                     client.pollNoWakeup();
 
@@ -997,30 +990,29 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The fetched records (may be empty)
      */
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(long timeout) {
-        // ensure we have partitions assigned if we expect to
-        if (subscriptions.partitionsAutoAssigned())
-            coordinator.ensurePartitionAssignment();
+        coordinator.poll(time.milliseconds());
 
         // fetch positions if we have partitions we're subscribed to that we
         // don't know the offset for
         if (!subscriptions.hasAllFetchPositions())
             updateFetchPositions(this.subscriptions.missingFetchPositions());
 
-        long now = time.milliseconds();
-
-        // execute delayed tasks (e.g. autocommits and heartbeats) prior to fetching records
-        client.executeDelayedTasks(now);
-
-        // init any new fetches (won't resend pending fetches)
+        // if data is available already, return it immediately
         Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
-
-        // if data is available already, e.g. from a previous network client poll() call to commit,
-        // then just return it immediately
         if (!records.isEmpty())
             return records;
 
+        // send any new fetches (won't resend pending fetches)
         fetcher.sendFetches();
-        client.poll(timeout, now);
+
+        long now = time.milliseconds();
+        client.poll(Math.min(coordinator.timeToNextPoll(now), timeout), now);
+
+        // after the long poll, we should check whether the group needs to rebalance
+        // prior to returning data so that the group can stabilize faster
+        if (coordinator.needRejoin())
+            return Collections.emptyMap();
+
         return fetcher.fetchedRecords();
     }
 
