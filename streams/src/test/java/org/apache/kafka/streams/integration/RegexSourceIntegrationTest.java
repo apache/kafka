@@ -79,9 +79,6 @@ public class RegexSourceIntegrationTest {
     private static final String FA_TOPIC = "fa";
     private static final String FOO_TOPIC = "foo";
 
-    private static final int FIRST_UPDATE = 0;
-    private static final int SECOND_UPDATE = 1;
-
     private static final String DEFAULT_OUTPUT_TOPIC = "outputTopic";
     private static final String STRING_SERDE_CLASSNAME = Serdes.String().getClass().getName();
     private Properties streamsConfiguration;
@@ -203,6 +200,8 @@ public class RegexSourceIntegrationTest {
         TestCondition bothTopicsAdded  = new TestCondition() {
             @Override
             public boolean conditionMet() {
+                System.out.println("added: " + testStreamThread.assignedTopicPartitions);
+
                 return testStreamThread.assignedTopicPartitions.equals(expectedFirstAssignment);
             }
         };
@@ -212,10 +211,11 @@ public class RegexSourceIntegrationTest {
 
         CLUSTER.deleteTopic("TEST-TOPIC-A");
 
-
         TestCondition oneTopicRemoved  = new TestCondition() {
             @Override
             public boolean conditionMet() {
+                System.out.println("deleted: " + testStreamThread.assignedTopicPartitions);
+
                 return testStreamThread.assignedTopicPartitions.equals(expectedSecondAssignment);
             }
         };
@@ -320,8 +320,7 @@ public class RegexSourceIntegrationTest {
     }
 
     private class TestStreamThread extends StreamThread {
-
-        public List<String> assignedTopicPartitions = new ArrayList<>();
+        public volatile List<String> assignedTopicPartitions = new ArrayList<>();
 
         public TestStreamThread(TopologyBuilder builder, StreamsConfig config, KafkaClientSupplier clientSupplier, String applicationId, String clientId, UUID processId, Metrics metrics, Time time) {
             super(builder, config, clientSupplier, applicationId, clientId, processId, metrics, time, new StreamsMetadataState(builder));
@@ -329,11 +328,13 @@ public class RegexSourceIntegrationTest {
 
         @Override
         public StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitions) {
-            assignedTopicPartitions.clear();
+            List<String> topicPartitions = new ArrayList<>();
             for (TopicPartition partition : partitions) {
-                assignedTopicPartitions.add(partition.topic());
+                topicPartitions.add(partition.topic());
             }
-            Collections.sort(assignedTopicPartitions);
+            Collections.sort(topicPartitions);
+
+            assignedTopicPartitions = topicPartitions;
             return super.createStreamTask(id, partitions);
         }
 
