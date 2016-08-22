@@ -200,8 +200,6 @@ public class RegexSourceIntegrationTest {
         TestCondition bothTopicsAdded  = new TestCondition() {
             @Override
             public boolean conditionMet() {
-                System.out.println("added: " + testStreamThread.assignedTopicPartitions);
-
                 return testStreamThread.assignedTopicPartitions.equals(expectedFirstAssignment);
             }
         };
@@ -214,8 +212,6 @@ public class RegexSourceIntegrationTest {
         TestCondition oneTopicRemoved  = new TestCondition() {
             @Override
             public boolean conditionMet() {
-                System.out.println("deleted: " + testStreamThread.assignedTopicPartitions);
-
                 return testStreamThread.assignedTopicPartitions.equals(expectedSecondAssignment);
             }
         };
