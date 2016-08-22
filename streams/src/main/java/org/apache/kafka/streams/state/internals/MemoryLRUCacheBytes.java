@@ -16,12 +16,11 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -39,93 +38,182 @@ import java.util.Map;
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
 public class MemoryLRUCacheBytes<K, V>  {
+    static final int DEFAULT_CAPACITY = 1000;
+    static final float DEFAULT_LOAD = 0.75f;
+    private long maxCacheSizeBytes;
+    private long currentSizeBytes = 0;
+    private LRUNode head = null;
+    private LRUNode tail = null;
+
     public interface EldestEntryRemovalListener<K, V> {
 
         void apply(K key, V value);
     }
-    private final Serde<K> keySerde;
 
-    private final Serde<V> valueSerde;
-    private String name;
-    protected Map<K, V> map;
-    private StateSerdes<K, V> serdes;
-    private volatile boolean open = true;
+    protected Map<Bytes, LRUNode> map;
 
-    protected List<MemoryLRUCacheBytes.EldestEntryRemovalListener<K, V>> listeners;
 
-    // this is used for extended MemoryNavigableLRUCache only
-    public MemoryLRUCacheBytes(Serde<K> keySerde, Serde<V> valueSerde) {
-        this.keySerde = keySerde;
-        this.valueSerde = valueSerde;
+    protected List<MemoryLRUCacheBytes.EldestEntryRemovalListener<Bytes, MemoryLRUCacheBytesEntry>> listeners;
+
+
+    public MemoryLRUCacheBytes(String name, long maxCacheSizeBytes) {
+        this.maxCacheSizeBytes = maxCacheSizeBytes;
+        this.map = new HashMap<>(DEFAULT_CAPACITY, DEFAULT_CAPACITY);
         listeners = new ArrayList<>();
     }
 
-    public MemoryLRUCacheBytes(long maxCacheSizeBytes) {
-        // TODO: implement, for now equivalent to entry-based cache
-        this("tmpName", 1000, null, null);
-    }
-
-    public MemoryLRUCacheBytes(String name, final int maxCacheSize, Serde<K> keySerde, Serde<V> valueSerde) {
-        this(keySerde, valueSerde);
-        this.name = name;
-
-        // leave room for one extra entry to handle adding an entry before the oldest can be removed
-        this.map = new LinkedHashMap<K, V>(maxCacheSize + 1, 1.01f, true) {
-            private static final long serialVersionUID = 1L;
-
-            @Override
-            protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
-                if (size() > maxCacheSize) {
-                    K key = eldest.getKey();
-                    if (listeners != null) {
-                        for (MemoryLRUCacheBytes.EldestEntryRemovalListener<K, V> listener: listeners) {
-                            listener.apply(key, eldest.getValue());
-                        }
-                    }
-                    return true;
-                }
-                return false;
-            }
-        };
-    }
-
-    public MemoryLRUCacheBytes<K, V> whenEldestRemoved(MemoryLRUCacheBytes.EldestEntryRemovalListener<K, V> listener) {
-        addEldestRemovedListener(listener);
-
-        return this;
-    }
-
-    public void addEldestRemovedListener(MemoryLRUCacheBytes.EldestEntryRemovalListener<K, V> listener) {
+    public void addEldestRemovedListener(MemoryLRUCacheBytes.EldestEntryRemovalListener<Bytes, MemoryLRUCacheBytesEntry> listener) {
         this.listeners.add(listener);
     }
 
-    public synchronized V get(K key) {
-        return this.map.get(key);
+
+
+    public synchronized MemoryLRUCacheBytesEntry<Bytes, byte[]> get(Bytes key) {
+        MemoryLRUCacheBytesEntry entry = null;
+        // get element
+        LRUNode node = this.map.get(key);
+        if (node != null) {
+            entry = node.entry();
+            updateLRU(node);
+        }
+
+        return entry;
     }
 
-    public synchronized void put(K key, V value) {
-        this.map.put(key, value);
+    private void callListeners(MemoryLRUCacheBytesEntry entry) {
+        for (MemoryLRUCacheBytes.EldestEntryRemovalListener listener : listeners) {
+            listener.apply(entry.key, entry);
+        }
     }
 
-    public synchronized V putIfAbsent(K key, V value) {
-        V originalValue = get(key);
+    /**
+     * Check if we have enough space in cache to accept new element
+     * @param newElement new element to be insterted
+     */
+    private void maybeEvict(LRUNode newElement) {
+        while (sizeBytes() + newElement.entry().size() > maxCacheSizeBytes) {
+            LRUNode removed = this.map.remove(tail.entry().key);
+            remove(tail);
+            currentSizeBytes -= removed.entry().size();
+            callListeners(removed.entry());
+        }
+    }
+
+    public synchronized void put(Bytes key, MemoryLRUCacheBytesEntry<Bytes, byte[]> value) {
+        if (this.map.containsKey(key)) {
+            LRUNode node = this.map.get(key);
+            currentSizeBytes -= node.entry().size();
+            node.update(value);
+            updateLRU(node);
+
+        } else {
+            LRUNode node = new LRUNode(value);
+            // check if we need to evict anything
+            maybeEvict(node);
+            // put element
+            putHead(node);
+            this.map.put(key, node);
+        }
+        currentSizeBytes += value.size();
+    }
+
+    public synchronized MemoryLRUCacheBytesEntry<Bytes, byte[]> putIfAbsent(Bytes key, MemoryLRUCacheBytesEntry<Bytes, byte[]> value) {
+        MemoryLRUCacheBytesEntry originalValue = get(key);
         if (originalValue == null) {
             put(key, value);
         }
         return originalValue;
     }
 
-    public void putAll(List<KeyValue<K, V>> entries) {
-        for (KeyValue<K, V> entry : entries)
+    public void putAll(List<KeyValue<Bytes, MemoryLRUCacheBytesEntry<Bytes, byte[]>>> entries) {
+        for (KeyValue<Bytes, MemoryLRUCacheBytesEntry<Bytes, byte[]>> entry : entries)
             put(entry.key, entry.value);
     }
 
-    public synchronized V delete(K key) {
-        V value = this.map.remove(key);
-        return value;
+    public synchronized MemoryLRUCacheBytesEntry<Bytes, byte[]> delete(Bytes key) {
+        LRUNode node = this.map.get(key);
+
+        // remove from LRU list
+        remove(node);
+
+        // remove from map
+        LRUNode value = this.map.remove(key);
+        return value.entry();
     }
+
 
     public int size() {
         return this.map.size();
     }
+
+    public long sizeBytes() {
+        return currentSizeBytes;
+    }
+
+
+    private void putHead(LRUNode node) {
+        node.next = head;
+        node.previous = null;
+        if (head != null) {
+            head.previous = node;
+        }
+        head = node;
+        if (tail == null) {
+            tail = head;
+        }
+    }
+    private void remove(LRUNode node) {
+        if (node.previous != null) {
+            node.previous.next = node.next;
+        } else {
+            head = node.next;
+        }
+        if (node.next != null) {
+            node.next.previous = node.previous;
+        } else {
+            tail = node.previous;
+        }
+    }
+
+    /**
+     * Update the LRU position of this node to be the head of list
+     * @param node
+     */
+    private void updateLRU(LRUNode node) {
+        remove(node);
+
+        putHead(node);
+    }
+
+    protected LRUNode head() {
+        return head;
+    }
+
+    protected LRUNode tail() {
+        return tail;
+    }
+
+
+    /**
+     * A simple wrapper class to implement a doubly-linked list around
+     * MemoryLRUCacheBytesEntry
+     */
+    protected class LRUNode {
+        private MemoryLRUCacheBytesEntry<Bytes, byte[]> entry;
+        private LRUNode previous;
+        private LRUNode next;
+        LRUNode(MemoryLRUCacheBytesEntry<Bytes, byte[]> entry) {
+            this.entry = entry;
+        }
+
+        public MemoryLRUCacheBytesEntry<Bytes, byte[]> entry() {
+            return entry;
+        }
+
+        public void update(MemoryLRUCacheBytesEntry<Bytes, byte[]> entry) {
+            this.entry = entry;
+        }
+    }
+
+
 }

@@ -21,42 +21,40 @@ import org.apache.kafka.streams.processor.RecordContext;
 /**
  * A cache entry
  */
-public class MemoryLRUCacheBytesEntry<V> implements RecordContext {
-
-
-    enum State { clean, dirty }
+public class MemoryLRUCacheBytesEntry<K, V> implements RecordContext {
 
     public final V value;
-    public final long offset;
-    public final long timestamp;
-    public final String topic;
-    public final int partition;
-    public State state;
 
-    public MemoryLRUCacheBytesEntry(final V value) {
-        this(value, -1, -1, -1, null, State.clean);
+    public final K key;
+    private final long offset;
+    private final long timestamp;
+    private final String topic;
+    public boolean isDirty;
+    private final int partition;
+    private long sizeBytes = 0;
+
+
+    public MemoryLRUCacheBytesEntry(final K key, final V value, long sizeBytes) {
+        this(key, value, sizeBytes, false, -1, -1, -1, null);
     }
 
-    public MemoryLRUCacheBytesEntry(final V value, final long offset, final long timestamp, final int partition, final String topic, final State state) {
+    public MemoryLRUCacheBytesEntry(final K key, final V value, final long sizeBytes, final boolean isDirty,
+                                    final long offset, final long timestamp, final int partition,
+                                    final String topic) {
+        this.key = key;
         this.value = value;
+        this.sizeBytes = sizeBytes;
+        this.isDirty = isDirty;
         this.partition = partition;
         this.topic = topic;
-        this.state = state;
         this.offset = offset;
         this.timestamp = timestamp;
     }
 
-    public boolean shouldForward() {
-        return state != State.clean;
-    }
 
 
     public void markClean() {
-        state = State.clean;
-    }
-
-    public State state() {
-        return state;
+        isDirty = false;
     }
 
     @Override
@@ -80,6 +78,12 @@ public class MemoryLRUCacheBytesEntry<V> implements RecordContext {
     }
 
     public boolean isDirty() {
-        return state == State.dirty;
+        return isDirty;
     }
+
+    public long size() {
+        return sizeBytes;
+    }
+
+
 }

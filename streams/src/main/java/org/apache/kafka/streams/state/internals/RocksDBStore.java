@@ -215,7 +215,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                     @Override
                     public void apply(Bytes key, MemoryLRUCacheBytesEntry entry) {
                         // flush all the dirty entries to RocksDB if this evicted entry is dirty
-                        if (entry.shouldForward()) {
+                        if (entry.isDirty()) {
                             flushCache();
                         }
                     }
@@ -266,7 +266,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     public synchronized V get(K key) {
         validateStoreOpen();
         if (cache != null) {
-            MemoryLRUCacheBytesEntry<V> entry = cache.get(Bytes.wrap(serdes.rawMergeStoreNameKey(key, name)));
+            Bytes cacheKey = Bytes.wrap(serdes.rawMergeStoreNameKey(key, name));
+            MemoryLRUCacheBytesEntry<Bytes, byte[]> entry = cache.get(cacheKey);
             if (entry == null) {
                 byte[] byteValue = getInternal(serdes.rawKey(key));
                 //Check value for null, to avoid  deserialization error
@@ -274,11 +275,12 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                     return null;
                 } else {
                     V value = serdes.valueFrom(byteValue);
-                    cache.put(Bytes.wrap(serdes.rawMergeStoreNameKey(key, name)), new MemoryLRUCacheBytesEntry(value));
+                    long length = byteValue != null ? byteValue.length : 0;
+                    cache.put(cacheKey, new MemoryLRUCacheBytesEntry(cacheKey, byteValue, length));
                     return value;
                 }
             } else {
-                return entry.value;
+                return serdes.valueFrom(entry.value);
             }
         } else {
             byte[] byteValue = getInternal(serdes.rawKey(key));
@@ -310,17 +312,15 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     @Override
     public synchronized void put(K key, V value, RecordContext context) {
         validateStoreOpen();
+        byte[] rawKey = serdes.rawKey(key);
+        byte[] rawValue = serdes.rawValue(value);
+        long length = rawValue != null ? rawValue.length : 0;
         if (cache != null) {
             cacheDirtyKeys.put(key, key);
-            cache.put(Bytes.wrap(serdes.rawMergeStoreNameKey(key, name)), new MemoryLRUCacheBytesEntry(value,
-                                                                                                       context.offset(),
-                                                                                                       context.timestamp(),
-                                                                                                       context.partition(),
-                                                                                                       context.topic(),
-                                                                                                       MemoryLRUCacheBytesEntry.State.dirty));
+            Bytes cacheKey = Bytes.wrap(serdes.rawMergeStoreNameKey(key, name));
+            cache.put(cacheKey, new MemoryLRUCacheBytesEntry(cacheKey, rawValue, length, true, context.offset(),
+                                                             context.timestamp(), context.partition(), context.topic()));
         } else {
-            byte[] rawKey = serdes.rawKey(key);
-            byte[] rawValue = serdes.rawValue(value);
             putInternal(rawKey, rawValue);
 
             if (loggingEnabled) {
@@ -450,10 +450,10 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     public class FlushedEntry {
-        MemoryLRUCacheBytesEntry<V> entry;
+        MemoryLRUCacheBytesEntry<Bytes, byte[]> entry;
         V oldValue;
 
-        public FlushedEntry(final MemoryLRUCacheBytesEntry<V> entry, final V oldValue) {
+        public FlushedEntry(final MemoryLRUCacheBytesEntry<Bytes, byte[]> entry, final V oldValue) {
             this.entry = entry;
             this.oldValue = oldValue;
         }
@@ -469,8 +469,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             while (dirtyKeyIterator.hasNext()) {
                 final K key = dirtyKeyIterator.next().getKey();
                 dirtyKeyIterator.remove();
-                final Bytes wrap = Bytes.wrap(serdes.rawMergeStoreNameKey(key, name));
-                final MemoryLRUCacheBytesEntry<V> entry = cache.get(wrap);
+                MemoryLRUCacheBytesEntry<Bytes, byte[]> entry = cache.get(Bytes.wrap(serdes.rawMergeStoreNameKey(key, name)));
+
                 if (entry != null) {
                     byte[] rawKey = serdes.rawKey(key);
 
@@ -479,15 +479,14 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
                     if (entry.isDirty()) {
                         if (entry.value != null) {
-                            putBatch.add(new KeyValue<>(rawKey, serdes.rawValue(entry.value)));
+                            putBatch.add(new KeyValue<>(rawKey, entry.value));
                         } else {
                             deleteBatch.add(rawKey);
                         }
+                        entry.markClean();
                     }
-                    entry.markClean();
                 }
             }
-
             putAllInternal(putBatch);
 
 
@@ -516,15 +515,12 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             for (Map.Entry<K, FlushedEntry> flush : toForward.entrySet()) {
                 final FlushedEntry value = flush.getValue();
                 if (sendOldValues) {
-                    cacheFlushListener.flushed(flush.getKey(), new Change<>(value.entry.value, value.oldValue), value.entry);
+                    cacheFlushListener.flushed(flush.getKey(), new Change<>(serdes.valueFrom(value.entry.value), value.oldValue), value.entry);
                 } else {
-                    cacheFlushListener.flushed(flush.getKey(), new Change<>(value.entry.value, null), value.entry);
+                    cacheFlushListener.flushed(flush.getKey(), new Change<>(serdes.valueFrom(value.entry.value), null), value.entry);
                 }
             }
         }
-
-
-
     }
 
 
