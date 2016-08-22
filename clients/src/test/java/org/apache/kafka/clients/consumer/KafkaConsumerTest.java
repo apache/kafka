@@ -690,6 +690,119 @@ public class KafkaConsumerTest {
         assertEquals(5, records.count());
     }
 
+    @Test
+    public void testSubscriptionChange() {
+        final String topic1 = "topic1";
+        final TopicPartition partition1 = new TopicPartition(topic1, 0);
+        final String topic2 = "topic2";
+        final TopicPartition partition2 = new TopicPartition(topic2, 0);
+
+        int rebalanceTimeoutMs = 60000;
+        int sessionTimeoutMs = 30000;
+        int heartbeatIntervalMs = 3000;
+
+        // adjust auto commit interval lower than heartbeat so we don't need to deal with
+        // a concurrent heartbeat request
+        int autoCommitIntervalMs = 1000;
+
+        Time time = new MockTime();
+        MockClient client = new MockClient(time);
+        Map<String, Integer> tpCounts = new HashMap<>();
+        tpCounts.put(topic1, 1);
+        tpCounts.put(topic2, 1);
+        Cluster cluster = TestUtils.singletonCluster(tpCounts);
+        Node node = cluster.nodes().get(0);
+        client.setNode(node);
+        Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+        metadata.update(cluster, time.milliseconds());
+        PartitionAssignor assignor = new RangeAssignor();
+
+        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
+                rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, autoCommitIntervalMs);
+
+        consumer.subscribe(Arrays.asList(topic1), new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            }
+
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                // set initial position so we don't need a lookup
+                for (TopicPartition partition : partitions)
+                    consumer.seek(partition, 0);
+            }
+        });
+
+        assertEquals(Collections.singleton(topic1), consumer.subscription());
+        assertTrue(consumer.assignment().isEmpty());
+
+        client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE.code(), node).toStruct(), node);
+        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE.code()), coordinator);
+        client.prepareResponseFrom(syncGroupResponse(Arrays.asList(partition1), Errors.NONE.code()), coordinator);
+
+        consumer.poll(0);
+
+        assertEquals(Collections.singleton(topic1), consumer.subscription());
+        assertEquals(Collections.singleton(partition1), consumer.assignment());
+
+        // respond to the outstanding fetch so that we have data available on the next poll
+        client.respondFrom(fetchResponse(partition1, 0, 0), node);
+        client.poll(0, time.milliseconds());
+
+        consumer.poll(0);
+
+        // subscription change
+        consumer.subscribe(Arrays.asList(topic2), new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            }
+
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                // set initial position so we don't need a lookup
+                for (TopicPartition partition : partitions)
+                    consumer.seek(partition, 0);
+            }
+        });
+
+        assertEquals(Collections.singleton(topic2), consumer.subscription());
+        assertEquals(Collections.singleton(partition1), consumer.assignment());
+
+        final AtomicBoolean commit1Received = new AtomicBoolean(false);
+        client.prepareResponseFrom(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(ClientRequest request) {
+                OffsetCommitRequest commitRequest = new OffsetCommitRequest(request.request().body());
+                OffsetCommitRequest.PartitionData partitionData = commitRequest.offsetData().get(partition1);
+                // No record has been returned to the consumer, so the committed offset should be 0
+                if (partitionData.offset == 0) {
+                    commit1Received.set(true);
+                    return true;
+                }
+                return false;
+            }
+        }, offsetCommitResponse(Collections.singletonMap(partition1, Errors.NONE.code())), coordinator);
+
+        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE.code()), coordinator);
+        client.prepareResponseFrom(syncGroupResponse(Arrays.asList(partition2), Errors.NONE.code()), coordinator);
+
+        // respond to the outstanding fetch so that we have data available on the next poll
+        client.respondFrom(fetchResponse(partition2, 0, 0), node);
+        client.poll(0, time.milliseconds());
+
+        consumer.poll(0);
+
+        assertTrue(commit1Received.get());
+        assertEquals(Collections.singleton(topic2), consumer.subscription());
+        assertEquals(Collections.singleton(partition2), consumer.assignment());
+    }
+
+    private Struct offsetCommitResponse(Map<TopicPartition, Short> responseData) {
+        OffsetCommitResponse response = new OffsetCommitResponse(responseData);
+        return response.toStruct();
+    }
+
     private Struct joinGroupFollowerResponse(PartitionAssignor assignor, int generationId, String memberId, String leaderId, short error) {
         return new JoinGroupResponse(error, generationId, assignor.name(), memberId, leaderId,
                 Collections.<String, ByteBuffer>emptyMap()).toStruct();
