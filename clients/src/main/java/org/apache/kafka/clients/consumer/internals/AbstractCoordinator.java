@@ -204,15 +204,16 @@ public abstract class AbstractCoordinator implements Closeable {
                 time.sleep(retryBackoffMs);
             }
         }
-        // Since coordinator is set in a synchronized block in the group coordinator response callback,
-        // the future associated with the cooordinator request can be safely cleared here.
-        findCoordinatorFuture = null;
     }
 
     protected synchronized RequestFuture<Void> lookupCoordinator() {
-        if (findCoordinatorFuture == null || findCoordinatorFuture.isDone())
+        if (findCoordinatorFuture == null)
             findCoordinatorFuture = sendGroupCoordinatorRequest();
         return findCoordinatorFuture;
+    }
+
+    private synchronized void clearFindCoordinatorFuture() {
+        findCoordinatorFuture = null;
     }
 
     /**
@@ -523,6 +524,7 @@ public abstract class AbstractCoordinator implements Closeable {
             // for the coordinator in the underlying network client layer
             // TODO: this needs to be better handled in KAFKA-1935
             Errors error = Errors.forCode(groupCoordinatorResponse.errorCode());
+            clearFindCoordinatorFuture();
             if (error == Errors.NONE) {
                 synchronized (AbstractCoordinator.this) {
                     AbstractCoordinator.this.coordinator = new Node(
@@ -540,6 +542,12 @@ public abstract class AbstractCoordinator implements Closeable {
                 log.debug("Group coordinator lookup for group {} failed: {}", groupId, error.message());
                 future.raise(error);
             }
+        }
+
+        @Override
+        public void onFailure(RuntimeException e, RequestFuture<Void> future) {
+            clearFindCoordinatorFuture();
+            super.onFailure(e, future);
         }
     }
 
@@ -811,7 +819,6 @@ public abstract class AbstractCoordinator implements Closeable {
         @Override
         public void run() {
             try {
-                RequestFuture<Void> findCoordinatorFuture = null;
 
                 while (true) {
                     synchronized (AbstractCoordinator.this) {
@@ -834,8 +841,8 @@ public abstract class AbstractCoordinator implements Closeable {
                         long now = time.milliseconds();
 
                         if (coordinatorUnknown()) {
-                            if (findCoordinatorFuture == null || findCoordinatorFuture.isDone())
-                                findCoordinatorFuture = lookupCoordinator();
+                            if (findCoordinatorFuture == null)
+                                lookupCoordinator();
                             else
                                 AbstractCoordinator.this.wait(retryBackoffMs);
                         } else if (heartbeat.sessionTimeoutExpired(now)) {
