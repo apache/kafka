@@ -90,7 +90,7 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
           val firstDirtyOffset = {
             val offset = lastClean.getOrElse(topicAndPartition, logStartOffset)
             if (offset < logStartOffset) {
-              // don't bother with the warning if compact_and_delete is enabled.
+              // don't bother with the warning if compact and delete are enabled.
               if (!isCompactAndDelete(log))
                 warn("Resetting first dirty offset to log start offset %d since the checkpointed offset %d is invalid."
                     .format(logStartOffset, offset))
@@ -116,7 +116,7 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
   }
 
   /**
-    * Find any logs that are compact_and_delete that have segments
+    * Find any logs that have compact and delete enabled and that have segments
     * ready for deletion
     */
   def logsWithSegmentsReadyToBeDeleted(): Iterable[(TopicAndPartition, Log)] = {

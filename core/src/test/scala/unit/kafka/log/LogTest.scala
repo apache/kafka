@@ -1227,7 +1227,7 @@ class LogTest extends JUnitSuite {
     val set = TestUtils.singleMessageSet("test".getBytes, key = "test".getBytes)
     val (myTime, log) = createLog(set.sizeInBytes,
       retentionMs = 10000,
-      cleanupPolicy = "compact_and_delete")
+      cleanupPolicy = "compact,delete")
 
     // append some messages to create some segments
     for (i <- 0 until 15)

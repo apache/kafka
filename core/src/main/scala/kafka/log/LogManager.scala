@@ -415,7 +415,7 @@ class LogManager(val logDirs: Array[File],
       new File(leastLoaded._1)
     }
   }
-  
+
   /**
    * Delete any eligible logs. Return the number of segments deleted.
    * Only consider logs that are not compacted.

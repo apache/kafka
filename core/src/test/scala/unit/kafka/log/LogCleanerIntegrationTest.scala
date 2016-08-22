@@ -96,7 +96,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     val logProps  = new Properties()
     val retentionMs: Integer = 100000
     logProps.put(LogConfig.RetentionMsProp, retentionMs: Integer)
-    logProps.put(LogConfig.CleanupPolicyProp, "compact_and_delete")
+    logProps.put(LogConfig.CleanupPolicyProp, "compact,delete")
 
     def runCleanerAndCheckCompacted(numKeys: Int): (Log, Seq[(Int, String)]) = {
       cleaner = makeCleaner(parts = 1, propertyOverrides = logProps, logCleanerBackOffMillis = 1000L)

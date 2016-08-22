@@ -159,14 +159,13 @@ class LogManagerTest {
   }
 
   /**
-    * Ensures that LogManager only runs on logs with cleanup.policy=delete as
-    * cleanup.policy=compact_and_delete is done by LogCleaner.CleanerThread.
-    * LogManager doesn't clean logs with compaction enabled.
+    * Ensures that LogManager only runs on logs with cleanup.policy=delete
+    * LogCleaner.CleanerThread handles all logs where compaction is enabled.
     */
   @Test
   def testDoesntCleanLogsWithCompactDeletePolicy() {
     val logProps = new Properties()
-    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.CompactDelete)
+    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact + "," + LogConfig.Delete)
     val log = logManager.createLog(TopicAndPartition(name, 0), LogConfig.fromProps(logConfig.originals, logProps))
     var offset = 0L
     for(i <- 0 until 200) {
