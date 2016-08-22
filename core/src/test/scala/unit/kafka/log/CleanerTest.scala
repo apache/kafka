@@ -491,7 +491,7 @@ class CleanerTest extends JUnitSuite {
     // because loadFactor is 0.75, this means we can fit 2 messages in the map
     val map = new FakeOffsetMap(3)
     val log = makeLog()
-    val cleaner = makeCleaner(1)
+    val cleaner = makeCleaner(2)
 
     log.append(message(0,0))
     log.append(message(1,1))
