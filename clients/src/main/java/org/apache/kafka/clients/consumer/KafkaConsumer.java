@@ -552,7 +552,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * A consumer is instantiated by providing a {@link java.util.Properties} object as configuration.
      * <p>
      * Valid configuration strings are documented at {@link ConsumerConfig}
-     * 
+     *
      * @param properties The consumer configuration properties
      */
     public KafkaConsumer(Properties properties) {
@@ -802,7 +802,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 }
                 log.debug("Subscribed to topic(s): {}", Utils.join(topics, ", "));
                 this.subscriptions.subscribe(new HashSet<>(topics), listener);
-                metadata.setTopics(subscriptions.groupSubscription());
             }
         } finally {
             release();

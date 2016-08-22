@@ -21,7 +21,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -116,6 +115,14 @@ public class SubscriptionState {
         changeSubscription(topics);
     }
 
+    public void subscribeFromAutoTopics(Set<String> topics) {
+        if (subscriptionType != SubscriptionType.AUTO_TOPICS)
+            throw new IllegalArgumentException("Attempt to subscribe from topics while subscription type set to " +
+                    subscriptionType);
+
+        changeSubscription(topics);
+    }
+
     public void subscribeFromPattern(Set<String> topics) {
         if (subscriptionType != SubscriptionType.AUTO_PATTERN)
             throw new IllegalArgumentException("Attempt to subscribe from pattern while subscription type set to " +
@@ -128,13 +135,6 @@ public class SubscriptionState {
         if (!this.subscription.equals(topicsToSubscribe)) {
             this.subscription = topicsToSubscribe;
             this.groupSubscription.addAll(topicsToSubscribe);
-
-            // Remove any assigned partitions which are no longer subscribed to
-            for (Iterator<TopicPartition> it = assignment.keySet().iterator(); it.hasNext(); ) {
-                TopicPartition tp = it.next();
-                if (!subscription.contains(tp.topic()))
-                    it.remove();
-            }
         }
     }
 
@@ -202,6 +202,10 @@ public class SubscriptionState {
 
         this.listener = listener;
         this.subscribedPattern = pattern;
+    }
+
+    public boolean hasAutoTopicSubscription() {
+        return this.subscriptionType == SubscriptionType.AUTO_TOPICS;
     }
 
     public boolean hasPatternSubscription() {

@@ -157,15 +157,23 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 if (!cluster.unauthorizedTopics().isEmpty())
                     throw new TopicAuthorizationException(new HashSet<>(cluster.unauthorizedTopics()));
 
-                if (subscriptions.hasPatternSubscription()) {
-                    final Set<String> topicsToSubscribe = new HashSet<>();
+                boolean hasAutoTopicSubscription = subscriptions.hasAutoTopicSubscription();
+                boolean hasPatternSubscription = subscriptions.hasPatternSubscription();
 
-                    for (String topic : cluster.topics())
-                        if (subscriptions.getSubscribedPattern().matcher(topic).matches() &&
-                                !(excludeInternalTopics && cluster.internalTopics().contains(topic)))
+                if (hasAutoTopicSubscription || hasPatternSubscription) {
+                    final Set<String> topicsToSubscribe = new HashSet<>();
+                    Set<String> internalTopics = cluster.internalTopics();
+                    Set<String> topics = hasAutoTopicSubscription ? subscriptions.subscription() : cluster.topics();
+
+                    for (String topic: topics)
+                        if (!(excludeInternalTopics && internalTopics.contains(topic)) &&
+                                (hasAutoTopicSubscription || subscriptions.getSubscribedPattern().matcher(topic).matches()))
                             topicsToSubscribe.add(topic);
 
-                    subscriptions.subscribeFromPattern(topicsToSubscribe);
+                    if (hasAutoTopicSubscription)
+                        subscriptions.subscribeFromAutoTopics(topicsToSubscribe);
+                    else
+                        subscriptions.subscribeFromPattern(topicsToSubscribe);
 
                     // note we still need to update the topics contained in the metadata. Although we have
                     // specified that all topics should be fetched, only those set explicitly will be retained
