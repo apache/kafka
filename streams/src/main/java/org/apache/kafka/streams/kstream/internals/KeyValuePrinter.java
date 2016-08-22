@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 import java.io.PrintStream;
@@ -90,13 +91,13 @@ class KeyValuePrinter<K, V> implements ProcessorSupplier<K, V> {
         }
 
         @Override
-        public void process(K key, V value) {
+        public void process(final ProcessorRecordContext recordContext, K key, V value) {
             K keyToPrint = (K) maybeDeserialize(key, keySerde.deserializer());
             V valueToPrint = (V) maybeDeserialize(value, valueSerde.deserializer());
 
             printStream.println("[" + this.streamName + "]: " + keyToPrint + " , " + valueToPrint);
 
-            this.processorContext.forward(key, value);
+            recordContext.forward(key, value);
         }
 
 

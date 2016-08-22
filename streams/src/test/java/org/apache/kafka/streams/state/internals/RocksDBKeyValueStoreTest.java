@@ -17,7 +17,10 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
+import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
@@ -46,6 +49,13 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
         } else {
             supplier = Stores.create("my-store").withKeys(keyClass).withValues(valueClass).persistent().build();
         }
+
+        ((ForwardingSupplier) supplier).withFlushListener(new CacheFlushListener() {
+            @Override
+            public void flushed(final Object key, final Change value, final RecordContext recordContext) {
+
+            }
+        });
 
         KeyValueStore<K, V> store = (KeyValueStore<K, V>) supplier.get();
         store.init(context, store);

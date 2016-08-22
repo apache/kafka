@@ -82,6 +82,11 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         return false;
     }
 
+    @Override
+    public void enableSendingOldValues() {
+
+    }
+
     private class TheWindowStoreIterator<E> implements WindowStoreIterator<E> {
 
         private final Iterator<KeyValue<Long, E>> underlying;

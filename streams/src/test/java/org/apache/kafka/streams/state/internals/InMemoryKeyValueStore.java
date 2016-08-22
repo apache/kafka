@@ -17,6 +17,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -36,12 +37,12 @@ class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public void put(final K key, final V value) {
+    public void put(final K key, final V value, final RecordContext recordRecordContext) {
         map.put(key, value);
     }
 
     @Override
-    public V putIfAbsent(final K key, final V value) {
+    public V putIfAbsent(final K key, final V value, final RecordContext recordContext) {
         V orig = map.get(key);
         if (orig == null) {
             map.put(key, value);
@@ -50,14 +51,14 @@ class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public void putAll(final List<KeyValue<K, V>> entries) {
+    public void putAll(final List<KeyValue<K, V>> entries, final RecordContext recordContext) {
         for (KeyValue<K, V> entry : entries) {
             map.put(entry.key, entry.value);
         }
     }
 
     @Override
-    public V delete(final K key) {
+    public V delete(final K key, final RecordContext recordContext) {
         return map.remove(key);
     }
 
@@ -94,6 +95,11 @@ class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
     @Override
     public boolean isOpen() {
         return open;
+    }
+
+    @Override
+    public void enableSendingOldValues() {
+
     }
 
     @Override

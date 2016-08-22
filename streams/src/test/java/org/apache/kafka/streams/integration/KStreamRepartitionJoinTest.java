@@ -83,6 +83,7 @@ public class KStreamRepartitionJoinTest {
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1);
 
         streamOne = builder.stream(Serdes.Long(), Serdes.Integer(), streamOneInput);
         streamTwo = builder.stream(Serdes.Integer(), Serdes.String(), streamTwoInput);
@@ -108,8 +109,8 @@ public class KStreamRepartitionJoinTest {
 
     @Test
     public void shouldCorrectlyRepartitionOnJoinOperations() throws Exception {
-        produceMessages();
 
+        produceMessages();
         final ExpectedOutputOnTopic mapOne = mapStreamOneAndJoin();
         final ExpectedOutputOnTopic mapBoth = mapBothStreamsAndJoin();
         final ExpectedOutputOnTopic mapMapJoin = mapMapJoin();
@@ -133,7 +134,7 @@ public class KStreamRepartitionJoinTest {
 
     private ExpectedOutputOnTopic mapStreamOneAndJoin() {
         String mapOneStreamAndJoinOutput = "map-one-join-output";
-        doJoin(streamOne.map(keyMapper), streamTwo, mapOneStreamAndJoinOutput, "map-one-join");
+        doJoin(streamOne.map(keyMapper), streamTwo, mapOneStreamAndJoinOutput);
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, mapOneStreamAndJoinOutput);
     }
 
@@ -141,7 +142,7 @@ public class KStreamRepartitionJoinTest {
         final KStream<Integer, Integer> map1 = streamOne.map(keyMapper);
         final KStream<Integer, String> map2 = streamTwo.map(MockKeyValueMapper.<Integer, String>NoOpKeyValueMapper());
 
-        doJoin(map1, map2, "map-both-streams-and-join", "map-both-join");
+        doJoin(map1, map2, "map-both-streams-and-join");
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, "map-both-streams-and-join");
     }
 
@@ -159,7 +160,7 @@ public class KStreamRepartitionJoinTest {
             }).map(keyMapper);
 
         String outputTopic = "map-map-join";
-        doJoin(mapMapStream, streamTwo, outputTopic, outputTopic);
+        doJoin(mapMapStream, streamTwo, outputTopic);
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
     }
 
@@ -170,7 +171,7 @@ public class KStreamRepartitionJoinTest {
                 streamOne.selectKey(MockKeyValueMapper.<Long, Integer>SelectValueMapper());
 
         String outputTopic = "select-key-join";
-        doJoin(keySelected, streamTwo, outputTopic, outputTopic);
+        doJoin(keySelected, streamTwo, outputTopic);
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
     }
 
@@ -186,7 +187,7 @@ public class KStreamRepartitionJoinTest {
             });
 
         String outputTopic = "flat-map-join";
-        doJoin(flatMapped, streamTwo, outputTopic, outputTopic);
+        doJoin(flatMapped, streamTwo, outputTopic);
 
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
     }
@@ -349,7 +350,7 @@ public class KStreamRepartitionJoinTest {
         streamTwoInput = "stream-two";
         streamFourInput = "stream-four";
         CLUSTER.createTopic(streamOneInput);
-        CLUSTER.createTopic(streamTwoInput, 2, 1);
+        CLUSTER.createTopic(streamTwoInput);
         CLUSTER.createTopic(streamFourInput);
     }
 
@@ -390,8 +391,7 @@ public class KStreamRepartitionJoinTest {
 
     private void doJoin(KStream<Integer, Integer> lhs,
                         KStream<Integer, String> rhs,
-                        String outputTopic,
-                        final String joinName) {
+                        String outputTopic) {
         CLUSTER.createTopic(outputTopic);
         lhs.join(rhs,
                  valueJoiner,

@@ -23,6 +23,8 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.ProcessorRecordContextImpl;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -101,6 +103,7 @@ public class KStreamTestDriver {
         }
     }
 
+
     public void punctuate(long timestamp) {
         setTime(timestamp);
 
@@ -126,11 +129,15 @@ public class KStreamTestDriver {
         for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
             currNode = childNode;
             try {
-                childNode.process(key, value);
+                childNode.process(createRecordContext(childNode), key, value);
             } finally {
                 currNode = thisNode;
             }
         }
+    }
+
+    private ProcessorRecordContext createRecordContext(ProcessorNode node) {
+        return new ProcessorRecordContextImpl(context.timestamp(), 0, 0, "topic", node);
     }
 
     @SuppressWarnings("unchecked")
@@ -139,7 +146,7 @@ public class KStreamTestDriver {
         ProcessorNode childNode = (ProcessorNode<K, V>) thisNode.children().get(childIndex);
         currNode = childNode;
         try {
-            childNode.process(key, value);
+            childNode.process(createRecordContext(childNode), key, value);
         } finally {
             currNode = thisNode;
         }
@@ -152,7 +159,7 @@ public class KStreamTestDriver {
             if (childNode.name().equals(childName)) {
                 currNode = childNode;
                 try {
-                    childNode.process(key, value);
+                    childNode.process(createRecordContext(childNode), key, value);
                 } finally {
                     currNode = thisNode;
                 }
@@ -203,6 +210,13 @@ public class KStreamTestDriver {
 
     public Map<String, StateStore> allStateStores() {
         return context.allStateStores();
+    }
+
+    public void flushState() {
+        for (StateStore stateStore : context.allStateStores().values()) {
+            stateStore.flush();
+        }
+
     }
 
     private class MockRecordCollector extends RecordCollector {

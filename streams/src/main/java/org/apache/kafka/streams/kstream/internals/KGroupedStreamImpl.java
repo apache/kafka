@@ -151,7 +151,7 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
                                                                    final Windows<W> windows,
                                                                    final String storeName) {
         return storeFactory(aggValSerde, storeName)
-            .windowed(windows.maintainMs(), windows.segments, false)
+            .windowed(windows.size(), windows.maintainMs(), windows.segments, false)
             .build();
 
     }

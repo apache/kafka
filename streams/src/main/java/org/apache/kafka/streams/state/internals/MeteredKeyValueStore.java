@@ -24,6 +24,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -99,6 +100,11 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
+    public void enableSendingOldValues() {
+        this.inner.enableSendingOldValues();
+    }
+
+    @Override
     public V get(K key) {
         long startNs = time.nanoseconds();
         try {
@@ -109,40 +115,40 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public void put(K key, V value) {
+    public void put(K key, V value, final RecordContext recordRecordContext) {
         long startNs = time.nanoseconds();
         try {
-            this.inner.put(key, value);
+            this.inner.put(key, value, recordRecordContext);
         } finally {
             this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
         }
     }
 
     @Override
-    public V putIfAbsent(K key, V value) {
+    public V putIfAbsent(K key, V value, final RecordContext recordContext) {
         long startNs = time.nanoseconds();
         try {
-            return this.inner.putIfAbsent(key, value);
+            return this.inner.putIfAbsent(key, value, recordContext);
         } finally {
             this.metrics.recordLatency(this.putIfAbsentTime, startNs, time.nanoseconds());
         }
     }
 
     @Override
-    public void putAll(List<KeyValue<K, V>> entries) {
+    public void putAll(List<KeyValue<K, V>> entries, final RecordContext recordContext) {
         long startNs = time.nanoseconds();
         try {
-            this.inner.putAll(entries);
+            this.inner.putAll(entries, recordContext);
         } finally {
             this.metrics.recordLatency(this.putAllTime, startNs, time.nanoseconds());
         }
     }
 
     @Override
-    public V delete(K key) {
+    public V delete(K key, final RecordContext recordContext) {
         long startNs = time.nanoseconds();
         try {
-            return this.inner.delete(key);
+            return this.inner.delete(key, recordContext);
         } finally {
             this.metrics.recordLatency(this.deleteTime, startNs, time.nanoseconds());
         }

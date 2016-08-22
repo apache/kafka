@@ -121,5 +121,10 @@ public class StateStoreTestUtils {
         public boolean isOpen() {
             return false;
         }
+
+        @Override
+        public void enableSendingOldValues() {
+
+        }
     }
 }

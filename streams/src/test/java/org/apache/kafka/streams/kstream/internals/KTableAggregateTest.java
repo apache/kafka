@@ -83,23 +83,31 @@ public class KTableAggregateTest {
         driver = new KStreamTestDriver(builder, stateDir);
 
         driver.process(topic1, "A", "1");
+        driver.flushState();
         driver.process(topic1, "B", "2");
+        driver.flushState();
         driver.process(topic1, "A", "3");
+        driver.flushState();
         driver.process(topic1, "B", "4");
+        driver.flushState();
         driver.process(topic1, "C", "5");
+        driver.flushState();
         driver.process(topic1, "D", "6");
+        driver.flushState();
         driver.process(topic1, "B", "7");
+        driver.flushState();
         driver.process(topic1, "C", "8");
+        driver.flushState();
 
         assertEquals(Utils.mkList(
                 "A:0+1",
                 "B:0+2",
-                "A:0+1-1", "A:0+1-1+3",
-                "B:0+2-2", "B:0+2-2+4",
+                "A:0+1-1+3",
+                "B:0+2-2+4",
                 "C:0+5",
                 "D:0+6",
-                "B:0+2-2+4-4", "B:0+2-2+4-4+7",
-                "C:0+5-5", "C:0+5-5+8"), proc.processed);
+                "B:0+2-2+4-4+7",
+                "C:0+5-5+8"), proc.processed);
     }
 
     @Test
@@ -135,13 +143,21 @@ public class KTableAggregateTest {
         driver = new KStreamTestDriver(builder, stateDir);
 
         driver.process(topic1, "A", "1");
+        driver.flushState();
         driver.process(topic1, "A", null);
+        driver.flushState();
         driver.process(topic1, "A", "1");
+        driver.flushState();
         driver.process(topic1, "B", "2");
+        driver.flushState();
         driver.process(topic1, "null", "3");
+        driver.flushState();
         driver.process(topic1, "B", "4");
+        driver.flushState();
         driver.process(topic1, "NULL", "5");
+        driver.flushState();
         driver.process(topic1, "B", "7");
+        driver.flushState();
 
         assertEquals(Utils.mkList(
                 "1:0+1",
@@ -170,10 +186,17 @@ public class KTableAggregateTest {
         final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir);
 
         driver.process(input, "A", "green");
+        driver.flushState();
         driver.process(input, "B", "green");
+        driver.flushState();
         driver.process(input, "A", "blue");
+        driver.flushState();
         driver.process(input, "C", "yellow");
+        driver.flushState();
         driver.process(input, "D", "green");
+        driver.flushState();
+        driver.flushState();
+
 
         assertEquals(Utils.mkList(
                  "green:1",
@@ -216,22 +239,26 @@ public class KTableAggregateTest {
                     public String apply(String key, String value, String aggregate) {
                         return aggregate.replaceAll(value, "");
                     }
-                }, "someStore")
+                }, Serdes.String(), "someStore")
                 .toStream()
                 .process(proc);
 
         final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir);
 
         driver.process(input, "11", "A");
+        driver.flushState();
         driver.process(input, "12", "B");
+        driver.flushState();
         driver.process(input, "11", null);
+        driver.flushState();
         driver.process(input, "12", "C");
+        driver.flushState();
 
         assertEquals(Utils.mkList(
                  "1:1",
                  "1:12",
                  "1:2",
-                 "1:", "1:2"
+                 "1:2"
                  ), proc.processed);
     }
 }

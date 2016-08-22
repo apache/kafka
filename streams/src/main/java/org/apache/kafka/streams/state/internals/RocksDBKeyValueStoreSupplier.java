@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 
@@ -30,12 +31,13 @@ import org.apache.kafka.streams.processor.StateStoreSupplier;
  *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
-public class RocksDBKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
+public class RocksDBKeyValueStoreSupplier<K, V> implements StateStoreSupplier, ForwardingSupplier<K, V> {
 
     private final String name;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private final Time time;
+    private CacheFlushListener<K, V> cacheFlushListener;
 
     public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde) {
         this(name, keySerde, valueSerde, null);
@@ -53,8 +55,14 @@ public class RocksDBKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
     }
 
     public StateStore get() {
-        RocksDBStore<K, V> store = new RocksDBStore<>(name, keySerde, valueSerde).enableCaching();
+        RocksDBStore<K, V> store = new RocksDBStore<>(name, keySerde, valueSerde, cacheFlushListener).enableCaching();
 
         return new MeteredKeyValueStore<>(store.enableLogging(), "rocksdb-state", time);
+    }
+
+    @Override
+    public void withFlushListener(final CacheFlushListener listener) {
+        this.cacheFlushListener = listener;
+
     }
 }

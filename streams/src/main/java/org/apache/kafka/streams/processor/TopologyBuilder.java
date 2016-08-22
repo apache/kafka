@@ -21,6 +21,8 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
+import org.apache.kafka.streams.kstream.internals.Change;
+import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -28,6 +30,7 @@ import org.apache.kafka.streams.processor.internals.QuickUnion;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor.SubscriptionUpdates;
+import org.apache.kafka.streams.state.internals.ForwardingSupplier;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -855,7 +858,7 @@ public class TopologyBuilder {
         // create processor nodes in a topological order ("nodeFactories" is already topologically sorted)
         for (NodeFactory factory : nodeFactories.values()) {
             if (nodeGroup == null || nodeGroup.contains(factory.name)) {
-                ProcessorNode node = factory.build(applicationId);
+                final ProcessorNode node = factory.build(applicationId);
                 processorNodes.add(node);
                 processorMap.put(node.name(), node);
 
@@ -865,6 +868,22 @@ public class TopologyBuilder {
                     }
                     for (String stateStoreName : ((ProcessorNodeFactory) factory).stateStoreNames) {
                         if (!stateStoreMap.containsKey(stateStoreName)) {
+                            final StateStoreSupplier supplier = stateFactories.get(stateStoreName).supplier;
+                            if (supplier instanceof ForwardingSupplier) {
+                                ((ForwardingSupplier) supplier).withFlushListener(new CacheFlushListener() {
+                                    @Override
+                                    public void flushed(final Object key, final Change value, final RecordContext recordContext) {
+                                        for (ProcessorNode processorNode : (List<ProcessorNode>) node.children()) {
+                                            processorNode.process(new ProcessorRecordContextImpl(recordContext.timestamp(),
+                                                                                                 recordContext.offset(),
+                                                                                                 recordContext.partition(),
+                                                                                                 recordContext.topic(),
+                                                                                                 processorNode),
+                                                                  key, value);
+                                        }
+                                    }
+                                });
+                            }
                             stateStoreMap.put(stateStoreName, stateFactories.get(stateStoreName).supplier);
                         }
                     }

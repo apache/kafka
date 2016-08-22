@@ -82,7 +82,7 @@ public class KTableMapValuesTest {
         driver.process(topic1, "B", "02");
         driver.process(topic1, "C", "03");
         driver.process(topic1, "D", "04");
-
+        driver.flushState();
         assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4"), proc2.processed);
     }
 
@@ -133,6 +133,7 @@ public class KTableMapValuesTest {
         driver.process(topic1, "A", "01");
         driver.process(topic1, "B", "01");
         driver.process(topic1, "C", "01");
+        driver.flushState();
 
         assertEquals("01", getter1.get("A"));
         assertEquals("01", getter1.get("B"));
@@ -152,6 +153,7 @@ public class KTableMapValuesTest {
 
         driver.process(topic1, "A", "02");
         driver.process(topic1, "B", "02");
+        driver.flushState();
 
         assertEquals("02", getter1.get("A"));
         assertEquals("02", getter1.get("B"));
@@ -170,6 +172,7 @@ public class KTableMapValuesTest {
         assertEquals("01", getter4.get("C"));
 
         driver.process(topic1, "A", "03");
+        driver.flushState();
 
         assertEquals("03", getter1.get("A"));
         assertEquals("02", getter1.get("B"));
@@ -188,6 +191,7 @@ public class KTableMapValuesTest {
         assertEquals("01", getter4.get("C"));
 
         driver.process(topic1, "A", null);
+        driver.flushState();
 
         assertNull(getter1.get("A"));
         assertEquals("02", getter1.get("B"));
@@ -234,19 +238,23 @@ public class KTableMapValuesTest {
         driver.process(topic1, "A", "01");
         driver.process(topic1, "B", "01");
         driver.process(topic1, "C", "01");
+        driver.flushState();
 
         proc.checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
 
         driver.process(topic1, "A", "02");
         driver.process(topic1, "B", "02");
+        driver.flushState();
 
         proc.checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
 
         driver.process(topic1, "A", "03");
+        driver.flushState();
 
         proc.checkAndClearProcessResult("A:(3<-null)");
 
         driver.process(topic1, "A", null);
+        driver.flushState();
 
         proc.checkAndClearProcessResult("A:(null<-null)");
     }
@@ -281,19 +289,23 @@ public class KTableMapValuesTest {
         driver.process(topic1, "A", "01");
         driver.process(topic1, "B", "01");
         driver.process(topic1, "C", "01");
+        driver.flushState();
 
         proc.checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
 
         driver.process(topic1, "A", "02");
         driver.process(topic1, "B", "02");
+        driver.flushState();
 
         proc.checkAndClearProcessResult("A:(2<-1)", "B:(2<-1)");
 
         driver.process(topic1, "A", "03");
+        driver.flushState();
 
         proc.checkAndClearProcessResult("A:(3<-2)");
 
         driver.process(topic1, "A", null);
+        driver.flushState();
 
         proc.checkAndClearProcessResult("A:(null<-3)");
     }

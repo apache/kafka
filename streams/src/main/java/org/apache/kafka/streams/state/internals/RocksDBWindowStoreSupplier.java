@@ -19,6 +19,8 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 
@@ -30,7 +32,7 @@ import org.apache.kafka.streams.processor.StateStoreSupplier;
  *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
-public class RocksDBWindowStoreSupplier<K, V> implements StateStoreSupplier {
+public class RocksDBWindowStoreSupplier<K, V> implements StateStoreSupplier, ForwardingSupplier<Windowed<K>, V> {
 
     private final String name;
     private final long retentionPeriod;
@@ -39,12 +41,14 @@ public class RocksDBWindowStoreSupplier<K, V> implements StateStoreSupplier {
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private final Time time;
+    private final long windowSize;
+    private CacheFlushListener<Windowed<K>, V> cacheFlushListener = null;
 
-    public RocksDBWindowStoreSupplier(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde) {
-        this(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, null);
+    public RocksDBWindowStoreSupplier(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde, final long windowSize) {
+        this(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, null, windowSize);
     }
 
-    public RocksDBWindowStoreSupplier(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde, Time time) {
+    public RocksDBWindowStoreSupplier(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde, Time time, long windowSize) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.retainDuplicates = retainDuplicates;
@@ -52,6 +56,7 @@ public class RocksDBWindowStoreSupplier<K, V> implements StateStoreSupplier {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.time = time;
+        this.windowSize = windowSize;
     }
 
     public String name() {
@@ -59,10 +64,13 @@ public class RocksDBWindowStoreSupplier<K, V> implements StateStoreSupplier {
     }
 
     public StateStore get() {
-        RocksDBWindowStore<K, V> store = new RocksDBWindowStore<>(name, retentionPeriod, numSegments,
-            retainDuplicates, keySerde, valueSerde).enableCaching();
+        RocksDBWindowStore<K, V> store = new RocksDBWindowStore<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, windowSize, cacheFlushListener).enableCaching();
 
         return new MeteredWindowStore<>(store.enableLogging(), "rocksdb-window", time);
     }
 
+    @Override
+    public void withFlushListener(final CacheFlushListener<Windowed<K>, V> listener) {
+        this.cacheFlushListener = listener;
+    }
 }

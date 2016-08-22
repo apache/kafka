@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.ProcessorRecordContext;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -44,6 +45,7 @@ public class ProcessorNode<K, V> {
         this.stateStores = stateStores;
     }
 
+
     public final String name() {
         return name;
     }
@@ -64,12 +66,12 @@ public class ProcessorNode<K, V> {
         processor.init(context);
     }
 
-    public void process(K key, V value) {
-        processor.process(key, value);
-    }
-
     public void close() {
         processor.close();
+    }
+
+    public void process(final ProcessorRecordContext context, final K key, final V value) {
+        processor.process(context, key, value);
     }
 
     /**

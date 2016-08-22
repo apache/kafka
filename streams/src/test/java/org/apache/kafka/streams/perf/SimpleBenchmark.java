@@ -36,8 +36,10 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
@@ -277,14 +279,14 @@ public class SimpleBenchmark {
         source.process(new ProcessorSupplier<Long, byte[]>() {
             @Override
             public Processor<Long, byte[]> get() {
-                return new Processor<Long, byte[]>() {
+                return new AbstractProcessor<Long, byte[]>() {
 
                     @Override
                     public void init(ProcessorContext context) {
                     }
 
                     @Override
-                    public void process(Long key, byte[] value) {
+                    public void process(final ProcessorRecordContext nodeContext, Long key, byte[] value) {
                         if (END_KEY.equals(key)) {
                             latch.countDown();
                         }
@@ -321,14 +323,14 @@ public class SimpleBenchmark {
         source.process(new ProcessorSupplier<Long, byte[]>() {
             @Override
             public Processor<Long, byte[]> get() {
-                return new Processor<Long, byte[]>() {
+                return new AbstractProcessor<Long, byte[]>() {
 
                     @Override
                     public void init(ProcessorContext context) {
                     }
 
                     @Override
-                    public void process(Long key, byte[] value) {
+                    public void process(final ProcessorRecordContext nodeContext, Long key, byte[] value) {
                         if (END_KEY.equals(key)) {
                             latch.countDown();
                         }
@@ -367,7 +369,7 @@ public class SimpleBenchmark {
         source.process(new ProcessorSupplier<Long, byte[]>() {
             @Override
             public Processor<Long, byte[]> get() {
-                return new Processor<Long, byte[]>() {
+                return new AbstractProcessor<Long, byte[]>() {
 
                     KeyValueStore<Long, byte[]> store;
 
@@ -378,8 +380,8 @@ public class SimpleBenchmark {
                     }
 
                     @Override
-                    public void process(Long key, byte[] value) {
-                        store.put(key, value);
+                    public void process(final ProcessorRecordContext nodeContext, Long key, byte[] value) {
+                        store.put(key, value, null);
 
                         if (END_KEY.equals(key)) {
                             latch.countDown();

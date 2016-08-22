@@ -97,7 +97,7 @@ public class KStreamKStreamLeftJoinTest {
         for (int i = 0; i < 2; i++) {
             driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
         }
-
+        driver.flushState();
         processor.checkAndClearProcessResult("0:X0+null", "1:X1+null");
 
         // push two items to the other stream. this should produce two items.
@@ -107,7 +107,7 @@ public class KStreamKStreamLeftJoinTest {
         for (int i = 0; i < 2; i++) {
             driver.process(topic2, expectedKeys[i], "Y" + expectedKeys[i]);
         }
-
+        driver.flushState();
         processor.checkAndClearProcessResult();
 
         // push all four items to the primary stream. this should produce four items.
@@ -117,7 +117,7 @@ public class KStreamKStreamLeftJoinTest {
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
         }
-
+        driver.flushState();
         processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1", "2:X2+null", "3:X3+null");
 
         // push all items to the other stream. this should produce no items.
@@ -127,7 +127,7 @@ public class KStreamKStreamLeftJoinTest {
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
         }
-
+        driver.flushState();
         processor.checkAndClearProcessResult();
 
         // push all four items to the primary stream. this should produce four items.
@@ -137,7 +137,7 @@ public class KStreamKStreamLeftJoinTest {
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
-
+        driver.flushState();
         processor.checkAndClearProcessResult("0:XX0+Y0", "0:XX0+YY0", "1:XX1+Y1", "1:XX1+YY1", "2:XX2+YY2", "3:XX3+YY3");
     }
 
@@ -176,7 +176,7 @@ public class KStreamKStreamLeftJoinTest {
         for (int i = 0; i < 2; i++) {
             driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
         }
-
+        driver.flushState();
         processor.checkAndClearProcessResult("0:X0+null", "1:X1+null");
 
         // push two items to the other stream. this should produce no items.
@@ -186,7 +186,7 @@ public class KStreamKStreamLeftJoinTest {
         for (int i = 0; i < 2; i++) {
             driver.process(topic2, expectedKeys[i], "Y" + expectedKeys[i]);
         }
-
+        driver.flushState();
         processor.checkAndClearProcessResult();
 
         // clear logically
@@ -199,7 +199,7 @@ public class KStreamKStreamLeftJoinTest {
             driver.setTime(time + i);
             driver.process(topic2, expectedKeys[i], "Y" + expectedKeys[i]);
         }
-
+        driver.flushState();
         processor.checkAndClearProcessResult();
 
         // gradually expire items in window.
@@ -210,35 +210,35 @@ public class KStreamKStreamLeftJoinTest {
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
-
+        driver.flushState();
         processor.checkAndClearProcessResult("0:XX0+Y0", "1:XX1+Y1", "2:XX2+Y2", "3:XX3+Y3");
 
         driver.setTime(++time);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
-
+        driver.flushState();
         processor.checkAndClearProcessResult("0:XX0+null", "1:XX1+Y1", "2:XX2+Y2", "3:XX3+Y3");
 
         driver.setTime(++time);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
-
+        driver.flushState();
         processor.checkAndClearProcessResult("0:XX0+null", "1:XX1+null", "2:XX2+Y2", "3:XX3+Y3");
 
         driver.setTime(++time);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
-
+        driver.flushState();
         processor.checkAndClearProcessResult("0:XX0+null", "1:XX1+null", "2:XX2+null", "3:XX3+Y3");
 
         driver.setTime(++time);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
-
+        driver.flushState();
         processor.checkAndClearProcessResult("0:XX0+null", "1:XX1+null", "2:XX2+null", "3:XX3+null");
 
         // go back to the time before expiration
@@ -248,35 +248,35 @@ public class KStreamKStreamLeftJoinTest {
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
-
+        driver.flushState();
         processor.checkAndClearProcessResult("0:XX0+null", "1:XX1+null", "2:XX2+null", "3:XX3+null");
 
         driver.setTime(++time);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
-
+        driver.flushState();
         processor.checkAndClearProcessResult("0:XX0+Y0", "1:XX1+null", "2:XX2+null", "3:XX3+null");
 
         driver.setTime(++time);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
-
+        driver.flushState();
         processor.checkAndClearProcessResult("0:XX0+Y0", "1:XX1+Y1", "2:XX2+null", "3:XX3+null");
 
         driver.setTime(++time);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
-
+        driver.flushState();
         processor.checkAndClearProcessResult("0:XX0+Y0", "1:XX1+Y1", "2:XX2+Y2", "3:XX3+null");
 
         driver.setTime(++time);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
-
+        driver.flushState();
         processor.checkAndClearProcessResult("0:XX0+Y0", "1:XX1+Y1", "2:XX2+Y2", "3:XX3+Y3");
     }
 }

@@ -25,6 +25,7 @@ import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
@@ -67,7 +68,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
         }
 
         @Override
-        public void process(K key, V value) {
+        public void process(final ProcessorRecordContext recordContex, K key, V value) {
             // if the key is null, we do not need proceed aggregating
             // the record with the table
             if (key == null)
@@ -106,13 +107,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
                         }
 
                         // update the store with the new value
-                        windowStore.put(key, newAgg, window.start());
-
-                        // forward the aggregated change pair
-                        if (sendOldValues)
-                            context().forward(new Windowed<>(key, window), new Change<>(newAgg, oldAgg));
-                        else
-                            context().forward(new Windowed<>(key, window), new Change<>(newAgg, null));
+                        windowStore.put(key, newAgg, window.start(), recordContex);
 
                         matchedWindows.remove(entry.key);
                     }
@@ -121,10 +116,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
 
             // create the new window for the rest of unmatched window that do not exist yet
             for (long windowStartMs : matchedWindows.keySet()) {
-                windowStore.put(key, value, windowStartMs);
-
-                // send the new aggregate pair (there will be no old value)
-                context().forward(new Windowed<>(key, matchedWindows.get(windowStartMs)), new Change<>(value, null));
+                windowStore.put(key, value, windowStartMs, recordContex);
             }
         }
     }

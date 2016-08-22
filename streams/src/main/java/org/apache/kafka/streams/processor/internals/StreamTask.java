@@ -24,6 +24,8 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.processor.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.ProcessorRecordContextImpl;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes;
@@ -172,8 +174,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
             TopicPartition partition = recordInfo.partition();
 
             log.debug("Start processing one record [{}]", currRecord);
-
-            this.currNode.process(currRecord.key(), currRecord.value());
+            final ProcessorRecordContext recordContext = createRecordContext(currNode);
+            this.currNode.process(recordContext, currRecord.key(), currRecord.value());
 
             log.debug("Completed processing one record [{}]", currRecord);
 
@@ -341,11 +343,15 @@ public class StreamTask extends AbstractTask implements Punctuator {
         try {
             for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
                 currNode = childNode;
-                childNode.process(key, value);
+                childNode.process(createRecordContext(childNode), key, value);
             }
         } finally {
             currNode = thisNode;
         }
+    }
+
+    private ProcessorRecordContextImpl createRecordContext(final ProcessorNode childNode) {
+        return new ProcessorRecordContextImpl(currRecord.timestamp, currRecord.offset(), currRecord.partition(), currRecord.topic(), childNode);
     }
 
     @SuppressWarnings("unchecked")
@@ -354,7 +360,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         ProcessorNode childNode = (ProcessorNode<K, V>) thisNode.children().get(childIndex);
         currNode = childNode;
         try {
-            childNode.process(key, value);
+            childNode.process(createRecordContext(childNode), key, value);
         } finally {
             currNode = thisNode;
         }
@@ -367,7 +373,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
             if (childNode.name().equals(childName)) {
                 currNode = childNode;
                 try {
-                    childNode.process(key, value);
+                    childNode.process(createRecordContext(childNode), key, value);
                 } finally {
                     currNode = thisNode;
                 }
@@ -384,4 +390,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
     public String toString() {
         return super.toString();
     }
+
+
 }

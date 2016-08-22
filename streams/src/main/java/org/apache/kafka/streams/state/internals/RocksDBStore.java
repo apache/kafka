@@ -23,9 +23,12 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.kstream.internals.Change;
+import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
@@ -45,11 +48,11 @@ import org.rocksdb.WriteOptions;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Set;
 
 /**
  * A persistent key-value store based on RocksDB.
@@ -84,6 +87,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private StateSerdes<K, V> serdes;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
+    private final CacheFlushListener<K, V> cacheFlushListener;
 
     private RocksDB db;
 
@@ -94,13 +98,14 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     private boolean loggingEnabled = false;
 
-    private Set<K> cacheDirtyKeys = null;
+    private LinkedHashMap<K, K> cacheDirtyKeys = new LinkedHashMap<>();
     private boolean cachingEnabled = false;
     private MemoryLRUCacheBytes<Bytes, MemoryLRUCacheBytesEntry> cache = null;
     private StoreChangeLogger<Bytes, byte[]> changeLogger;
     private StoreChangeLogger.ValueGetter<Bytes, byte[]> getter;
 
     private volatile boolean open = false;
+    private boolean sendOldValues = false;
 
     public KeyValueStore<K, V> enableLogging() {
         loggingEnabled = true;
@@ -114,19 +119,17 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         return this;
     }
 
-    public boolean isCachingEnabled() {
-        return cachingEnabled;
+    public RocksDBStore(String name, Serde<K> keySerde, Serde<V> valueSerde, CacheFlushListener<K, V> cacheFlushListeners) {
+        this(name, DB_FILE_DIR, keySerde, valueSerde, cacheFlushListeners);
     }
 
-    public RocksDBStore(String name, Serde<K> keySerde, Serde<V> valueSerde) {
-        this(name, DB_FILE_DIR, keySerde, valueSerde);
-    }
 
-    public RocksDBStore(String name, String parentDir, Serde<K> keySerde, Serde<V> valueSerde) {
+    public RocksDBStore(String name, String parentDir, Serde<K> keySerde, Serde<V> valueSerde, CacheFlushListener<K, V> cacheFlushListeners) {
         this.name = name;
         this.parentDir = parentDir;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
+        this.cacheFlushListener = cacheFlushListeners;
 
         // initialize the default rocksdb options
         BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
@@ -178,7 +181,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         this.changeLogger = this.loggingEnabled ? new StoreChangeLogger<>(name, context, WindowStoreUtils.INNER_SERDES) : null;
         initCaching(context);
-
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
         this.getter = new StoreChangeLogger.ValueGetter<Bytes, byte[]>() {
@@ -213,12 +215,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                     @Override
                     public void apply(Bytes key, MemoryLRUCacheBytesEntry entry) {
                         // flush all the dirty entries to RocksDB if this evicted entry is dirty
-                        if (entry.isDirty) {
+                        if (entry.shouldForward()) {
                             flushCache();
                         }
                     }
                 });
-                this.cacheDirtyKeys = new HashSet<>();
             }
         }  else {
             this.cache = null;
@@ -254,6 +255,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     @Override
     public boolean isOpen() {
         return open;
+    }
+
+    @Override
+    public void enableSendingOldValues() {
+        this.sendOldValues = true;
     }
 
     @Override
@@ -300,12 +306,18 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public synchronized void put(K key, V value) {
+    public synchronized void put(K key, V value, RecordContext context) {
         validateStoreOpen();
         if (cache != null) {
-            cacheDirtyKeys.add(key);
-            cache.put(Bytes.wrap(serdes.rawMergeStoreNameKey(key, name)), new MemoryLRUCacheBytesEntry(value, true));
+            cacheDirtyKeys.put(key, key);
+            cache.put(Bytes.wrap(serdes.rawMergeStoreNameKey(key, name)), new MemoryLRUCacheBytesEntry(value,
+                                                                                                       context.offset(),
+                                                                                                       context.timestamp(),
+                                                                                                       context.partition(),
+                                                                                                       context.topic(),
+                                                                                                       MemoryLRUCacheBytesEntry.State.dirty));
         } else {
             byte[] rawKey = serdes.rawKey(key);
             byte[] rawValue = serdes.rawValue(value);
@@ -319,11 +331,17 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     }
 
+    @SuppressWarnings("unchecked")
+    synchronized void writeToStore(K key, V value) {
+//        cache.put(Bytes.wrap(serdes.rawMergeStoreNameKey(key, name)), new MemoryLRUCacheBytesEntry(value));
+        putInternal(serdes.rawKey(key), serdes.rawValue(value));
+    }
+
     @Override
-    public synchronized V putIfAbsent(K key, V value) {
+    public synchronized V putIfAbsent(K key, V value, final RecordContext recordContext) {
         V originalValue = get(key);
         if (originalValue == null) {
-            put(key, value);
+            put(key, value, recordContext);
         }
         return originalValue;
     }
@@ -347,9 +365,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public void putAll(List<KeyValue<K, V>> entries) {
+    public void putAll(List<KeyValue<K, V>> entries, final RecordContext recordContext) {
         for (KeyValue<K, V> entry : entries)
-            put(entry.key, entry.value);
+            put(entry.key, entry.value, recordContext);
     }
 
     // this function is only called in flushCache()
@@ -366,9 +384,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public synchronized V delete(K key) {
+    public synchronized V delete(K key, final RecordContext recordContext) {
         V value = get(key);
-        put(key, null);
+        put(key, null, recordContext);
         return value;
     }
 
@@ -431,29 +449,47 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         return value < 0;
     }
 
+    public class FlushedEntry {
+        MemoryLRUCacheBytesEntry<V> entry;
+        V oldValue;
+
+        public FlushedEntry(final MemoryLRUCacheBytesEntry<V> entry, final V oldValue) {
+            this.entry = entry;
+            this.oldValue = oldValue;
+        }
+    }
+
     private void flushCache() {
-        // flush of the cache entries if necessary
         if (cache != null) {
             List<KeyValue<byte[], byte[]>> putBatch = new ArrayList<>(cache.size());
             List<byte[]> deleteBatch = new ArrayList<>(cache.size());
+            final Iterator<Map.Entry<K, K>> dirtyKeyIterator = cacheDirtyKeys.entrySet().iterator();
+            final LinkedHashMap<K, FlushedEntry> toForward = new LinkedHashMap<>();
 
-            for (K key : cacheDirtyKeys) {
-                MemoryLRUCacheBytesEntry<V> entry = cache.get(Bytes.wrap(serdes.rawMergeStoreNameKey(key, name)));
-
+            while (dirtyKeyIterator.hasNext()) {
+                final K key = dirtyKeyIterator.next().getKey();
+                dirtyKeyIterator.remove();
+                final Bytes wrap = Bytes.wrap(serdes.rawMergeStoreNameKey(key, name));
+                final MemoryLRUCacheBytesEntry<V> entry = cache.get(wrap);
                 if (entry != null) {
-                    entry.isDirty = false;
-
                     byte[] rawKey = serdes.rawKey(key);
 
-                    if (entry.value != null) {
-                        putBatch.add(new KeyValue<>(rawKey, serdes.rawValue(entry.value)));
-                    } else {
-                        deleteBatch.add(rawKey);
+                    final V oldValue = getValue(rawKey);
+                    toForward.put(key, new FlushedEntry(entry, oldValue));
+
+                    if (entry.isDirty()) {
+                        if (entry.value != null) {
+                            putBatch.add(new KeyValue<>(rawKey, serdes.rawValue(entry.value)));
+                        } else {
+                            deleteBatch.add(rawKey);
+                        }
                     }
+                    entry.markClean();
                 }
             }
 
             putAllInternal(putBatch);
+
 
             if (loggingEnabled) {
                 for (KeyValue<byte[], byte[]> kv : putBatch)
@@ -474,14 +510,33 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                 }
             }
 
-            // reset dirty set
-            cacheDirtyKeys.clear();
+            if (loggingEnabled)
+                changeLogger.logChange(getter);
+
+            for (Map.Entry<K, FlushedEntry> flush : toForward.entrySet()) {
+                final FlushedEntry value = flush.getValue();
+                if (sendOldValues) {
+                    cacheFlushListener.flushed(flush.getKey(), new Change<>(value.entry.value, value.oldValue), value.entry);
+                } else {
+                    cacheFlushListener.flushed(flush.getKey(), new Change<>(value.entry.value, null), value.entry);
+                }
+            }
         }
 
-        if (loggingEnabled)
-            changeLogger.logChange(getter);
+
 
     }
+
+
+
+    private V getValue(final byte [] key) {
+        final byte[] rawValue = getInternal(key);
+        if (rawValue == null) {
+            return null;
+        }
+        return serdes.valueFrom(rawValue);
+    }
+
 
     @Override
     public synchronized void flush() {
@@ -495,7 +550,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         // flush RocksDB
         flushInternal();
     }
-
     /**
      * @throws ProcessorStateException if flushing failed because of any internal store exceptions
      */
@@ -524,6 +578,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         fOptions = null;
         db = null;
     }
+
+
 
     private static class RocksDbIterator<K, V> implements KeyValueIterator<K, V> {
         private final RocksIterator iter;

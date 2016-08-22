@@ -18,11 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
-import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.ArrayList;
@@ -43,7 +38,7 @@ import java.util.Map;
  *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
-public class MemoryLRUCacheBytes<K, V> implements KeyValueStore<K, V> {
+public class MemoryLRUCacheBytes<K, V>  {
     public interface EldestEntryRemovalListener<K, V> {
 
         void apply(K key, V value);
@@ -94,10 +89,6 @@ public class MemoryLRUCacheBytes<K, V> implements KeyValueStore<K, V> {
         };
     }
 
-    public KeyValueStore<K, V> enableLogging() {
-        return new InMemoryKeyValueLoggedStore<>(this.name, this, keySerde, valueSerde);
-    }
-
     public MemoryLRUCacheBytes<K, V> whenEldestRemoved(MemoryLRUCacheBytes.EldestEntryRemovalListener<K, V> listener) {
         addEldestRemovedListener(listener);
 
@@ -108,54 +99,14 @@ public class MemoryLRUCacheBytes<K, V> implements KeyValueStore<K, V> {
         this.listeners.add(listener);
     }
 
-    @Override
-    public String name() {
-        return this.name;
-    }
-
-    @Override
-    @SuppressWarnings("unchecked")
-    public void init(ProcessorContext context, StateStore root) {
-        // construct the serde
-        this.serdes = new StateSerdes<>(name,
-            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
-
-        // register the store
-        context.register(root, true, new StateRestoreCallback() {
-            @Override
-            public void restore(byte[] key, byte[] value) {
-                // check value for null, to avoid  deserialization error.
-                if (value == null) {
-                    put(serdes.keyFrom(key), null);
-                } else {
-                    put(serdes.keyFrom(key), serdes.valueFrom(value));
-                }
-            }
-        });
-    }
-
-    @Override
-    public boolean persistent() {
-        return false;
-    }
-
-    @Override
-    public boolean isOpen() {
-        return open;
-    }
-
-    @Override
     public synchronized V get(K key) {
         return this.map.get(key);
     }
 
-    @Override
     public synchronized void put(K key, V value) {
         this.map.put(key, value);
     }
 
-    @Override
     public synchronized V putIfAbsent(K key, V value) {
         V originalValue = get(key);
         if (originalValue == null) {
@@ -164,47 +115,14 @@ public class MemoryLRUCacheBytes<K, V> implements KeyValueStore<K, V> {
         return originalValue;
     }
 
-    @Override
     public void putAll(List<KeyValue<K, V>> entries) {
         for (KeyValue<K, V> entry : entries)
             put(entry.key, entry.value);
     }
 
-    @Override
     public synchronized V delete(K key) {
         V value = this.map.remove(key);
         return value;
-    }
-
-    /**
-     * @throws UnsupportedOperationException
-     */
-    @Override
-    public KeyValueIterator<K, V> range(K from, K to) {
-        throw new UnsupportedOperationException("MemoryLRUCache does not support range() function.");
-    }
-
-    /**
-     * @throws UnsupportedOperationException
-     */
-    @Override
-    public KeyValueIterator<K, V> all() {
-        throw new UnsupportedOperationException("MemoryLRUCache does not support all() function.");
-    }
-
-    @Override
-    public long approximateNumEntries() {
-        return this.map.size();
-    }
-
-    @Override
-    public void flush() {
-        // do-nothing since it is in-memory
-    }
-
-    @Override
-    public void close() {
-        open = false;
     }
 
     public int size() {

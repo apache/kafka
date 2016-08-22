@@ -85,36 +85,52 @@ public class KStreamWindowAggregateTest {
 
             driver.setTime(0L);
             driver.process(topic1, "A", "1");
+            driver.flushState();
             driver.setTime(1L);
             driver.process(topic1, "B", "2");
+            driver.flushState();
             driver.setTime(2L);
             driver.process(topic1, "C", "3");
+            driver.flushState();
             driver.setTime(3L);
             driver.process(topic1, "D", "4");
+            driver.flushState();
             driver.setTime(4L);
             driver.process(topic1, "A", "1");
+            driver.flushState();
 
             driver.setTime(5L);
             driver.process(topic1, "A", "1");
+            driver.flushState();
             driver.setTime(6L);
             driver.process(topic1, "B", "2");
+            driver.flushState();
             driver.setTime(7L);
             driver.process(topic1, "D", "4");
+            driver.flushState();
             driver.setTime(8L);
             driver.process(topic1, "B", "2");
+            driver.flushState();
             driver.setTime(9L);
             driver.process(topic1, "C", "3");
-
+            driver.flushState();
             driver.setTime(10L);
             driver.process(topic1, "A", "1");
+            driver.flushState();
             driver.setTime(11L);
             driver.process(topic1, "B", "2");
+            driver.flushState();
             driver.setTime(12L);
+            driver.flushState();
             driver.process(topic1, "D", "4");
+            driver.flushState();
             driver.setTime(13L);
             driver.process(topic1, "B", "2");
+            driver.flushState();
             driver.setTime(14L);
             driver.process(topic1, "C", "3");
+            driver.flushState();
+
 
             assertEquals(Utils.mkList(
                     "[A@0]:0+1",
@@ -184,14 +200,19 @@ public class KStreamWindowAggregateTest {
 
             driver.setTime(0L);
             driver.process(topic1, "A", "1");
+            driver.flushState();
             driver.setTime(1L);
             driver.process(topic1, "B", "2");
+            driver.flushState();
             driver.setTime(2L);
             driver.process(topic1, "C", "3");
+            driver.flushState();
             driver.setTime(3L);
             driver.process(topic1, "D", "4");
+            driver.flushState();
             driver.setTime(4L);
             driver.process(topic1, "A", "1");
+            driver.flushState();
 
             proc1.checkAndClearProcessResult(
                     "[A@0]:0+1",
@@ -211,14 +232,19 @@ public class KStreamWindowAggregateTest {
 
             driver.setTime(5L);
             driver.process(topic1, "A", "1");
+            driver.flushState();
             driver.setTime(6L);
             driver.process(topic1, "B", "2");
+            driver.flushState();
             driver.setTime(7L);
             driver.process(topic1, "D", "4");
+            driver.flushState();
             driver.setTime(8L);
             driver.process(topic1, "B", "2");
+            driver.flushState();
             driver.setTime(9L);
             driver.process(topic1, "C", "3");
+            driver.flushState();
 
             proc1.checkAndClearProcessResult(
                     "[A@0]:0+1+1+1", "[A@5]:0+1",
@@ -238,14 +264,19 @@ public class KStreamWindowAggregateTest {
 
             driver.setTime(0L);
             driver.process(topic2, "A", "a");
+            driver.flushState();
             driver.setTime(1L);
             driver.process(topic2, "B", "b");
+            driver.flushState();
             driver.setTime(2L);
             driver.process(topic2, "C", "c");
+            driver.flushState();
             driver.setTime(3L);
             driver.process(topic2, "D", "d");
+            driver.flushState();
             driver.setTime(4L);
             driver.process(topic2, "A", "a");
+            driver.flushState();
 
             proc1.checkAndClearProcessResult();
             proc2.checkAndClearProcessResult(
@@ -264,15 +295,19 @@ public class KStreamWindowAggregateTest {
 
             driver.setTime(5L);
             driver.process(topic2, "A", "a");
+            driver.flushState();
             driver.setTime(6L);
             driver.process(topic2, "B", "b");
+            driver.flushState();
             driver.setTime(7L);
             driver.process(topic2, "D", "d");
+            driver.flushState();
             driver.setTime(8L);
             driver.process(topic2, "B", "b");
+            driver.flushState();
             driver.setTime(9L);
             driver.process(topic2, "C", "c");
-
+            driver.flushState();
             proc1.checkAndClearProcessResult();
             proc2.checkAndClearProcessResult(
                     "[A@0]:0+a+a+a", "[A@5]:0+a",

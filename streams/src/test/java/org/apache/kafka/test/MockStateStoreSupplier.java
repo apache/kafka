@@ -106,6 +106,11 @@ public class MockStateStoreSupplier implements StateStoreSupplier {
             return !closed;
         }
 
+        @Override
+        public void enableSendingOldValues() {
+
+        }
+
         public final StateRestoreCallback stateRestoreCallback = new StateRestoreCallback() {
             private final Deserializer<Integer> deserializer = new IntegerDeserializer();
 

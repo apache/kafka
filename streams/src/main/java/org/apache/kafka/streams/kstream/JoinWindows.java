@@ -103,6 +103,11 @@ public class JoinWindows extends Windows<TimeWindow> {
     }
 
     @Override
+    public long size() {
+        return after;
+    }
+
+    @Override
     public final boolean equals(Object o) {
         if (o == this) {
             return true;

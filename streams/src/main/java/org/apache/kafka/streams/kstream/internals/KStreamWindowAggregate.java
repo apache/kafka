@@ -26,6 +26,7 @@ import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
@@ -70,14 +71,14 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
         }
 
         @Override
-        public void process(K key, V value) {
+        public void process(final ProcessorRecordContext nodeContext, K key, V value) {
             // if the key is null, we do not need proceed aggregating the record
             // the record with the table
             if (key == null)
                 return;
 
             // first get the matching windows
-            long timestamp = context().timestamp();
+            long timestamp = nodeContext.timestamp();
             Map<Long, W> matchedWindows = windows.windowsFor(timestamp);
 
             long timeFrom = Long.MAX_VALUE;
@@ -91,7 +92,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
             try (WindowStoreIterator<T> iter = windowStore.fetch(key, timeFrom, timeTo)) {
 
-                // for each matching window, try to update the corresponding key and send to the downstream
+                // for each matching window, try to update the corresponding key
                 while (iter.hasNext()) {
                     KeyValue<Long, T> entry = iter.next();
                     W window = matchedWindows.get(entry.key);
@@ -107,13 +108,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
                         T newAgg = aggregator.apply(key, value, oldAgg);
 
                         // update the store with the new value
-                        windowStore.put(key, newAgg, window.start());
-
-                        // forward the aggregated change pair
-                        if (sendOldValues)
-                            context().forward(new Windowed<>(key, window), new Change<>(newAgg, oldAgg));
-                        else
-                            context().forward(new Windowed<>(key, window), new Change<>(newAgg, null));
+                        windowStore.put(key, newAgg, window.start(), nodeContext);
 
                         matchedWindows.remove(entry.key);
                     }
@@ -124,14 +119,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
             for (long windowStartMs : matchedWindows.keySet()) {
                 T oldAgg = initializer.apply();
                 T newAgg = aggregator.apply(key, value, oldAgg);
-
-                windowStore.put(key, newAgg, windowStartMs);
-
-                // send the new aggregate pair
-                if (sendOldValues)
-                    context().forward(new Windowed<>(key, matchedWindows.get(windowStartMs)), new Change<>(newAgg, oldAgg));
-                else
-                    context().forward(new Windowed<>(key, matchedWindows.get(windowStartMs)), new Change<>(newAgg, null));
+                windowStore.put(key, newAgg, windowStartMs, nodeContext);
             }
         }
     }

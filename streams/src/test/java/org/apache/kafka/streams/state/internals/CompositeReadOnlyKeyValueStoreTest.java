@@ -15,6 +15,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.junit.Before;
@@ -37,6 +38,8 @@ public class CompositeReadOnlyKeyValueStoreTest {
     private CompositeReadOnlyKeyValueStore<String, String> theStore;
     private KeyValueStore<String, String>
         otherUnderlyingStore;
+
+    private RecordContext recordRecordContext = null;
 
     @SuppressWarnings("unchecked")
     @Before
@@ -66,13 +69,13 @@ public class CompositeReadOnlyKeyValueStoreTest {
 
     @Test
     public void shouldReturnValueIfExists() throws Exception {
-        stubOneUnderlying.put("key", "value");
+        stubOneUnderlying.put("key", "value", null);
         assertEquals("value", theStore.get("key"));
     }
 
     @Test
     public void shouldNotGetValuesFromOtherStores() throws Exception {
-        otherUnderlyingStore.put("otherKey", "otherValue");
+        otherUnderlyingStore.put("otherKey", "otherValue", null);
         assertNull(theStore.get("otherKey"));
     }
 
@@ -82,8 +85,8 @@ public class CompositeReadOnlyKeyValueStoreTest {
         final KeyValueStore<String, String> cache = newStoreInstance();
         stubProviderTwo.addStore(storeName, cache);
 
-        cache.put("key-two", "key-two-value");
-        stubOneUnderlying.put("key-one", "key-one-value");
+        cache.put("key-two", "key-two-value", null);
+        stubOneUnderlying.put("key-one", "key-one-value", null);
 
         assertEquals("key-two-value", theStore.get("key-two"));
         assertEquals("key-one-value", theStore.get("key-one"));
@@ -91,9 +94,9 @@ public class CompositeReadOnlyKeyValueStoreTest {
 
     @Test
     public void shouldSupportRange() throws Exception {
-        stubOneUnderlying.put("a", "a");
-        stubOneUnderlying.put("b", "b");
-        stubOneUnderlying.put("c", "c");
+        stubOneUnderlying.put("a", "a", recordRecordContext);
+        stubOneUnderlying.put("b", "b", recordRecordContext);
+        stubOneUnderlying.put("c", "c", recordRecordContext);
 
         final List<KeyValue<String, String>> results = toList(theStore.range("a", "c"));
         assertTrue(results.contains(new KeyValue<>("a", "a")));
@@ -107,13 +110,13 @@ public class CompositeReadOnlyKeyValueStoreTest {
         final KeyValueStore<String, String> cache = newStoreInstance();
         stubProviderTwo.addStore(storeName, cache);
 
-        stubOneUnderlying.put("a", "a");
-        stubOneUnderlying.put("b", "b");
-        stubOneUnderlying.put("z", "z");
+        stubOneUnderlying.put("a", "a", recordRecordContext);
+        stubOneUnderlying.put("b", "b", recordRecordContext);
+        stubOneUnderlying.put("z", "z", recordRecordContext);
 
-        cache.put("c", "c");
-        cache.put("d", "d");
-        cache.put("x", "x");
+        cache.put("c", "c", recordRecordContext);
+        cache.put("d", "d", recordRecordContext);
+        cache.put("x", "x", recordRecordContext);
 
         final List<KeyValue<String, String>> results = toList(theStore.range("a", "e"));
         assertTrue(results.contains(new KeyValue<>("a", "a")));
@@ -128,13 +131,13 @@ public class CompositeReadOnlyKeyValueStoreTest {
         final KeyValueStore<String, String> cache = newStoreInstance();
         stubProviderTwo.addStore(storeName, cache);
 
-        stubOneUnderlying.put("a", "a");
-        stubOneUnderlying.put("b", "b");
-        stubOneUnderlying.put("z", "z");
+        stubOneUnderlying.put("a", "a", recordRecordContext);
+        stubOneUnderlying.put("b", "b", recordRecordContext);
+        stubOneUnderlying.put("z", "z", recordRecordContext);
 
-        cache.put("c", "c");
-        cache.put("d", "d");
-        cache.put("x", "x");
+        cache.put("c", "c", recordRecordContext);
+        cache.put("d", "d", recordRecordContext);
+        cache.put("x", "x", recordRecordContext);
 
         final List<KeyValue<String, String>> results = toList(theStore.all());
         assertTrue(results.contains(new KeyValue<>("a", "a")));
@@ -167,13 +170,13 @@ public class CompositeReadOnlyKeyValueStoreTest {
         final KeyValueStore<String, String> cache = newStoreInstance();
         stubProviderTwo.addStore(storeName, cache);
 
-        stubOneUnderlying.put("a", "a");
-        stubOneUnderlying.put("b", "b");
-        stubOneUnderlying.put("z", "z");
+        stubOneUnderlying.put("a", "a", recordRecordContext);
+        stubOneUnderlying.put("b", "b", recordRecordContext);
+        stubOneUnderlying.put("z", "z", recordRecordContext);
 
-        cache.put("c", "c");
-        cache.put("d", "d");
-        cache.put("x", "x");
+        cache.put("c", "c", recordRecordContext);
+        cache.put("d", "d", recordRecordContext);
+        cache.put("x", "x", recordRecordContext);
 
         assertEquals(6, theStore.approximateNumEntries());
     }
@@ -187,7 +190,7 @@ public class CompositeReadOnlyKeyValueStoreTest {
             }
         });
 
-        stubOneUnderlying.put("overflow", "me");
+        stubOneUnderlying.put("overflow", "me", recordRecordContext);
         assertEquals(Long.MAX_VALUE, theStore.approximateNumEntries());
     }
 

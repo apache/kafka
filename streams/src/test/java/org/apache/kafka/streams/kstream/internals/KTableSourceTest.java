@@ -74,8 +74,10 @@ public class KTableSourceTest {
         driver.process(topic1, "B", 2);
         driver.process(topic1, "C", 3);
         driver.process(topic1, "D", 4);
+        driver.flushState();
         driver.process(topic1, "A", null);
         driver.process(topic1, "B", null);
+        driver.flushState();
 
         assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4", "A:null", "B:null"), proc1.processed);
     }
@@ -142,20 +144,24 @@ public class KTableSourceTest {
         driver.process(topic1, "A", "01");
         driver.process(topic1, "B", "01");
         driver.process(topic1, "C", "01");
+        driver.flushState();
 
         proc1.checkAndClearProcessResult("A:(01<-null)", "B:(01<-null)", "C:(01<-null)");
 
         driver.process(topic1, "A", "02");
         driver.process(topic1, "B", "02");
+        driver.flushState();
 
         proc1.checkAndClearProcessResult("A:(02<-null)", "B:(02<-null)");
 
         driver.process(topic1, "A", "03");
+        driver.flushState();
 
         proc1.checkAndClearProcessResult("A:(03<-null)");
 
         driver.process(topic1, "A", null);
         driver.process(topic1, "B", null);
+        driver.flushState();
 
         proc1.checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
     }
@@ -181,20 +187,24 @@ public class KTableSourceTest {
         driver.process(topic1, "A", "01");
         driver.process(topic1, "B", "01");
         driver.process(topic1, "C", "01");
+        driver.flushState();
 
         proc1.checkAndClearProcessResult("A:(01<-null)", "B:(01<-null)", "C:(01<-null)");
 
         driver.process(topic1, "A", "02");
         driver.process(topic1, "B", "02");
+        driver.flushState();
 
         proc1.checkAndClearProcessResult("A:(02<-01)", "B:(02<-01)");
 
         driver.process(topic1, "A", "03");
+        driver.flushState();
 
         proc1.checkAndClearProcessResult("A:(03<-02)");
 
         driver.process(topic1, "A", null);
         driver.process(topic1, "B", null);
+        driver.flushState();
 
         proc1.checkAndClearProcessResult("A:(null<-03)", "B:(null<-02)");
     }

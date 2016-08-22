@@ -22,8 +22,10 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -50,7 +52,7 @@ public class WordCountProcessorDemo {
 
         @Override
         public Processor<String, String> get() {
-            return new Processor<String, String>() {
+            return new AbstractProcessor<String, String>() {
                 private ProcessorContext context;
                 private KeyValueStore<String, Integer> kvStore;
 
@@ -63,16 +65,16 @@ public class WordCountProcessorDemo {
                 }
 
                 @Override
-                public void process(String dummy, String line) {
+                public void process(final ProcessorRecordContext nodeContext, String dummy, String line) {
                     String[] words = line.toLowerCase(Locale.getDefault()).split(" ");
 
                     for (String word : words) {
                         Integer oldValue = this.kvStore.get(word);
 
                         if (oldValue == null) {
-                            this.kvStore.put(word, 1);
+                            this.kvStore.put(word, 1, null);
                         } else {
-                            this.kvStore.put(word, oldValue + 1);
+                            this.kvStore.put(word, oldValue + 1, null);
                         }
                     }
 

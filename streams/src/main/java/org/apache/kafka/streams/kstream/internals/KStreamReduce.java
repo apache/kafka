@@ -21,6 +21,7 @@ import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V, V> {
@@ -59,7 +60,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
 
 
         @Override
-        public void process(K key, V value) {
+        public void process(final ProcessorRecordContext context, K key, V value) {
             // If the key is null we don't need to proceed
             if (key == null)
                 return;
@@ -77,13 +78,8 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
             }
 
             // update the store with the new value
-            store.put(key, newAgg);
+            store.put(key, newAgg, context);
 
-            // send the old / new pair
-            if (sendOldValues)
-                context().forward(key, new Change<>(newAgg, oldAgg));
-            else
-                context().forward(key, new Change<>(newAgg, null));
         }
     }
 

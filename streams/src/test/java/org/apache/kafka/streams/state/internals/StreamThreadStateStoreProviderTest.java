@@ -76,7 +76,7 @@ public class StreamThreadStateStoreProviderTest {
                                   .withStringKeys()
                                   .withStringValues()
                                   .persistent()
-                                  .windowed(10, 2, false).build(), "the-processor");
+                                  .windowed(10, 10, 2, false).build(), "the-processor");
 
         final Properties properties = new Properties();
         final String applicationId = "applicationId";

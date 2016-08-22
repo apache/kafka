@@ -17,6 +17,7 @@
 
 package org.apache.kafka.test;
 
+import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 
 import java.util.Collections;
@@ -42,8 +43,8 @@ public class MockProcessorNode<K, V> extends ProcessorNode<K, V> {
     }
 
     @Override
-    public void process(K key, V value) {
+    public void process(ProcessorRecordContext nodeContext, K key, V value) {
         this.numReceived++;
-        processor().process(key, value);
+        processor().process(nodeContext, key, value);
     }
 }

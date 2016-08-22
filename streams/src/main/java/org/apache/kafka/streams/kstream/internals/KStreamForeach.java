@@ -20,6 +20,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 class KStreamForeach<K, V> implements ProcessorSupplier<K, V> {
@@ -37,7 +38,7 @@ class KStreamForeach<K, V> implements ProcessorSupplier<K, V> {
 
     private class KStreamForeachProcessor extends AbstractProcessor<K, V> {
         @Override
-        public void process(K key, V value) {
+        public void process(final ProcessorRecordContext nodeContext, K key, V value) {
             action.apply(key, value);
         }
     }

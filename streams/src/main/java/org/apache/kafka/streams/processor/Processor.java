@@ -38,11 +38,11 @@ public interface Processor<K, V> {
 
     /**
      * Process the record with the given key and value.
-     * 
+     *
+     * @param nodeContext
      * @param key the key for the record
-     * @param value the value for the record
-     */
-    void process(K key, V value);
+     * @param value the value for the record */
+    void process(final ProcessorRecordContext nodeContext, K key, V value);
 
     /**
      * Perform any periodic operations, if this processor {@link ProcessorContext#schedule(long) schedule itself} with the context
@@ -57,4 +57,6 @@ public interface Processor<K, V> {
      * Thus, it is not possible to write anything to Kafka as underlying clients are already closed.
      */
     void close();
+
+
 }

@@ -633,7 +633,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             .withKeys(keySerde)
             .withValues(valueSerde)
             .persistent()
-            .windowed(windows.maintainMs(), windows.segments, true)
+            .windowed(windows.after, windows.maintainMs(), windows.segments, true)
             .build();
     }
 
@@ -703,8 +703,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             topology.addProcessor(joinThisName, joinThis, thisWindowStreamName);
             topology.addProcessor(joinOtherName, joinOther, otherWindowStreamName);
             topology.addProcessor(joinMergeName, joinMerge, joinThisName, joinOtherName);
-            topology.addStateStore(thisWindow, thisWindowStreamName, otherWindowStreamName);
-            topology.addStateStore(otherWindow, thisWindowStreamName, otherWindowStreamName);
+            topology.addStateStore(thisWindow, thisWindowStreamName);
+            topology.addStateStore(otherWindow, otherWindowStreamName);
 
             Set<String> allSourceNodes = new HashSet<>(((AbstractStream) lhs).sourceNodes);
             allSourceNodes.addAll(((KStreamImpl<K1, V2>) other).sourceNodes);
@@ -731,14 +731,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
             KStreamJoinWindow<K1, V1>
                 otherWindowedStream = new KStreamJoinWindow<>(otherWindow.name(), windows.before + windows.after + 1, windows.maintainMs());
-            KStreamKStreamJoin<K1, R, V1, V2>
-                joinThis = new KStreamKStreamJoin<>(otherWindow.name(), windows.before, windows.after, joiner, true);
+            KStreamKStreamLeftJoin<K1, R, V1, V2>
+                joinThis = new KStreamKStreamLeftJoin<>(otherWindow.name(), windows.before, windows.after, joiner, true);
 
 
 
             topology.addProcessor(otherWindowStreamName, otherWindowedStream, ((AbstractStream) other).name);
             topology.addProcessor(joinThisName, joinThis, ((AbstractStream) lhs).name);
-            topology.addStateStore(otherWindow, joinThisName, otherWindowStreamName);
+            topology.addStateStore(otherWindow, otherWindowStreamName, joinThisName);
 
             Set<String> allSourceNodes = new HashSet<>(((AbstractStream) lhs).sourceNodes);
             allSourceNodes.addAll(((KStreamImpl<K1, V2>) other).sourceNodes);

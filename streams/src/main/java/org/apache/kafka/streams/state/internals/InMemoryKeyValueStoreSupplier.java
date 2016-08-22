@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -116,9 +117,9 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
                 public void restore(byte[] key, byte[] value) {
                     // check value for null, to avoid  deserialization error.
                     if (value == null) {
-                        put(serdes.keyFrom(key), null);
+                        put(serdes.keyFrom(key), null, null);
                     } else {
-                        put(serdes.keyFrom(key), serdes.valueFrom(value));
+                        put(serdes.keyFrom(key), serdes.valueFrom(value), null);
                     }
                 }
             });
@@ -136,32 +137,37 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
         }
 
         @Override
+        public void enableSendingOldValues() {
+
+        }
+
+        @Override
         public synchronized V get(K key) {
             return this.map.get(key);
         }
 
         @Override
-        public synchronized void put(K key, V value) {
+        public synchronized void put(K key, V value, final RecordContext recordRecordContext) {
             this.map.put(key, value);
         }
 
         @Override
-        public synchronized V putIfAbsent(K key, V value) {
+        public synchronized V putIfAbsent(K key, V value, final RecordContext recordContext) {
             V originalValue = get(key);
             if (originalValue == null) {
-                put(key, value);
+                put(key, value, null);
             }
             return originalValue;
         }
 
         @Override
-        public synchronized void putAll(List<KeyValue<K, V>> entries) {
+        public synchronized void putAll(List<KeyValue<K, V>> entries, final RecordContext recordContext) {
             for (KeyValue<K, V> entry : entries)
-                put(entry.key, entry.value);
+                put(entry.key, entry.value, null);
         }
 
         @Override
-        public synchronized V delete(K key) {
+        public synchronized V delete(K key, final RecordContext recordContext) {
             return this.map.remove(key);
         }
 

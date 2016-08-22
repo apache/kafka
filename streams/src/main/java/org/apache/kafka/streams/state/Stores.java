@@ -74,12 +74,14 @@ public class Stores {
                             @Override
                             public PersistentKeyValueFactory<K, V> persistent() {
                                 return new PersistentKeyValueFactory<K, V>() {
+                                    private long windowSize;
                                     private int numSegments = 0;
                                     private long retentionPeriod = 0L;
                                     private boolean retainDuplicates = false;
 
                                     @Override
-                                    public PersistentKeyValueFactory<K, V> windowed(long retentionPeriod, int numSegments, boolean retainDuplicates) {
+                                    public PersistentKeyValueFactory<K, V> windowed(final long windowSize, long retentionPeriod, int numSegments, boolean retainDuplicates) {
+                                        this.windowSize = windowSize;
                                         this.numSegments = numSegments;
                                         this.retentionPeriod = retentionPeriod;
                                         this.retainDuplicates = retainDuplicates;
@@ -90,7 +92,7 @@ public class Stores {
                                     @Override
                                     public StateStoreSupplier build() {
                                         if (numSegments > 0) {
-                                            return new RocksDBWindowStoreSupplier<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde);
+                                            return new RocksDBWindowStoreSupplier<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, windowSize);
                                         }
 
                                         return new RocksDBKeyValueStoreSupplier<>(name, keySerde, valueSerde);
@@ -316,16 +318,19 @@ public class Stores {
         /**
          * Set the persistent store as a windowed key-value store
          *
+         * @param windowSize
          * @param retentionPeriod the maximum period of time in milli-second to keep each window in this store
          * @param numSegments the maximum number of segments for rolling the windowed store
          * @param retainDuplicates whether or not to retain duplicate data within the window
          */
-        PersistentKeyValueFactory<K, V> windowed(long retentionPeriod, int numSegments, boolean retainDuplicates);
+        PersistentKeyValueFactory<K, V> windowed(final long windowSize, long retentionPeriod, int numSegments, boolean retainDuplicates);
 
         /**
          * Return the instance of StateStoreSupplier of new key-value store.
          * @return the key-value store; never null
          */
         StateStoreSupplier build();
+
+
     }
 }
