@@ -346,7 +346,7 @@ private[log] class Cleaner(val id: Int,
     val deleteHorizonMs = 
       log.logSegments(0, cleanable.firstDirtyOffset).lastOption match {
         case None => 0L
-        case Some(seg) => seg.lastModified - log.config.deleteRetentionMs
+        case Some(seg) => seg.largestTimestamp - log.config.deleteRetentionMs
     }
         
     // group the segments and clean the groups
@@ -378,22 +378,31 @@ private[log] class Cleaner(val id: Int,
     val logFile = new File(segments.head.log.file.getPath + Log.CleanedFileSuffix)
     logFile.delete()
     val indexFile = new File(segments.head.index.file.getPath + Log.CleanedFileSuffix)
+    val timeIndexFile = new File(segments.head.timeIndex.file.getPath + Log.CleanedFileSuffix)
     indexFile.delete()
+    timeIndexFile.delete()
     val messages = new FileMessageSet(logFile, fileAlreadyExists = false, initFileSize = log.initFileSize(), preallocate = log.config.preallocate)
     val index = new OffsetIndex(indexFile, segments.head.baseOffset, segments.head.index.maxIndexSize)
-    val cleaned = new LogSegment(messages, index, segments.head.baseOffset, segments.head.indexIntervalBytes, log.config.randomSegmentJitter, time)
+    val timeIndex = new TimeIndex(timeIndexFile, segments.head.baseOffset, segments.head.timeIndex.maxIndexSize)
+    val cleaned = new LogSegment(messages, index, timeIndex, segments.head.baseOffset, segments.head.indexIntervalBytes, log.config.randomSegmentJitter, time)
 
     try {
       // clean segments into the new destination segment
       for (old <- segments) {
-        val retainDeletes = old.lastModified > deleteHorizonMs
-        info("Cleaning segment %s in log %s (last modified %s) into %s, %s deletes."
-            .format(old.baseOffset, log.name, new Date(old.lastModified), cleaned.baseOffset, if(retainDeletes) "retaining" else "discarding"))
+        val retainDeletes = old.largestTimestamp > deleteHorizonMs
+        info("Cleaning segment %s in log %s (largest timestamp %s) into %s, %s deletes."
+            .format(old.baseOffset, log.name, new Date(old.largestTimestamp), cleaned.baseOffset, if(retainDeletes) "retaining" else "discarding"))
         cleanInto(log.topicAndPartition, old, cleaned, map, retainDeletes, log.config.messageFormatVersion.messageFormatVersion)
       }
 
       // trim excess index
       index.trimToValidSize()
+
+      // Append the last index entry
+      cleaned.onBecomeInactiveSegment()
+
+      // trim time index
+      timeIndex.trimToValidSize()
 
       // flush new segment to disk before swap
       cleaned.flush()
@@ -434,6 +443,8 @@ private[log] class Cleaner(val id: Int,
       // read a chunk of messages and copy any that are to be retained to the write buffer to be written out
       readBuffer.clear()
       writeBuffer.clear()
+      var maxTimestamp = Message.NoTimestamp
+      var offsetOfMaxTimestamp = -1L
       val messages = new ByteBufferMessageSet(source.log.readInto(readBuffer, position))
       throttler.maybeThrottle(messages.sizeInBytes)
       // check each message to see if it is to be retained
@@ -445,6 +456,10 @@ private[log] class Cleaner(val id: Int,
           if (shouldRetainMessage(source, map, retainDeletes, entry)) {
             ByteBufferMessageSet.writeMessage(writeBuffer, entry.message, entry.offset)
             stats.recopyMessage(size)
+            if (entry.message.timestamp > maxTimestamp) {
+              maxTimestamp = entry.message.timestamp
+              offsetOfMaxTimestamp = entry.offset
+            }
           }
           messagesRead += 1
         } else {
@@ -455,12 +470,16 @@ private[log] class Cleaner(val id: Int,
           val retainedMessages = new mutable.ArrayBuffer[MessageAndOffset]
           messages.foreach { messageAndOffset =>
             messagesRead += 1
-            if (shouldRetainMessage(source, map, retainDeletes, messageAndOffset))
+            if (shouldRetainMessage(source, map, retainDeletes, messageAndOffset)) {
               retainedMessages += messageAndOffset
+              // We need the max timestamp and last offset for time index
+              if (messageAndOffset.message.timestamp > maxTimestamp)
+                maxTimestamp = messageAndOffset.message.timestamp
+            }
             else writeOriginalMessageSet = false
           }
-
-          // There are no messages compacted out, write the original message set back
+          offsetOfMaxTimestamp = if (retainedMessages.nonEmpty) retainedMessages.last.offset else -1L
+          // There are no messages compacted out and no message format conversion, write the original message set back
           if (writeOriginalMessageSet)
             ByteBufferMessageSet.writeMessage(writeBuffer, entry.message, entry.offset)
           else
@@ -473,7 +492,8 @@ private[log] class Cleaner(val id: Int,
       if (writeBuffer.position > 0) {
         writeBuffer.flip()
         val retained = new ByteBufferMessageSet(writeBuffer)
-        dest.append(retained.head.offset, retained)
+        dest.append(firstOffset = retained.head.offset, largestTimestamp = maxTimestamp,
+          offsetOfLargestTimestamp = offsetOfMaxTimestamp, messages = retained)
         throttler.maybeThrottle(writeBuffer.limit)
       }
       
@@ -581,14 +601,17 @@ private[log] class Cleaner(val id: Int,
       var group = List(segs.head)
       var logSize = segs.head.size
       var indexSize = segs.head.index.sizeInBytes
+      var timeIndexSize = segs.head.timeIndex.sizeInBytes
       segs = segs.tail
       while(segs.nonEmpty &&
             logSize + segs.head.size <= maxSize &&
             indexSize + segs.head.index.sizeInBytes <= maxIndexSize &&
+            timeIndexSize + segs.head.timeIndex.sizeInBytes <= maxIndexSize &&
             segs.head.index.lastOffset - group.last.index.baseOffset <= Int.MaxValue) {
         group = segs.head :: group
         logSize += segs.head.size
         indexSize += segs.head.index.sizeInBytes
+        timeIndexSize += segs.head.timeIndex.sizeInBytes
         segs = segs.tail
       }
       grouped ::= group.reverse

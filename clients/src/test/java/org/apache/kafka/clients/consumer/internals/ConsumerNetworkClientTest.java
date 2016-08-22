@@ -15,9 +15,9 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -73,22 +73,6 @@ public class ConsumerNetworkClientTest {
         consumerClient.awaitPendingRequests(node);
         assertTrue(future1.succeeded());
         assertTrue(future2.succeeded());
-    }
-
-    @Test
-    public void schedule() {
-        TestDelayedTask task = new TestDelayedTask();
-        consumerClient.schedule(task, time.milliseconds());
-        consumerClient.poll(0);
-        assertEquals(1, task.executions);
-
-        consumerClient.schedule(task, time.milliseconds() + 100);
-        consumerClient.poll(0);
-        assertEquals(1, task.executions);
-
-        time.sleep(100);
-        consumerClient.poll(0);
-        assertEquals(2, task.executions);
     }
 
     @Test
@@ -173,14 +157,6 @@ public class ConsumerNetworkClientTest {
     private Struct heartbeatResponse(short error) {
         HeartbeatResponse response = new HeartbeatResponse(error);
         return response.toStruct();
-    }
-
-    private static class TestDelayedTask implements DelayedTask {
-        int executions = 0;
-        @Override
-        public void run(long now) {
-            executions++;
-        }
     }
 
 }

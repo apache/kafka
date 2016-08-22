@@ -306,14 +306,14 @@ public class StreamThreadTest {
 
             List<TopicPartition> revokedPartitions;
             List<TopicPartition> assignedPartitions;
-            Map<Integer, StreamTask> prevTasks;
+            Map<TaskId, StreamTask> prevTasks;
 
             //
             // Assign t1p1 and t1p2. This should create task1 & task2
             //
             revokedPartitions = Collections.emptyList();
             assignedPartitions = Arrays.asList(t1p1, t1p2);
-            prevTasks = new HashMap(thread.tasks());
+            prevTasks = new HashMap<>(thread.tasks());
 
             rebalanceListener.onPartitionsRevoked(revokedPartitions);
             rebalanceListener.onPartitionsAssigned(assignedPartitions);
@@ -345,7 +345,7 @@ public class StreamThreadTest {
             //
             revokedPartitions = assignedPartitions;
             assignedPartitions = Collections.emptyList();
-            prevTasks = new HashMap(thread.tasks());
+            prevTasks = new HashMap<>(thread.tasks());
 
             rebalanceListener.onPartitionsRevoked(revokedPartitions);
             rebalanceListener.onPartitionsAssigned(assignedPartitions);

@@ -108,7 +108,7 @@ class LogManager(val logDirs: Array[File],
    */
   private def loadLogs(): Unit = {
     info("Loading logs.")
-
+    val startMs = time.milliseconds
     val threadPools = mutable.ArrayBuffer.empty[ExecutorService]
     val jobs = mutable.Map.empty[File, Seq[Future[_]]]
 
@@ -177,7 +177,7 @@ class LogManager(val logDirs: Array[File],
       threadPools.foreach(_.shutdown())
     }
 
-    info("Logs loading complete.")
+    info(s"Logs loading complete in ${time.milliseconds - startMs} ms.")
   }
 
   /**
@@ -415,7 +415,7 @@ class LogManager(val logDirs: Array[File],
       new File(leastLoaded._1)
     }
   }
-
+  
   /**
    * Delete any eligible logs. Return the number of segments deleted.
    * Only consider logs that are not compacted.

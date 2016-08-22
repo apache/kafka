@@ -73,6 +73,10 @@ public class StandaloneHerderTest {
     private static final int DEFAULT_MAX_TASKS = 1;
     private static final String WORKER_ID = "localhost:8083";
 
+    private enum SourceSink {
+        SOURCE, SINK
+    };
+
     private StandaloneHerder herder;
 
     private Connector connector;
@@ -88,11 +92,11 @@ public class StandaloneHerderTest {
     @Test
     public void testCreateSourceConnector() throws Exception {
         connector = PowerMock.createMock(BogusSourceConnector.class);
-        expectAdd(CONNECTOR_NAME, BogusSourceConnector.class, BogusSourceTask.class, false);
+        expectAdd(SourceSink.SOURCE);
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(CONNECTOR_NAME, BogusSourceConnector.class, false), false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(SourceSink.SOURCE), false, createCallback);
 
         PowerMock.verifyAll();
     }
@@ -101,7 +105,7 @@ public class StandaloneHerderTest {
     public void testCreateConnectorAlreadyExists() throws Exception {
         connector = PowerMock.createMock(BogusSourceConnector.class);
         // First addition should succeed
-        expectAdd(CONNECTOR_NAME, BogusSourceConnector.class, BogusSourceTask.class, false);
+        expectAdd(SourceSink.SOURCE);
 
         // Second should fail
         createCallback.onCompletion(EasyMock.<AlreadyExistsException>anyObject(), EasyMock.<Herder.Created<ConnectorInfo>>isNull());
@@ -109,8 +113,8 @@ public class StandaloneHerderTest {
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(CONNECTOR_NAME, BogusSourceConnector.class, false), false, createCallback);
-        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(CONNECTOR_NAME, BogusSourceConnector.class, false), false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(SourceSink.SOURCE), false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(SourceSink.SOURCE), false, createCallback);
 
         PowerMock.verifyAll();
     }
@@ -118,11 +122,11 @@ public class StandaloneHerderTest {
     @Test
     public void testCreateSinkConnector() throws Exception {
         connector = PowerMock.createMock(BogusSinkConnector.class);
-        expectAdd(CONNECTOR_NAME, BogusSinkConnector.class, BogusSinkTask.class, true);
+        expectAdd(SourceSink.SINK);
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(CONNECTOR_NAME, BogusSinkConnector.class, true), false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(SourceSink.SINK), false, createCallback);
 
         PowerMock.verifyAll();
     }
@@ -130,7 +134,7 @@ public class StandaloneHerderTest {
     @Test
     public void testDestroyConnector() throws Exception {
         connector = PowerMock.createMock(BogusSourceConnector.class);
-        expectAdd(CONNECTOR_NAME, BogusSourceConnector.class, BogusSourceTask.class, false);
+        expectAdd(SourceSink.SOURCE);
 
         EasyMock.expect(statusBackingStore.getAll(CONNECTOR_NAME)).andReturn(Collections.<TaskStatus>emptyList());
         statusBackingStore.put(new ConnectorStatus(CONNECTOR_NAME, AbstractStatus.State.DESTROYED, WORKER_ID, 0));
@@ -139,7 +143,7 @@ public class StandaloneHerderTest {
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(CONNECTOR_NAME, BogusSourceConnector.class, false), false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(SourceSink.SOURCE), false, createCallback);
         FutureCallback<Herder.Created<ConnectorInfo>> futureCb = new FutureCallback<>();
         herder.putConnectorConfig(CONNECTOR_NAME, null, true, futureCb);
         futureCb.get(1000L, TimeUnit.MILLISECONDS);
@@ -159,18 +163,18 @@ public class StandaloneHerderTest {
 
     @Test
     public void testRestartConnector() throws Exception {
-        expectAdd(CONNECTOR_NAME, BogusSourceConnector.class, BogusSourceTask.class, false);
+        expectAdd(SourceSink.SOURCE);
 
         worker.stopConnector(CONNECTOR_NAME);
         EasyMock.expectLastCall();
 
-        worker.startConnector(EasyMock.eq(new ConnectorConfig(connectorConfig(CONNECTOR_NAME, BogusSourceConnector.class, false))),
+        worker.startConnector(EasyMock.eq(new ConnectorConfig(connectorConfig(SourceSink.SOURCE))),
                 EasyMock.anyObject(HerderConnectorContext.class), EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         EasyMock.expectLastCall();
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(CONNECTOR_NAME, BogusSourceConnector.class, false), false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(SourceSink.SOURCE), false, createCallback);
 
         FutureCallback<Void> cb = new FutureCallback<>();
         herder.restartConnector(CONNECTOR_NAME, cb);
@@ -181,7 +185,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testRestartConnectorFailureOnStop() throws Exception {
-        expectAdd(CONNECTOR_NAME, BogusSourceConnector.class, BogusSourceTask.class, false);
+        expectAdd(SourceSink.SOURCE);
 
         RuntimeException e = new RuntimeException();
         worker.stopConnector(CONNECTOR_NAME);
@@ -191,7 +195,7 @@ public class StandaloneHerderTest {
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(CONNECTOR_NAME, BogusSourceConnector.class, false), false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(SourceSink.SOURCE), false, createCallback);
 
         FutureCallback<Void> cb = new FutureCallback<>();
         herder.restartConnector(CONNECTOR_NAME, cb);
@@ -207,19 +211,19 @@ public class StandaloneHerderTest {
 
     @Test
     public void testRestartConnectorFailureOnStart() throws Exception {
-        expectAdd(CONNECTOR_NAME, BogusSourceConnector.class, BogusSourceTask.class, false);
+        expectAdd(SourceSink.SOURCE);
 
         worker.stopConnector(CONNECTOR_NAME);
         EasyMock.expectLastCall();
 
         RuntimeException e = new RuntimeException();
-        worker.startConnector(EasyMock.eq(new ConnectorConfig(connectorConfig(CONNECTOR_NAME, BogusSourceConnector.class, false))),
+        worker.startConnector(EasyMock.eq(new ConnectorConfig(connectorConfig(SourceSink.SOURCE))),
                 EasyMock.anyObject(HerderConnectorContext.class), EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         EasyMock.expectLastCall().andThrow(e);
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(CONNECTOR_NAME, BogusSourceConnector.class, false), false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(SourceSink.SOURCE), false, createCallback);
 
         FutureCallback<Void> cb = new FutureCallback<>();
         herder.restartConnector(CONNECTOR_NAME, cb);
@@ -236,18 +240,19 @@ public class StandaloneHerderTest {
     @Test
     public void testRestartTask() throws Exception {
         ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_NAME, 0);
-        expectAdd(CONNECTOR_NAME, BogusSourceConnector.class, BogusSourceTask.class, false);
+        expectAdd(SourceSink.SOURCE);
 
         worker.stopAndAwaitTask(taskId);
         EasyMock.expectLastCall();
 
-        Map<String, String> generatedTaskProps = taskConfig(BogusSourceTask.class, false);
-        worker.startTask(taskId, new TaskConfig(generatedTaskProps), herder, TargetState.STARTED);
+        ConnectorConfig connConfig = new ConnectorConfig(connectorConfig(SourceSink.SOURCE));
+        TaskConfig taskConfig = new TaskConfig(taskConfig(SourceSink.SOURCE));
+        worker.startTask(taskId, taskConfig, connConfig, herder, TargetState.STARTED);
         EasyMock.expectLastCall();
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(CONNECTOR_NAME, BogusSourceConnector.class, false), false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(SourceSink.SOURCE), false, createCallback);
 
         FutureCallback<Void> cb = new FutureCallback<>();
         herder.restartTask(taskId, cb);
@@ -259,7 +264,7 @@ public class StandaloneHerderTest {
     @Test
     public void testRestartTaskFailureOnStop() throws Exception {
         ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_NAME, 0);
-        expectAdd(CONNECTOR_NAME, BogusSourceConnector.class, BogusSourceTask.class, false);
+        expectAdd(SourceSink.SOURCE);
 
         RuntimeException e = new RuntimeException();
         worker.stopAndAwaitTask(taskId);
@@ -269,7 +274,7 @@ public class StandaloneHerderTest {
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(CONNECTOR_NAME, BogusSourceConnector.class, false), false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(SourceSink.SOURCE), false, createCallback);
 
         FutureCallback<Void> cb = new FutureCallback<>();
         herder.restartTask(taskId, cb);
@@ -285,19 +290,20 @@ public class StandaloneHerderTest {
     @Test
     public void testRestartTaskFailureOnStart() throws Exception {
         ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_NAME, 0);
-        expectAdd(CONNECTOR_NAME, BogusSourceConnector.class, BogusSourceTask.class, false);
+        expectAdd(SourceSink.SOURCE);
 
         worker.stopAndAwaitTask(taskId);
         EasyMock.expectLastCall();
 
         RuntimeException e = new RuntimeException();
-        Map<String, String> generatedTaskProps = taskConfig(BogusSourceTask.class, false);
-        worker.startTask(taskId, new TaskConfig(generatedTaskProps), herder, TargetState.STARTED);
+        ConnectorConfig connConfig = new ConnectorConfig(connectorConfig(SourceSink.SOURCE));
+        TaskConfig taskConfig = new TaskConfig(taskConfig(SourceSink.SOURCE));
+        worker.startTask(taskId, taskConfig, connConfig, herder, TargetState.STARTED);
         EasyMock.expectLastCall().andThrow(e);
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(CONNECTOR_NAME, BogusSourceConnector.class, false), false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(SourceSink.SOURCE), false, createCallback);
 
         FutureCallback<Void> cb = new FutureCallback<>();
         herder.restartTask(taskId, cb);
@@ -314,7 +320,7 @@ public class StandaloneHerderTest {
     @Test
     public void testCreateAndStop() throws Exception {
         connector = PowerMock.createMock(BogusSourceConnector.class);
-        expectAdd(CONNECTOR_NAME, BogusSourceConnector.class, BogusSourceTask.class, false);
+        expectAdd(SourceSink.SOURCE);
         // herder.stop() should stop any running connectors and tasks even if destroyConnector was not invoked
         expectStop();
 
@@ -325,7 +331,7 @@ public class StandaloneHerderTest {
 
         PowerMock.replayAll();
 
-        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(CONNECTOR_NAME, BogusSourceConnector.class, false), false, createCallback);
+        herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig(SourceSink.SOURCE), false, createCallback);
         herder.stop();
 
         PowerMock.verifyAll();
@@ -333,7 +339,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testAccessors() throws Exception {
-        Map<String, String> connConfig = connectorConfig(CONNECTOR_NAME, BogusSourceConnector.class, false);
+        Map<String, String> connConfig = connectorConfig(SourceSink.SOURCE);
 
         Callback<Collection<String>> listConnectorsCb = PowerMock.createMock(Callback.class);
         Callback<ConnectorInfo> connectorInfoCb = PowerMock.createMock(Callback.class);
@@ -353,7 +359,7 @@ public class StandaloneHerderTest {
 
         // Create connector
         connector = PowerMock.createMock(BogusSourceConnector.class);
-        expectAdd(CONNECTOR_NAME, BogusSourceConnector.class, BogusSourceTask.class, false);
+        expectAdd(SourceSink.SOURCE);
 
         // Validate accessors with 1 connector
         listConnectorsCb.onCompletion(null, Collections.singleton(CONNECTOR_NAME));
@@ -364,7 +370,7 @@ public class StandaloneHerderTest {
         connectorConfigCb.onCompletion(null, connConfig);
         EasyMock.expectLastCall();
 
-        TaskInfo taskInfo = new TaskInfo(new ConnectorTaskId(CONNECTOR_NAME, 0), taskConfig(BogusSourceTask.class, false));
+        TaskInfo taskInfo = new TaskInfo(new ConnectorTaskId(CONNECTOR_NAME, 0), taskConfig(SourceSink.SOURCE));
         taskConfigsCb.onCompletion(null, Arrays.asList(taskInfo));
         EasyMock.expectLastCall();
 
@@ -388,7 +394,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testPutConnectorConfig() throws Exception {
-        Map<String, String> connConfig = connectorConfig(CONNECTOR_NAME, BogusSourceConnector.class, false);
+        Map<String, String> connConfig = connectorConfig(SourceSink.SOURCE);
         Map<String, String> newConnConfig = new HashMap<>(connConfig);
         newConnConfig.put("foo", "bar");
 
@@ -397,7 +403,7 @@ public class StandaloneHerderTest {
 
         // Create
         connector = PowerMock.createMock(BogusSourceConnector.class);
-        expectAdd(CONNECTOR_NAME, BogusSourceConnector.class, BogusSourceTask.class, false);
+        expectAdd(SourceSink.SOURCE);
         // Should get first config
         connectorConfigCb.onCompletion(null, connConfig);
         EasyMock.expectLastCall();
@@ -411,7 +417,7 @@ public class StandaloneHerderTest {
         EasyMock.expect(worker.isRunning(CONNECTOR_NAME)).andReturn(true);
         // Generate same task config, which should result in no additional action to restart tasks
         EasyMock.expect(worker.connectorTaskConfigs(CONNECTOR_NAME, DEFAULT_MAX_TASKS, null))
-                .andReturn(Collections.singletonList(taskConfig(BogusSourceTask.class, false)));
+                .andReturn(Collections.singletonList(taskConfig(SourceSink.SOURCE)));
         worker.isSinkConnector(CONNECTOR_NAME);
         EasyMock.expectLastCall().andReturn(false);
         ConnectorInfo newConnInfo = new ConnectorInfo(CONNECTOR_NAME, newConnConfig, Arrays.asList(new ConnectorTaskId(CONNECTOR_NAME, 0)));
@@ -446,17 +452,14 @@ public class StandaloneHerderTest {
         PowerMock.verifyAll();
     }
 
-    private void expectAdd(String name,
-                           Class<? extends Connector> connClass,
-                           Class<? extends Task> taskClass,
-                           boolean sink) throws Exception {
+    private void expectAdd(SourceSink sourceSink) throws Exception {
 
-        Map<String, String> connectorProps = connectorConfig(name, connClass, sink);
+        Map<String, String> connectorProps = connectorConfig(sourceSink);
 
         worker.startConnector(EasyMock.eq(new ConnectorConfig(connectorProps)), EasyMock.anyObject(HerderConnectorContext.class),
                               EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         EasyMock.expectLastCall();
-        EasyMock.expect(worker.isRunning(name)).andReturn(true);
+        EasyMock.expect(worker.isRunning(CONNECTOR_NAME)).andReturn(true);
 
         ConnectorInfo connInfo = new ConnectorInfo(CONNECTOR_NAME, connectorProps, Arrays.asList(new ConnectorTaskId(CONNECTOR_NAME, 0)));
         createCallback.onCompletion(null, new Herder.Created<>(true, connInfo));
@@ -464,16 +467,18 @@ public class StandaloneHerderTest {
 
         // And we should instantiate the tasks. For a sink task, we should see added properties for
         // the input topic partitions
-        Map<String, String> generatedTaskProps = taskConfig(taskClass, sink);
+        ConnectorConfig connConfig = new ConnectorConfig(connectorConfig(sourceSink));
+        Map<String, String> generatedTaskProps = taskConfig(sourceSink);
+        TaskConfig taskConfig = new TaskConfig(generatedTaskProps);
 
-        EasyMock.expect(worker.connectorTaskConfigs(CONNECTOR_NAME, DEFAULT_MAX_TASKS, sink ? TOPICS_LIST : null))
+        EasyMock.expect(worker.connectorTaskConfigs(CONNECTOR_NAME, DEFAULT_MAX_TASKS, sourceSink == SourceSink.SINK ? TOPICS_LIST : null))
             .andReturn(Collections.singletonList(generatedTaskProps));
 
-        worker.startTask(new ConnectorTaskId(CONNECTOR_NAME, 0), new TaskConfig(generatedTaskProps), herder, TargetState.STARTED);
+        worker.startTask(new ConnectorTaskId(CONNECTOR_NAME, 0), taskConfig, connConfig, herder, TargetState.STARTED);
         EasyMock.expectLastCall();
 
         worker.isSinkConnector(CONNECTOR_NAME);
-        PowerMock.expectLastCall().andReturn(sink);
+        PowerMock.expectLastCall().andReturn(sourceSink == SourceSink.SINK);
     }
 
     private void expectStop() {
@@ -490,22 +495,24 @@ public class StandaloneHerderTest {
         expectStop();
     }
 
-    private static HashMap<String, String> connectorConfig(String name, Class<? extends Connector> connClass, boolean sink) {
-        HashMap<String, String> connectorProps = new HashMap<>();
-        connectorProps.put(ConnectorConfig.NAME_CONFIG, name);
-        connectorProps.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connClass.getName());
-        if (sink) {
-            connectorProps.put(SinkConnector.TOPICS_CONFIG, TOPICS_LIST_STR);
-        }
-        return connectorProps;
+    private static Map<String, String> connectorConfig(SourceSink sourceSink) {
+        Map<String, String> props = new HashMap<>();
+        props.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME);
+        Class<? extends Connector> connectorClass = sourceSink == SourceSink.SINK ? BogusSinkConnector.class : BogusSourceConnector.class;
+        props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connectorClass.getName());
+        props.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
+        if (sourceSink == SourceSink.SINK)
+            props.put(SinkTask.TOPICS_CONFIG, TOPICS_LIST_STR);
+        return props;
     }
 
-    private static Map<String, String> taskConfig(Class<? extends Task> taskClass, boolean sink) {
+    private static Map<String, String> taskConfig(SourceSink sourceSink) {
         HashMap<String, String> generatedTaskProps = new HashMap<>();
         // Connectors can add any settings, so these are arbitrary
         generatedTaskProps.put("foo", "bar");
+        Class<? extends Task> taskClass = sourceSink == SourceSink.SINK ? BogusSinkTask.class : BogusSourceTask.class;
         generatedTaskProps.put(TaskConfig.TASK_CLASS_CONFIG, taskClass.getName());
-        if (sink)
+        if (sourceSink == SourceSink.SINK)
             generatedTaskProps.put(SinkTask.TOPICS_CONFIG, TOPICS_LIST_STR);
         return generatedTaskProps;
     }

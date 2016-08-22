@@ -27,7 +27,7 @@ class StreamsSimpleBenchmarkTest(KafkaTest):
     def __init__(self, test_context):
         super(StreamsSimpleBenchmarkTest, self).__init__(test_context, num_zk=1, num_brokers=1)
 
-        self.driver = StreamsSimpleBenchmarkService(test_context, self.kafka)
+        self.driver = StreamsSimpleBenchmarkService(test_context, self.kafka, 1000000L)
 
     def test_simple_benchmark(self):
         """

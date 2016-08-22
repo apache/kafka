@@ -309,6 +309,12 @@ public class Selector implements Selectable {
                     if (channel.finishConnect()) {
                         this.connected.add(channel.id());
                         this.sensors.connectionCreated.record();
+                        SocketChannel socketChannel = (SocketChannel) key.channel();
+                        log.debug("Created socket with SO_RCVBUF = {}, SO_SNDBUF = {}, SO_TIMEOUT = {} to node {}",
+                                socketChannel.socket().getReceiveBufferSize(),
+                                socketChannel.socket().getSendBufferSize(),
+                                socketChannel.socket().getSoTimeout(),
+                                channel.id());
                     } else
                         continue;
                 }
