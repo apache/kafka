@@ -349,7 +349,7 @@ class LogSegment(val log: FileMessageSet,
       if (iter.hasNext)
         rollingBasedTimestamp = Some(iter.next.message.timestamp)
       else
-        // If the log is empty, we return 0 as time waited.
+        // If the log is empty, we return time elapsed since the segment is created.
         return now - created
     }
     now - {if (rollingBasedTimestamp.get >= 0) rollingBasedTimestamp.get else created}
@@ -393,7 +393,7 @@ class LogSegment(val log: FileMessageSet,
    * Close this log segment
    */
   def close() {
-    timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipFullCheck = true)
+    CoreUtils.swallow(timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipFullCheck = true))
     CoreUtils.swallow(index.close)
     CoreUtils.swallow(timeIndex.close())
     CoreUtils.swallow(log.close)
