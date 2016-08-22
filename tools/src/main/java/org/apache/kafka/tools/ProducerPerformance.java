@@ -47,6 +47,10 @@ public class ProducerPerformance {
             List<String> producerProps = res.getList("producerConfig");
             String producerConfig = res.getString("producerConfigFile");
 
+            if (producerProps == null && producerConfig == null) {
+                throw new ArgumentParserException("Either --producer-props or --producer.config must be specified.", parser);
+            }
+
             Properties props = new Properties();
             if (producerConfig != null) {
                 props.putAll(Utils.loadProps(producerConfig));
@@ -141,7 +145,8 @@ public class ProducerPerformance {
                  .metavar("PROP-NAME=PROP-VALUE")
                  .type(String.class)
                  .dest("producerConfig")
-                 .help("kafka producer related configuration properties like bootstrap.servers,client.id etc..");
+                 .help("kafka producer related configuration properties like bootstrap.servers,client.id etc. " +
+                         "These configs take precedence over those passed via --producer.config.");
 
         parser.addArgument("--producer.config")
                 .action(store())
