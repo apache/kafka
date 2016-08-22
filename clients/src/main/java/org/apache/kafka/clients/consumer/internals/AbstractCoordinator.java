@@ -204,6 +204,9 @@ public abstract class AbstractCoordinator implements Closeable {
                 time.sleep(retryBackoffMs);
             }
         }
+        // Since coordinator is set in a synchronized block in the group coordinator response callback,
+        // the future associated with the cooordinator request can be safely cleared here.
+        findCoordinatorFuture = null;
     }
 
     protected synchronized RequestFuture<Void> lookupCoordinator() {
