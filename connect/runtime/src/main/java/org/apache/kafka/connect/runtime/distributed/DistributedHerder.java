@@ -17,7 +17,6 @@
 
 package org.apache.kafka.connect.runtime.distributed;
 
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -301,10 +300,20 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             boolean remains = configState.contains(connectorName);
             log.info("Handling connector-only config update by {} connector {}",
                     remains ? "restarting" : "stopping", connectorName);
-            worker.stopConnector(connectorName);
+            if (worker.ownsConnector(connectorName)) {
+                worker.stopConnector(connectorName);
+            } else {
+                log.warn("Worker does not own connector {} so cannot stop it", connectorName);
+            }
             // The update may be a deletion, so verify we actually need to restart the connector
-            if (remains)
-                startConnector(connectorName);
+            if (remains) {
+                try {
+                    startConnector(connectorName);
+                } catch (Throwable t) {
+                    log.warn("Failed to start connector {}", connectorName, t);
+                    onFailure(connectorName, t);
+                }
+            }
         }
     }
 
@@ -573,9 +582,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     return null;
                 }
 
-                if (worker.ownsConnector(connName)) {
+                if (assignment.connectors().contains(connName)) {
                     try {
-                        worker.stopConnector(connName);
+                        if (worker.ownsConnector(connName)) {
+                            worker.stopConnector(connName);
+                        }
                         startConnector(connName);
                         callback.onCompletion(null, null);
                     } catch (Throwable t) {
@@ -753,17 +764,17 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         for (String connectorName : assignment.connectors()) {
             try {
                 startConnector(connectorName);
-            } catch (ConfigException e) {
-                log.error("Couldn't instantiate connector " + connectorName + " because it has an invalid connector " +
-                        "configuration. This connector will not execute until reconfigured.", e);
+            } catch (Throwable t) {
+                log.error("Failed to start connector {}", connectorName, t);
+                onFailure(connectorName, t);
             }
         }
         for (ConnectorTaskId taskId : assignment.tasks()) {
             try {
                 startTask(taskId);
-            } catch (ConfigException e) {
-                log.error("Couldn't instantiate task " + taskId + " because it has an invalid task " +
-                        "configuration. This task will not execute until reconfigured.", e);
+            } catch (Throwable t) {
+                log.error("Failed to start task {}", taskId, t);
+                onFailure(taskId, t);
             }
         }
         log.info("Finished starting connectors and tasks");
@@ -1053,16 +1064,29 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 // this worker. Instead, we can let them continue to run but buffer any update requests (which should be
                 // rare anyway). This would avoid a steady stream of start/stop, which probably also includes lots of
                 // unnecessary repeated connections to the source/sink system.
-                for (String connectorName : connectors)
-                    worker.stopConnector(connectorName);
+                for (String connectorName : connectors) {
+                    if (worker.ownsConnector(connectorName)) {
+                        worker.stopConnector(connectorName);
+                    } else {
+                        log.warn("Worker does not own connector {} so cannot stop it in rebalance", connectorName);
+                    }
+                }
 
                 // TODO: We need to at least commit task offsets, but if we could commit offsets & pause them instead of
                 // stopping them then state could continue to be reused when the task remains on this worker. For example,
                 // this would avoid having to close a connection and then reopen it when the task is assigned back to this
                 // worker again.
-                if (!tasks.isEmpty()) {
-                    worker.stopTasks(tasks); // trigger stop() for all tasks
-                    worker.awaitStopTasks(tasks); // await stopping tasks
+                final List<ConnectorTaskId> ownedTasks = new ArrayList<>(tasks.size());
+                for (ConnectorTaskId taskId: tasks) {
+                    if (worker.ownsTask(taskId)) {
+                        ownedTasks.add(taskId);
+                    } else {
+                        log.warn("Worker does not own task {} so cannot stop it in rebalance", taskId);
+                    }
+                }
+                if (!ownedTasks.isEmpty()) {
+                    worker.stopTasks(ownedTasks); // trigger stop() for all tasks
+                    worker.awaitStopTasks(ownedTasks); // await stopping tasks
                 }
 
                 // Ensure that all status updates have been pushed to the storage system before rebalancing.
