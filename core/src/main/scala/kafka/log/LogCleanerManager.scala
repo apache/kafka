@@ -125,8 +125,6 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
         case (topicAndPartition, log) => inProgress.contains(topicAndPartition)
       }.filter {
         case (topicAndPartition, log) => isCompactAndDelete(log)
-      }.filter {
-        case (topicAndPartition, log) => log.shouldDeleteSegments
       }
       toClean.foreach{x => inProgress.put(x._1, LogCleaningInProgress)}
       toClean

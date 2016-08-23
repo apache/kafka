@@ -99,7 +99,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     logProps.put(LogConfig.CleanupPolicyProp, "compact,delete")
 
     def runCleanerAndCheckCompacted(numKeys: Int): (Log, Seq[(Int, String)]) = {
-      cleaner = makeCleaner(parts = 1, propertyOverrides = logProps, logCleanerBackOffMillis = 1000L)
+      cleaner = makeCleaner(parts = 1, propertyOverrides = logProps, logCleanerBackOffMillis = 100L)
       val log = cleaner.logs.get(topics(0))
 
       val messages: Seq[(Int, String)] = writeDups(numKeys = numKeys, numDups = 3, log = log, codec = codec)
@@ -119,19 +119,19 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     val (log, _) = runCleanerAndCheckCompacted(100)
     // should delete old segments
     log.logSegments.foreach(_.lastModified = time.milliseconds - (2 * retentionMs))
-    val waitUntil = System.currentTimeMillis() + 10000L
-    while (System.currentTimeMillis() < waitUntil && log.numberOfSegments != 1) {}
+
+    TestUtils.waitUntilTrue(() => log.numberOfSegments == 1, "There should only be 1 segment remaining", 10000L)
     assertEquals(1, log.numberOfSegments)
 
     cleaner.shutdown()
 
-    // run the cleaner again to make sure it there are no issues post deletion
+    // run the cleaner again to make sure if there are no issues post deletion
     val (log2, messages) = runCleanerAndCheckCompacted(20)
     val read = readFromLog(log2)
     assertEquals("Contents of the map shouldn't change", messages.toMap, read.toMap)
   }
 
-  // returns (value, ByteBufferMessageSet)
+  // returns (value, ByteBufferMessag eSet)
   private def createLargeSingleMessageSet(key: Int, messageFormatVersion: Byte): (String, ByteBufferMessageSet) = {
     def messageValue(length: Int): String = {
       val random = new Random(0)
@@ -272,8 +272,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
       logs.put(TopicAndPartition("log", i), log)      
     }
   
-    new LogCleaner(CleanerConfig(numThreads = numThreads, ioBufferSize = maxMessageSize / 2, maxMessageSize = maxMessageSize,
-                   backOffMs = logCleanerBackOffMillis),
+    new LogCleaner(CleanerConfig(numThreads = numThreads, ioBufferSize = maxMessageSize / 2, maxMessageSize = maxMessageSize, backOffMs = logCleanerBackOffMillis),
                    logDirs = Array(logDir),
                    logs = logs,
                    time = time)
