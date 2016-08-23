@@ -556,7 +556,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             while (dirtyKeyIterator.hasNext()) {
                 final K key = dirtyKeyIterator.next().getKey();
                 dirtyKeyIterator.remove();
-                MemoryLRUCacheBytesEntry<byte[], byte[]> entry = cache.get(serdes.rawMergeStoreNameKey(key, name));
+                byte[] cacheKey = serdes.rawMergeStoreNameKey(key, name);
+                MemoryLRUCacheBytesEntry<byte[], byte[]> entry = cache.get(cacheKey);
 
                 if (entry != null) {
                     byte[] rawKey = serdes.rawKey(key);
@@ -567,10 +568,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                     if (entry.isDirty()) {
                         if (entry.value != null) {
                             putBatch.add(new KeyValue<>(rawKey, entry.value));
+                            entry.markClean();
                         } else {
                             deleteBatch.add(rawKey);
+                            cache.delete(cacheKey);
                         }
-                        entry.markClean();
                     }
                 }
             }
