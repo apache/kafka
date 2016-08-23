@@ -361,7 +361,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         if (tempConnectors.containsKey(connType)) {
             return tempConnectors.get(connType);
         } else {
-            Connector connector = worker.getConnector(connType);
+            Connector connector = Worker.createConnector(connType);
             tempConnectors.put(connType, connector);
             return connector;
         }

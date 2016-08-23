@@ -96,8 +96,8 @@ public class WorkerTest extends ThreadedTest {
         Connector connector = PowerMock.createMock(Connector.class);
         ConnectorContext ctx = PowerMock.createMock(ConnectorContext.class);
 
-        PowerMock.mockStaticPartial(Worker.class, "instantiateConnector");
-        PowerMock.expectPrivate(Worker.class, "instantiateConnector", new Object[]{WorkerTestConnector.class}).andReturn(connector);
+        PowerMock.mockStaticPartial(Worker.class, "instantiate");
+        PowerMock.expectPrivate(Worker.class, "instantiate", new Object[]{WorkerTestConnector.class}).andReturn(connector);
         EasyMock.expect(connector.version()).andReturn("1.0");
 
         Map<String, String> props = new HashMap<>();
@@ -128,12 +128,11 @@ public class WorkerTest extends ThreadedTest {
         worker = new Worker(WORKER_ID, new MockTime(), config, offsetBackingStore);
         worker.start();
 
-        ConnectorConfig config = new ConnectorConfig(props);
         assertEquals(Collections.emptySet(), worker.connectorNames());
-        worker.startConnector(config, ctx, connectorStatusListener, TargetState.STARTED);
+        worker.startConnector(CONNECTOR_ID, props, ctx, connectorStatusListener, TargetState.STARTED);
         assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_ID)), worker.connectorNames());
         try {
-            worker.startConnector(config, ctx, connectorStatusListener, TargetState.STARTED);
+            worker.startConnector(CONNECTOR_ID, props, ctx, connectorStatusListener, TargetState.STARTED);
             fail("Should have thrown exception when trying to add connector with same name.");
         } catch (ConnectException e) {
             // expected
@@ -154,8 +153,8 @@ public class WorkerTest extends ThreadedTest {
         Connector connector = PowerMock.createMock(Connector.class);
         ConnectorContext ctx = PowerMock.createMock(ConnectorContext.class);
 
-        PowerMock.mockStaticPartial(Worker.class, "instantiateConnector");
-        PowerMock.expectPrivate(Worker.class, "instantiateConnector", new Object[]{WorkerTestConnector.class}).andReturn(connector);
+        PowerMock.mockStaticPartial(Worker.class, "instantiate");
+        PowerMock.expectPrivate(Worker.class, "instantiate", new Object[]{WorkerTestConnector.class}).andReturn(connector);
         EasyMock.expect(connector.version()).andReturn("1.0");
 
         Map<String, String> props = new HashMap<>();
@@ -186,9 +185,8 @@ public class WorkerTest extends ThreadedTest {
         worker = new Worker(WORKER_ID, new MockTime(), config, offsetBackingStore);
         worker.start();
 
-        ConnectorConfig config = new ConnectorConfig(props);
         assertEquals(Collections.emptySet(), worker.connectorNames());
-        worker.startConnector(config, ctx, connectorStatusListener, TargetState.STARTED);
+        worker.startConnector(CONNECTOR_ID, props, ctx, connectorStatusListener, TargetState.STARTED);
         assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_ID)), worker.connectorNames());
 
         worker.stopConnector(CONNECTOR_ID);
@@ -207,8 +205,8 @@ public class WorkerTest extends ThreadedTest {
         Connector connector = PowerMock.createMock(Connector.class);
         ConnectorContext ctx = PowerMock.createMock(ConnectorContext.class);
 
-        PowerMock.mockStaticPartial(Worker.class, "instantiateConnector");
-        PowerMock.expectPrivate(Worker.class, "instantiateConnector", new Object[]{WorkerTestConnector.class}).andReturn(connector);
+        PowerMock.mockStaticPartial(Worker.class, "instantiate");
+        PowerMock.expectPrivate(Worker.class, "instantiate", new Object[]{WorkerTestConnector.class}).andReturn(connector);
         EasyMock.expect(connector.version()).andReturn("1.0");
 
         Map<String, String> props = new HashMap<>();
@@ -239,9 +237,8 @@ public class WorkerTest extends ThreadedTest {
         worker = new Worker(WORKER_ID, new MockTime(), config, offsetBackingStore);
         worker.start();
 
-        ConnectorConfig config = new ConnectorConfig(props);
         assertEquals(Collections.emptySet(), worker.connectorNames());
-        worker.startConnector(config, ctx, connectorStatusListener, TargetState.STARTED);
+        worker.startConnector(CONNECTOR_ID, props, ctx, connectorStatusListener, TargetState.STARTED);
         assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_ID)), worker.connectorNames());
 
         worker.stopConnector(CONNECTOR_ID);
@@ -252,8 +249,7 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.verifyAll();
     }
 
-
-    @Test(expected = ConnectException.class)
+    @Test
     public void testStopInvalidConnector() {
         expectStartStorage();
 
@@ -273,8 +269,8 @@ public class WorkerTest extends ThreadedTest {
         Connector connector = PowerMock.createMock(Connector.class);
         ConnectorContext ctx = PowerMock.createMock(ConnectorContext.class);
 
-        PowerMock.mockStaticPartial(Worker.class, "instantiateConnector");
-        PowerMock.expectPrivate(Worker.class, "instantiateConnector", new Object[]{WorkerTestConnector.class}).andReturn(connector);
+        PowerMock.mockStaticPartial(Worker.class, "instantiate");
+        PowerMock.expectPrivate(Worker.class, "instantiate", new Object[]{WorkerTestConnector.class}).andReturn(connector);
         EasyMock.expect(connector.version()).andReturn("1.0");
 
         Map<String, String> props = new HashMap<>();
@@ -311,12 +307,11 @@ public class WorkerTest extends ThreadedTest {
         worker = new Worker(WORKER_ID, new MockTime(), config, offsetBackingStore);
         worker.start();
 
-        ConnectorConfig config = new ConnectorConfig(props);
         assertEquals(Collections.emptySet(), worker.connectorNames());
-        worker.startConnector(config, ctx, connectorStatusListener, TargetState.STARTED);
+        worker.startConnector(CONNECTOR_ID, props, ctx, connectorStatusListener, TargetState.STARTED);
         assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_ID)), worker.connectorNames());
         try {
-            worker.startConnector(config, ctx, connectorStatusListener, TargetState.STARTED);
+            worker.startConnector(CONNECTOR_ID, props, ctx, connectorStatusListener, TargetState.STARTED);
             fail("Should have thrown exception when trying to add connector with same name.");
         } catch (ConnectException e) {
             // expected
@@ -347,8 +342,8 @@ public class WorkerTest extends ThreadedTest {
         WorkerSourceTask workerTask = PowerMock.createMock(WorkerSourceTask.class);
         EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
 
-        PowerMock.mockStaticPartial(Worker.class, "instantiateTask");
-        PowerMock.expectPrivate(Worker.class, "instantiateTask", new Object[]{TestSourceTask.class}).andReturn(task);
+        PowerMock.mockStaticPartial(Worker.class, "instantiate");
+        PowerMock.expectPrivate(Worker.class, "instantiate", new Object[]{TestSourceTask.class}).andReturn(task);
         EasyMock.expect(task.version()).andReturn("1.0");
 
         PowerMock.expectNew(
@@ -384,7 +379,7 @@ public class WorkerTest extends ThreadedTest {
         worker = new Worker(WORKER_ID, new MockTime(), config, offsetBackingStore);
         worker.start();
         assertEquals(Collections.emptySet(), worker.taskIds());
-        worker.startTask(TASK_ID, new TaskConfig(origProps), anyConnectorConfig(), taskStatusListener, TargetState.STARTED);
+        worker.startTask(TASK_ID, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED);
         assertEquals(new HashSet<>(Arrays.asList(TASK_ID)), worker.taskIds());
         worker.stopAndAwaitTask(TASK_ID);
         assertEquals(Collections.emptySet(), worker.taskIds());
@@ -394,7 +389,7 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.verifyAll();
     }
 
-    @Test(expected = ConnectException.class)
+    @Test
     public void testStopInvalidTask() {
         expectStartStorage();
 
@@ -415,8 +410,8 @@ public class WorkerTest extends ThreadedTest {
         WorkerSourceTask workerTask = PowerMock.createMock(WorkerSourceTask.class);
         EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
 
-        PowerMock.mockStaticPartial(Worker.class, "instantiateTask");
-        PowerMock.expectPrivate(Worker.class, "instantiateTask", new Object[]{TestSourceTask.class}).andReturn(task);
+        PowerMock.mockStaticPartial(Worker.class, "instantiate");
+        PowerMock.expectPrivate(Worker.class, "instantiate", new Object[]{TestSourceTask.class}).andReturn(task);
         EasyMock.expect(task.version()).andReturn("1.0");
         
         PowerMock.expectNew(
@@ -453,7 +448,7 @@ public class WorkerTest extends ThreadedTest {
 
         worker = new Worker(WORKER_ID, new MockTime(), config, offsetBackingStore);
         worker.start();
-        worker.startTask(TASK_ID, new TaskConfig(origProps), anyConnectorConfig(), taskStatusListener, TargetState.STARTED);
+        worker.startTask(TASK_ID, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED);
         worker.stop();
 
         PowerMock.verifyAll();
@@ -467,8 +462,8 @@ public class WorkerTest extends ThreadedTest {
         WorkerSourceTask workerTask = PowerMock.createMock(WorkerSourceTask.class);
         EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
 
-        PowerMock.mockStaticPartial(Worker.class, "instantiateTask");
-        PowerMock.expectPrivate(Worker.class, "instantiateTask", new Object[]{TestSourceTask.class}).andReturn(task);
+        PowerMock.mockStaticPartial(Worker.class, "instantiate");
+        PowerMock.expectPrivate(Worker.class, "instantiate", new Object[]{TestSourceTask.class}).andReturn(task);
         EasyMock.expect(task.version()).andReturn("1.0");
 
         Capture<TestConverter> keyConverter = EasyMock.newCapture();
@@ -512,7 +507,7 @@ public class WorkerTest extends ThreadedTest {
         connProps.put("key.converter.extra.config", "foo");
         connProps.put(ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
         connProps.put("value.converter.extra.config", "bar");
-        worker.startTask(TASK_ID, new TaskConfig(origProps), new ConnectorConfig(connProps), taskStatusListener, TargetState.STARTED);
+        worker.startTask(TASK_ID, connProps, origProps, taskStatusListener, TargetState.STARTED);
         assertEquals(new HashSet<>(Arrays.asList(TASK_ID)), worker.taskIds());
         worker.stopAndAwaitTask(TASK_ID);
         assertEquals(Collections.emptySet(), worker.taskIds());
@@ -544,10 +539,6 @@ public class WorkerTest extends ThreadedTest {
         props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, WorkerTestConnector.class.getName());
         props.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
         return props;
-    }
-
-    private ConnectorConfig anyConnectorConfig() {
-        return new ConnectorConfig(anyConnectorConfigMap());
     }
 
     /* Name here needs to be unique as we are testing the aliasing mechanism */
