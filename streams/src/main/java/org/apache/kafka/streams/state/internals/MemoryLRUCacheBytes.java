@@ -214,6 +214,10 @@ public class MemoryLRUCacheBytes  {
         return new MemoryLRUCacheBytesIterator(((TreeMap) map).navigableKeySet().subSet(from, true, to, true).iterator(), map);
     }
 
+    public MemoryLRUCacheBytesIterator all() {
+        return new MemoryLRUCacheBytesIterator(map.keySet().iterator(), map);
+    }
+
     public static class MemoryLRUCacheBytesIterator implements KeyValueIterator<byte[], byte[]> {
         private final Iterator<byte[]> keys;
         private final Map<byte[], LRUNode> entries;

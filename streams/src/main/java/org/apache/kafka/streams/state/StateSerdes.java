@@ -184,16 +184,29 @@ public final class StateSerdes<K, V> {
 
     /**
      * Deserialize a key that has been previously merged with the store name.
-     * @param rawKey
+     * @param rawKeyStoreName
      * @param storeName
      * @return the deserialized key
      */
-    public K keyFromRawMergedStoreNameKey(byte[] rawKey, final String storeName) {
+    public K keyFromRawMergedStoreNameKey(byte[] rawKeyStoreName, final String storeName) {
         byte[] storeNameBytes = storeName.getBytes();
-        byte[] keyOnly = new byte[rawKey.length - storeNameBytes.length];
-        System.arraycopy(rawKey, storeNameBytes.length, keyOnly, 0, keyOnly.length);
+        byte[] keyOnly = new byte[rawKeyStoreName.length - storeNameBytes.length];
+        System.arraycopy(rawKeyStoreName, storeNameBytes.length, keyOnly, 0, keyOnly.length);
         K key = keySerde.deserializer().deserialize(null, keyOnly);
         return key;
+    }
+
+    /**
+     * Return the store name from a byte array that has been created from original key plus store name
+     * @param rawKeyStoreName
+     * @param keyOnly original key
+     * @return Store name
+     */
+    public String storeNameFromRawMergedStoreNameKey(byte[] rawKeyStoreName, K keyOnly) {
+        byte[] rawKey = rawKey(keyOnly);
+        byte[] storeBytes = new byte[rawKeyStoreName.length - rawKey.length];
+        System.arraycopy(rawKeyStoreName, 0, storeBytes, 0, rawKeyStoreName.length - rawKey.length);
+        return new String(storeBytes);
     }
 
     /**
