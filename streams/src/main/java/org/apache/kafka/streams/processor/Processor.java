@@ -38,11 +38,9 @@ public interface Processor<K, V> {
 
     /**
      * Process the record with the given key and value.
-     *
-     * @param nodeContext
-     * @param key the key for the record
+     *  @param key the key for the record
      * @param value the value for the record */
-    void process(final ProcessorRecordContext nodeContext, K key, V value);
+    void process(K key, V value);
 
     /**
      * Perform any periodic operations, if this processor {@link ProcessorContext#schedule(long) schedule itself} with the context

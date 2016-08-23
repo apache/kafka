@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -870,19 +871,7 @@ public class TopologyBuilder {
                         if (!stateStoreMap.containsKey(stateStoreName)) {
                             final StateStoreSupplier supplier = stateFactories.get(stateStoreName).supplier;
                             if (supplier instanceof ForwardingSupplier) {
-                                ((ForwardingSupplier) supplier).withFlushListener(new CacheFlushListener() {
-                                    @Override
-                                    public void flushed(final Object key, final Change value, final RecordContext recordContext) {
-                                        for (ProcessorNode processorNode : (List<ProcessorNode>) node.children()) {
-                                            processorNode.process(new ProcessorRecordContextImpl(recordContext.timestamp(),
-                                                                                                 recordContext.offset(),
-                                                                                                 recordContext.partition(),
-                                                                                                 recordContext.topic(),
-                                                                                                 processorNode),
-                                                                  key, value);
-                                        }
-                                    }
-                                });
+                                addCacheFlushListener(node, (ForwardingSupplier) supplier);
                             }
                             stateStoreMap.put(stateStoreName, stateFactories.get(stateStoreName).supplier);
                         }
@@ -916,6 +905,30 @@ public class TopologyBuilder {
         }
 
         return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap, new ArrayList<>(stateStoreMap.values()), sourceStoreToSourceTopic);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void addCacheFlushListener(final ProcessorNode node, final ForwardingSupplier supplier) {
+        supplier.withFlushListener(new CacheFlushListener() {
+            @Override
+            public void flushed(final Object key, final Change value, final RecordContext recordContext, final InternalProcessorContext context) {
+                final ProcessorRecordContext current = context.processorRecordContext();
+                try {
+                    for (ProcessorNode processorNode : (List<ProcessorNode>) node.children()) {
+                        final ProcessorRecordContextImpl processorRecordContext = new ProcessorRecordContextImpl(recordContext.timestamp(),
+                                                                                                                 recordContext.offset(),
+                                                                                                                 recordContext.partition(),
+                                                                                                                 recordContext.topic(),
+                                                                                                                 processorNode);
+                        context.setRecordContext(processorRecordContext);
+                        processorNode.process(key, value);
+                    }
+                } finally {
+                    context.setRecordContext(current);
+                }
+
+            }
+        });
     }
 
     /**

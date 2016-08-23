@@ -23,7 +23,6 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T> {
@@ -69,7 +68,7 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
          * @throws StreamsException if key is null
          */
         @Override
-        public void process(final ProcessorRecordContext nodeContext, K key, Change<V> value) {
+        public void process(K key, Change<V> value) {
             // the keys should never be null
             if (key == null)
                 throw new StreamsException("Record key for KTable aggregate operator with state " + storeName + " should not be null.");
@@ -92,7 +91,7 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
             }
 
             // update the store with the new value
-            store.put(key, newAgg, nodeContext);
+            store.put(key, newAgg);
         }
     }
 

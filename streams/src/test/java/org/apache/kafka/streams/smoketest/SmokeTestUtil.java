@@ -27,7 +27,6 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 import java.io.File;
@@ -57,7 +56,7 @@ public class SmokeTestUtil {
                     }
 
                     @Override
-                    public void process(final ProcessorRecordContext nodeContext, String key, T value) {
+                    public void process(String key, T value) {
                         if (printOffset) System.out.println(">>> " + context.offset());
                         numRecordsProcessed++;
                         if (numRecordsProcessed % 100 == 0) {

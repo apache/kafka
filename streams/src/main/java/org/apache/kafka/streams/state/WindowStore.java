@@ -20,7 +20,6 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.StateStore;
 
 /**
@@ -36,11 +35,11 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * Put a key-value pair with the current wall-clock time as the timestamp
      * into the corresponding window
      */
-    void put(K key, V value, RecordContext context);
+    void put(K key, V value);
 
     /**
      * Put a key-value pair with the given timestamp into the corresponding window
      */
-    void put(K key, V value, long timestamp, RecordContext context);
+    void put(K key, V value, long timestamp);
 
 }

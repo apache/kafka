@@ -32,7 +32,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
@@ -261,8 +260,8 @@ public class ProcessorTopologyTest {
     protected static class ForwardingProcessor extends AbstractProcessor<String, String> {
 
         @Override
-        public void process(final ProcessorRecordContext recordContext, String key, String value) {
-            recordContext.forward(key, value);
+        public void process(String key, String value) {
+            context().forward(key, value);
         }
 
         @Override
@@ -283,9 +282,9 @@ public class ProcessorTopologyTest {
         }
 
         @Override
-        public void process(final ProcessorRecordContext recordContext, String key, String value) {
+        public void process(String key, String value) {
             for (int i = 0; i != numChildren; ++i) {
-                recordContext.forward(key, value + "(" + (i + 1) + ")", i);
+                context().forward(key, value + "(" + (i + 1) + ")", i);
             }
         }
 
@@ -310,9 +309,9 @@ public class ProcessorTopologyTest {
         }
 
         @Override
-        public void process(final ProcessorRecordContext recordContext, String key, String value) {
+        public void process(String key, String value) {
             for (int i = 0; i != numChildren; ++i) {
-                recordContext.forward(key, value + "(" + (i + 1) + ")", "sink" + i);
+                context().forward(key, value + "(" + (i + 1) + ")", "sink" + i);
             }
         }
 
@@ -345,8 +344,8 @@ public class ProcessorTopologyTest {
         }
 
         @Override
-        public void process(final ProcessorRecordContext recordContext, String key, String value) {
-            store.put(key, value, recordContext);
+        public void process(String key, String value) {
+            store.put(key, value);
         }
 
         @Override

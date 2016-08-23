@@ -23,7 +23,6 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
 
 /**
  * KTable repartition map functions are not exposed to public APIs, but only used for keyed aggregations.
@@ -72,7 +71,7 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
          * @throws StreamsException if key is null
          */
         @Override
-        public void process(final ProcessorRecordContext nodeContext, K key, Change<V> change) {
+        public void process(K key, Change<V> change) {
             // the original key should never be null
             if (key == null)
                 throw new StreamsException("Record key for the grouping KTable should not be null.");
@@ -84,11 +83,11 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
             // if the selected repartition key or value is null, skip
             // forward oldPair first, to be consistent with reduce and aggregate
             if (oldPair != null && oldPair.key != null && oldPair.value != null) {
-                nodeContext.forward(oldPair.key, new Change<>(null, oldPair.value));
+                context().forward(oldPair.key, new Change<>(null, oldPair.value));
             }
 
             if (newPair != null && newPair.key != null && newPair.value != null) {
-                nodeContext.forward(newPair.key, new Change<>(newPair.value, null));
+                context().forward(newPair.key, new Change<>(newPair.value, null));
             }
             
         }

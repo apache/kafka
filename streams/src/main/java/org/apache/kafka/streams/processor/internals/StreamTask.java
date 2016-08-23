@@ -34,7 +34,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static java.util.Collections.singleton;
@@ -175,7 +174,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
             log.debug("Start processing one record [{}]", currRecord);
             final ProcessorRecordContext recordContext = createRecordContext(currNode);
-            this.currNode.process(recordContext, currRecord.key(), currRecord.value());
+            processorContext.setRecordContext(recordContext);
+            this.currNode.process(currRecord.key(), currRecord.value());
 
             log.debug("Completed processing one record [{}]", currRecord);
 
@@ -194,6 +194,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
                 requiresPoll = true;
             }
         } finally {
+            processorContext.setRecordContext(null);
             this.currRecord = null;
             this.currNode = null;
         }
@@ -230,10 +231,12 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
         currNode = node;
         currRecord = new StampedRecord(DUMMY_RECORD, timestamp);
-
+        // what to do here? Punctuate on this record doesn't mean we've seen it.
+        processorContext.setRecordContext(createRecordContext(node));
         try {
             node.processor().punctuate(timestamp);
         } finally {
+            processorContext.setRecordContext(null);
             currNode = null;
             currRecord = null;
         }
@@ -337,49 +340,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
         return new RecordQueue(partition, source);
     }
 
-    @SuppressWarnings("unchecked")
-    public <K, V> void forward(K key, V value) {
-        ProcessorNode thisNode = currNode;
-        try {
-            for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
-                currNode = childNode;
-                childNode.process(createRecordContext(childNode), key, value);
-            }
-        } finally {
-            currNode = thisNode;
-        }
-    }
-
     private ProcessorRecordContextImpl createRecordContext(final ProcessorNode childNode) {
         return new ProcessorRecordContextImpl(currRecord.timestamp, currRecord.offset(), currRecord.partition(), currRecord.topic(), childNode);
-    }
-
-    @SuppressWarnings("unchecked")
-    public <K, V> void forward(K key, V value, int childIndex) {
-        ProcessorNode thisNode = currNode;
-        ProcessorNode childNode = (ProcessorNode<K, V>) thisNode.children().get(childIndex);
-        currNode = childNode;
-        try {
-            childNode.process(createRecordContext(childNode), key, value);
-        } finally {
-            currNode = thisNode;
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    public <K, V> void forward(K key, V value, String childName) {
-        ProcessorNode thisNode = currNode;
-        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
-            if (childNode.name().equals(childName)) {
-                currNode = childNode;
-                try {
-                    childNode.process(createRecordContext(childNode), key, value);
-                } finally {
-                    currNode = thisNode;
-                }
-                break;
-            }
-        }
     }
 
     /**

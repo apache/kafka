@@ -41,7 +41,7 @@ public abstract class AbstractTask {
     protected final Consumer consumer;
     protected final ProcessorStateManager stateMgr;
     protected final Set<TopicPartition> partitions;
-    protected ProcessorContext processorContext;
+    protected InternalProcessorContext processorContext;
     protected final MemoryLRUCacheBytes cache;
     /**
      * @throws ProcessorStateException if the state manager cannot be created

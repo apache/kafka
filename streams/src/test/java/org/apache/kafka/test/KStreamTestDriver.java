@@ -49,6 +49,7 @@ public class KStreamTestDriver {
     public final File stateDir;
 
     private ProcessorNode currNode;
+    private ProcessorRecordContext recordContext;
 
     public KStreamTestDriver(KStreamBuilder builder) {
         this(builder, null, Serdes.ByteArray(), Serdes.ByteArray());
@@ -96,6 +97,8 @@ public class KStreamTestDriver {
         if (topicName.endsWith(ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX))
             return;
 
+        setRecordContext(createRecordContext(currNode));
+
         try {
             forward(key, value);
         } finally {
@@ -111,6 +114,7 @@ public class KStreamTestDriver {
             if (processor.processor() != null) {
                 currNode = processor;
                 try {
+                    setRecordContext(createRecordContext(currNode));
                     processor.processor().punctuate(timestamp);
                 } finally {
                     currNode = null;
@@ -125,47 +129,21 @@ public class KStreamTestDriver {
 
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value) {
-        ProcessorNode thisNode = currNode;
-        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
-            currNode = childNode;
-            try {
-                childNode.process(createRecordContext(childNode), key, value);
-            } finally {
-                currNode = thisNode;
-            }
-        }
+        recordContext.forward(key, value);
     }
 
     private ProcessorRecordContext createRecordContext(ProcessorNode node) {
-        return new ProcessorRecordContextImpl(context.timestamp(), 0, 0, "topic", node);
+        return new ProcessorRecordContextImpl(0, 0, 0, "topic", node);
     }
 
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value, int childIndex) {
-        ProcessorNode thisNode = currNode;
-        ProcessorNode childNode = (ProcessorNode<K, V>) thisNode.children().get(childIndex);
-        currNode = childNode;
-        try {
-            childNode.process(createRecordContext(childNode), key, value);
-        } finally {
-            currNode = thisNode;
-        }
+        recordContext.forward(key, value, childIndex);
     }
 
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value, String childName) {
-        ProcessorNode thisNode = currNode;
-        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
-            if (childNode.name().equals(childName)) {
-                currNode = childNode;
-                try {
-                    childNode.process(createRecordContext(childNode), key, value);
-                } finally {
-                    currNode = thisNode;
-                }
-                break;
-            }
-        }
+        recordContext.forward(key, value, childName);
     }
 
     public void close() {
@@ -217,6 +195,10 @@ public class KStreamTestDriver {
             stateStore.flush();
         }
 
+    }
+
+    public void setRecordContext(final ProcessorRecordContext recordContext) {
+        this.recordContext = recordContext;
     }
 
     private class MockRecordCollector extends RecordCollector {

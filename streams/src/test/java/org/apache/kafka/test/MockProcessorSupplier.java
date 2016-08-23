@@ -20,7 +20,6 @@ package org.apache.kafka.test;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 import java.util.ArrayList;
@@ -57,7 +56,7 @@ public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
         }
 
         @Override
-        public void process(final ProcessorRecordContext nodeContext, K key, V value) {
+        public void process(K key, V value) {
             processed.add((key == null ? "null" : key) + ":" +
                     (value == null ? "null" : value));
 

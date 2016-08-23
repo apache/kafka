@@ -21,10 +21,11 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes;
@@ -35,7 +36,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class MockProcessorContext implements ProcessorContext, RecordCollector.Supplier {
+public class MockProcessorContext implements InternalProcessorContext, RecordCollector.Supplier {
 
     private final KStreamTestDriver driver;
     private final Serde<?> keySerde;
@@ -47,6 +48,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     private Map<String, StateRestoreCallback> restoreFuncs = new HashMap<>();
 
     long timestamp = -1L;
+    private ProcessorRecordContext recordContext;
 
     public MockProcessorContext(StateSerdes<?, ?> serdes, RecordCollector collector) {
         this(null, null, serdes.keySerde(), serdes.valueSerde(), collector, null);
@@ -181,22 +183,34 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     @Override
     public String topic() {
-        return null;
+        if (recordContext == null) {
+            return null;
+        }
+        return recordContext.topic();
     }
 
     @Override
     public int partition() {
-        return -1;
+        if (recordContext == null) {
+            return -1;
+        }
+        return recordContext.partition();
     }
 
     @Override
     public long offset() {
-        return -1L;
+        if (recordContext == null) {
+            return -1L;
+        }
+        return recordContext.offset();
     }
 
     @Override
     public long timestamp() {
-        return this.timestamp;
+        if (recordContext == null) {
+            return timestamp;
+        }
+        return recordContext.timestamp();
     }
 
     @Override
@@ -209,6 +223,11 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         return Collections.emptyMap();
     }
 
+    @Override
+    public ProcessorRecordContext processorRecordContext() {
+        return recordContext;
+    }
+
     public Map<String, StateStore> allStateStores() {
         return Collections.unmodifiableMap(storeMap);
     }
@@ -219,4 +238,13 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
             restoreCallback.restore(entry.key, entry.value);
         }
     }
+
+    @Override
+    public void setRecordContext(final ProcessorRecordContext recordContext) {
+        this.recordContext = recordContext;
+        if (driver != null) {
+            driver.setRecordContext(recordContext);
+        }
+    }
+
 }

@@ -22,7 +22,6 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes;
 
@@ -66,7 +65,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
 
 
         @Override
-        public void process(final ProcessorRecordContext recordContext, K key, V value) {
+        public void process(K key, V value) {
             if (key == null)
                 return;
 
@@ -83,7 +82,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
             }
 
             // update the store with the new value
-            store.put(key, newAgg, recordContext);
+            store.put(key, newAgg);
         }
     }
 

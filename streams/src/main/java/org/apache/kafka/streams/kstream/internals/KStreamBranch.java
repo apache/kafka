@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.kstream.Predicate;
 
@@ -39,12 +38,12 @@ class KStreamBranch<K, V> implements ProcessorSupplier<K, V> {
 
     private class KStreamBranchProcessor extends AbstractProcessor<K, V> {
         @Override
-        public void process(final ProcessorRecordContext nodeContext, K key, V value) {
+        public void process(K key, V value) {
             for (int i = 0; i < predicates.length; i++) {
                 if (predicates[i].test(key, value)) {
                     // use forward with childIndex here and then break the loop
                     // so that no record is going to be piped to multiple streams
-                    nodeContext.forward(key, value, i);
+                    context().forward(key, value, i);
                     break;
                 }
             }

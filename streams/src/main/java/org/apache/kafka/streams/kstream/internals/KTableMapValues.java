@@ -21,7 +21,6 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
 
 
 class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
@@ -72,11 +71,11 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
     private class KTableMapValuesProcessor extends AbstractProcessor<K, Change<V>> {
 
         @Override
-        public void process(final ProcessorRecordContext nodeContext, K key, Change<V> change) {
+        public void process(K key, Change<V> change) {
             V1 newValue = computeValue(change.newValue);
             V1 oldValue = sendOldValues ? computeValue(change.oldValue) : null;
 
-            nodeContext.forward(key, new Change<>(newValue, oldValue));
+            context().forward(key, new Change<>(newValue, oldValue));
         }
     }
 

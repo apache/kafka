@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
 
 class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
 
@@ -49,8 +48,8 @@ class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     private class KTableKTableJoinMergeProcessor<K, V> extends AbstractProcessor<K, Change<V>> {
         @Override
-        public void process(final ProcessorRecordContext recordContext, K key, Change<V> value) {
-            recordContext.forward(key, value);
+        public void process(K key, Change<V> value) {
+            context().forward(key, value);
         }
     }
 

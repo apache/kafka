@@ -21,7 +21,6 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 class KStreamKTableLeftJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
@@ -55,11 +54,11 @@ class KStreamKTableLeftJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
         }
 
         @Override
-        public void process(final ProcessorRecordContext nodeContext, K key, V1 value) {
+        public void process(K key, V1 value) {
             // if the key is null, we do not need proceed joining
             // the record with the table
             if (key != null) {
-                nodeContext.forward(key, joiner.apply(value, valueGetter.get(key)));
+                context().forward(key, joiner.apply(value, valueGetter.get(key)));
             }
         }
     }

@@ -21,7 +21,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -114,9 +113,9 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
             public void restore(byte[] key, byte[] value) {
                 // check value for null, to avoid  deserialization error.
                 if (value == null) {
-                    put(serdes.keyFrom(key), null, null);
+                    put(serdes.keyFrom(key), null);
                 } else {
-                    put(serdes.keyFrom(key), serdes.valueFrom(value), null);
+                    put(serdes.keyFrom(key), serdes.valueFrom(value));
                 }
             }
         });
@@ -143,27 +142,27 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public synchronized void put(K key, V value, final RecordContext recordRecordContext) {
+    public synchronized void put(K key, V value) {
         this.map.put(key, value);
     }
 
     @Override
-    public synchronized V putIfAbsent(K key, V value, final RecordContext recordContext) {
+    public synchronized V putIfAbsent(K key, V value) {
         V originalValue = get(key);
         if (originalValue == null) {
-            put(key, value, null);
+            put(key, value);
         }
         return originalValue;
     }
 
     @Override
-    public void putAll(List<KeyValue<K, V>> entries, final RecordContext recordContext) {
+    public void putAll(List<KeyValue<K, V>> entries) {
         for (KeyValue<K, V> entry : entries)
-            put(entry.key, entry.value, null);
+            put(entry.key, entry.value);
     }
 
     @Override
-    public synchronized V delete(K key, final RecordContext recordContext) {
+    public synchronized V delete(K key) {
         V value = this.map.remove(key);
         return value;
     }
