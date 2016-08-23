@@ -18,7 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
 import org.junit.Test;
-import org.apache.kafka.common.utils.Bytes;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
@@ -38,14 +37,14 @@ public class MemoryLRUCacheBytesTest  {
             toInsert.size() * toInsert.get(0).value.getBytes().length);
 
         for (int i = 0; i < toInsert.size(); i++) {
-            Bytes key = Bytes.wrap(toInsert.get(i).key.getBytes());
+            byte[] key = toInsert.get(i).key.getBytes();
             byte[] value = toInsert.get(i).value.getBytes();
-            cache.put(key, new MemoryLRUCacheBytesEntry<Bytes, byte[]>(key, value, value.length, true, 1L, 1L, 1, ""));
+            cache.put(key, new MemoryLRUCacheBytesEntry<>(key, value, value.length, true, 1L, 1L, 1, ""));
         }
 
         for (int i = 0; i < toInsert.size(); i++) {
-            Bytes key = Bytes.wrap(toInsert.get(i).key.getBytes());
-            MemoryLRUCacheBytesEntry<Bytes, byte[]> entry = cache.get(key);
+            byte[] key = toInsert.get(i).key.getBytes();
+            MemoryLRUCacheBytesEntry<byte[], byte[]> entry = cache.get(key);
             assertEquals(entry.isDirty, true);
             assertEquals(new String(entry.value), toInsert.get(i).value);
         }
@@ -63,11 +62,11 @@ public class MemoryLRUCacheBytesTest  {
             toInsert.size() * toInsert.get(0).value.getBytes().length);
 
         for (int i = 0; i < toInsert.size(); i++) {
-            Bytes key = Bytes.wrap(toInsert.get(i).key.getBytes());
+            byte[] key = toInsert.get(i).key.getBytes();
             byte[] value = toInsert.get(i).value.getBytes();
-            cache.put(key, new MemoryLRUCacheBytesEntry<Bytes, byte[]>(key, value, value.length, true, 1, 1, 1, ""));
-            MemoryLRUCacheBytesEntry<Bytes, byte[]> head = cache.head().entry();
-            MemoryLRUCacheBytesEntry<Bytes, byte[]> tail = cache.tail().entry();
+            cache.put(key, new MemoryLRUCacheBytesEntry<byte[], byte[]>(key, value, value.length, true, 1, 1, 1, ""));
+            MemoryLRUCacheBytesEntry<byte[], byte[]> head = cache.head().entry();
+            MemoryLRUCacheBytesEntry<byte[], byte[]> tail = cache.tail().entry();
             assertEquals(new String(head.value), toInsert.get(i).value);
             assertEquals(new String(tail.value), toInsert.get(0).value);
         }
@@ -87,20 +86,20 @@ public class MemoryLRUCacheBytesTest  {
             new KeyValue<>("K5", "V5"));
         MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes("anyName",
             toInsert.size() - 1);
-        cache.addEldestRemovedListener(new MemoryLRUCacheBytes.EldestEntryRemovalListener<Bytes,
+        cache.addEldestRemovedListener(new MemoryLRUCacheBytes.EldestEntryRemovalListener<byte[],
             MemoryLRUCacheBytesEntry>() {
             @Override
-            public void apply(Bytes key, MemoryLRUCacheBytesEntry value) {
+            public void apply(byte[] key, MemoryLRUCacheBytesEntry value) {
 
-                received.add(new KeyValue<String, String>(key.toString(),
-                    new String(((MemoryLRUCacheBytesEntry<Bytes, byte[]>) value).value)));
+                received.add(new KeyValue<>(new String(key),
+                    new String(((MemoryLRUCacheBytesEntry<byte[], byte[]>) value).value)));
             }
         });
 
         for (int i = 0; i < toInsert.size(); i++) {
-            Bytes key = Bytes.wrap(toInsert.get(i).key.getBytes());
+            byte[] key = toInsert.get(i).key.getBytes();
             byte[] value = toInsert.get(i).value.getBytes();
-            cache.put(key, new MemoryLRUCacheBytesEntry<Bytes, byte[]>(key, value, value.length, true, 1, 1, 1, ""));
+            cache.put(key, new MemoryLRUCacheBytesEntry<>(key, value, value.length, true, 1, 1, 1, ""));
         }
 
         for (int i = 0; i < expected.size(); i++) {

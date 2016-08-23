@@ -167,7 +167,7 @@ public final class StateSerdes<K, V> {
     }
 
     /**
-     * Serialize the given key. Merge it with the store name to return a new key
+     * Serialize the given key. Merge it with the store name to return a new key.
      *
      * @param key  the key to be serialized
      * @param storeName the name of the state store
@@ -180,6 +180,20 @@ public final class StateSerdes<K, V> {
         System.arraycopy(storeNameBytes, 0, merged, 0, storeNameBytes.length);
         System.arraycopy(keyBytes, 0, merged, storeNameBytes.length, keyBytes.length);
         return merged;
+    }
+
+    /**
+     * Deserialize a key that has been previously merged with the store name.
+     * @param rawKey
+     * @param storeName
+     * @return the deserialized key
+     */
+    public K keyFromRawMergedStoreNameKey(byte[] rawKey, final String storeName) {
+        byte[] storeNameBytes = storeName.getBytes();
+        byte[] keyOnly = new byte[rawKey.length - storeNameBytes.length];
+        System.arraycopy(rawKey, storeNameBytes.length, keyOnly, 0, keyOnly.length);
+        K key = keySerde.deserializer().deserialize(null, keyOnly);
+        return key;
     }
 
     /**

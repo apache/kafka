@@ -18,9 +18,11 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Iterator;
+import java.util.TreeMap;
 import java.util.List;
 import java.util.Map;
 
@@ -30,16 +32,10 @@ import java.util.Map;
  * Note that the use of array-typed keys is discouraged because they result in incorrect ordering behavior.
  * If you intend to work on byte arrays as key, for example, you may want to wrap them with the {@code Bytes} class,
  * i.e. use {@code RocksDBStore<Bytes, ...>} rather than {@code RocksDBStore<byte[], ...>}.
-
- *
- * @param <K> The key type
- * @param <V> The value type
  *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
-public class MemoryLRUCacheBytes<K, V>  {
-    static final int DEFAULT_CAPACITY = 1000;
-    static final float DEFAULT_LOAD = 0.75f;
+public class MemoryLRUCacheBytes  {
     private long maxCacheSizeBytes;
     private long currentSizeBytes = 0;
     private LRUNode head = null;
@@ -50,25 +46,23 @@ public class MemoryLRUCacheBytes<K, V>  {
         void apply(K key, V value);
     }
 
-    protected Map<Bytes, LRUNode> map;
+    protected Map<byte[], LRUNode> map;
 
 
-    protected List<MemoryLRUCacheBytes.EldestEntryRemovalListener<Bytes, MemoryLRUCacheBytesEntry>> listeners;
+    protected List<MemoryLRUCacheBytes.EldestEntryRemovalListener<byte[], MemoryLRUCacheBytesEntry>> listeners;
 
 
     public MemoryLRUCacheBytes(String name, long maxCacheSizeBytes) {
         this.maxCacheSizeBytes = maxCacheSizeBytes;
-        this.map = new HashMap<>(DEFAULT_CAPACITY, DEFAULT_CAPACITY);
+        this.map = new TreeMap(Bytes.BYTES_LEXICO_COMPARATOR);
         listeners = new ArrayList<>();
     }
 
-    public void addEldestRemovedListener(MemoryLRUCacheBytes.EldestEntryRemovalListener<Bytes, MemoryLRUCacheBytesEntry> listener) {
+    public void addEldestRemovedListener(MemoryLRUCacheBytes.EldestEntryRemovalListener<byte[], MemoryLRUCacheBytesEntry> listener) {
         this.listeners.add(listener);
     }
 
-
-
-    public synchronized MemoryLRUCacheBytesEntry<Bytes, byte[]> get(Bytes key) {
+    public synchronized MemoryLRUCacheBytesEntry<byte[], byte[]> get(byte[] key) {
         MemoryLRUCacheBytesEntry entry = null;
         // get element
         LRUNode node = this.map.get(key);
@@ -99,7 +93,7 @@ public class MemoryLRUCacheBytes<K, V>  {
         }
     }
 
-    public synchronized void put(Bytes key, MemoryLRUCacheBytesEntry<Bytes, byte[]> value) {
+    public synchronized void put(byte[] key, MemoryLRUCacheBytesEntry<byte[], byte[]> value) {
         if (this.map.containsKey(key)) {
             LRUNode node = this.map.get(key);
             currentSizeBytes -= node.entry().size();
@@ -117,20 +111,20 @@ public class MemoryLRUCacheBytes<K, V>  {
         currentSizeBytes += value.size();
     }
 
-    public synchronized MemoryLRUCacheBytesEntry<Bytes, byte[]> putIfAbsent(Bytes key, MemoryLRUCacheBytesEntry<Bytes, byte[]> value) {
-        MemoryLRUCacheBytesEntry originalValue = get(key);
+    public synchronized MemoryLRUCacheBytesEntry<byte[], byte[]> putIfAbsent(byte[] key, MemoryLRUCacheBytesEntry<byte[], byte[]> value) {
+        MemoryLRUCacheBytesEntry<byte[], byte[]> originalValue = get(key);
         if (originalValue == null) {
             put(key, value);
         }
         return originalValue;
     }
 
-    public void putAll(List<KeyValue<Bytes, MemoryLRUCacheBytesEntry<Bytes, byte[]>>> entries) {
-        for (KeyValue<Bytes, MemoryLRUCacheBytesEntry<Bytes, byte[]>> entry : entries)
+    public void putAll(List<KeyValue<byte[], MemoryLRUCacheBytesEntry<byte[], byte[]>>> entries) {
+        for (KeyValue<byte[], MemoryLRUCacheBytesEntry<byte[], byte[]>> entry : entries)
             put(entry.key, entry.value);
     }
 
-    public synchronized MemoryLRUCacheBytesEntry<Bytes, byte[]> delete(Bytes key) {
+    public synchronized MemoryLRUCacheBytesEntry<byte[], byte[]> delete(byte[] key) {
         LRUNode node = this.map.get(key);
 
         // remove from LRU list
@@ -199,21 +193,57 @@ public class MemoryLRUCacheBytes<K, V>  {
      * MemoryLRUCacheBytesEntry
      */
     protected class LRUNode {
-        private MemoryLRUCacheBytesEntry<Bytes, byte[]> entry;
+        private MemoryLRUCacheBytesEntry<byte[], byte[]> entry;
         private LRUNode previous;
         private LRUNode next;
-        LRUNode(MemoryLRUCacheBytesEntry<Bytes, byte[]> entry) {
+        LRUNode(MemoryLRUCacheBytesEntry<byte[], byte[]> entry) {
             this.entry = entry;
         }
 
-        public MemoryLRUCacheBytesEntry<Bytes, byte[]> entry() {
+        public MemoryLRUCacheBytesEntry<byte[], byte[]> entry() {
             return entry;
         }
 
-        public void update(MemoryLRUCacheBytesEntry<Bytes, byte[]> entry) {
+        public void update(MemoryLRUCacheBytesEntry<byte[], byte[]> entry) {
             this.entry = entry;
         }
     }
 
+
+    public MemoryLRUCacheBytesIterator range(byte[] from, byte[] to) {
+        return new MemoryLRUCacheBytesIterator(((TreeMap) map).navigableKeySet().subSet(from, true, to, true).iterator(), map);
+    }
+
+    public static class MemoryLRUCacheBytesIterator implements KeyValueIterator<byte[], byte[]> {
+        private final Iterator<byte[]> keys;
+        private final Map<byte[], LRUNode> entries;
+        private byte[] lastKey;
+
+        public MemoryLRUCacheBytesIterator(Iterator<byte[]> keys, Map<byte[], LRUNode> entries) {
+            this.keys = keys;
+            this.entries = entries;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return keys.hasNext();
+        }
+
+        @Override
+        public KeyValue<byte[], byte[]> next() {
+            lastKey = keys.next();
+            return new KeyValue<>(lastKey, entries.get(lastKey).entry().value);
+        }
+
+        @Override
+        public void remove() {
+            // do nothing
+        }
+
+        @Override
+        public void close() {
+            // do nothing
+        }
+    }
 
 }

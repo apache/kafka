@@ -33,7 +33,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.StateSerdes;
-
+import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.CompactionStyle;
 import org.rocksdb.CompressionType;
@@ -100,7 +100,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     private LinkedHashMap<K, K> cacheDirtyKeys = new LinkedHashMap<>();
     private boolean cachingEnabled = false;
-    private MemoryLRUCacheBytes<Bytes, MemoryLRUCacheBytesEntry> cache = null;
+    private MemoryLRUCacheBytes cache = null;
     private StoreChangeLogger<Bytes, byte[]> changeLogger;
     private StoreChangeLogger.ValueGetter<Bytes, byte[]> getter;
 
@@ -211,9 +211,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                 if (this.cache == null) {
                     throw new ProcessorStateException("Error getting cache in store " + this.name);
                 }
-                this.cache.addEldestRemovedListener(new MemoryLRUCacheBytes.EldestEntryRemovalListener<Bytes, MemoryLRUCacheBytesEntry>() {
+                this.cache.addEldestRemovedListener(new MemoryLRUCacheBytes.EldestEntryRemovalListener<byte[], MemoryLRUCacheBytesEntry>() {
                     @Override
-                    public void apply(Bytes key, MemoryLRUCacheBytesEntry entry) {
+                    public void apply(byte[] key, MemoryLRUCacheBytesEntry entry) {
                         // flush all the dirty entries to RocksDB if this evicted entry is dirty
                         if (entry.isDirty()) {
                             flushCache();
@@ -266,8 +266,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     public synchronized V get(K key) {
         validateStoreOpen();
         if (cache != null) {
-            Bytes cacheKey = Bytes.wrap(serdes.rawMergeStoreNameKey(key, name));
-            MemoryLRUCacheBytesEntry<Bytes, byte[]> entry = cache.get(cacheKey);
+            byte[] cacheKey = serdes.rawMergeStoreNameKey(key, name);
+            MemoryLRUCacheBytesEntry<byte[], byte[]> entry = cache.get(cacheKey);
             if (entry == null) {
                 byte[] byteValue = getInternal(serdes.rawKey(key));
                 //Check value for null, to avoid  deserialization error
@@ -280,7 +280,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                     return value;
                 }
             } else {
-                return serdes.valueFrom(entry.value);
+                if (entry.value == null) {
+                    return null;
+                } else {
+                    return serdes.valueFrom(entry.value);
+                }
             }
         } else {
             byte[] byteValue = getInternal(serdes.rawKey(key));
@@ -316,10 +320,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         byte[] rawValue = serdes.rawValue(value);
         long length = rawValue != null ? rawValue.length : 0;
         if (cache != null) {
+            byte[] cacheKey = serdes.rawMergeStoreNameKey(key, name);
+
             cacheDirtyKeys.put(key, key);
-            Bytes cacheKey = Bytes.wrap(serdes.rawMergeStoreNameKey(key, name));
             cache.put(cacheKey, new MemoryLRUCacheBytesEntry(cacheKey, rawValue, length, true, context.offset(),
-                                                             context.timestamp(), context.partition(), context.topic()));
+                context.timestamp(), context.partition(), context.topic()));
         } else {
             putInternal(rawKey, rawValue);
 
@@ -393,11 +398,93 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     @Override
     public synchronized KeyValueIterator<K, V> range(K from, K to) {
         validateStoreOpen();
-        // we need to flush the cache if necessary before returning the iterator
-        if (cache != null)
-            flushCache();
 
-        return new RocksDBRangeIterator<>(db.newIterator(), serdes, from, to);
+        // query cache
+        MemoryLRUCacheBytesIterator cacheIter = cache.range(serdes.rawMergeStoreNameKey(from, name),
+            serdes.rawMergeStoreNameKey(to, name));
+
+        // query rocksdb
+        RocksDbIterator rocksDbIter = new RocksDBRangeIterator<>(db.newIterator(), serdes, from, to);
+
+        // merge results
+        return new MergedSortedCacheRocksDBIterator<>(this, cacheIter, rocksDbIter);
+    }
+
+    /**
+     * Merges two iterators. Assumes each of them is sorted by key
+     * @param <K>
+     * @param <V>
+     */
+    private static class MergedSortedCacheRocksDBIterator<K, V> implements KeyValueIterator<K, V> {
+        private final MemoryLRUCacheBytesIterator cacheIter;
+        private KeyValue<K, V> lastEntryCache = null;
+        private final RocksDbIterator<K, V> rocksDbIter;
+        private KeyValue<K, V> lastEntryRocksDb = null;
+        private final RocksDBStore store;
+        private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
+        private KeyValue<K, V> returnValue = null;
+
+        public MergedSortedCacheRocksDBIterator(RocksDBStore store, MemoryLRUCacheBytesIterator cacheIter, RocksDbIterator<K, V> rocksDbIter) {
+            this.cacheIter = cacheIter;
+            this.rocksDbIter = rocksDbIter;
+            this.store = store;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return cacheIter.hasNext() || rocksDbIter.hasNext();
+        }
+
+        @Override
+        public KeyValue<K, V> next() {
+            if (!cacheIter.hasNext())
+                return rocksDbIter.next();
+
+            if (!rocksDbIter.hasNext()) {
+                lastEntryCache = (KeyValue<K, V>) cacheIter.next();
+                K originalKey = (K) store.serdes.keyFromRawMergedStoreNameKey((byte[]) lastEntryCache.key, store.name());
+                return new KeyValue<>(originalKey, (V) store.serdes.valueFrom((byte[]) lastEntryCache.value));
+            }
+
+            // convert the RocksDb key to a key recognized by the cache
+            // TODO: serdes back and forth is inneficient
+            byte[] storeKeyToCacheKey = store.serdes.rawMergeStoreNameKey(store.serdes.keyFrom(rocksDbIter.peekRawKey()), store.name());
+
+            if (lastEntryCache == null)
+                lastEntryCache = (KeyValue<K, V>) cacheIter.next();
+            if (lastEntryRocksDb == null)
+                lastEntryRocksDb = rocksDbIter.next();
+
+            // element is in the cache but not in RocksDB. This can be if an item is not flushed yet
+            if (comparator.compare((byte[]) lastEntryCache.key, storeKeyToCacheKey) < 0) {
+                K originalKey = (K) store.serdes.keyFromRawMergedStoreNameKey((byte[]) lastEntryCache.key, store.name());
+                returnValue = new KeyValue<>(originalKey, (V) store.serdes.valueFrom((byte[]) lastEntryCache.value));
+                lastEntryCache = null;
+            } else if (comparator.compare((byte[]) lastEntryCache.key, storeKeyToCacheKey) == 0) {
+                // element is in the cache and in RocksDB. Return cached element, discard rocksdb element forever
+                K originalKey = (K) store.serdes.keyFromRawMergedStoreNameKey((byte[]) lastEntryCache.key, store.name());
+                returnValue = new KeyValue<>(originalKey, (V) store.serdes.valueFrom((byte[]) lastEntryCache.value));
+                lastEntryCache = null;
+                lastEntryRocksDb = null;
+            } else {
+                // element is in rocksDb, return it but do not advance the cache element
+                returnValue = lastEntryRocksDb;
+                lastEntryRocksDb = null;
+            }
+
+            return returnValue;
+        }
+
+        @Override
+        public void remove() {
+            // do nothing
+        }
+
+        @Override
+        public void close() {
+            cacheIter.close();
+            rocksDbIter.close();
+        }
     }
 
     @Override
@@ -450,10 +537,10 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     public class FlushedEntry {
-        MemoryLRUCacheBytesEntry<Bytes, byte[]> entry;
+        MemoryLRUCacheBytesEntry<byte[], byte[]> entry;
         V oldValue;
 
-        public FlushedEntry(final MemoryLRUCacheBytesEntry<Bytes, byte[]> entry, final V oldValue) {
+        public FlushedEntry(final MemoryLRUCacheBytesEntry<byte[], byte[]> entry, final V oldValue) {
             this.entry = entry;
             this.oldValue = oldValue;
         }
@@ -469,7 +556,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             while (dirtyKeyIterator.hasNext()) {
                 final K key = dirtyKeyIterator.next().getKey();
                 dirtyKeyIterator.remove();
-                MemoryLRUCacheBytesEntry<Bytes, byte[]> entry = cache.get(Bytes.wrap(serdes.rawMergeStoreNameKey(key, name)));
+                MemoryLRUCacheBytesEntry<byte[], byte[]> entry = cache.get(serdes.rawMergeStoreNameKey(key, name));
 
                 if (entry != null) {
                     byte[] rawKey = serdes.rawKey(key);
@@ -586,7 +673,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             this.serdes = serdes;
         }
 
-        protected byte[] peekRawKey() {
+        public byte[] peekRawKey() {
             return iter.key();
         }
 
