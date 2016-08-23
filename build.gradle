@@ -26,7 +26,7 @@ buildscript {
     // For Apache Rat plugin to ignore non-Git files
     classpath "org.ajoberstar:grgit:1.5.0"
     classpath 'com.github.ben-manes:gradle-versions-plugin:0.12.0'
-    classpath 'org.scoverage:gradle-scoverage:2.0.1'
+    classpath 'org.scoverage:gradle-scoverage:2.1.0'
   }
 }
 
@@ -68,7 +68,7 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "2.14.1"
+  gradleVersion = "3.0"
   buildVersionFileName = "kafka-version.properties"
 
   userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
@@ -236,8 +236,6 @@ subprojects {
   }
 
   tasks.withType(ScalaCompile) {
-    scalaCompileOptions.useAnt = false
-
     scalaCompileOptions.additionalParameters = [
       "-deprecation",
       "-unchecked",
