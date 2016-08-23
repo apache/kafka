@@ -39,7 +39,9 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.test.TestUtils;
+import org.junit.After;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Ignore;
@@ -75,6 +77,10 @@ public class ResetIntegrationTest {
     private static final long STREAMS_CONSUMER_TIMEOUT = 2000L;
     private static final long CLEANUP_CONSUMER_TIMEOUT = 2000L;
 
+    private final WaitUntilConsumerGroupGotClosed consumerGroupInactive = new WaitUntilConsumerGroupGotClosed();
+
+    private AdminClient adminClient = null;
+
     @BeforeClass
     public static void startKafkaCluster() throws Exception {
         CLUSTER.createTopic(INPUT_TOPIC);
@@ -84,7 +90,19 @@ public class ResetIntegrationTest {
         CLUSTER.createTopic(INTERMEDIATE_USER_TOPIC);
     }
 
-    @Ignore
+    @Before
+    public void prepare() {
+        this.adminClient = AdminClient.createSimplePlaintext(CLUSTER.bootstrapServers());
+    }
+
+    @After
+    public void cleanup() {
+        if (this.adminClient != null) {
+            this.adminClient.close();
+            this.adminClient = null;
+        }
+    }
+
     @Test
     public void testReprocessingFromScratchAfterReset() throws Exception {
         final Properties streamsConfiguration = prepareTest();
@@ -269,6 +287,13 @@ public class ResetIntegrationTest {
             }
         }
         assertThat(allTopics, equalTo(expectedRemainingTopicsAfterCleanup));
+    }
+
+    private class WaitUntilConsumerGroupGotClosed implements TestCondition {
+        @Override
+        public boolean conditionMet() {
+            return ResetIntegrationTest.this.adminClient.describeConsumerGroup(APP_ID).get().isEmpty();
+        }
     }
 
 }
