@@ -21,6 +21,7 @@ import java.util.Iterator;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.AbstractIterator;
+import org.apache.kafka.common.utils.Utils;
 
 /**
  * A {@link Records} implementation backed by a ByteBuffer.
@@ -248,29 +249,34 @@ public class MemoryRecords implements Records {
 
             long wrapperRecordTimestamp = entry.record().timestamp();
             this.logEntries = new ArrayDeque<>();
+            // If relative offset is used, we need to decompress the entire message first to compute
+            // the absolute offset. For simplicity and because it's a format that is on its way out, we
+            // do the same for message format version 0
             try {
                 while (true) {
                     try {
                         LogEntry logEntry = getNextEntryFromStream();
-                        Record recordWithTimestamp = new Record(
-                            logEntry.record().buffer(),
-                            wrapperRecordTimestamp,
-                            entry.record().timestampType()
-                        );
-                        logEntries.add(new LogEntry(logEntry.offset(), recordWithTimestamp));
+                        if (entry.record().magic() > Record.MAGIC_VALUE_V0) {
+                            Record recordWithTimestamp = new Record(
+                                    logEntry.record().buffer(),
+                                    wrapperRecordTimestamp,
+                                    entry.record().timestampType()
+                            );
+                            logEntry = new LogEntry(logEntry.offset(), recordWithTimestamp);
+                        }
+                        logEntries.add(logEntry);
                     } catch (EOFException e) {
                         break;
                     }
                 }
-                this.absoluteBaseOffset = wrapperRecordOffset - logEntries.getLast().offset();
+                if (entry.record().magic() > Record.MAGIC_VALUE_V0)
+                    this.absoluteBaseOffset = wrapperRecordOffset - logEntries.getLast().offset();
+                else
+                    this.absoluteBaseOffset = -1;
             } catch (IOException e) {
                 throw new KafkaException(e);
             } finally {
-                try {
-                    stream.close();
-                } catch (IOException e) {
-                    // Is there an equivalent to CoreUtils.swallow() in the client?
-                }
+                Utils.closeQuietly(stream, "records iterator stream");
             }
         }
 
