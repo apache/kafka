@@ -700,6 +700,19 @@ public class Utils {
     }
 
     /**
+     * Closes {@code closeable} and if an exception is thrown, it is logged at the WARN level.
+     */
+    public static void closeQuietly(Closeable closeable, String name) {
+        if (closeable != null) {
+            try {
+                closeable.close();
+            } catch (Throwable t) {
+                log.warn("Failed to close " + name, t);
+            }
+        }
+    }
+
+    /**
      * A cheap way to deterministically convert a number to a positive value. When the input is
      * positive, the original value is returned. When the input number is negative, the returned
      * positive value is the original value bit AND against 0x7fffffff which is not its absolutely
