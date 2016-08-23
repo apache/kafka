@@ -49,7 +49,9 @@ class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
    * the timeout expires or the connection fails.
    *
    * It returns `true` if the call completes normally or `false` if the timeout expires. If the connection fails,
-   * an `IOException` is thrown instead.
+   * an `IOException` is thrown instead. Note that if the `NetworkClient` has been configured with a positive
+   * connection timeout, it is possible for this method to raise an `IOException` for a previous connection which
+   * has recently disconnected.
    *
    * This method is useful for implementing blocking behaviour on top of the non-blocking `NetworkClient`, use it with
    * care.

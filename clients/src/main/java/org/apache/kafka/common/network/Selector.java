@@ -756,7 +756,7 @@ public class Selector implements Selectable {
         }
 
         public Map.Entry<String, Long> pollExpiredConnection(long currentTimeNanos) {
-            if (currentTimeNanos < nextIdleCloseCheckTime)
+            if (currentTimeNanos <= nextIdleCloseCheckTime)
                 return null;
 
             if (lruConnections.isEmpty()) {
