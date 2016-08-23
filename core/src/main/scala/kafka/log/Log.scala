@@ -672,8 +672,8 @@ class Log(val dir: File,
   }
 
   /**
-    * Find any segments that match the user-supplied predicate UNLESS it is the final segment
-    * and it is empty (since we would just end up re-creating it)
+    * Find segments starting from the oldest until the the user-supplied predicate is false.
+    * A final segment that is empty will never be returned (since we would just end up re-creating it).
     * @param predicate A function that takes in a single log segment and returns true iff it is deletable
     * @return the segments ready to be deleted
     */
