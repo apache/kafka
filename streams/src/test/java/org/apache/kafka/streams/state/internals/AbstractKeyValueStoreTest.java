@@ -65,11 +65,11 @@ public abstract class AbstractKeyValueStoreTest {
         try {
 
             // Verify that the store reads and writes correctly ...
-            store.put(0, "zero", recordContext);
-            store.put(1, "one", recordContext);
-            store.put(2, "two", recordContext);
-            store.put(4, "four", recordContext);
-            store.put(5, "five", recordContext);
+            store.put(0, "zero");
+            store.put(1, "one");
+            store.put(2, "two");
+            store.put(4, "four");
+            store.put(5, "five");
             assertEquals(5, driver.sizeOf(store));
             assertEquals("zero", store.get(0));
             assertEquals("one", store.get(1));
@@ -77,7 +77,7 @@ public abstract class AbstractKeyValueStoreTest {
             assertNull(store.get(3));
             assertEquals("four", store.get(4));
             assertEquals("five", store.get(5));
-            store.delete(5, recordContext);
+            store.delete(5);
 
             // Flush the store and verify all current entries were properly flushed ...
             store.flush();
@@ -131,11 +131,11 @@ public abstract class AbstractKeyValueStoreTest {
         try {
 
             // Verify that the store reads and writes correctly ...
-            store.put(0, "zero", recordContext);
-            store.put(1, "one", recordContext);
-            store.put(2, "two", recordContext);
-            store.put(4, "four", recordContext);
-            store.put(5, "five", recordContext);
+            store.put(0, "zero");
+            store.put(1, "one");
+            store.put(2, "two");
+            store.put(4, "four");
+            store.put(5, "five");
             assertEquals(5, driver.sizeOf(store));
             assertEquals("zero", store.get(0));
             assertEquals("one", store.get(1));
@@ -143,7 +143,7 @@ public abstract class AbstractKeyValueStoreTest {
             assertNull(store.get(3));
             assertEquals("four", store.get(4));
             assertEquals("five", store.get(5));
-            store.delete(5, recordContext);
+            store.delete(5);
 
             // Flush the store and verify all current entries were properly flushed ...
             store.flush();
@@ -223,11 +223,11 @@ public abstract class AbstractKeyValueStoreTest {
         try {
 
             // Verify that the store reads and writes correctly ...
-            assertNull(store.putIfAbsent(0, "zero", recordContext));
-            assertNull(store.putIfAbsent(1, "one", recordContext));
-            assertNull(store.putIfAbsent(2, "two", recordContext));
-            assertNull(store.putIfAbsent(4, "four", recordContext));
-            assertEquals("four", store.putIfAbsent(4, "unexpected value", recordContext));
+            assertNull(store.putIfAbsent(0, "zero"));
+            assertNull(store.putIfAbsent(1, "one"));
+            assertNull(store.putIfAbsent(2, "two"));
+            assertNull(store.putIfAbsent(4, "four"));
+            assertEquals("four", store.putIfAbsent(4, "unexpected value"));
             assertEquals(4, driver.sizeOf(store));
             assertEquals("zero", store.get(0));
             assertEquals("one", store.get(1));
@@ -258,11 +258,11 @@ public abstract class AbstractKeyValueStoreTest {
         KeyValueStore<Integer, String> store = createKeyValueStore(driver.context(), Integer.class, String.class, true);
         try {
             assertEquals("A newly created store should have no entries", 0, store.approximateNumEntries());
-            store.put(0, "zero", recordContext);
-            store.put(1, "one", recordContext);
-            store.put(2, "two", recordContext);
-            store.put(4, "four", recordContext);
-            store.put(5, "five", recordContext);
+            store.put(0, "zero");
+            store.put(1, "one");
+            store.put(2, "two");
+            store.put(4, "four");
+            store.put(5, "five");
             assertEquals(5, store.approximateNumEntries());
         } finally {
             store.close();

@@ -20,7 +20,6 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 class KStreamFilter<K, V> implements ProcessorSupplier<K, V> {
@@ -40,9 +39,9 @@ class KStreamFilter<K, V> implements ProcessorSupplier<K, V> {
 
     private class KStreamFilterProcessor extends AbstractProcessor<K, V> {
         @Override
-        public void process(final ProcessorRecordContext nodeContext, K key, V value) {
+        public void process(K key, V value) {
             if (filterNot ^ predicate.test(key, value)) {
-                nodeContext.forward(key, value);
+                context().forward(key, value);
             }
         }
     }

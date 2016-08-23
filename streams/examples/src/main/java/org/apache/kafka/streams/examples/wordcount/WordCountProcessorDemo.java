@@ -25,7 +25,6 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -65,16 +64,16 @@ public class WordCountProcessorDemo {
                 }
 
                 @Override
-                public void process(final ProcessorRecordContext nodeContext, String dummy, String line) {
+                public void process(String dummy, String line) {
                     String[] words = line.toLowerCase(Locale.getDefault()).split(" ");
 
                     for (String word : words) {
                         Integer oldValue = this.kvStore.get(word);
 
                         if (oldValue == null) {
-                            this.kvStore.put(word, 1, null);
+                            this.kvStore.put(word, 1);
                         } else {
-                            this.kvStore.put(word, oldValue + 1, null);
+                            this.kvStore.put(word, oldValue + 1);
                         }
                     }
 

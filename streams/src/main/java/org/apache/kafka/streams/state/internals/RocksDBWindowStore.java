@@ -31,6 +31,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.RecordContext;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
@@ -165,16 +166,16 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         this.numSegments = numSegments;
         this.cacheFlushListener = new CacheFlushListener<Bytes, byte[]>() {
             @Override
-            public void flushed(final Bytes key, final Change<byte[]> value, final RecordContext recordContext) {
+            public void flushed(final Bytes key, final Change<byte[]> value, final RecordContext recordContext, final InternalProcessorContext context) {
                 final long windowStart = WindowStoreUtils.timestampFromBinaryKey(key.get());
                 final V newValue = serdes.valueFrom(value.newValue);
                 final V oldValue = serdes.valueFrom(value.oldValue);
                 final Windowed<K> windowedKey = new Windowed<>(WindowStoreUtils.keyFromBinaryKey(key.get(), serdes),
                                                        new TimeWindow(windowStart, windowStart + windowSize));
                 if (sendOldValues) {
-                    cacheFlushListener.flushed(windowedKey, new Change<>(newValue, oldValue), recordContext);
+                    cacheFlushListener.flushed(windowedKey, new Change<>(newValue, oldValue), recordContext, context);
                 } else {
-                    cacheFlushListener.flushed(windowedKey, new Change<>(newValue, null), recordContext);
+                    cacheFlushListener.flushed(windowedKey, new Change<>(newValue, null), recordContext, context);
                 }
 
             }
@@ -315,8 +316,8 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     }
 
     @Override
-    public void put(K key, V value, RecordContext context) {
-        byte[] rawKey = putAndReturnInternalKey(key, value, context.timestamp(), context);
+    public void put(K key, V value) {
+        byte[] rawKey = putAndReturnInternalKey(key, value, context.timestamp());
 
         if (rawKey != null && loggingEnabled) {
             changeLogger.add(Bytes.wrap(rawKey));
@@ -325,8 +326,8 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     }
 
     @Override
-    public void put(K key, V value, long timestamp, RecordContext context) {
-        byte[] rawKey = putAndReturnInternalKey(key, value, timestamp, context);
+    public void put(K key, V value, long timestamp) {
+        byte[] rawKey = putAndReturnInternalKey(key, value, timestamp);
 
         if (rawKey != null && loggingEnabled) {
             changeLogger.add(Bytes.wrap(rawKey));
@@ -334,7 +335,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         }
     }
 
-    private byte[] putAndReturnInternalKey(K key, V value, long timestamp, RecordContext recordContext) {
+    private byte[] putAndReturnInternalKey(K key, V value, long timestamp) {
         long segmentId = segmentId(timestamp);
 
         if (segmentId > currentSegmentId) {
@@ -349,7 +350,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
             if (retainDuplicates)
                 seqnum = (seqnum + 1) & 0x7FFFFFFF;
             byte[] binaryKey = WindowStoreUtils.toBinaryKey(key, timestamp, seqnum, serdes);
-            segment.put(Bytes.wrap(binaryKey), serdes.rawValue(value), recordContext);
+            segment.put(Bytes.wrap(binaryKey), serdes.rawValue(value));
             return binaryKey;
         } else {
             return null;

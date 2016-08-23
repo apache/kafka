@@ -22,7 +22,6 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.RecordContext;
 
 import java.util.List;
 
@@ -40,10 +39,9 @@ public interface KeyValueStore<K, V> extends StateStore, ReadOnlyKeyValueStore<K
      *
      * @param key They key to associate the value to
      * @param value The value
-     * @param recordRecordContext
      * @throws NullPointerException If null is used for key or value.
      */
-    void put(K key, V value, RecordContext recordRecordContext);
+    void put(K key, V value);
 
     /**
      * Update the value associated with this key, unless a value
@@ -51,29 +49,26 @@ public interface KeyValueStore<K, V> extends StateStore, ReadOnlyKeyValueStore<K
      *
      * @param key They key to associate the value to
      * @param value The value
-     * @param recordContext
      * @return The old value or null if there is no such key.
      * @throws NullPointerException If null is used for key or value.
      */
-    V putIfAbsent(K key, V value, RecordContext recordContext);
+    V putIfAbsent(K key, V value);
 
     /**
      * Update all the given key/value pairs
      *
      * @param entries A list of entries to put into the store.
-     * @param recordContext
      * @throws NullPointerException If null is used for any key or value.
      */
-    void putAll(List<KeyValue<K, V>> entries, final RecordContext recordContext);
+    void putAll(List<KeyValue<K, V>> entries);
 
     /**
      * Delete the value from the store (if there is one)
      *
      * @param key The key
-     * @param recordContext
      * @return The old value or null if there is no such key.
      * @throws NullPointerException If null is used for key.
      */
-    V delete(K key, final RecordContext recordContext);
+    V delete(K key);
 
 }

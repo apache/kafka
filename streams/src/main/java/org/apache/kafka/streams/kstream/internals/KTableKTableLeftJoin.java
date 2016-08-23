@@ -22,7 +22,6 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
 
 class KTableKTableLeftJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, V2> {
 
@@ -65,7 +64,7 @@ class KTableKTableLeftJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, 
          * @throws StreamsException if key is null
          */
         @Override
-        public void process(final ProcessorRecordContext recordContext, K key, Change<V1> change) {
+        public void process(K key, Change<V1> change) {
             // the keys should never be null
             if (key == null)
                 throw new StreamsException("Record key for KTable left-join operator should not be null.");
@@ -83,7 +82,7 @@ class KTableKTableLeftJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, 
             if (sendOldValues && change.oldValue != null)
                 oldValue = joiner.apply(change.oldValue, value2);
 
-            recordContext.forward(key, new Change<>(newValue, oldValue));
+            context().forward(key, new Change<>(newValue, oldValue));
         }
 
     }

@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -91,20 +90,20 @@ public class MeteredWindowStore<K, V> implements WindowStore<K, V> {
     }
 
     @Override
-    public void put(K key, V value, final RecordContext context) {
+    public void put(K key, V value) {
         long startNs = time.nanoseconds();
         try {
-            this.inner.put(key, value, context);
+            this.inner.put(key, value);
         } finally {
             this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
         }
     }
 
     @Override
-    public void put(K key, V value, long timestamp, final RecordContext context) {
+    public void put(K key, V value, long timestamp) {
         long startNs = time.nanoseconds();
         try {
-            this.inner.put(key, value, timestamp, context);
+            this.inner.put(key, value, timestamp);
         } finally {
             this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
         }

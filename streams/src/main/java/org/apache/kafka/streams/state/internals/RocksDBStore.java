@@ -28,7 +28,7 @@ import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.RecordContext;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
@@ -106,6 +106,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     private volatile boolean open = false;
     private boolean sendOldValues = false;
+    private InternalProcessorContext context;
 
     public KeyValueStore<K, V> enableLogging() {
         loggingEnabled = true;
@@ -173,6 +174,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         this.dbDir = new File(new File(context.stateDir(), parentDir), this.name);
         this.db = openDB(this.dbDir, this.options, TTL_SECONDS);
         open = true;
+        this.context = (InternalProcessorContext) context;
     }
 
     public void init(ProcessorContext context, StateStore root) {
@@ -314,7 +316,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     @SuppressWarnings("unchecked")
     @Override
-    public synchronized void put(K key, V value, RecordContext context) {
+    public synchronized void put(K key, V value) {
         validateStoreOpen();
         byte[] rawKey = serdes.rawKey(key);
         byte[] rawValue = serdes.rawValue(value);
@@ -343,10 +345,10 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public synchronized V putIfAbsent(K key, V value, final RecordContext recordContext) {
+    public synchronized V putIfAbsent(K key, V value) {
         V originalValue = get(key);
         if (originalValue == null) {
-            put(key, value, recordContext);
+            put(key, value);
         }
         return originalValue;
     }
@@ -370,9 +372,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public void putAll(List<KeyValue<K, V>> entries, final RecordContext recordContext) {
+    public void putAll(List<KeyValue<K, V>> entries) {
         for (KeyValue<K, V> entry : entries)
-            put(entry.key, entry.value, recordContext);
+            put(entry.key, entry.value);
     }
 
     // this function is only called in flushCache()
@@ -389,9 +391,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public synchronized V delete(K key, final RecordContext recordContext) {
+    public synchronized V delete(K key) {
         V value = get(key);
-        put(key, null, recordContext);
+        put(key, null);
         return value;
     }
 
@@ -604,9 +606,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             for (Map.Entry<K, FlushedEntry> flush : toForward.entrySet()) {
                 final FlushedEntry value = flush.getValue();
                 if (sendOldValues) {
-                    cacheFlushListener.flushed(flush.getKey(), new Change<>(serdes.valueFrom(value.entry.value), value.oldValue), value.entry);
+                    cacheFlushListener.flushed(flush.getKey(), new Change<>(serdes.valueFrom(value.entry.value), value.oldValue), value.entry, context);
                 } else {
-                    cacheFlushListener.flushed(flush.getKey(), new Change<>(serdes.valueFrom(value.entry.value), null), value.entry);
+                    cacheFlushListener.flushed(flush.getKey(), new Change<>(serdes.valueFrom(value.entry.value), null), value.entry, context);
                 }
             }
         }

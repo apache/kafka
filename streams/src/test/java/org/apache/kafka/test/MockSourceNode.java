@@ -19,7 +19,6 @@ package org.apache.kafka.test;
 
 
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 
 import java.util.ArrayList;
@@ -39,7 +38,7 @@ public class MockSourceNode<K, V> extends SourceNode<K, V> {
     }
 
     @Override
-    public void process(ProcessorRecordContext context, K key, V value) {
+    public void process(K key, V value) {
         this.numReceived++;
         this.keys.add(key);
         this.values.add(value);

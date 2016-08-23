@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.processor.RecordContext;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 
 /**
  * Listen to cache flush events so they can be forwarded to
@@ -26,5 +27,5 @@ import org.apache.kafka.streams.processor.RecordContext;
  */
 public interface CacheFlushListener<K, V> {
 
-    void flushed(final K key, final Change<V> value, final RecordContext recordContext);
+    void flushed(final K key, final Change<V> value, final RecordContext recordContext, final InternalProcessorContext context);
 }

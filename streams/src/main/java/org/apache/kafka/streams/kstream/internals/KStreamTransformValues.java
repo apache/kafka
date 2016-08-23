@@ -19,10 +19,8 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
-import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> {
@@ -38,11 +36,10 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
         return new KStreamTransformValuesProcessor<>(valueTransformerSupplier.get());
     }
 
-    public static class KStreamTransformValuesProcessor<K, V, R> extends AbstractProcessor<K, V> {
+    public static class KStreamTransformValuesProcessor<K, V, R> implements Processor<K, V> {
 
         private final ValueTransformer<V, R> valueTransformer;
         private ProcessorContext context;
-        private ProcessorRecordContext nodeContext;
 
         public KStreamTransformValuesProcessor(ValueTransformer<V, R> valueTransformer) {
             this.valueTransformer = valueTransformer;
@@ -52,21 +49,19 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
         public void init(ProcessorContext context) {
             valueTransformer.init(context);
             this.context = context;
-            super.init(context);
         }
 
         @Override
-        public void process(final ProcessorRecordContext nodeContext, K key, V value) {
-            this.nodeContext = nodeContext;
-            nodeContext.forward(key, valueTransformer.transform(value));
+        public void process(K key, V value) {
+            context.forward(key, valueTransformer.transform(value));
         }
 
         @Override
         public void punctuate(long timestamp) {
             R ret = valueTransformer.punctuate(timestamp);
 
-            if (ret != null && nodeContext != null)
-                nodeContext.forward(null, ret);
+            if (ret != null)
+                context.forward(null, ret);
         }
 
         @Override

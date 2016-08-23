@@ -22,6 +22,7 @@ import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
@@ -52,7 +53,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
         ((ForwardingSupplier) supplier).withFlushListener(new CacheFlushListener() {
             @Override
-            public void flushed(final Object key, final Change value, final RecordContext recordContext) {
+            public void flushed(final Object key, final Change value, final RecordContext recordContext, final InternalProcessorContext context) {
 
             }
         });

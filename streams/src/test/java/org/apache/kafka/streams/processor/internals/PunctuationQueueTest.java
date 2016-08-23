@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -70,7 +69,7 @@ public class PunctuationQueueTest {
         }
 
         @Override
-        public void process(final ProcessorRecordContext nodeContext, String key, String value) {
+        public void process(String key, String value) {
         }
 
         @Override

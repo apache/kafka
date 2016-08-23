@@ -20,7 +20,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -28,7 +28,7 @@ import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes;
 import java.io.File;
 import java.util.Map;
 
-public class StandbyContextImpl implements ProcessorContext, RecordCollector.Supplier {
+public class StandbyContextImpl implements InternalProcessorContext, RecordCollector.Supplier {
 
     private final TaskId id;
     private final String applicationId;
@@ -205,5 +205,15 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
     @Override
     public Map<String, Object> appConfigsWithPrefix(String prefix) {
         return config.originalsWithPrefix(prefix);
+    }
+
+    @Override
+    public ProcessorRecordContext processorRecordContext() {
+        throw new UnsupportedOperationException("this should not happen: processorRecordContext not supported in standby tasks.");
+    }
+
+    @Override
+    public void setRecordContext(final ProcessorRecordContext recordContext) {
+        throw new UnsupportedOperationException("this should not happen: setRecordContext not supported in standby tasks.");
     }
 }

@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -101,16 +100,16 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public void put(K key, V value, final RecordContext recordRecordContext) {
-        this.inner.put(key, value, recordRecordContext);
+    public void put(K key, V value) {
+        this.inner.put(key, value);
 
         changeLogger.add(key);
         changeLogger.maybeLogChange(this.getter);
     }
 
     @Override
-    public V putIfAbsent(K key, V value, final RecordContext recordContext) {
-        V originalValue = this.inner.putIfAbsent(key, value, recordContext);
+    public V putIfAbsent(K key, V value) {
+        V originalValue = this.inner.putIfAbsent(key, value);
         if (originalValue == null) {
             changeLogger.add(key);
             changeLogger.maybeLogChange(this.getter);
@@ -119,8 +118,8 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public void putAll(List<KeyValue<K, V>> entries, final RecordContext recordContext) {
-        this.inner.putAll(entries, recordContext);
+    public void putAll(List<KeyValue<K, V>> entries) {
+        this.inner.putAll(entries);
 
         for (KeyValue<K, V> entry : entries) {
             K key = entry.key;
@@ -130,8 +129,8 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public V delete(K key, final RecordContext recordContext) {
-        V value = this.inner.delete(key, recordContext);
+    public V delete(K key) {
+        V value = this.inner.delete(key);
 
         removed(key);
 

@@ -26,7 +26,7 @@ public class ProcessorRecordContextImpl implements ProcessorRecordContext {
     private final long offset;
     private final String topic;
     private final int partition;
-    private final ProcessorNode node;
+    private ProcessorNode node;
 
     public ProcessorRecordContextImpl(final long timestamp,
                                       final long offset,
@@ -61,36 +61,51 @@ public class ProcessorRecordContextImpl implements ProcessorRecordContext {
 
     /**
      * Forwards a key/value pair to the downstream processors
-     * @param key key
+     *
+     * @param key   key
      * @param value value
      */
     @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(K key, V value) {
-        for (ProcessorNode child : (List<ProcessorNode>) node.children()) {
-            child.process(childContext(child), key, value);
+        ProcessorNode currNode = node;
+        try {
+            for (ProcessorNode child : (List<ProcessorNode>) node.children()) {
+                node = child;
+                child.process(key, value);
+            }
+        } finally {
+            node = currNode;
         }
 
     }
 
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value, int childIndex) {
+        ProcessorNode old = node;
         final ProcessorNode child = (ProcessorNode<K, V>) node.children().get(childIndex);
-        child.process(childContext(child), key, value);
+        node = child;
+        try {
+            child.process(key, value);
+        } finally {
+            node = old;
+        }
     }
 
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value, String childName) {
         for (ProcessorNode child : (List<ProcessorNode<K, V>>) node.children()) {
             if (child.name().equals(childName)) {
-                child.process(childContext(child), key, value);
-                return;
+                ProcessorNode old = node;
+                node = child;
+                try {
+                    child.process(key, value);
+                    return;
+                } finally {
+                    node = old;
+                }
             }
         }
-    }
-
-    private ProcessorRecordContextImpl childContext(final ProcessorNode child) {
-        return new ProcessorRecordContextImpl(timestamp, offset, partition, topic, child);
     }
 
 }

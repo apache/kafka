@@ -21,7 +21,6 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
 
 class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
 
@@ -74,14 +73,14 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
     private class KTableFilterProcessor extends AbstractProcessor<K, Change<V>> {
 
         @Override
-        public void process(final ProcessorRecordContext nodeContext, K key, Change<V> change) {
+        public void process(K key, Change<V> change) {
             V newValue = computeValue(key, change.newValue);
             V oldValue = sendOldValues ? computeValue(key, change.oldValue) : null;
 
             if (sendOldValues && oldValue == null && newValue == null)
                 return; // unnecessary to forward here.
 
-            nodeContext.forward(key, new Change<>(newValue, oldValue));
+            context().forward(key, new Change<>(newValue, oldValue));
         }
 
     }

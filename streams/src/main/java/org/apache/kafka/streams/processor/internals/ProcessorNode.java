@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -70,8 +69,8 @@ public class ProcessorNode<K, V> {
         processor.close();
     }
 
-    public void process(final ProcessorRecordContext context, final K key, final V value) {
-        processor.process(context, key, value);
+    public void process(final K key, final V value) {
+        processor.process(key, value);
     }
 
     /**

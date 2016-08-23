@@ -21,7 +21,6 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.ChangedSerializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
 public class SinkNode<K, V> extends ProcessorNode<K, V> {
@@ -68,9 +67,9 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
 
 
     @Override
-    public void process(final ProcessorRecordContext nodeContext, final K key, final V value) {
+    public void process(final K key, final V value) {
         RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
-        collector.send(new ProducerRecord<>(topic, null, nodeContext.timestamp(), key, value), keySerializer, valSerializer, partitioner);
+        collector.send(new ProducerRecord<>(topic, null, context.timestamp(), key, value), keySerializer, valSerializer, partitioner);
     }
 
     @Override

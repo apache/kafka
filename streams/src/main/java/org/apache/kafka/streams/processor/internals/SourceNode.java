@@ -20,7 +20,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.streams.kstream.internals.ChangedDeserializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
 
 public class SourceNode<K, V> extends ProcessorNode<K, V> {
 
@@ -63,7 +62,7 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
 
 
     @Override
-    public void process(final ProcessorRecordContext context, final K key, final V value) {
+    public void process(final K key, final V value) {
         context.forward(key, value);
     }
 

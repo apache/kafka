@@ -22,7 +22,6 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -64,23 +63,23 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<Windowed<K>,
 
 
         @Override
-        public void process(final ProcessorRecordContext recordContext, Windowed<K> key, Change<V1> value) {
+        public void process(Windowed<K> key, Change<V1> value) {
             if (key == null)
                 return;
 
             boolean needOuterJoin = KStreamKStreamJoin.this.outer;
 
-            long timeFrom = Math.max(0L, recordContext.timestamp() - joinBeforeMs);
-            long timeTo = Math.max(0L, recordContext.timestamp() + joinAfterMs);
+            long timeFrom = Math.max(0L, context().timestamp() - joinBeforeMs);
+            long timeTo = Math.max(0L, context().timestamp() + joinAfterMs);
 
             try (WindowStoreIterator<V2> iter = otherWindow.fetch(key.key(), timeFrom, timeTo)) {
                 while (iter.hasNext()) {
                     needOuterJoin = false;
-                    recordContext.forward(key.key(), joiner.apply(value.newValue, iter.next().value));
+                    context().forward(key.key(), joiner.apply(value.newValue, iter.next().value));
                 }
 
                 if (needOuterJoin)
-                    recordContext.forward(key.key(), joiner.apply(value.newValue, null));
+                    context().forward(key.key(), joiner.apply(value.newValue, null));
             }
         }
     }
