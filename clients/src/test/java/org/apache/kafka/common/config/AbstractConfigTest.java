@@ -114,13 +114,12 @@ public class AbstractConfigTest {
             }
         }
 
-        ClassTestConfig testConfig;
         ClassLoader restrictedClassLoader = new RestrictedClassLoader();
         ClassLoader defaultClassLoader = AbstractConfig.class.getClassLoader();
 
         // Test default classloading where all classes are visible to thread context classloader
         Thread.currentThread().setContextClassLoader(defaultClassLoader);
-        testConfig = new ClassTestConfig();
+        ClassTestConfig testConfig = new ClassTestConfig();
         testConfig.checkInstances(ClassTestConfig.DEFAULT_CLASS, ClassTestConfig.DEFAULT_CLASS);
 
         // Test default classloading where default classes are not visible to thread context classloader
@@ -245,16 +244,13 @@ public class AbstractConfigTest {
     }
 
     public static class FakeMetricsReporterConfig extends AbstractConfig {
-        private static final ConfigDef CONFIG;
 
         public static final String EXTRA_CONFIG = "metric.extra_config";
         private static final String EXTRA_CONFIG_DOC = "An extraneous configuration string.";
-
-        static {
-            CONFIG = new ConfigDef().define(
+        private static final ConfigDef CONFIG = new ConfigDef().define(
                 EXTRA_CONFIG, ConfigDef.Type.STRING, "",
                 ConfigDef.Importance.LOW, EXTRA_CONFIG_DOC);
-        }
+
 
         public FakeMetricsReporterConfig(Map<?, ?> props) {
             super(CONFIG, props);
