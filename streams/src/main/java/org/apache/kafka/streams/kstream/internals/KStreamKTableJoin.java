@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -23,44 +23,75 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-class KStreamKTableLeftJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
+class KStreamKTableJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
     private final KTableValueGetterSupplier<K, V2> valueGetterSupplier;
     private final ValueJoiner<V1, V2, R> joiner;
+    private final boolean left;
 
-    KStreamKTableLeftJoin(KTableImpl<K, ?, V2> table, ValueJoiner<V1, V2, R> joiner) {
-        this.valueGetterSupplier = table.valueGetterSupplier();
+    KStreamKTableJoin(final KTableImpl<K, ?, V2> table, final ValueJoiner<V1, V2, R> joiner, final boolean left) {
+        valueGetterSupplier = table.valueGetterSupplier();
         this.joiner = joiner;
+        this.left = left;
     }
 
     @Override
     public Processor<K, V1> get() {
-        return new KStreamKTableLeftJoinProcessor(valueGetterSupplier.get());
+        if (!left) {
+            return new KStreamKTableJoinProcessor(valueGetterSupplier.get());
+        } else {
+            return new KStreamKTableLeftJoinProcessor(valueGetterSupplier.get());
+        }
     }
 
     private class KStreamKTableLeftJoinProcessor extends AbstractProcessor<K, V1> {
 
         private final KTableValueGetter<K, V2> valueGetter;
 
-        public KStreamKTableLeftJoinProcessor(KTableValueGetter<K, V2> valueGetter) {
+        KStreamKTableLeftJoinProcessor(final KTableValueGetter<K, V2> valueGetter) {
             this.valueGetter = valueGetter;
         }
 
-        @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
             valueGetter.init(context);
         }
 
         @Override
-        public void process(K key, V1 value) {
+        public void process(final K key, final V1 value) {
             // if the key is null, we do not need proceed joining
             // the record with the table
-            if (key != null) {
+            if (key != null && value != null) {
                 context().forward(key, joiner.apply(value, valueGetter.get(key)));
             }
         }
     }
 
+    private class KStreamKTableJoinProcessor extends AbstractProcessor<K, V1> {
+
+        private final KTableValueGetter<K, V2> valueGetter;
+
+        KStreamKTableJoinProcessor(final KTableValueGetter<K, V2> valueGetter) {
+            this.valueGetter = valueGetter;
+        }
+
+        @Override
+        public void init(final ProcessorContext context) {
+            super.init(context);
+            valueGetter.init(context);
+        }
+
+        @Override
+        public void process(final K key, final V1 value) {
+            // if the key is null, we do not need proceed joining
+            // the record with the table
+            if (key != null && value != null) {
+                final V2 value2 = valueGetter.get(key);
+                if (value2 != null) {
+                    context().forward(key, joiner.apply(value, value2));
+                }
+            }
+        }
+    }
 }

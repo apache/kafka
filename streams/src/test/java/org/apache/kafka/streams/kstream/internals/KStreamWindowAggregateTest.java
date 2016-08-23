@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -52,15 +52,15 @@ public class KStreamWindowAggregateTest {
 
     @After
     public void tearDown() {
-        if (driver != null) {
-            driver.close();
+        if (this.driver != null) {
+            this.driver.close();
         }
-        driver = null;
+        this.driver = null;
     }
 
     @Before
     public void setUp() throws IOException {
-        stateDir = TestUtils.tempDirectory("kafka-test");
+        this.stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
     @Test
@@ -69,18 +69,18 @@ public class KStreamWindowAggregateTest {
 
         try {
             final KStreamBuilder builder = new KStreamBuilder();
-            String topic1 = "topic1";
+            final String topic1 = "topic1";
 
-            KStream<String, String> stream1 = builder.stream(strSerde, strSerde, topic1);
-            KTable<Windowed<String>, String> table2 =
-                stream1.groupByKey(strSerde,
-                                   strSerde)
+            final KStream<String, String> stream1 = builder.stream(this.strSerde, this.strSerde, topic1);
+            final KTable<Windowed<String>, String> table2 =
+                stream1.groupByKey(this.strSerde,
+                    this.strSerde)
                     .aggregate(MockInitializer.STRING_INIT,
-                               MockAggregator.STRING_ADDER,
-                               TimeWindows.of(10).advanceBy(5),
-                               strSerde, "topic1-Canonized");
+                        MockAggregator.STRING_ADDER,
+                        TimeWindows.of(10).advanceBy(5),
+                        this.strSerde, "topic1-Canonized");
 
-            MockProcessorSupplier<Windowed<String>, String> proc2 = new MockProcessorSupplier<>();
+            final MockProcessorSupplier<Windowed<String>, String> proc2 = new MockProcessorSupplier<>();
             table2.toStream().process(proc2);
 
             driver = new KStreamTestDriver(builder, baseDir);
@@ -135,23 +135,23 @@ public class KStreamWindowAggregateTest {
 
 
             assertEquals(Utils.mkList(
-                    "[A@0]:0+1",
-                    "[B@0]:0+2",
-                    "[C@0]:0+3",
-                    "[D@0]:0+4",
-                    "[A@0]:0+1+1",
+                "[A@0]:0+1",
+                "[B@0]:0+2",
+                "[C@0]:0+3",
+                "[D@0]:0+4",
+                "[A@0]:0+1+1",
 
-                    "[A@0]:0+1+1+1", "[A@5]:0+1",
-                    "[B@0]:0+2+2", "[B@5]:0+2",
-                    "[D@0]:0+4+4", "[D@5]:0+4",
-                    "[B@0]:0+2+2+2", "[B@5]:0+2+2",
-                    "[C@0]:0+3+3", "[C@5]:0+3",
+                "[A@0]:0+1+1+1", "[A@5]:0+1",
+                "[B@0]:0+2+2", "[B@5]:0+2",
+                "[D@0]:0+4+4", "[D@5]:0+4",
+                "[B@0]:0+2+2+2", "[B@5]:0+2+2",
+                "[C@0]:0+3+3", "[C@5]:0+3",
 
-                    "[A@5]:0+1+1", "[A@10]:0+1",
-                    "[B@5]:0+2+2+2", "[B@10]:0+2",
-                    "[D@5]:0+4+4", "[D@10]:0+4",
-                    "[B@5]:0+2+2+2+2", "[B@10]:0+2+2",
-                    "[C@5]:0+3+3", "[C@10]:0+3"), proc2.processed);
+                "[A@5]:0+1+1", "[A@10]:0+1",
+                "[B@5]:0+2+2+2", "[B@10]:0+2",
+                "[D@5]:0+4+4", "[D@10]:0+4",
+                "[B@5]:0+2+2+2+2", "[B@10]:0+2+2",
+                "[C@5]:0+3+3", "[C@10]:0+3"), proc2.processed);
 
         } finally {
             Utils.delete(baseDir);
@@ -168,36 +168,36 @@ public class KStreamWindowAggregateTest {
 
         try {
             final KStreamBuilder builder = new KStreamBuilder();
-            String topic1 = "topic1";
-            String topic2 = "topic2";
+            final String topic1 = "topic1";
+            final String topic2 = "topic2";
 
-            KStream<String, String> stream1 = builder.stream(strSerde, strSerde, topic1);
-            KTable<Windowed<String>, String> table1 =
-                stream1.groupByKey(strSerde, strSerde)
+            final KStream<String, String> stream1 = builder.stream(this.strSerde, this.strSerde, topic1);
+            final KTable<Windowed<String>, String> table1 =
+                stream1.groupByKey(this.strSerde, this.strSerde)
                     .aggregate(MockInitializer.STRING_INIT,
-                               MockAggregator.STRING_ADDER,
-                               TimeWindows.of(10).advanceBy(5),
-                               strSerde, "topic1-Canonized");
+                        MockAggregator.STRING_ADDER,
+                        TimeWindows.of(10).advanceBy(5),
+                        this.strSerde, "topic1-Canonized");
 
-            MockProcessorSupplier<Windowed<String>, String> proc1 = new MockProcessorSupplier<>();
+            final MockProcessorSupplier<Windowed<String>, String> proc1 = new MockProcessorSupplier<>();
             table1.toStream().process(proc1);
 
-            KStream<String, String> stream2 = builder.stream(strSerde, strSerde, topic2);
-            KTable<Windowed<String>, String> table2 =
-                stream2.groupByKey(strSerde, strSerde)
+            final KStream<String, String> stream2 = builder.stream(this.strSerde, this.strSerde, topic2);
+            final KTable<Windowed<String>, String> table2 =
+                stream2.groupByKey(this.strSerde, this.strSerde)
                     .aggregate(MockInitializer.STRING_INIT,
-                               MockAggregator.STRING_ADDER,
-                               TimeWindows.of(10).advanceBy(5),
-                               strSerde, "topic2-Canonized");
+                        MockAggregator.STRING_ADDER,
+                        TimeWindows.of(10).advanceBy(5),
+                        this.strSerde, "topic2-Canonized");
 
-            MockProcessorSupplier<Windowed<String>, String> proc2 = new MockProcessorSupplier<>();
+            final MockProcessorSupplier<Windowed<String>, String> proc2 = new MockProcessorSupplier<>();
             table2.toStream().process(proc2);
 
 
-            MockProcessorSupplier<Windowed<String>, String> proc3 = new MockProcessorSupplier<>();
+            final MockProcessorSupplier<Windowed<String>, String> proc3 = new MockProcessorSupplier<>();
             table1.join(table2, new ValueJoiner<String, String, String>() {
                 @Override
-                public String apply(String p1, String p2) {
+                public String apply(final String p1, final String p2) {
                     return p1 + "%" + p2;
                 }
             }).toStream().process(proc3);
@@ -221,20 +221,14 @@ public class KStreamWindowAggregateTest {
             driver.flushState();
 
             proc1.checkAndClearProcessResult(
-                    "[A@0]:0+1",
-                    "[B@0]:0+2",
-                    "[C@0]:0+3",
-                    "[D@0]:0+4",
-                    "[A@0]:0+1+1"
+                "[A@0]:0+1",
+                "[B@0]:0+2",
+                "[C@0]:0+3",
+                "[D@0]:0+4",
+                "[A@0]:0+1+1"
             );
             proc2.checkAndClearProcessResult();
-            proc3.checkAndClearProcessResult(
-                    "[A@0]:null",
-                    "[B@0]:null",
-                    "[C@0]:null",
-                    "[D@0]:null",
-                    "[A@0]:null"
-            );
+            proc3.checkAndClearProcessResult();
 
             setRecordContext(5, topic1);
             driver.process(topic1, "A", "1");
@@ -253,20 +247,14 @@ public class KStreamWindowAggregateTest {
             driver.flushState();
 
             proc1.checkAndClearProcessResult(
-                    "[A@0]:0+1+1+1", "[A@5]:0+1",
-                    "[B@0]:0+2+2", "[B@5]:0+2",
-                    "[D@0]:0+4+4", "[D@5]:0+4",
-                    "[B@0]:0+2+2+2", "[B@5]:0+2+2",
-                    "[C@0]:0+3+3", "[C@5]:0+3"
+                "[A@0]:0+1+1+1", "[A@5]:0+1",
+                "[B@0]:0+2+2", "[B@5]:0+2",
+                "[D@0]:0+4+4", "[D@5]:0+4",
+                "[B@0]:0+2+2+2", "[B@5]:0+2+2",
+                "[C@0]:0+3+3", "[C@5]:0+3"
             );
             proc2.checkAndClearProcessResult();
-            proc3.checkAndClearProcessResult(
-                    "[A@0]:null", "[A@5]:null",
-                    "[B@0]:null", "[B@5]:null",
-                    "[D@0]:null", "[D@5]:null",
-                    "[B@0]:null", "[B@5]:null",
-                    "[C@0]:null", "[C@5]:null"
-            );
+            proc3.checkAndClearProcessResult();
 
             setRecordContext(0, topic1);
             driver.process(topic2, "A", "a");
@@ -286,18 +274,18 @@ public class KStreamWindowAggregateTest {
 
             proc1.checkAndClearProcessResult();
             proc2.checkAndClearProcessResult(
-                    "[A@0]:0+a",
-                    "[B@0]:0+b",
-                    "[C@0]:0+c",
-                    "[D@0]:0+d",
-                    "[A@0]:0+a+a"
+                "[A@0]:0+a",
+                "[B@0]:0+b",
+                "[C@0]:0+c",
+                "[D@0]:0+d",
+                "[A@0]:0+a+a"
             );
             proc3.checkAndClearProcessResult(
-                    "[A@0]:0+1+1+1%0+a",
-                    "[B@0]:0+2+2+2%0+b",
-                    "[C@0]:0+3+3%0+c",
-                    "[D@0]:0+4+4%0+d",
-                    "[A@0]:0+1+1+1%0+a+a");
+                "[A@0]:0+1+1+1%0+a",
+                "[B@0]:0+2+2+2%0+b",
+                "[C@0]:0+3+3%0+c",
+                "[D@0]:0+4+4%0+d",
+                "[A@0]:0+1+1+1%0+a+a");
 
             setRecordContext(5, topic1);
             driver.process(topic2, "A", "a");
@@ -316,18 +304,18 @@ public class KStreamWindowAggregateTest {
             driver.flushState();
             proc1.checkAndClearProcessResult();
             proc2.checkAndClearProcessResult(
-                    "[A@0]:0+a+a+a", "[A@5]:0+a",
-                    "[B@0]:0+b+b", "[B@5]:0+b",
-                    "[D@0]:0+d+d", "[D@5]:0+d",
-                    "[B@0]:0+b+b+b", "[B@5]:0+b+b",
-                    "[C@0]:0+c+c", "[C@5]:0+c"
+                "[A@0]:0+a+a+a", "[A@5]:0+a",
+                "[B@0]:0+b+b", "[B@5]:0+b",
+                "[D@0]:0+d+d", "[D@5]:0+d",
+                "[B@0]:0+b+b+b", "[B@5]:0+b+b",
+                "[C@0]:0+c+c", "[C@5]:0+c"
             );
             proc3.checkAndClearProcessResult(
-                    "[A@0]:0+1+1+1%0+a+a+a", "[A@5]:0+1%0+a",
-                    "[B@0]:0+2+2+2%0+b+b", "[B@5]:0+2+2%0+b",
-                    "[D@0]:0+4+4%0+d+d", "[D@5]:0+4%0+d",
-                    "[B@0]:0+2+2+2%0+b+b+b", "[B@5]:0+2+2%0+b+b",
-                    "[C@0]:0+3+3%0+c+c", "[C@5]:0+3%0+c"
+                "[A@0]:0+1+1+1%0+a+a+a", "[A@5]:0+1%0+a",
+                "[B@0]:0+2+2+2%0+b+b", "[B@5]:0+2+2%0+b",
+                "[D@0]:0+4+4%0+d+d", "[D@5]:0+4%0+d",
+                "[B@0]:0+2+2+2%0+b+b+b", "[B@5]:0+2+2%0+b+b",
+                "[C@0]:0+3+3%0+c+c", "[C@5]:0+3%0+c"
             );
         } finally {
             Utils.delete(baseDir);

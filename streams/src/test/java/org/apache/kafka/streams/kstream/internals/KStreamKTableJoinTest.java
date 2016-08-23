@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
@@ -38,7 +39,7 @@ import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 
-public class KStreamKTableLeftJoinTest {
+public class KStreamKTableJoinTest {
 
     final private String topic1 = "topic1";
     final private String topic2 = "topic2";
@@ -75,7 +76,7 @@ public class KStreamKTableLeftJoinTest {
         processor = new MockProcessorSupplier<>();
         stream = builder.stream(intSerde, stringSerde, topic1);
         table = builder.table(intSerde, stringSerde, topic2, "anyStoreName");
-        stream.leftJoin(table, MockValueJoiner.STRING_JOINER).process(processor);
+        stream.join(table, MockValueJoiner.STRING_JOINER).process(processor);
 
         final Collection<Set<String>> copartitionGroups = builder.copartitionGroups();
 
@@ -91,7 +92,7 @@ public class KStreamKTableLeftJoinTest {
             driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
         }
 
-        processor.checkAndClearProcessResult("0:X0+null", "1:X1+null");
+        processor.checkAndClearProcessResult();
 
         // push two items to the other stream. this should not produce any item.
 
@@ -103,15 +104,15 @@ public class KStreamKTableLeftJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "X" + expectedKey);
+        for (final int expectedKey2 : expectedKeys) {
+            driver.process(topic1, expectedKey2, "X" + expectedKey2);
         }
 
-        processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1", "2:X2+null", "3:X3+null");
+        processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1");
 
         // push all items to the other stream. this should not produce any item
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic2, expectedKey, "YY" + expectedKey);
+        for (final int expectedKey1 : expectedKeys) {
+            driver.process(topic2, expectedKey1, "YY" + expectedKey1);
         }
 
         processor.checkAndClearProcessResult();
@@ -138,7 +139,7 @@ public class KStreamKTableLeftJoinTest {
             driver.process(topic1, expectedKey, "XX" + expectedKey);
         }
 
-        processor.checkAndClearProcessResult("0:XX0+null", "1:XX1+null", "2:XX2+YY2", "3:XX3+YY3");
+        processor.checkAndClearProcessResult("2:XX2+YY2", "3:XX3+YY3");
     }
 
 
