@@ -17,12 +17,11 @@
 
 package kafka.log
 
-import java.io.{File, IOException}
-import java.nio.file.Files
+import java.io.File
 import java.util.Properties
 
 import kafka.api.{KAFKA_0_10_0_IV1, KAFKA_0_9_0}
-import kafka.common._
+import kafka.common.TopicAndPartition
 import kafka.message._
 import kafka.server.OffsetCheckpoint
 import kafka.utils._
@@ -221,11 +220,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     val logs = new Pool[TopicAndPartition, Log]()
     for(i <- 0 until parts) {
       val dir = new File(logDir, "log-" + i)
-      try {
-          Files.createDirectory(dir.toPath())    
-      } catch {
-        case e: IOException => //this is good
-      }
+      dir.mkdirs()
       
       val log = new Log(dir = dir,
                         LogConfig(logConfigProperties(maxMessageSize, minCleanableDirtyRatio)),

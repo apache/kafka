@@ -53,11 +53,10 @@ private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
         csvDir = new File(props.getString("kafka.csv.metrics.dir", "kafka_metrics"))
         Utils.delete(csvDir)
         try {
-            Files.createDirectory(csvDir.toPath())    
+            Files.createDirectories(csvDir.toPath())    
         } catch {
-          case e: IOException => throw new KafkaException("Error in creating new directory '%s'".format(csvDir), e)
+          case e: IOException => throw new KafkaException("Error in creating metrics directory ${csvDir}", e)
         }
-        Files.createDirectory(csvDir.toPath())
         underlying = new CsvReporter(Metrics.defaultRegistry(), csvDir)
         if (props.getBoolean("kafka.csv.metrics.reporter.enabled", default = false)) {
           initialized = true
