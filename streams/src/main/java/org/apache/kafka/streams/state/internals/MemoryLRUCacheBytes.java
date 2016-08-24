@@ -135,7 +135,7 @@ public class MemoryLRUCacheBytes implements KeyValueStore<byte[], MemoryLRUCache
         return originalValue;
     }
 
-    public void putAll(List<KeyValue<byte[], MemoryLRUCacheBytesEntry<byte[], byte[]>>> entries) {
+    public synchronized void putAll(List<KeyValue<byte[], MemoryLRUCacheBytesEntry<byte[], byte[]>>> entries) {
         for (KeyValue<byte[], MemoryLRUCacheBytesEntry<byte[], byte[]>> entry : entries)
             put(entry.key, entry.value);
     }
@@ -255,13 +255,13 @@ public class MemoryLRUCacheBytes implements KeyValueStore<byte[], MemoryLRUCache
         }
     }
 
-
     @Override
-    public MemoryLRUCacheBytesIterator<byte[], MemoryLRUCacheBytesEntry<byte[], byte[]>> range(byte[] from, byte[] to) {
+    public synchronized MemoryLRUCacheBytesIterator<byte[], MemoryLRUCacheBytesEntry<byte[], byte[]>> range(byte[] from, byte[] to) {
         return new MemoryLRUCacheBytesIterator(((TreeMap) map).navigableKeySet().subSet(from, true, to, true).iterator(), map);
     }
 
-    public MemoryLRUCacheBytesIterator<byte[], MemoryLRUCacheBytesEntry<byte[], byte[]>> all() {
+    @Override
+    public synchronized MemoryLRUCacheBytesIterator<byte[], MemoryLRUCacheBytesEntry<byte[], byte[]>> all() {
         return new MemoryLRUCacheBytesIterator(map.keySet().iterator(), map);
     }
 

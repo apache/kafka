@@ -33,6 +33,7 @@ import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes;
 import java.io.File;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -44,7 +45,7 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
     private final RecordCollector.Supplier recordCollectorSupplier;
     private final File stateDir;
     private final MemoryLRUCacheBytes cache;
-    private Map<String, StateStore> storeMap = new HashMap<>();
+    private Map<String, StateStore> storeMap = new LinkedHashMap<>();
     private Map<String, StateRestoreCallback> restoreFuncs = new HashMap<>();
 
     long timestamp = -1L;

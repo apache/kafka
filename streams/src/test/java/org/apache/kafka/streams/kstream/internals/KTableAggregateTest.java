@@ -110,6 +110,36 @@ public class KTableAggregateTest {
                 "C:0+5-5+8"), proc.processed);
     }
 
+
+    @Test
+    public void testAggCoalesced() throws Exception {
+        final KStreamBuilder builder = new KStreamBuilder();
+        final String topic1 = "topic1";
+        final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
+
+        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
+        KTable<String, String> table2 = table1.groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper(),
+            stringSerde,
+            stringSerde
+        ).aggregate(MockInitializer.STRING_INIT,
+            MockAggregator.STRING_ADDER,
+            MockAggregator.STRING_REMOVER,
+            stringSerde,
+            "topic1-Canonized");
+
+        table2.toStream().process(proc);
+
+        driver = new KStreamTestDriver(builder, stateDir);
+
+        driver.process(topic1, "A", "1");
+        driver.process(topic1, "A", "3");
+        driver.process(topic1, "A", "4");
+        driver.flushState();
+        assertEquals(Utils.mkList(
+            "A:0+4"), proc.processed);
+    }
+
+
     @Test
     public void testAggRepartition() throws Exception {
         final KStreamBuilder builder = new KStreamBuilder();
@@ -205,6 +235,35 @@ public class KTableAggregateTest {
                  "yellow:1",
                  "green:2"
                  ), proc.processed);
+    }
+
+    @Test
+    public void testCountCoalesced() throws IOException {
+        final KStreamBuilder builder = new KStreamBuilder();
+        final String input = "count-test-input";
+        final MockProcessorSupplier<String, Long> proc = new MockProcessorSupplier<>();
+
+        builder.table(Serdes.String(), Serdes.String(), input, "anyStoreName")
+            .groupBy(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper(), stringSerde, stringSerde)
+            .count("count")
+            .toStream()
+            .process(proc);
+
+        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir);
+
+        driver.process(input, "A", "green");
+        driver.process(input, "B", "green");
+        driver.process(input, "A", "blue");
+        driver.process(input, "C", "yellow");
+        driver.process(input, "D", "green");
+        driver.flushState();
+
+
+        assertEquals(Utils.mkList(
+            "blue:1",
+            "green:2",
+            "yellow:1"
+        ), proc.processed);
     }
     
     @Test
