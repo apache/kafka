@@ -73,7 +73,7 @@ public class RocksDBWindowStoreTest {
         RocksDBWindowStoreSupplier supplier = new RocksDBWindowStoreSupplier<>(windowName, retentionPeriod, numSegments, true, intSerde, stringSerde, windowSize, enableCaching);
         supplier.withFlushListener(new CacheFlushListener() {
             @Override
-            public void flushed(final Object key, final Change value, final RecordContext recordContext, final InternalProcessorContext context) {
+            public void forward(final Object key, final Change value, final RecordContext recordContext, final InternalProcessorContext context) {
 
             }
         });

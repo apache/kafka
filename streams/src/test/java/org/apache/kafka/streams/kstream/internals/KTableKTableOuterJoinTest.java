@@ -93,7 +93,6 @@ public class KTableKTableOuterJoinTest {
         KTableValueGetterSupplier<Integer, String> getterSupplier = ((KTableImpl<Integer, String, String>) joined).valueGetterSupplier();
 
         driver = new KStreamTestDriver(builder, stateDir);
-        driver.setTime(0L);
 
         KTableValueGetter<Integer, String> getter = getterSupplier.get();
         getter.init(driver.context());
@@ -189,7 +188,6 @@ public class KTableKTableOuterJoinTest {
         builder.addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);
 
         driver = new KStreamTestDriver(builder, stateDir);
-        driver.setTime(0L);
 
         assertFalse(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
         assertFalse(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled());
@@ -280,7 +278,6 @@ public class KTableKTableOuterJoinTest {
         builder.addProcessor("proc", proc, ((KTableImpl<?, ?, ?>) joined).name);
 
         driver = new KStreamTestDriver(builder, stateDir);
-        driver.setTime(0L);
 
         assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
         assertTrue(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled());

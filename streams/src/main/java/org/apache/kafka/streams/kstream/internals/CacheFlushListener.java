@@ -27,5 +27,5 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
  */
 public interface CacheFlushListener<K, V> {
 
-    void flushed(final K key, final Change<V> value, final RecordContext recordContext, final InternalProcessorContext context);
+    void forward(final K key, final Change<V> value, final RecordContext recordContext, final InternalProcessorContext context);
 }

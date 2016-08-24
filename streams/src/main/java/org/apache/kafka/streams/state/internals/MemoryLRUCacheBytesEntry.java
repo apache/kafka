@@ -21,11 +21,10 @@ import org.apache.kafka.streams.processor.RecordContext;
 /**
  * A cache entry
  */
-public class MemoryLRUCacheBytesEntry<K, V> implements RecordContext {
+public class MemoryLRUCacheBytesEntry implements RecordContext {
 
-    public final V value;
-
-    public final K key;
+    public final byte[] value;
+    public final byte[] key;
     private final long offset;
     private final long timestamp;
     private final String topic;
@@ -34,21 +33,28 @@ public class MemoryLRUCacheBytesEntry<K, V> implements RecordContext {
     private long sizeBytes = 0;
 
 
-    public MemoryLRUCacheBytesEntry(final K key, final V value, long sizeBytes) {
-        this(key, value, sizeBytes, false, -1, -1, -1, null);
+    public MemoryLRUCacheBytesEntry(final byte[] key, final byte[] value) {
+        this(key, value, false, -1, -1, -1, "");
     }
 
-    public MemoryLRUCacheBytesEntry(final K key, final V value, final long sizeBytes, final boolean isDirty,
+    public MemoryLRUCacheBytesEntry(final byte[] key, final byte[] value, final boolean isDirty,
                                     final long offset, final long timestamp, final int partition,
                                     final String topic) {
         this.key = key;
         this.value = value;
-        this.sizeBytes = sizeBytes;
-        this.isDirty = isDirty;
         this.partition = partition;
         this.topic = topic;
         this.offset = offset;
+        this.isDirty = isDirty;
         this.timestamp = timestamp;
+        this.sizeBytes = key.length +
+                (value == null ? 0 : value.length) +
+                1 + // isDirty
+                8 + // timestamp
+                8 + // offset
+                4 + // partition
+                topic.length();
+
     }
 
 

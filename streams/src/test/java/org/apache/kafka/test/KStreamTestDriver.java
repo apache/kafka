@@ -68,7 +68,7 @@ public class KStreamTestDriver {
         this.stateDir = stateDir;
         this.cache = new MemoryLRUCacheBytes(DEFAULT_CACHE_SIZE_BYTES);
         this.context = new MockProcessorContext(this, stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
-        this.context.setTime(0L);
+        this.context.setRecordContext(new ProcessorRecordContextImpl(0, 0, 0, "topic", null));
 
 
         for (StateStoreSupplier stateStoreSupplier : topology.stateStoreSuppliers()) {
@@ -98,7 +98,7 @@ public class KStreamTestDriver {
         if (topicName.endsWith(ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX))
             return;
 
-        setRecordContext(createRecordContext(currNode));
+        setRecordContext(createRecordContext(currNode, 0));
 
         try {
             forward(key, value);
@@ -109,13 +109,11 @@ public class KStreamTestDriver {
 
 
     public void punctuate(long timestamp) {
-        setTime(timestamp);
-
         for (ProcessorNode processor : topology.processors()) {
             if (processor.processor() != null) {
                 currNode = processor;
                 try {
-                    setRecordContext(createRecordContext(currNode));
+                    context.setRecordContext(createRecordContext(currNode, timestamp));
                     processor.processor().punctuate(timestamp);
                 } finally {
                     currNode = null;
@@ -133,8 +131,8 @@ public class KStreamTestDriver {
         recordContext.forward(key, value);
     }
 
-    private ProcessorRecordContext createRecordContext(ProcessorNode node) {
-        return new ProcessorRecordContextImpl(0, 0, 0, "topic", node);
+    private ProcessorRecordContext createRecordContext(ProcessorNode node, long timestamp) {
+        return new ProcessorRecordContextImpl(timestamp, -1, -1, "topic", node);
     }
 
     @SuppressWarnings("unchecked")

@@ -33,6 +33,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -64,15 +65,9 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     private static class Segment extends RocksDBStore<Bytes, byte[]> {
         public final long id;
 
-        Segment(String segmentName, String windowName, long id, boolean cachingEnabled, final CacheFlushListener<Bytes, byte[]> cacheFlushListener) {
-            super(segmentName, windowName, WindowStoreUtils.INNER_KEY_SERDE, WindowStoreUtils.INNER_VALUE_SERDE, cacheFlushListener);
-            if (cachingEnabled) {
-                enableCaching();
-            }
+        Segment(String segmentName, String windowName, long id) {
+            super(segmentName, windowName, WindowStoreUtils.INNER_KEY_SERDE, WindowStoreUtils.INNER_VALUE_SERDE);
             this.id = id;
-            if (cachingEnabled) {
-                enableCaching();
-            }
         }
 
         public void destroy() {
@@ -82,17 +77,17 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
     private static class RocksDBWindowStoreIterator<V> implements WindowStoreIterator<V> {
         private final StateSerdes<?, V> serdes;
-        private final Iterator<Segment> segments;
+        private final Iterator<KeyValueStore<Bytes, byte[]>> segments;
         private final Bytes from;
         private final Bytes to;
         private KeyValueIterator<Bytes, byte[]> currentIterator;
-        private Segment currentSegment;
+        private KeyValueStore<Bytes, byte[]> currentSegment;
 
         RocksDBWindowStoreIterator(StateSerdes<?, V> serdes) {
-            this(serdes, null, null, Collections.<Segment>emptyIterator());
+            this(serdes, null, null, Collections.<KeyValueStore<Bytes, byte[]>>emptyIterator());
         }
 
-        RocksDBWindowStoreIterator(StateSerdes<?, V> serdes, Bytes from, Bytes to, Iterator<Segment> segments) {
+        RocksDBWindowStoreIterator(StateSerdes<?, V> serdes, Bytes from, Bytes to, Iterator<KeyValueStore<Bytes, byte[]>> segments) {
             this.serdes = serdes;
             this.from = from;
             this.to = to;
@@ -150,7 +145,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     private final Serde<V> valueSerde;
     private final SimpleDateFormat formatter;
     private final StoreChangeLogger.ValueGetter<Bytes, byte[]> getter;
-    private final ConcurrentHashMap<Long, Segment> segments = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Long, KeyValueStore<Bytes, byte[]>> segments = new ConcurrentHashMap<>();
 
     private ProcessorContext context;
     private int seqnum = 0;
@@ -166,16 +161,16 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         this.numSegments = numSegments;
         this.cacheFlushListener = new CacheFlushListener<Bytes, byte[]>() {
             @Override
-            public void flushed(final Bytes key, final Change<byte[]> value, final RecordContext recordContext, final InternalProcessorContext context) {
+            public void forward(final Bytes key, final Change<byte[]> value, final RecordContext recordContext, final InternalProcessorContext context) {
                 final long windowStart = WindowStoreUtils.timestampFromBinaryKey(key.get());
                 final V newValue = serdes.valueFrom(value.newValue);
                 final V oldValue = serdes.valueFrom(value.oldValue);
                 final Windowed<K> windowedKey = new Windowed<>(WindowStoreUtils.keyFromBinaryKey(key.get(), serdes),
                                                        new TimeWindow(windowStart, windowStart + windowSize));
                 if (sendOldValues) {
-                    cacheFlushListener.flushed(windowedKey, new Change<>(newValue, oldValue), recordContext, context);
+                    cacheFlushListener.forward(windowedKey, new Change<>(newValue, oldValue), recordContext, context);
                 } else {
-                    cacheFlushListener.flushed(windowedKey, new Change<>(newValue, null), recordContext, context);
+                    cacheFlushListener.forward(windowedKey, new Change<>(newValue, null), recordContext, context);
                 }
 
             }
@@ -295,7 +290,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
     @Override
     public void flush() {
-        for (Segment segment : segments.values()) {
+        for (KeyValueStore<Bytes, byte[]> segment : segments.values()) {
             if (segment != null) {
                 segment.flush();
             }
@@ -309,7 +304,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     public void close() {
         open = false;
         flush();
-        for (Segment segment : segments.values()) {
+        for (KeyValueStore segment : segments.values()) {
             if (segment != null)
                 segment.close();
         }
@@ -345,7 +340,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         }
 
         // If the record is within the retention period, put it in the store.
-        Segment segment = getOrCreateSegment(segmentId);
+        KeyValueStore<Bytes, byte[]> segment = getOrCreateSegment(segmentId);
         if (segment != null) {
             if (retainDuplicates)
                 seqnum = (seqnum + 1) & 0x7FFFFFFF;
@@ -368,7 +363,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         }
 
         // If the record is within the retention period, put it in the store.
-        Segment segment = getOrCreateSegment(segmentId);
+        Segment segment = underlyingSegment(getOrCreateSegment(segmentId));
         if (segment != null) {
             segment.writeToStore(Bytes.wrap(binaryKey), binaryValue);
         }
@@ -377,7 +372,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     private byte[] getInternal(byte[] binaryKey) {
         long segmentId = segmentId(WindowStoreUtils.timestampFromBinaryKey(binaryKey));
 
-        Segment segment = getSegment(segmentId);
+        KeyValueStore<Bytes, byte[]> segment = getSegment(segmentId);
         if (segment != null) {
             return segment.get(Bytes.wrap(binaryKey));
         } else {
@@ -397,9 +392,9 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         byte[] binaryFrom = WindowStoreUtils.toBinaryKey(key, timeFrom, 0, serdes);
         byte[] binaryTo = WindowStoreUtils.toBinaryKey(key, timeTo, Integer.MAX_VALUE, serdes);
 
-        final List<Segment> segments = new ArrayList<>();
+        final List<KeyValueStore<Bytes, byte[]>> segments = new ArrayList<>();
         for (long segmentId = segFrom; segmentId <= segTo; segmentId++) {
-            Segment segment = getSegment(segmentId);
+            KeyValueStore<Bytes, byte[]> segment = getSegment(segmentId);
             if (segment != null && segment.isOpen()) {
                 try {
                     segments.add(segment);
@@ -416,27 +411,36 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         }
     }
 
-    private Segment getSegment(long segmentId) {
-        final Segment segment = segments.get(segmentId % numSegments);
-        if (segment != null && segment.id != segmentId) {
+    private KeyValueStore<Bytes, byte[]> getSegment(long segmentId) {
+        final KeyValueStore<Bytes, byte[]> segment = segments.get(segmentId % numSegments);
+        if (!isSegment(segment, segmentId)) {
             return null;
         }
         return segment;
     }
 
+    private boolean isSegment(final KeyValueStore<Bytes, byte[]> store, long segmentId) {
+        return store != null && underlyingSegment(store).id == segmentId;
+    }
 
+    private Segment underlyingSegment(final KeyValueStore<Bytes, byte[]> store) {
+        if (cachingEnabled) {
+            return (Segment) ((CachingKeyValueStore) store).underlying();
+        }
+        return (Segment) store;
+    }
 
-    private Segment getOrCreateSegment(long segmentId) {
+    private KeyValueStore<Bytes, byte[]> getOrCreateSegment(long segmentId) {
         if (segmentId <= currentSegmentId && segmentId > currentSegmentId - numSegments) {
             final long key = segmentId % numSegments;
-            final Segment segment = segments.get(key);
-            if (segment != null && segment.id != segmentId) {
+            final KeyValueStore segment = segments.get(key);
+            if (!isSegment(segment, segmentId)) {
                 cleanup();
             }
             if (!segments.containsKey(key)) {
-                final Segment newSegment = new Segment(segmentName(segmentId), name, segmentId, cachingEnabled, cacheFlushListener);
+                Segment newSegment = new Segment(segmentName(segmentId), name, segmentId);
                 newSegment.openDB(context);
-                segments.put(key, newSegment);
+                segments.put(key, maybeDecorateWithCaching(newSegment));
             }
             return segments.get(key);
 
@@ -445,12 +449,25 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         }
     }
 
+    private KeyValueStore<Bytes, byte[]> maybeDecorateWithCaching(final Segment newSegment) {
+        if (cachingEnabled) {
+            final CachingKeyValueStore<Bytes, byte[]> cachingKeyValueStore = new CachingKeyValueStore<>(newSegment,
+                                                                                                        WindowStoreUtils.INNER_KEY_SERDE,
+                                                                                                        WindowStoreUtils.INNER_VALUE_SERDE,
+                                                                                                        cacheFlushListener);
+            cachingKeyValueStore.initInternal(context);
+            return cachingKeyValueStore;
+        }
+        return newSegment;
+    }
+
     private void cleanup() {
-        for (Map.Entry<Long, Segment> segmentEntry : segments.entrySet()) {
-            final Segment segment = segmentEntry.getValue();
+        for (Map.Entry<Long, KeyValueStore<Bytes, byte[]>> segmentEntry : segments.entrySet()) {
+            final KeyValueStore<Bytes, byte[]> store = segmentEntry.getValue();
+            final Segment segment = underlyingSegment(store);
             if (segment != null && segment.id <= currentSegmentId - numSegments) {
                 segments.remove(segmentEntry.getKey());
-                segment.close();
+                store.close();
                 segment.destroy();
             }
         }
@@ -478,9 +495,9 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     public Set<Long> segmentIds() {
         HashSet<Long> segmentIds = new HashSet<>();
 
-        for (Segment segment : segments.values()) {
+        for (KeyValueStore<Bytes, byte[]> segment : segments.values()) {
             if (segment != null)
-                segmentIds.add(segment.id);
+                segmentIds.add(underlyingSegment(segment).id);
         }
 
         return segmentIds;
