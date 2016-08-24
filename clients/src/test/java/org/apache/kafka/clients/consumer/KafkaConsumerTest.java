@@ -40,6 +40,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.requests.FetchResponse;
+import org.apache.kafka.common.requests.FetchResponse.PartitionData;
 import org.apache.kafka.common.requests.GroupCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.JoinGroupResponse;
@@ -76,9 +77,8 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class KafkaConsumerTest {
-
     private final String topic = "test";
-    private final TopicPartition tp0 = new TopicPartition("test", 0);
+    private final TopicPartition tp0 = new TopicPartition(topic, 0);
 
     @Test
     public void testConstructorClose() throws Exception {
@@ -318,9 +318,6 @@ public class KafkaConsumerTest {
 
     @Test
     public void verifyHeartbeatSent() throws Exception {
-        String topic = "topic";
-        TopicPartition partition = new TopicPartition(topic, 0);
-
         int rebalanceTimeoutMs = 60000;
         int sessionTimeoutMs = 30000;
         int heartbeatIntervalMs = 1000;
@@ -338,45 +335,16 @@ public class KafkaConsumerTest {
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
                 rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, autoCommitIntervalMs);
 
-        consumer.subscribe(Arrays.asList(topic), new ConsumerRebalanceListener() {
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-
-            }
-
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                // set initial position so we don't need a lookup
-                for (TopicPartition partition : partitions)
-                    consumer.seek(partition, 0);
-            }
-        });
-
-        // lookup coordinator
-        client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE.code(), node).toStruct(), node);
-
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
-
-        // join group
-        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE.code()), coordinator);
-
-        // sync group
-        client.prepareResponseFrom(syncGroupResponse(Arrays.asList(partition), Errors.NONE.code()), coordinator);
+        consumer.subscribe(Arrays.asList(topic), getConsumerRebalanceListener(consumer));
+        Node coordinator = prepareRebalance(client, node, assignor, Arrays.asList(tp0), null);
 
         // initial fetch
-        client.prepareResponseFrom(fetchResponse(partition, 0, 0), node);
+        client.prepareResponseFrom(fetchResponse(Arrays.asList(tp0), 0, 0), node);
 
         consumer.poll(0);
-        assertEquals(Collections.singleton(partition), consumer.assignment());
+        assertEquals(Collections.singleton(tp0), consumer.assignment());
 
-        final AtomicBoolean heartbeatReceived = new AtomicBoolean(false);
-        client.prepareResponseFrom(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(ClientRequest request) {
-                heartbeatReceived.set(true);
-                return true;
-            }
-        }, new HeartbeatResponse(Errors.NONE.code()).toStruct(), coordinator);
+        AtomicBoolean heartbeatReceived = prepareHeartbeatResponse(client, coordinator);
 
         // heartbeat interval is 2 seconds
         time.sleep(heartbeatIntervalMs);
@@ -389,9 +357,6 @@ public class KafkaConsumerTest {
 
     @Test
     public void verifyHeartbeatSentWhenFetchedDataReady() throws Exception {
-        String topic = "topic";
-        TopicPartition partition = new TopicPartition(topic, 0);
-
         int rebalanceTimeoutMs = 60000;
         int sessionTimeoutMs = 30000;
         int heartbeatIntervalMs = 1000;
@@ -408,46 +373,18 @@ public class KafkaConsumerTest {
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
                 rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, autoCommitIntervalMs);
-        consumer.subscribe(Arrays.asList(topic), new ConsumerRebalanceListener() {
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
 
-            }
-
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                // set initial position so we don't need a lookup
-                for (TopicPartition partition : partitions)
-                    consumer.seek(partition, 0);
-            }
-        });
-
-        // lookup coordinator
-        client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE.code(), node).toStruct(), node);
-
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
-
-        // join group
-        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE.code()), coordinator);
-
-        // sync group
-        client.prepareResponseFrom(syncGroupResponse(Arrays.asList(partition), Errors.NONE.code()), coordinator);
+        consumer.subscribe(Arrays.asList(topic), getConsumerRebalanceListener(consumer));
+        Node coordinator = prepareRebalance(client, node, assignor, Arrays.asList(tp0), null);
 
         consumer.poll(0);
 
         // respond to the outstanding fetch so that we have data available on the next poll
-        client.respondFrom(fetchResponse(partition, 0, 5), node);
+        client.respondFrom(fetchResponse(Arrays.asList(tp0), 0, 5), node);
         client.poll(0, time.milliseconds());
 
-        client.prepareResponseFrom(fetchResponse(partition, 5, 0), node);
-        final AtomicBoolean heartbeatReceived = new AtomicBoolean(false);
-        client.prepareResponseFrom(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(ClientRequest request) {
-                heartbeatReceived.set(true);
-                return true;
-            }
-        }, new HeartbeatResponse(Errors.NONE.code()).toStruct(), coordinator);
+        client.prepareResponseFrom(fetchResponse(Arrays.asList(tp0), 5, 0), node);
+        AtomicBoolean heartbeatReceived = prepareHeartbeatResponse(client, coordinator);
 
         time.sleep(heartbeatIntervalMs);
         Thread.sleep(heartbeatIntervalMs);
@@ -459,8 +396,6 @@ public class KafkaConsumerTest {
 
     @Test
     public void verifyNoCoordinatorLookupForManualAssignmentWithSeek() {
-        String topic = "topic";
-        final TopicPartition partition = new TopicPartition(topic, 0);
         int rebalanceTimeoutMs = 60000;
         int sessionTimeoutMs = 3000;
         int heartbeatIntervalMs = 2000;
@@ -477,24 +412,22 @@ public class KafkaConsumerTest {
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
                 rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, autoCommitIntervalMs);
-        consumer.assign(Arrays.asList(partition));
-        consumer.seekToBeginning(Arrays.asList(partition));
+        consumer.assign(Arrays.asList(tp0));
+        consumer.seekToBeginning(Arrays.asList(tp0));
 
         // there shouldn't be any need to lookup the coordinator or fetch committed offsets.
         // we just lookup the starting position and send the record fetch.
-        client.prepareResponse(listOffsetsResponse(Collections.singletonMap(partition, 50L), Errors.NONE.code()));
-        client.prepareResponse(fetchResponse(partition, 50L, 5));
+        client.prepareResponse(listOffsetsResponse(Collections.singletonMap(tp0, 50L), Errors.NONE.code()));
+        client.prepareResponse(fetchResponse(Arrays.asList(tp0), 50L, 5));
 
         ConsumerRecords<String, String> records = consumer.poll(0);
         assertEquals(5, records.count());
-        assertEquals(55L, consumer.position(partition));
+        assertEquals(55L, consumer.position(tp0));
     }
 
     @Test
     public void testCommitsFetchedDuringAssign() {
-        String topic = "topic";
-        final TopicPartition partition1 = new TopicPartition(topic, 0);
-        final TopicPartition partition2 = new TopicPartition(topic, 1);
+        final TopicPartition tp1 = new TopicPartition(topic, 1);
 
         long offset1 = 10000;
         long offset2 = 20000;
@@ -515,7 +448,7 @@ public class KafkaConsumerTest {
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
                 rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, autoCommitIntervalMs);
-        consumer.assign(Arrays.asList(partition1));
+        consumer.assign(Arrays.asList(tp0));
 
         // lookup coordinator
         client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE.code(), node).toStruct(), node);
@@ -523,28 +456,25 @@ public class KafkaConsumerTest {
 
         // fetch offset for one topic
         client.prepareResponseFrom(
-                offsetResponse(Collections.singletonMap(partition1, offset1), Errors.NONE.code()),
+                offsetResponse(Collections.singletonMap(tp0, offset1), Errors.NONE.code()),
                 coordinator);
 
-        assertEquals(offset1, consumer.committed(partition1).offset());
+        assertEquals(offset1, consumer.committed(tp0).offset());
 
-        consumer.assign(Arrays.asList(partition1, partition2));
+        consumer.assign(Arrays.asList(tp0, tp1));
 
         // fetch offset for two topics
         Map<TopicPartition, Long> offsets = new HashMap<>();
-        offsets.put(partition1, offset1);
-        offsets.put(partition2, offset2);
+        offsets.put(tp0, offset1);
+        offsets.put(tp1, offset2);
         client.prepareResponseFrom(offsetResponse(offsets, Errors.NONE.code()), coordinator);
 
-        assertEquals(offset1, consumer.committed(partition1).offset());
-        assertEquals(offset2, consumer.committed(partition2).offset());
+        assertEquals(offset1, consumer.committed(tp0).offset());
+        assertEquals(offset2, consumer.committed(tp1).offset());
     }
 
     @Test
     public void testAutoCommitSentBeforePositionUpdate() {
-        String topic = "topic";
-        final TopicPartition partition = new TopicPartition(topic, 0);
-
         int rebalanceTimeoutMs = 60000;
         int sessionTimeoutMs = 30000;
         int heartbeatIntervalMs = 3000;
@@ -564,55 +494,22 @@ public class KafkaConsumerTest {
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
                 rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, autoCommitIntervalMs);
-        consumer.subscribe(Arrays.asList(topic), new ConsumerRebalanceListener() {
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
 
-            }
-
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                // set initial position so we don't need a lookup
-                for (TopicPartition partition : partitions)
-                    consumer.seek(partition, 0);
-            }
-        });
-
-        // lookup coordinator
-        client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE.code(), node).toStruct(), node);
-
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
-
-        // join group
-        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE.code()), coordinator);
-
-        // sync group
-        client.prepareResponseFrom(syncGroupResponse(Arrays.asList(partition), Errors.NONE.code()), coordinator);
+        consumer.subscribe(Arrays.asList(topic), getConsumerRebalanceListener(consumer));
+        Node coordinator = prepareRebalance(client, node, assignor, Arrays.asList(tp0), null);
 
         consumer.poll(0);
 
         // respond to the outstanding fetch so that we have data available on the next poll
-        client.respondFrom(fetchResponse(partition, 0, 5), node);
+        client.respondFrom(fetchResponse(Arrays.asList(tp0), 0, 5), node);
         client.poll(0, time.milliseconds());
 
         time.sleep(autoCommitIntervalMs);
 
-        client.prepareResponseFrom(fetchResponse(partition, 5, 0), node);
+        client.prepareResponseFrom(fetchResponse(Arrays.asList(tp0), 5, 0), node);
 
         // no data has been returned to the user yet, so the committed offset should be 0
-        final AtomicBoolean commitReceived = new AtomicBoolean(false);
-        client.prepareResponseFrom(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(ClientRequest request) {
-                OffsetCommitRequest commitRequest = new OffsetCommitRequest(request.request().body());
-                OffsetCommitRequest.PartitionData partitionData = commitRequest.offsetData().get(partition);
-                if (partitionData.offset == 0) {
-                    commitReceived.set(true);
-                    return true;
-                }
-                return false;
-            }
-        }, new OffsetCommitResponse(Collections.singletonMap(partition, Errors.NONE.code())).toStruct(), coordinator);
+        AtomicBoolean commitReceived = prepareOffsetCommitResponse(client, coordinator, Arrays.asList(tp0), 0);
 
         consumer.poll(0);
 
@@ -621,9 +518,6 @@ public class KafkaConsumerTest {
 
     @Test
     public void testWakeupWithFetchDataAvailable() {
-        String topic = "topic";
-        final TopicPartition partition = new TopicPartition(topic, 0);
-
         int rebalanceTimeoutMs = 60000;
         int sessionTimeoutMs = 30000;
         int heartbeatIntervalMs = 3000;
@@ -643,35 +537,14 @@ public class KafkaConsumerTest {
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
                 rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, autoCommitIntervalMs);
-        consumer.subscribe(Arrays.asList(topic), new ConsumerRebalanceListener() {
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
 
-            }
-
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                // set initial position so we don't need a lookup
-                for (TopicPartition partition : partitions)
-                    consumer.seek(partition, 0);
-            }
-        });
-
-        // lookup coordinator
-        client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE.code(), node).toStruct(), node);
-
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
-
-        // join group
-        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE.code()), coordinator);
-
-        // sync group
-        client.prepareResponseFrom(syncGroupResponse(Arrays.asList(partition), Errors.NONE.code()), coordinator);
+        consumer.subscribe(Arrays.asList(topic), getConsumerRebalanceListener(consumer));
+        prepareRebalance(client, node, assignor, Arrays.asList(tp0), null);
 
         consumer.poll(0);
 
         // respond to the outstanding fetch so that we have data available on the next poll
-        client.respondFrom(fetchResponse(partition, 0, 5), node);
+        client.respondFrom(fetchResponse(Arrays.asList(tp0), 0, 5), node);
         client.poll(0, time.milliseconds());
 
         consumer.wakeup();
@@ -683,7 +556,7 @@ public class KafkaConsumerTest {
         }
 
         // make sure the position hasn't been updated
-        assertEquals(0, consumer.position(partition));
+        assertEquals(0, consumer.position(tp0));
 
         // the next poll should return the completed fetch
         ConsumerRecords<String, String> records = consumer.poll(0);
@@ -692,10 +565,10 @@ public class KafkaConsumerTest {
 
     @Test
     public void testSubscriptionChange() {
-        final String topic1 = "topic1";
-        final TopicPartition partition1 = new TopicPartition(topic1, 0);
-        final String topic2 = "topic2";
-        final TopicPartition partition2 = new TopicPartition(topic2, 0);
+        final String topic2 = "test2";
+        final TopicPartition t2p0 = new TopicPartition(topic2, 0);
+        final String topic3 = "test3";
+        final TopicPartition t3p0 = new TopicPartition(topic3, 0);
 
         int rebalanceTimeoutMs = 60000;
         int sessionTimeoutMs = 30000;
@@ -708,8 +581,9 @@ public class KafkaConsumerTest {
         Time time = new MockTime();
         MockClient client = new MockClient(time);
         Map<String, Integer> tpCounts = new HashMap<>();
-        tpCounts.put(topic1, 1);
+        tpCounts.put(topic, 1);
         tpCounts.put(topic2, 1);
+        tpCounts.put(topic3, 1);
         Cluster cluster = TestUtils.singletonCluster(tpCounts);
         Node node = cluster.nodes().get(0);
         client.setNode(node);
@@ -720,42 +594,56 @@ public class KafkaConsumerTest {
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
                 rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, autoCommitIntervalMs);
 
-        consumer.subscribe(Arrays.asList(topic1), new ConsumerRebalanceListener() {
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-            }
+        consumer.subscribe(Arrays.asList(topic, topic2), getConsumerRebalanceListener(consumer));
 
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                // set initial position so we don't need a lookup
-                for (TopicPartition partition : partitions)
-                    consumer.seek(partition, 0);
-            }
-        });
-
-        assertEquals(Collections.singleton(topic1), consumer.subscription());
+        assertTrue(consumer.subscription().size() == 2);
+        assertTrue(consumer.subscription().contains(topic) && consumer.subscription().contains(topic2));
         assertTrue(consumer.assignment().isEmpty());
 
-        client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE.code(), node).toStruct(), node);
-        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
-        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE.code()), coordinator);
-        client.prepareResponseFrom(syncGroupResponse(Arrays.asList(partition1), Errors.NONE.code()), coordinator);
+        Node coordinator = prepareRebalance(client, node, assignor, Arrays.asList(tp0, t2p0), null);
 
         consumer.poll(0);
 
-        assertEquals(Collections.singleton(topic1), consumer.subscription());
-        assertEquals(Collections.singleton(partition1), consumer.assignment());
+        assertTrue(consumer.subscription().size() == 2);
+        assertTrue(consumer.subscription().contains(topic) && consumer.subscription().contains(topic2));
+        assertTrue(consumer.assignment().size() == 2);
+        assertTrue(consumer.assignment().contains(tp0) && consumer.assignment().contains(t2p0));
 
         // respond to the outstanding fetch so that we have data available on the next poll
-        client.respondFrom(fetchResponse(partition1, 0, 0), node);
+        client.respondFrom(fetchResponse(Arrays.asList(tp0, t2p0), 0, 0), node);
         client.poll(0, time.milliseconds());
 
         consumer.poll(0);
 
         // subscription change
-        consumer.subscribe(Arrays.asList(topic2), new ConsumerRebalanceListener() {
+        consumer.subscribe(Arrays.asList(topic, topic3), getConsumerRebalanceListener(consumer));
+
+        assertTrue(consumer.subscription().size() == 2);
+        assertTrue(consumer.subscription().contains(topic) && consumer.subscription().contains(topic3));
+        assertTrue(consumer.assignment().size() == 2);
+        assertTrue(consumer.assignment().contains(tp0) && consumer.assignment().contains(t2p0));
+
+        AtomicBoolean commitReceived = prepareOffsetCommitResponse(client, coordinator, Arrays.asList(tp0, t2p0), 0);
+        prepareRebalance(client, node, assignor, Arrays.asList(tp0, t3p0), coordinator);
+
+        // respond to the outstanding fetch so that we have data available on the next poll
+        client.respondFrom(fetchResponse(Arrays.asList(tp0, t3p0), 0, 0), node);
+        client.poll(0, time.milliseconds());
+
+        consumer.poll(0);
+
+        assertTrue(commitReceived.get());
+        assertTrue(consumer.subscription().size() == 2);
+        assertTrue(consumer.subscription().contains(topic) && consumer.subscription().contains(topic3));
+        assertTrue(consumer.assignment().size() == 2);
+        assertTrue(consumer.assignment().contains(tp0) && consumer.assignment().contains(t3p0));
+    }
+
+    private ConsumerRebalanceListener getConsumerRebalanceListener(final KafkaConsumer<String, String> consumer) {
+        return new ConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+
             }
 
             @Override
@@ -764,38 +652,55 @@ public class KafkaConsumerTest {
                 for (TopicPartition partition : partitions)
                     consumer.seek(partition, 0);
             }
-        });
+        };
+    }
 
-        assertEquals(Collections.singleton(topic2), consumer.subscription());
-        assertEquals(Collections.singleton(partition1), consumer.assignment());
+    private Node prepareRebalance(MockClient client, Node node, PartitionAssignor assignor, List<TopicPartition> partitions, Node coordinator) {
+        if (coordinator == null) {
+            // lookup coordinator
+            client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE.code(), node).toStruct(), node);
+            coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        }
 
-        final AtomicBoolean commit1Received = new AtomicBoolean(false);
+        // join group
+        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE.code()), coordinator);
+
+        // sync group
+        client.prepareResponseFrom(syncGroupResponse(partitions, Errors.NONE.code()), coordinator);
+
+        return coordinator;
+    }
+
+    private AtomicBoolean prepareHeartbeatResponse(MockClient client, Node coordinator) {
+        final AtomicBoolean heartbeatReceived = new AtomicBoolean(false);
+        client.prepareResponseFrom(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(ClientRequest request) {
+                heartbeatReceived.set(true);
+                return true;
+            }
+        }, new HeartbeatResponse(Errors.NONE.code()).toStruct(), coordinator);
+        return heartbeatReceived;
+    }
+
+    private AtomicBoolean prepareOffsetCommitResponse(MockClient client, Node coordinator, final List<TopicPartition> partitions, final long offset) {
+        final AtomicBoolean commitReceived = new AtomicBoolean(true);
         client.prepareResponseFrom(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(ClientRequest request) {
                 OffsetCommitRequest commitRequest = new OffsetCommitRequest(request.request().body());
-                OffsetCommitRequest.PartitionData partitionData = commitRequest.offsetData().get(partition1);
-                // No record has been returned to the consumer, so the committed offset should be 0
-                if (partitionData.offset == 0) {
-                    commit1Received.set(true);
-                    return true;
+                for (TopicPartition partition: partitions) {
+                    OffsetCommitRequest.PartitionData partitionData = commitRequest.offsetData().get(partition);
+                    // verify that the expected offset has been committed
+                    if (partitionData.offset != offset) {
+                        commitReceived.set(false);
+                        return false;
+                    }
                 }
-                return false;
+                return true;
             }
-        }, offsetCommitResponse(Collections.singletonMap(partition1, Errors.NONE.code())), coordinator);
-
-        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE.code()), coordinator);
-        client.prepareResponseFrom(syncGroupResponse(Arrays.asList(partition2), Errors.NONE.code()), coordinator);
-
-        // respond to the outstanding fetch so that we have data available on the next poll
-        client.respondFrom(fetchResponse(partition2, 0, 0), node);
-        client.poll(0, time.milliseconds());
-
-        consumer.poll(0);
-
-        assertTrue(commit1Received.get());
-        assertEquals(Collections.singleton(topic2), consumer.subscription());
-        assertEquals(Collections.singleton(partition2), consumer.assignment());
+        }, offsetCommitResponse(Collections.singletonMap(tp0, Errors.NONE.code())), coordinator);
+        return commitReceived;
     }
 
     private Struct offsetCommitResponse(Map<TopicPartition, Short> responseData) {
@@ -830,13 +735,15 @@ public class KafkaConsumerTest {
         return new ListOffsetResponse(partitionData).toStruct();
     }
 
-    private Struct fetchResponse(TopicPartition tp, long fetchOffset, int count) {
+    private Struct fetchResponse(List<TopicPartition> partitions, long fetchOffset, int count) {
         MemoryRecords records = MemoryRecords.emptyRecords(ByteBuffer.allocate(1024), CompressionType.NONE);
         for (int i = 0; i < count; i++)
             records.append(fetchOffset + i, 0L, ("key-" + i).getBytes(), ("value-" + i).getBytes());
         records.close();
-        FetchResponse response = new FetchResponse(Collections.singletonMap(
-                tp, new FetchResponse.PartitionData(Errors.NONE.code(), 5, records.buffer())), 0);
+        Map<TopicPartition, PartitionData> tpResponses = new HashMap<>();
+        for (TopicPartition partition: partitions)
+            tpResponses.put(partition, new FetchResponse.PartitionData(Errors.NONE.code(), 0, records.buffer()));
+        FetchResponse response = new FetchResponse(tpResponses, 0);
         return response.toStruct();
     }
 
