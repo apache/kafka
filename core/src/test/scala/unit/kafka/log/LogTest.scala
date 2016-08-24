@@ -1090,7 +1090,7 @@ class LogTest extends JUnitSuite {
   @Test
   def shouldDeleteSizeBasedSegments() {
     val set = TestUtils.singleMessageSet("test".getBytes)
-    val (_, log: Log) = createLog(set.sizeInBytes, retentionBytes = set.sizeInBytes * 10)
+    val log = createLog(set.sizeInBytes, retentionBytes = set.sizeInBytes * 10)
 
     // append some messages to create some segments
     for (i <- 0 until 15)
@@ -1103,7 +1103,7 @@ class LogTest extends JUnitSuite {
   @Test
   def shouldNotDeleteSizeBasedSegmentsWhenUnderRetentionSize() {
     val set = TestUtils.singleMessageSet("test".getBytes)
-    val (_, log: Log) = createLog(set.sizeInBytes, retentionBytes = set.sizeInBytes * 15)
+    val log = createLog(set.sizeInBytes, retentionBytes = set.sizeInBytes * 15)
 
     // append some messages to create some segments
     for (i <- 0 until 15)
@@ -1116,7 +1116,7 @@ class LogTest extends JUnitSuite {
   @Test
   def shouldDeleteTimeBasedSegmentsReadyToBeDeleted() {
     val set = TestUtils.singleMessageSet("test".getBytes, timestamp = 10)
-    val (myTime, log) = createLog(set.sizeInBytes, retentionMs = 10000)
+    val log = createLog(set.sizeInBytes, retentionMs = 10000)
 
     // append some messages to create some segments
     for (i <- 0 until 15)
@@ -1128,8 +1128,8 @@ class LogTest extends JUnitSuite {
 
   @Test
   def shouldNotDeleteTimeBasedSegmentsWhenNoneReadyToBeDeleted() {
-    val set = TestUtils.singleMessageSet("test".getBytes, timestamp = System.currentTimeMillis())
-    val (_, log) = createLog(set.sizeInBytes, retentionMs = 10000000)
+    val set = TestUtils.singleMessageSet("test".getBytes, timestamp = time.milliseconds)
+    val log = createLog(set.sizeInBytes, retentionMs = 10000000)
 
     // append some messages to create some segments
     for (i <- 0 until 15)
@@ -1142,7 +1142,7 @@ class LogTest extends JUnitSuite {
   @Test
   def shouldNotDeleteSegmentsWhenPolicyDoesNotIncludeDelete() {
     val set = TestUtils.singleMessageSet("test".getBytes, key = "test".getBytes(), timestamp = 10L)
-    val (myTime, log) = createLog(set.sizeInBytes,
+    val log = createLog(set.sizeInBytes,
       retentionMs = 10000,
       cleanupPolicy = "compact")
 
@@ -1151,7 +1151,7 @@ class LogTest extends JUnitSuite {
       log.append(set)
 
     // mark oldest segment as older the retention.ms
-    log.logSegments.head.lastModified = myTime.milliseconds - 20000
+    log.logSegments.head.lastModified = time.milliseconds - 20000
 
     val segments = log.numberOfSegments
     log.deleteOldSegments()
@@ -1161,7 +1161,7 @@ class LogTest extends JUnitSuite {
   @Test
   def shouldDeleteSegmentsReadyToBeDeletedWhenCleanupPolicyIsCompactAndDelete() {
     val set = TestUtils.singleMessageSet("test".getBytes, key = "test".getBytes,timestamp = 10L)
-    val (myTime, log) = createLog(set.sizeInBytes,
+    val log = createLog(set.sizeInBytes,
       retentionMs = 10000,
       cleanupPolicy = "compact,delete")
 
@@ -1174,19 +1174,18 @@ class LogTest extends JUnitSuite {
   }
 
   def createLog(messageSizeInBytes: Int, retentionMs: Int = -1,
-                retentionBytes: Int = -1, cleanupPolicy: String = "delete"): (MockTime, Log) = {
+                retentionBytes: Int = -1, cleanupPolicy: String = "delete"): Log = {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, messageSizeInBytes * 5: Integer)
     logProps.put(LogConfig.RetentionMsProp, retentionMs: Integer)
     logProps.put(LogConfig.RetentionBytesProp, retentionBytes: Integer)
     logProps.put(LogConfig.CleanupPolicyProp, cleanupPolicy)
     val config = LogConfig(logProps)
-    val myTime = new MockTime()
     val log = new Log(logDir,
       config,
       recoveryPoint = 0L,
-      myTime.scheduler,
-      myTime)
-    (myTime, log)
+      time.scheduler,
+      time)
+    log
   }
 }
