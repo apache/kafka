@@ -140,11 +140,11 @@ class Log(val dir: File,
   /* Load the log segments from the log files on disk */
   private def loadSegments() {
     // create the log directory if it doesn't exist
-    if (!Files.exists(dir.toPath())) {
+    if (!Files.exists(dir.toPath)) {
       try {
-          Files.createDirectory(dir.toPath())    
+          Files.createDirectories(dir.toPath)    
       } catch {
-        case e: IOException => throw new KafkaException("Error in creating new directory.", e)
+        case e: IOException => throw new KafkaException("Error creating log directory ${dir.toPath}", e)
       }
     }
     var swapFiles = Set[File]()

@@ -83,9 +83,9 @@ class LogManager(val logDirs: Array[File],
       if(!dir.exists) {
         info("Log directory '" + dir.getAbsolutePath + "' not found, creating it.")
         try {
-            Files.createDirectory(dir.toPath())    
+            Files.createDirectories(dir.toPath())    
         } catch {
-          case e: IOException => throw new KafkaException("Error in creating new directory.", e)
+          case e: IOException => throw new KafkaException("Error in creating log directory ${dir.toPath}", e)
         }
       }
       if(!dir.isDirectory || !dir.canRead)
@@ -362,9 +362,9 @@ class LogManager(val logDirs: Array[File],
       val dataDir = nextLogDir()
       val dir = new File(dataDir, topicAndPartition.topic + "-" + topicAndPartition.partition)
       try {
-          Files.createDirectory(dir.toPath())
+          Files.createDirectories(dir.toPath())
       } catch {
-        case e: IOException => throw new KafkaException("Error in creating new directory.", e)
+        case e: IOException => throw new KafkaException("Error in creating log directory ${dir.toPath}", e)
       }
       log = new Log(dir, 
                     config,
