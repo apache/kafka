@@ -57,10 +57,6 @@ public class StreamsConfig extends AbstractConfig {
     public static final String STATE_DIR_CONFIG = "state.dir";
     private static final String STATE_DIR_DOC = "Directory location for state store.";
 
-    /** <code>zookeeper.connect<code/> */
-    public static final String ZOOKEEPER_CONNECT_CONFIG = "zookeeper.connect";
-    private static final String ZOOKEEPER_CONNECT_DOC = "Zookeeper connect string for Kafka topics management.";
-
     /** <code>commit.interval.ms</code> */
     public static final String COMMIT_INTERVAL_MS_CONFIG = "commit.interval.ms";
     private static final String COMMIT_INTERVAL_MS_DOC = "The frequency with which to save the position of the processor.";
@@ -173,11 +169,6 @@ public class StreamsConfig extends AbstractConfig {
                         "",
                         Importance.HIGH,
                         CommonClientConfigs.CLIENT_ID_DOC)
-                .define(ZOOKEEPER_CONNECT_CONFIG,
-                        Type.STRING,
-                        "",
-                        Importance.HIGH,
-                        StreamsConfig.ZOOKEEPER_CONNECT_DOC)
                 .define(STATE_DIR_CONFIG,
                         Type.STRING,
                         "/tmp/kafka-streams",
@@ -397,9 +388,6 @@ public class StreamsConfig extends AbstractConfig {
         props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, getInt(REPLICATION_FACTOR_CONFIG));
         props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, getInt(NUM_STANDBY_REPLICAS_CONFIG));
         props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamPartitionAssignor.class.getName());
-        if (!getString(ZOOKEEPER_CONNECT_CONFIG).equals(""))
-            props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, getString(ZOOKEEPER_CONNECT_CONFIG));
-
         props.put(APPLICATION_SERVER_CONFIG, getString(APPLICATION_SERVER_CONFIG));
         return props;
     }

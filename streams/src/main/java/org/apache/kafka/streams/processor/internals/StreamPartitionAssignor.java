@@ -144,13 +144,10 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         }
 
-        if (configs.containsKey(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG)) {
-            internalTopicManager = new InternalTopicManager(
-                    this.streamThread.config,
-                    configs.containsKey(StreamsConfig.REPLICATION_FACTOR_CONFIG) ? (Integer) configs.get(StreamsConfig.REPLICATION_FACTOR_CONFIG) : 1);
-        } else {
-            log.info("Config '{}' isn't supplied and hence no internal topics will be created.", StreamsConfig.ZOOKEEPER_CONNECT_CONFIG);
-        }
+        internalTopicManager = new InternalTopicManager(
+                this.streamThread.config,
+                configs.containsKey(StreamsConfig.REPLICATION_FACTOR_CONFIG) ? (Integer) configs.get(StreamsConfig.REPLICATION_FACTOR_CONFIG) : 1);
+
     }
 
     @Override
@@ -233,7 +230,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
             if (!missingTopics.isEmpty()) {
                 log.warn("Topic {} do not exists but couldn't created as the config '{}' isn't supplied",
-                        missingTopics, StreamsConfig.ZOOKEEPER_CONNECT_CONFIG);
+                        missingTopics);
 
             }
         }

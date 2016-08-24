@@ -50,6 +50,9 @@ public class InternalTopicManager {
     private final KafkaClient kafkaClient;
     StreamsConfig config;
 
+    private static final String CLEANUP_POLICY_PROP = "log.cleanup.policy";
+    private static final String COMPACT = "compact";
+
     public InternalTopicManager() {
         this.config = null;
         this.kafkaClient = null;
@@ -148,7 +151,15 @@ public class InternalTopicManager {
      */
     private void createTopic(String topic, int numPartitions, int replicationFactor, boolean compactTopic, Node brokerNode)  {
 
-        CreateTopicsRequest.TopicDetails topicDetails = new CreateTopicsRequest.TopicDetails(numPartitions, (short) replicationFactor);
+        CreateTopicsRequest.TopicDetails topicDetails;
+        if (compactTopic) {
+            Map<String, String> topicConfig = new HashMap<>();
+            topicConfig.put(CLEANUP_POLICY_PROP, COMPACT);
+            topicDetails = new CreateTopicsRequest.TopicDetails(numPartitions, (short) replicationFactor, topicConfig);
+        } else {
+            topicDetails = new CreateTopicsRequest.TopicDetails(numPartitions, (short) replicationFactor);
+        }
+
         Map<String, CreateTopicsRequest.TopicDetails> topics = new HashMap<>();
         topics.put(topic, topicDetails);
 
