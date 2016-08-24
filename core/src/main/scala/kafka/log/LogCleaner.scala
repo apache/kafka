@@ -243,8 +243,8 @@ class LogCleaner(val config: CleanerConfig,
           }
           true
       }
-      val deleted: Iterable[(TopicAndPartition, Log)] = cleanerManager.logsWithSegmentsReadyToBeDeleted()
-      deleted.foreach{
+      val deletable: Iterable[(TopicAndPartition, Log)] = cleanerManager.deletableLogs()
+      deletable.foreach{
         case (topicPartition, log) =>
           try {
             log.deleteOldSegments()
@@ -252,7 +252,7 @@ class LogCleaner(val config: CleanerConfig,
             cleanerManager.doneDeleting(topicPartition)
           }
       }
-      if (!cleaned && deleted.isEmpty)
+      if (!cleaned)
         backOffWaitLatch.await(config.backOffMs, TimeUnit.MILLISECONDS)
     }
     
