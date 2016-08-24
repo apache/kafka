@@ -1088,7 +1088,7 @@ class LogTest extends JUnitSuite {
 
 
   @Test
-  def shouldDeleteSizeBasedSegments(): Unit = {
+  def shouldDeleteSizeBasedSegments() {
     val set = TestUtils.singleMessageSet("test".getBytes)
     val (_, log: Log) = createLog(set.sizeInBytes, retentionBytes = set.sizeInBytes * 10)
 
@@ -1101,7 +1101,7 @@ class LogTest extends JUnitSuite {
   }
 
   @Test
-  def shouldNotDeleteSizeBasedSegmentsWhenUnderRetentionSize(): Unit = {
+  def shouldNotDeleteSizeBasedSegmentsWhenUnderRetentionSize() {
     val set = TestUtils.singleMessageSet("test".getBytes)
     val (_, log: Log) = createLog(set.sizeInBytes, retentionBytes = set.sizeInBytes * 15)
 
@@ -1114,24 +1114,22 @@ class LogTest extends JUnitSuite {
   }
 
   @Test
-  def shouldDeleteTimeBasedSegmentsReadyToBeDeleted(): Unit = {
-    val set = TestUtils.singleMessageSet("test".getBytes)
+  def shouldDeleteTimeBasedSegmentsReadyToBeDeleted() {
+    val set = TestUtils.singleMessageSet("test".getBytes, timestamp = 10)
     val (myTime, log) = createLog(set.sizeInBytes, retentionMs = 10000)
 
     // append some messages to create some segments
     for (i <- 0 until 15)
       log.append(set)
 
-    log.logSegments.head.lastModified = myTime.milliseconds - 20000
-
     log.deleteOldSegments()
-    assertEquals("There should be 2 segments remaining", 2, log.numberOfSegments)
+    assertEquals("There should be 1 segment remaining", 1, log.numberOfSegments)
   }
 
   @Test
-  def shouldNotDeleteTimeBasedSegmentsWhenNoneReadyToBeDeleted(): Unit = {
-    val set = TestUtils.singleMessageSet("test".getBytes)
-    val (_, log) = createLog(set.sizeInBytes, retentionMs = 10000)
+  def shouldNotDeleteTimeBasedSegmentsWhenNoneReadyToBeDeleted() {
+    val set = TestUtils.singleMessageSet("test".getBytes, timestamp = System.currentTimeMillis())
+    val (_, log) = createLog(set.sizeInBytes, retentionMs = 10000000)
 
     // append some messages to create some segments
     for (i <- 0 until 15)
@@ -1142,8 +1140,8 @@ class LogTest extends JUnitSuite {
   }
 
   @Test
-  def shouldNotDeleteSegmentsWhenPolicyDoesNotIncludeDelete(): Unit = {
-    val set = TestUtils.singleMessageSet("test".getBytes, key = "test".getBytes())
+  def shouldNotDeleteSegmentsWhenPolicyDoesNotIncludeDelete() {
+    val set = TestUtils.singleMessageSet("test".getBytes, key = "test".getBytes(), timestamp = 10L)
     val (myTime, log) = createLog(set.sizeInBytes,
       retentionMs = 10000,
       cleanupPolicy = "compact")
@@ -1161,8 +1159,8 @@ class LogTest extends JUnitSuite {
   }
 
   @Test
-  def shouldDeleteSegmentsReadyToBeDeletedWhenCleanupPolicyIsCompactAndDelete(): Unit = {
-    val set = TestUtils.singleMessageSet("test".getBytes, key = "test".getBytes)
+  def shouldDeleteSegmentsReadyToBeDeletedWhenCleanupPolicyIsCompactAndDelete() {
+    val set = TestUtils.singleMessageSet("test".getBytes, key = "test".getBytes,timestamp = 10L)
     val (myTime, log) = createLog(set.sizeInBytes,
       retentionMs = 10000,
       cleanupPolicy = "compact,delete")
@@ -1171,10 +1169,8 @@ class LogTest extends JUnitSuite {
     for (i <- 0 until 15)
       log.append(set)
 
-    log.logSegments.head.lastModified = myTime.milliseconds - 20000
-
     log.deleteOldSegments()
-    assertEquals("There should be 2 segments remaining", 2, log.numberOfSegments)
+    assertEquals("There should be 1 segment remaining", 1, log.numberOfSegments)
   }
 
   def createLog(messageSizeInBytes: Int, retentionMs: Int = -1,
