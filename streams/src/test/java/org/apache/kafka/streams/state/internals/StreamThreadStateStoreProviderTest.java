@@ -92,7 +92,8 @@ public class StreamThreadStateStoreProviderTest {
         configureRestoreConsumer(clientSupplier, "applicationId-kv-store-changelog");
         configureRestoreConsumer(clientSupplier, "applicationId-window-store-changelog");
 
-        final ProcessorTopology topology = builder.build("X", null);
+        builder.setApplicationId(applicationId);
+        final ProcessorTopology topology = builder.build(null);
         final Map<TaskId, StreamTask> tasks = new HashMap<>();
         stateDirectory = new StateDirectory(applicationId, stateConfigDir);
         taskOne = createStreamsTask(applicationId, streamsConfig, clientSupplier, topology,
@@ -218,8 +219,7 @@ public class StreamThreadStateStoreProviderTest {
         }
 
         @Override
-        public void recordLatency(final Sensor sensor, final long startNs,
-                                  final long endNs) {
+        public void recordLatency(final Sensor sensor, final long startNs, final long endNs) {
 
         }
     }

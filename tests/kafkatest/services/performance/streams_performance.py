@@ -47,9 +47,10 @@ class StreamsSimpleBenchmarkService(KafkaPathResolverMixin, Service):
             "collect_default": True},
     }
 
-    def __init__(self, context, kafka):
+    def __init__(self, context, kafka, numrecs):
         super(StreamsSimpleBenchmarkService, self).__init__(context, 1)
         self.kafka = kafka
+        self.numrecs = numrecs
 
     @property
     def node(self):
@@ -88,6 +89,7 @@ class StreamsSimpleBenchmarkService(KafkaPathResolverMixin, Service):
         args['kafka'] = self.kafka.bootstrap_servers()
         args['zk'] = self.kafka.zk.connect_setting()
         args['state_dir'] = self.PERSISTENT_ROOT
+        args['numrecs'] = self.numrecs
         args['stdout'] = self.STDOUT_FILE
         args['stderr'] = self.STDERR_FILE
         args['pidfile'] = self.PID_FILE
@@ -96,7 +98,7 @@ class StreamsSimpleBenchmarkService(KafkaPathResolverMixin, Service):
 
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
               "INCLUDE_TEST_JARS=true %(kafka_run_class)s org.apache.kafka.streams.perf.SimpleBenchmark " \
-              " %(kafka)s %(zk)s %(state_dir)s " \
+              " %(kafka)s %(zk)s %(state_dir)s %(numrecs)s " \
               " & echo $! >&3 ) 1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args
 
         return cmd

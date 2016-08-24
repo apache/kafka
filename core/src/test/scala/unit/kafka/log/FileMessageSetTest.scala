@@ -111,21 +111,21 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
     var position = 0
     assertEquals("Should be able to find the first message by its offset", 
                  OffsetPosition(0L, position), 
-                 messageSet.searchFor(0, 0))
+                 messageSet.searchForOffset(0, 0))
     position += MessageSet.entrySize(messageSet.head.message)
     assertEquals("Should be able to find second message when starting from 0", 
                  OffsetPosition(1L, position), 
-                 messageSet.searchFor(1, 0))
+                 messageSet.searchForOffset(1, 0))
     assertEquals("Should be able to find second message starting from its offset", 
                  OffsetPosition(1L, position), 
-                 messageSet.searchFor(1, position))
+                 messageSet.searchForOffset(1, position))
     position += MessageSet.entrySize(messageSet.tail.head.message) + MessageSet.entrySize(messageSet.tail.tail.head.message)
     assertEquals("Should be able to find fourth message from a non-existant offset", 
                  OffsetPosition(50L, position), 
-                 messageSet.searchFor(3, position))
+                 messageSet.searchForOffset(3, position))
     assertEquals("Should be able to find fourth message by correct offset", 
                  OffsetPosition(50L, position), 
-                 messageSet.searchFor(50,  position))
+                 messageSet.searchForOffset(50,  position))
   }
   
   /**
@@ -134,7 +134,7 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
   @Test
   def testIteratorWithLimits() {
     val message = messageSet.toList(1)
-    val start = messageSet.searchFor(1, 0).position
+    val start = messageSet.searchForOffset(1, 0).position
     val size = message.message.size + 12
     val slice = messageSet.read(start, size)
     assertEquals(List(message), slice.toList)
@@ -148,7 +148,7 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
   @Test
   def testTruncate() {
     val message = messageSet.toList.head
-    val end = messageSet.searchFor(1, 0).position
+    val end = messageSet.searchForOffset(1, 0).position
     messageSet.truncateTo(end)
     assertEquals(List(message), messageSet.toList)
     assertEquals(MessageSet.entrySize(message.message), messageSet.sizeInBytes)
@@ -272,7 +272,7 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
   @Test
   def testFormatConversionWithPartialMessage() {
     val message = messageSet.toList(1)
-    val start = messageSet.searchFor(1, 0).position
+    val start = messageSet.searchForOffset(1, 0).position
     val size = message.message.size + 12
     val slice = messageSet.read(start, size - 1)
     val messageV0 = slice.toMessageFormat(Message.MagicValue_V0)

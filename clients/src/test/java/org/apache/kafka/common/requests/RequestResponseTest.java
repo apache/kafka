@@ -55,8 +55,9 @@ public class RequestResponseTest {
                 createHeartBeatRequest(),
                 createHeartBeatRequest().getErrorResponse(0, new UnknownServerException()),
                 createHeartBeatResponse(),
-                createJoinGroupRequest(),
-                createJoinGroupRequest().getErrorResponse(0, new UnknownServerException()),
+                createJoinGroupRequest(1),
+                createJoinGroupRequest(0).getErrorResponse(0, new UnknownServerException()),
+                createJoinGroupRequest(1).getErrorResponse(1, new UnknownServerException()),
                 createJoinGroupResponse(),
                 createLeaveGroupRequest(),
                 createLeaveGroupRequest().getErrorResponse(0, new UnknownServerException()),
@@ -118,6 +119,7 @@ public class RequestResponseTest {
         checkSerialization(createOffsetCommitRequest(0).getErrorResponse(0, new UnknownServerException()), 0);
         checkSerialization(createOffsetCommitRequest(1), 1);
         checkSerialization(createOffsetCommitRequest(1).getErrorResponse(1, new UnknownServerException()), 1);
+        checkSerialization(createJoinGroupRequest(0), 0);
         checkSerialization(createUpdateMetadataRequest(0, null), 0);
         checkSerialization(createUpdateMetadataRequest(0, null).getErrorResponse(0, new UnknownServerException()), 0);
         checkSerialization(createUpdateMetadataRequest(1, null), 1);
@@ -236,11 +238,15 @@ public class RequestResponseTest {
         return new HeartbeatResponse(Errors.NONE.code());
     }
 
-    private AbstractRequest createJoinGroupRequest() {
+    private AbstractRequest createJoinGroupRequest(int version) {
         ByteBuffer metadata = ByteBuffer.wrap(new byte[] {});
         List<JoinGroupRequest.ProtocolMetadata> protocols = new ArrayList<>();
         protocols.add(new JoinGroupRequest.ProtocolMetadata("consumer-range", metadata));
-        return new JoinGroupRequest("group1", 30000, "consumer1", "consumer", protocols);
+        if (version == 0) {
+            return new JoinGroupRequest("group1", 30000, "consumer1", "consumer", protocols);
+        } else {
+            return new JoinGroupRequest("group1", 10000, 60000, "consumer1", "consumer", protocols);
+        }
     }
 
     private AbstractRequestResponse createJoinGroupResponse() {

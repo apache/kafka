@@ -66,8 +66,8 @@ public class Worker {
     private final Time time;
     private final String workerId;
     private final WorkerConfig config;
-    private final Converter keyConverter;
-    private final Converter valueConverter;
+    private final Converter defaultKeyConverter;
+    private final Converter defaultValueConverter;
     private final Converter internalKeyConverter;
     private final Converter internalValueConverter;
     private final OffsetBackingStore offsetBackingStore;
@@ -85,10 +85,10 @@ public class Worker {
         this.workerId = workerId;
         this.time = time;
         this.config = config;
-        this.keyConverter = config.getConfiguredInstance(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, Converter.class);
-        this.keyConverter.configure(config.originalsWithPrefix("key.converter."), true);
-        this.valueConverter = config.getConfiguredInstance(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, Converter.class);
-        this.valueConverter.configure(config.originalsWithPrefix("value.converter."), false);
+        this.defaultKeyConverter = config.getConfiguredInstance(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, Converter.class);
+        this.defaultKeyConverter.configure(config.originalsWithPrefix("key.converter."), true);
+        this.defaultValueConverter = config.getConfiguredInstance(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, Converter.class);
+        this.defaultValueConverter.configure(config.originalsWithPrefix("value.converter."), false);
         this.internalKeyConverter = config.getConfiguredInstance(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, Converter.class);
         this.internalKeyConverter.configure(config.originalsWithPrefix("internal.key.converter."), true);
         this.internalValueConverter = config.getConfiguredInstance(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, Converter.class);
@@ -302,11 +302,13 @@ public class Worker {
      * Add a new task.
      * @param id Globally unique ID for this task.
      * @param taskConfig the parsed task configuration
+     * @param connConfig the parsed connector configuration
      * @param statusListener listener for notifications of task status changes
      * @param initialState the initial target state that the task should be initialized to
      */
     public void startTask(ConnectorTaskId id,
                           TaskConfig taskConfig,
+                          ConnectorConfig connConfig,
                           TaskStatus.Listener statusListener,
                           TargetState initialState) {
         log.info("Creating task {}", id);
@@ -322,7 +324,18 @@ public class Worker {
         final Task task = instantiateTask(taskClass);
         log.info("Instantiated task {} with version {} of type {}", id, task.version(), taskClass.getName());
 
-        final WorkerTask workerTask = buildWorkerTask(id, task, statusListener, initialState);
+        Converter keyConverter = connConfig.getConfiguredInstance(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, Converter.class);
+        if (keyConverter != null)
+            keyConverter.configure(connConfig.originalsWithPrefix("key.converter."), true);
+        else
+            keyConverter = defaultKeyConverter;
+        Converter valueConverter = connConfig.getConfiguredInstance(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, Converter.class);
+        if (valueConverter != null)
+            valueConverter.configure(connConfig.originalsWithPrefix("value.converter."), false);
+        else
+            valueConverter = defaultValueConverter;
+
+        final WorkerTask workerTask = buildWorkerTask(id, task, statusListener, initialState, keyConverter, valueConverter);
 
         // Start the task before adding modifying any state, any exceptions are caught higher up the
         // call chain and there's no cleanup to do here
@@ -339,7 +352,9 @@ public class Worker {
     private WorkerTask buildWorkerTask(ConnectorTaskId id,
                                        Task task,
                                        TaskStatus.Listener statusListener,
-                                       TargetState initialState) {
+                                       TargetState initialState,
+                                       Converter keyConverter,
+                                       Converter valueConverter) {
         // Decide which type of worker task we need based on the type of task.
         if (task instanceof SourceTask) {
             OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.connector(),

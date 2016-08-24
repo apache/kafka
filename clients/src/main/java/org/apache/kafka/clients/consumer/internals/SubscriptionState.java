@@ -18,6 +18,7 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -46,6 +47,8 @@ import java.util.regex.Pattern;
  * to set the initial fetch position (e.g. {@link Fetcher#resetOffset(TopicPartition)}.
  */
 public class SubscriptionState {
+    private static final String SUBSCRIPTION_EXCEPTION_MESSAGE =
+            "Subscription to topics, partitions and pattern are mutually exclusive";
 
     private enum SubscriptionType {
         NONE, AUTO_TOPICS, AUTO_PATTERN, USER_ASSIGNED
@@ -58,19 +61,16 @@ public class SubscriptionState {
     private Pattern subscribedPattern;
 
     /* the list of topics the user has requested */
-    private final Set<String> subscription;
+    private Set<String> subscription;
+
+    /* the list of partitions the user has requested */
+    private Set<TopicPartition> userAssignment;
 
     /* the list of topics the group has subscribed to (set only for the leader on join group completion) */
     private final Set<String> groupSubscription;
 
-    /* the list of partitions the user has requested */
-    private final Set<TopicPartition> userAssignment;
-
     /* the list of partitions currently assigned */
     private final Map<TopicPartition, TopicPartitionState> assignment;
-
-    /* do we need to request a partition assignment from the coordinator? */
-    private boolean needsPartitionAssignment;
 
     /* do we need to request the latest committed offsets from the coordinator? */
     private boolean needsFetchCommittedOffsets;
@@ -81,8 +81,16 @@ public class SubscriptionState {
     /* Listener to be invoked when assignment changes */
     private ConsumerRebalanceListener listener;
 
-    private static final String SUBSCRIPTION_EXCEPTION_MESSAGE =
-        "Subscription to topics, partitions and pattern are mutually exclusive";
+    public SubscriptionState(OffsetResetStrategy defaultResetStrategy) {
+        this.defaultResetStrategy = defaultResetStrategy;
+        this.subscription = Collections.emptySet();
+        this.userAssignment = Collections.emptySet();
+        this.assignment = new HashMap<>();
+        this.groupSubscription = new HashSet<>();
+        this.needsFetchCommittedOffsets = true; // initialize to true for the consumers to fetch offset upon starting up
+        this.subscribedPattern = null;
+        this.subscriptionType = SubscriptionType.NONE;
+    }
 
     /**
      * This method sets the subscription type if it is not already set (i.e. when it is NONE),
@@ -97,19 +105,7 @@ public class SubscriptionState {
             throw new IllegalStateException(SUBSCRIPTION_EXCEPTION_MESSAGE);
     }
 
-    public SubscriptionState(OffsetResetStrategy defaultResetStrategy) {
-        this.defaultResetStrategy = defaultResetStrategy;
-        this.subscription = new HashSet<>();
-        this.userAssignment = new HashSet<>();
-        this.assignment = new HashMap<>();
-        this.groupSubscription = new HashSet<>();
-        this.needsPartitionAssignment = false;
-        this.needsFetchCommittedOffsets = true; // initialize to true for the consumers to fetch offset upon starting up
-        this.subscribedPattern = null;
-        this.subscriptionType = SubscriptionType.NONE;
-    }
-
-    public void subscribe(Collection<String> topics, ConsumerRebalanceListener listener) {
+    public void subscribe(Set<String> topics, ConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
 
@@ -120,12 +116,18 @@ public class SubscriptionState {
         changeSubscription(topics);
     }
 
-    public void changeSubscription(Collection<String> topicsToSubscribe) {
-        if (!this.subscription.equals(new HashSet<>(topicsToSubscribe))) {
-            this.subscription.clear();
-            this.subscription.addAll(topicsToSubscribe);
+    public void subscribeFromPattern(Set<String> topics) {
+        if (subscriptionType != SubscriptionType.AUTO_PATTERN)
+            throw new IllegalArgumentException("Attempt to subscribe from pattern while subscription type set to " +
+                    subscriptionType);
+
+        changeSubscription(topics);
+    }
+
+    private void changeSubscription(Set<String> topicsToSubscribe) {
+        if (!this.subscription.equals(topicsToSubscribe)) {
+            this.subscription = topicsToSubscribe;
             this.groupSubscription.addAll(topicsToSubscribe);
-            this.needsPartitionAssignment = true;
 
             // Remove any assigned partitions which are no longer subscribed to
             for (Iterator<TopicPartition> it = assignment.keySet().iterator(); it.hasNext(); ) {
@@ -147,9 +149,11 @@ public class SubscriptionState {
         this.groupSubscription.addAll(topics);
     }
 
-    public void needReassignment() {
+    /**
+     * Reset the group's subscription to only contain topics subscribed by this consumer.
+     */
+    public void resetGroupSubscription() {
         this.groupSubscription.retainAll(subscription);
-        this.needsPartitionAssignment = true;
     }
 
     /**
@@ -157,34 +161,37 @@ public class SubscriptionState {
      * note this is different from {@link #assignFromSubscribed(Collection)}
      * whose input partitions are provided from the subscribed topics.
      */
-    public void assignFromUser(Collection<TopicPartition> partitions) {
+    public void assignFromUser(Set<TopicPartition> partitions) {
         setSubscriptionType(SubscriptionType.USER_ASSIGNED);
 
-        this.userAssignment.clear();
-        this.userAssignment.addAll(partitions);
+        if (!this.assignment.keySet().equals(partitions)) {
+            this.userAssignment = partitions;
 
-        for (TopicPartition partition : partitions)
-            if (!assignment.containsKey(partition))
-                addAssignedPartition(partition);
-
-        this.assignment.keySet().retainAll(this.userAssignment);
-
-        this.needsPartitionAssignment = false;
-        this.needsFetchCommittedOffsets = true;
+            for (TopicPartition partition : partitions)
+                if (!assignment.containsKey(partition))
+                    addAssignedPartition(partition);
+            this.assignment.keySet().retainAll(this.userAssignment);
+            this.needsFetchCommittedOffsets = true;
+        }
     }
 
     /**
      * Change the assignment to the specified partitions returned from the coordinator,
-     * note this is different from {@link #assignFromUser(Collection)} which directly set the assignment from user inputs
+     * note this is different from {@link #assignFromUser(Set)} which directly set the assignment from user inputs
      */
     public void assignFromSubscribed(Collection<TopicPartition> assignments) {
+        if (!this.partitionsAutoAssigned())
+            throw new IllegalArgumentException("Attempt to dynamically assign partitions while manual assignment in use");
+
         for (TopicPartition tp : assignments)
             if (!this.subscription.contains(tp.topic()))
                 throw new IllegalArgumentException("Assigned partition " + tp + " for non-subscribed topic.");
+
+        // after rebalancing, we always reinitialize the assignment state
         this.assignment.clear();
         for (TopicPartition tp: assignments)
             addAssignedPartition(tp);
-        this.needsPartitionAssignment = false;
+        this.needsFetchCommittedOffsets = true;
     }
 
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
@@ -202,10 +209,9 @@ public class SubscriptionState {
     }
 
     public void unsubscribe() {
-        this.subscription.clear();
-        this.userAssignment.clear();
+        this.subscription = Collections.emptySet();
+        this.userAssignment = Collections.emptySet();
         this.assignment.clear();
-        this.needsPartitionAssignment = true;
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
     }
@@ -344,10 +350,6 @@ public class SubscriptionState {
             if (!entry.getValue().hasValidPosition())
                 missing.add(entry.getKey());
         return missing;
-    }
-
-    public boolean partitionAssignmentNeeded() {
-        return this.needsPartitionAssignment;
     }
 
     public boolean isAssigned(TopicPartition tp) {

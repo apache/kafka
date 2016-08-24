@@ -19,6 +19,7 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.serialization.Deserializer;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -48,24 +49,33 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String MAX_POLL_RECORDS_CONFIG = "max.poll.records";
     private static final String MAX_POLL_RECORDS_DOC = "The maximum number of records returned in a single call to poll().";
 
+    /** <code>max.poll.interval.ms</code> */
+    public static final String MAX_POLL_INTERVAL_MS_CONFIG = "max.poll.interval.ms";
+    private static final String MAX_POLL_INTERVAL_MS_DOC = "The maximum delay between invocations of poll() when using " +
+            "consumer group management. This places an upper bound on the amount of time that the consumer can be idle " +
+            "before fetching more records. If poll() is not called before expiration of this timeout, then the consumer " +
+            "is considered failed and the group will rebalance in order to reassign the partitions to another member. ";
+
     /**
      * <code>session.timeout.ms</code>
      */
     public static final String SESSION_TIMEOUT_MS_CONFIG = "session.timeout.ms";
-    private static final String SESSION_TIMEOUT_MS_DOC = "The timeout used to detect failures when using Kafka's " +
-            "group management facilities. When a consumer's heartbeat is not received within the session timeout, " +
-            "the broker will mark the consumer as failed and rebalance the group. Since heartbeats are sent only " +
-            "when poll() is invoked, a higher session timeout allows more time for message processing in the consumer's " +
-            "poll loop at the cost of a longer time to detect hard failures. See also <code>" + MAX_POLL_RECORDS_CONFIG + "</code> for " +
-            "another option to control the processing time in the poll loop. Note that the value must be in the " +
-            "allowable range as configured in the broker configuration by <code>group.min.session.timeout.ms</code> " +
+    private static final String SESSION_TIMEOUT_MS_DOC = "The timeout used to detect consumer failures when using " +
+            "Kafka's group management facility. The consumer sends periodic heartbeats to indicate its liveness " +
+            "to the broker. If no heartbeats are received by the broker before the expiration of this session timeout, " +
+            "then the broker will remove this consumer from the group and initiate a rebalance. Note that the value " +
+            "must be in the allowable range as configured in the broker configuration by <code>group.min.session.timeout.ms</code> " +
             "and <code>group.max.session.timeout.ms</code>.";
 
     /**
      * <code>heartbeat.interval.ms</code>
      */
     public static final String HEARTBEAT_INTERVAL_MS_CONFIG = "heartbeat.interval.ms";
-    private static final String HEARTBEAT_INTERVAL_MS_DOC = "The expected time between heartbeats to the consumer coordinator when using Kafka's group management facilities. Heartbeats are used to ensure that the consumer's session stays active and to facilitate rebalancing when new consumers join or leave the group. The value must be set lower than <code>session.timeout.ms</code>, but typically should be set no higher than 1/3 of that value. It can be adjusted even lower to control the expected time for normal rebalances.";
+    private static final String HEARTBEAT_INTERVAL_MS_DOC = "The expected time between heartbeats to the consumer " +
+            "coordinator when using Kafka's group management facilities. Heartbeats are used to ensure that the " +
+            "consumer's session stays active and to facilitate rebalancing when new consumers join or leave the group. " +
+            "The value must be set lower than <code>session.timeout.ms</code>, but typically should be set no higher " +
+            "than 1/3 of that value. It can be adjusted even lower to control the expected time for normal rebalances.";
 
     /**
      * <code>bootstrap.servers</code>
@@ -196,7 +206,7 @@ public class ConsumerConfig extends AbstractConfig {
                                 .define(GROUP_ID_CONFIG, Type.STRING, "", Importance.HIGH, GROUP_ID_DOC)
                                 .define(SESSION_TIMEOUT_MS_CONFIG,
                                         Type.INT,
-                                        30000,
+                                        10000,
                                         Importance.HIGH,
                                         SESSION_TIMEOUT_MS_DOC)
                                 .define(HEARTBEAT_INTERVAL_MS_CONFIG,
@@ -206,7 +216,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         HEARTBEAT_INTERVAL_MS_DOC)
                                 .define(PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
                                         Type.LIST,
-                                        RangeAssignor.class.getName(),
+                                        Collections.singletonList(RangeAssignor.class),
                                         Importance.MEDIUM,
                                         PARTITION_ASSIGNMENT_STRATEGY_DOC)
                                 .define(METADATA_MAX_AGE_CONFIG,
@@ -221,7 +231,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         ENABLE_AUTO_COMMIT_DOC)
                                 .define(AUTO_COMMIT_INTERVAL_MS_CONFIG,
-                                        Type.LONG,
+                                        Type.INT,
                                         5000,
                                         atLeast(0),
                                         Importance.LOW,
@@ -311,7 +321,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         VALUE_DESERIALIZER_CLASS_DOC)
                                 .define(REQUEST_TIMEOUT_MS_CONFIG,
                                         Type.INT,
-                                        40 * 1000,
+                                        305000, // chosen to be higher than the default of max.poll.interval.ms
                                         atLeast(0),
                                         Importance.MEDIUM,
                                         REQUEST_TIMEOUT_MS_DOC)
@@ -328,10 +338,16 @@ public class ConsumerConfig extends AbstractConfig {
                                         INTERCEPTOR_CLASSES_DOC)
                                 .define(MAX_POLL_RECORDS_CONFIG,
                                         Type.INT,
-                                        Integer.MAX_VALUE,
+                                        500,
                                         atLeast(1),
                                         Importance.MEDIUM,
                                         MAX_POLL_RECORDS_DOC)
+                                .define(MAX_POLL_INTERVAL_MS_CONFIG,
+                                        Type.INT,
+                                        300000,
+                                        atLeast(1),
+                                        Importance.MEDIUM,
+                                        MAX_POLL_INTERVAL_MS_DOC)
                                 .define(EXCLUDE_INTERNAL_TOPICS_CONFIG,
                                         Type.BOOLEAN,
                                         DEFAULT_EXCLUDE_INTERNAL_TOPICS,

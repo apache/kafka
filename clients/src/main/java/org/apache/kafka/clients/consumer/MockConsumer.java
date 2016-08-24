@@ -94,26 +94,26 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     public void subscribe(Pattern pattern, final ConsumerRebalanceListener listener) {
         ensureNotClosed();
         this.subscriptions.subscribe(pattern, listener);
-        List<String> topicsToSubscribe = new ArrayList<>();
+        Set<String> topicsToSubscribe = new HashSet<>();
         for (String topic: partitions.keySet()) {
             if (pattern.matcher(topic).matches() &&
                 !subscriptions.subscription().contains(topic))
                 topicsToSubscribe.add(topic);
         }
         ensureNotClosed();
-        this.subscriptions.changeSubscription(topicsToSubscribe);
+        this.subscriptions.subscribeFromPattern(topicsToSubscribe);
     }
 
     @Override
     public void subscribe(Collection<String> topics, final ConsumerRebalanceListener listener) {
         ensureNotClosed();
-        this.subscriptions.subscribe(topics, listener);
+        this.subscriptions.subscribe(new HashSet<>(topics), listener);
     }
 
     @Override
     public void assign(Collection<TopicPartition> partitions) {
         ensureNotClosed();
-        this.subscriptions.assignFromUser(partitions);
+        this.subscriptions.assignFromUser(new HashSet<>(partitions));
     }
 
     @Override

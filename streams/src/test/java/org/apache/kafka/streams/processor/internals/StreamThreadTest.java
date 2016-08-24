@@ -153,7 +153,7 @@ public class StreamThreadTest {
     public void testPartitionAssignmentChange() throws Exception {
         StreamsConfig config = new StreamsConfig(configProps());
 
-        TopologyBuilder builder = new TopologyBuilder();
+        TopologyBuilder builder = new TopologyBuilder().setApplicationId("X");
         builder.addSource("source1", "topic1");
         builder.addSource("source2", "topic2");
         builder.addSource("source3", "topic3");
@@ -162,7 +162,7 @@ public class StreamThreadTest {
         StreamThread thread = new StreamThread(builder, config, new MockClientSupplier(), applicationId, clientId, processId, new Metrics(), new SystemTime(), new StreamsMetadataState(builder)) {
             @Override
             protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitionsForTask) {
-                ProcessorTopology topology = builder.build("X", id.topicGroupId);
+                ProcessorTopology topology = builder.build(id.topicGroupId);
                 return new TestStreamTask(id, applicationId, partitionsForTask, topology, consumer, producer, restoreConsumer, config, stateDirectory);
             }
         };
@@ -275,7 +275,7 @@ public class StreamThreadTest {
 
             MockTime mockTime = new MockTime();
 
-            TopologyBuilder builder = new TopologyBuilder();
+            TopologyBuilder builder = new TopologyBuilder().setApplicationId("X");
             builder.addSource("source1", "topic1");
 
             StreamThread thread = new StreamThread(builder, config, new MockClientSupplier(), applicationId, clientId,  processId, new Metrics(), mockTime, new StreamsMetadataState(builder)) {
@@ -286,7 +286,7 @@ public class StreamThreadTest {
 
                 @Override
                 protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitionsForTask) {
-                    ProcessorTopology topology = builder.build("X", id.topicGroupId);
+                    ProcessorTopology topology = builder.build(id.topicGroupId);
                     return new TestStreamTask(id, applicationId, partitionsForTask, topology, consumer, producer, restoreConsumer, config, stateDirectory);
                 }
             };
@@ -306,14 +306,14 @@ public class StreamThreadTest {
 
             List<TopicPartition> revokedPartitions;
             List<TopicPartition> assignedPartitions;
-            Map<Integer, StreamTask> prevTasks;
+            Map<TaskId, StreamTask> prevTasks;
 
             //
             // Assign t1p1 and t1p2. This should create task1 & task2
             //
             revokedPartitions = Collections.emptyList();
             assignedPartitions = Arrays.asList(t1p1, t1p2);
-            prevTasks = new HashMap(thread.tasks());
+            prevTasks = new HashMap<>(thread.tasks());
 
             rebalanceListener.onPartitionsRevoked(revokedPartitions);
             rebalanceListener.onPartitionsAssigned(assignedPartitions);
@@ -345,7 +345,7 @@ public class StreamThreadTest {
             //
             revokedPartitions = assignedPartitions;
             assignedPartitions = Collections.emptyList();
-            prevTasks = new HashMap(thread.tasks());
+            prevTasks = new HashMap<>(thread.tasks());
 
             rebalanceListener.onPartitionsRevoked(revokedPartitions);
             rebalanceListener.onPartitionsAssigned(assignedPartitions);
@@ -394,7 +394,7 @@ public class StreamThreadTest {
 
             MockTime mockTime = new MockTime();
 
-            TopologyBuilder builder = new TopologyBuilder();
+            TopologyBuilder builder = new TopologyBuilder().setApplicationId("X");
             builder.addSource("source1", "topic1");
 
             StreamThread thread = new StreamThread(builder, config, new MockClientSupplier(), applicationId, clientId,  processId, new Metrics(), mockTime, new StreamsMetadataState(builder)) {
@@ -405,7 +405,7 @@ public class StreamThreadTest {
 
                 @Override
                 protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitionsForTask) {
-                    ProcessorTopology topology = builder.build("X", id.topicGroupId);
+                    ProcessorTopology topology = builder.build(id.topicGroupId);
                     return new TestStreamTask(id, applicationId, partitionsForTask, topology, consumer, producer, restoreConsumer, config, stateDirectory);
                 }
             };
@@ -465,7 +465,7 @@ public class StreamThreadTest {
 
     @Test
     public void testInjectClients() {
-        TopologyBuilder builder = new TopologyBuilder();
+        TopologyBuilder builder = new TopologyBuilder().setApplicationId("X");
         StreamsConfig config = new StreamsConfig(configProps());
         MockClientSupplier clientSupplier = new MockClientSupplier();
         StreamThread thread = new StreamThread(builder, config, clientSupplier, applicationId,
