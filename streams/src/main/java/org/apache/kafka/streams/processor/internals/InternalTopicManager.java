@@ -23,13 +23,24 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.requests.*;
+
+import org.apache.kafka.common.requests.MetadataRequest;
+import org.apache.kafka.common.requests.RequestSend;
+import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.CreateTopicsRequest;
+import org.apache.kafka.common.requests.DeleteTopicsRequest;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Arrays;
+
 
 public class InternalTopicManager {
 
@@ -39,6 +50,11 @@ public class InternalTopicManager {
     private final KafkaClient kafkaClient;
     StreamsConfig config;
 
+    public InternalTopicManager() {
+        this.config = null;
+        this.kafkaClient = null;
+        this.replicationFactor = 0;
+    }
 
     public InternalTopicManager(StreamsConfig config) {
         this.config = config;
@@ -59,13 +75,13 @@ public class InternalTopicManager {
 
         // Delete the topic if it exists before.
         boolean topicExists = topicExists(topic, brokerNode);
-        if(topicExists) {
+        if (topicExists) {
             deleteTopic(topic, brokerNode);
-            log.debug("Deleted: "+topic);
+            log.debug("Deleted: " + topic);
         }
         // Create a new topic
         createTopic(topic, numPartitions, replicationFactor, compactTopic, brokerNode);
-        log.debug("Created: "+topic);
+        log.debug("Created: " + topic);
     }
 
 
@@ -93,8 +109,8 @@ public class InternalTopicManager {
         ClientRequest clientRequest = new ClientRequest(new SystemTime().milliseconds(), true, send, callback);
         SystemTime systemTime = new SystemTime();
         int iterationCount = 0;
-        while(iterationCount < 5) { // TODO: Set this later
-            if(kafkaClient.ready(brokerNode, systemTime.milliseconds())) {
+        while (iterationCount < 5) { // TODO: Set this later
+            if (kafkaClient.ready(brokerNode, systemTime.milliseconds())) {
                 kafkaClient.send(clientRequest, systemTime.milliseconds());
                 break;
             } else {
@@ -105,12 +121,12 @@ public class InternalTopicManager {
 
         // Process the response
         iterationCount = 0;
-        while(iterationCount < 5) { // TODO: Set this later
+        while (iterationCount < 5) { // TODO: Set this later
             List<ClientResponse> responseList = kafkaClient.poll(config.getLong(StreamsConfig.POLL_MS_CONFIG), new SystemTime().milliseconds());
-            for(ClientResponse clientResponse: responseList) {
-                if(clientResponse.request().request().body().equals(metadataRequest.toStruct())) {
+            for (ClientResponse clientResponse: responseList) {
+                if (clientResponse.request().request().body().equals(metadataRequest.toStruct())) {
                     MetadataResponse metadataResponse = new MetadataResponse(clientResponse.responseBody());
-                    if(metadataResponse.errors().isEmpty()) {
+                    if (metadataResponse.errors().isEmpty()) {
                         return true;
                     }
                 }
@@ -132,7 +148,7 @@ public class InternalTopicManager {
      */
     private void createTopic(String topic, int numPartitions, int replicationFactor, boolean compactTopic, Node brokerNode)  {
 
-        CreateTopicsRequest.TopicDetails topicDetails = new CreateTopicsRequest.TopicDetails(numPartitions, (short)replicationFactor);
+        CreateTopicsRequest.TopicDetails topicDetails = new CreateTopicsRequest.TopicDetails(numPartitions, (short) replicationFactor);
         Map<String, CreateTopicsRequest.TopicDetails> topics = new HashMap<>();
         topics.put(topic, topicDetails);
 
@@ -184,8 +200,8 @@ public class InternalTopicManager {
         ClientRequest clientRequest = new ClientRequest(new SystemTime().milliseconds(), true, send, callback);
         SystemTime systemTime = new SystemTime();
         int iterationCount = 0;
-        while(iterationCount < 5) { // TODO: Set this later
-            if(kafkaClient.ready(brokerNode, systemTime.milliseconds())) {
+        while (iterationCount < 5) { // TODO: Set this later
+            if (kafkaClient.ready(brokerNode, systemTime.milliseconds())) {
                 kafkaClient.send(clientRequest, systemTime.milliseconds());
                 break;
             } else {
