@@ -33,8 +33,8 @@ public class MemoryLRUCacheBytesTest  {
             new KeyValue<>("K3", "V3"),
             new KeyValue<>("K4", "V4"),
             new KeyValue<>("K5", "V5"));
-        MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes("anyName",
-            toInsert.size() * toInsert.get(0).value.getBytes().length);
+        MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(
+                toInsert.size() * toInsert.get(0).value.getBytes().length);
 
         for (int i = 0; i < toInsert.size(); i++) {
             byte[] key = toInsert.get(i).key.getBytes();
@@ -58,8 +58,8 @@ public class MemoryLRUCacheBytesTest  {
             new KeyValue<>("K3", "V3"),
             new KeyValue<>("K4", "V4"),
             new KeyValue<>("K5", "V5"));
-        MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes("anyName",
-            toInsert.size() * toInsert.get(0).value.getBytes().length);
+        MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(
+                toInsert.size() * toInsert.get(0).value.getBytes().length);
 
         for (int i = 0; i < toInsert.size(); i++) {
             byte[] key = toInsert.get(i).key.getBytes();
@@ -84,8 +84,8 @@ public class MemoryLRUCacheBytesTest  {
             new KeyValue<>("K3", "V3"),
             new KeyValue<>("K4", "V4"),
             new KeyValue<>("K5", "V5"));
-        MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes("anyName",
-            toInsert.size() - 1);
+        MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(
+                toInsert.size() - 1);
         cache.addEldestRemovedListener(new MemoryLRUCacheBytes.EldestEntryRemovalListener<byte[],
             MemoryLRUCacheBytesEntry>() {
             @Override

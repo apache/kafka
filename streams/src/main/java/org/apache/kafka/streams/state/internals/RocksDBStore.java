@@ -401,12 +401,17 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     public synchronized KeyValueIterator<K, V> range(K from, K to) {
         validateStoreOpen();
 
+        // query rocksdb
+        RocksDbIterator rocksDbIter = new RocksDBRangeIterator<>(db.newIterator(), serdes, from, to);
+
         // query cache
+        if (cache == null) {
+            return rocksDbIter;
+        }
+
         MemoryLRUCacheBytesIterator cacheIter = cache.range(serdes.rawMergeStoreNameKey(from, name),
             serdes.rawMergeStoreNameKey(to, name));
 
-        // query rocksdb
-        RocksDbIterator rocksDbIter = new RocksDBRangeIterator<>(db.newIterator(), serdes, from, to);
 
         // merge results
         return new MergedSortedCacheRocksDBIterator<>(this, cacheIter, rocksDbIter);
@@ -567,13 +572,18 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     public synchronized KeyValueIterator<K, V> all() {
         validateStoreOpen();
 
-        // query cache
-        MemoryLRUCacheBytesIterator cacheIter = cache.all();
-
         // query rocksdb
         RocksIterator innerIter = db.newIterator();
         innerIter.seekToFirst();
         RocksDbIterator rocksDbIter = new RocksDbIterator<>(innerIter, serdes);
+
+        if (cache == null) {
+            return rocksDbIter;
+        }
+
+        // query cache
+        MemoryLRUCacheBytesIterator cacheIter = cache.all();
+
 
         // merge results
         return new MergedSortedCacheRocksDBIterator<>(this, cacheIter, rocksDbIter);

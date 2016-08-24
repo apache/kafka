@@ -23,7 +23,6 @@ import static org.junit.Assert.fail;
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
@@ -31,27 +30,6 @@ import org.junit.Test;
 
 public abstract class AbstractKeyValueStoreTest {
 
-    private final RecordContext recordContext = new RecordContext() {
-        @Override
-        public long offset() {
-            return 0;
-        }
-
-        @Override
-        public long timestamp() {
-            return 0;
-        }
-
-        @Override
-        public String topic() {
-            return "topic";
-        }
-
-        @Override
-        public int partition() {
-            return 0;
-        }
-    };
 
     protected abstract <K, V> KeyValueStore<K, V> createKeyValueStore(ProcessorContext context,
                                                                       Class<K> keyClass, Class<V> valueClass,

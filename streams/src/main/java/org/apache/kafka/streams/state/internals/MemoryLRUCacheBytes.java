@@ -52,9 +52,9 @@ public class MemoryLRUCacheBytes  {
     protected List<MemoryLRUCacheBytes.EldestEntryRemovalListener<byte[], MemoryLRUCacheBytesEntry>> listeners;
 
 
-    public MemoryLRUCacheBytes(String name, long maxCacheSizeBytes) {
+    public MemoryLRUCacheBytes(long maxCacheSizeBytes) {
         this.maxCacheSizeBytes = maxCacheSizeBytes;
-        this.map = new TreeMap(Bytes.BYTES_LEXICO_COMPARATOR);
+        this.map = new TreeMap<>(Bytes.BYTES_LEXICO_COMPARATOR);
         listeners = new ArrayList<>();
     }
 

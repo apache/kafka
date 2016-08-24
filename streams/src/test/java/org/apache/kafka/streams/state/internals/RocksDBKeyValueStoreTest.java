@@ -23,6 +23,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
@@ -32,6 +33,8 @@ import org.rocksdb.Options;
 
 import java.util.Map;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
@@ -44,11 +47,32 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
             Class<V> valueClass,
             boolean useContextSerdes) {
 
+        return createStore(context, keyClass, valueClass, useContextSerdes, true);
+
+    }
+
+    private <K, V> KeyValueStore<K, V> createStore(final ProcessorContext context, final Class<K> keyClass, final Class<V> valueClass, final boolean useContextSerdes, final boolean enableCaching) {
         StateStoreSupplier supplier;
         if (useContextSerdes) {
-            supplier = Stores.create("my-store").withKeys(context.keySerde()).withValues(context.valueSerde()).persistent().build();
+            final Stores.PersistentKeyValueFactory<?, ?> factory = Stores
+                    .create("my-store")
+                    .withKeys(context.keySerde())
+                    .withValues(context.valueSerde())
+                    .persistent();
+            if (enableCaching) {
+                factory.enableCaching();
+            }
+            supplier = factory.build();
         } else {
-            supplier = Stores.create("my-store").withKeys(keyClass).withValues(valueClass).persistent().build();
+            final Stores.PersistentKeyValueFactory<K, V> factory = Stores
+                    .create("my-store")
+                    .withKeys(keyClass)
+                    .withValues(valueClass)
+                    .persistent();
+            if (enableCaching) {
+                factory.enableCaching();
+            }
+            supplier = factory.build();
         }
 
         ((ForwardingSupplier) supplier).withFlushListener(new CacheFlushListener() {
@@ -61,7 +85,6 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
         KeyValueStore<K, V> store = (KeyValueStore<K, V>) supplier.get();
         store.init(context, store);
         return store;
-
     }
 
     public static class TheRocksDbConfigSetter implements RocksDBConfigSetter {
@@ -80,6 +103,30 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
         driver.setConfig(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TheRocksDbConfigSetter.class);
         createKeyValueStore(driver.context(), Integer.class, String.class, false);
         assertTrue(TheRocksDbConfigSetter.called);
+    }
+
+    @Test
+    public void shouldPerformRangeQueriesWithCachingDisabled() throws Exception {
+        final KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
+        final KeyValueStore<Integer, String> store = createStore(driver.context(), Integer.class, String.class, false, true);
+        store.put(1, "hi");
+        store.put(2, "goodbye");
+        final KeyValueIterator<Integer, String> range = store.range(1, 2);
+        assertEquals("hi", range.next().value);
+        assertEquals("goodbye", range.next().value);
+        assertFalse(range.hasNext());
+    }
+
+    @Test
+    public void shouldPerformAllQueriesWithCachingDisabled() throws Exception {
+        final KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
+        final KeyValueStore<Integer, String> store = createStore(driver.context(), Integer.class, String.class, false, true);
+        store.put(1, "hi");
+        store.put(2, "goodbye");
+        final KeyValueIterator<Integer, String> range = store.all();
+        assertEquals("hi", range.next().value);
+        assertEquals("goodbye", range.next().value);
+        assertFalse(range.hasNext());
     }
 
 }

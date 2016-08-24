@@ -37,17 +37,19 @@ public class RocksDBKeyValueStoreSupplier<K, V> implements StateStoreSupplier, F
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private final Time time;
+    private final boolean enableCaching;
     private CacheFlushListener<K, V> cacheFlushListener;
 
-    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde) {
-        this(name, keySerde, valueSerde, null);
+    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, boolean enableCaching) {
+        this(name, keySerde, valueSerde, null, enableCaching);
     }
 
-    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, Time time) {
+    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, Time time, boolean enableCaching) {
         this.name = name;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.time = time;
+        this.enableCaching = enableCaching;
     }
 
     public String name() {
@@ -55,7 +57,10 @@ public class RocksDBKeyValueStoreSupplier<K, V> implements StateStoreSupplier, F
     }
 
     public StateStore get() {
-        RocksDBStore<K, V> store = new RocksDBStore<>(name, keySerde, valueSerde, cacheFlushListener).enableCaching();
+        RocksDBStore<K, V> store = new RocksDBStore<>(name, keySerde, valueSerde, cacheFlushListener);
+        if (enableCaching) {
+            store.enableCaching();
+        }
 
         return new MeteredKeyValueStore<>(store.enableLogging(), "rocksdb-state", time);
     }
