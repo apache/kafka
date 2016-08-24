@@ -49,7 +49,7 @@ class LogCleanerManagerTest extends JUnitSuite {
     val log: Log = createLog(messageSet.sizeInBytes * 5, LogConfig.Delete)
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
 
-    val readyToDelete = cleanerManager.logsWithSegmentsReadyToBeDeleted().size
+    val readyToDelete = cleanerManager.deletableLogs().size
     assertEquals("should have 0 logs ready to be deleted", 0, readyToDelete)
   }
 
@@ -62,7 +62,7 @@ class LogCleanerManagerTest extends JUnitSuite {
     val log: Log = createLog(messageSet.sizeInBytes * 5, LogConfig.Compact + "," + LogConfig.Delete)
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
 
-    val readyToDelete = cleanerManager.logsWithSegmentsReadyToBeDeleted().size
+    val readyToDelete = cleanerManager.deletableLogs().size
     assertEquals("should have 1 logs ready to be deleted", 1, readyToDelete)
   }
 
@@ -76,7 +76,7 @@ class LogCleanerManagerTest extends JUnitSuite {
     val log: Log = createLog(messageSet.sizeInBytes * 5, LogConfig.Compact)
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
 
-    val readyToDelete = cleanerManager.logsWithSegmentsReadyToBeDeleted().size
+    val readyToDelete = cleanerManager.deletableLogs().size
     assertEquals("should have 1 logs ready to be deleted", 0, readyToDelete)
   }
 
