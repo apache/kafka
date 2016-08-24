@@ -87,7 +87,7 @@ public class MemoryLRUCacheBytesTest  {
         MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes("anyName",
             toInsert.size() - 1);
         cache.addEldestRemovedListener(new MemoryLRUCacheBytes.EldestEntryRemovalListener<byte[],
-            MemoryLRUCacheBytesEntry>() {
+            MemoryLRUCacheBytesEntry<byte[], byte[]>>() {
             @Override
             public void apply(byte[] key, MemoryLRUCacheBytesEntry value) {
 

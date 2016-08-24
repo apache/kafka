@@ -213,7 +213,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                 if (this.cache == null) {
                     throw new ProcessorStateException("Error getting cache in store " + this.name);
                 }
-                this.cache.addEldestRemovedListener(new MemoryLRUCacheBytes.EldestEntryRemovalListener<byte[], MemoryLRUCacheBytesEntry>() {
+                this.cache.addEldestRemovedListener(new MemoryLRUCacheBytes.EldestEntryRemovalListener<byte[],
+                    MemoryLRUCacheBytesEntry<byte[], byte[]>>() {
                     @Override
                     public void apply(byte[] key, MemoryLRUCacheBytesEntry entry) {
                         // flush all the dirty entries to RocksDB if this evicted entry is dirty
