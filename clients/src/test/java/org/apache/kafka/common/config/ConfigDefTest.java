@@ -318,6 +318,38 @@ public class ConfigDefTest {
         }
     }
 
+    @Test
+    public void testExecutablePassword() {
+        Map<String, ConfigValue> expected = new HashMap<>();
+        String errorMessageB = "Invalid value non_integer for configuration a: Not a number of type INT";
+        ConfigValue configA = new ConfigValue("a", null, Collections.emptyList(), Arrays.asList(errorMessageB));
+        expected.put("a", configA);
+
+        ConfigDef def = new ConfigDef().define("a", Type.PASSWORD, Importance.HIGH, "docs");
+        Map<String, String> props = new HashMap<>();
+        props.put(ConfigDef.EXECUTABLE_PASSWORD_ENABLE_CONFIG, "true");
+        props.put("a", "echo password");
+
+        Map<String, Object> configs = def.parse(props);
+        assertEquals(new Password("password"), configs.get("a"));
+    }
+
+    @Test
+    public void testPasswordFromExecFile() {
+        Map<String, ConfigValue> expected = new HashMap<>();
+        String errorMessageB = "Invalid value non_integer for configuration a: Not a number of type INT";
+        ConfigValue configA = new ConfigValue("a", null, Collections.emptyList(), Arrays.asList(errorMessageB));
+        expected.put("a", configA);
+
+        ConfigDef def = new ConfigDef().define("a", Type.PASSWORD, Importance.HIGH, "docs");
+        Map<String, String> props = new HashMap<>();
+        props.put(ConfigDef.EXECUTABLE_PASSWORD_ENABLE_CONFIG, "true");
+        props.put("a", ConfigDefTest.class.getResource("/test-password.sh").getPath());
+
+        Map<String, Object> configs = def.parse(props);
+        assertEquals(new Password("password"), configs.get("a"));
+    }
+
     private static class IntegerRecommender implements ConfigDef.Recommender {
 
         private boolean hasParent;

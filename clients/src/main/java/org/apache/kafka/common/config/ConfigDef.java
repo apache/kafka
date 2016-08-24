@@ -625,7 +625,10 @@ public class ConfigDef {
                     else if (value instanceof String) {
                         String password = trimmed;
                         if (isPasswordExecutable) {
-                            password = execAndGetOutput(trimmed);
+                            // Remove beginning and ending ", which is required for passing a value with space in configs
+                            password = Shell.execCommand(password.replaceAll("^\\\"|\\\"$", "").split(" "));
+                            // Get rid of newline character from the result
+                            password = password.substring(0, password.length() - 1);
                         }
                         return new Password(password);
                     } else
@@ -696,10 +699,6 @@ public class ConfigDef {
                     "executing " + value + ". If the password is not an executable, make sure " +
                     EXECUTABLE_PASSWORD_ENABLE_CONFIG + " is not set to True.");
         }
-    }
-
-    private String execAndGetOutput(String trimmed) throws IOException {
-        return Shell.execCommand(trimmed);
     }
 
     public static String convertToString(Object parsedValue, Type type) {
