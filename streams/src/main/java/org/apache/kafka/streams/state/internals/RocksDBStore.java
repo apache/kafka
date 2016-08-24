@@ -688,9 +688,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                 }
             }
 
-            if (loggingEnabled)
-                changeLogger.logChange(getter);
-
             for (Map.Entry<K, FlushedEntry> flush : toForward.entrySet()) {
                 final FlushedEntry value = flush.getValue();
                 if (sendOldValues) {
@@ -699,6 +696,12 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                     cacheFlushListener.flushed(flush.getKey(), new Change<>(serdes.valueFrom(value.entry.value), null), value.entry, context);
                 }
             }
+
+
+            if (loggingEnabled) {
+                changeLogger.logChange(getter);
+            }
+
         }
     }
 
