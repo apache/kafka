@@ -180,7 +180,7 @@ public class KeyValueStoreTestDriver<K, V> {
     private final MockProcessorContext context;
     private final Map<String, StateStore> storeMap = new HashMap<>();
     private static final long DEFAULT_CACHE_SIZE_BYTES = 1 * 1024 * 1024L;
-    private final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes("cache", DEFAULT_CACHE_SIZE_BYTES);
+    private final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(DEFAULT_CACHE_SIZE_BYTES);
     private final StreamsMetrics metrics = new StreamsMetrics() {
         @Override
         public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {

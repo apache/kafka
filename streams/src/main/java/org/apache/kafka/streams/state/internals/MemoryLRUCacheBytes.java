@@ -40,7 +40,6 @@ public class MemoryLRUCacheBytes implements KeyValueStore<byte[], MemoryLRUCache
     private LRUNode<byte[], byte[]> head = null;
     private LRUNode<byte[], byte[]> tail = null;
     private volatile boolean open = true;
-    private String name;
     protected Map<byte[], LRUNode<byte[], byte[]>> map;
     protected List<MemoryLRUCacheBytes.EldestEntryRemovalListener<byte[], MemoryLRUCacheBytesEntry<byte[], byte[]>>> listeners;
 
@@ -50,13 +49,12 @@ public class MemoryLRUCacheBytes implements KeyValueStore<byte[], MemoryLRUCache
 
     @Override
     public String name() {
-        return this.name;
+        return null;
     }
 
-    public MemoryLRUCacheBytes(String name, long maxCacheSizeBytes) {
-        this.name = name;
+    public MemoryLRUCacheBytes(long maxCacheSizeBytes) {
         this.maxCacheSizeBytes = maxCacheSizeBytes;
-        this.map = new TreeMap(Bytes.BYTES_LEXICO_COMPARATOR);
+        this.map = new TreeMap<>(Bytes.BYTES_LEXICO_COMPARATOR);
         listeners = new ArrayList<>();
     }
 

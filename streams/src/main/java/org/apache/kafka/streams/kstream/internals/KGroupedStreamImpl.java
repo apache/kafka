@@ -161,7 +161,8 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
         return Stores.create(storeName)
             .withKeys(keySerde)
             .withValues(aggValueSerde)
-            .persistent();
+            .persistent()
+            .enableCaching();
 
     }
 

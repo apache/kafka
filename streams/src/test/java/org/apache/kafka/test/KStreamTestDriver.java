@@ -65,7 +65,7 @@ public class KStreamTestDriver {
                              Serde<?> valSerde) {
         this.topology = builder.build("X", null);
         this.stateDir = stateDir;
-        this.cache = new MemoryLRUCacheBytes("cache", DEFAULT_CACHE_SIZE_BYTES);
+        this.cache = new MemoryLRUCacheBytes(DEFAULT_CACHE_SIZE_BYTES);
         this.context = new MockProcessorContext(this, stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
         this.context.setTime(0L);
 

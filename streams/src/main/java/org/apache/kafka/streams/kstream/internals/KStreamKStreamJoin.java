@@ -18,7 +18,6 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -27,7 +26,7 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
 
-class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<Windowed<K>, Change<V1>> {
+class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
     private final String otherWindowName;
     private final long joinBeforeMs;
@@ -45,11 +44,11 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<Windowed<K>,
     }
 
     @Override
-    public Processor<Windowed<K>, Change<V1>> get() {
+    public Processor<K, V1> get() {
         return new KStreamKStreamJoinProcessor();
     }
 
-    private class KStreamKStreamJoinProcessor extends AbstractProcessor<Windowed<K>, Change<V1>> {
+    private class KStreamKStreamJoinProcessor extends AbstractProcessor<K, V1> {
 
         private WindowStore<K, V2> otherWindow;
 
@@ -63,7 +62,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<Windowed<K>,
 
 
         @Override
-        public void process(Windowed<K> key, Change<V1> value) {
+        public void process(K key, V1 value) {
             if (key == null)
                 return;
 
@@ -72,14 +71,14 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<Windowed<K>,
             long timeFrom = Math.max(0L, context().timestamp() - joinBeforeMs);
             long timeTo = Math.max(0L, context().timestamp() + joinAfterMs);
 
-            try (WindowStoreIterator<V2> iter = otherWindow.fetch(key.key(), timeFrom, timeTo)) {
+            try (WindowStoreIterator<V2> iter = otherWindow.fetch(key, timeFrom, timeTo)) {
                 while (iter.hasNext()) {
                     needOuterJoin = false;
-                    context().forward(key.key(), joiner.apply(value.newValue, iter.next().value));
+                    context().forward(key, joiner.apply(value, iter.next().value));
                 }
 
                 if (needOuterJoin)
-                    context().forward(key.key(), joiner.apply(value.newValue, null));
+                    context().forward(key, joiner.apply(value, null));
             }
         }
     }
