@@ -18,8 +18,10 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
-
+import org.apache.kafka.streams.state.KeyValueStore;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.TreeMap;
@@ -27,30 +29,28 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * An in-memory LRU cache store based on HashSet and HashMap. XXX: the same as MemoryLRUCache for now.
- *
- * Note that the use of array-typed keys is discouraged because they result in incorrect ordering behavior.
- * If you intend to work on byte arrays as key, for example, you may want to wrap them with the {@code Bytes} class,
- * i.e. use {@code RocksDBStore<Bytes, ...>} rather than {@code RocksDBStore<byte[], ...>}.
+ * An in-memory LRU cache store similar to {@link MemoryLRUCache} but byte-based, not
+ * record based
  *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
-public class MemoryLRUCacheBytes  {
+public class MemoryLRUCacheBytes implements KeyValueStore<byte[], MemoryLRUCacheBytesEntry<byte[], byte[]>> {
     private long maxCacheSizeBytes;
     private long currentSizeBytes = 0;
-    private LRUNode head = null;
-    private LRUNode tail = null;
+    private LRUNode<byte[], byte[]> head = null;
+    private LRUNode<byte[], byte[]> tail = null;
+    private volatile boolean open = true;
+    protected Map<byte[], LRUNode<byte[], byte[]>> map;
+    protected List<MemoryLRUCacheBytes.EldestEntryRemovalListener<byte[], MemoryLRUCacheBytesEntry<byte[], byte[]>>> listeners;
 
     public interface EldestEntryRemovalListener<K, V> {
-
         void apply(K key, V value);
     }
 
-    protected Map<byte[], LRUNode> map;
-
-
-    protected List<MemoryLRUCacheBytes.EldestEntryRemovalListener<byte[], MemoryLRUCacheBytesEntry>> listeners;
-
+    @Override
+    public String name() {
+        return null;
+    }
 
     public MemoryLRUCacheBytes(long maxCacheSizeBytes) {
         this.maxCacheSizeBytes = maxCacheSizeBytes;
@@ -58,11 +58,29 @@ public class MemoryLRUCacheBytes  {
         listeners = new ArrayList<>();
     }
 
-    public void addEldestRemovedListener(MemoryLRUCacheBytes.EldestEntryRemovalListener<byte[], MemoryLRUCacheBytesEntry> listener) {
+    @Override
+    @SuppressWarnings("unchecked")
+    public void init(ProcessorContext context, StateStore root) {
+        // do nothing
+    }
+
+    /**
+     * Add a listener that is called each time an entry is evicted from cache
+     * @param listener
+     */
+    public void addEldestRemovedListener(MemoryLRUCacheBytes.EldestEntryRemovalListener<byte[],
+        MemoryLRUCacheBytesEntry<byte[], byte[]>> listener) {
         this.listeners.add(listener);
     }
 
-    public synchronized MemoryLRUCacheBytesEntry<byte[], byte[]> get(byte[] key) {
+    private void callListeners(MemoryLRUCacheBytesEntry entry) {
+        for (MemoryLRUCacheBytes.EldestEntryRemovalListener listener : listeners) {
+            listener.apply(entry.key, entry);
+        }
+    }
+
+    @Override
+    public synchronized MemoryLRUCacheBytesEntry get(byte[] key) {
         MemoryLRUCacheBytesEntry entry = null;
         // get element
         LRUNode node = this.map.get(key);
@@ -74,14 +92,9 @@ public class MemoryLRUCacheBytes  {
         return entry;
     }
 
-    private void callListeners(MemoryLRUCacheBytesEntry entry) {
-        for (MemoryLRUCacheBytes.EldestEntryRemovalListener listener : listeners) {
-            listener.apply(entry.key, entry);
-        }
-    }
-
     /**
      * Check if we have enough space in cache to accept new element
+     *
      * @param newElement new element to be insterted
      */
     private void maybeEvict(LRUNode newElement) {
@@ -93,6 +106,7 @@ public class MemoryLRUCacheBytes  {
         }
     }
 
+    @Override
     public synchronized void put(byte[] key, MemoryLRUCacheBytesEntry<byte[], byte[]> value) {
         if (this.map.containsKey(key)) {
             LRUNode node = this.map.get(key);
@@ -101,13 +115,15 @@ public class MemoryLRUCacheBytes  {
             updateLRU(node);
 
         } else {
-            LRUNode node = new LRUNode(value);
+            LRUNode<byte[], byte[]> node = new LRUNode(value);
             // check if we need to evict anything
             maybeEvict(node);
             // put element
             putHead(node);
             this.map.put(key, node);
         }
+
+        // TODO: memory size is more than the value size, it should include overheads
         currentSizeBytes += value.size();
     }
 
@@ -144,6 +160,36 @@ public class MemoryLRUCacheBytes  {
         return currentSizeBytes;
     }
 
+    @Override
+    public long approximateNumEntries() {
+        return size();
+    }
+
+    @Override
+    public boolean persistent() {
+        return false;
+    }
+
+    @Override
+    public boolean isOpen() {
+        return open;
+    }
+
+    @Override
+    public void enableSendingOldValues() {
+        // do nothing
+    }
+
+    @Override
+    public void flush() {
+        // do nothing
+    }
+
+    @Override
+    public void close() {
+        open = false;
+    }
+
 
     private void putHead(LRUNode node) {
         node.next = head;
@@ -156,6 +202,7 @@ public class MemoryLRUCacheBytes  {
             tail = head;
         }
     }
+
     private void remove(LRUNode node) {
         if (node.previous != null) {
             node.previous.next = node.next;
@@ -171,7 +218,6 @@ public class MemoryLRUCacheBytes  {
 
     /**
      * Update the LRU position of this node to be the head of list
-     * @param node
      */
     private void updateLRU(LRUNode node) {
         remove(node);
@@ -189,41 +235,43 @@ public class MemoryLRUCacheBytes  {
 
 
     /**
-     * A simple wrapper class to implement a doubly-linked list around
-     * MemoryLRUCacheBytesEntry
+     * A simple wrapper class to implement a doubly-linked list around MemoryLRUCacheBytesEntry
      */
-    protected class LRUNode {
-        private MemoryLRUCacheBytesEntry<byte[], byte[]> entry;
+    protected class LRUNode<K, V> {
+        private MemoryLRUCacheBytesEntry<K, V> entry;
         private LRUNode previous;
         private LRUNode next;
-        LRUNode(MemoryLRUCacheBytesEntry<byte[], byte[]> entry) {
+
+        LRUNode(MemoryLRUCacheBytesEntry<K, V> entry) {
             this.entry = entry;
         }
 
-        public MemoryLRUCacheBytesEntry<byte[], byte[]> entry() {
+        public MemoryLRUCacheBytesEntry<K, V> entry() {
             return entry;
         }
 
-        public void update(MemoryLRUCacheBytesEntry<byte[], byte[]> entry) {
+        public void update(MemoryLRUCacheBytesEntry<K, V> entry) {
             this.entry = entry;
         }
     }
 
 
-    public MemoryLRUCacheBytesIterator range(byte[] from, byte[] to) {
+    @Override
+    public MemoryLRUCacheBytesIterator<byte[], MemoryLRUCacheBytesEntry<byte[], byte[]>> range(byte[] from, byte[] to) {
         return new MemoryLRUCacheBytesIterator(((TreeMap) map).navigableKeySet().subSet(from, true, to, true).iterator(), map);
     }
 
-    public MemoryLRUCacheBytesIterator all() {
+    public MemoryLRUCacheBytesIterator<byte[], MemoryLRUCacheBytesEntry<byte[], byte[]>> all() {
         return new MemoryLRUCacheBytesIterator(map.keySet().iterator(), map);
     }
 
-    public static class MemoryLRUCacheBytesIterator implements KeyValueIterator<byte[], byte[]> {
-        private final Iterator<byte[]> keys;
-        private final Map<byte[], LRUNode> entries;
-        private byte[] lastKey;
 
-        public MemoryLRUCacheBytesIterator(Iterator<byte[]> keys, Map<byte[], LRUNode> entries) {
+    public static class MemoryLRUCacheBytesIterator<K, V> implements KeyValueIterator<K, V> {
+        private final Iterator<K> keys;
+        private final Map<K, LRUNode<K, V>> entries;
+        private K lastKey;
+
+        public MemoryLRUCacheBytesIterator(Iterator<K> keys, Map<K, LRUNode<K, V>> entries) {
             this.keys = keys;
             this.entries = entries;
         }
@@ -234,7 +282,7 @@ public class MemoryLRUCacheBytes  {
         }
 
         @Override
-        public KeyValue<byte[], byte[]> next() {
+        public KeyValue<K, V> next() {
             lastKey = keys.next();
             return new KeyValue<>(lastKey, entries.get(lastKey).entry().value);
         }
