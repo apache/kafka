@@ -17,39 +17,41 @@
 package org.apache.kafka.streams.integration;
 
 
-import org.I0Itec.zkclient.ZkClient;
-import org.I0Itec.zkclient.ZkConnection;
+import org.apache.kafka.clients.ClientRequest;
+import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.requests.MetadataRequest;
+import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.RequestSend;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.integration.utils.EmbeddedSingleNodeKafkaCluster;
-import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.integration.utils.EmbeddedSingleNodeKafkaCluster;
+import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
+import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.TestUtils;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
-import static org.junit.Assert.assertEquals;
+
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
 
-import kafka.admin.AdminUtils;
-import kafka.log.LogConfig;
-import kafka.utils.ZKStringSerializer$;
-import kafka.utils.ZkUtils;
-import scala.Tuple2;
-import scala.collection.Iterator;
-import scala.collection.Map;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Tests related to internal topics in streams
@@ -59,8 +61,6 @@ public class InternalTopicIntegrationTest {
     public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster();
     private static final String DEFAULT_INPUT_TOPIC = "inputTopic";
     private static final String DEFAULT_OUTPUT_TOPIC = "outputTopic";
-    private static final int DEFAULT_ZK_SESSION_TIMEOUT_MS = 10 * 1000;
-    private static final int DEFAULT_ZK_CONNECTION_TIMEOUT_MS = 8 * 1000;
 
     @BeforeClass
     public static void startKafkaCluster() throws Exception {
@@ -69,42 +69,56 @@ public class InternalTopicIntegrationTest {
     }
 
     /**
-     * Validates that any state changelog topics are compacted
-     * @return true if topics have a valid config, false otherwise
+     * Check if the given topic exists.
+     *
+     * @param topic
+     * @param config
+     * @return
      */
-    private boolean isUsingCompactionForStateChangelogTopics() {
-        boolean valid = true;
+    private boolean topicExists(String topic, StreamsConfig config) {
+        KafkaClient kafkaClient = new DefaultKafkaClientSupplier().getKafkaClient(config);
+        Node brokerNode = kafkaClient.leastLoadedNode(new SystemTime().milliseconds());
+        MetadataRequest metadataRequest = new MetadataRequest(Arrays.asList(topic));
+        String brokerId = Integer.toString(brokerNode.id());
+        RequestSend send = new RequestSend(brokerId,
+                kafkaClient.nextRequestHeader(ApiKeys.METADATA),
+                metadataRequest.toStruct());
 
-        // Note: You must initialize the ZkClient with ZKStringSerializer.  If you don't, then
-        // createTopic() will only seem to work (it will return without error).  The topic will exist in
-        // only ZooKeeper and will be returned when listing topics, but Kafka itself does not create the
-        // topic.
-        ZkClient zkClient = new ZkClient(
-            CLUSTER.zKConnectString(),
-            DEFAULT_ZK_SESSION_TIMEOUT_MS,
-            DEFAULT_ZK_CONNECTION_TIMEOUT_MS,
-            ZKStringSerializer$.MODULE$);
-        boolean isSecure = false;
-        ZkUtils zkUtils = new ZkUtils(zkClient, new ZkConnection(CLUSTER.zKConnectString()), isSecure);
+        RequestCompletionHandler callback = new RequestCompletionHandler() {
+            public void onComplete(ClientResponse response) {
 
-        Map<String, Properties> topicConfigs = AdminUtils.fetchAllTopicConfigs(zkUtils);
-        Iterator it = topicConfigs.iterator();
-        while (it.hasNext()) {
-            Tuple2<String, Properties> topicConfig = (Tuple2<String, Properties>) it.next();
-            String topic = topicConfig._1;
-            Properties prop = topicConfig._2;
+            }
+        };
 
-            // state changelogs should be compacted
-            if (topic.endsWith(ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX)) {
-                if (!prop.containsKey(LogConfig.CleanupPolicyProp()) ||
-                    !prop.getProperty(LogConfig.CleanupPolicyProp()).equals(LogConfig.Compact())) {
-                    valid = false;
-                    break;
-                }
+        // Send the async request to check the topic existance
+        ClientRequest clientRequest = new ClientRequest(new SystemTime().milliseconds(), true, send, callback);
+        SystemTime systemTime = new SystemTime();
+        int iterationCount = 0;
+        while (iterationCount < 5) { // TODO: Set this later
+            if (kafkaClient.ready(brokerNode, systemTime.milliseconds())) {
+                kafkaClient.send(clientRequest, systemTime.milliseconds());
+                break;
+            } else {
+                // If the client is not ready call poll to make the client ready
+                kafkaClient.poll(config.getLong(StreamsConfig.POLL_MS_CONFIG), new SystemTime().milliseconds());
             }
         }
-        zkClient.close();
-        return valid;
+
+        // Process the response
+        iterationCount = 0;
+        while (iterationCount < 5) { // TODO: Set this later
+            List<ClientResponse> responseList = kafkaClient.poll(config.getLong(StreamsConfig.POLL_MS_CONFIG), new SystemTime().milliseconds());
+            for (ClientResponse clientResponse: responseList) {
+                if (clientResponse.request().request().body().equals(metadataRequest.toStruct())) {
+                    MetadataResponse metadataResponse = new MetadataResponse(clientResponse.responseBody());
+                    if (metadataResponse.errors().isEmpty()) {
+                        return true;
+                    }
+                }
+            }
+            iterationCount++;
+        }
+        return false;
     }
 
     @Test
@@ -160,6 +174,9 @@ public class InternalTopicIntegrationTest {
         // Step 3: Verify the state changelog topics are compact
         //
         streams.close();
-        assertEquals(isUsingCompactionForStateChangelogTopics(), true);
+
+        // Check if the topics were created correctly.
+        boolean topicExists = topicExists("compact-topics-integration-test-Counts-changelog", new StreamsConfig(streamsConfiguration));
+        assertTrue(topicExists);
     }
 }
