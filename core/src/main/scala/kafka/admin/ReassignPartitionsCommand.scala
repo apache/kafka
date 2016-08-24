@@ -155,7 +155,7 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   def executeAssignment(zkUtils: ZkUtils, reassignmentJsonString: String, throttle: Long = -1) {
-    val partitionsToBeReassigned = parseAndValidate(reassignmentJsonString)
+    val partitionsToBeReassigned = parseAndValidate(zkUtils, reassignmentJsonString)
     val reassignPartitionsCommand = new ReassignPartitionsCommand(zkUtils, partitionsToBeReassigned.toMap)
 
     // If there is an existing rebalance running, attempt to change its throttle
@@ -181,7 +181,7 @@ object ReassignPartitionsCommand extends Logging {
       .format(ZkUtils.formatAsReassignmentJson(currentPartitionReplicaAssignment)))
   }
 
-  def parseAndValidate(reassignmentJsonString: String): scala.Seq[(TopicAndPartition, scala.Seq[Int])] = {
+  def parseAndValidate(zkUtils: ZkUtils, reassignmentJsonString: String): scala.Seq[(TopicAndPartition, scala.Seq[Int])] = {
     val partitionsToBeReassigned = ZkUtils.parsePartitionReassignmentDataWithoutDedup(reassignmentJsonString)
     if (partitionsToBeReassigned.isEmpty)
       throw new AdminCommandFailedException("Partition reassignment data file is empty")
@@ -196,6 +196,22 @@ object ReassignPartitionsCommand extends Logging {
         .map { case (tp, duplicateReplicas) => "%s contains multiple entries for %s".format(tp, duplicateReplicas.mkString(",")) }
         .mkString(". ")
       throw new AdminCommandFailedException("Partition replica lists may not contain duplicate entries: %s".format(duplicatesMsg))
+    }
+    // prevent different replication factor among partitions
+    partitionsToBeReassigned.groupBy(_._1.topic).foreach {
+      case (topic, replicasAssignment) => {
+        if (replicasAssignment.map(_._2.size).toSet.size != 1)
+          throw new AdminCommandFailedException("All partitions should have the same number of replicas")
+        val existingReplicaAssignment = zkUtils.getReplicaAssignmentForTopics(List(topic))
+        if (!existingReplicaAssignment.isEmpty && existingReplicaAssignment.size != replicasAssignment.size)
+          replicasAssignment.foreach {
+            case (topicPartition, brokerList) => {
+              if (existingReplicaAssignment.contains(topicPartition)
+                && brokerList.size != existingReplicaAssignment(topicPartition).size)
+                throw new AdminCommandFailedException("The replication factor of topic partition %s is different from existing ones".format(topicPartition))
+            }
+          }
+      }
     }
     partitionsToBeReassigned
   }
