@@ -26,7 +26,7 @@ buildscript {
     // For Apache Rat plugin to ignore non-Git files
     classpath "org.ajoberstar:grgit:1.5.0"
     classpath 'com.github.ben-manes:gradle-versions-plugin:0.12.0'
-    classpath 'org.scoverage:gradle-scoverage:2.0.1'
+    classpath 'org.scoverage:gradle-scoverage:2.1.0'
   }
 }
 
@@ -68,7 +68,7 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "2.14.1"
+  gradleVersion = "3.0"
   buildVersionFileName = "kafka-version.properties"
 
   userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
@@ -236,8 +236,6 @@ subprojects {
   }
 
   tasks.withType(ScalaCompile) {
-    scalaCompileOptions.useAnt = false
-
     scalaCompileOptions.additionalParameters = [
       "-deprecation",
       "-unchecked",
@@ -695,7 +693,12 @@ project(':streams') {
       exclude module: 'jline'
       exclude module: 'netty'
     }
-    compile libs.jacksonDatabind // this dependency should be removed after KIP-4
+
+    // zkclient has a hard log4j dependency, we set it here as well to avoid copying an older
+    // version to the binary package; the following two dependencies should be removed after KIP-4
+    // (along with the zkclient dependency)
+    compile libs.log4j
+    compile libs.jacksonDatabind
 
     testCompile project(':clients').sourceSets.test.output
     testCompile project(':core')
@@ -743,6 +746,7 @@ project(':streams:examples') {
   dependencies {
     compile project(':streams')
     compile project(':connect:json')  // this dependency should be removed after we unify data API
+    compile libs.slf4jlog4j           // this dependency should be removed after KIP-4
   }
 
   javadoc {

@@ -412,13 +412,16 @@ class WorkerSinkTask extends WorkerTask {
         if (offsets.isEmpty()) {
             return;
         }
-        for (TopicPartition tp: offsets.keySet()) {
-            Long offset = offsets.get(tp);
+        for (Map.Entry<TopicPartition, Long> entry: offsets.entrySet()) {
+            TopicPartition tp = entry.getKey();
+            Long offset = entry.getValue();
             if (offset != null) {
                 log.trace("Rewind {} to offset {}.", tp, offset);
                 consumer.seek(tp, offset);
                 lastCommittedOffsets.put(tp, new OffsetAndMetadata(offset));
                 currentOffsets.put(tp, new OffsetAndMetadata(offset));
+            } else {
+                log.warn("Cannot rewind {} to null offset.", tp);
             }
         }
         context.clearOffsets();
@@ -462,6 +465,8 @@ class WorkerSinkTask extends WorkerTask {
             if (rebalanceException == null || rebalanceException instanceof WakeupException) {
                 try {
                     openPartitions(partitions);
+                    // Rewind should be applied only if openPartitions succeeds.
+                    rewind();
                 } catch (RuntimeException e) {
                     // The consumer swallows exceptions raised in the rebalance listener, so we need to store
                     // exceptions and rethrow when poll() returns.

@@ -643,8 +643,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       case e: TopicExistsException => // let it go, possibly another broker created this topic
         new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, topic, Topic.isInternal(topic),
           java.util.Collections.emptyList())
-      case itex: InvalidTopicException =>
-        new MetadataResponse.TopicMetadata(Errors.INVALID_TOPIC_EXCEPTION, topic, Topic.isInternal(topic),
+      case ex: Throwable  => // Catch all to prevent unhandled errors
+        new MetadataResponse.TopicMetadata(Errors.forException(ex), topic, Topic.isInternal(topic),
           java.util.Collections.emptyList())
     }
   }

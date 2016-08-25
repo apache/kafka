@@ -48,6 +48,7 @@ public class KStreamBranchTest {
     @Test
     public void testKStreamBranch() {
         KStreamBuilder builder = new KStreamBuilder();
+        builder.setApplicationId("X");
 
         Predicate<Integer, String> isEven = new Predicate<Integer, String>() {
             @Override

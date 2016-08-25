@@ -221,13 +221,18 @@ public class AbstractConfig {
         List<T> objects = new ArrayList<T>();
         if (klasses == null)
             return objects;
-        for (String klass : klasses) {
+        for (Object klass : klasses) {
             Object o;
-            try {
-                o = Utils.newInstance(klass, t);
-            } catch (ClassNotFoundException e) {
-                throw new KafkaException(klass + " ClassNotFoundException exception occured", e);
-            }
+            if (klass instanceof String) {
+                try {
+                    o = Utils.newInstance((String) klass, t);
+                } catch (ClassNotFoundException e) {
+                    throw new KafkaException(klass + " ClassNotFoundException exception occured", e);
+                }
+            } else if (klass instanceof Class<?>) {
+                o = Utils.newInstance((Class<?>) klass);
+            } else
+                throw new KafkaException("List contains element of type " + klass.getClass() + ", expected String or Class");
             if (!t.isInstance(o))
                 throw new KafkaException(klass + " is not an instance of " + t.getName());
             if (o instanceof Configurable)
