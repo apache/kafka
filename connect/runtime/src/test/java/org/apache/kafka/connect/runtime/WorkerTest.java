@@ -43,6 +43,7 @@ import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.internal.matchers.ThrowableCauseMatcher;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
 import org.powermock.core.classloader.annotations.PowerMockIgnore;
@@ -57,6 +58,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
@@ -144,6 +146,29 @@ public class WorkerTest extends ThreadedTest {
         worker.stop();
 
         PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testStartConnectorFailure() throws Exception {
+        expectStartStorage();
+
+        worker = new Worker(WORKER_ID, new MockTime(), config, offsetBackingStore);
+        worker.start();
+
+        Map<String, String> props = new HashMap<>();
+        props.put(SinkConnectorConfig.TOPICS_CONFIG, "foo,bar");
+        props.put(ConnectorConfig.TASKS_MAX_CONFIG, "1");
+        props.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
+        props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, "java.util.HashMap"); // Bad connector class name
+
+        connectorStatusListener.onFailure(EasyMock.eq(CONNECTOR_ID), EasyMock.<Throwable>anyObject());
+        EasyMock.expectLastCall();
+
+        assertFalse(worker.startConnector(CONNECTOR_ID, props, PowerMock.createMock(ConnectorContext.class), connectorStatusListener, TargetState.STARTED));
+
+        assertEquals(Collections.emptySet(), worker.connectorNames());
+
+        assertFalse(worker.stopConnector(CONNECTOR_ID));
     }
 
     @Test
@@ -391,6 +416,26 @@ public class WorkerTest extends ThreadedTest {
     }
 
     @Test
+    public void testStartTaskFailure() throws Exception {
+        expectStartStorage();
+
+        worker = new Worker(WORKER_ID, new MockTime(), config, offsetBackingStore);
+        worker.start();
+
+        Map<String, String> origProps = new HashMap<>();
+        origProps.put(TaskConfig.TASK_CLASS_CONFIG, "missing.From.This.Workers.Classpath");
+
+        assertFalse(worker.startTask(TASK_ID, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED));
+
+        taskStatusListener.onFailure(EasyMock.eq(TASK_ID), EasyMock.<Throwable>anyObject());
+        EasyMock.expectLastCall();
+
+        assertEquals(Collections.emptySet(), worker.taskIds());
+
+        assertFalse(worker.stopAndAwaitTask(TASK_ID));
+    }
+
+    @Test
     public void testStopInvalidTask() {
         expectStartStorage();
 
@@ -399,7 +444,7 @@ public class WorkerTest extends ThreadedTest {
         worker = new Worker(WORKER_ID, new MockTime(), config, offsetBackingStore);
         worker.start();
 
-        worker.stopAndAwaitTask(TASK_ID);
+        assertFalse(worker.stopAndAwaitTask(TASK_ID));
     }
 
     @Test
