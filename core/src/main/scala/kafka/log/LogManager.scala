@@ -187,10 +187,10 @@ class LogManager(val logDirs: Array[File],
     /* Schedule the cleanup task to delete old logs */
     if(scheduler != null) {
       info("Starting log cleanup with a period of %d ms.".format(retentionCheckMs))
-      scheduler.schedule("kafka-log-retention", 
-                         cleanupLogs, 
-                         delay = InitialTaskDelayMs, 
-                         period = retentionCheckMs, 
+      scheduler.schedule("kafka-log-retention",
+                         cleanupLogs,
+                         delay = InitialTaskDelayMs,
+                         period = retentionCheckMs,
                          TimeUnit.MILLISECONDS)
       info("Starting log flusher with a default period of %d ms.".format(flushCheckMs))
       scheduler.schedule("kafka-log-flusher", 
@@ -417,36 +417,8 @@ class LogManager(val logDirs: Array[File],
   }
 
   /**
-   * Runs through the log removing segments older than a certain age
-   */
-  private def cleanupExpiredSegments(log: Log): Int = {
-    if (log.config.retentionMs < 0)
-      return 0
-    val startMs = time.milliseconds
-    log.deleteOldSegments(startMs - _.largestTimestamp > log.config.retentionMs)
-  }
-
-  /**
-   *  Runs through the log removing segments until the size of the log
-   *  is at least logRetentionSize bytes in size
-   */
-  private def cleanupSegmentsToMaintainSize(log: Log): Int = {
-    if(log.config.retentionSize < 0 || log.size < log.config.retentionSize)
-      return 0
-    var diff = log.size - log.config.retentionSize
-    def shouldDelete(segment: LogSegment) = {
-      if(diff - segment.size >= 0) {
-        diff -= segment.size
-        true
-      } else {
-        false
-      }
-    }
-    log.deleteOldSegments(shouldDelete)
-  }
-
-  /**
    * Delete any eligible logs. Return the number of segments deleted.
+   * Only consider logs that are not compacted.
    */
   def cleanupLogs() {
     debug("Beginning log cleanup...")
@@ -454,7 +426,7 @@ class LogManager(val logDirs: Array[File],
     val startMs = time.milliseconds
     for(log <- allLogs; if !log.config.compact) {
       debug("Garbage collecting '" + log.name + "'")
-      total += cleanupExpiredSegments(log) + cleanupSegmentsToMaintainSize(log)
+      total += log.deleteOldSegments()
     }
     debug("Log cleanup completed. " + total + " files deleted in " +
                   (time.milliseconds - startMs) / 1000 + " seconds")

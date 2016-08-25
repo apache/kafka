@@ -28,6 +28,7 @@ import kafka.message._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 
+import scala.Iterable
 import scala.collection._
 
 /**
@@ -226,10 +227,9 @@ class LogCleaner(val config: CleanerConfig,
      * Clean a log if there is a dirty log available, otherwise sleep for a bit
      */
     private def cleanOrSleep() {
-      cleanerManager.grabFilthiestLog() match {
+      val cleaned = cleanerManager.grabFilthiestCompactedLog() match {
         case None =>
-          // there are no cleanable logs, sleep a while
-          backOffWaitLatch.await(config.backOffMs, TimeUnit.MILLISECONDS)
+          false
         case Some(cleanable) =>
           // there's a log, clean it
           var endOffset = cleanable.firstDirtyOffset
@@ -241,7 +241,19 @@ class LogCleaner(val config: CleanerConfig,
           } finally {
             cleanerManager.doneCleaning(cleanable.topicPartition, cleanable.log.dir.getParentFile, endOffset)
           }
+          true
       }
+      val deletable: Iterable[(TopicAndPartition, Log)] = cleanerManager.deletableLogs()
+      deletable.foreach{
+        case (topicPartition, log) =>
+          try {
+            log.deleteOldSegments()
+          } finally {
+            cleanerManager.doneDeleting(topicPartition)
+          }
+      }
+      if (!cleaned)
+        backOffWaitLatch.await(config.backOffMs, TimeUnit.MILLISECONDS)
     }
     
     /**
