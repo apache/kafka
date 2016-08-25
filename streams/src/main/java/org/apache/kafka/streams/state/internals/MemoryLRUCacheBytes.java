@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
- *
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,9 +18,14 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 
-import java.util.ArrayList;
-import java.util.Arrays;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -29,51 +34,57 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-import static org.apache.kafka.streams.state.internals.CachingKeyValueStore.originalKey;
-
 /**
  * An in-memory LRU cache store similar to {@link MemoryLRUCache} but byte-based, not
  * record based
  *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
-public class MemoryLRUCacheBytes  {
+public class MemoryLRUCacheBytes {
     private final long maxCacheSizeBytes;
     private long currentSizeBytes = 0;
     private LRUNode head = null;
     private LRUNode tail = null;
     private final TreeMap<Bytes, LRUNode> map;
-    private final List<MemoryLRUCacheBytes.EldestEntryRemovalListener<byte[], MemoryLRUCacheBytesEntry>> listeners;
+    private final Map<String, MemoryLRUCacheBytes.EldestEntryRemovalListener> listeners;
 
-    public interface EldestEntryRemovalListener<K, V> {
-        void apply(K key, V value);
+    public interface EldestEntryRemovalListener {
+        void apply(byte[] key, MemoryLRUCacheBytesEntry value);
     }
 
     public MemoryLRUCacheBytes(long maxCacheSizeBytes) {
         this.maxCacheSizeBytes = maxCacheSizeBytes;
         this.map = new TreeMap<>();
-        listeners = new ArrayList<>();
+        listeners = new HashMap<>();
     }
 
     /**
      * Add a listener that is called each time an entry is evicted from cache
+     * @param namespace
      * @param listener
      */
-    public void addEldestRemovedListener(MemoryLRUCacheBytes.EldestEntryRemovalListener<byte[],
-        MemoryLRUCacheBytesEntry> listener) {
-        this.listeners.add(listener);
+    public void addEldestRemovedListener(final String namespace, EldestEntryRemovalListener listener) {
+        this.listeners.put(namespace, listener);
     }
 
-    private void callListeners(MemoryLRUCacheBytesEntry entry) {
-        for (MemoryLRUCacheBytes.EldestEntryRemovalListener listener : listeners) {
-            listener.apply(entry.key, entry);
+    private void callListener(final Bytes key, MemoryLRUCacheBytesEntry entry) {
+        try {
+            final DataInputStream dataInputStream = new DataInputStream(new ByteArrayInputStream(key.get()));
+            final String namespace = namespaceFromKey(dataInputStream);
+            final EldestEntryRemovalListener listener = listeners.get(namespace);
+            if (listener == null) {
+                return;
+            }
+            listener.apply(remainingBytes(dataInputStream), entry);
+        } catch (IOException e) {
+            throw new ProcessorStateException(e);
         }
     }
 
-    public synchronized MemoryLRUCacheBytesEntry get(byte[] key) {
+    public synchronized MemoryLRUCacheBytesEntry get(final String namespace, byte[] key) {
         MemoryLRUCacheBytesEntry entry = null;
         // get element
-        LRUNode node = this.map.get(Bytes.wrap(key));
+        LRUNode node = this.map.get(cacheKey(namespace, key));
         if (node != null) {
             entry = node.entry();
             updateLRU(node);
@@ -88,58 +99,61 @@ public class MemoryLRUCacheBytes  {
      * @param newElement new element to be insterted
      */
     private void maybeEvict(LRUNode newElement) {
-        while (sizeBytes() + newElement.entry().size() > maxCacheSizeBytes) {
-            final Bytes wrappedKey = Bytes.wrap(tail.entry().key);
-            LRUNode toRemove = this.map.get(wrappedKey);
+        while (sizeBytes() + newElement.size() > maxCacheSizeBytes) {
+            final Bytes key = tail.key;
+            LRUNode toRemove = this.map.get(key);
+            currentSizeBytes -= toRemove.size();
             remove(tail);
-            currentSizeBytes -= toRemove.entry().size();
-            callListeners(toRemove.entry());
-            this.map.remove(wrappedKey);
+            callListener(toRemove.key, toRemove.entry());
+            this.map.remove(key);
         }
     }
 
-    public synchronized void put(byte[] key, MemoryLRUCacheBytesEntry value) {
-        final Bytes wrappedKey = Bytes.wrap(key);
-        if (this.map.containsKey(wrappedKey)) {
-            LRUNode node = this.map.get(wrappedKey);
-            currentSizeBytes -= node.entry().size();
+
+    public synchronized void put(final String namespace, byte[] key, MemoryLRUCacheBytesEntry value) {
+        final Bytes cacheKey = cacheKey(namespace, key);
+        LRUNode node;
+        if (this.map.containsKey(cacheKey)) {
+            node = this.map.get(cacheKey);
+            currentSizeBytes -= node.size();
             node.update(value);
             updateLRU(node);
 
         } else {
-            LRUNode node = new LRUNode(value);
+            node = new LRUNode(cacheKey, value);
             // check if we need to evict anything
             maybeEvict(node);
             // put element
             putHead(node);
-            this.map.put(wrappedKey, node);
+            this.map.put(cacheKey, node);
         }
 
-        currentSizeBytes += value.size();
+        currentSizeBytes += node.size();
     }
 
-    public synchronized MemoryLRUCacheBytesEntry putIfAbsent(byte[] key, MemoryLRUCacheBytesEntry value) {
-        MemoryLRUCacheBytesEntry originalValue = get(key);
+    public synchronized MemoryLRUCacheBytesEntry putIfAbsent(final String namespace, byte[] key, MemoryLRUCacheBytesEntry value) {
+        MemoryLRUCacheBytesEntry originalValue = get(namespace, key);
         if (originalValue == null) {
-            put(key, value);
+            put(namespace, key, value);
         }
         return originalValue;
     }
 
-    public synchronized void putAll(List<KeyValue<byte[], MemoryLRUCacheBytesEntry>> entries) {
+    public synchronized void putAll(final String namespace, List<KeyValue<byte[], MemoryLRUCacheBytesEntry>> entries) {
         for (KeyValue<byte[], MemoryLRUCacheBytesEntry> entry : entries) {
-            put(entry.key, entry.value);
+            put(namespace, entry.key, entry.value);
         }
     }
 
-    public synchronized MemoryLRUCacheBytesEntry delete(byte[] key) {
-        LRUNode node = this.map.get(Bytes.wrap(key));
+    public synchronized MemoryLRUCacheBytesEntry delete(final String namespace, byte[] key) {
+        final Bytes cacheKey = cacheKey(namespace, key);
+        LRUNode node = this.map.get(cacheKey);
 
         // remove from LRU list
         remove(node);
 
         // remove from map
-        LRUNode value = this.map.remove(key);
+        LRUNode value = this.map.remove(cacheKey);
         return value.entry();
     }
 
@@ -152,6 +166,34 @@ public class MemoryLRUCacheBytes  {
         return currentSizeBytes;
     }
 
+
+    private static String namespaceFromKey(final Bytes key) {
+        try {
+            return namespaceFromKey(new DataInputStream(new ByteArrayInputStream(key.get())));
+        } catch (IOException e) {
+            throw new ProcessorStateException(e);
+        }
+    }
+
+    private static String namespaceFromKey(final DataInputStream stream) throws IOException {
+        return stream.readUTF();
+    }
+
+    private static byte[] originalKey(final Bytes cacheKey) {
+        final DataInputStream input = new DataInputStream(new ByteArrayInputStream(cacheKey.get()));
+        try {
+            namespaceFromKey(input);
+            return remainingBytes(input);
+        } catch (IOException e) {
+            throw new ProcessorStateException(e);
+        }
+    }
+
+    private static byte[] remainingBytes(final DataInputStream input) throws IOException {
+        final byte[] originalKey = new byte[input.available()];
+        input.read(originalKey);
+        return originalKey;
+    }
 
     private void putHead(LRUNode node) {
         node.next = head;
@@ -200,11 +242,13 @@ public class MemoryLRUCacheBytes  {
      * A simple wrapper class to implement a doubly-linked list around MemoryLRUCacheBytesEntry
      */
     protected class LRUNode {
+        private Bytes key;
         private MemoryLRUCacheBytesEntry entry;
         private LRUNode previous;
         private LRUNode next;
 
-        LRUNode(MemoryLRUCacheBytesEntry entry) {
+        LRUNode(final Bytes key, MemoryLRUCacheBytesEntry entry) {
+            this.key = key;
             this.entry = entry;
         }
 
@@ -215,14 +259,18 @@ public class MemoryLRUCacheBytes  {
         public void update(MemoryLRUCacheBytesEntry entry) {
             this.entry = entry;
         }
+
+        public long size() {
+            return key.get().length + entry.size();
+        }
     }
 
-    public synchronized MemoryLRUCacheBytesIterator range(final String cacheName, byte[] from, byte[] to) {
-        return new MemoryLRUCacheBytesIterator(cacheName, keySetIterator(map.navigableKeySet().subSet(Bytes.wrap(from), true, Bytes.wrap(to), true)), map);
+    public synchronized MemoryLRUCacheBytesIterator range(final String namespace, byte[] from, byte[] to) {
+        return new MemoryLRUCacheBytesIterator(namespace, keySetIterator(map.navigableKeySet().subSet(cacheKey(namespace, from), true, cacheKey(namespace, to), true)), map);
     }
 
-    public MemoryLRUCacheBytesIterator all(final String cacheName) {
-        return new MemoryLRUCacheBytesIterator(cacheName, keySetIterator(map.tailMap(Bytes.wrap(cacheName.getBytes())).keySet()), map);
+    public MemoryLRUCacheBytesIterator all(final String namespace) {
+        return new MemoryLRUCacheBytesIterator(namespace, keySetIterator(map.tailMap(namespaceBytes(namespace)).keySet()), map);
     }
 
 
@@ -232,14 +280,37 @@ public class MemoryLRUCacheBytes  {
         return copy.iterator();
     }
 
-    public static class MemoryLRUCacheBytesIterator implements PeekingKeyValueIterator<byte[], MemoryLRUCacheBytesEntry> {
-        private final byte [] cacheNameBytes;
+    private Bytes cacheKey(String namespace, byte[] keyBytes) {
+        final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        final DataOutputStream output = new DataOutputStream(bytes);
+        try {
+            output.writeUTF(namespace);
+            output.write(keyBytes);
+            return Bytes.wrap(bytes.toByteArray());
+        } catch (IOException e) {
+            throw new ProcessorStateException("Unable to convert key to cache key", e);
+        }
+    }
+
+    private static Bytes namespaceBytes(final String namespace) {
+        final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        final DataOutputStream output = new DataOutputStream(bytes);
+        try {
+            output.writeUTF(namespace);
+            return Bytes.wrap(bytes.toByteArray());
+        } catch (IOException e) {
+            throw new ProcessorStateException(e);
+        }
+    }
+
+    static class MemoryLRUCacheBytesIterator implements PeekingKeyValueIterator<byte[], MemoryLRUCacheBytesEntry> {
+        private final String namespace;
         private final Iterator<Bytes> keys;
         private final Map<Bytes, LRUNode> entries;
-        private KeyValue<byte [], MemoryLRUCacheBytesEntry> nextEntry;
+        private KeyValue<byte[], MemoryLRUCacheBytesEntry> nextEntry;
 
-        public MemoryLRUCacheBytesIterator(final String cacheName, Iterator<Bytes> keys, Map<Bytes, LRUNode> entries) {
-            this.cacheNameBytes = cacheName.getBytes();
+        MemoryLRUCacheBytesIterator(final String namespace, Iterator<Bytes> keys, Map<Bytes, LRUNode> entries) {
+            this.namespace = namespace;
             this.keys = keys;
             this.entries = entries;
         }
@@ -275,19 +346,17 @@ public class MemoryLRUCacheBytes  {
         }
 
         private void internalNext() {
-            byte [] cacheKey = keys.next().get();
-            final LRUNode lruNode = entries.get(Bytes.wrap(cacheKey));
+            Bytes cacheKey = keys.next();
+            final LRUNode lruNode = entries.get(cacheKey);
             if (lruNode == null) {
                 return;
             }
 
-            final byte[] storeName = new byte[cacheNameBytes.length];
-            System.arraycopy(cacheKey, 0, storeName, 0, storeName.length);
-            if (!Arrays.equals(cacheNameBytes, storeName)) {
+            if (!namespace.equals(namespaceFromKey(cacheKey))) {
                 return;
             }
 
-            nextEntry = new KeyValue<>(originalKey(cacheKey, cacheNameBytes), lruNode.entry());
+            nextEntry = new KeyValue<>(originalKey(cacheKey), lruNode.entry());
         }
 
         @Override

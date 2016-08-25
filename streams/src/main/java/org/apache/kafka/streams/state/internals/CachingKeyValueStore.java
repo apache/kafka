@@ -78,7 +78,7 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
                                         keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                                         valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
         this.cache = context.getCache();
-        cache.addEldestRemovedListener(new MemoryLRUCacheBytes.EldestEntryRemovalListener<byte[], MemoryLRUCacheBytesEntry>() {
+        cache.addEldestRemovedListener(name, new MemoryLRUCacheBytes.EldestEntryRemovalListener() {
             @Override
             public void apply(final byte[] key, final MemoryLRUCacheBytesEntry entry) {
                 if (entry.isDirty()) {
@@ -96,24 +96,16 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
         while (dirtyKeyIterator.hasNext()) {
             final Bytes dirtyKey = dirtyKeyIterator.next().getKey();
             dirtyKeyIterator.remove();
-            final byte[] cacheKey = dirtyKey.get();
-            final byte[] originalKey = originalKey(cacheKey, nameBytes);
-            final MemoryLRUCacheBytesEntry entry = cache.get(cacheKey);
-            final Bytes wrappedOriginal = Bytes.wrap(originalKey);
-            keyValues.add(KeyValue.pair(wrappedOriginal, entry.value));
-            flushListener.forward(serdes.keyFrom(originalKey),
-                                  change(entry.value, underlying.get(wrappedOriginal)),
+            final Bytes cacheKey = dirtyKey;
+            final MemoryLRUCacheBytesEntry entry = cache.get(name, cacheKey.get());
+            keyValues.add(KeyValue.pair(cacheKey, entry.value));
+            flushListener.forward(serdes.keyFrom(cacheKey.get()),
+                                  change(entry.value, underlying.get(cacheKey)),
                                   entry,
                                   context);
         }
         underlying.putAll(keyValues);
         underlying.flush();
-    }
-
-    static byte[] originalKey(final byte[] cacheKey, final byte [] nameBytes) {
-        final byte [] originalKey = new byte[cacheKey.length - nameBytes.length];
-        System.arraycopy(cacheKey, nameBytes.length, originalKey, 0, originalKey.length);
-        return originalKey;
     }
 
     private Change<V> change(final byte[] newValue, final byte[] oldValue) {
@@ -158,14 +150,13 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     private V get(final byte[] rawKey) {
-        final byte[] cacheKey = cacheKey(rawKey);
-        final MemoryLRUCacheBytesEntry entry = cache.get(cacheKey);
+        final MemoryLRUCacheBytesEntry entry = cache.get(name, rawKey);
         if (entry == null) {
             final byte[] rawValue = underlying.get(Bytes.wrap(rawKey));
             if (rawValue == null) {
                 return null;
             }
-            cache.put(cacheKey, new MemoryLRUCacheBytesEntry(cacheKey, rawValue));
+            cache.put(name, rawKey, new MemoryLRUCacheBytesEntry(rawValue));
             return serdes.valueFrom(rawValue);
         }
 
@@ -181,7 +172,7 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
         final byte[] origFrom = serdes.rawKey(from);
         final byte[] origTo = serdes.rawKey(to);
         final PeekingKeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator(underlying.range(Bytes.wrap(origFrom), Bytes.wrap(origTo)));
-        final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, cacheKey(origFrom), cacheKey(origTo));
+        final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, origFrom, origTo);
         return new MergedSortedCacheKeyValueStoreIterator<>(underlying, cacheIterator, storeIterator, serdes);
     }
 
@@ -207,11 +198,11 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     private synchronized void put(final byte[] rawKey, final V value) {
-        final byte[] cacheKey = cacheKey(rawKey);
         final byte[] rawValue = serdes.rawValue(value);
-        cache.put(cacheKey, new MemoryLRUCacheBytesEntry(cacheKey, rawValue, true, context.offset(),
-                                                         context.timestamp(), context.partition(), context.topic()));
-        dirtyKeys.put(Bytes.wrap(cacheKey), Bytes.wrap(cacheKey));
+        cache.put(name, rawKey, new MemoryLRUCacheBytesEntry(rawValue, true, context.offset(),
+                                                               context.timestamp(), context.partition(), context.topic()));
+        final Bytes wrappedKey = Bytes.wrap(rawKey);
+        dirtyKeys.put(wrappedKey, wrappedKey);
     }
 
     @Override

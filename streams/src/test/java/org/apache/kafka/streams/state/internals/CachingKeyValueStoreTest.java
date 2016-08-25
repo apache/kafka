@@ -30,6 +30,9 @@ import org.apache.kafka.test.MockProcessorContext;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -53,7 +56,10 @@ public class CachingKeyValueStoreTest {
     @Before
     public void setUp() throws Exception {
         final String storeName = "store";
-        nameLength = storeName.getBytes().length;
+        final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        final DataOutputStream out = new DataOutputStream(bytes);
+        out.writeUTF("store");
+        nameLength = bytes.size();
         underlyingStore = new InMemoryKeyValueStore<>(storeName);
         cacheFlushListener = new CacheFlushListenerStub();
         store = new CachingKeyValueStore<>(underlyingStore, Serdes.String(), Serdes.String(), cacheFlushListener);
@@ -95,23 +101,34 @@ public class CachingKeyValueStoreTest {
     }
 
     @Test
-    public void shouldDoSomethingWithAll() throws Exception {
-        int i = addItemsToCache();
+    public void shouldIterateAllStoredItems() throws Exception {
+        int items = addItemsToCache();
         final KeyValueIterator<String, String> all = store.all();
         final List<String> results = new ArrayList<>();
         while (all.hasNext()) {
             results.add(all.next().key);
         }
-        assertEquals(4, results.size());
+        assertEquals(items, results.size());
     }
 
-    private int addItemsToCache() {
+    @Test
+    public void shouldIterateOverRange() throws Exception {
+        int items = addItemsToCache();
+        final KeyValueIterator<String, String> range = store.range(String.valueOf(0), String.valueOf(items));
+        final List<String> results = new ArrayList<>();
+        while (range.hasNext()) {
+            results.add(range.next().key);
+        }
+        assertEquals(items, results.size());
+    }
+
+    private int addItemsToCache() throws IOException {
         int cachedSize = 0;
         int i = 0;
         while (cachedSize < maxCacheSizeBytes) {
             final String kv = String.valueOf(i++);
             store.put(kv, kv);
-            cachedSize += memoryCacheEntrySize(kv, kv) + nameLength;
+            cachedSize += memoryCacheEntrySize("store", kv.getBytes(), kv.getBytes()) + nameLength;
         }
         return i;
     }

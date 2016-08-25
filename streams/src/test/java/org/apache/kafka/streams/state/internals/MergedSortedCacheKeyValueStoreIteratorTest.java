@@ -32,16 +32,16 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
         KeyValueStore<Bytes, byte[]> kv = new InMemoryKeyValueStore<>("one");
         final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(1000000L);
         byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}};
-        final byte[] nameBytes = "one".getBytes();
+        final String namespace = "one";
         for (int i = 0; i < bytes.length - 1; i += 2) {
             kv.put(Bytes.wrap(bytes[i]), bytes[i]);
-            cache.put(cacheKey(bytes[i + 1], nameBytes), new MemoryLRUCacheBytesEntry(bytes[i + 1], bytes[i + 1]));
+            cache.put(namespace, bytes[i + 1], new MemoryLRUCacheBytesEntry(bytes[i + 1]));
         }
 
         final Bytes from = Bytes.wrap(new byte[]{2});
         final Bytes to = Bytes.wrap(new byte[]{9});
         final PeekingKeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator(kv.range(from, to));
-        final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator cacheIterator = cache.range("one", cacheKey(from.get(), nameBytes), cacheKey(to.get(), nameBytes));
+        final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, from.get(), to.get());
 
         final MergedSortedCacheKeyValueStoreIterator<byte[], byte[]> iterator = new MergedSortedCacheKeyValueStoreIterator<>(kv, cacheIterator, storeIterator, new StateSerdes<>("name", Serdes.ByteArray(), Serdes.ByteArray()));
         byte[][] values = new byte[8][];
