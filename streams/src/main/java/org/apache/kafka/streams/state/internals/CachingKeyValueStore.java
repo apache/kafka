@@ -173,14 +173,14 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
         final byte[] origTo = serdes.rawKey(to);
         final KeyValueIterator<Bytes, byte[]> storeIterator = underlying.range(Bytes.wrap(origFrom), Bytes.wrap(origTo));
         final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheKey(origFrom), cacheKey(origTo));
-        return new MergedSortedCacheRocksDBIterator<>(underlying, cacheIterator, storeIterator, serdes);
+        return new MergedSortedCacheKeyValueStoreIterator<>(underlying, cacheIterator, storeIterator, serdes);
     }
 
     @Override
     public KeyValueIterator<K, V> all() {
         final KeyValueIterator<Bytes, byte[]> storeIterator = underlying.all();
         final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator cacheIterator = cache.all();
-        return new MergedSortedCacheRocksDBIterator<>(underlying, cacheIterator, storeIterator, serdes);
+        return new MergedSortedCacheKeyValueStoreIterator<>(underlying, cacheIterator, storeIterator, serdes);
     }
 
     @Override

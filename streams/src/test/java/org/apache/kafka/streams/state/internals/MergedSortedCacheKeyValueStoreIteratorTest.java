@@ -26,7 +26,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertArrayEquals;
 
-public class MergedSortedCacheRocksDBIteratorTest {
+public class MergedSortedCacheKeyValueStoreIteratorTest {
 
     @Test
     public void shouldIterateOverRange() throws Exception {
@@ -45,7 +45,7 @@ public class MergedSortedCacheRocksDBIteratorTest {
         final KeyValueIterator<Bytes, byte[]> storeIterator = kv.range(from, to);
         final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheKey(from.get(), nameBytes), cacheKey(to.get(), nameBytes));
 
-        final MergedSortedCacheRocksDBIterator<byte[], byte[]> iterator = new MergedSortedCacheRocksDBIterator<>(kv, cacheIterator, storeIterator, new StateSerdes<>("name", Serdes.ByteArray(), Serdes.ByteArray()));
+        final MergedSortedCacheKeyValueStoreIterator<byte[], byte[]> iterator = new MergedSortedCacheKeyValueStoreIterator<>(kv, cacheIterator, storeIterator, new StateSerdes<>("name", Serdes.ByteArray(), Serdes.ByteArray()));
         byte[][] values = new byte[8][];
         int index = 0;
         int bytesIndex = 2;

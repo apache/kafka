@@ -31,7 +31,7 @@ import java.util.Comparator;
  * @param <K>
  * @param <V>
  */
-class MergedSortedCacheRocksDBIterator<K, V> implements KeyValueIterator<K, V> {
+class MergedSortedCacheKeyValueStoreIterator<K, V> implements KeyValueIterator<K, V> {
     private final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator cacheIter;
     private KeyValue<byte[], MemoryLRUCacheBytesEntry> lastEntryCache = null;
     private KeyValue<byte[], MemoryLRUCacheBytesEntry> cacheNext = null;
@@ -43,10 +43,10 @@ class MergedSortedCacheRocksDBIterator<K, V> implements KeyValueIterator<K, V> {
     private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
     private KeyValue<K, V> returnValue = null;
 
-    public MergedSortedCacheRocksDBIterator(final KeyValueStore<Bytes, byte[]> store,
-                                            final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator cacheIter,
-                                            final KeyValueIterator<Bytes, byte[]> storeIterator,
-                                            final StateSerdes<K, V> serdes) {
+    public MergedSortedCacheKeyValueStoreIterator(final KeyValueStore<Bytes, byte[]> store,
+                                                  final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator cacheIter,
+                                                  final KeyValueIterator<Bytes, byte[]> storeIterator,
+                                                  final StateSerdes<K, V> serdes) {
         this.cacheIter = cacheIter;
         this.storeIterator = storeIterator;
         this.store = store;
