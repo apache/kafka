@@ -226,12 +226,13 @@ class RequestSendThread(val controllerId: Int,
   private def brokerReady(): Boolean = {
     import NetworkClientBlockingOps._
     try {
-      val ready = networkClient.blockingReady(brokerNode, socketTimeoutMs)(time)
+      if (!networkClient.isReady(brokerNode)(time)) {
+        if (!networkClient.blockingReady(brokerNode, socketTimeoutMs)(time))
+          throw new SocketTimeoutException(s"Failed to connect within $socketTimeoutMs ms")
 
-      if (!ready)
-        throw new SocketTimeoutException(s"Failed to connect within $socketTimeoutMs ms")
+        info("Controller %d connected to %s for sending state change requests".format(controllerId, brokerNode.toString()))
+      }
 
-      info("Controller %d connected to %s for sending state change requests".format(controllerId, brokerNode.toString()))
       true
     } catch {
       case e: Throwable =>
