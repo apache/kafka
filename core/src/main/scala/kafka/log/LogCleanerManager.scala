@@ -49,6 +49,8 @@ private[log] case object LogCleaningPaused extends LogCleaningState
  */
 private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[TopicAndPartition, Log]) extends Logging with KafkaMetricsGroup {
 
+  import LogCleanerManager._
+
   override val loggerName = classOf[LogCleaner].getName
 
   // package-private for testing
@@ -81,7 +83,7 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
     * each time from the full set of logs to allow logs to be dynamically added to the pool of logs
     * the log manager maintains.
     */
-  def grabFilthiestLog(time: Time): Option[LogToClean] = {
+  def grabFilthiestCompactedLog(time: Time): Option[LogToClean] = {
     inLock(lock) {
       val now = time.milliseconds
       val lastClean = allCleanerCheckpoints()
@@ -125,10 +127,6 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
 
   }
 
-  def isCompactAndDelete(log: Log): Boolean = {
-    log.config.compact && log.config.delete
-  }
-
   /**
    *  Abort the cleaning of a particular partition, if it's in progress. This call blocks until the cleaning of
    *  the partition is aborted.
@@ -139,7 +137,7 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
       abortAndPauseCleaning(topicAndPartition)
       resumeCleaning(topicAndPartition)
     }
-    info("The cleaning for partition %s is aborted".format(topicAndPartition))
+    info(s"The cleaning for partition $topicAndPartition is aborted")
   }
 
   /**
@@ -162,14 +160,13 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
             case LogCleaningInProgress =>
               inProgress.put(topicAndPartition, LogCleaningAborted)
             case s =>
-              throw new IllegalStateException("Compaction for partition %s cannot be aborted and paused since it is in %s state."
-                                              .format(topicAndPartition, s))
+              throw new IllegalStateException(s"Compaction for partition $topicAndPartition cannot be aborted and paused since it is in $s state.")
           }
       }
       while (!isCleaningInState(topicAndPartition, LogCleaningPaused))
         pausedCleaningCond.await(100, TimeUnit.MILLISECONDS)
     }
-    info("The cleaning for partition %s is aborted and paused".format(topicAndPartition))
+    info(s"The cleaning for partition $topicAndPartition is aborted and paused")
   }
 
   /**
@@ -179,19 +176,17 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
     inLock(lock) {
       inProgress.get(topicAndPartition) match {
         case None =>
-          throw new IllegalStateException("Compaction for partition %s cannot be resumed since it is not paused."
-                                          .format(topicAndPartition))
+          throw new IllegalStateException(s"Compaction for partition $topicAndPartition cannot be resumed since it is not paused.")
         case Some(state) =>
           state match {
             case LogCleaningPaused =>
               inProgress.remove(topicAndPartition)
             case s =>
-              throw new IllegalStateException("Compaction for partition %s cannot be resumed since it is in %s state."
-                                              .format(topicAndPartition, s))
+              throw new IllegalStateException(s"Compaction for partition %s cannot be resumed since it is in $topicAndPartition state.")
           }
       }
     }
-    info("Compaction for partition %s is resumed".format(topicAndPartition))
+    info(s"Compaction for partition $topicAndPartition is resumed")
   }
 
   /**
@@ -251,7 +246,7 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
           inProgress.put(topicAndPartition, LogCleaningPaused)
           pausedCleaningCond.signalAll()
         case s =>
-          throw new IllegalStateException("In-progress partition %s cannot be in %s state.".format(topicAndPartition, s))
+          throw new IllegalStateException(s"In-progress partition $topicAndPartition cannot be in $s state.")
       }
     }
   }
@@ -265,10 +260,15 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
 
 private[log] object LogCleanerManager extends Logging {
 
+  def isCompactAndDelete(log: Log): Boolean = {
+    log.config.compact && log.config.delete
+  }
+
   /**
     * Returns the range of dirty offsets that can be cleaned.
     *
     * @param log the log
+    * @param topicAndPartition the topic and partition of the log
     * @param lastClean the map of checkpointed offsets
     * @param now the current time in milliseconds of the cleaning operation
     * @return the lower (inclusive) and upper (exclusive) offsets
@@ -286,8 +286,7 @@ private[log] object LogCleanerManager extends Logging {
       if (offset < logStartOffset) {
         // don't bother with the warning if compact and delete are enabled.
         if (!isCompactAndDelete(log))
-          warn("Resetting first dirty offset to log start offset %d since the checkpointed offset %d is invalid."
-            .format(logStartOffset, offset))
+          warn(s"Resetting first dirty offset to log start offset $logStartOffset since the checkpointed offset $offset is invalid.")
         logStartOffset
       } else {
         offset
@@ -311,18 +310,13 @@ private[log] object LogCleanerManager extends Logging {
         if (compactionLagMs > 0) {
           dirtySegments.find {
             case segment =>
-              segment.log.lastOption match {
-                case Some(lastMessage) =>
-                  val lastTime = if (lastMessage.message.timestamp != Message.NoTimestamp) lastMessage.message.timestamp else segment.lastModified
-                  debug(s"log=${log.name} segment.baseOffset=${segment.baseOffset} segment.lastModified=${segment.lastModified} last message.timestamp=${lastMessage.message.timestamp} now - lag=${now - compactionLagMs}")
-                  lastTime > now - compactionLagMs
-                case _ => false
-              }
+              val lastTime = segment.largestTimestamp
+              lastTime > now - compactionLagMs
           } map(_.baseOffset)
         } else None
       ).flatten.min
 
-    debug(s"log=${log.name} topicAndPartition=${topicAndPartition} lastClean=$lastCleanOffset now=$now => firstDirtyOffset=$firstDirtyOffset firstUncleanableOffset=$firstUncleanableDirtyOffset activeSegmentBaseOffset=${log.activeSegment.baseOffset}")
+    debug(s"log=${log.name} topicAndPartition=$topicAndPartition lastClean=$lastCleanOffset now=$now => firstDirtyOffset=$firstDirtyOffset firstUncleanableOffset=$firstUncleanableDirtyOffset activeSegmentBaseOffset=${log.activeSegment.baseOffset}")
 
     (firstDirtyOffset, firstUncleanableDirtyOffset)
   }

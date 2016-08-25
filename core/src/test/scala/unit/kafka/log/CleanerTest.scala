@@ -124,17 +124,18 @@ class CleanerTest extends JUnitSuite {
     // roll the segment, so we can clean the messages already appended
     log.roll()
 
+    val firstUncleanableOffset = log.activeSegment.baseOffset
     // clean the log with only one message removed
-    cleaner.clean(LogToClean(TopicAndPartition("test", 0), log, 2))
+    cleaner.clean(LogToClean(TopicAndPartition("test", 0), log, 2, firstUncleanableOffset))
     assertEquals(immutable.List(1,0,1,0), keysInLog(log))
     assertEquals(immutable.List(1,2,3,4), offsetsInLog(log))
 
     // continue to make progress, even though we can only clean one message at a time
-    cleaner.clean(LogToClean(TopicAndPartition("test", 0), log, 3))
+    cleaner.clean(LogToClean(TopicAndPartition("test", 0), log, 3, firstUncleanableOffset))
     assertEquals(immutable.List(0,1,0), keysInLog(log))
     assertEquals(immutable.List(2,3,4), offsetsInLog(log))
 
-    cleaner.clean(LogToClean(TopicAndPartition("test", 0), log, 4))
+    cleaner.clean(LogToClean(TopicAndPartition("test", 0), log, 4, firstUncleanableOffset))
     assertEquals(immutable.List(1,0), keysInLog(log))
     assertEquals(immutable.List(3,4), offsetsInLog(log))
   }
