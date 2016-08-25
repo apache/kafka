@@ -645,7 +645,7 @@ class CleanerTest extends JUnitSuite {
   
   def key(id: Int) = ByteBuffer.wrap(id.toString.getBytes)
   
-  def message(key: Int, value: Int) : ByteBufferMessageSet =
+  def message(key: Int, value: Int): ByteBufferMessageSet =
     message(key, value.toString.getBytes)
 
   def message(key: Int, value: Array[Byte]) =
