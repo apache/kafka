@@ -144,7 +144,7 @@ public class MemoryLRUCacheBytesTest {
         final byte [] name1Byte = new byte[] {1};
         cache.put("name", nameByte, entry(nameByte));
         cache.put("name1", nameByte, entry(name1Byte));
-        
+
         assertArrayEquals(nameByte, cache.get("name", nameByte).value);
         assertArrayEquals(name1Byte, cache.get("name1", nameByte).value);
     }

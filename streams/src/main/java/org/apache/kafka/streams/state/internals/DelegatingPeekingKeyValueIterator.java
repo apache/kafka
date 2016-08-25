@@ -16,22 +16,21 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.util.NoSuchElementException;
 
-class DelegatingPeekingKeyValueIterator implements PeekingKeyValueIterator<Bytes, byte[]> {
-    private final KeyValueIterator<Bytes, byte[]> underlying;
-    private KeyValue<Bytes, byte[]> next;
+class DelegatingPeekingKeyValueIterator<K, V> implements PeekingKeyValueIterator<K, V> {
+    private final KeyValueIterator<K, V> underlying;
+    private KeyValue<K, V> next;
 
-    public DelegatingPeekingKeyValueIterator(final KeyValueIterator<Bytes, byte[]> underlying) {
+    public DelegatingPeekingKeyValueIterator(final KeyValueIterator<K, V> underlying) {
         this.underlying = underlying;
     }
 
     @Override
-    public Bytes peekNextKey() {
+    public K peekNextKey() {
         if (!hasNext()) {
             throw new NoSuchElementException();
         }
@@ -58,11 +57,11 @@ class DelegatingPeekingKeyValueIterator implements PeekingKeyValueIterator<Bytes
     }
 
     @Override
-    public KeyValue<Bytes, byte[]> next() {
+    public KeyValue<K, V> next() {
         if (!hasNext()) {
             throw new NoSuchElementException();
         }
-        final KeyValue<Bytes, byte[]> result = next;
+        final KeyValue<K, V> result = next;
         next = null;
         return result;
     }
