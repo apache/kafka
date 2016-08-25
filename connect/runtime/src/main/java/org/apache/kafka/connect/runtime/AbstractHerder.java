@@ -40,6 +40,7 @@ import org.apache.kafka.connect.tools.VerifiableSinkConnector;
 import org.apache.kafka.connect.tools.VerifiableSourceConnector;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.ReflectionsUtil;
+import org.apache.kafka.connect.util.WorkerUtil;
 import org.reflections.Reflections;
 import org.reflections.util.ClasspathHelper;
 import org.reflections.util.ConfigurationBuilder;
@@ -361,7 +362,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         if (tempConnectors.containsKey(connType)) {
             return tempConnectors.get(connType);
         } else {
-            Connector connector = Worker.createConnector(connType);
+            Connector connector = WorkerUtil.createConnector(connType);
             tempConnectors.put(connType, connector);
             return connector;
         }

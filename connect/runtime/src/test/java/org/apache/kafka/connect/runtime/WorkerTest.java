@@ -38,6 +38,7 @@ import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.MockTime;
 import org.apache.kafka.connect.util.ThreadedTest;
+import org.apache.kafka.connect.util.WorkerUtil;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.Before;
@@ -59,7 +60,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest(Worker.class)
+@PrepareForTest({Worker.class, WorkerUtil.class})
 @PowerMockIgnore("javax.management.*")
 public class WorkerTest extends ThreadedTest {
 
@@ -96,8 +97,8 @@ public class WorkerTest extends ThreadedTest {
         Connector connector = PowerMock.createMock(Connector.class);
         ConnectorContext ctx = PowerMock.createMock(ConnectorContext.class);
 
-        PowerMock.mockStaticPartial(Worker.class, "instantiate");
-        PowerMock.expectPrivate(Worker.class, "instantiate", new Object[]{WorkerTestConnector.class}).andReturn(connector);
+        PowerMock.mockStaticPartial(WorkerUtil.class, "instantiate");
+        PowerMock.expectPrivate(WorkerUtil.class, "instantiate", new Object[]{WorkerTestConnector.class}).andReturn(connector);
         EasyMock.expect(connector.version()).andReturn("1.0");
 
         Map<String, String> props = new HashMap<>();
@@ -153,8 +154,8 @@ public class WorkerTest extends ThreadedTest {
         Connector connector = PowerMock.createMock(Connector.class);
         ConnectorContext ctx = PowerMock.createMock(ConnectorContext.class);
 
-        PowerMock.mockStaticPartial(Worker.class, "instantiate");
-        PowerMock.expectPrivate(Worker.class, "instantiate", new Object[]{WorkerTestConnector.class}).andReturn(connector);
+        PowerMock.mockStaticPartial(WorkerUtil.class, "instantiate");
+        PowerMock.expectPrivate(WorkerUtil.class, "instantiate", new Object[]{WorkerTestConnector.class}).andReturn(connector);
         EasyMock.expect(connector.version()).andReturn("1.0");
 
         Map<String, String> props = new HashMap<>();
@@ -205,8 +206,8 @@ public class WorkerTest extends ThreadedTest {
         Connector connector = PowerMock.createMock(Connector.class);
         ConnectorContext ctx = PowerMock.createMock(ConnectorContext.class);
 
-        PowerMock.mockStaticPartial(Worker.class, "instantiate");
-        PowerMock.expectPrivate(Worker.class, "instantiate", new Object[]{WorkerTestConnector.class}).andReturn(connector);
+        PowerMock.mockStaticPartial(WorkerUtil.class, "instantiate");
+        PowerMock.expectPrivate(WorkerUtil.class, "instantiate", new Object[]{WorkerTestConnector.class}).andReturn(connector);
         EasyMock.expect(connector.version()).andReturn("1.0");
 
         Map<String, String> props = new HashMap<>();
@@ -269,8 +270,8 @@ public class WorkerTest extends ThreadedTest {
         Connector connector = PowerMock.createMock(Connector.class);
         ConnectorContext ctx = PowerMock.createMock(ConnectorContext.class);
 
-        PowerMock.mockStaticPartial(Worker.class, "instantiate");
-        PowerMock.expectPrivate(Worker.class, "instantiate", new Object[]{WorkerTestConnector.class}).andReturn(connector);
+        PowerMock.mockStaticPartial(WorkerUtil.class, "instantiate");
+        PowerMock.expectPrivate(WorkerUtil.class, "instantiate", new Object[]{WorkerTestConnector.class}).andReturn(connector);
         EasyMock.expect(connector.version()).andReturn("1.0");
 
         Map<String, String> props = new HashMap<>();
@@ -342,8 +343,8 @@ public class WorkerTest extends ThreadedTest {
         WorkerSourceTask workerTask = PowerMock.createMock(WorkerSourceTask.class);
         EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
 
-        PowerMock.mockStaticPartial(Worker.class, "instantiate");
-        PowerMock.expectPrivate(Worker.class, "instantiate", new Object[]{TestSourceTask.class}).andReturn(task);
+        PowerMock.mockStaticPartial(WorkerUtil.class, "instantiate");
+        PowerMock.expectPrivate(WorkerUtil.class, "instantiate", new Object[]{TestSourceTask.class}).andReturn(task);
         EasyMock.expect(task.version()).andReturn("1.0");
 
         PowerMock.expectNew(
@@ -410,8 +411,8 @@ public class WorkerTest extends ThreadedTest {
         WorkerSourceTask workerTask = PowerMock.createMock(WorkerSourceTask.class);
         EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
 
-        PowerMock.mockStaticPartial(Worker.class, "instantiate");
-        PowerMock.expectPrivate(Worker.class, "instantiate", new Object[]{TestSourceTask.class}).andReturn(task);
+        PowerMock.mockStaticPartial(WorkerUtil.class, "instantiate");
+        PowerMock.expectPrivate(WorkerUtil.class, "instantiate", new Object[]{TestSourceTask.class}).andReturn(task);
         EasyMock.expect(task.version()).andReturn("1.0");
         
         PowerMock.expectNew(
@@ -462,8 +463,8 @@ public class WorkerTest extends ThreadedTest {
         WorkerSourceTask workerTask = PowerMock.createMock(WorkerSourceTask.class);
         EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
 
-        PowerMock.mockStaticPartial(Worker.class, "instantiate");
-        PowerMock.expectPrivate(Worker.class, "instantiate", new Object[]{TestSourceTask.class}).andReturn(task);
+        PowerMock.mockStaticPartial(WorkerUtil.class, "instantiate");
+        PowerMock.expectPrivate(WorkerUtil.class, "instantiate", new Object[]{TestSourceTask.class}).andReturn(task);
         EasyMock.expect(task.version()).andReturn("1.0");
 
         Capture<TestConverter> keyConverter = EasyMock.newCapture();

@@ -33,9 +33,7 @@ import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.reflections.Reflections;
-import org.reflections.util.ClasspathHelper;
-import org.reflections.util.ConfigurationBuilder;
+import org.apache.kafka.connect.util.WorkerUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -161,7 +159,7 @@ public class Worker {
             final ConnectorConfig connConfig = new ConnectorConfig(connProps);
             final String connClass = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
             log.info("Creating connector {} of type {}", connName, connClass);
-            final Connector connector = createConnector(connClass);
+            final Connector connector = WorkerUtil.createConnector(connClass);
             workerConnector = new WorkerConnector(connName, connector, ctx, statusListener);
             log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connector.getClass());
             workerConnector.initialize(connConfig);
@@ -182,58 +180,6 @@ public class Worker {
     public boolean isSinkConnector(String connName) {
         WorkerConnector workerConnector = connectors.get(connName);
         return workerConnector.isSinkConnector();
-    }
-
-    public static Connector createConnector(String connType) {
-        return instantiate(getConnectorClass(connType));
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Class<? extends Connector> getConnectorClass(String connectorAlias) {
-        // Avoid the classpath scan if the full class name was provided
-        try {
-            Class<?> clazz = Class.forName(connectorAlias);
-            if (!Connector.class.isAssignableFrom(clazz))
-                throw new ConnectException("Class " + connectorAlias + " does not implement Connector");
-            return (Class<? extends Connector>) clazz;
-        } catch (ClassNotFoundException e) {
-            // Fall through to scan for the alias
-        }
-
-        // Iterate over our entire classpath to find all the connectors and hopefully one of them matches the alias from the connector configration
-        Reflections reflections = new Reflections(new ConfigurationBuilder()
-                .setUrls(ClasspathHelper.forJavaClassPath()));
-
-        Set<Class<? extends Connector>> connectors = reflections.getSubTypesOf(Connector.class);
-
-        List<Class<? extends Connector>> results = new ArrayList<>();
-
-        for (Class<? extends Connector> connector: connectors) {
-            // Configuration included the class name but not package
-            if (connector.getSimpleName().equals(connectorAlias))
-                results.add(connector);
-
-            // Configuration included a short version of the name (i.e. FileStreamSink instead of FileStreamSinkConnector)
-            if (connector.getSimpleName().equals(connectorAlias + "Connector"))
-                results.add(connector);
-        }
-
-        if (results.isEmpty())
-            throw new ConnectException("Failed to find any class that implements Connector and which name matches " + connectorAlias + " available connectors are: " + connectorNames(connectors));
-        if (results.size() > 1) {
-            throw new ConnectException("More than one connector matches alias " +  connectorAlias + ". Please use full package + class name instead. Classes found: " + connectorNames(results));
-        }
-
-        // We just validated that we have exactly one result, so this is safe
-        return results.get(0);
-    }
-
-    private static String connectorNames(Collection<Class<? extends Connector>> connectors) {
-        StringBuilder names = new StringBuilder();
-        for (Class<?> c : connectors)
-            names.append(c.getName()).append(", ");
-
-        return names.substring(0, names.toString().length() - 2);
     }
 
     public List<Map<String, String>> connectorTaskConfigs(String connName, int maxTasks, List<String> sinkTopics) {
@@ -315,8 +261,8 @@ public class Worker {
             final ConnectorConfig connConfig = new ConnectorConfig(connProps);
             final TaskConfig taskConfig = new TaskConfig(taskProps);
 
-            Class<? extends Task> taskClass = taskConfig.getClass(TaskConfig.TASK_CLASS_CONFIG).asSubclass(Task.class);
-            final Task task = instantiate(taskClass);
+            final Class<? extends Task> taskClass = taskConfig.getClass(TaskConfig.TASK_CLASS_CONFIG).asSubclass(Task.class);
+            final Task task = WorkerUtil.instantiate(taskClass);
             log.info("Instantiated task {} with version {} of type {}", id, task.version(), taskClass.getName());
 
             Converter keyConverter = connConfig.getConfiguredInstance(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, Converter.class);
@@ -367,14 +313,6 @@ public class Worker {
         } else {
             log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
             throw new ConnectException("Tasks must be a subclass of either SourceTask or SinkTask");
-        }
-    }
-
-    private static <T> T instantiate(Class<? extends T> cls) {
-        try {
-            return Utils.newInstance(cls);
-        } catch (Throwable t) {
-            throw new ConnectException("Instantiation error", t);
         }
     }
 
