@@ -79,7 +79,13 @@ class MergedSortedCacheKeyValueStoreIterator<K, V> implements KeyValueIterator<K
             return nextCacheValue();
         }
 
-        if (comparator.compare(nextCacheKey, nextStoreKey) <= 0) {
+        final int comparison = comparator.compare(nextCacheKey, nextStoreKey);
+        // Use the cached item as it will be at least as new as the stored item
+        if (comparison == 0) {
+            storeIterator.next();
+        }
+
+        if (comparison <= 0) {
             return nextCacheValue();
         }
 

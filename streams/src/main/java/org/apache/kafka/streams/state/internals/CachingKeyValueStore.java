@@ -96,15 +96,24 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
         while (dirtyKeyIterator.hasNext()) {
             final Bytes dirtyKey = dirtyKeyIterator.next().getKey();
             dirtyKeyIterator.remove();
-            final MemoryLRUCacheBytesEntry entry = cache.get(cacheKey(dirtyKey.get()));
-            keyValues.add(KeyValue.pair(dirtyKey, entry.value));
-            flushListener.forward(serdes.keyFrom(dirtyKey.get()),
-                                  change(entry.value, underlying.get(dirtyKey)),
+            final byte[] cacheKey = dirtyKey.get();
+            final byte[] originalKey = originalKey(cacheKey, nameBytes);
+            final MemoryLRUCacheBytesEntry entry = cache.get(cacheKey);
+            final Bytes wrappedOriginal = Bytes.wrap(originalKey);
+            keyValues.add(KeyValue.pair(wrappedOriginal, entry.value));
+            flushListener.forward(serdes.keyFrom(originalKey),
+                                  change(entry.value, underlying.get(wrappedOriginal)),
                                   entry,
                                   context);
         }
         underlying.putAll(keyValues);
         underlying.flush();
+    }
+
+    static byte[] originalKey(final byte[] cacheKey, final byte [] nameBytes) {
+        final byte [] originalKey = new byte[cacheKey.length - nameBytes.length];
+        System.arraycopy(cacheKey, nameBytes.length, originalKey, 0, originalKey.length);
+        return originalKey;
     }
 
     private Change<V> change(final byte[] newValue, final byte[] oldValue) {
@@ -185,21 +194,24 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public synchronized long approximateNumEntries() {
-        return underlying.approximateNumEntries() + dirtyKeys.size();
+        final long total = underlying.approximateNumEntries() + dirtyKeys.size();
+        if (total < 0) {
+            return Long.MAX_VALUE;
+        }
+        return total;
     }
 
     @Override
     public synchronized void put(final K key, final V value) {
-        put(key, serdes.rawKey(key), value);
+        put(serdes.rawKey(key), value);
     }
 
-    private synchronized void put(final K key, final byte[] rawKey, final V value) {
-        final Bytes wrapped = Bytes.wrap(rawKey);
-        dirtyKeys.put(wrapped, wrapped);
+    private synchronized void put(final byte[] rawKey, final V value) {
         final byte[] cacheKey = cacheKey(rawKey);
         final byte[] rawValue = serdes.rawValue(value);
-        cache.put(cacheKey, new MemoryLRUCacheBytesEntry(rawKey, rawValue, true, context.offset(),
+        cache.put(cacheKey, new MemoryLRUCacheBytesEntry(cacheKey, rawValue, true, context.offset(),
                                                          context.timestamp(), context.partition(), context.topic()));
+        dirtyKeys.put(Bytes.wrap(cacheKey), Bytes.wrap(cacheKey));
     }
 
     @Override
@@ -207,7 +219,7 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
         final byte[] rawKey = serdes.rawKey(key);
         final V v = get(rawKey);
         if (v == null) {
-            put(key, rawKey, value);
+            put(rawKey, value);
         }
         return v;
     }
@@ -223,7 +235,7 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
     public synchronized V delete(final K key) {
         final byte[] rawKey = serdes.rawKey(key);
         final V v = get(rawKey);
-        put(key, rawKey, null);
+        put(rawKey, null);
         return v;
     }
 

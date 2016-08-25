@@ -38,8 +38,9 @@ public class MemoryLRUCacheBytesTest {
                 new KeyValue<>("K3", "V3"),
                 new KeyValue<>("K4", "V4"),
                 new KeyValue<>("K5", "V5"));
+        final KeyValue<String, String> kv = toInsert.get(0);
         MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(
-                toInsert.size() * entrySize(toInsert.get(0)));
+                toInsert.size() * memoryCacheEntrySize(kv.key, kv.value));
 
         for (int i = 0; i < toInsert.size(); i++) {
             byte[] key = toInsert.get(i).key.getBytes();
@@ -64,7 +65,7 @@ public class MemoryLRUCacheBytesTest {
                 new KeyValue<>("K4", "V4"),
                 new KeyValue<>("K5", "V5"));
         final KeyValue<String, String> kv = toInsert.get(0);
-        final int length = entrySize(kv);
+        final int length = memoryCacheEntrySize(kv.key, kv.value);
 
         MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(
                 toInsert.size() * length);
@@ -80,9 +81,9 @@ public class MemoryLRUCacheBytesTest {
         }
     }
 
-    private int entrySize(final KeyValue<String, String> kv) {
-        return kv.key.getBytes().length +
-                kv.value.getBytes().length +
+    static int memoryCacheEntrySize(String key, String value) {
+        return key.getBytes().length +
+                value.getBytes().length +
                 1 + // isDirty
                 8 + // timestamp
                 8 + // offset
@@ -101,15 +102,16 @@ public class MemoryLRUCacheBytesTest {
                 new KeyValue<>("K3", "V3"),
                 new KeyValue<>("K4", "V4"),
                 new KeyValue<>("K5", "V5"));
+        final KeyValue<String, String> kv = toInsert.get(0);
         MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(
-                entrySize(toInsert.get(0)));
+                memoryCacheEntrySize(kv.key, kv.value));
         cache.addEldestRemovedListener(new MemoryLRUCacheBytes.EldestEntryRemovalListener<byte[],
                 MemoryLRUCacheBytesEntry>() {
             @Override
             public void apply(byte[] key, MemoryLRUCacheBytesEntry value) {
 
                 received.add(new KeyValue<>(new String(key),
-                                            new String(((MemoryLRUCacheBytesEntry) value).value)));
+                                            new String(value.value)));
             }
         });
 
