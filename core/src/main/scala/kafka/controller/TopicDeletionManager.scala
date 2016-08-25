@@ -80,7 +80,7 @@ class TopicDeletionManager(controller: KafkaController,
   val partitionStateMachine = controller.partitionStateMachine
   val replicaStateMachine = controller.replicaStateMachine
   val topicsToBeDeleted: mutable.Set[String] = mutable.Set.empty[String] ++ initialTopicsToBeDeleted
-  val partitionsToBeDeleted: mutable.Set[TopicAndPartition] = topicsToBeDeleted.flatMap(controllerContext.partitionsForTopic)
+  private val partitionsToBeDeleted: mutable.Set[TopicAndPartition] = topicsToBeDeleted.flatMap(controllerContext.partitionsForTopic)
   val deleteLock = new ReentrantLock()
   val topicsIneligibleForDeletion: mutable.Set[String] = mutable.Set.empty[String] ++
     (initialTopicsIneligibleForDeletion & initialTopicsToBeDeleted)
@@ -213,6 +213,13 @@ class TopicDeletionManager(controller: KafkaController,
       topicsToBeDeleted.contains(topic)
     } else
       false
+  }
+
+  def getPartitionsToBeDeleted(): Set[TopicAndPartition] = {
+    if(isDeleteTopicEnabled) {
+      partitionsToBeDeleted
+    } else
+      mutable.Set.empty[TopicAndPartition]
   }
 
   /**
