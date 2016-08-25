@@ -90,8 +90,8 @@ class SourceTaskOffsetCommitter {
             if (!task.isDone())
                 task.get();
         } catch (CancellationException e) {
+            // ignore
             log.trace("Offset commit thread was cancelled by another thread while removing connector task with id: {}", id);
-            return;
         } catch (ExecutionException | InterruptedException e) {
             throw new ConnectException("Unexpected interruption in SourceTaskOffsetCommitter.", e);
         }

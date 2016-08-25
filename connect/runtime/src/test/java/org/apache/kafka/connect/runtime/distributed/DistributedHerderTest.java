@@ -274,9 +274,11 @@ public class DistributedHerderTest {
 
     @Test
     public void testHaltCleansUpWorker() {
-        worker.stopConnectors();
-        PowerMock.expectLastCall();
-        worker.stopAndAwaitTasks();
+        EasyMock.expect(worker.connectorNames()).andReturn(Collections.singleton(CONN1));
+        worker.stopConnector(CONN1);
+        PowerMock.expectLastCall().andReturn(true);
+        EasyMock.expect(worker.taskIds()).andReturn(Collections.singleton(TASK1));
+        worker.stopAndAwaitTask(TASK1);
         PowerMock.expectLastCall();
         member.stop();
         PowerMock.expectLastCall();
@@ -681,7 +683,7 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
 
         worker.stopAndAwaitTask(TASK0);
-        PowerMock.expectLastCall().andReturn(true);
+        PowerMock.expectLastCall();
         worker.startTask(EasyMock.eq(TASK0), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         PowerMock.expectLastCall().andReturn(true);
@@ -1318,13 +1320,15 @@ public class DistributedHerderTest {
         });
 
         if (revokedConnectors != null) {
-            worker.stopConnectors(revokedConnectors);
-            PowerMock.expectLastCall().andReturn(revokedConnectors);
+            for (String connector : revokedConnectors) {
+                worker.stopConnector(connector);
+                PowerMock.expectLastCall().andReturn(true);
+            }
         }
 
-        if (revokedTasks != null) {
-            worker.stopAndAwaitTasks(revokedTasks);
-            PowerMock.expectLastCall().andReturn(revokedTasks);
+        if (revokedTasks != null && !revokedTasks.isEmpty()) {
+            worker.stopAndAwaitTask(EasyMock.anyObject(ConnectorTaskId.class));
+            PowerMock.expectLastCall();
         }
 
         if (revokedConnectors != null) {
