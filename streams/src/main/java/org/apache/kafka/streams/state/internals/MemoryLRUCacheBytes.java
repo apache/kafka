@@ -34,14 +34,14 @@ import java.util.Map;
  *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
-public class MemoryLRUCacheBytes implements KeyValueStore<byte[], MemoryLRUCacheBytesEntry<byte[], byte[]>> {
+public class MemoryLRUCacheBytes implements KeyValueStore<byte[], MemoryLRUCacheBytesEntry> {
     private long maxCacheSizeBytes;
     private long currentSizeBytes = 0;
-    private LRUNode<byte[], byte[]> head = null;
-    private LRUNode<byte[], byte[]> tail = null;
+    private LRUNode head = null;
+    private LRUNode tail = null;
     private volatile boolean open = true;
-    protected Map<byte[], LRUNode<byte[], byte[]>> map;
-    protected List<MemoryLRUCacheBytes.EldestEntryRemovalListener<byte[], MemoryLRUCacheBytesEntry<byte[], byte[]>>> listeners;
+    protected Map<byte[], LRUNode> map;
+    protected List<MemoryLRUCacheBytes.EldestEntryRemovalListener<byte[], MemoryLRUCacheBytesEntry>> listeners;
 
     public interface EldestEntryRemovalListener<K, V> {
         void apply(K key, V value);
@@ -69,7 +69,7 @@ public class MemoryLRUCacheBytes implements KeyValueStore<byte[], MemoryLRUCache
      * @param listener
      */
     public void addEldestRemovedListener(MemoryLRUCacheBytes.EldestEntryRemovalListener<byte[],
-        MemoryLRUCacheBytesEntry<byte[], byte[]>> listener) {
+        MemoryLRUCacheBytesEntry> listener) {
         this.listeners.add(listener);
     }
 
@@ -107,7 +107,7 @@ public class MemoryLRUCacheBytes implements KeyValueStore<byte[], MemoryLRUCache
     }
 
     @Override
-    public synchronized void put(byte[] key, MemoryLRUCacheBytesEntry<byte[], byte[]> value) {
+    public synchronized void put(byte[] key, MemoryLRUCacheBytesEntry value) {
         if (this.map.containsKey(key)) {
             LRUNode node = this.map.get(key);
             currentSizeBytes -= node.entry().size();
@@ -115,7 +115,7 @@ public class MemoryLRUCacheBytes implements KeyValueStore<byte[], MemoryLRUCache
             updateLRU(node);
 
         } else {
-            LRUNode<byte[], byte[]> node = new LRUNode(value);
+            LRUNode node = new LRUNode(value);
             // check if we need to evict anything
             maybeEvict(node);
             // put element
@@ -127,20 +127,21 @@ public class MemoryLRUCacheBytes implements KeyValueStore<byte[], MemoryLRUCache
         currentSizeBytes += value.size();
     }
 
-    public synchronized MemoryLRUCacheBytesEntry<byte[], byte[]> putIfAbsent(byte[] key, MemoryLRUCacheBytesEntry<byte[], byte[]> value) {
-        MemoryLRUCacheBytesEntry<byte[], byte[]> originalValue = get(key);
+    public synchronized MemoryLRUCacheBytesEntry putIfAbsent(byte[] key, MemoryLRUCacheBytesEntry value) {
+        MemoryLRUCacheBytesEntry originalValue = get(key);
         if (originalValue == null) {
             put(key, value);
         }
         return originalValue;
     }
 
-    public synchronized void putAll(List<KeyValue<byte[], MemoryLRUCacheBytesEntry<byte[], byte[]>>> entries) {
-        for (KeyValue<byte[], MemoryLRUCacheBytesEntry<byte[], byte[]>> entry : entries)
+    public synchronized void putAll(List<KeyValue<byte[], MemoryLRUCacheBytesEntry>> entries) {
+        for (KeyValue<byte[], MemoryLRUCacheBytesEntry> entry : entries) {
             put(entry.key, entry.value);
+        }
     }
 
-    public synchronized MemoryLRUCacheBytesEntry<byte[], byte[]> delete(byte[] key) {
+    public synchronized MemoryLRUCacheBytesEntry delete(byte[] key) {
         LRUNode node = this.map.get(key);
 
         // remove from LRU list
@@ -237,41 +238,41 @@ public class MemoryLRUCacheBytes implements KeyValueStore<byte[], MemoryLRUCache
     /**
      * A simple wrapper class to implement a doubly-linked list around MemoryLRUCacheBytesEntry
      */
-    protected class LRUNode<K, V> {
-        private MemoryLRUCacheBytesEntry<K, V> entry;
+    protected class LRUNode {
+        private MemoryLRUCacheBytesEntry entry;
         private LRUNode previous;
         private LRUNode next;
 
-        LRUNode(MemoryLRUCacheBytesEntry<K, V> entry) {
+        LRUNode(MemoryLRUCacheBytesEntry entry) {
             this.entry = entry;
         }
 
-        public MemoryLRUCacheBytesEntry<K, V> entry() {
+        public MemoryLRUCacheBytesEntry entry() {
             return entry;
         }
 
-        public void update(MemoryLRUCacheBytesEntry<K, V> entry) {
+        public void update(MemoryLRUCacheBytesEntry entry) {
             this.entry = entry;
         }
     }
 
     @Override
-    public synchronized MemoryLRUCacheBytesIterator<byte[], MemoryLRUCacheBytesEntry<byte[], byte[]>> range(byte[] from, byte[] to) {
+    public synchronized MemoryLRUCacheBytesIterator range(byte[] from, byte[] to) {
         return new MemoryLRUCacheBytesIterator(((TreeMap) map).navigableKeySet().subSet(from, true, to, true).iterator(), map);
     }
 
-    @Override
-    public synchronized MemoryLRUCacheBytesIterator<byte[], MemoryLRUCacheBytesEntry<byte[], byte[]>> all() {
+
+    public MemoryLRUCacheBytesIterator all() {
         return new MemoryLRUCacheBytesIterator(map.keySet().iterator(), map);
     }
 
 
-    public static class MemoryLRUCacheBytesIterator<K, V> implements KeyValueIterator<K, V> {
-        private final Iterator<K> keys;
-        private final Map<K, LRUNode<K, V>> entries;
-        private K lastKey;
+    public static class MemoryLRUCacheBytesIterator implements KeyValueIterator<byte[], MemoryLRUCacheBytesEntry> {
+        private final Iterator<byte[]> keys;
+        private final Map<byte[], LRUNode> entries;
+        private byte[] lastKey;
 
-        public MemoryLRUCacheBytesIterator(Iterator<K> keys, Map<K, LRUNode<K, V>> entries) {
+        public MemoryLRUCacheBytesIterator(Iterator<byte[]> keys, Map<byte[], LRUNode> entries) {
             this.keys = keys;
             this.entries = entries;
         }
@@ -282,9 +283,13 @@ public class MemoryLRUCacheBytes implements KeyValueStore<byte[], MemoryLRUCache
         }
 
         @Override
-        public KeyValue<K, V> next() {
+        public KeyValue<byte[], MemoryLRUCacheBytesEntry> next() {
             lastKey = keys.next();
-            return new KeyValue<>(lastKey, entries.get(lastKey).entry().value);
+            final LRUNode lruNode = entries.get(lastKey);
+            if (lruNode == null) {
+                return new KeyValue<>(lastKey, null);
+            }
+            return new KeyValue<>(lastKey, lruNode.entry());
         }
 
         @Override

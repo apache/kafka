@@ -26,9 +26,11 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.ProcessorRecordContextImpl;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
+import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -81,53 +83,53 @@ public class KStreamWindowAggregateTest {
             MockProcessorSupplier<Windowed<String>, String> proc2 = new MockProcessorSupplier<>();
             table2.toStream().process(proc2);
 
-            KStreamTestDriver driver = new KStreamTestDriver(builder, baseDir);
+            driver = new KStreamTestDriver(builder, baseDir);
 
-            driver.setTime(0L);
+            setRecordContext(0, topic1);
             driver.process(topic1, "A", "1");
             driver.flushState();
-            driver.setTime(1L);
+            setRecordContext(1, topic1);
             driver.process(topic1, "B", "2");
             driver.flushState();
-            driver.setTime(2L);
+            setRecordContext(2, topic1);
             driver.process(topic1, "C", "3");
             driver.flushState();
-            driver.setTime(3L);
+            setRecordContext(3, topic1);
             driver.process(topic1, "D", "4");
             driver.flushState();
-            driver.setTime(4L);
+            setRecordContext(4, topic1);
             driver.process(topic1, "A", "1");
             driver.flushState();
 
-            driver.setTime(5L);
+            setRecordContext(5, topic1);
             driver.process(topic1, "A", "1");
             driver.flushState();
-            driver.setTime(6L);
+            setRecordContext(6, topic1);
             driver.process(topic1, "B", "2");
             driver.flushState();
-            driver.setTime(7L);
+            setRecordContext(7, topic1);
             driver.process(topic1, "D", "4");
             driver.flushState();
-            driver.setTime(8L);
+            setRecordContext(8, topic1);
             driver.process(topic1, "B", "2");
             driver.flushState();
-            driver.setTime(9L);
+            setRecordContext(9, topic1);
             driver.process(topic1, "C", "3");
             driver.flushState();
-            driver.setTime(10L);
+            setRecordContext(10, topic1);
             driver.process(topic1, "A", "1");
             driver.flushState();
-            driver.setTime(11L);
+            setRecordContext(11, topic1);
             driver.process(topic1, "B", "2");
             driver.flushState();
-            driver.setTime(12L);
+            setRecordContext(12, topic1);
             driver.flushState();
             driver.process(topic1, "D", "4");
             driver.flushState();
-            driver.setTime(13L);
+            setRecordContext(13, topic1);
             driver.process(topic1, "B", "2");
             driver.flushState();
-            driver.setTime(14L);
+            setRecordContext(14, topic1);
             driver.process(topic1, "C", "3");
             driver.flushState();
 
@@ -154,6 +156,10 @@ public class KStreamWindowAggregateTest {
         } finally {
             Utils.delete(baseDir);
         }
+    }
+
+    private void setRecordContext(final long time, final String topic) {
+        ((MockProcessorContext) driver.context()).setRecordContext(new ProcessorRecordContextImpl(time, 0, 0, topic, null));
     }
 
     @Test
@@ -196,21 +202,21 @@ public class KStreamWindowAggregateTest {
                 }
             }).toStream().process(proc3);
 
-            KStreamTestDriver driver = new KStreamTestDriver(builder, baseDir);
+            driver = new KStreamTestDriver(builder, baseDir);
 
-            driver.setTime(0L);
+            setRecordContext(0, topic1);
             driver.process(topic1, "A", "1");
             driver.flushState();
-            driver.setTime(1L);
+            setRecordContext(1, topic1);
             driver.process(topic1, "B", "2");
             driver.flushState();
-            driver.setTime(2L);
+            setRecordContext(2, topic1);
             driver.process(topic1, "C", "3");
             driver.flushState();
-            driver.setTime(3L);
+            setRecordContext(3, topic1);
             driver.process(topic1, "D", "4");
             driver.flushState();
-            driver.setTime(4L);
+            setRecordContext(4, topic1);
             driver.process(topic1, "A", "1");
             driver.flushState();
 
@@ -230,19 +236,19 @@ public class KStreamWindowAggregateTest {
                     "[A@0]:null"
             );
 
-            driver.setTime(5L);
+            setRecordContext(5, topic1);
             driver.process(topic1, "A", "1");
             driver.flushState();
-            driver.setTime(6L);
+            setRecordContext(6, topic1);
             driver.process(topic1, "B", "2");
             driver.flushState();
-            driver.setTime(7L);
+            setRecordContext(7, topic1);
             driver.process(topic1, "D", "4");
             driver.flushState();
-            driver.setTime(8L);
+            setRecordContext(8, topic1);
             driver.process(topic1, "B", "2");
             driver.flushState();
-            driver.setTime(9L);
+            setRecordContext(9, topic1);
             driver.process(topic1, "C", "3");
             driver.flushState();
 
@@ -262,19 +268,19 @@ public class KStreamWindowAggregateTest {
                     "[C@0]:null", "[C@5]:null"
             );
 
-            driver.setTime(0L);
+            setRecordContext(0, topic1);
             driver.process(topic2, "A", "a");
             driver.flushState();
-            driver.setTime(1L);
+            setRecordContext(1, topic1);
             driver.process(topic2, "B", "b");
             driver.flushState();
-            driver.setTime(2L);
+            setRecordContext(2, topic1);
             driver.process(topic2, "C", "c");
             driver.flushState();
-            driver.setTime(3L);
+            setRecordContext(3, topic1);
             driver.process(topic2, "D", "d");
             driver.flushState();
-            driver.setTime(4L);
+            setRecordContext(4, topic1);
             driver.process(topic2, "A", "a");
             driver.flushState();
 
@@ -293,19 +299,19 @@ public class KStreamWindowAggregateTest {
                     "[D@0]:0+4+4%0+d",
                     "[A@0]:0+1+1+1%0+a+a");
 
-            driver.setTime(5L);
+            setRecordContext(5, topic1);
             driver.process(topic2, "A", "a");
             driver.flushState();
-            driver.setTime(6L);
+            setRecordContext(6, topic1);
             driver.process(topic2, "B", "b");
             driver.flushState();
-            driver.setTime(7L);
+            setRecordContext(7, topic1);
             driver.process(topic2, "D", "d");
             driver.flushState();
-            driver.setTime(8L);
+            setRecordContext(8, topic1);
             driver.process(topic2, "B", "b");
             driver.flushState();
-            driver.setTime(9L);
+            setRecordContext(9, topic1);
             driver.process(topic2, "C", "c");
             driver.flushState();
             proc1.checkAndClearProcessResult();

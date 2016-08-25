@@ -831,7 +831,7 @@ public class TopologyBuilder {
     private void addCacheFlushListener(final ProcessorNode node, final ForwardingSupplier supplier) {
         supplier.withFlushListener(new CacheFlushListener() {
             @Override
-            public void flushed(final Object key, final Change value, final RecordContext recordContext, final InternalProcessorContext context) {
+            public void forward(final Object key, final Change value, final RecordContext recordContext, final InternalProcessorContext context) {
                 final ProcessorRecordContext current = context.processorRecordContext();
                 try {
                     for (ProcessorNode processorNode : (List<ProcessorNode>) node.children()) {

@@ -47,7 +47,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
             Class<V> valueClass,
             boolean useContextSerdes) {
 
-        return createStore(context, keyClass, valueClass, useContextSerdes, true);
+        return createStore(context, keyClass, valueClass, useContextSerdes, false);
 
     }
 
@@ -77,7 +77,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
         ((ForwardingSupplier) supplier).withFlushListener(new CacheFlushListener() {
             @Override
-            public void flushed(final Object key, final Change value, final RecordContext recordContext, final InternalProcessorContext context) {
+            public void forward(final Object key, final Change value, final RecordContext recordContext, final InternalProcessorContext context) {
 
             }
         });
@@ -108,7 +108,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
     @Test
     public void shouldPerformRangeQueriesWithCachingDisabled() throws Exception {
         final KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
-        final KeyValueStore<Integer, String> store = createStore(driver.context(), Integer.class, String.class, false, true);
+        final KeyValueStore<Integer, String> store = createStore(driver.context(), Integer.class, String.class, false, false);
         store.put(1, "hi");
         store.put(2, "goodbye");
         final KeyValueIterator<Integer, String> range = store.range(1, 2);
@@ -120,7 +120,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
     @Test
     public void shouldPerformAllQueriesWithCachingDisabled() throws Exception {
         final KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
-        final KeyValueStore<Integer, String> store = createStore(driver.context(), Integer.class, String.class, false, true);
+        final KeyValueStore<Integer, String> store = createStore(driver.context(), Integer.class, String.class, false, false);
         store.put(1, "hi");
         store.put(2, "goodbye");
         final KeyValueIterator<Integer, String> range = store.all();

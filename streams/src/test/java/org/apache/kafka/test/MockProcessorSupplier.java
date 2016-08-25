@@ -65,7 +65,6 @@ public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
         @Override
         public void punctuate(long streamTime) {
             assertEquals(streamTime, context().timestamp());
-            assertEquals(null, context().topic());
             assertEquals(-1, context().partition());
             assertEquals(-1L, context().offset());
 

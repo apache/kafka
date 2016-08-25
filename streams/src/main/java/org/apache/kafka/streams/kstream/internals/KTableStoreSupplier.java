@@ -18,9 +18,11 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.state.internals.CachingKeyValueStore;
 import org.apache.kafka.streams.state.internals.ForwardingSupplier;
 import org.apache.kafka.streams.state.internals.MeteredKeyValueStore;
 import org.apache.kafka.streams.state.internals.RocksDBStore;
@@ -54,7 +56,9 @@ public class KTableStoreSupplier<K, V> implements StateStoreSupplier, Forwarding
     }
 
     public StateStore get() {
-        return new MeteredKeyValueStore<>(new RocksDBStore<>(name, keySerde, valueSerde, cacheFlushListener).enableCaching(), "rocksdb-state", time);
+        final CachingKeyValueStore<K, V> store = new CachingKeyValueStore<>(new RocksDBStore<>(name, Serdes.Bytes(), Serdes.ByteArray()),
+                                                                                             keySerde, valueSerde, cacheFlushListener);
+        return new MeteredKeyValueStore<>(store, "rocksdb-state", time);
     }
 
     @Override

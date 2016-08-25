@@ -18,10 +18,12 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueStore;
 
 /**
  * A {@link org.apache.kafka.streams.state.KeyValueStore} that stores all entries in a local RocksDB database.
@@ -57,12 +59,16 @@ public class RocksDBKeyValueStoreSupplier<K, V> implements StateStoreSupplier, F
     }
 
     public StateStore get() {
-        RocksDBStore<K, V> store = new RocksDBStore<>(name, keySerde, valueSerde, cacheFlushListener);
+        KeyValueStore<K, V> store;
         if (enableCaching) {
-            store.enableCaching();
+            store = new CachingKeyValueStore<>(new RocksDBStore<>(name, Serdes.Bytes(),
+                                                                  Serdes.ByteArray()).enableLogging(),
+                                               keySerde,
+                                               valueSerde, cacheFlushListener);
+        } else {
+            store = new RocksDBStore<>(name, keySerde, valueSerde).enableLogging();
         }
-
-        return new MeteredKeyValueStore<>(store.enableLogging(), "rocksdb-state", time);
+        return new MeteredKeyValueStore<>(store, "rocksdb-state", time);
     }
 
     @Override

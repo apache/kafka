@@ -120,7 +120,6 @@ public class KTableMapValuesTest {
         KTableValueGetterSupplier<String, String> getterSupplier4 = table4.valueGetterSupplier();
 
         driver = new KStreamTestDriver(builder, stateDir, null, null);
-
         KTableValueGetter<String, String> getter1 = getterSupplier1.get();
         getter1.init(driver.context());
         KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
@@ -231,7 +230,6 @@ public class KTableMapValuesTest {
         builder.addProcessor("proc", proc, table2.name);
 
         driver = new KStreamTestDriver(builder, stateDir, null, null);
-
         assertFalse(table1.sendingOldValueEnabled());
         assertFalse(table2.sendingOldValueEnabled());
 
@@ -282,7 +280,6 @@ public class KTableMapValuesTest {
         builder.addProcessor("proc", proc, table2.name);
 
         driver = new KStreamTestDriver(builder, stateDir, null, null);
-
         assertTrue(table1.sendingOldValueEnabled());
         assertTrue(table2.sendingOldValueEnabled());
 
