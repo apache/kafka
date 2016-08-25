@@ -44,6 +44,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -72,8 +73,8 @@ public class Worker {
     private final OffsetBackingStore offsetBackingStore;
     private final Map<String, Object> producerProps;
 
-    private HashMap<String, WorkerConnector> connectors = new HashMap<>();
-    private HashMap<ConnectorTaskId, WorkerTask> tasks = new HashMap<>();
+    private Map<String, WorkerConnector> connectors = new ConcurrentHashMap<>();
+    private Map<ConnectorTaskId, WorkerTask> tasks = new ConcurrentHashMap<>();
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
 
     public Worker(String workerId, Time time, ConnectorFactory connectorFactory, WorkerConfig config, OffsetBackingStore offsetBackingStore) {
@@ -168,7 +169,9 @@ public class Worker {
             return false;
         }
 
-        connectors.put(connName, workerConnector);
+        WorkerConnector existing = connectors.put(connName, workerConnector);
+        if (existing != null)
+            throw new ConnectException("Connector with name " + connName + " already exists");
 
         log.info("Finished creating connector {}", connName);
         return true;
@@ -217,14 +220,13 @@ public class Worker {
     public boolean stopConnector(String connName) {
         log.info("Stopping connector {}", connName);
 
-        WorkerConnector connector = connectors.get(connName);
+        WorkerConnector connector = connectors.remove(connName);
         if (connector == null) {
             log.warn("Ignoring stop request for unowned connector {}", connName);
             return false;
         }
 
         connector.shutdown();
-        connectors.remove(connName);
 
         log.info("Stopped connector {}", connName);
         return true;
@@ -282,11 +284,14 @@ public class Worker {
             return false;
         }
 
+        WorkerTask existing = tasks.put(id, workerTask);
+        if (existing != null)
+            throw new ConnectException("Task already exists in this worker: " + id);
+
         executor.submit(workerTask);
         if (workerTask instanceof WorkerSourceTask) {
             sourceTaskOffsetCommitter.schedule(id, (WorkerSourceTask) workerTask);
         }
-        tasks.put(id, workerTask);
         return true;
     }
 
