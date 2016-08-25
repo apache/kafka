@@ -22,8 +22,8 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
 
-import java.util.Arrays;
 import java.util.Comparator;
+import java.util.NoSuchElementException;
 
 /**
  * Merges two iterators. Assumes each of them is sorted by key
@@ -33,19 +33,14 @@ import java.util.Comparator;
  */
 class MergedSortedCacheKeyValueStoreIterator<K, V> implements KeyValueIterator<K, V> {
     private final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator cacheIter;
-    private KeyValue<byte[], MemoryLRUCacheBytesEntry> lastEntryCache = null;
-    private KeyValue<byte[], MemoryLRUCacheBytesEntry> cacheNext = null;
-
-    private final KeyValueIterator<Bytes, byte[]> storeIterator;
-    private KeyValue<Bytes, byte[]> lastEntryRocksDb = null;
+    private final PeekingKeyValueIterator<Bytes, byte[]> storeIterator;
     private final KeyValueStore<Bytes, byte[]> store;
     private final StateSerdes<K, V> serdes;
     private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
-    private KeyValue<K, V> returnValue = null;
 
     public MergedSortedCacheKeyValueStoreIterator(final KeyValueStore<Bytes, byte[]> store,
                                                   final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator cacheIter,
-                                                  final KeyValueIterator<Bytes, byte[]> storeIterator,
+                                                  final PeekingKeyValueIterator<Bytes, byte[]> storeIterator,
                                                   final StateSerdes<K, V> serdes) {
         this.cacheIter = cacheIter;
         this.storeIterator = storeIterator;
@@ -53,143 +48,53 @@ class MergedSortedCacheKeyValueStoreIterator<K, V> implements KeyValueIterator<K
         this.serdes = serdes;
     }
 
-    /**
-     * like hasNext(), but for elements of this store only
-     *
-     * @return
-     */
-    private boolean cacheHasNextThisStore() {
-        cacheGetNextThisStore(false);
-        return cacheNext != null;
-    }
-
     @Override
     public boolean hasNext() {
-        return storeIterator.hasNext() || cacheHasNextThisStore();
-    }
-
-    /**
-     * Get in advance the next element that belongs to this store
-     */
-    private void updateCacheNext() {
-        boolean found = false;
-        KeyValue<byte[], MemoryLRUCacheBytesEntry> entry = null;
-        // skip cache entries that do not belong to our store
-        try {
-            entry = cacheIter.next();
-            while (entry != null) {
-                byte[] storeNameBytes = storeNameBytes(entry);
-
-                if (Arrays.equals(store.name().getBytes(), storeNameBytes)) {
-                    found = true;
-                    break;
-                } else {
-                    entry = cacheIter.next();
-                }
-            }
-        } catch (java.util.NoSuchElementException e) {
-            found = false;
-        }
-        if (!found) {
-            entry = null;
-        }
-
-        cacheNext = entry;
-    }
-
-    private byte[] storeNameBytes(final KeyValue<byte[], MemoryLRUCacheBytesEntry> entry) {
-        byte[] cacheKey = entry.key;
-        byte[] originalKey = entry.value.key;
-        byte[] storeName = new byte[cacheKey.length - originalKey.length];
-        System.arraycopy(cacheKey, 0, storeName, 0, storeName.length);
-        return storeName;
-    }
-
-    /**
-     * Like next(), but for elements of this store only
-     *
-     * @param advance
-     * @return
-     */
-    private KeyValue<byte[], MemoryLRUCacheBytesEntry> cacheGetNextThisStore(boolean advance) {
-        KeyValue<byte[], MemoryLRUCacheBytesEntry> entry = null;
-
-        if (cacheNext == null) {
-            updateCacheNext();
-        }
-        entry = cacheNext;
-
-        if (advance) {
-            updateCacheNext();
-        }
-
-        return entry;
+        final boolean storeHasNext = storeIterator.hasNext();
+        return cacheIter.hasNext() || storeHasNext;
     }
 
 
     @Override
     public KeyValue<K, V> next() {
-        if (!cacheHasNextThisStore()) {
-            final KeyValue<Bytes, byte[]> next = storeIterator.next();
-            return KeyValue.pair(serdes.keyFrom(next.key.get()), serdes.valueFrom(next.value));
+        if (!hasNext()) {
+            throw new NoSuchElementException();
         }
 
-        if (lastEntryRocksDb == null && !storeIterator.hasNext()) {
-
-            lastEntryCache = cacheGetNextThisStore(true);
-            if (lastEntryCache.value == null) {
-                byte[] cacheKey = lastEntryCache.key;
-                byte[] storeName = store.name().getBytes();
-                byte[] originalKeyBytes = new byte[cacheKey.length - storeName.length];
-                System.arraycopy(cacheKey, 0, originalKeyBytes, 0, originalKeyBytes.length);
-                final byte[] value = store.get(Bytes.wrap(originalKeyBytes));
-                return new KeyValue<>(serdes.keyFrom(originalKeyBytes), serdes.valueFrom(value));
-            }
-            K originalKey = serdes.keyFromRawMergedStoreNameKey(lastEntryCache.key, store.name());
-            return new KeyValue<>(originalKey, serdes.valueFrom(lastEntryCache.value.value));
+        byte[] nextCacheKey = null;
+        if (cacheIter.hasNext()) {
+            nextCacheKey = cacheIter.peekNextKey();
         }
 
-        // convert the RocksDb key to a key recognized by the cache
-        // TODO: serdes back and forth is inneficient
-        KeyValue<Bytes, byte[]> rocksDbEntry = null;
-        if (lastEntryRocksDb == null) {
-            rocksDbEntry = storeIterator.next();
+        byte[] nextStoreKey = null;
+        if (storeIterator.hasNext()) {
+            nextStoreKey = storeIterator.peekNextKey().get();
         }
 
-
-
-        if (lastEntryCache == null) {
-            lastEntryCache = cacheGetNextThisStore(true);
-
-            if (lastEntryCache == null) {
-                return this.next();
-            }
-        }
-        if (lastEntryRocksDb == null)
-            lastEntryRocksDb = rocksDbEntry;
-
-        byte[] storeKeyToCacheKey = serdes.rawMergeStoreNameKey(serdes.keyFrom(lastEntryRocksDb.key.get()), store.name());
-        // element is in the cache but not in RocksDB. This can be if an item is not flushed yet
-        if (comparator.compare(lastEntryCache.key, storeKeyToCacheKey) <= 0) {
-            K originalKey = serdes.keyFromRawMergedStoreNameKey(lastEntryCache.key, store.name());
-            returnValue = new KeyValue<>(originalKey, serdes.valueFrom(lastEntryCache.value.value));
-        } else {
-            // element is in rocksDb, return it but do not advance the cache element
-            returnValue = KeyValue.pair(serdes.keyFrom(lastEntryRocksDb.key.get()), serdes.valueFrom(lastEntryRocksDb.value));
-            lastEntryRocksDb = null;
+        if (nextCacheKey == null) {
+            return nextStoreValue();
         }
 
-        // iterator bookeepeing
-        if (comparator.compare(lastEntryCache.key, storeKeyToCacheKey) < 0) {
-            // advance cache iterator, but don't advance RocksDb iterator
-            lastEntryCache = null;
-        } else if (comparator.compare(lastEntryCache.key, storeKeyToCacheKey) == 0) {
-            // advance both iterators since the RocksDb balue is superceded by the cache value
-            lastEntryCache = null;
-            lastEntryRocksDb = null;
+        if (nextStoreKey == null) {
+            return nextCacheValue();
         }
 
-        return returnValue;
+        if (comparator.compare(nextCacheKey, nextStoreKey) <= 0) {
+            return nextCacheValue();
+        }
+
+        return nextStoreValue();
+
+    }
+
+    private KeyValue<K, V> nextCacheValue() {
+        final KeyValue<byte[], MemoryLRUCacheBytesEntry> next = cacheIter.next();
+        return KeyValue.pair(serdes.keyFrom(next.key), serdes.valueFrom(next.value.value));
+    }
+
+    private KeyValue<K, V> nextStoreValue() {
+        final KeyValue<Bytes, byte[]> next = storeIterator.next();
+        return KeyValue.pair(serdes.keyFrom(next.key.get()), serdes.valueFrom(next.value));
     }
 
     @Override

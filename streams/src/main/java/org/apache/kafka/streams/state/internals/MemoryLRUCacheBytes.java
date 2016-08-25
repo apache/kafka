@@ -18,15 +18,16 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.KeyValueStore;
+
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
-import java.util.TreeMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 /**
  * An in-memory LRU cache store similar to {@link MemoryLRUCache} but byte-based, not
@@ -34,34 +35,23 @@ import java.util.Map;
  *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
-public class MemoryLRUCacheBytes implements KeyValueStore<byte[], MemoryLRUCacheBytesEntry> {
-    private long maxCacheSizeBytes;
+public class MemoryLRUCacheBytes  {
+    private final long maxCacheSizeBytes;
     private long currentSizeBytes = 0;
     private LRUNode head = null;
     private LRUNode tail = null;
     private volatile boolean open = true;
-    protected Map<byte[], LRUNode> map;
-    protected List<MemoryLRUCacheBytes.EldestEntryRemovalListener<byte[], MemoryLRUCacheBytesEntry>> listeners;
+    private final TreeMap<byte[], LRUNode> map;
+    private final List<MemoryLRUCacheBytes.EldestEntryRemovalListener<byte[], MemoryLRUCacheBytesEntry>> listeners;
 
     public interface EldestEntryRemovalListener<K, V> {
         void apply(K key, V value);
-    }
-
-    @Override
-    public String name() {
-        return null;
     }
 
     public MemoryLRUCacheBytes(long maxCacheSizeBytes) {
         this.maxCacheSizeBytes = maxCacheSizeBytes;
         this.map = new TreeMap<>(Bytes.BYTES_LEXICO_COMPARATOR);
         listeners = new ArrayList<>();
-    }
-
-    @Override
-    @SuppressWarnings("unchecked")
-    public void init(ProcessorContext context, StateStore root) {
-        // do nothing
     }
 
     /**
@@ -79,7 +69,6 @@ public class MemoryLRUCacheBytes implements KeyValueStore<byte[], MemoryLRUCache
         }
     }
 
-    @Override
     public synchronized MemoryLRUCacheBytesEntry get(byte[] key) {
         MemoryLRUCacheBytesEntry entry = null;
         // get element
@@ -106,7 +95,6 @@ public class MemoryLRUCacheBytes implements KeyValueStore<byte[], MemoryLRUCache
         }
     }
 
-    @Override
     public synchronized void put(byte[] key, MemoryLRUCacheBytesEntry value) {
         if (this.map.containsKey(key)) {
             LRUNode node = this.map.get(key);
@@ -159,36 +147,6 @@ public class MemoryLRUCacheBytes implements KeyValueStore<byte[], MemoryLRUCache
 
     public long sizeBytes() {
         return currentSizeBytes;
-    }
-
-    @Override
-    public long approximateNumEntries() {
-        return size();
-    }
-
-    @Override
-    public boolean persistent() {
-        return false;
-    }
-
-    @Override
-    public boolean isOpen() {
-        return open;
-    }
-
-    @Override
-    public void enableSendingOldValues() {
-        // do nothing
-    }
-
-    @Override
-    public void flush() {
-        // do nothing
-    }
-
-    @Override
-    public void close() {
-        open = false;
     }
 
 
@@ -256,40 +214,80 @@ public class MemoryLRUCacheBytes implements KeyValueStore<byte[], MemoryLRUCache
         }
     }
 
-    @Override
-    public synchronized MemoryLRUCacheBytesIterator range(byte[] from, byte[] to) {
-        return new MemoryLRUCacheBytesIterator(((TreeMap) map).navigableKeySet().subSet(from, true, to, true).iterator(), map);
+    public synchronized MemoryLRUCacheBytesIterator range(final String cacheName, byte[] from, byte[] to) {
+        return new MemoryLRUCacheBytesIterator(cacheName, keySetIterator(map.navigableKeySet().subSet(from, true, to, true)), map);
+    }
+
+    public MemoryLRUCacheBytesIterator all(final String cacheName) {
+        return new MemoryLRUCacheBytesIterator(cacheName, keySetIterator(map.tailMap(cacheName.getBytes()).keySet()), map);
     }
 
 
-    public MemoryLRUCacheBytesIterator all() {
-        return new MemoryLRUCacheBytesIterator(map.keySet().iterator(), map);
+    private Iterator<byte[]> keySetIterator(final Set<byte[]> keySet) {
+        final TreeSet<byte[]> copy = new TreeSet<>(Bytes.BYTES_LEXICO_COMPARATOR);
+        copy.addAll(keySet);
+        return copy.iterator();
     }
 
-
-    public static class MemoryLRUCacheBytesIterator implements KeyValueIterator<byte[], MemoryLRUCacheBytesEntry> {
+    public static class MemoryLRUCacheBytesIterator implements PeekingKeyValueIterator<byte[], MemoryLRUCacheBytesEntry> {
+        private final byte [] cacheNameBytes;
         private final Iterator<byte[]> keys;
         private final Map<byte[], LRUNode> entries;
-        private byte[] lastKey;
+        private KeyValue<byte[], MemoryLRUCacheBytesEntry> nextEntry;
 
-        public MemoryLRUCacheBytesIterator(Iterator<byte[]> keys, Map<byte[], LRUNode> entries) {
+        public MemoryLRUCacheBytesIterator(final String cacheName, Iterator<byte[]> keys, Map<byte[], LRUNode> entries) {
+            this.cacheNameBytes = cacheName.getBytes();
             this.keys = keys;
             this.entries = entries;
         }
 
+        public byte[] peekNextKey() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            return nextEntry.key;
+        }
+
         @Override
         public boolean hasNext() {
-            return keys.hasNext();
+            if (nextEntry != null) {
+                return true;
+            }
+
+            while (keys.hasNext() && nextEntry == null) {
+                internalNext();
+            }
+
+            return nextEntry != null;
         }
 
         @Override
         public KeyValue<byte[], MemoryLRUCacheBytesEntry> next() {
-            lastKey = keys.next();
-            final LRUNode lruNode = entries.get(lastKey);
-            if (lruNode == null) {
-                return new KeyValue<>(lastKey, null);
+            if (!hasNext()) {
+                throw new NoSuchElementException();
             }
-            return new KeyValue<>(lastKey, lruNode.entry());
+            final KeyValue<byte[], MemoryLRUCacheBytesEntry> result = nextEntry;
+            nextEntry = null;
+            return result;
+        }
+
+        private void internalNext() {
+            byte [] cacheKey = keys.next();
+            final LRUNode lruNode = entries.get(cacheKey);
+            if (lruNode == null) {
+                return;
+            }
+
+            final byte[] storeName = new byte[cacheNameBytes.length];
+            System.arraycopy(cacheKey, 0, storeName, 0, storeName.length);
+            if (!Arrays.equals(cacheNameBytes, storeName)) {
+                return;
+            }
+
+            final byte [] originalKey = new byte[cacheKey.length - cacheNameBytes.length];
+            System.arraycopy(cacheKey, cacheNameBytes.length, originalKey, 0, originalKey.length);
+
+            nextEntry = new KeyValue<>(originalKey, lruNode.entry());
         }
 
         @Override

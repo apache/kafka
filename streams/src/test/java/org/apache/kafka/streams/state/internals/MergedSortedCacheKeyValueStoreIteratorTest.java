@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.junit.Test;
@@ -36,14 +35,13 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
         final byte[] nameBytes = "one".getBytes();
         for (int i = 0; i < bytes.length - 1; i += 2) {
             kv.put(Bytes.wrap(bytes[i]), bytes[i]);
-
             cache.put(cacheKey(bytes[i + 1], nameBytes), new MemoryLRUCacheBytesEntry(bytes[i + 1], bytes[i + 1]));
         }
 
         final Bytes from = Bytes.wrap(new byte[]{2});
         final Bytes to = Bytes.wrap(new byte[]{9});
-        final KeyValueIterator<Bytes, byte[]> storeIterator = kv.range(from, to);
-        final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheKey(from.get(), nameBytes), cacheKey(to.get(), nameBytes));
+        final PeekingKeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator(kv.range(from, to));
+        final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator cacheIterator = cache.range("one", cacheKey(from.get(), nameBytes), cacheKey(to.get(), nameBytes));
 
         final MergedSortedCacheKeyValueStoreIterator<byte[], byte[]> iterator = new MergedSortedCacheKeyValueStoreIterator<>(kv, cacheIterator, storeIterator, new StateSerdes<>("name", Serdes.ByteArray(), Serdes.ByteArray()));
         byte[][] values = new byte[8][];
@@ -54,15 +52,19 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
             values[index++] = value;
             assertArrayEquals(bytes[bytesIndex++], value);
         }
-
-
     }
 
-    private byte[] cacheKey(byte[] keyBytes, byte[] nameBytes) {
+    static byte[] cacheKey(byte[] keyBytes, byte[] nameBytes) {
         byte[] merged = new byte[nameBytes.length + keyBytes.length];
         System.arraycopy(nameBytes, 0, merged, 0, nameBytes.length);
         System.arraycopy(keyBytes, 0, merged, nameBytes.length, keyBytes.length);
         return merged;
+    }
+
+
+    @Test
+    public void should() throws Exception {
+
     }
 
 }

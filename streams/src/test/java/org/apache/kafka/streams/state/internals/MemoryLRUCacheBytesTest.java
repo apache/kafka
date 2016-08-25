@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
- *
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,21 +18,26 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
 import org.junit.Test;
+
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
-import static org.junit.Assert.assertEquals;
+import java.util.NoSuchElementException;
 
-public class MemoryLRUCacheBytesTest  {
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+
+public class MemoryLRUCacheBytesTest {
 
     @Test
     public void basicPutGet() {
         List<KeyValue<String, String>> toInsert = Arrays.asList(
-            new KeyValue<>("K1", "V1"),
-            new KeyValue<>("K2", "V2"),
-            new KeyValue<>("K3", "V3"),
-            new KeyValue<>("K4", "V4"),
-            new KeyValue<>("K5", "V5"));
+                new KeyValue<>("K1", "V1"),
+                new KeyValue<>("K2", "V2"),
+                new KeyValue<>("K3", "V3"),
+                new KeyValue<>("K4", "V4"),
+                new KeyValue<>("K5", "V5"));
         MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(
                 toInsert.size() * entrySize(toInsert.get(0)));
 
@@ -53,11 +58,11 @@ public class MemoryLRUCacheBytesTest  {
     @Test
     public void headTail() {
         List<KeyValue<String, String>> toInsert = Arrays.asList(
-            new KeyValue<>("K1", "V1"),
-            new KeyValue<>("K2", "V2"),
-            new KeyValue<>("K3", "V3"),
-            new KeyValue<>("K4", "V4"),
-            new KeyValue<>("K5", "V5"));
+                new KeyValue<>("K1", "V1"),
+                new KeyValue<>("K2", "V2"),
+                new KeyValue<>("K3", "V3"),
+                new KeyValue<>("K4", "V4"),
+                new KeyValue<>("K5", "V5"));
         final KeyValue<String, String> kv = toInsert.get(0);
         final int length = entrySize(kv);
 
@@ -77,34 +82,34 @@ public class MemoryLRUCacheBytesTest  {
 
     private int entrySize(final KeyValue<String, String> kv) {
         return kv.key.getBytes().length +
-                    kv.value.getBytes().length +
-                    1 + // isDirty
-                    8 + // timestamp
-                    8 + // offset
-                    4;
+                kv.value.getBytes().length +
+                1 + // isDirty
+                8 + // timestamp
+                8 + // offset
+                4;
     }
 
     @Test
     public void evict() {
         final List<KeyValue<String, String>> received = new ArrayList<>();
         List<KeyValue<String, String>> expected = Arrays.asList(
-            new KeyValue<>("K1", "V1"));
+                new KeyValue<>("K1", "V1"));
 
         List<KeyValue<String, String>> toInsert = Arrays.asList(
-            new KeyValue<>("K1", "V1"),
-            new KeyValue<>("K2", "V2"),
-            new KeyValue<>("K3", "V3"),
-            new KeyValue<>("K4", "V4"),
-            new KeyValue<>("K5", "V5"));
+                new KeyValue<>("K1", "V1"),
+                new KeyValue<>("K2", "V2"),
+                new KeyValue<>("K3", "V3"),
+                new KeyValue<>("K4", "V4"),
+                new KeyValue<>("K5", "V5"));
         MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(
                 entrySize(toInsert.get(0)));
         cache.addEldestRemovedListener(new MemoryLRUCacheBytes.EldestEntryRemovalListener<byte[],
-            MemoryLRUCacheBytesEntry>() {
+                MemoryLRUCacheBytesEntry>() {
             @Override
             public void apply(byte[] key, MemoryLRUCacheBytesEntry value) {
 
                 received.add(new KeyValue<>(new String(key),
-                    new String(((MemoryLRUCacheBytesEntry) value).value)));
+                                            new String(((MemoryLRUCacheBytesEntry) value).value)));
             }
         });
 
@@ -120,4 +125,83 @@ public class MemoryLRUCacheBytesTest  {
             assertEquals(expectedRecord, actualRecord);
         }
     }
+
+    @Test
+    public void shouldPeekNextKey() throws Exception {
+        final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(10000L);
+        final byte[] theByte = {0};
+        cache.put(theByte, entry(theByte));
+        final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator iterator = cache.range("", theByte, new byte[]{1});
+        assertArrayEquals(theByte, iterator.peekNextKey());
+        assertArrayEquals(theByte, iterator.peekNextKey());
+    }
+
+    @Test
+    public void shouldGetSameKeyAsPeekNext() throws Exception {
+        final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(10000L);
+        final byte[] theByte = {0};
+        cache.put(theByte, entry(theByte));
+        final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator iterator = cache.range("", theByte, new byte[]{1});
+        assertArrayEquals(iterator.peekNextKey(), iterator.next().key);
+    }
+
+    @Test(expected = NoSuchElementException.class)
+    public void shouldThrowIfNoNextKey() throws Exception {
+        final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(10000L);
+        final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator iterator = cache.range("", new byte[]{0}, new byte[]{1});
+        iterator.peekNextKey();
+    }
+
+    @Test
+    public void shouldBeFalseIfNoNextKey() throws Exception {
+        final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(10000L);
+        final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator iterator = cache.range("", new byte[]{0}, new byte[]{1});
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
+    public void shouldPeekAndIterateOverRange() throws Exception {
+        final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(10000L);
+        byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}};
+        for (final byte[] aByte : bytes) {
+            cache.put(aByte, entry(aByte));
+        }
+        final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator iterator = cache.range("", new byte[]{1}, new byte[]{4});
+        int bytesIndex = 1;
+        while (iterator.hasNext()) {
+            byte[] peekedKey = iterator.peekNextKey();
+            final KeyValue<byte[], MemoryLRUCacheBytesEntry> next = iterator.next();
+            assertArrayEquals(bytes[bytesIndex], peekedKey);
+            assertArrayEquals(bytes[bytesIndex], next.key);
+            bytesIndex++;
+        }
+        assertEquals(5, bytesIndex);
+    }
+
+    @Test
+    public void shouldSkipEntriesWhereValueHasBeenEvictedFromCache() throws Exception {
+        final int entrySize = 2 + // key + val
+                1 + // isDirty
+                8 + // timestamp
+                8 + // offset
+                4;
+        final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(entrySize * 5);
+        byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}};
+        for (int i = 0; i < 5; i++) {
+            cache.put(bytes[i], entry(bytes[i]));
+        }
+        assertEquals(5, cache.size());
+
+        final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator range = cache.range("", new byte[]{0}, new byte[]{5});
+        // should evict byte[] {0}
+        cache.put(new byte[]{6}, entry(new byte[]{6}));
+
+        assertArrayEquals(new byte[]{1}, range.peekNextKey());
+    }
+
+    private MemoryLRUCacheBytesEntry entry(final byte[] key) {
+        return new MemoryLRUCacheBytesEntry(key, key);
+    }
+
+
 }
