@@ -484,7 +484,7 @@ public class NetworkClient implements KafkaClient {
     private static void correlate(RequestHeader requestHeader, ResponseHeader responseHeader) {
         if (requestHeader.correlationId() != responseHeader.correlationId())
             throw new IllegalStateException("Correlation id for response (" + responseHeader.correlationId()
-                    + ") does not match request (" + requestHeader.correlationId() + ")");
+                    + ") does not match request (" + requestHeader.correlationId() + "), request header: " + requestHeader);
     }
 
     /**
