@@ -19,7 +19,7 @@ import java.util.Properties
 import kafka.admin.AdminUtils
 import kafka.consumer.SimpleConsumer
 import kafka.integration.KafkaServerTestHarness
-import kafka.server.{ClientQuotaManager, ClientConfigOverride, KafkaConfig, KafkaServer}
+import kafka.server._
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
@@ -132,9 +132,6 @@ class QuotasTest extends KafkaServerTestHarness {
 
     // Consumer should read in a bursty manner and get throttled immediately
     consume(consumers.head, numRecords)
-    // The replica consumer should not be throttled also. Create a fetch request which will exceed the quota immediately
-    val request = new FetchRequestBuilder().addFetch(topic1, 0, 0, 1024*1024).replicaId(followerNode.config.brokerId).build()
-    replicaConsumers.head.fetch(request)
     val consumerMetricName = leaderNode.metrics.metricName("throttle-time",
                                                            ApiKeys.FETCH.name,
                                                            "Tracking throttle-time per client",
@@ -153,9 +150,9 @@ class QuotasTest extends KafkaServerTestHarness {
     AdminUtils.changeClientIdConfig(zkUtils, consumerId2, props)
 
     TestUtils.retry(10000) {
-      val quotaManagers: Map[Short, ClientQuotaManager] = leaderNode.apis.quotaManagers
-      val overrideProducerQuota = quotaManagers.get(ApiKeys.PRODUCE.id).get.quota(producerId2)
-      val overrideConsumerQuota = quotaManagers.get(ApiKeys.FETCH.id).get.quota(consumerId2)
+      val quotaManagers = leaderNode.apis.quotas
+      val overrideProducerQuota = quotaManagers.client(QuotaType.Produce).quota(producerId2)
+      val overrideConsumerQuota = quotaManagers.client(QuotaType.Fetch).quota(consumerId2)
 
       assertEquals(s"ClientId $producerId2 must have unlimited producer quota", Quota.upperBound(Long.MaxValue), overrideProducerQuota)
       assertEquals(s"ClientId $consumerId2 must have unlimited consumer quota", Quota.upperBound(Long.MaxValue), overrideConsumerQuota)

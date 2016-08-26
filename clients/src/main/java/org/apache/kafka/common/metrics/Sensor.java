@@ -112,19 +112,42 @@ public final class Sensor {
      * @param timeMs
      */
     private void checkQuotas(long timeMs) {
-        for (int i = 0; i < this.metrics.size(); i++) {
-            KafkaMetric metric = this.metrics.get(i);
-            MetricConfig config = metric.config();
-            if (config != null) {
-                Quota quota = config.quota();
-                if (quota != null) {
-                    double value = metric.value(timeMs);
-                    if (!quota.acceptable(value)) {
-                        throw new QuotaViolationException(String.format(
-                            "'%s' violated quota. Actual: %f, Threshold: %f",
-                            metric.metricName(),
-                            value,
-                            quota.bound()));
+        checkQuotaWithDelta(0, timeMs);
+    }
+
+    /**
+     * Evaluate whether the value passed causes the quota to be exceeded on any metric
+     * @param delta A delta to be added to each metric before it is evalutated
+     * @throws QuotaViolationException if evaluating this value moves a metric beyond its configured maximum or minimum
+     *         bound
+     */
+    public void checkQuotaWithDelta(double value) {
+        checkQuotaWithDelta(value, time.milliseconds());
+    }
+
+    /**
+     * Evaluate whether the value passed causes the quota to be exceeded on any metric
+     * @param delta A delta to be added to each metric before it is evalutated
+     * @param timeMs The current POSIX time in milliseconds
+     * @throws QuotaViolationException if evaluating this value moves a metric beyond its configured maximum or minimum
+     *         bound
+     */
+    public void checkQuotaWithDelta(double delta, long timeMs) {
+        synchronized (this) {
+            for (int i = 0; i < this.metrics.size(); i++) {
+                KafkaMetric metric = this.metrics.get(i);
+                MetricConfig config = metric.config();
+                if (config != null) {
+                    Quota quota = config.quota();
+                    if (quota != null) {
+                        double current = metric.value(timeMs);
+                        double proposed = current + delta;
+                        if (!quota.acceptable(proposed)) {
+                            throw new QuotaViolationException(
+                                    metric.metricName(),
+                                    current,
+                                    quota.bound());
+                        }
                     }
                 }
             }
@@ -187,7 +210,7 @@ public final class Sensor {
         return (time.milliseconds() - this.lastRecordTime) > this.inactiveSensorExpirationTimeMs;
     }
 
-    synchronized List<KafkaMetric> metrics() {
+    public synchronized List<KafkaMetric> metrics() {
         return Collections.unmodifiableList(this.metrics);
     }
 }

@@ -66,7 +66,7 @@ class ReplicaManagerTest {
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false))
+      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics).followerReplication)
     try {
       val partition = rm.getOrCreatePartition(topic, 1)
       partition.getOrCreateReplica(1)
@@ -84,7 +84,7 @@ class ReplicaManagerTest {
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false))
+      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics).followerReplication)
     try {
       val partition = rm.getOrCreatePartition(topic, 1)
       partition.getOrCreateReplica(1)
@@ -101,7 +101,7 @@ class ReplicaManagerTest {
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false), Option(this.getClass.getName))
+      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics).followerReplication, Option(this.getClass.getName))
     try {
       def callback(responseStatus: Map[TopicPartition, PartitionResponse]) = {
         assert(responseStatus.values.head.errorCode == Errors.INVALID_REQUIRED_ACKS.code)
@@ -126,7 +126,7 @@ class ReplicaManagerTest {
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false))
+      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics).followerReplication)
 
     try {
       var produceCallbackFired = false
@@ -195,7 +195,7 @@ class ReplicaManagerTest {
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false), Option(this.getClass.getName))
+      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics).followerReplication, Option(this.getClass.getName))
     try {
       val aliveBrokers = Seq(new Broker(0, "host0", 0), new Broker(1, "host1", 1), new Broker(1, "host2", 2))
       val metadataCache = EasyMock.createMock(classOf[MetadataCache])

@@ -17,7 +17,6 @@
 package kafka.server
 
 import java.util.concurrent.{ConcurrentHashMap, DelayQueue, TimeUnit}
-
 import kafka.utils.{ShutdownableThread, Logging}
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics._

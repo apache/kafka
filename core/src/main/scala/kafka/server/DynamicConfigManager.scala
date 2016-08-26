@@ -37,6 +37,7 @@ import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener, ZkClient}
 object ConfigType {
   val Topic = "topics"
   val Client = "clients"
+  val Broker: String = "broker"
 }
 
 /**
@@ -92,6 +93,7 @@ class DynamicConfigManager(private val zkUtils: ZkUtils,
           val entityType = map.get("entity_type") match {
             case Some(ConfigType.Topic) => ConfigType.Topic
             case Some(ConfigType.Client) => ConfigType.Client
+            case Some(ConfigType.Broker) => ConfigType.Broker
             case _ => throw new IllegalArgumentException("Config change notification must have 'entity_type' set to either 'client' or 'topic'." +
               " Received: " + json)
           }

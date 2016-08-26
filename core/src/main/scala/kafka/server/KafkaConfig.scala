@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.util.Properties
+import java.util.concurrent.locks.{Lock, ReentrantReadWriteLock}
 
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1}
 import kafka.cluster.EndPoint
@@ -25,7 +26,7 @@ import kafka.consumer.ConsumerConfig
 import kafka.coordinator.OffsetConfig
 import kafka.log.LogConfig
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, Message, MessageSet}
-import kafka.utils.CoreUtils
+import kafka.utils.{Logging, CoreUtils}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.config.ConfigDef.ValidList
 import org.apache.kafka.common.config.SaslConfigs
@@ -104,6 +105,7 @@ object Defaults {
   val NumRecoveryThreadsPerDataDir = 1
   val AutoCreateTopicsEnable = true
   val MinInSyncReplicas = 1
+  val ThrottledReplicationLimit = Long.MaxValue
 
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMs = RequestTimeoutMs
@@ -153,6 +155,8 @@ object Defaults {
   val ConsumerQuotaBytesPerSecondDefault = ClientQuotaManagerConfig.QuotaBytesPerSecondDefault
   val NumQuotaSamples: Int = ClientQuotaManagerConfig.DefaultNumQuotaSamples
   val QuotaWindowSizeSeconds: Int = ClientQuotaManagerConfig.DefaultQuotaWindowSizeSeconds
+  val NumReplicationQuotaSamples: Int = ReplicationQuotaManagerConfig.DefaultNumQuotaSamples
+  val ReplicationQuotaWindowSizeSeconds: Int = ReplicationQuotaManagerConfig.DefaultQuotaWindowSizeSeconds
 
   val DeleteTopicEnable = false
 
@@ -313,7 +317,10 @@ object KafkaConfig {
   val ProducerQuotaBytesPerSecondDefaultProp = "quota.producer.default"
   val ConsumerQuotaBytesPerSecondDefaultProp = "quota.consumer.default"
   val NumQuotaSamplesProp = "quota.window.num"
+  val NumReplicationQuotaSamplesProp = "replication.quota.window.num"
   val QuotaWindowSizeSecondsProp = "quota.window.size.seconds"
+  val ReplicationQuotaWindowSizeSecondsProp = "replication.quota.window.size.seconds"
+  val ThrottledReplicationRateLimitProp = "replication.quota.throttled.rate"
 
   val DeleteTopicEnableProp = "delete.topic.enable"
   val CompressionTypeProp = "compression.type"
@@ -520,8 +527,12 @@ object KafkaConfig {
   /** ********* Quota Configuration ***********/
   val ProducerQuotaBytesPerSecondDefaultDoc = "Any producer distinguished by clientId will get throttled if it produces more bytes than this value per-second"
   val ConsumerQuotaBytesPerSecondDefaultDoc = "Any consumer distinguished by clientId/consumer group will get throttled if it fetches more bytes than this value per-second"
-  val NumQuotaSamplesDoc = "The number of samples to retain in memory"
-  val QuotaWindowSizeSecondsDoc = "The time span of each sample"
+  val NumQuotaSamplesDoc = "The number of samples to retain in memory for client quotas"
+  val NumReplicationQuotaSamplesDoc = "The number of samples to retain in memory for replication quotas"
+  val QuotaWindowSizeSecondsDoc = "The time span of each sample for client quotas"
+  val ReplicationQuotaWindowSizeSecondsDoc = "The time span of each sample for replication quotas"
+  val ThrottledReplicationRateLimitDoc = "An long representing an upper bound on replication traffic for replicas enumerated in the " +
+    "property quota.replication.throttled.replicas. This property can be set dynamically."
 
   val DeleteTopicEnableDoc = "Enables delete topic. Delete topic through the admin tool will have no effect if this config is turned off"
   val CompressionTypeDoc = "Specify the final compression type for a given topic. This configuration accepts the standard compression codecs " +
@@ -705,8 +716,10 @@ object KafkaConfig {
       .define(ProducerQuotaBytesPerSecondDefaultProp, LONG, Defaults.ProducerQuotaBytesPerSecondDefault, atLeast(1), HIGH, ProducerQuotaBytesPerSecondDefaultDoc)
       .define(ConsumerQuotaBytesPerSecondDefaultProp, LONG, Defaults.ConsumerQuotaBytesPerSecondDefault, atLeast(1), HIGH, ConsumerQuotaBytesPerSecondDefaultDoc)
       .define(NumQuotaSamplesProp, INT, Defaults.NumQuotaSamples, atLeast(1), LOW, NumQuotaSamplesDoc)
+      .define(NumReplicationQuotaSamplesProp, INT, Defaults.NumReplicationQuotaSamples, atLeast(1), LOW, NumReplicationQuotaSamplesDoc)
       .define(QuotaWindowSizeSecondsProp, INT, Defaults.QuotaWindowSizeSeconds, atLeast(1), LOW, QuotaWindowSizeSecondsDoc)
-
+      .define(ReplicationQuotaWindowSizeSecondsProp, INT, Defaults.ReplicationQuotaWindowSizeSeconds, atLeast(1), LOW, ReplicationQuotaWindowSizeSecondsDoc)
+      .define(ThrottledReplicationRateLimitProp, LONG, Defaults.ThrottledReplicationLimit, atLeast(0), MEDIUM, ThrottledReplicationRateLimitDoc)
 
       /** ********* SSL Configuration ****************/
       .define(PrincipalBuilderClassProp, CLASS, Defaults.PrincipalBuilderClass, MEDIUM, PrincipalBuilderClassDoc)
@@ -751,7 +764,7 @@ object KafkaConfig {
     import scala.collection.JavaConversions._
     val names = configDef.names()
     for (name <- props.keys)
-      require(names.contains(name), "Unknown configuration \"%s\".".format(name))
+      require(names.contains(name), "Unknown Kafka configuration \"%s\".".format(name))
   }
 
   def fromProps(props: Properties): KafkaConfig =
@@ -775,6 +788,7 @@ object KafkaConfig {
 }
 
 class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends AbstractConfig(KafkaConfig.configDef, props, doLog) {
+  private val lock = new ReentrantReadWriteLock()
 
   def this(props: java.util.Map[_, _]) = this(props, true)
 
@@ -938,12 +952,31 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val consumerQuotaBytesPerSecondDefault = getLong(KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp)
   val numQuotaSamples = getInt(KafkaConfig.NumQuotaSamplesProp)
   val quotaWindowSizeSeconds = getInt(KafkaConfig.QuotaWindowSizeSecondsProp)
+  val numReplicationQuotaSamples = getInt(KafkaConfig.NumReplicationQuotaSamplesProp)
+  val replicationQuotaWindowSizeSeconds = getInt(KafkaConfig.ReplicationQuotaWindowSizeSecondsProp)
 
   val deleteTopicEnable = getBoolean(KafkaConfig.DeleteTopicEnableProp)
   val compressionType = getString(KafkaConfig.CompressionTypeProp)
 
   val listeners = getListeners
   val advertisedListeners = getAdvertisedListeners
+
+  /** ********** Mutable Configuration ***************/
+  private var throttledReplicationRateLimitMutable = getLong(KafkaConfig.ThrottledReplicationRateLimitProp)
+
+  def throttledReplicationRateLimit() = {CoreUtils.inReadLock(lock){throttledReplicationRateLimitMutable}}
+
+  /**
+    * Mutate specific configuration values which are allowed to be mutated
+    */
+  def mutateConfig(prop: String, value: Long): Unit ={
+    CoreUtils.inWriteLock(lock){
+      prop match {
+        case KafkaConfig.ThrottledReplicationRateLimitProp => throttledReplicationRateLimitMutable = value
+        case default => throw new IllegalArgumentException("Property $prop cannot be mutated as it's not configured as a mutable property")
+      }
+    }
+  }
 
   private def getLogRetentionTimeMillis: Long = {
     val millisInMinute = 60L * 1000L

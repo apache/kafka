@@ -19,10 +19,8 @@ package kafka.log
 
 import java.util.Properties
 
-import kafka.server.KafkaConfig
-import kafka.server.KafkaServer
+import kafka.server.{ThrottledReplicaValidator, KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils
-import org.apache.kafka.common.config.ConfigException
 import org.junit.{Assert, Test}
 import org.junit.Assert._
 import org.scalatest.Assertions._
@@ -63,6 +61,25 @@ class LogConfigTest {
       case LogConfig.MessageFormatVersionProp => assertPropertyInvalid(name, "")
       case positiveIntProperty => assertPropertyInvalid(name, "not_a_number", "-1")
     })
+  }
+
+  @Test
+  def shouldValidateThrottledReplicasConfig() {
+    assertTrue(ThrottledReplicaValidator.isValid("*"))
+    assertTrue(ThrottledReplicaValidator.isValid("* "))
+    assertTrue(ThrottledReplicaValidator.isValid(""))
+    assertTrue(ThrottledReplicaValidator.isValid(" "))
+    assertTrue(ThrottledReplicaValidator.isValid("100-10"))
+    assertTrue(ThrottledReplicaValidator.isValid("100-10:12-10"))
+    assertTrue(ThrottledReplicaValidator.isValid("100-10:12-10:15-1"))
+    assertTrue(ThrottledReplicaValidator.isValid("100-10:12-10:15-1  "))
+
+    assertFalse(ThrottledReplicaValidator.isValid("100"))
+    assertFalse(ThrottledReplicaValidator.isValid("100-"))
+    assertFalse(ThrottledReplicaValidator.isValid("100-0:"))
+    assertFalse(ThrottledReplicaValidator.isValid("100-0:10"))
+    assertFalse(ThrottledReplicaValidator.isValid("100-0:10-"))
+    assertFalse(ThrottledReplicaValidator.isValid("100-0:10-   "))
   }
 
   private def assertPropertyInvalid(name: String, values: AnyRef*) {

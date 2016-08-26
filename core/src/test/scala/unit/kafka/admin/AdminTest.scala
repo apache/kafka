@@ -16,9 +16,9 @@
  */
 package kafka.admin
 
+import kafka.server.KafkaConfig._
 import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, InvalidReplicationFactorException, InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.metrics.Quota
-import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.Assert._
 import org.junit.Test
 import java.util.Properties
@@ -28,7 +28,7 @@ import kafka.log._
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.{Logging, TestUtils, ZkUtils}
 import kafka.common.TopicAndPartition
-import kafka.server.{ConfigType, KafkaConfig, KafkaServer}
+import kafka.server.{QuotaType, ConfigType, KafkaConfig, KafkaServer}
 import java.io.File
 
 import TestUtils._
@@ -424,6 +424,50 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     }
   }
 
+  @Test
+  def shouldPropagateDynamicBrokerConfigs() = {
+    val brokerIds = Seq(0, 1, 2)
+    val servers = createBrokerConfigs(3, zkConnect).map(fromProps).map(TestUtils.createServer(_))
+
+    def wrap(limit: Long): Properties = {
+      val props = new Properties()
+      props.setProperty(KafkaConfig.ThrottledReplicationRateLimitProp, limit.toString)
+      props
+    }
+
+    def checkConfig(limit: Long) {
+      TestUtils.retry(10000) {
+        for (server <- servers) {
+          assertEquals("KafkaConfig was not updated", limit, server.config.throttledReplicationRateLimit)
+          assertEquals("Leader Quota Manager was not updated", limit, server.quotaManagers.leaderReplication.bound())
+          assertEquals("Follower Quota Manager was not updated", limit, server.quotaManagers.followerReplication.bound())
+        }
+      }
+    }
+
+    try {
+      val limit = 42
+
+      // Set the limit & check it is applied to the log
+      AdminUtils.changeBrokerConfig(servers(0).zkUtils, brokerIds, wrap(limit))
+      checkConfig(limit)
+
+      // Now double the config values for the topic and check that it is applied
+      val newLimit = 2 * limit
+      AdminUtils.changeBrokerConfig(servers(0).zkUtils, brokerIds, wrap(newLimit))
+      checkConfig(newLimit)
+
+      // Verify that the same config can be read from ZK
+      for (brokerId <- brokerIds) {
+        val configInZk = AdminUtils.fetchEntityConfig(servers(brokerId).zkUtils, ConfigType.Broker, brokerId.toString)
+        assertEquals(newLimit, configInZk.getProperty(KafkaConfig.ThrottledReplicationRateLimitProp).toInt)
+      }
+    } finally {
+      servers.foreach(_.shutdown())
+      servers.foreach(server => CoreUtils.delete(server.config.logDirs))
+    }
+  }
+
   /**
    * This test simulates a client config change in ZK whose notification has been purged.
    * Basically, it asserts that notifications are bootstrapped from ZK
@@ -447,8 +491,8 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     // Test that the existing clientId overrides are read
     val server = TestUtils.createServer(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
     try {
-      assertEquals(new Quota(1000, true), server.apis.quotaManagers(ApiKeys.PRODUCE.id).quota(clientId))
-      assertEquals(new Quota(2000, true), server.apis.quotaManagers(ApiKeys.FETCH.id).quota(clientId))
+      assertEquals(new Quota(1000, true), server.apis.quotas.client(QuotaType.Produce).quota(clientId))
+      assertEquals(new Quota(2000, true), server.apis.quotas.client(QuotaType.Fetch).quota(clientId))
     } finally {
       server.shutdown()
       CoreUtils.delete(server.config.logDirs)

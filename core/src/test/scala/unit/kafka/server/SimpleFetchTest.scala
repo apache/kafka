@@ -16,23 +16,23 @@
  */
 package kafka.server
 
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.{Collections, Properties}
+
 import kafka.api._
-import kafka.utils._
 import kafka.cluster.Replica
 import kafka.common.TopicAndPartition
 import kafka.log.Log
-import kafka.message.{MessageSet, ByteBufferMessageSet, Message}
+import kafka.message.{ByteBufferMessageSet, Message, MessageSet}
+import kafka.server.QuotaFactory.UnbreakableQuota
+import kafka.utils._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.{MockTime => JMockTime}
-import org.junit.{Test, After, Before}
-
-import java.util.{Properties, Collections}
-import java.util.concurrent.atomic.AtomicBoolean
-import collection.JavaConversions._
-
 import org.easymock.EasyMock
-import org.I0Itec.zkclient.ZkClient
 import org.junit.Assert._
+import org.junit.{After, Before, Test}
+
+import scala.collection.JavaConversions._
 
 class SimpleFetchTest {
 
@@ -99,7 +99,7 @@ class SimpleFetchTest {
 
     // create the replica manager
     replicaManager = new ReplicaManager(configs.head, metrics, time, jTime, zkUtils, scheduler, logManager,
-      new AtomicBoolean(false))
+      new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics).followerReplication)
 
     // add the partition with two replicas, both in ISR
     val partition = replicaManager.getOrCreatePartition(topic, partitionId)
@@ -148,9 +148,9 @@ class SimpleFetchTest {
     val initialAllTopicsCount = BrokerTopicStats.getBrokerAllTopicsStats().totalFetchRequestRate.count()
 
     assertEquals("Reading committed data should return messages only up to high watermark", messagesToHW,
-      replicaManager.readFromLocalLog(true, true, fetchInfo).get(topicAndPartition).get.info.messageSet.head.message)
+      replicaManager.readFromLocalLog(true, true, fetchInfo, UnbreakableQuota).get(topicAndPartition).get.info.messageSet.head.message)
     assertEquals("Reading any data can return messages up to the end of the log", messagesToLEO,
-      replicaManager.readFromLocalLog(true, false, fetchInfo).get(topicAndPartition).get.info.messageSet.head.message)
+      replicaManager.readFromLocalLog(true, false, fetchInfo, UnbreakableQuota).get(topicAndPartition).get.info.messageSet.head.message)
 
     assertEquals("Counts should increment after fetch", initialTopicCount+2, BrokerTopicStats.getBrokerTopicStats(topic).totalFetchRequestRate.count())
     assertEquals("Counts should increment after fetch", initialAllTopicsCount+2, BrokerTopicStats.getBrokerAllTopicsStats().totalFetchRequestRate.count())

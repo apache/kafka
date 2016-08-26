@@ -18,9 +18,10 @@ package kafka.server
 
 import java.util.Collections
 
+import kafka.common.TopicAndPartition
 import org.apache.kafka.common.metrics.{MetricConfig, Metrics, Quota}
 import org.apache.kafka.common.utils.MockTime
-import org.junit.Assert.{assertEquals, assertTrue}
+import org.junit.Assert.{assertEquals, assertTrue, assertFalse}
 import org.junit.{Before, Test}
 
 class ClientQuotaManagerTest {

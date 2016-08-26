@@ -54,6 +54,7 @@ case class FetchMetadata(fetchMinBytes: Int,
 class DelayedFetch(delayMs: Long,
                    fetchMetadata: FetchMetadata,
                    replicaManager: ReplicaManager,
+                   quota: ReadOnlyQuota,
                    responseCallback: Map[TopicAndPartition, FetchResponsePartitionData] => Unit)
   extends DelayedOperation(delayMs) {
 
@@ -69,6 +70,7 @@ class DelayedFetch(delayMs: Long,
    */
   override def tryComplete() : Boolean = {
     var accumulatedSize = 0
+    var containsThrottledPartitions = false
     fetchMetadata.fetchPartitionStatus.foreach {
       case (topicAndPartition, fetchStatus) =>
         val fetchOffset = fetchStatus.startOffsetMetadata
@@ -95,8 +97,11 @@ class DelayedFetch(delayMs: Long,
                 debug("Satisfying fetch %s immediately since it is fetching older segments.".format(fetchMetadata))
                 return forceComplete()
               } else if (fetchOffset.messageOffset < endOffset.messageOffset) {
-                // we need take the partition fetch size as upper bound when accumulating the bytes
-                accumulatedSize += math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.fetchSize)
+                // we take the partition fetch size as upper bound when accumulating the bytes (skip if a throttled partition)
+                if (!quota.isThrottled(topicAndPartition))
+                  accumulatedSize += math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.fetchSize)
+                else
+                  containsThrottledPartitions = true
               }
             }
           }
@@ -111,7 +116,7 @@ class DelayedFetch(delayMs: Long,
     }
 
     // Case D
-    if (accumulatedSize >= fetchMetadata.fetchMinBytes)
+    if (accumulatedSize >= fetchMetadata.fetchMinBytes || (containsThrottledPartitions && !quota.isQuotaExceededBy(0)))
       forceComplete()
     else
       false
@@ -130,7 +135,7 @@ class DelayedFetch(delayMs: Long,
   override def onComplete() {
     val logReadResults = replicaManager.readFromLocalLog(fetchMetadata.fetchOnlyLeader,
       fetchMetadata.fetchOnlyCommitted,
-      fetchMetadata.fetchPartitionStatus.mapValues(status => status.fetchInfo))
+      fetchMetadata.fetchPartitionStatus.mapValues(status => status.fetchInfo), quota)
 
     val fetchPartitionData = logReadResults.mapValues(result =>
       FetchResponsePartitionData(result.errorCode, result.hw, result.info.messageSet))

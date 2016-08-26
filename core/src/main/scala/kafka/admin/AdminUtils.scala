@@ -20,7 +20,7 @@ package kafka.admin
 import kafka.common._
 import kafka.cluster.Broker
 import kafka.log.LogConfig
-import kafka.server.ConfigType
+import kafka.server.{KafkaConfig, ConfigType}
 import kafka.utils._
 import kafka.utils.ZkUtils._
 import java.util.Random
@@ -496,6 +496,21 @@ object AdminUtils extends Logging {
     // remove the topic overrides
     LogConfig.validate(configs)
     changeEntityConfig(zkUtils, ConfigType.Topic, topic, configs)
+  }
+
+  /**
+    * Override the broker config on some set of brokers. These overrides will be persisted between sessions, and will
+    * override any defaults entered in the broker's config files
+    *
+    * @param zkUtils: Zookeeper utilities used to write the config to ZK
+    * @param brokers: The list of brokers to apply config changes to
+    * @param configs: The config to change, as properties
+    */
+  def changeBrokerConfig(zkUtils: ZkUtils, brokers: Seq[Int], configs: Properties): Unit = {
+    KafkaConfig.validateNames(configs)
+    brokers.foreach { broker =>
+      changeEntityConfig(zkUtils, ConfigType.Broker, broker.toString, configs)
+    }
   }
 
   private def changeEntityConfig(zkUtils: ZkUtils, entityType: String, entityName: String, configs: Properties) {

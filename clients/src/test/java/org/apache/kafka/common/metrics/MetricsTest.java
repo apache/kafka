@@ -35,6 +35,8 @@ import org.apache.kafka.common.metrics.stats.Percentiles;
 import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Total;
+import org.apache.kafka.common.metrics.stats.FixedWindowRate;
+import org.apache.kafka.common.metrics.stats.SimpleRate;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.After;
 import org.junit.Before;
@@ -459,4 +461,94 @@ public class MetricsTest {
 
     }
 
+    @Test
+    public void testFixedWindowRate() {
+        FixedWindowRate rate = new FixedWindowRate();
+
+        //Given
+        MetricConfig config = new MetricConfig().timeWindow(1, TimeUnit.SECONDS).samples(10);
+
+        //When we record anything, if there is no time, just provide the rate
+        record(rate, config, 1000);
+        assertEquals(1000, measure(rate, config), 0.01);
+
+        //Inside the first window, the rate should be the average over that first window
+        time.sleep(100);
+        assertEquals(1000, measure(rate, config), 0);
+        time.sleep(100);
+        assertEquals(1000, measure(rate, config), 0);
+
+        //Adding another value, inside the same window should double the rate
+        record(rate, config, 1000);
+        assertEquals(2000, measure(rate, config), 0);
+
+        //Going over the window boundary 1s should double the window size and half the rate
+        time.sleep(1000);
+        assertEquals(2000 / 2, measure(rate, config), 0);
+        record(rate, config, 1000);
+        assertEquals(3000 / 2, measure(rate, config), 0);
+
+        //Sleeping for another 7 windows and the rate should be the same
+        time.sleep(7000);
+        assertEquals(3000 / 9, measure(rate, config), 1);
+        record(rate, config, 1000);
+        assertEquals(4000 / 9, measure(rate, config), 1);
+
+        //Going over the 10 window boundary should cause the first window's values (2000) to be purged
+        time.sleep(2000);
+        assertEquals((4000 - 2000) / 1, measure(rate, config), 0);
+        record(rate, config, 1000);
+        assertEquals((5000 - 2000) / 1, measure(rate, config), 0);
+    }
+
+    @Test
+    public void testSimpleRate() {
+        SimpleRate rate = new SimpleRate();
+
+        //Given
+        MetricConfig config = new MetricConfig().timeWindow(1, TimeUnit.SECONDS).samples(10);
+
+        //When we record anything, if there is no time, rate will be infinite
+        record(rate, config, 1000);
+        assertTrue(measure(rate, config).isInfinite());
+
+        //Inside the first window, the rate will be in proportion to the elapsed time
+        time.sleep(100);
+        assertEquals(10000, measure(rate, config), 0); // 1000B / 0.1s
+        time.sleep(100);
+        assertEquals(5000, measure(rate, config), 0); // 1000B / 0.2s
+        time.sleep(200);
+        assertEquals(2500, measure(rate, config), 0); // 1000B / 0.4s
+
+        //Adding another value, inside the same window should double the rate
+        record(rate, config, 1000);
+        assertEquals(2000 / 0.4, measure(rate, config), 0);
+
+        //Going over the window boundary 1s should not change behaviour
+        time.sleep(1100);
+        assertEquals(2000 / 1.5, measure(rate, config), 0);
+        record(rate, config, 1000);
+        assertEquals(3000 / 1.5, measure(rate, config), 0);
+
+        //Sleeping for another 7 windows also should be the same
+        time.sleep(7500);
+        assertEquals(3000 / 9, measure(rate, config), 1);
+        record(rate, config, 1000);
+        assertEquals(4000 / 9, measure(rate, config), 1);
+
+        //Going over the 10 window boundary should cause the first window's values (2000) to be purged.
+        //So the time is now back to the last reading which was 1.5s into test
+        time.sleep(1500);
+        assertEquals((4000 - 2000) / (10.5 - 1.5), measure(rate, config), 1);
+        record(rate, config, 1000);
+        assertEquals((5000 - 2000) / (10.5 - 1.5), measure(rate, config), 1);
+    }
+
+    private void record(Rate rate, MetricConfig config, int value) {
+        rate.record(config, value, time.milliseconds());
+    }
+
+    private Double measure(Measurable rate, MetricConfig config) {
+        return rate.measure(config, time.milliseconds());
+    }
 }

@@ -22,7 +22,7 @@ import kafka.cluster.BrokerEndPoint
 import kafka.message.ByteBufferMessageSet
 import kafka.server.{PartitionFetchState, AbstractFetcherThread}
 import kafka.common.{ErrorMapping, TopicAndPartition}
-import scala.collection.JavaConverters
+import scala.collection.{Map, JavaConverters}
 import JavaConverters._
 import ConsumerFetcherThread._
 
@@ -109,6 +109,7 @@ class ConsumerFetcherThread(name: String,
       key -> new PartitionData(value)
     }
 
+  override def fetchResponseProcessingComplete(responseData: Map[TopicAndPartition, PD]): Unit = {}
 }
 
 object ConsumerFetcherThread {

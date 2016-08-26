@@ -17,6 +17,7 @@
 package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.MetricName;
 
 /**
  * Thrown when a sensor records a value that causes a metric to go outside the bounds configured as its quota
@@ -24,8 +25,18 @@ import org.apache.kafka.common.KafkaException;
 public class QuotaViolationException extends KafkaException {
 
     private static final long serialVersionUID = 1L;
+    public MetricName metricName;
+    public Double value;
+    public Double bound;
 
-    public QuotaViolationException(String m) {
-        super(m);
+    public QuotaViolationException(MetricName metricName, Double value, Double bound) {
+        super(String.format(
+                "'%s' violated quota. Actual: %f, Threshold: %f",
+                metricName,
+                value,
+                bound));
+        this.metricName = metricName;
+        this.value = value;
+        this.bound = bound;
     }
 }

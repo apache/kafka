@@ -28,6 +28,7 @@ import org.junit.Assert.{assertFalse, assertTrue}
 import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
+import scala.collection.Map
 
 class AbstractFetcherThreadTest {
 
@@ -122,6 +123,7 @@ class AbstractFetcherThreadTest {
     override protected def buildFetchRequest(partitionMap: collection.Map[TopicAndPartition, PartitionFetchState]): DummyFetchRequest = {
       new DummyFetchRequest(partitionMap.mapValues(_.offset))
     }
+    def fetchResponseProcessingComplete(responseData: Map[TopicAndPartition, PD]){}
   }
 
 }
