@@ -115,13 +115,20 @@ public final class Metadata {
 
     /**
      * The next time to update the cluster info is the maximum of the time the current info will expire and the time the
-     * current info can be updated (i.e. backoff time has elapsed); If an update has been request then the expiry time
+     * current info can be updated (i.e. backoff time has elapsed); If an update has been requested then the expiry time
      * is now
      */
     public synchronized long timeToNextUpdate(long nowMs) {
         long timeToExpire = needUpdate ? 0 : Math.max(this.lastSuccessfulRefreshMs + this.metadataExpireMs - nowMs, 0);
         long timeToAllowUpdate = this.lastRefreshMs + this.refreshBackoffMs - nowMs;
         return Math.max(timeToExpire, timeToAllowUpdate);
+    }
+
+    /**
+     * The metadata has expired if an update is explicitly requested or an update is due now.
+     */
+    public synchronized  boolean hasExpired(long nowMs) {
+        return this.needUpdate || this.timeToNextUpdate(nowMs) == 0;
     }
 
     /**

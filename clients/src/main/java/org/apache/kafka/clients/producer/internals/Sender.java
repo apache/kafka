@@ -208,11 +208,13 @@ public class Sender implements Runnable {
             }
         }
 
-        List<RecordBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, now);
-        // update sensors
-        for (RecordBatch expiredBatch : expiredBatches)
-            this.sensors.recordErrors(expiredBatch.topicPartition.topic(), expiredBatch.recordCount);
-
+        if (!metadata.hasExpired(now)) {
+            List<RecordBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, now);
+            // update sensors
+            for (RecordBatch expiredBatch : expiredBatches)
+                this.sensors.recordErrors(expiredBatch.topicPartition.topic(), expiredBatch.recordCount);
+        }
+        
         sensors.updateProduceRequestMetrics(batches);
         List<ClientRequest> requests = createProduceRequests(batches, now);
         // If we have any nodes that are ready to send + have sendable data, poll with 0 timeout so this can immediately
