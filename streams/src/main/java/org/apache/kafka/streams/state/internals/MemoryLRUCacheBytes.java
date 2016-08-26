@@ -20,11 +20,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -45,7 +40,7 @@ public class MemoryLRUCacheBytes {
     private long currentSizeBytes = 0;
     private LRUNode head = null;
     private LRUNode tail = null;
-    private final TreeMap<Bytes, LRUNode> map;
+    private final Map<String, TreeMap<Bytes, LRUNode>> map;
     private final Map<String, MemoryLRUCacheBytes.EldestEntryRemovalListener> listeners;
 
     public interface EldestEntryRemovalListener {
@@ -54,7 +49,7 @@ public class MemoryLRUCacheBytes {
 
     public MemoryLRUCacheBytes(long maxCacheSizeBytes) {
         this.maxCacheSizeBytes = maxCacheSizeBytes;
-        this.map = new TreeMap<>();
+        this.map = new HashMap<>();
         listeners = new HashMap<>();
     }
 
@@ -67,29 +62,27 @@ public class MemoryLRUCacheBytes {
         this.listeners.put(namespace, listener);
     }
 
-    private void callListener(final Bytes key, MemoryLRUCacheBytesEntry entry) {
-        try {
-            final DataInputStream dataInputStream = new DataInputStream(new ByteArrayInputStream(key.get()));
-            final String namespace = namespaceFromKey(dataInputStream);
-            final EldestEntryRemovalListener listener = listeners.get(namespace);
-            if (listener == null) {
-                return;
-            }
-            listener.apply(remainingBytes(dataInputStream), entry);
-        } catch (IOException e) {
-            throw new ProcessorStateException(e);
+    private void callListener(final Bytes key, LRUNode node) {
+        MemoryLRUCacheBytesEntry entry = node.entry();
+        final EldestEntryRemovalListener listener = listeners.get(node.namespace);
+        if (listener == null) {
+            return;
         }
+        listener.apply(key.get(), entry);
     }
 
     public synchronized MemoryLRUCacheBytesEntry get(final String namespace, byte[] key) {
         MemoryLRUCacheBytesEntry entry = null;
-        // get element
-        LRUNode node = this.map.get(cacheKey(namespace, key));
-        if (node != null) {
-            entry = node.entry();
-            updateLRU(node);
+        // get map
+        TreeMap<Bytes, LRUNode> treeMap = this.map.get(namespace);
+        if (treeMap != null) {
+            // get element
+            LRUNode node = treeMap.get(cacheKey(key));
+            if (node != null) {
+                entry = node.entry();
+                updateLRU(node);
+            }
         }
-
         return entry;
     }
 
@@ -101,31 +94,41 @@ public class MemoryLRUCacheBytes {
     private void maybeEvict(LRUNode newElement) {
         while (sizeBytes() + newElement.size() > maxCacheSizeBytes) {
             final Bytes key = tail.key;
-            LRUNode toRemove = this.map.get(key);
+            final String namespace = tail.namespace;
+            TreeMap<Bytes, LRUNode> treeMap = this.map.get(namespace);
+            LRUNode toRemove = treeMap.get(key);
             currentSizeBytes -= toRemove.size();
             remove(tail);
-            callListener(toRemove.key, toRemove.entry());
-            this.map.remove(key);
+            callListener(toRemove.key, toRemove);
+            treeMap.remove(key);
         }
     }
 
 
     public synchronized void put(final String namespace, byte[] key, MemoryLRUCacheBytesEntry value) {
-        final Bytes cacheKey = cacheKey(namespace, key);
+        final Bytes cacheKey = cacheKey(key);
         LRUNode node;
-        if (this.map.containsKey(cacheKey)) {
-            node = this.map.get(cacheKey);
+        // get map
+        TreeMap<Bytes, LRUNode> treeMap = null;
+        if (!this.map.containsKey(namespace)) {
+            treeMap = new TreeMap<>();
+            this.map.put(namespace, treeMap);
+        } else {
+            treeMap = this.map.get(namespace);
+        }
+
+        if (treeMap.containsKey(cacheKey)) {
+            node = treeMap.get(cacheKey);
             currentSizeBytes -= node.size();
             node.update(value);
             updateLRU(node);
-
         } else {
-            node = new LRUNode(cacheKey, value);
+            node = new LRUNode(cacheKey, namespace, value);
             // check if we need to evict anything
             maybeEvict(node);
             // put element
             putHead(node);
-            this.map.put(cacheKey, node);
+            treeMap.put(cacheKey, node);
         }
 
         currentSizeBytes += node.size();
@@ -146,53 +149,32 @@ public class MemoryLRUCacheBytes {
     }
 
     public synchronized MemoryLRUCacheBytesEntry delete(final String namespace, byte[] key) {
-        final Bytes cacheKey = cacheKey(namespace, key);
-        LRUNode node = this.map.get(cacheKey);
+        final Bytes cacheKey = cacheKey(key);
+        TreeMap<Bytes, LRUNode> treeMap = this.map.get(namespace);
+        LRUNode node = treeMap.get(cacheKey);
 
         // remove from LRU list
         remove(node);
 
         // remove from map
-        LRUNode value = this.map.remove(cacheKey);
+        LRUNode value = treeMap.remove(cacheKey);
+        if (treeMap.size() == 0) {
+            this.map.remove(namespace);
+        }
         return value.entry();
     }
 
 
     public int size() {
-        return this.map.size();
+        int size = 0;
+        for (Map.Entry<String, TreeMap<Bytes, LRUNode>> entry: this.map.entrySet()) {
+            size += entry.getValue().size();
+        }
+        return size;
     }
 
     public long sizeBytes() {
         return currentSizeBytes;
-    }
-
-
-    private static String namespaceFromKey(final Bytes key) {
-        try {
-            return namespaceFromKey(new DataInputStream(new ByteArrayInputStream(key.get())));
-        } catch (IOException e) {
-            throw new ProcessorStateException(e);
-        }
-    }
-
-    private static String namespaceFromKey(final DataInputStream stream) throws IOException {
-        return stream.readUTF();
-    }
-
-    private static byte[] originalKey(final Bytes cacheKey) {
-        final DataInputStream input = new DataInputStream(new ByteArrayInputStream(cacheKey.get()));
-        try {
-            namespaceFromKey(input);
-            return remainingBytes(input);
-        } catch (IOException e) {
-            throw new ProcessorStateException(e);
-        }
-    }
-
-    private static byte[] remainingBytes(final DataInputStream input) throws IOException {
-        final byte[] originalKey = new byte[input.available()];
-        input.read(originalKey);
-        return originalKey;
     }
 
     private void putHead(LRUNode node) {
@@ -243,12 +225,14 @@ public class MemoryLRUCacheBytes {
      */
     protected class LRUNode {
         private Bytes key;
+        private String namespace;
         private MemoryLRUCacheBytesEntry entry;
         private LRUNode previous;
         private LRUNode next;
 
-        LRUNode(final Bytes key, MemoryLRUCacheBytesEntry entry) {
+        LRUNode(final Bytes key, final String namespace, MemoryLRUCacheBytesEntry entry) {
             this.key = key;
+            this.namespace = namespace;
             this.entry = entry;
         }
 
@@ -261,16 +245,24 @@ public class MemoryLRUCacheBytes {
         }
 
         public long size() {
-            return key.get().length + entry.size();
+            return key.get().length + namespace.length() + entry.size();
         }
     }
 
     public synchronized MemoryLRUCacheBytesIterator range(final String namespace, byte[] from, byte[] to) {
-        return new MemoryLRUCacheBytesIterator(namespace, keySetIterator(map.navigableKeySet().subSet(cacheKey(namespace, from), true, cacheKey(namespace, to), true)), map);
+        TreeMap<Bytes, LRUNode> treeMap = this.map.get(namespace);
+        if (treeMap == null) {
+            throw new NoSuchElementException();
+        }
+        return new MemoryLRUCacheBytesIterator(namespace, keySetIterator(treeMap.navigableKeySet().subSet(cacheKey(from), true, cacheKey(to), true)), treeMap);
     }
 
     public MemoryLRUCacheBytesIterator all(final String namespace) {
-        return new MemoryLRUCacheBytesIterator(namespace, keySetIterator(map.tailMap(namespaceBytes(namespace)).keySet()), map);
+        TreeMap<Bytes, LRUNode> treeMap = this.map.get(namespace);
+        if (treeMap == null) {
+            throw new NoSuchElementException();
+        }
+        return new MemoryLRUCacheBytesIterator(namespace, keySetIterator(treeMap.keySet()), treeMap);
     }
 
 
@@ -280,28 +272,10 @@ public class MemoryLRUCacheBytes {
         return copy.iterator();
     }
 
-    private Bytes cacheKey(String namespace, byte[] keyBytes) {
-        final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        final DataOutputStream output = new DataOutputStream(bytes);
-        try {
-            output.writeUTF(namespace);
-            output.write(keyBytes);
-            return Bytes.wrap(bytes.toByteArray());
-        } catch (IOException e) {
-            throw new ProcessorStateException("Unable to convert key to cache key", e);
-        }
+    private Bytes cacheKey(byte[] keyBytes) {
+        return Bytes.wrap(keyBytes);
     }
 
-    private static Bytes namespaceBytes(final String namespace) {
-        final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        final DataOutputStream output = new DataOutputStream(bytes);
-        try {
-            output.writeUTF(namespace);
-            return Bytes.wrap(bytes.toByteArray());
-        } catch (IOException e) {
-            throw new ProcessorStateException(e);
-        }
-    }
 
     static class MemoryLRUCacheBytesIterator implements PeekingKeyValueIterator<byte[], MemoryLRUCacheBytesEntry> {
         private final String namespace;
@@ -352,11 +326,11 @@ public class MemoryLRUCacheBytes {
                 return;
             }
 
-            if (!namespace.equals(namespaceFromKey(cacheKey))) {
-                return;
+            if (!namespace.equals(lruNode.namespace)) {
+                throw new ProcessorStateException("Namespace mismatch in MemoryLRUCacheBytesIterator");
             }
 
-            nextEntry = new KeyValue<>(originalKey(cacheKey), lruNode.entry());
+            nextEntry = new KeyValue<>(cacheKey.get(), lruNode.entry());
         }
 
         @Override

@@ -30,8 +30,6 @@ import org.apache.kafka.test.MockProcessorContext;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -50,16 +48,11 @@ public class CachingKeyValueStoreTest {
     private InMemoryKeyValueStore<Bytes, byte[]> underlyingStore;
     private MemoryLRUCacheBytes cache;
     private int maxCacheSizeBytes;
-    private int nameLength;
     private CacheFlushListenerStub cacheFlushListener;
 
     @Before
     public void setUp() throws Exception {
         final String storeName = "store";
-        final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        final DataOutputStream out = new DataOutputStream(bytes);
-        out.writeUTF("store");
-        nameLength = bytes.size();
         underlyingStore = new InMemoryKeyValueStore<>(storeName);
         cacheFlushListener = new CacheFlushListenerStub();
         store = new CachingKeyValueStore<>(underlyingStore, Serdes.String(), Serdes.String(), cacheFlushListener);
@@ -128,7 +121,7 @@ public class CachingKeyValueStoreTest {
         while (cachedSize < maxCacheSizeBytes) {
             final String kv = String.valueOf(i++);
             store.put(kv, kv);
-            cachedSize += memoryCacheEntrySize("store", kv.getBytes(), kv.getBytes()) + nameLength;
+            cachedSize += memoryCacheEntrySize("store", kv.getBytes(), kv.getBytes());
         }
         return i;
     }

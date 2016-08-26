@@ -41,7 +41,6 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private final Serde<V> valueSerde;
     private final String name;
     private final CacheFlushListener<K, V> flushListener;
-    private final byte[] nameBytes;
     private MemoryLRUCacheBytes cache;
     private InternalProcessorContext context;
     private StateSerdes<K, V> serdes;
@@ -57,7 +56,6 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.valueSerde = valueSerde;
         this.name = underlying.name();
         this.flushListener = flushListener;
-        this.nameBytes = name.getBytes();
     }
 
     @Override
@@ -140,13 +138,6 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
     public synchronized V get(final K key) {
         final byte[] rawKey = serdes.rawKey(key);
         return get(rawKey);
-    }
-
-    private byte[] cacheKey(byte[] keyBytes) {
-        byte[] merged = new byte[nameBytes.length + keyBytes.length];
-        System.arraycopy(nameBytes, 0, merged, 0, nameBytes.length);
-        System.arraycopy(keyBytes, 0, merged, nameBytes.length, keyBytes.length);
-        return merged;
     }
 
     private V get(final byte[] rawKey) {

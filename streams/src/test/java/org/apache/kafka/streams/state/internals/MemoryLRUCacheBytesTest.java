@@ -19,8 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.KeyValue;
 import org.junit.Test;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.ArrayList;
@@ -86,11 +84,8 @@ public class MemoryLRUCacheBytesTest {
         }
     }
 
-    static int memoryCacheEntrySize(String namespace, byte [] key, byte [] value) throws IOException {
-        final ByteArrayOutputStream out = new ByteArrayOutputStream();
-        final DataOutputStream dataOut = new DataOutputStream(out);
-        dataOut.writeUTF(namespace);
-        return out.toByteArray().length + key.length +
+    static int memoryCacheEntrySize(String namespace, byte [] key, byte [] value) {
+        return key.length + namespace.length() +
                 value.length +
                 1 + // isDirty
                 8 + // timestamp
@@ -171,14 +166,14 @@ public class MemoryLRUCacheBytesTest {
     }
 
     @Test(expected = NoSuchElementException.class)
-    public void shouldThrowIfNoNextKey() throws Exception {
+    public void shouldThrowIfNoPeekNextKey() throws Exception {
         final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(10000L);
         final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator iterator = cache.range("", new byte[]{0}, new byte[]{1});
         iterator.peekNextKey();
     }
 
-    @Test
-    public void shouldBeFalseIfNoNextKey() throws Exception {
+    @Test(expected = NoSuchElementException.class)
+    public void shouldThrowIfNoNextKey() throws Exception {
         final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(10000L);
         final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator iterator = cache.range("", new byte[]{0}, new byte[]{1});
         assertFalse(iterator.hasNext());
