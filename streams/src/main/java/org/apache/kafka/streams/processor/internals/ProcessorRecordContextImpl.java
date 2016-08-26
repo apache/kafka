@@ -59,12 +59,6 @@ public class ProcessorRecordContextImpl implements ProcessorRecordContext {
         return partition;
     }
 
-    /**
-     * Forwards a key/value pair to the downstream processors
-     *
-     * @param key   key
-     * @param value value
-     */
     @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(K key, V value) {
