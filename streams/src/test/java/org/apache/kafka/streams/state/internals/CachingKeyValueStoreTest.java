@@ -40,6 +40,7 @@ import static org.apache.kafka.streams.state.internals.MemoryLRUCacheBytesTest.m
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 public class CachingKeyValueStoreTest {
 
@@ -91,6 +92,25 @@ public class CachingKeyValueStoreTest {
         int numRecords = addItemsToCache();
         assertEquals(numRecords - 1, cacheFlushListener.forwarded.size());
         assertFalse(cacheFlushListener.forwarded.containsKey(String.valueOf(numRecords - 1)));
+    }
+
+    @Test
+    public void shouldForwardDirtyItemsWhenFlushCalled() throws Exception {
+        store.put("1", "a");
+        store.flush();
+        assertEquals("a", cacheFlushListener.forwarded.get("1").newValue);
+        assertNull(cacheFlushListener.forwarded.get("1").oldValue);
+    }
+
+    @Test
+    public void shouldForwardOldValuesWhenEnabled() throws Exception {
+        store.enableSendingOldValues();
+        store.put("1", "a");
+        store.flush();
+        store.put("1", "b");
+        store.flush();
+        assertEquals("b", cacheFlushListener.forwarded.get("1").newValue);
+        assertEquals("a", cacheFlushListener.forwarded.get("1").oldValue);
     }
 
     @Test

@@ -70,6 +70,7 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
         initInternal(context);
     }
 
+    @SuppressWarnings("unchecked")
     void initInternal(final ProcessorContext context) {
         this.context = (InternalProcessorContext) context;
         this.serdes = new StateSerdes<>(underlying.name(),
@@ -94,11 +95,10 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
         while (dirtyKeyIterator.hasNext()) {
             final Bytes dirtyKey = dirtyKeyIterator.next().getKey();
             dirtyKeyIterator.remove();
-            final Bytes cacheKey = dirtyKey;
-            final MemoryLRUCacheBytesEntry entry = cache.get(name, cacheKey.get());
-            keyValues.add(KeyValue.pair(cacheKey, entry.value));
-            flushListener.forward(serdes.keyFrom(cacheKey.get()),
-                                  change(entry.value, underlying.get(cacheKey)),
+            final MemoryLRUCacheBytesEntry entry = cache.get(name, dirtyKey.get());
+            keyValues.add(KeyValue.pair(dirtyKey, entry.value));
+            flushListener.forward(serdes.keyFrom(dirtyKey.get()),
+                                  change(entry.value, underlying.get(dirtyKey)),
                                   entry,
                                   context);
         }
@@ -162,14 +162,14 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
     public KeyValueIterator<K, V> range(final K from, final K to) {
         final byte[] origFrom = serdes.rawKey(from);
         final byte[] origTo = serdes.rawKey(to);
-        final PeekingKeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator(underlying.range(Bytes.wrap(origFrom), Bytes.wrap(origTo)));
+        final PeekingKeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>(underlying.range(Bytes.wrap(origFrom), Bytes.wrap(origTo)));
         final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, origFrom, origTo);
         return new MergedSortedCacheKeyValueStoreIterator<>(underlying, cacheIterator, storeIterator, serdes);
     }
 
     @Override
     public KeyValueIterator<K, V> all() {
-        final PeekingKeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator(underlying.all());
+        final PeekingKeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>(underlying.all());
         final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator cacheIterator = cache.all(name);
         return new MergedSortedCacheKeyValueStoreIterator<>(underlying, cacheIterator, storeIterator, serdes);
     }
