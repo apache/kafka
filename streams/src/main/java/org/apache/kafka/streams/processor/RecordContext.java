@@ -16,9 +16,28 @@
  */
 package org.apache.kafka.streams.processor;
 
+/**
+ * The context associated with the current record being processed by
+ * an {@link Processor}
+ */
 public interface RecordContext {
+    /**
+     * @return The offset of the original record received from Kafka
+     */
     long offset();
+
+    /**
+     * @return The timestamp extracted from the record received from Kafka
+     */
     long timestamp();
+
+    /**
+     * @return The topic the record was received on
+     */
     String topic();
+
+    /**
+     * @return The partition the record was received on
+     */
     int partition();
 }

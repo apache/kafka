@@ -21,11 +21,8 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
-import org.apache.kafka.streams.kstream.internals.Change;
-import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContextImpl;
+import org.apache.kafka.streams.processor.internals.ProcessorNodeCacheFlushListener;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.QuickUnion;
@@ -830,26 +827,7 @@ public class TopologyBuilder {
 
     @SuppressWarnings("unchecked")
     private void addCacheFlushListener(final ProcessorNode node, final ForwardingSupplier supplier) {
-        supplier.withFlushListener(new CacheFlushListener() {
-            @Override
-            public void forward(final Object key, final Change value, final RecordContext recordContext, final InternalProcessorContext context) {
-                final ProcessorRecordContext current = context.processorRecordContext();
-                try {
-                    for (ProcessorNode processorNode : (List<ProcessorNode>) node.children()) {
-                        final ProcessorRecordContextImpl processorRecordContext = new ProcessorRecordContextImpl(recordContext.timestamp(),
-                                                                                                                 recordContext.offset(),
-                                                                                                                 recordContext.partition(),
-                                                                                                                 recordContext.topic(),
-                                                                                                                 processorNode);
-                        context.setRecordContext(processorRecordContext);
-                        processorNode.process(key, value);
-                    }
-                } finally {
-                    context.setRecordContext(current);
-                }
-
-            }
-        });
+        supplier.withFlushListener(new ProcessorNodeCacheFlushListener(node));
     }
 
     /**

@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.streams.processor.ProcessorRecordContext;
 
 import java.util.List;
+import java.util.Objects;
 
 public class ProcessorRecordContextImpl implements ProcessorRecordContext {
 
@@ -102,4 +103,20 @@ public class ProcessorRecordContextImpl implements ProcessorRecordContext {
         }
     }
 
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        final ProcessorRecordContextImpl that = (ProcessorRecordContextImpl) o;
+        return timestamp == that.timestamp &&
+                offset == that.offset &&
+                partition == that.partition &&
+                Objects.equals(topic, that.topic) &&
+                Objects.equals(node, that.node);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(timestamp, offset, topic, partition, node);
+    }
 }
