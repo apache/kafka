@@ -647,12 +647,12 @@ We do graphing and alerting on the following metrics:
       <td>broken into queue, local, remote and response send time</td>
     </tr>
     <tr>
-      <td>Time the request waiting in the request queue</td>
-       <td>kafka.network:type=RequestMetrics,name=QueueTimeMs,request={Produce|FetchConsumer|FetchFollower}</td>
+      <td>Time the request waits in the request queue</td>
+       <td>kafka.network:type=RequestMetrics,name=RequestQueueTimeMs,request={Produce|FetchConsumer|FetchFollower}</td>
       <td></td>
     </tr>
     <tr>
-      <td>Time the request being processed at the leader</td>
+      <td>Time the request is processed at the leader</td>
       <td>kafka.network:type=RequestMetrics,name=LocalTimeMs,request={Produce|FetchConsumer|FetchFollower}</td>
       <td></td>
     </tr>
@@ -660,6 +660,11 @@ We do graphing and alerting on the following metrics:
       <td>Time the request waits for the follower</td>
       <td>kafka.network:type=RequestMetrics,name=RemoteTimeMs,request={Produce|FetchConsumer|FetchFollower}</td>
       <td>non-zero for produce requests when ack=-1</td>
+    </tr>
+    <tr>
+        <td>Time the request waits in the response queue</td>
+        <td>kafka.network:type=RequestMetrics,name=ResponseQueueTimeMs,request={Produce|FetchConsumer|FetchFollower}</td>
+        <td></td>
     </tr>
     <tr>
       <td>Time to send the response</td>
