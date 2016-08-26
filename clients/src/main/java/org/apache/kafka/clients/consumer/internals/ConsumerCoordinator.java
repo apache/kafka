@@ -157,23 +157,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 if (!cluster.unauthorizedTopics().isEmpty())
                     throw new TopicAuthorizationException(new HashSet<>(cluster.unauthorizedTopics()));
 
-                boolean hasAutoTopicSubscription = subscriptions.hasAutoTopicSubscription();
-                boolean hasPatternSubscription = subscriptions.hasPatternSubscription();
-
-                if (hasAutoTopicSubscription || hasPatternSubscription) {
+                if (subscriptions.hasPatternSubscription()) {
                     final Set<String> topicsToSubscribe = new HashSet<>();
-                    Set<String> internalTopics = cluster.internalTopics();
-                    Set<String> topics = hasAutoTopicSubscription ? subscriptions.subscription() : cluster.topics();
 
-                    for (String topic: topics)
-                        if (!(excludeInternalTopics && internalTopics.contains(topic)) &&
-                                (hasAutoTopicSubscription || subscriptions.getSubscribedPattern().matcher(topic).matches()))
+                    for (String topic : cluster.topics())
+                        if (subscriptions.getSubscribedPattern().matcher(topic).matches() &&
+                                !(excludeInternalTopics && cluster.internalTopics().contains(topic)))
                             topicsToSubscribe.add(topic);
 
-                    if (hasAutoTopicSubscription)
-                        subscriptions.subscribeFromAutoTopics(topicsToSubscribe);
-                    else
-                        subscriptions.subscribeFromPattern(topicsToSubscribe);
+                    subscriptions.subscribeFromPattern(topicsToSubscribe);
 
                     // note we still need to update the topics contained in the metadata. Although we have
                     // specified that all topics should be fetched, only those set explicitly will be retained
@@ -522,20 +514,29 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 this.nextAutoCommitDeadline = now + retryBackoffMs;
             } else if (now >= nextAutoCommitDeadline) {
                 this.nextAutoCommitDeadline = now + autoCommitIntervalMs;
-                commitOffsetsAsync(subscriptions.allConsumed(), new OffsetCommitCallback() {
-                    @Override
-                    public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
-                        if (exception != null) {
-                            log.warn("Auto offset commit failed for group {}: {}", groupId, exception.getMessage());
-                            if (exception instanceof RetriableException)
-                                nextAutoCommitDeadline = Math.min(time.milliseconds() + retryBackoffMs, nextAutoCommitDeadline);
-                        } else {
-                            log.debug("Completed autocommit of offsets {} for group {}", offsets, groupId);
-                        }
-                    }
-                });
+                doAutoCommitOffsetsAsync();
             }
         }
+    }
+
+    public void maybeAutoCommitOffsetsNow() {
+        if (autoCommitEnabled && !coordinatorUnknown())
+            doAutoCommitOffsetsAsync();
+    }
+
+    private void doAutoCommitOffsetsAsync() {
+        commitOffsetsAsync(subscriptions.allConsumed(), new OffsetCommitCallback() {
+            @Override
+            public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+                if (exception != null) {
+                    log.warn("Auto offset commit failed for group {}: {}", groupId, exception.getMessage());
+                    if (exception instanceof RetriableException)
+                        nextAutoCommitDeadline = Math.min(time.milliseconds() + retryBackoffMs, nextAutoCommitDeadline);
+                } else {
+                    log.debug("Completed autocommit of offsets {} for group {}", offsets, groupId);
+                }
+            }
+        });
     }
 
     private void maybeAutoCommitOffsetsSync() {
@@ -815,7 +816,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         public void invoke() {
-            callback.onComplete(offsets, exception);
+            if (callback != null)
+                callback.onComplete(offsets, exception);
         }
     }
 

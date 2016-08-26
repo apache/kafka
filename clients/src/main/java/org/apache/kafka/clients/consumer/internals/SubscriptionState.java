@@ -115,14 +115,6 @@ public class SubscriptionState {
         changeSubscription(topics);
     }
 
-    public void subscribeFromAutoTopics(Set<String> topics) {
-        if (subscriptionType != SubscriptionType.AUTO_TOPICS)
-            throw new IllegalArgumentException("Attempt to subscribe from topics while subscription type set to " +
-                    subscriptionType);
-
-        changeSubscription(topics);
-    }
-
     public void subscribeFromPattern(Set<String> topics) {
         if (subscriptionType != SubscriptionType.AUTO_PATTERN)
             throw new IllegalArgumentException("Attempt to subscribe from pattern while subscription type set to " +
@@ -204,10 +196,6 @@ public class SubscriptionState {
         this.subscribedPattern = pattern;
     }
 
-    public boolean hasAutoTopicSubscription() {
-        return this.subscriptionType == SubscriptionType.AUTO_TOPICS;
-    }
-
     public boolean hasPatternSubscription() {
         return this.subscriptionType == SubscriptionType.AUTO_PATTERN;
     }
@@ -219,7 +207,6 @@ public class SubscriptionState {
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
     }
-
 
     public Pattern getSubscribedPattern() {
         return this.subscribedPattern;

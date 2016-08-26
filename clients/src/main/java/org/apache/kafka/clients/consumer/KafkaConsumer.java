@@ -706,9 +706,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                   Metrics metrics,
                   SubscriptionState subscriptions,
                   Metadata metadata,
-                  boolean autoCommitEnabled,
-                  int autoCommitIntervalMs,
-                  int heartbeatIntervalMs,
                   long retryBackoffMs,
                   long requestTimeoutMs) {
         this.clientId = clientId;
@@ -802,6 +799,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 }
                 log.debug("Subscribed to topic(s): {}", Utils.join(topics, ", "));
                 this.subscriptions.subscribe(new HashSet<>(topics), listener);
+                metadata.setTopics(subscriptions.groupSubscription());
             }
         } finally {
             release();
@@ -871,6 +869,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void unsubscribe() {
         acquire();
         try {
+            // make sure the offsets of topic partitions the consumer is unsubscribing from
+            // are committed since there will be no following rebalance
+            this.coordinator.maybeAutoCommitOffsetsNow();
+
             log.debug("Unsubscribed all topics or patterns and assigned partitions");
             this.subscriptions.unsubscribe();
             this.coordinator.maybeLeaveGroup();
@@ -911,6 +913,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         throw new IllegalArgumentException("Topic partitions to assign to cannot have null or empty topic");
                     topics.add(topic);
                 }
+
+                // make sure the offsets of topic partitions the consumer is unsubscribing from
+                // are committed since there will be no following rebalance
+                this.coordinator.maybeAutoCommitOffsetsNow();
 
                 log.debug("Subscribed to partition(s): {}", Utils.join(partitions, ", "));
                 this.subscriptions.assignFromUser(new HashSet<>(partitions));
