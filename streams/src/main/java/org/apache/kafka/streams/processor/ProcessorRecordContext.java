@@ -16,10 +16,32 @@
  */
 package org.apache.kafka.streams.processor;
 
+/**
+ * An {@link RecordContext} that also can forward to children of
+ * the current {@link org.apache.kafka.streams.processor.internals.ProcessorNode}
+ */
 public interface ProcessorRecordContext extends RecordContext {
+
+    /**
+     * Forwards a key/value pair to the downstream processors
+     * @param key key
+     * @param value value
+     */
     <K, V> void forward(K key, V value);
 
+    /**
+     * Forwards a key/value pair to one of the downstream processors designated by childIndex
+     * @param key key
+     * @param value value
+     * @param childIndex index in list of children of this node
+     */
     <K, V> void forward(K key, V value, int childIndex);
 
+    /**
+     * Forwards a key/value pair to one of the downstream processors designated by the downstream processor name
+     * @param key key
+     * @param value value
+     * @param childName name of downstream processor
+     */
     <K, V> void forward(K key, V value, String childName);
 }

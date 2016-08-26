@@ -27,5 +27,14 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
  */
 public interface CacheFlushListener<K, V> {
 
+    /**
+     * Forward records flushed from the {@link org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes} to
+     * any downstream Processors
+     * @param key               key of the entry
+     * @param value             current value
+     * @param recordContext     {@link RecordContext}
+     * @param context           context that should be updated with a {@link org.apache.kafka.streams.processor.ProcessorRecordContext}
+     *                          before forwarding
+     */
     void forward(final K key, final Change<V> value, final RecordContext recordContext, final InternalProcessorContext context);
 }

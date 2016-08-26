@@ -19,6 +19,11 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorRecordContext;
 
+/**
+ * For internal use so we can update the {@link ProcessorRecordContext}
+ * when we are forwarding items that have been evicted for flushed from
+ * {@link org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes}
+ */
 public interface InternalProcessorContext extends ProcessorContext {
     void setRecordContext(ProcessorRecordContext recordContext);
 }

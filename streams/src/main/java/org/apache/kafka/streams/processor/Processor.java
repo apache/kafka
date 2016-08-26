@@ -38,8 +38,10 @@ public interface Processor<K, V> {
 
     /**
      * Process the record with the given key and value.
-     *  @param key the key for the record
-     * @param value the value for the record */
+     *
+     * @param key the key for the record
+     * @param value the value for the record
+     */
     void process(K key, V value);
 
     /**
@@ -55,6 +57,4 @@ public interface Processor<K, V> {
      * Thus, it is not possible to write anything to Kafka as underlying clients are already closed.
      */
     void close();
-
-
 }

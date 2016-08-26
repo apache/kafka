@@ -29,7 +29,7 @@ import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorRecordContext;
-import org.apache.kafka.streams.processor.ProcessorRecordContextImpl;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContextImpl;
 import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;

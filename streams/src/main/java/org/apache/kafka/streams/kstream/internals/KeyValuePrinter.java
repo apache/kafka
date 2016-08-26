@@ -96,7 +96,7 @@ class KeyValuePrinter<K, V> implements ProcessorSupplier<K, V> {
 
             printStream.println("[" + this.streamName + "]: " + keyToPrint + " , " + valueToPrint);
 
-            processorContext.forward(key, value);
+            this.processorContext.forward(key, value);
         }
 
 
