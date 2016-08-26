@@ -141,7 +141,7 @@ public class CachingKeyValueStoreTest {
         while (cachedSize < maxCacheSizeBytes) {
             final String kv = String.valueOf(i++);
             store.put(kv, kv);
-            cachedSize += memoryCacheEntrySize("store", kv.getBytes(), kv.getBytes());
+            cachedSize += memoryCacheEntrySize(kv.getBytes(), kv.getBytes());
         }
         return i;
     }

@@ -28,6 +28,7 @@ import java.util.NoSuchElementException;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 
 public class MemoryLRUCacheBytesTest {
 
@@ -42,7 +43,7 @@ public class MemoryLRUCacheBytesTest {
         final KeyValue<String, String> kv = toInsert.get(0);
         final String name = "name";
         MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(
-                toInsert.size() * memoryCacheEntrySize(name, kv.key.getBytes(), kv.value.getBytes()));
+                toInsert.size() * memoryCacheEntrySize(kv.key.getBytes(), kv.value.getBytes()));
 
         for (int i = 0; i < toInsert.size(); i++) {
             byte[] key = toInsert.get(i).key.getBytes();
@@ -68,7 +69,7 @@ public class MemoryLRUCacheBytesTest {
                 new KeyValue<>("K5", "V5"));
         final KeyValue<String, String> kv = toInsert.get(0);
         final String namespace = "jo";
-        final int length = memoryCacheEntrySize(namespace, kv.key.getBytes(), kv.value.getBytes());
+        final int length = memoryCacheEntrySize(kv.key.getBytes(), kv.value.getBytes());
 
         MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(
                 toInsert.size() * length);
@@ -84,8 +85,8 @@ public class MemoryLRUCacheBytesTest {
         }
     }
 
-    static int memoryCacheEntrySize(String namespace, byte [] key, byte [] value) {
-        return key.length + namespace.length() +
+    static int memoryCacheEntrySize(byte[] key, byte[] value) {
+        return key.length +
                 value.length +
                 1 + // isDirty
                 8 + // timestamp
@@ -108,7 +109,7 @@ public class MemoryLRUCacheBytesTest {
         final KeyValue<String, String> kv = toInsert.get(0);
         final String namespace = "kafka";
         MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(
-                memoryCacheEntrySize(namespace, kv.key.getBytes(), kv.value.getBytes()));
+                memoryCacheEntrySize(kv.key.getBytes(), kv.value.getBytes()));
         cache.addEldestRemovedListener(namespace, new MemoryLRUCacheBytes.EldestEntryRemovalListener() {
             @Override
             public void apply(byte[] key, MemoryLRUCacheBytesEntry value) {
@@ -130,6 +131,31 @@ public class MemoryLRUCacheBytesTest {
             KeyValue<String, String> actualRecord = received.get(i);
             assertEquals(expectedRecord, actualRecord);
         }
+    }
+
+    @Test
+    public void shouldDelete() throws Exception {
+        final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(10000L);
+        final byte [] key = new byte[] {0};
+
+        cache.put("name", key, entry(key));
+        assertEquals(key, cache.delete("name", key).value);
+        assertNull(cache.get("name", key));
+    }
+
+    @Test
+    public void shouldNotBlowUpOnNonExistentKeyWhenDeleting() throws Exception {
+        final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(10000L);
+        final byte [] key = new byte[] {0};
+
+        cache.put("name", key, entry(key));
+        assertNull(cache.delete("name", new byte[] {1}));
+    }
+
+    @Test
+    public void shouldNotBlowUpOnNonExistentNamespaceWhenDeleting() throws Exception {
+        final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(10000L);
+        assertNull(cache.delete("name", new byte[] {1}));
     }
 
     @Test
@@ -202,7 +228,7 @@ public class MemoryLRUCacheBytesTest {
     @Test
     public void shouldSkipEntriesWhereValueHasBeenEvictedFromCache() throws Exception {
         final String namespace = "streams";
-        final int entrySize = memoryCacheEntrySize(namespace, new byte[1], new byte[1]);
+        final int entrySize = memoryCacheEntrySize(new byte[1], new byte[1]);
         final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(entrySize * 5);
         byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}};
         for (int i = 0; i < 5; i++) {

@@ -62,8 +62,8 @@ public class MemoryLRUCacheBytes {
         this.listeners.put(namespace, listener);
     }
 
-    private void callListener(final Bytes key, LRUNode node) {
-        MemoryLRUCacheBytesEntry entry = node.entry();
+    private void callListener(final Bytes key, final LRUNode node) {
+        final MemoryLRUCacheBytesEntry entry = node.entry();
         final EldestEntryRemovalListener listener = listeners.get(node.namespace);
         if (listener == null) {
             return;
@@ -95,11 +95,11 @@ public class MemoryLRUCacheBytes {
         while (sizeBytes() + newElement.size() > maxCacheSizeBytes) {
             final Bytes key = tail.key;
             final String namespace = tail.namespace;
-            TreeMap<Bytes, LRUNode> treeMap = this.map.get(namespace);
-            LRUNode toRemove = treeMap.get(key);
+            final TreeMap<Bytes, LRUNode> treeMap = this.map.get(namespace);
+            final LRUNode toRemove = treeMap.get(key);
             currentSizeBytes -= toRemove.size();
-            remove(tail);
             callListener(toRemove.key, toRemove);
+            remove(toRemove);
             treeMap.remove(key);
         }
     }
@@ -135,29 +135,37 @@ public class MemoryLRUCacheBytes {
     }
 
     public synchronized MemoryLRUCacheBytesEntry putIfAbsent(final String namespace, byte[] key, MemoryLRUCacheBytesEntry value) {
-        MemoryLRUCacheBytesEntry originalValue = get(namespace, key);
+        final MemoryLRUCacheBytesEntry originalValue = get(namespace, key);
         if (originalValue == null) {
             put(namespace, key, value);
         }
         return originalValue;
     }
 
-    public synchronized void putAll(final String namespace, List<KeyValue<byte[], MemoryLRUCacheBytesEntry>> entries) {
+    public synchronized void putAll(final String namespace, final List<KeyValue<byte[], MemoryLRUCacheBytesEntry>> entries) {
         for (KeyValue<byte[], MemoryLRUCacheBytesEntry> entry : entries) {
             put(namespace, entry.key, entry.value);
         }
     }
 
-    public synchronized MemoryLRUCacheBytesEntry delete(final String namespace, byte[] key) {
+    public synchronized MemoryLRUCacheBytesEntry delete(final String namespace, final byte[] key) {
         final Bytes cacheKey = cacheKey(key);
-        TreeMap<Bytes, LRUNode> treeMap = this.map.get(namespace);
-        LRUNode node = treeMap.get(cacheKey);
+        final TreeMap<Bytes, LRUNode> treeMap = this.map.get(namespace);
+        if (treeMap == null) {
+            return null;
+        }
+
+        final LRUNode node = treeMap.get(cacheKey);
+
+        if (node == null) {
+            return null;
+        }
 
         // remove from LRU list
         remove(node);
 
         // remove from map
-        LRUNode value = treeMap.remove(cacheKey);
+        final LRUNode value = treeMap.remove(cacheKey);
         if (treeMap.size() == 0) {
             this.map.remove(namespace);
         }
@@ -169,6 +177,9 @@ public class MemoryLRUCacheBytes {
         int size = 0;
         for (Map.Entry<String, TreeMap<Bytes, LRUNode>> entry: this.map.entrySet()) {
             size += entry.getValue().size();
+        }
+        if (size < 0) {
+            return Integer.MAX_VALUE;
         }
         return size;
     }
@@ -224,13 +235,13 @@ public class MemoryLRUCacheBytes {
      * A simple wrapper class to implement a doubly-linked list around MemoryLRUCacheBytesEntry
      */
     protected class LRUNode {
-        private Bytes key;
-        private String namespace;
+        private final Bytes key;
+        private final String namespace;
         private MemoryLRUCacheBytesEntry entry;
         private LRUNode previous;
         private LRUNode next;
 
-        LRUNode(final Bytes key, final String namespace, MemoryLRUCacheBytesEntry entry) {
+        LRUNode(final Bytes key, final String namespace, final MemoryLRUCacheBytesEntry entry) {
             this.key = key;
             this.namespace = namespace;
             this.entry = entry;
@@ -245,22 +256,22 @@ public class MemoryLRUCacheBytes {
         }
 
         public long size() {
-            return key.get().length + namespace.length() + entry.size();
+            return key.get().length + entry.size();
         }
     }
 
-    public synchronized MemoryLRUCacheBytesIterator range(final String namespace, byte[] from, byte[] to) {
-        TreeMap<Bytes, LRUNode> treeMap = this.map.get(namespace);
+    public synchronized MemoryLRUCacheBytesIterator range(final String namespace, final byte[] from, final byte[] to) {
+        final TreeMap<Bytes, LRUNode> treeMap = this.map.get(namespace);
         if (treeMap == null) {
-            throw new NoSuchElementException();
+            throw new NoSuchElementException("Namespace " + namespace + " doesn't exist");
         }
         return new MemoryLRUCacheBytesIterator(namespace, keySetIterator(treeMap.navigableKeySet().subSet(cacheKey(from), true, cacheKey(to), true)), treeMap);
     }
 
     public MemoryLRUCacheBytesIterator all(final String namespace) {
-        TreeMap<Bytes, LRUNode> treeMap = this.map.get(namespace);
+        final TreeMap<Bytes, LRUNode> treeMap = this.map.get(namespace);
         if (treeMap == null) {
-            throw new NoSuchElementException();
+            throw new NoSuchElementException("Namespace " + namespace + " doesn't exist");
         }
         return new MemoryLRUCacheBytesIterator(namespace, keySetIterator(treeMap.keySet()), treeMap);
     }
@@ -272,7 +283,7 @@ public class MemoryLRUCacheBytes {
         return copy.iterator();
     }
 
-    private Bytes cacheKey(byte[] keyBytes) {
+    private Bytes cacheKey(final byte[] keyBytes) {
         return Bytes.wrap(keyBytes);
     }
 
@@ -283,7 +294,7 @@ public class MemoryLRUCacheBytes {
         private final Map<Bytes, LRUNode> entries;
         private KeyValue<byte[], MemoryLRUCacheBytesEntry> nextEntry;
 
-        MemoryLRUCacheBytesIterator(final String namespace, Iterator<Bytes> keys, Map<Bytes, LRUNode> entries) {
+        MemoryLRUCacheBytesIterator(final String namespace, final Iterator<Bytes> keys, final Map<Bytes, LRUNode> entries) {
             this.namespace = namespace;
             this.keys = keys;
             this.entries = entries;
