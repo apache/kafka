@@ -33,7 +33,6 @@ import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.apache.kafka.connect.util.WorkerUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,6 +63,7 @@ public class Worker {
     private final ExecutorService executor;
     private final Time time;
     private final String workerId;
+    private final ConnectorFactory connectorFactory;
     private final WorkerConfig config;
     private final Converter defaultKeyConverter;
     private final Converter defaultValueConverter;
@@ -76,13 +76,11 @@ public class Worker {
     private HashMap<ConnectorTaskId, WorkerTask> tasks = new HashMap<>();
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
 
-    public Worker(String workerId,
-                  Time time,
-                  WorkerConfig config,
-                  OffsetBackingStore offsetBackingStore) {
+    public Worker(String workerId, Time time, ConnectorFactory connectorFactory, WorkerConfig config, OffsetBackingStore offsetBackingStore) {
         this.executor = Executors.newCachedThreadPool();
         this.workerId = workerId;
         this.time = time;
+        this.connectorFactory = connectorFactory;
         this.config = config;
         this.defaultKeyConverter = config.getConfiguredInstance(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, Converter.class);
         this.defaultKeyConverter.configure(config.originalsWithPrefix("key.converter."), true);
@@ -159,7 +157,7 @@ public class Worker {
             final ConnectorConfig connConfig = new ConnectorConfig(connProps);
             final String connClass = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
             log.info("Creating connector {} of type {}", connName, connClass);
-            final Connector connector = WorkerUtil.createConnector(connClass);
+            final Connector connector = connectorFactory.newConnector(connClass);
             workerConnector = new WorkerConnector(connName, connector, ctx, statusListener);
             log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connector.getClass());
             workerConnector.initialize(connConfig);
@@ -262,7 +260,7 @@ public class Worker {
             final TaskConfig taskConfig = new TaskConfig(taskProps);
 
             final Class<? extends Task> taskClass = taskConfig.getClass(TaskConfig.TASK_CLASS_CONFIG).asSubclass(Task.class);
-            final Task task = WorkerUtil.instantiate(taskClass);
+            final Task task = connectorFactory.newTask(taskClass);
             log.info("Instantiated task {} with version {} of type {}", id, task.version(), taskClass.getName());
 
             Converter keyConverter = connConfig.getConfiguredInstance(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, Converter.class);
@@ -376,6 +374,10 @@ public class Worker {
 
     public Converter getInternalValueConverter() {
         return internalValueConverter;
+    }
+
+    public ConnectorFactory getConnectorFactory() {
+        return connectorFactory;
     }
 
     public String workerId() {
