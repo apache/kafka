@@ -45,6 +45,19 @@ object NetworkClientBlockingOps {
 class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
 
   /**
+    * Checks whether the node is currently connected, first calling `client.poll` to ensure that any pending
+    * disconnects have been processed.
+    *
+    * This method can be used to check the status of a connection prior to calling `blockingReady` to be able
+    * to tell whether the latter completed a new connection.
+    */
+  def isReady(node: Node)(implicit time: JTime): Boolean = {
+    val currentTime = time.milliseconds()
+    client.poll(0, currentTime)
+    client.isReady(node, currentTime)
+  }
+
+  /**
    * Invokes `client.poll` to discard pending disconnects, followed by `client.ready` and 0 or more `client.poll`
    * invocations until the connection to `node` is ready, the timeout expires or the connection fails.
    *
@@ -77,10 +90,7 @@ class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
       }
     }
 
-    // poll once to receive pending disconnects
-    client.poll(0, startTime)
-
-    client.ready(node, startTime) || awaitReady(startTime)
+    isReady(node) || client.ready(node, startTime) || awaitReady(startTime)
   }
 
   /**

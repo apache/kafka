@@ -68,18 +68,18 @@ class CleanerTest extends JUnitSuite {
       log.append(message(log.logEndOffset.toInt, log.logEndOffset.toInt))
     val keysFound = keysInLog(log)
     assertEquals(0L until log.logEndOffset, keysFound)
-    
+
     // pretend we have the following keys
     val keys = immutable.ListSet(1, 3, 5, 7, 9)
     val map = new FakeOffsetMap(Int.MaxValue)
     keys.foreach(k => map.put(key(k), Long.MaxValue))
-    
+
     // clean the log
     cleaner.cleanSegments(log, log.logSegments.take(3).toSeq, map, 0L)
     val shouldRemain = keysInLog(log).filter(!keys.contains(_))
     assertEquals(shouldRemain, keysInLog(log))
   }
-  
+
   @Test
   def testCleaningWithDeletes() {
     val cleaner = makeCleaner(Int.MaxValue)

@@ -808,6 +808,31 @@ public class ConfigDef {
         }
     }
 
+    public static class ValidList implements Validator {
+
+        ValidString validString;
+
+        private ValidList(List<String> validStrings) {
+            this.validString = new ValidString(validStrings);
+        }
+
+        public static ValidList in(String... validStrings) {
+            return new ValidList(Arrays.asList(validStrings));
+        }
+
+        @Override
+        public void ensureValid(final String name, final Object value) {
+            List<String> values = (List<String>) value;
+            for (String string : values) {
+                validString.ensureValid(name, string);
+            }
+        }
+
+        public String toString() {
+            return validString.toString();
+        }
+    }
+
     public static class ValidString implements Validator {
         List<String> validStrings;
 

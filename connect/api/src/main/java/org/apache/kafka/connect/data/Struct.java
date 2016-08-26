@@ -263,5 +263,24 @@ public class Struct {
         return values[field.index()];
     }
 
+    @Override
+    public String toString() {
+        final StringBuilder sb = new StringBuilder("Struct{");
+        boolean first = true;
+        for (int i = 0; i < values.length; i++) {
+            final Object value = values[i];
+            if (value != null) {
+                final Field field = schema.fields().get(i);
+                if (first) {
+                    first = false;
+                } else {
+                    sb.append(",");
+                }
+                sb.append(field.name()).append("=").append(value);
+            }
+        }
+        return sb.append("}").toString();
+    }
+
 }
 
