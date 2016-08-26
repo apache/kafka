@@ -45,6 +45,7 @@ object Defaults {
   val IndexInterval = kafka.server.Defaults.LogIndexIntervalBytes
   val FileDeleteDelayMs = kafka.server.Defaults.LogDeleteDelayMs
   val DeleteRetentionMs = kafka.server.Defaults.LogCleanerDeleteRetentionMs
+  val MinCompactionLagMs = kafka.server.Defaults.LogCleanerMinCompactionLagMs
   val MinCleanableDirtyRatio = kafka.server.Defaults.LogCleanerMinCleanRatio
   val Compact = kafka.server.Defaults.LogCleanupPolicy
   val UncleanLeaderElectionEnable = kafka.server.Defaults.UncleanLeaderElectionEnable
@@ -73,6 +74,7 @@ case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfi
   val indexInterval = getInt(LogConfig.IndexIntervalBytesProp)
   val fileDeleteDelayMs = getLong(LogConfig.FileDeleteDelayMsProp)
   val deleteRetentionMs = getLong(LogConfig.DeleteRetentionMsProp)
+  val compactionLagMs = getLong(LogConfig.MinCompactionLagMsProp)
   val minCleanableRatio = getDouble(LogConfig.MinCleanableDirtyRatioProp)
   val compact = getList(LogConfig.CleanupPolicyProp).asScala.map(_.toLowerCase(Locale.ROOT)).contains(LogConfig.Compact)
   val delete = getList(LogConfig.CleanupPolicyProp).asScala.map(_.toLowerCase(Locale.ROOT)).contains(LogConfig.Delete)
@@ -108,6 +110,7 @@ object LogConfig {
   val MaxMessageBytesProp = "max.message.bytes"
   val IndexIntervalBytesProp = "index.interval.bytes"
   val DeleteRetentionMsProp = "delete.retention.ms"
+  val MinCompactionLagMsProp = "min.compaction.lag.ms"
   val FileDeleteDelayMsProp = "file.delete.delay.ms"
   val MinCleanableDirtyRatioProp = "min.cleanable.dirty.ratio"
   val CleanupPolicyProp = "cleanup.policy"
@@ -169,6 +172,8 @@ object LogConfig {
     "the log by duplicates (at 50% at most 50% of the log could be duplicates). A " +
     "higher ratio will mean fewer, more efficient cleanings but will mean more wasted " +
     "space in the log."
+  val MinCompactionLagMsDoc = "The minimum time a message will remain uncompacted in the log. " +
+    "Only applicable for logs that are being compacted."
   val CompactDoc = "A string that is either \"delete\" or \"compact\". This string " +
     "designates the retention policy to use on old log segments. The default policy " +
     "(\"delete\") will discard old segments when their retention time or size limit has " +
@@ -253,6 +258,8 @@ object LogConfig {
         KafkaConfig.LogIndexIntervalBytesProp)
       .define(DeleteRetentionMsProp, LONG, Defaults.DeleteRetentionMs, atLeast(0), MEDIUM,
         DeleteRetentionMsDoc, KafkaConfig.LogCleanerDeleteRetentionMsProp)
+      .define(MinCompactionLagMsProp, LONG, Defaults.MinCompactionLagMs, atLeast(0), MEDIUM, MinCompactionLagMsDoc,
+        KafkaConfig.LogCleanerMinCompactionLagMsProp)
       .define(FileDeleteDelayMsProp, LONG, Defaults.FileDeleteDelayMs, atLeast(0), MEDIUM, FileDeleteDelayMsDoc,
         KafkaConfig.LogDeleteDelayMsProp)
       .define(MinCleanableDirtyRatioProp, DOUBLE, Defaults.MinCleanableDirtyRatio, between(0, 1), MEDIUM,
