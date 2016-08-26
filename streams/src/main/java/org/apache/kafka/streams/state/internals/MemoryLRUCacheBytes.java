@@ -19,9 +19,13 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.processor.RecordContext;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -41,40 +45,63 @@ public class MemoryLRUCacheBytes {
     private LRUNode head = null;
     private LRUNode tail = null;
     private final Map<String, TreeMap<Bytes, LRUNode>> map;
-    private final Map<String, MemoryLRUCacheBytes.EldestEntryRemovalListener> listeners;
+    private final Map<String, DirtyEntryFlushListener> listeners;
+    private final Map<String, Set<Bytes>> dirtKeys;
 
-    public interface EldestEntryRemovalListener {
-        void apply(byte[] key, MemoryLRUCacheBytesEntry value);
+
+    public interface DirtyEntryFlushListener {
+        void apply(final List<DirtyEntry> dirty);
     }
+
 
     public MemoryLRUCacheBytes(long maxCacheSizeBytes) {
         this.maxCacheSizeBytes = maxCacheSizeBytes;
         this.map = new HashMap<>();
         listeners = new HashMap<>();
+        dirtKeys = new HashMap<>();
     }
 
     /**
-     * Add a listener that is called each time an entry is evicted from cache
+     * Add a listener that is called each time an entry is evicted from the cache or an explicit flush is called
      * @param namespace
      * @param listener
      */
-    public void addEldestRemovedListener(final String namespace, EldestEntryRemovalListener listener) {
+    public synchronized void addDirtyEntryFlushListener(final String namespace, DirtyEntryFlushListener listener) {
         this.listeners.put(namespace, listener);
+    }
+
+    public synchronized void flush(final String namespace) {
+        final DirtyEntryFlushListener listener = listeners.get(namespace);
+        if (listener == null) {
+            throw new IllegalArgumentException("No listener for namespace " + namespace + " registered with cache");
+        }
+
+        final Set<Bytes> keys = dirtKeys.get(namespace);
+        if (keys == null) {
+            return;
+        }
+        final List<DirtyEntry> entries  = new ArrayList<>();
+        for (Bytes key : keys) {
+            final MemoryLRUCacheBytesEntry entry = get(namespace, key.get());
+            entries.add(new DirtyEntry(key, entry.value, entry));
+        }
+        listener.apply(entries);
+        keys.clear();
     }
 
     private void callListener(final Bytes key, final LRUNode node) {
         final MemoryLRUCacheBytesEntry entry = node.entry();
-        final EldestEntryRemovalListener listener = listeners.get(node.namespace);
+        final DirtyEntryFlushListener listener = listeners.get(node.namespace);
         if (listener == null) {
             return;
         }
-        listener.apply(key.get(), entry);
+        listener.apply(Collections.singletonList(new DirtyEntry(key, entry.value, entry)));
     }
 
     public synchronized MemoryLRUCacheBytesEntry get(final String namespace, byte[] key) {
         MemoryLRUCacheBytesEntry entry = null;
         // get map
-        TreeMap<Bytes, LRUNode> treeMap = this.map.get(namespace);
+        final TreeMap<Bytes, LRUNode> treeMap = this.map.get(namespace);
         if (treeMap != null) {
             // get element
             LRUNode node = treeMap.get(cacheKey(key));
@@ -86,13 +113,8 @@ public class MemoryLRUCacheBytes {
         return entry;
     }
 
-    /**
-     * Check if we have enough space in cache to accept new element
-     *
-     * @param newElement new element to be insterted
-     */
-    private void maybeEvict(LRUNode newElement) {
-        while (sizeBytes() + newElement.size() > maxCacheSizeBytes) {
+    private void maybeEvict() {
+        while (sizeBytes() > maxCacheSizeBytes) {
             final Bytes key = tail.key;
             final String namespace = tail.namespace;
             final TreeMap<Bytes, LRUNode> treeMap = this.map.get(namespace);
@@ -109,13 +131,11 @@ public class MemoryLRUCacheBytes {
         final Bytes cacheKey = cacheKey(key);
         LRUNode node;
         // get map
-        TreeMap<Bytes, LRUNode> treeMap = null;
         if (!this.map.containsKey(namespace)) {
-            treeMap = new TreeMap<>();
-            this.map.put(namespace, treeMap);
-        } else {
-            treeMap = this.map.get(namespace);
+            this.map.put(namespace, new TreeMap<Bytes, LRUNode>());
         }
+
+        final TreeMap<Bytes, LRUNode> treeMap = this.map.get(namespace);
 
         if (treeMap.containsKey(cacheKey)) {
             node = treeMap.get(cacheKey);
@@ -124,14 +144,14 @@ public class MemoryLRUCacheBytes {
             updateLRU(node);
         } else {
             node = new LRUNode(cacheKey, namespace, value);
-            // check if we need to evict anything
-            maybeEvict(node);
             // put element
             putHead(node);
             treeMap.put(cacheKey, node);
         }
 
         currentSizeBytes += node.size();
+        maybeEvict();
+        addDirtyKey(namespace, cacheKey);
     }
 
     public synchronized MemoryLRUCacheBytesEntry putIfAbsent(final String namespace, byte[] key, MemoryLRUCacheBytesEntry value) {
@@ -169,9 +189,18 @@ public class MemoryLRUCacheBytes {
         if (treeMap.size() == 0) {
             this.map.remove(namespace);
         }
+        addDirtyKey(namespace, cacheKey);
         return value.entry();
     }
 
+
+    public synchronized int dirtySize(final String namespace) {
+        final TreeMap<Bytes, LRUNode> treeMap = map.get(namespace);
+        if (treeMap == null) {
+            return 0;
+        }
+        return treeMap.size();
+    }
 
     public int size() {
         int size = 0;
@@ -198,6 +227,17 @@ public class MemoryLRUCacheBytes {
         if (tail == null) {
             tail = head;
         }
+    }
+
+
+    private void addDirtyKey(final String namespace, final Bytes cacheKey) {
+        if (!dirtKeys.containsKey(namespace)) {
+            dirtKeys.put(namespace, new LinkedHashSet<Bytes>());
+        }
+        final Set<Bytes> dirtyKeys = dirtKeys.get(namespace);
+        // first remove and then add so we can maintain ordering as the arrival order of the records.
+        dirtyKeys.remove(cacheKey);
+        dirtyKeys.add(cacheKey);
     }
 
     private void remove(LRUNode node) {
@@ -352,6 +392,30 @@ public class MemoryLRUCacheBytes {
         @Override
         public void close() {
             // do nothing
+        }
+    }
+
+    public static class DirtyEntry {
+        private final Bytes key;
+        private final byte[] newValue;
+        private final RecordContext recordContext;
+
+        public DirtyEntry(final Bytes key, final byte[] newValue, final RecordContext recordContext) {
+            this.key = key;
+            this.newValue = newValue;
+            this.recordContext = recordContext;
+        }
+
+        public Bytes key() {
+            return key;
+        }
+
+        public byte[] newValue() {
+            return newValue;
+        }
+
+        public RecordContext recordContext() {
+            return recordContext;
         }
     }
 

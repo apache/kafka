@@ -261,9 +261,9 @@ public class KTableAggregateTest {
 
         assertEquals(Utils.mkList(
             "blue:1",
-            "green:2",
-            "yellow:1"
-        ), proc.processed);
+            "yellow:1",
+            "green:2"
+            ), proc.processed);
     }
     
     @Test

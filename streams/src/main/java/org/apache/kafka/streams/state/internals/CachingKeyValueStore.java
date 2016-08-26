@@ -29,10 +29,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
@@ -44,7 +41,6 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private MemoryLRUCacheBytes cache;
     private InternalProcessorContext context;
     private StateSerdes<K, V> serdes;
-    private final LinkedHashMap<Bytes, Bytes> dirtyKeys = new LinkedHashMap<>();
     private boolean sendOldValues;
 
     public CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying,
@@ -77,12 +73,19 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
                                         keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                                         valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
         this.cache = context.getCache();
-        cache.addEldestRemovedListener(name, new MemoryLRUCacheBytes.EldestEntryRemovalListener() {
+        cache.addDirtyEntryFlushListener(name, new MemoryLRUCacheBytes.DirtyEntryFlushListener() {
             @Override
-            public void apply(final byte[] key, final MemoryLRUCacheBytesEntry entry) {
-                if (entry.isDirty()) {
-                    flush();
+            public void apply(final List<MemoryLRUCacheBytes.DirtyEntry> entries) {
+                final List<KeyValue<Bytes, byte[]>> keyValues = new ArrayList<>();
+                for (MemoryLRUCacheBytes.DirtyEntry entry : entries) {
+                    keyValues.add(KeyValue.pair(entry.key(), entry.newValue()));
+                    flushListener.forward(serdes.keyFrom(entry.key().get()),
+                                          change(entry.newValue(), underlying.get(entry.key())),
+                                          entry.recordContext(),
+                                          CachingKeyValueStore.this.context);
                 }
+                underlying.putAll(keyValues);
+                underlying.flush();
             }
         });
 
@@ -90,20 +93,7 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public synchronized void flush() {
-        final Iterator<Map.Entry<Bytes, Bytes>> dirtyKeyIterator = dirtyKeys.entrySet().iterator();
-        final List<KeyValue<Bytes, byte[]>> keyValues = new ArrayList<>();
-        while (dirtyKeyIterator.hasNext()) {
-            final Bytes dirtyKey = dirtyKeyIterator.next().getKey();
-            dirtyKeyIterator.remove();
-            final MemoryLRUCacheBytesEntry entry = cache.get(name, dirtyKey.get());
-            keyValues.add(KeyValue.pair(dirtyKey, entry.value));
-            flushListener.forward(serdes.keyFrom(dirtyKey.get()),
-                                  change(entry.value, underlying.get(dirtyKey)),
-                                  entry,
-                                  context);
-        }
-        underlying.putAll(keyValues);
-        underlying.flush();
+        cache.flush(name);
     }
 
     private Change<V> change(final byte[] newValue, final byte[] oldValue) {
@@ -176,7 +166,7 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public synchronized long approximateNumEntries() {
-        final long total = underlying.approximateNumEntries() + dirtyKeys.size();
+        final long total = underlying.approximateNumEntries() + cache.dirtySize(name);
         if (total < 0) {
             return Long.MAX_VALUE;
         }
@@ -192,8 +182,6 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
         final byte[] rawValue = serdes.rawValue(value);
         cache.put(name, rawKey, new MemoryLRUCacheBytesEntry(rawValue, true, context.offset(),
                                                                context.timestamp(), context.partition(), context.topic()));
-        final Bytes wrappedKey = Bytes.wrap(rawKey);
-        dirtyKeys.put(wrappedKey, wrappedKey);
     }
 
     @Override

@@ -50,6 +50,7 @@ public class CachingKeyValueStoreTest {
     private MemoryLRUCacheBytes cache;
     private int maxCacheSizeBytes;
     private CacheFlushListenerStub cacheFlushListener;
+    private String topic;
 
     @Before
     public void setUp() throws Exception {
@@ -60,7 +61,8 @@ public class CachingKeyValueStoreTest {
         maxCacheSizeBytes = 100;
         cache = new MemoryLRUCacheBytes(maxCacheSizeBytes);
         context = new MockProcessorContext(null, null, null, null, (RecordCollector) null, cache);
-        context.setRecordContext(new ProcessorRecordContextImpl(10, 0, 0, "topic", null));
+        topic = "topic";
+        context.setRecordContext(new ProcessorRecordContextImpl(10, 0, 0, topic, null));
         store.init(context, null);
     }
 
@@ -76,21 +78,19 @@ public class CachingKeyValueStoreTest {
     }
 
     @Test
-    public void shouldEvictItemsIntoUnderlyingStore() throws Exception {
+    public void shouldFlushEvictedItemsIntoUnderlyingStore() throws Exception {
         int added = addItemsToCache();
-        // newest entry wont be in underlying store as it is not in cache at time of eviction
-        assertEquals(added - 1, underlyingStore.approximateNumEntries());
+        // should only have only been one record evicted
+        assertEquals(1, underlyingStore.approximateNumEntries());
         // 1 dirty key + entries in store;
         assertEquals(added, store.approximateNumEntries());
-        for (int i = 0; i < added - 1; i++) {
-            assertNotNull(underlyingStore.get(Bytes.wrap(String.valueOf(i).getBytes())));
-        }
+        assertNotNull(underlyingStore.get(Bytes.wrap("0".getBytes())));
     }
 
     @Test
-    public void shouldForwardDirtyItemsToListenerWhenEvicted() throws Exception {
+    public void shouldForwardDirtyItemToListenerWhenEvicted() throws Exception {
         int numRecords = addItemsToCache();
-        assertEquals(numRecords - 1, cacheFlushListener.forwarded.size());
+        assertEquals(1, cacheFlushListener.forwarded.size());
         assertFalse(cacheFlushListener.forwarded.containsKey(String.valueOf(numRecords - 1)));
     }
 
@@ -141,7 +141,7 @@ public class CachingKeyValueStoreTest {
         while (cachedSize < maxCacheSizeBytes) {
             final String kv = String.valueOf(i++);
             store.put(kv, kv);
-            cachedSize += memoryCacheEntrySize(kv.getBytes(), kv.getBytes());
+            cachedSize += memoryCacheEntrySize(kv.getBytes(), kv.getBytes(), topic);
         }
         return i;
     }

@@ -51,7 +51,7 @@ public class WordCountProcessorDemo {
 
         @Override
         public Processor<String, String> get() {
-            return new AbstractProcessor<String, String>() {
+            return new Processor<String, String>() {
                 private ProcessorContext context;
                 private KeyValueStore<String, Integer> kvStore;
 

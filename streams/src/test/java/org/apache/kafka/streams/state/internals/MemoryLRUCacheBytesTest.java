@@ -43,7 +43,7 @@ public class MemoryLRUCacheBytesTest {
         final KeyValue<String, String> kv = toInsert.get(0);
         final String name = "name";
         MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(
-                toInsert.size() * memoryCacheEntrySize(kv.key.getBytes(), kv.value.getBytes()));
+                toInsert.size() * memoryCacheEntrySize(kv.key.getBytes(), kv.value.getBytes(), ""));
 
         for (int i = 0; i < toInsert.size(); i++) {
             byte[] key = toInsert.get(i).key.getBytes();
@@ -69,7 +69,7 @@ public class MemoryLRUCacheBytesTest {
                 new KeyValue<>("K5", "V5"));
         final KeyValue<String, String> kv = toInsert.get(0);
         final String namespace = "jo";
-        final int length = memoryCacheEntrySize(kv.key.getBytes(), kv.value.getBytes());
+        final int length = memoryCacheEntrySize(kv.key.getBytes(), kv.value.getBytes(), "");
 
         MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(
                 toInsert.size() * length);
@@ -85,13 +85,14 @@ public class MemoryLRUCacheBytesTest {
         }
     }
 
-    static int memoryCacheEntrySize(byte[] key, byte[] value) {
+    static int memoryCacheEntrySize(byte[] key, byte[] value, final String topic) {
         return key.length +
                 value.length +
                 1 + // isDirty
                 8 + // timestamp
                 8 + // offset
-                4;
+                4 +
+                topic.length();
     }
 
     @Test
@@ -109,14 +110,15 @@ public class MemoryLRUCacheBytesTest {
         final KeyValue<String, String> kv = toInsert.get(0);
         final String namespace = "kafka";
         MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(
-                memoryCacheEntrySize(kv.key.getBytes(), kv.value.getBytes()));
-        cache.addEldestRemovedListener(namespace, new MemoryLRUCacheBytes.EldestEntryRemovalListener() {
+                memoryCacheEntrySize(kv.key.getBytes(), kv.value.getBytes(), ""));
+        cache.addDirtyEntryFlushListener(namespace, new MemoryLRUCacheBytes.DirtyEntryFlushListener() {
             @Override
-            public void apply(byte[] key, MemoryLRUCacheBytesEntry value) {
-
-                received.add(new KeyValue<>(new String(key),
-                                            new String(value.value)));
+            public void apply(final List<MemoryLRUCacheBytes.DirtyEntry> dirty) {
+                for (MemoryLRUCacheBytes.DirtyEntry dirtyEntry : dirty) {
+                    received.add(new KeyValue<>(dirtyEntry.key().toString(), new String(dirtyEntry.newValue())));
+                }
             }
+
         });
 
 
@@ -136,7 +138,7 @@ public class MemoryLRUCacheBytesTest {
     @Test
     public void shouldDelete() throws Exception {
         final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(10000L);
-        final byte [] key = new byte[] {0};
+        final byte[] key = new byte[]{0};
 
         cache.put("name", key, entry(key));
         assertEquals(key, cache.delete("name", key).value);
@@ -146,23 +148,23 @@ public class MemoryLRUCacheBytesTest {
     @Test
     public void shouldNotBlowUpOnNonExistentKeyWhenDeleting() throws Exception {
         final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(10000L);
-        final byte [] key = new byte[] {0};
+        final byte[] key = new byte[]{0};
 
         cache.put("name", key, entry(key));
-        assertNull(cache.delete("name", new byte[] {1}));
+        assertNull(cache.delete("name", new byte[]{1}));
     }
 
     @Test
     public void shouldNotBlowUpOnNonExistentNamespaceWhenDeleting() throws Exception {
         final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(10000L);
-        assertNull(cache.delete("name", new byte[] {1}));
+        assertNull(cache.delete("name", new byte[]{1}));
     }
 
     @Test
     public void shouldNotClashWithOverlappingNames() throws Exception {
         final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(10000L);
-        final byte [] nameByte = new byte[] {0};
-        final byte [] name1Byte = new byte[] {1};
+        final byte[] nameByte = new byte[]{0};
+        final byte[] name1Byte = new byte[]{1};
         cache.put("name", nameByte, entry(nameByte));
         cache.put("name1", nameByte, entry(name1Byte));
 
@@ -228,7 +230,7 @@ public class MemoryLRUCacheBytesTest {
     @Test
     public void shouldSkipEntriesWhereValueHasBeenEvictedFromCache() throws Exception {
         final String namespace = "streams";
-        final int entrySize = memoryCacheEntrySize(new byte[1], new byte[1]);
+        final int entrySize = memoryCacheEntrySize(new byte[1], new byte[1], "");
         final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(entrySize * 5);
         byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}};
         for (int i = 0; i < 5; i++) {
@@ -241,6 +243,70 @@ public class MemoryLRUCacheBytesTest {
         cache.put(namespace, new byte[]{6}, entry(new byte[]{6}));
 
         assertArrayEquals(new byte[]{1}, range.peekNextKey());
+    }
+
+    @Test
+    public void shouldFlushDirtyEntriesForNamespace() throws Exception {
+        final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(100000);
+        final List<byte[]> received = new ArrayList<>();
+        cache.addDirtyEntryFlushListener("1", new MemoryLRUCacheBytes.DirtyEntryFlushListener() {
+            @Override
+            public void apply(final List<MemoryLRUCacheBytes.DirtyEntry> dirty) {
+                for (MemoryLRUCacheBytes.DirtyEntry dirtyEntry : dirty) {
+                    received.add(dirtyEntry.key().get());
+                }
+            }
+        });
+        final List<byte[]> expected = Arrays.asList(new byte[]{0}, new byte[]{1}, new byte[]{2});
+        for (byte[] bytes : expected) {
+            cache.put("1", bytes, entry(bytes));
+        }
+        cache.put("2", new byte[]{4}, entry(new byte[]{4}));
+
+        cache.flush("1");
+        assertEquals(expected, received);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowIllegalArgumentOnFlushIfNoListenerRegistered() throws Exception {
+        final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(100000);
+        cache.flush("whateva");
+    }
+
+    @Test
+    public void shouldEvictImmediatelyIfCacheSizeIsZero() throws Exception {
+        final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(0);
+        final List<MemoryLRUCacheBytes.DirtyEntry> received = new ArrayList<>();
+        final String namespace = "namespace";
+        cache.addDirtyEntryFlushListener(namespace, new MemoryLRUCacheBytes.DirtyEntryFlushListener() {
+            @Override
+            public void apply(final List<MemoryLRUCacheBytes.DirtyEntry> dirty) {
+                received.addAll(dirty);
+            }
+        });
+        cache.put(namespace, new byte[]{0}, entry(new byte[]{0}));
+        assertEquals(1, received.size());
+    }
+
+    @Test
+    public void shouldPutAll() throws Exception {
+        final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(100000);
+
+        cache.putAll("name", Arrays.asList(KeyValue.pair(new byte[]{0}, entry(new byte[]{5})),
+                                           KeyValue.pair(new byte[]{1}, entry(new byte[]{6}))));
+
+        assertArrayEquals(new byte[]{5}, cache.get("name", new byte[]{0}).value);
+        assertArrayEquals(new byte[]{6}, cache.get("name", new byte[]{1}).value);
+    }
+
+    @Test
+    public void shouldPutIfAbsent() throws Exception {
+        final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(100000);
+        final byte[] key = {10};
+        final byte[] value = {30};
+        assertNull(cache.putIfAbsent("n", key, entry(value)));
+        assertArrayEquals(value, cache.putIfAbsent("n", key, entry(new byte[]{8})).value);
+        assertArrayEquals(value, cache.get("n", key).value);
     }
 
     private MemoryLRUCacheBytesEntry entry(final byte[] key) {
