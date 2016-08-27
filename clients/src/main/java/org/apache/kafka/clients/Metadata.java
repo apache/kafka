@@ -52,6 +52,7 @@ public final class Metadata {
 
     private final long refreshBackoffMs;
     private final long metadataExpireMs;
+    private final long metadataStaleMs;
     private int version;
     private long lastRefreshMs;
     private long lastSuccessfulRefreshMs;
@@ -86,6 +87,7 @@ public final class Metadata {
     public Metadata(long refreshBackoffMs, long metadataExpireMs, boolean topicExpiryEnabled, ClusterResourceListeners clusterResourceListeners) {
         this.refreshBackoffMs = refreshBackoffMs;
         this.metadataExpireMs = metadataExpireMs;
+        this.metadataStaleMs = metadataExpireMs * 2;
         this.topicExpiryEnabled = topicExpiryEnabled;
         this.lastRefreshMs = 0L;
         this.lastSuccessfulRefreshMs = 0L;
@@ -125,10 +127,10 @@ public final class Metadata {
     }
 
     /**
-     * The metadata has expired if an update is explicitly requested or an update is due now.
+     * The metadata is stale if it has taken more than staleMs after last successful refresh. 
      */
-    public synchronized  boolean hasExpired(long nowMs) {
-        return this.needUpdate || this.timeToNextUpdate(nowMs) == 0;
+    public synchronized  boolean isStale(long nowMs) {
+        return (nowMs - this.lastSuccessfulRefreshMs) > this.metadataStaleMs;
     }
 
     /**
