@@ -112,7 +112,7 @@ public class ResetIntegrationTest {
         // RUN
         KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
         streams.start();
-        final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultTopicConsumerConfig, OUTPUT_TOPIC, 10, 120000);
+        final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultTopicConsumerConfig, OUTPUT_TOPIC, 10);
         // receive only first values to make sure intermediate user topic is not consumed completely
         // => required to test "seekToEnd" for intermediate topics
         final KeyValue<Object, Object> result2 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultTopicConsumerConfig, OUTPUT_TOPIC_2, 1).get(0);
@@ -132,7 +132,7 @@ public class ResetIntegrationTest {
         // RE-RUN
         streams = new KafkaStreams(setupTopology(OUTPUT_TOPIC_2_RERUN), streamsConfiguration);
         streams.start();
-        final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultTopicConsumerConfig, OUTPUT_TOPIC, 10, 120000);
+        final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultTopicConsumerConfig, OUTPUT_TOPIC, 10);
         final KeyValue<Object, Object> resultRerun2 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultTopicConsumerConfig, OUTPUT_TOPIC_2_RERUN, 1).get(0);
         streams.close();
 
@@ -210,12 +210,15 @@ public class ResetIntegrationTest {
         final KStream<Long, Long> windowedCounts = input
             .through(INTERMEDIATE_USER_TOPIC)
             .map(new KeyValueMapper<Long, String, KeyValue<Long, String>>() {
+                private long sleep = 1000;
+
                 @Override
                 public KeyValue<Long, String> apply(final Long key, final String value) {
                     // must sleep long enough to avoid processing the whole intermediate topic before application gets stopped
                     // => want to test "skip over" unprocessed records
                     // increasing the sleep time only has disadvantage that test run time is increased
-                    Utils.sleep(1000);
+                    Utils.sleep(this.sleep);
+                    this.sleep *= 2;
                     return new KeyValue<>(key, value);
                 }
             })
