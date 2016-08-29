@@ -73,8 +73,8 @@ public class RequestResponseTest {
                 createListOffsetResponse(),
                 MetadataRequest.allTopics(),
                 createMetadataRequest(Arrays.asList("topic1")),
-                createMetadataRequest(Arrays.asList("topic1")).getErrorResponse(1, new UnknownServerException()),
-                createMetadataResponse(1),
+                createMetadataRequest(Arrays.asList("topic1")).getErrorResponse(2, new UnknownServerException()),
+                createMetadataResponse(2),
                 createOffsetCommitRequest(2),
                 createOffsetCommitRequest(2).getErrorResponse(2, new UnknownServerException()),
                 createOffsetCommitResponse(),
@@ -315,7 +315,7 @@ public class RequestResponseTest {
         allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, "topic2", false,
                 Collections.<MetadataResponse.PartitionMetadata>emptyList()));
 
-        return new MetadataResponse(Arrays.asList(node), MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata, version);
+        return new MetadataResponse(Arrays.asList(node), MetadataResponse.NO_CLUSTER_ID, MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata, version);
     }
 
     private AbstractRequest createOffsetCommitRequest(int version) {

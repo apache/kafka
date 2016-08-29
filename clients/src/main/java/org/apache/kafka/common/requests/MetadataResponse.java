@@ -44,6 +44,9 @@ public class MetadataResponse extends AbstractRequestResponse {
     private static final String CONTROLLER_ID_KEY_NAME = "controller_id";
     public static final int NO_CONTROLLER_ID = -1;
 
+    private static final String CLUSTER_ID_KEY_NAME = "cluster_id";
+    public static final String NO_CLUSTER_ID = "none";
+
     // topic level field names
     private static final String TOPIC_ERROR_CODE_KEY_NAME = "topic_error_code";
 
@@ -82,16 +85,15 @@ public class MetadataResponse extends AbstractRequestResponse {
     /**
      * Constructor for the latest version
      */
-    public MetadataResponse(List<Node> brokers, int controllerId, List<TopicMetadata> topicMetadata) {
-        this(brokers, controllerId, topicMetadata, CURRENT_VERSION);
+    public MetadataResponse(List<Node> brokers, String clusterId, int controllerId, List<TopicMetadata> topicMetadata) {
+        this(brokers, clusterId, controllerId, topicMetadata, CURRENT_VERSION);
     }
 
     /**
      * Constructor for a specific version
      */
-    public MetadataResponse(List<Node> brokers, int controllerId, List<TopicMetadata> topicMetadata, int version) {
+    public MetadataResponse(List<Node> brokers, String clusterId, int controllerId, List<TopicMetadata> topicMetadata, int version) {
         super(new Struct(ProtoUtils.responseSchema(ApiKeys.METADATA.id, version)));
-
         this.brokers = brokers;
         this.controller = getControllerNode(controllerId, brokers);
         this.topicMetadata = topicMetadata;
@@ -112,6 +114,10 @@ public class MetadataResponse extends AbstractRequestResponse {
         // This field only exists in v1+
         if (struct.hasField(CONTROLLER_ID_KEY_NAME))
             struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
+
+        // This field only exists in v2+
+        if (struct.hasField(CLUSTER_ID_KEY_NAME))
+            struct.set(CLUSTER_ID_KEY_NAME, clusterId);
 
         List<Struct> topicMetadataArray = new ArrayList<>(topicMetadata.size());
         for (TopicMetadata metadata : topicMetadata) {

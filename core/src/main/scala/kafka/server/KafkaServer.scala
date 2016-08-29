@@ -137,6 +137,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
   val correlationId: AtomicInteger = new AtomicInteger(0)
   val brokerMetaPropsFile = "meta.properties"
   val brokerMetadataCheckpoints = config.logDirs.map(logDir => (logDir, new BrokerMetadataCheckpoint(new File(logDir + File.separator +brokerMetaPropsFile)))).toMap
+  val clusterId: String = "dummy"
 
   newGauge(
     "BrokerState",
@@ -217,7 +218,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
 
         /* start processing requests */
         apis = new KafkaApis(socketServer.requestChannel, replicaManager, adminManager, groupCoordinator,
-          kafkaController, zkUtils, config.brokerId, config, metadataCache, metrics, authorizer)
+          kafkaController, zkUtils, config.brokerId, config, metadataCache, metrics, authorizer, clusterId)
         requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, config.numIoThreads)
 
         Mx4jLoader.maybeLoad()
@@ -632,6 +633,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
     * <li> config has broker.id and meta.properties contains broker.id if they don't match throws InconsistentBrokerIdException
     * <li> config has broker.id and there is no meta.properties file, creates new meta.properties and stores broker.id
     * <ol>
+ *
     * @return A brokerId.
     */
   private def getBrokerId: Int =  {
