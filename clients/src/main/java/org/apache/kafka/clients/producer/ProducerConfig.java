@@ -79,14 +79,15 @@ public class ProducerConfig extends AbstractConfig {
                                            + " durability of records that are sent. The following settings are allowed: "
                                            + " <ul>"
                                            + " <li><code>acks=0</code> If set to zero then the producer will not wait for any acknowledgment from the"
-                                           + " server at all. The record will be immediately added to the socket buffer and considered sent. No guarantee can be"
+                                           + " server at all. The record will be immediately added to the socket buffer and considered sent. There is no guarantee"
+                                           + " that the socket buffer will be flushed prior to the shutdown of the producer JVM.  No guarantee can be"
                                            + " made that the server has received the record in this case, and the <code>retries</code> configuration will not"
                                            + " take effect (as the client won't generally know of any failures). The offset given back for each record will"
                                            + " always be set to -1."
                                            + " <li><code>acks=1</code> This will mean the leader will write the record to its local log but will respond"
                                            + " without awaiting full acknowledgement from all followers. In this case should the leader fail immediately after"
                                            + " acknowledging the record but before the followers have replicated it then the record will be lost."
-                                           + " <li><code>acks=all</code> This means the leader will wait for the full set of in-sync replicas to"
+                                           + " <li><code>acks=[-1|all]</code> This means the leader will wait for the full set of in-sync replicas to"
                                            + " acknowledge the record. This guarantees that the record will not be lost as long as at least one in-sync replica"
                                            + " remains alive. This is the strongest available guarantee.";
 
