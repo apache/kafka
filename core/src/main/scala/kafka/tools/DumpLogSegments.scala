@@ -69,7 +69,7 @@ object DumpLogSegments {
 
     CommandLineUtils.checkRequiredArgs(parser, options, filesOpt)
 
-    val print = if(options.has(printOpt)) true else false
+    val print = if(options.has(printOpt) || options.has(offsetsOpt)) true else false
     val verifyOnly = if(options.has(verifyOpt)) true else false
     val indexSanityOnly = if(options.has(indexSanityOpt)) true else false
 
