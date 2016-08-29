@@ -40,6 +40,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
+import org.apache.kafka.streams.processor.internals.StreamsKafkaClient;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.TestUtils;
 import org.junit.BeforeClass;
@@ -76,7 +77,8 @@ public class InternalTopicIntegrationTest {
      * @return
      */
     private boolean topicExists(String topic, StreamsConfig config) {
-        KafkaClient kafkaClient = new DefaultKafkaClientSupplier().getKafkaClient(config);
+        StreamsKafkaClient streamsKafkaClient = new DefaultKafkaClientSupplier().getStreamKafkaClient(config);
+        KafkaClient kafkaClient = streamsKafkaClient.getKafkaClient();
         Node brokerNode = kafkaClient.leastLoadedNode(new SystemTime().milliseconds());
         MetadataRequest metadataRequest = new MetadataRequest(Arrays.asList(topic));
         String brokerId = Integer.toString(brokerNode.id());

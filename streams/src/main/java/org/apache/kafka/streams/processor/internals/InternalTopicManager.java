@@ -34,6 +34,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.Map;
@@ -48,7 +49,9 @@ public class InternalTopicManager {
 
     private final int replicationFactor;
     private final KafkaClient kafkaClient;
+    private StreamsKafkaClient streamsKafkaClient;
     StreamsConfig config;
+
 
     private static final String CLEANUP_POLICY_PROP = "log.cleanup.policy";
     private static final String COMPACT = "compact";
@@ -61,17 +64,22 @@ public class InternalTopicManager {
 
     public InternalTopicManager(StreamsConfig config) {
         this.config = config;
-        this.kafkaClient = new DefaultKafkaClientSupplier().getKafkaClient(config);
+        this.streamsKafkaClient = new DefaultKafkaClientSupplier().getStreamKafkaClient(config);
+        this.kafkaClient = streamsKafkaClient.getKafkaClient();
         this.replicationFactor = 0;
     }
 
     public InternalTopicManager(StreamsConfig config, int replicationFactor) {
         this.config = config;
-        this.kafkaClient = new DefaultKafkaClientSupplier().getKafkaClient(config);
+        this.streamsKafkaClient = new DefaultKafkaClientSupplier().getStreamKafkaClient(config);
+        this.kafkaClient = streamsKafkaClient.getKafkaClient();
         this.replicationFactor = replicationFactor;
     }
 
 
+    public void shutDown() throws IOException {
+        this.streamsKafkaClient.shutdown();
+    }
     public void makeReady(String topic, int numPartitions, boolean compactTopic) {
 
         Node brokerNode = kafkaClient.leastLoadedNode(new SystemTime().milliseconds());

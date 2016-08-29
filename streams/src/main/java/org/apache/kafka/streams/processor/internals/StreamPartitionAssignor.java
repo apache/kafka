@@ -99,6 +99,15 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
     private InternalTopicManager internalTopicManager;
 
+    public void shutDownInternalTopicManager() {
+
+        try {
+            internalTopicManager.shutDown();
+        } catch (Exception e) {
+            throw new KafkaException("Failed to close kafka client in InternalTopicManager.");
+        }
+    }
+
     /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible
      * since the former needs later's cached metadata while sending subscriptions,

@@ -271,6 +271,11 @@ public class StreamThread extends Thread {
             log.error("Failed to close restore consumer in thread [" + this.getName() + "]: ", e);
         }
 
+        try {
+            partitionAssignor.shutDownInternalTopicManager();
+        } catch (Throwable e) {
+            log.error("Failed to close internal topic manager in thread [" + this.getName() + "]: ", e);
+        }
         removeStreamTasks();
 
         log.info("Stream thread shutdown complete [" + this.getName() + "]");
