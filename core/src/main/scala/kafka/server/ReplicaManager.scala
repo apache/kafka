@@ -631,7 +631,7 @@ class ReplicaManager(val config: KafkaConfig,
           } else {
             // Otherwise record the error code in response
             stateChangeLogger.warn(("Broker %d ignoring LeaderAndIsr request from controller %d with correlation id %d " +
-              "epoch %d for partition [%s,%d] since its associated leader epoch %d is old. Current leader epoch is %d")
+              "epoch %d for partition [%s,%d] since its associated leader epoch %d is not higher than the current leader epoch %d")
               .format(localBrokerId, controllerId, correlationId, leaderAndISRRequest.controllerEpoch,
                 topicPartition.topic, topicPartition.partition, stateInfo.leaderEpoch, partitionLeaderEpoch))
             responseMap.put(topicPartition, Errors.STALE_CONTROLLER_EPOCH.code)

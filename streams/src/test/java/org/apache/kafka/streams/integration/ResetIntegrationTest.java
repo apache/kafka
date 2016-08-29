@@ -41,6 +41,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -79,6 +80,7 @@ public class ResetIntegrationTest {
         CLUSTER.createTopic(INTERMEDIATE_USER_TOPIC);
     }
 
+    @Ignore
     @Test
     public void testReprocessingFromScratchAfterReset() throws Exception {
         final Properties streamsConfiguration = prepareTest();
