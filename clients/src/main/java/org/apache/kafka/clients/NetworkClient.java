@@ -559,7 +559,7 @@ public class NetworkClient implements KafkaClient {
         public boolean maybeHandleDisconnection(ClientRequest request) {
             ApiKeys requestKey = ApiKeys.forId(request.request().header().apiKey());
 
-            if (requestKey == ApiKeys.METADATA) {
+            if (requestKey == ApiKeys.METADATA && request.isInitiatedByNetworkClient()) {
                 Cluster cluster = metadata.fetch();
                 if (cluster.isBootstrapConfigured()) {
                     int nodeId = Integer.parseInt(request.request().destination());
