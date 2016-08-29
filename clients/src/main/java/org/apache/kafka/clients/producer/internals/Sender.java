@@ -208,8 +208,8 @@ public class Sender implements Runnable {
             }
         }
 
-        if (metadata.isStale(now) || (metadata.timeToNextUpdate(now) != 0 && !result.unknownLeaderTopics.isEmpty())) {
-            List<RecordBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, now);
+        if (metadata.isStale(now) || !result.unknownLeaderTopics.isEmpty())) {
+            List<RecordBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, metadata, now);
             // update sensors
             for (RecordBatch expiredBatch : expiredBatches)
                 this.sensors.recordErrors(expiredBatch.topicPartition.topic(), expiredBatch.recordCount);
