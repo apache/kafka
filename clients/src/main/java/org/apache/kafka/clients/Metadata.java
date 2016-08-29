@@ -73,7 +73,7 @@ public final class Metadata {
     }
 
     public Metadata(long refreshBackoffMs, long metadataExpireMs) {
-        this(refreshBackoffMs, metadataExpireMs, false, new ClusterResourceListeners());
+        this(refreshBackoffMs, metadataExpireMs, false, Cluster.empty(), new ClusterResourceListeners());
     }
 
     /**
@@ -84,7 +84,7 @@ public final class Metadata {
      * @param topicExpiryEnabled If true, enable expiry of unused topics
      * @param clusterResourceListeners List of ClusterResourceListeners which will receive metadata updates.
      */
-    public Metadata(long refreshBackoffMs, long metadataExpireMs, boolean topicExpiryEnabled, ClusterResourceListeners clusterResourceListeners) {
+    public Metadata(long refreshBackoffMs, long metadataExpireMs, boolean topicExpiryEnabled, Cluster cluster, ClusterResourceListeners clusterResourceListeners) {
         this.refreshBackoffMs = refreshBackoffMs;
         this.metadataExpireMs = metadataExpireMs;
         this.metadataStaleMs = metadataExpireMs * 2;
@@ -92,7 +92,7 @@ public final class Metadata {
         this.lastRefreshMs = 0L;
         this.lastSuccessfulRefreshMs = 0L;
         this.version = 0;
-        this.cluster = Cluster.empty();
+        this.cluster = cluster;
         this.needUpdate = false;
         this.topics = new HashMap<>();
         this.listeners = new ArrayList<>();
