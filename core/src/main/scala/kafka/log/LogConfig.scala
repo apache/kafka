@@ -324,10 +324,19 @@ object LogConfig {
   }
 
   /**
+    * Check that the property values are valid relative to each other
+    */
+  def validateValues(props: Properties) {
+    require(props.getProperty(SegmentBytesProp).toLong <= props.getProperty(RetentionBytesProp).toLong,
+      "segment.bytes "+props.getProperty(SegmentBytesProp)+" is not less than or equal to retention.bytes "+props.getProperty(RetentionBytesProp))
+  }
+
+  /**
    * Check that the given properties contain only valid log config names and that all values can be parsed and are valid
    */
   def validate(props: Properties) {
     validateNames(props)
+    validateValues(props)
     configDef.parse(props)
   }
 
