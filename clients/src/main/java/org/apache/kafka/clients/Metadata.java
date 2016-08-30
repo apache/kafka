@@ -92,7 +92,7 @@ public final class Metadata {
         this.lastRefreshMs = 0L;
         this.lastSuccessfulRefreshMs = 0L;
         this.version = 0;
-        this.cluster = cluster;
+        this.cluster = Cluster.empty();
         this.needUpdate = false;
         this.topics = new HashMap<>();
         this.listeners = new ArrayList<>();
