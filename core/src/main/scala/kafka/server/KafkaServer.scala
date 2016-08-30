@@ -319,8 +319,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
   def getOrGenerateClusterId(zkUtils: ZkUtils): String = {
     val uuid:UUID = UUID.randomUUID()
     val base64EncodedUUID = new sun.misc.BASE64Encoder().encode(uuid.toString().getBytes())
-    val clusterId = zkUtils.getClusterId(base64EncodedUUID)
-    info("#################################### cluster_id = " + clusterId)
+    val clusterId = zkUtils.getOrCreateClusterId(base64EncodedUUID)
+    info(s"Cluster ID = $clusterId")
     clusterId
   }
 

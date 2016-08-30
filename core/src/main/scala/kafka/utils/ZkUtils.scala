@@ -210,16 +210,29 @@ class ZkUtils(val zkClient: ZkClient,
     }
   }
 
-  def getClusterId(proposedClusterId:String): String = {
-    readDataMaybeNull(clusterIdPath)._1 match {
-      case Some(clusterId) => clusterId
-      case None => {
-        def writeToZk: Unit = {
-          updatePersistentPath(clusterIdPath, proposedClusterId)
-        }
+  def getOrCreateClusterId(proposedClusterId:String): String = {
 
+    def updateClusterId: Unit = {
+      val jsonMap = Map("version" -> "1",
+        "id" -> proposedClusterId
+      )
+      updatePersistentPath(clusterIdPath, Json.encode(jsonMap))
+    }
+
+    def parseClusterId(clusterIdString: String): String = {
+
+      Json.parseFull(clusterIdString) match {
+        case Some(m) =>
+          val clusterIdMap = m.asInstanceOf[Map[String, Any]]
+          clusterIdMap.get("id").get.asInstanceOf[String]
+        case None => throw new KafkaException("Failed to parse the cluster id json [%s].".format(clusterIdString))
+      }
+    }
+    readDataMaybeNull(clusterIdPath)._1 match {
+      case Some(clusterId) => parseClusterId(clusterId)
+      case None => {
         try {
-          writeToZk
+          updateClusterId
           zkClient.readData(clusterIdPath)
           } catch {
             case e: ZkNodeExistsException =>
