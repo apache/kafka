@@ -167,49 +167,6 @@ public final class StateSerdes<K, V> {
     }
 
     /**
-     * Serialize the given key. Merge it with the store name to return a new key.
-     *
-     * @param key  the key to be serialized
-     * @param storeName the name of the state store
-     * @return     the serialized key
-     */
-    public byte[] rawMergeStoreNameKey(K key, final String storeName) {
-        byte[] storeNameBytes = storeName.getBytes();
-        byte[] keyBytes = keySerde.serializer().serialize(stateName, key);
-        byte[] merged = new byte[storeNameBytes.length + keyBytes.length];
-        System.arraycopy(storeNameBytes, 0, merged, 0, storeNameBytes.length);
-        System.arraycopy(keyBytes, 0, merged, storeNameBytes.length, keyBytes.length);
-        return merged;
-    }
-
-    /**
-     * Deserialize a key that has been previously merged with the store name.
-     * @param rawKeyStoreName
-     * @param storeName
-     * @return the deserialized key
-     */
-    public K keyFromRawMergedStoreNameKey(byte[] rawKeyStoreName, final String storeName) {
-        byte[] storeNameBytes = storeName.getBytes();
-        byte[] keyOnly = new byte[rawKeyStoreName.length - storeNameBytes.length];
-        System.arraycopy(rawKeyStoreName, storeNameBytes.length, keyOnly, 0, keyOnly.length);
-        K key = keySerde.deserializer().deserialize(null, keyOnly);
-        return key;
-    }
-
-    /**
-     * Return the store name from a byte array that has been created from original key plus store name
-     * @param rawKeyStoreName
-     * @param keyOnly original key
-     * @return Store name
-     */
-    public String storeNameFromRawMergedStoreNameKey(byte[] rawKeyStoreName, K keyOnly) {
-        byte[] rawKey = rawKey(keyOnly);
-        byte[] storeBytes = new byte[rawKeyStoreName.length - rawKey.length];
-        System.arraycopy(rawKeyStoreName, 0, storeBytes, 0, rawKeyStoreName.length - rawKey.length);
-        return new String(storeBytes);
-    }
-
-    /**
      * Serialize the given value.
      *
      * @param value  the value to be serialized
