@@ -45,23 +45,42 @@ class MiniKdc(KafkaPathResolverMixin, Service):
     LOCAL_KRB5CONF_FILE = None
 
     @staticmethod
-    def _keytab():
+    def _set_local_keytab_file(local_scratch_dir):
+        """Set MiniKdc.LOCAL_KEYTAB_FILE exactly once per test.
+
+        LOCAL_KEYTAB_FILE is currently used like a global variable to provide a mechanism to share the
+        location of the local keytab file among all services which might need it.
+
+        Since individual ducktape tests are each run in a subprocess forked from the ducktape main process,
+        class variables set at class load time are duplicated between test processes. This leads to collisions
+        if test subprocesses are run in parallel, so we defer setting these class variables until after the test itself
+        begins to run.
+        """
         if MiniKdc.LOCAL_KEYTAB_FILE is None:
-            MiniKdc.LOCAL_KEYTAB_FILE = "/tmp/" + str(random.randint(1, 2**63 - 1)) + str(uuid.uuid4().get_hex()) + "_keytab"
+            MiniKdc.LOCAL_KEYTAB_FILE = os.path.join(local_scratch_dir, "keytab")
         return MiniKdc.LOCAL_KEYTAB_FILE
 
     @staticmethod
-    def _krb5conf():
+    def _set_local_krb5conf_file(local_scratch_dir):
+        """Set MiniKdc.LOCAL_KRB5CONF_FILE exactly once per test.
+
+        See _set_local_keytab_file for details why we do this.
+        """
+
         if MiniKdc.LOCAL_KRB5CONF_FILE is None:
-            MiniKdc.LOCAL_KRB5CONF_FILE = "/tmp/" + str(random.randint(1, 2**63 - 1)) + str(uuid.uuid4().get_hex()) + "_keytab"
+            MiniKdc.LOCAL_KRB5CONF_FILE = os.path.join(local_scratch_dir, "krb5conf")
         return MiniKdc.LOCAL_KRB5CONF_FILE
-
-
 
     def __init__(self, context, kafka_nodes, extra_principals=""):
         super(MiniKdc, self).__init__(context, 1)
         self.kafka_nodes = kafka_nodes
         self.extra_principals = extra_principals
+
+        # context.scratch_dir uses a ducktape feature:
+        # each test_context object has a unique local scratch directory which is available for the duration of the test
+        # which is automatically garbage collected after the test finishes
+        MiniKdc._set_local_keytab_file(context.scratch_dir)
+        MiniKdc._set_local_krb5conf_file(context.scratch_dir)
 
     def replace_in_file(self, file_path, pattern, subst):
         fh, abs_path = mkstemp()
@@ -96,8 +115,6 @@ class MiniKdc(KafkaPathResolverMixin, Service):
             node.account.ssh(cmd)
             monitor.wait_until("MiniKdc Running", timeout_sec=60, backoff_sec=1, err_msg="MiniKdc didn't finish startup")
 
-        MiniKdc._keytab()
-        MiniKdc._krb5conf()
         node.account.copy_from(MiniKdc.KEYTAB_FILE, MiniKdc.LOCAL_KEYTAB_FILE)
         node.account.copy_from(MiniKdc.KRB5CONF_FILE, MiniKdc.LOCAL_KRB5CONF_FILE)
 
