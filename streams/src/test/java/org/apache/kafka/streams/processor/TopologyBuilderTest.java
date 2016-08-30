@@ -29,6 +29,7 @@ import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateStoreSupplier;
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -309,9 +310,29 @@ public class TopologyBuilderTest {
         final String store1 = ProcessorStateManager.storeChangelogTopic("X", "store-1");
         final String store2 = ProcessorStateManager.storeChangelogTopic("X", "store-2");
         final String store3 = ProcessorStateManager.storeChangelogTopic("X", "store-3");
-        expectedTopicGroups.put(0, new TopicsInfo(Collections.<String>emptySet(), mkSet("topic-1", "topic-1x", "topic-2"), Collections.<String, InternalTopicConfig>emptyMap(), Collections.singletonMap(store1, new InternalTopicConfig(store1))));
-        expectedTopicGroups.put(1, new TopicsInfo(Collections.<String>emptySet(), mkSet("topic-3", "topic-4"), Collections.<String, InternalTopicConfig>emptyMap(), Collections.singletonMap(store2, new InternalTopicConfig(store2))));
-        expectedTopicGroups.put(2, new TopicsInfo(Collections.<String>emptySet(), mkSet("topic-5"), Collections.<String, InternalTopicConfig>emptyMap(), Collections.singletonMap(store3, new InternalTopicConfig(store3))));
+        expectedTopicGroups.put(0, new TopicsInfo(Collections.<String>emptySet(), mkSet("topic-1", "topic-1x", "topic-2"),
+                                                  Collections.<String, InternalTopicConfig>emptyMap(),
+                                                  Collections.singletonMap(store1,
+                                                                           new InternalTopicConfig(
+                                                                                   store1,
+                                                                                   Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
+                                                                                   Collections.<String, String>emptyMap()))));
+        expectedTopicGroups.put(1, new TopicsInfo(Collections.<String>emptySet(), mkSet("topic-3", "topic-4"),
+                                                  Collections.<String, InternalTopicConfig>emptyMap(),
+                                                  Collections.singletonMap(store2,
+                                                                           new InternalTopicConfig(
+                                                                                   store2,
+                                                                                   Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
+                                                                                   Collections.<String, String>emptyMap()))));
+        expectedTopicGroups.put(2, new TopicsInfo(Collections.<String>emptySet(), mkSet("topic-5"),
+                                                  Collections.<String, InternalTopicConfig>emptyMap(),
+                                                  Collections.singletonMap(store3,
+                                                                           new InternalTopicConfig(
+                                                                                   store3,
+                                                                                   Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
+                                                                                   Collections.<String, String>emptyMap()))));
+
+
 
         assertEquals(3, topicGroups.size());
         assertEquals(expectedTopicGroups, topicGroups);
@@ -397,7 +418,7 @@ public class TopologyBuilderTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotAddNullStateStoreSupplier() throws Exception {
         final TopologyBuilder builder = new TopologyBuilder();
-        builder.addStateStore(null, true);
+        builder.addStateStore(null);
     }
 
     private Set<String> nodeNames(Collection<ProcessorNode> nodes) {
@@ -413,7 +434,7 @@ public class TopologyBuilderTest {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.addSource("source", "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
-        builder.addStateStore(new MockStateStoreSupplier("store", false), true, "processor");
+        builder.addStateStore(new MockStateStoreSupplier("store", false), "processor");
         final Map<String, Set<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToSourceTopics();
         assertEquals(1, stateStoreNameToSourceTopic.size());
         assertEquals(Collections.singleton("topic"), stateStoreNameToSourceTopic.get("store"));
@@ -424,7 +445,7 @@ public class TopologyBuilderTest {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.addSource("source", "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
-        builder.addStateStore(new MockStateStoreSupplier("store", false), false, "processor");
+        builder.addStateStore(new MockStateStoreSupplier("store", false), "processor");
         final Map<String, Set<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToSourceTopics();
         assertEquals(1, stateStoreNameToSourceTopic.size());
         assertEquals(Collections.singleton("topic"), stateStoreNameToSourceTopic.get("store"));
@@ -437,7 +458,7 @@ public class TopologyBuilderTest {
         builder.addInternalTopic("internal-topic");
         builder.addSource("source", "internal-topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
-        builder.addStateStore(new MockStateStoreSupplier("store", false), true, "processor");
+        builder.addStateStore(new MockStateStoreSupplier("store", false), "processor");
         final Map<String, Set<String>> stateStoreNameToSourceTopic = builder.stateStoreNameToSourceTopics();
         assertEquals(1, stateStoreNameToSourceTopic.size());
         assertEquals(Collections.singleton("appId-internal-topic"), stateStoreNameToSourceTopic.get("store"));
@@ -450,15 +471,19 @@ public class TopologyBuilderTest {
         builder.setApplicationId("appId");
         builder.addSource("source", "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
-        builder.addStateStore(new RocksDBWindowStoreSupplier("store", 30000, 3, false, null, null), true, "processor");
+        builder.addStateStore(new RocksDBWindowStoreSupplier("store", 30000, 3, false, null, null, true, Collections.<String, String>emptyMap()), "processor");
         final Map<Integer, TopicsInfo> topicGroups = builder.topicGroups();
         final TopicsInfo topicsInfo = topicGroups.values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-store-changelog");
         final Properties properties = topicConfig.toProperties(0);
+        final List<String> policies = Arrays.asList(properties.getProperty(InternalTopicManager.CLEANUP_POLICY_PROP).split(","));
         assertEquals("appId-store-changelog", topicConfig.name());
-        assertEquals("compact,delete", properties.getProperty(InternalTopicManager.CLEANUP_POLICY_PROP));
+        assertTrue(policies.contains("compact"));
+        assertTrue(policies.contains("delete"));
+        assertEquals(2, policies.size());
         assertEquals("30000", properties.getProperty(InternalTopicManager.RETENTION_MS));
-        assertEquals(2, properties.size());
+        assertEquals(String.valueOf(Long.MAX_VALUE), properties.get("segment.ms"));
+        assertEquals(3, properties.size());
     }
 
     @SuppressWarnings("unchecked")
@@ -468,11 +493,11 @@ public class TopologyBuilderTest {
         builder.setApplicationId("appId");
         builder.addSource("source", "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
-        builder.addStateStore(new MockStateStoreSupplier("name", true), true, "processor");
+        builder.addStateStore(new MockStateStoreSupplier("name", true), "processor");
         final Map<Integer, TopicsInfo> topicGroups = builder.topicGroups();
         final TopicsInfo topicsInfo = topicGroups.values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-name-changelog");
-        final Properties properties = topicConfig.toProperties(1);
+        final Properties properties = topicConfig.toProperties(0);
         assertEquals("appId-name-changelog", topicConfig.name());
         assertEquals("compact", properties.getProperty(InternalTopicManager.CLEANUP_POLICY_PROP));
         assertEquals(1, properties.size());
@@ -480,16 +505,17 @@ public class TopologyBuilderTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldAddInternalTopicConfigWithNoPropertiesSetForInternalTopics() throws Exception {
+    public void shouldAddInternalTopicConfigWithCleanupPolicyDeleteForInternalTopics() throws Exception {
         final TopologyBuilder builder = new TopologyBuilder();
         builder.setApplicationId("appId");
         builder.addInternalTopic("foo");
         builder.addSource("source", "foo");
         final TopicsInfo topicsInfo = builder.topicGroups().values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.interSourceTopics.get("appId-foo");
-        final Properties properties = topicConfig.toProperties(1);
+        final Properties properties = topicConfig.toProperties(0);
         assertEquals("appId-foo", topicConfig.name());
-        assertEquals(0, properties.size());
+        assertEquals("delete", properties.getProperty(InternalTopicManager.CLEANUP_POLICY_PROP));
+        assertEquals(1, properties.size());
     }
 
 }

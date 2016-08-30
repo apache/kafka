@@ -20,7 +20,8 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
+
+import java.util.Map;
 
 /**
  * A {@link org.apache.kafka.streams.state.KeyValueStore} that stores all entries in a local RocksDB database.
@@ -30,31 +31,19 @@ import org.apache.kafka.streams.processor.StateStoreSupplier;
  *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
-public class RocksDBKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
+public class RocksDBKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K, V> {
 
-    private final String name;
-    private final Serde<K> keySerde;
-    private final Serde<V> valueSerde;
-    private final Time time;
-
-    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde) {
-        this(name, keySerde, valueSerde, null);
+    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, boolean logged, Map<String, String> logConfig) {
+        this(name, keySerde, valueSerde, null, logged, logConfig);
     }
 
-    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, Time time) {
-        this.name = name;
-        this.keySerde = keySerde;
-        this.valueSerde = valueSerde;
-        this.time = time;
-    }
-
-    public String name() {
-        return name;
+    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, Time time, boolean logged, Map<String, String> logConfig) {
+        super(name, keySerde, valueSerde, time, logged, logConfig);
     }
 
     public StateStore get() {
         RocksDBStore<K, V> store = new RocksDBStore<>(name, keySerde, valueSerde);
-
-        return new MeteredKeyValueStore<>(store.enableLogging(), "rocksdb-state", time);
+        return new MeteredKeyValueStore<>(logged ? store.enableLogging() : store, "rocksdb-state", time);
     }
+
 }

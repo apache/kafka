@@ -16,8 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.utils.Utils;
-
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
@@ -27,64 +26,58 @@ import java.util.Set;
  * the internal topics we create for change-logs and repartitioning etc.
  */
 public class InternalTopicConfig {
-    private static final long FOREVER = -1;
-    private static final Set VALID_CLEANUP_POLICIES = Utils.mkSet(InternalTopicManager.COMPACT_AND_DELETE,
-                                                                  InternalTopicManager.COMPACT,
-                                                                  InternalTopicManager.DELETE);
+    public enum CleanupPolicy { compact, delete }
+
     private final String name;
-    private String cleanupPolicy;
-    private long retentionMs = FOREVER;
+    private final Map<String, String> logConfig;
+    private Long retentionMs;
+    private final Set<CleanupPolicy> cleanupPolicies;
 
-    public InternalTopicConfig(final String name) {
-        this(name, null);
-    }
-
-    public InternalTopicConfig(final String name, final String cleanupPolicy) {
+    public InternalTopicConfig(final String name, final Set<CleanupPolicy> defaultCleanupPolicies, final Map<String, String> logConfig) {
         Objects.requireNonNull(name, "name can't be null");
+        if (defaultCleanupPolicies.isEmpty()) {
+            throw new IllegalArgumentException("Must provide at least one cleanup policy");
+        }
         this.name = name;
-        setCleanupPolicy(cleanupPolicy);
-    }
-
-    @Override
-    public boolean equals(final Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        final InternalTopicConfig that = (InternalTopicConfig) o;
-        return Objects.equals(name, that.name);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(name);
-    }
-
-    @Override
-    public String toString() {
-        return "InternalTopicConfig{" +
-                "name='" + name + '\'' +
-                ", cleanupPolicy='" + cleanupPolicy + '\'' +
-                ", retentionMs=" + retentionMs +
-                '}';
+        this.cleanupPolicies = defaultCleanupPolicies;
+        this.logConfig = logConfig;
     }
 
     boolean isCompacted() {
-        return InternalTopicManager.COMPACT_AND_DELETE.equals(cleanupPolicy) || InternalTopicManager.COMPACT.equals(cleanupPolicy);
+        return cleanupPolicies.contains(CleanupPolicy.compact);
+    }
+
+    private boolean isCompactDelete() {
+        return cleanupPolicies.contains(CleanupPolicy.compact) && cleanupPolicies.contains(CleanupPolicy.delete);
     }
 
     /**
      * Get the configured properties for this topic. If rententionMs is set then
-     * we use the retentionMultiplier to work out the desired retention when cleanup.policy=compact_and_delete
+     * we add additionalRetentionMs to work out the desired retention when cleanup.policy=compact_and_delete
+     *
      * @param additionalRetentionMs - added to retention to allow for clock drift etc
      * @return Properties to be used when creating the topic
      */
     public Properties toProperties(final long additionalRetentionMs) {
         final Properties result = new Properties();
-        if (cleanupPolicy != null) {
-            result.put(InternalTopicManager.CLEANUP_POLICY_PROP, cleanupPolicy);
+        for (Map.Entry<String, String> configEntry : logConfig.entrySet()) {
+            result.put(configEntry.getKey(), configEntry.getValue());
         }
-        if (retentionMs != FOREVER && InternalTopicManager.COMPACT_AND_DELETE.equals(cleanupPolicy)) {
+        if (retentionMs != null && isCompactDelete()) {
             result.put(InternalTopicManager.RETENTION_MS, String.valueOf(retentionMs + additionalRetentionMs));
         }
+
+        if (!logConfig.containsKey(InternalTopicManager.CLEANUP_POLICY_PROP)) {
+            final StringBuilder builder = new StringBuilder();
+            for (CleanupPolicy cleanupPolicy : cleanupPolicies) {
+                builder.append(cleanupPolicy.name()).append(",");
+            }
+            builder.deleteCharAt(builder.length() - 1);
+
+            result.put(InternalTopicManager.CLEANUP_POLICY_PROP, builder.toString());
+        }
+
+
         return result;
     }
 
@@ -93,13 +86,24 @@ public class InternalTopicConfig {
     }
 
     public void setRetentionMs(final long retentionMs) {
-        this.retentionMs = retentionMs;
+        if (!logConfig.containsKey(InternalTopicManager.RETENTION_MS)) {
+            this.retentionMs = retentionMs;
+        }
     }
 
-    public void setCleanupPolicy(final String cleanupPolicy) {
-        if (cleanupPolicy != null && !VALID_CLEANUP_POLICIES.contains(cleanupPolicy)) {
-            throw new IllegalArgumentException("cleanupPolicy=" + cleanupPolicy + " is not valid. Must be in: " + VALID_CLEANUP_POLICIES);
-        }
-        this.cleanupPolicy = cleanupPolicy;
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        final InternalTopicConfig that = (InternalTopicConfig) o;
+        return Objects.equals(name, that.name) &&
+                Objects.equals(logConfig, that.logConfig) &&
+                Objects.equals(retentionMs, that.retentionMs) &&
+                Objects.equals(cleanupPolicies, that.cleanupPolicies);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(name, logConfig, retentionMs, cleanupPolicies);
     }
 }

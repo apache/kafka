@@ -19,12 +19,17 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryLRUCacheStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
 
 /**
  * Factory for creating state stores in Kafka Streams.
@@ -44,65 +49,119 @@ public class Stores {
                 return new ValueFactory<K>() {
                     @Override
                     public <V> KeyValueFactory<K, V> withValues(final Serde<V> valueSerde) {
+
                         return new KeyValueFactory<K, V>() {
+                            public LoggedKeyValueFactory<K, V> logged(final String cleanupPolicy, final Map<String, String> config) {
+                                if (!InternalTopicManager.isValidCleanupPolicy(cleanupPolicy)) {
+                                    throw new IllegalArgumentException("cleanup policy: " + cleanupPolicy + " is not valid");
+                                }
+                                final Map<String, String> logConfig = new HashMap<>(config);
+                                logConfig.put("cleanup.policy", cleanupPolicy.toLowerCase(Locale.ROOT));
+                                return loggedKeyValueFactory(name, true, logConfig, keySerde, valueSerde);
+                            }
+
+                            public LoggedKeyValueFactory<K, V> notLogged() {
+                                return loggedKeyValueFactory(name, false, Collections.<String, String>emptyMap(), keySerde, valueSerde);
+                            }
+
                             @Override
                             public InMemoryKeyValueFactory<K, V> inMemory() {
-                                return new InMemoryKeyValueFactory<K, V>() {
-                                    private int capacity = Integer.MAX_VALUE;
-
-                                    /**
-                                     * @param capacity the maximum capacity of the in-memory cache; should be one less than a power of 2
-                                     * @throws IllegalArgumentException if the capacity of the store is zero or negative
-                                     */
-                                    @Override
-                                    public InMemoryKeyValueFactory<K, V> maxEntries(int capacity) {
-                                        if (capacity < 1) throw new IllegalArgumentException("The capacity must be positive");
-                                        this.capacity = capacity;
-                                        return this;
-                                    }
-
-                                    @Override
-                                    public StateStoreSupplier build() {
-                                        if (capacity < Integer.MAX_VALUE) {
-                                            return new InMemoryLRUCacheStoreSupplier<>(name, capacity, keySerde, valueSerde);
-                                        }
-                                        return new InMemoryKeyValueStoreSupplier<>(name, keySerde, valueSerde);
-                                    }
-                                };
+                                return inMemoryKeyValueFactory(true, name, keySerde, valueSerde, Collections.<String, String>emptyMap());
                             }
 
                             @Override
                             public PersistentKeyValueFactory<K, V> persistent() {
-                                return new PersistentKeyValueFactory<K, V>() {
-                                    private int numSegments = 0;
-                                    private long retentionPeriod = 0L;
-                                    private boolean retainDuplicates = false;
-
-                                    @Override
-                                    public PersistentKeyValueFactory<K, V> windowed(long retentionPeriod, int numSegments, boolean retainDuplicates) {
-                                        this.numSegments = numSegments;
-                                        this.retentionPeriod = retentionPeriod;
-                                        this.retainDuplicates = retainDuplicates;
-
-                                        return this;
-                                    }
-
-                                    @Override
-                                    public StateStoreSupplier build() {
-                                        if (numSegments > 0) {
-                                            return new RocksDBWindowStoreSupplier<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde);
-                                        }
-
-                                        return new RocksDBKeyValueStoreSupplier<>(name, keySerde, valueSerde);
-                                    }
-                                };
+                                return persistentKeyValueFactory(true, name, keySerde, valueSerde, Collections.<String, String>emptyMap());
                             }
+
+
                         };
                     }
                 };
             }
         };
     }
+
+
+
+    private static <K, V> LoggedKeyValueFactory<K, V> loggedKeyValueFactory(final String name,
+                                                                    final boolean logged,
+                                                                    final Map<String, String> logConfig,
+                                                                    final Serde<K> keySerde,
+                                                                    final Serde<V> valSerde) {
+        return new LoggedKeyValueFactory<K, V>() {
+            @Override
+            public InMemoryKeyValueFactory<K, V> inMemory() {
+                return inMemoryKeyValueFactory(logged, name, keySerde, valSerde, logConfig);
+            }
+
+            @Override
+            public PersistentKeyValueFactory<K, V> persistent() {
+                return persistentKeyValueFactory(logged, name, keySerde, valSerde, logConfig);
+            }
+        };
+
+    }
+
+    private static <K, V> PersistentKeyValueFactory<K, V> persistentKeyValueFactory(final boolean logged,
+                                                                                    final String name,
+                                                                                    final Serde<K> keySerde,
+                                                                                    final Serde<V> valueSerde,
+                                                                                    final Map<String, String> logConfig) {
+        return new PersistentKeyValueFactory<K, V>() {
+            private int numSegments = 0;
+            private long retentionPeriod = 0L;
+            private boolean retainDuplicates = false;
+
+            @Override
+            public PersistentKeyValueFactory<K, V> windowed(long retentionPeriod, int numSegments, boolean retainDuplicates) {
+                this.numSegments = numSegments;
+                this.retentionPeriod = retentionPeriod;
+                this.retainDuplicates = retainDuplicates;
+
+                return this;
+            }
+
+            @Override
+            public StateStoreSupplier build() {
+                if (numSegments > 0) {
+                    return new RocksDBWindowStoreSupplier<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, logged, logConfig);
+                }
+
+                return new RocksDBKeyValueStoreSupplier<>(name, keySerde, valueSerde, logged, logConfig);
+            }
+        };
+    }
+
+    private static <K, V> InMemoryKeyValueFactory<K, V> inMemoryKeyValueFactory(final boolean logged,
+                                                                                final String name,
+                                                                                final Serde<K> keySerde,
+                                                                                final Serde<V> valueSerde,
+                                                                                final Map<String, String> logConfig) {
+        return new InMemoryKeyValueFactory<K, V>() {
+            private int capacity = Integer.MAX_VALUE;
+
+            /**
+             * @param capacity the maximum capacity of the in-memory cache; should be one less than a power of 2
+             * @throws IllegalArgumentException if the capacity of the store is zero or negative
+             */
+            @Override
+            public InMemoryKeyValueFactory<K, V> maxEntries(int capacity) {
+                if (capacity < 1) throw new IllegalArgumentException("The capacity must be positive");
+                this.capacity = capacity;
+                return this;
+            }
+
+            @Override
+            public StateStoreSupplier build() {
+                if (capacity < Integer.MAX_VALUE) {
+                    return new InMemoryLRUCacheStoreSupplier<>(name, capacity, keySerde, valueSerde, logged, logConfig);
+                }
+                return new InMemoryKeyValueStoreSupplier<>(name, keySerde, valueSerde, logged, logConfig);
+            }
+        };
+    }
+
 
     public static abstract class StoreFactory {
         /**
@@ -263,7 +322,14 @@ public class Stores {
      * @param <K> the type of keys
      * @param <V> the type of values
      */
-    public interface KeyValueFactory<K, V> {
+    public interface KeyValueFactory<K, V> extends LoggedKeyValueFactory<K, V> {
+
+        LoggedKeyValueFactory<K, V> logged(final String cleanupPolicy, final Map<String, String> config);
+
+        LoggedKeyValueFactory<K, V> notLogged();
+    }
+
+    public interface LoggedKeyValueFactory<K, V> {
         /**
          * Keep all key-value entries in-memory, although for durability all entries are recorded in a Kafka topic that can be
          * read to restore the entries if they are lost.

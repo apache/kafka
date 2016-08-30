@@ -22,7 +22,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
-import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -105,11 +104,9 @@ public class TopologyBuilder {
     private static class StateStoreFactory {
         public final Set<String> users;
 
-        public final boolean isInternal;
         public final StateStoreSupplier supplier;
 
-        StateStoreFactory(boolean isInternal, StateStoreSupplier supplier) {
-            this.isInternal = isInternal;
+        StateStoreFactory(StateStoreSupplier supplier) {
             this.supplier = supplier;
             this.users = new HashSet<>();
         }
@@ -556,13 +553,13 @@ public class TopologyBuilder {
      * @return this builder instance so methods can be chained together; never null
      * @throws TopologyBuilderException if state store supplier is already added
      */
-    public synchronized final TopologyBuilder addStateStore(StateStoreSupplier supplier, boolean isInternal, String... processorNames) {
+    public synchronized final TopologyBuilder addStateStore(StateStoreSupplier supplier, String... processorNames) {
         Objects.requireNonNull(supplier, "supplier can't be null");
         if (stateFactories.containsKey(supplier.name())) {
             throw new TopologyBuilderException("StateStore " + supplier.name() + " is already added.");
         }
 
-        stateFactories.put(supplier.name(), new StateStoreFactory(isInternal, supplier));
+        stateFactories.put(supplier.name(), new StateStoreFactory(supplier));
 
         if (processorNames != null) {
             for (String processorName : processorNames) {
@@ -573,15 +570,6 @@ public class TopologyBuilder {
         return this;
     }
 
-    /**
-     * Adds a state store
-     *
-     * @param supplier the supplier used to obtain this state store {@link StateStore} instance
-     * @return this builder instance so methods can be chained together; never null
-     */
-    public synchronized final TopologyBuilder addStateStore(StateStoreSupplier supplier, String... processorNames) {
-        return this.addStateStore(supplier, true, processorNames);
-    }
 
     /**
      * Connects the processor and the state stores
@@ -864,7 +852,9 @@ public class TopologyBuilder {
                         if (this.internalTopicNames.contains(topic)) {
                             // prefix the internal topic name with the application id
                             String internalTopic = decorateTopic(topic);
-                            internalSourceTopics.put(internalTopic, new InternalTopicConfig(internalTopic));
+                            internalSourceTopics.put(internalTopic, new InternalTopicConfig(internalTopic,
+                                                                                            Collections.singleton(InternalTopicConfig.CleanupPolicy.delete),
+                                                                                            Collections.<String, String>emptyMap()));
                             sourceTopics.add(internalTopic);
                         } else {
                             sourceTopics.add(topic);
@@ -885,17 +875,10 @@ public class TopologyBuilder {
 
                 // if the node is connected to a state, add to the state topics
                 for (StateStoreFactory stateFactory : stateFactories.values()) {
-                    if (stateFactory.isInternal && stateFactory.users.contains(node)) {
-                        final String name = ProcessorStateManager.storeChangelogTopic(applicationId, stateFactory.supplier.name());
-                        final InternalTopicConfig internalTopicConfig = new InternalTopicConfig(name, InternalTopicManager.COMPACT);
-
-                        // If it is a Window Store then we want to set the cleanup.policy to compact,delete
-                        // and the retentionMs window retention + StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG
-                        if (stateFactory.supplier instanceof RocksDBWindowStoreSupplier) {
-                            final RocksDBWindowStoreSupplier windowStoreSupplier = (RocksDBWindowStoreSupplier) stateFactory.supplier;
-                            internalTopicConfig.setCleanupPolicy(InternalTopicManager.COMPACT_AND_DELETE);
-                            internalTopicConfig.setRetentionMs(windowStoreSupplier.retentionPeriod());
-                        }
+                    final StateStoreSupplier supplier = stateFactory.supplier;
+                    if (supplier.loggingEnabled() && stateFactory.users.contains(node)) {
+                        final String name = ProcessorStateManager.storeChangelogTopic(applicationId, supplier.name());
+                        final InternalTopicConfig internalTopicConfig = createInternalTopicConfig(supplier, name);
                         stateChangelogTopics.put(name, internalTopicConfig);
                     }
                 }
@@ -908,6 +891,24 @@ public class TopologyBuilder {
         }
 
         return Collections.unmodifiableMap(topicGroups);
+    }
+
+    private InternalTopicConfig createInternalTopicConfig(final StateStoreSupplier supplier, final String name) {
+        if (!(supplier instanceof RocksDBWindowStoreSupplier)) {
+            return new InternalTopicConfig(name, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), supplier.logConfig());
+        }
+
+        final RocksDBWindowStoreSupplier windowStoreSupplier = (RocksDBWindowStoreSupplier) supplier;
+        final Map<String, String> logConfig = new HashMap<>(supplier.logConfig());
+        // set segment.ms to Long.MAX_VALUE so we avoid potentially rolling the segment
+        // on each message.
+        logConfig.put("segment.ms", String.valueOf(Long.MAX_VALUE));
+        final InternalTopicConfig config = new InternalTopicConfig(name,
+                                                                   Utils.mkSet(InternalTopicConfig.CleanupPolicy.compact,
+                                                                               InternalTopicConfig.CleanupPolicy.delete),
+                                                                   logConfig);
+        config.setRetentionMs(windowStoreSupplier.retentionPeriod());
+        return config;
     }
 
 

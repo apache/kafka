@@ -551,9 +551,11 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     }
 
     private void ensureCopartitioning(Collection<Set<String>> copartitionGroups, Map<Integer, Collection<InternalTopicConfig>> internalTopicGroups, Cluster metadata) {
-        Set<InternalTopicConfig> internalTopics = new HashSet<>();
+        Map<String, InternalTopicConfig> internalTopics = new HashMap<>();
         for (Collection<InternalTopicConfig> topics : internalTopicGroups.values()) {
-            internalTopics.addAll(topics);
+            for (InternalTopicConfig topic : topics) {
+                internalTopics.put(topic.name(), topic);
+            }
         }
 
         for (Set<String> copartitionGroup : copartitionGroups) {
@@ -561,11 +563,11 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
     }
 
-    private void ensureCopartitioning(Set<String> copartitionGroup, Set<InternalTopicConfig> internalTopics, Cluster metadata) {
+    private void ensureCopartitioning(Set<String> copartitionGroup, Map<String, InternalTopicConfig> internalTopics, Cluster metadata) {
         int numPartitions = -1;
 
         for (String topic : copartitionGroup) {
-            if (!internalTopics.contains(new InternalTopicConfig(topic))) {
+            if (!internalTopics.containsKey(topic)) {
                 List<PartitionInfo> infos = metadata.partitionsForTopic(topic);
 
                 if (infos == null)
@@ -582,7 +584,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
 
         if (numPartitions == -1) {
-            for (InternalTopicConfig topic : internalTopics) {
+            for (InternalTopicConfig topic : internalTopics.values()) {
                 if (copartitionGroup.contains(topic.name())) {
                     Integer partitions = metadata.partitionCountForTopic(topic.name());
                     if (partitions != null && partitions > numPartitions) {
@@ -592,7 +594,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
         }
         // enforce co-partitioning restrictions to internal topics reusing internalSourceTopicToTaskIds
-        for (InternalTopicConfig topic : internalTopics) {
+        for (InternalTopicConfig topic : internalTopics.values()) {
             if (copartitionGroup.contains(topic.name())) {
                 internalSourceTopicToTaskIds
                     .put(topic, Collections.singleton(new TaskId(-1, numPartitions)));
@@ -602,7 +604,13 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
     /* For Test Only */
     public Set<TaskId> tasksForState(String stateName) {
-        return stateChangelogTopicToTaskIds.get(new InternalTopicConfig(ProcessorStateManager.storeChangelogTopic(streamThread.applicationId, stateName)));
+        final String changeLogName = ProcessorStateManager.storeChangelogTopic(streamThread.applicationId, stateName);
+        for (InternalTopicConfig internalTopicConfig : stateChangelogTopicToTaskIds.keySet()) {
+            if (internalTopicConfig.name().equals(changeLogName)) {
+                return stateChangelogTopicToTaskIds.get(internalTopicConfig);
+            }
+        }
+        return Collections.emptySet();
     }
 
     public Set<TaskId> tasksForPartition(TopicPartition partition) {

@@ -24,6 +24,7 @@ import org.I0Itec.zkclient.ZkClient;
 import org.I0Itec.zkclient.exception.ZkNoNodeException;
 import org.I0Itec.zkclient.exception.ZkNodeExistsException;
 import org.I0Itec.zkclient.serialize.ZkSerializer;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.zookeeper.ZooDefs;
 import org.slf4j.Logger;
@@ -35,7 +36,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 public class InternalTopicManager {
@@ -49,15 +52,26 @@ public class InternalTopicManager {
     private static final String ZK_ENTITY_CONFIG_PATH = "/config/topics";
     // TODO: the following LogConfig dependency should be removed after KIP-4
     public static final String CLEANUP_POLICY_PROP = "cleanup.policy";
-    public static final String COMPACT = "compact";
-    public static final String DELETE = "delete";
-    public static final String COMPACT_AND_DELETE = "compact,delete";
+    private static final Set<String> CLEANUP_POLICIES = Utils.mkSet("compact", "delete");
     public static final String RETENTION_MS = "retention.ms";
     public static final Long WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
 
     private final ZkClient zkClient;
     private final int replicationFactor;
     private final long windowChangeLogAdditionalRetention;
+
+    public static boolean isValidCleanupPolicy(final String cleanupPolicy) {
+        if (cleanupPolicy == null) {
+            return false;
+        }
+        final String[] policies = cleanupPolicy.toLowerCase(Locale.ROOT).split(",");
+        for (String policy : policies) {
+            if (!CLEANUP_POLICIES.contains(policy.trim())) {
+                return false;
+            }
+        }
+        return true;
+    }
 
     private class ZKStringSerializer implements ZkSerializer {
 
@@ -191,16 +205,14 @@ public class InternalTopicManager {
             assignment.put(i, brokerList);
         }
         // write out config first just like in AdminUtils.scala createOrUpdateTopicPartitionAssignmentPathInZK()
-        if (topic.isCompacted()) {
-            try {
-                Map<String, Object> dataMap = new HashMap<>();
-                dataMap.put("version", 1);
-                dataMap.put("config", topic.toProperties(windowChangeLogAdditionalRetention));
-                String data = mapper.writeValueAsString(dataMap);
-                zkClient.createPersistent(ZK_ENTITY_CONFIG_PATH + "/" + topic.name(), data, ZooDefs.Ids.OPEN_ACL_UNSAFE);
-            } catch (JsonProcessingException e) {
-                throw new StreamsException("Error while creating topic config in ZK for internal topic " + topic, e);
-            }
+        try {
+            Map<String, Object> dataMap = new HashMap<>();
+            dataMap.put("version", 1);
+            dataMap.put("config", topic.toProperties(windowChangeLogAdditionalRetention));
+            String data = mapper.writeValueAsString(dataMap);
+            zkClient.createPersistent(ZK_ENTITY_CONFIG_PATH + "/" + topic.name(), data, ZooDefs.Ids.OPEN_ACL_UNSAFE);
+        } catch (JsonProcessingException e) {
+            throw new StreamsException("Error while creating topic config in ZK for internal topic " + topic, e);
         }
 
         // try to write to ZK with open ACL

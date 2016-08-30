@@ -40,6 +40,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -64,7 +65,14 @@ public class RocksDBWindowStoreTest {
 
     @SuppressWarnings("unchecked")
     protected <K, V> WindowStore<K, V> createWindowStore(ProcessorContext context) {
-        StateStoreSupplier supplier = new RocksDBWindowStoreSupplier<>(windowName, retentionPeriod, numSegments, true, intSerde, stringSerde);
+        StateStoreSupplier supplier = new RocksDBWindowStoreSupplier<>(windowName,
+                                                                       retentionPeriod,
+                                                                       numSegments,
+                                                                       true,
+                                                                       intSerde,
+                                                                       stringSerde,
+                                                                       true,
+                                                                       Collections.<String, String>emptyMap());
 
         WindowStore<K, V> store = (WindowStore<K, V>) supplier.get();
         store.init(context, store);
