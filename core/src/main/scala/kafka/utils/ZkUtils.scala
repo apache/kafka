@@ -41,6 +41,7 @@ import scala.collection._
 
 object ZkUtils {
   val ConsumersPath = "/consumers"
+  val clusterIdPath = "/cluster/id"
   val BrokerIdsPath = "/brokers/ids"
   val BrokerTopicsPath = "/brokers/topics"
   val ControllerPath = "/controller"
@@ -208,6 +209,26 @@ class ZkUtils(val zkClient: ZkClient,
       case None => throw new KafkaException("Controller doesn't exist")
     }
   }
+
+  def getClusterId(proposedClusterId:String): String = {
+    readDataMaybeNull(clusterIdPath)._1 match {
+      case Some(clusterId) => clusterId
+      case None => {
+        def writeToZk: Unit = {
+          updatePersistentPath(clusterIdPath, proposedClusterId)
+        }
+
+        try {
+          writeToZk
+          zkClient.readData(clusterIdPath)
+          } catch {
+            case e: ZkNodeExistsException =>
+              zkClient.readData(clusterIdPath)
+          }
+        }
+      }
+    }
+
 
   def getSortedBrokerList(): Seq[Int] =
     getChildren(BrokerIdsPath).map(_.toInt).sorted

@@ -82,6 +82,7 @@ public class MetadataResponse extends AbstractRequestResponse {
     private final Node controller;
     private final List<TopicMetadata> topicMetadata;
 
+
     /**
      * Constructor for the latest version
      */
@@ -299,6 +300,14 @@ public class MetadataResponse extends AbstractRequestResponse {
      */
     public Node controller() {
         return controller;
+    }
+
+    public String clusterId() {
+        if (struct.hasField(CLUSTER_ID_KEY_NAME)){
+            return (String) struct.get(CLUSTER_ID_KEY_NAME);
+        } else {
+            return NO_CLUSTER_ID;
+        }
     }
 
     public static MetadataResponse parse(ByteBuffer buffer) {
