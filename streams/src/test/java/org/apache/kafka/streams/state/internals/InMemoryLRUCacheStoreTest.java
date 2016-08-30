@@ -18,7 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
-import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
 import org.apache.kafka.streams.state.Stores;
@@ -56,7 +55,6 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
         KeyValueStore<Integer, String> store = createKeyValueStore(driver.context(), Integer.class, String.class, false);
 
         try {
-            RecordContext recordContext = null;
             store.put(0, "zero");
             store.put(1, "one");
             store.put(2, "two");
