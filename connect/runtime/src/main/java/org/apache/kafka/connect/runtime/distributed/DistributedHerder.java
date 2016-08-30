@@ -1172,10 +1172,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 // stopping them then state could continue to be reused when the task remains on this worker. For example,
                 // this would avoid having to close a connection and then reopen it when the task is assigned back to this
                 // worker again.
-                if (!tasks.isEmpty()) {
-                    for (final ConnectorTaskId taskId : tasks) {
-                        callables.add(getTaskCallable(taskId, TaskStatus.State.DESTROYED));
-                    }
+                for (final ConnectorTaskId taskId : tasks) {
+                    callables.add(getTaskCallable(taskId, TaskStatus.State.DESTROYED));
                 }
 
                 // The actual timeout for graceful task stop is applied in worker's stopAndAwaitTask method.

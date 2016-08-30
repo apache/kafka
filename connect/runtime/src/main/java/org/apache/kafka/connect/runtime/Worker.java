@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -72,8 +73,8 @@ public class Worker {
     private final OffsetBackingStore offsetBackingStore;
     private final Map<String, Object> producerProps;
 
-    private Map<String, WorkerConnector> connectors = new ConcurrentHashMap<>();
-    private Map<ConnectorTaskId, WorkerTask> tasks = new ConcurrentHashMap<>();
+    private ConcurrentMap<String, WorkerConnector> connectors = new ConcurrentHashMap<>();
+    private ConcurrentMap<ConnectorTaskId, WorkerTask> tasks = new ConcurrentHashMap<>();
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
 
     public Worker(String workerId, Time time, ConnectorFactory connectorFactory, WorkerConfig config, OffsetBackingStore offsetBackingStore) {
@@ -184,7 +185,7 @@ public class Worker {
             return false;
         }
 
-        WorkerConnector existing = connectors.put(connName, workerConnector);
+        WorkerConnector existing = connectors.putIfAbsent(connName, workerConnector);
         if (existing != null)
             throw new ConnectException("Connector with name " + connName + " already exists");
 
@@ -200,7 +201,6 @@ public class Worker {
      * @throws ConnectException if the worker does not manage a connector with the given name.
      */
     public boolean isSinkConnector(String connName) {
-        /* Now that the configuration doesn't contain the actual class name, we need to be able to tell the herder whether a connector is a Sink */
         WorkerConnector workerConnector = connectors.get(connName);
         if (workerConnector == null)
             throw new ConnectException("Connector " + connName + " not found in this worker.");
@@ -236,13 +236,9 @@ public class Worker {
     }
 
     private void stopConnectors() {
-        stopConnectors(new ArrayList<>(connectors.keySet()));
-    }
-
-    private void stopConnectors(Collection<String> connectors) {
         // Herder is responsible for stopping connectors. This is an internal method to sequentially
         // stop connectors that have not explicitly been stopped.
-        for (String connector: connectors)
+        for (String connector: connectors.keySet())
             stopConnector(connector);
     }
 
@@ -337,7 +333,7 @@ public class Worker {
             return false;
         }
 
-        WorkerTask existing = tasks.put(id, workerTask);
+        WorkerTask existing = tasks.putIfAbsent(id, workerTask);
         if (existing != null)
             throw new ConnectException("Task already exists in this worker: " + id);
 

@@ -22,9 +22,9 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -48,7 +48,7 @@ class SourceTaskOffsetCommitter {
 
     private WorkerConfig config;
     private ScheduledExecutorService commitExecutorService = null;
-    private final Map<ConnectorTaskId, ScheduledFuture<?>> committers = new ConcurrentHashMap<>();
+    private final ConcurrentMap<ConnectorTaskId, ScheduledFuture<?>> committers = new ConcurrentHashMap<>();
 
     SourceTaskOffsetCommitter(WorkerConfig config) {
         this.config = config;
@@ -67,21 +67,18 @@ class SourceTaskOffsetCommitter {
     }
 
     public void schedule(final ConnectorTaskId id, final WorkerSourceTask workerTask) {
-        synchronized (committers) {
-            long commitIntervalMs = config.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
-            ScheduledFuture<?> commitFuture = commitExecutorService.scheduleWithFixedDelay(new Runnable() {
-                @Override
-                public void run() {
-                    commit(id, workerTask);
-                }
-            }, 0, commitIntervalMs, TimeUnit.MILLISECONDS);
-            committers.put(id, commitFuture);
-        }
+        long commitIntervalMs = config.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
+        ScheduledFuture<?> commitFuture = commitExecutorService.scheduleWithFixedDelay(new Runnable() {
+            @Override
+            public void run() {
+                commit(id, workerTask);
+            }
+        }, 0, commitIntervalMs, TimeUnit.MILLISECONDS);
+        committers.put(id, commitFuture);
     }
 
     public void remove(ConnectorTaskId id) {
-        final ScheduledFuture<?> task;
-        task = committers.remove(id);
+        final ScheduledFuture<?> task = committers.remove(id);
         if (task == null)
             return;
 
@@ -98,10 +95,6 @@ class SourceTaskOffsetCommitter {
     }
 
     private boolean commit(ConnectorTaskId id, WorkerSourceTask workerTask) {
-        final ScheduledFuture<?> task = committers.get(id);
-        if (task == null || task.isCancelled())
-            return false;
-
         try {
             log.debug("Committing offsets for {}", workerTask);
             boolean success = workerTask.commitOffsets();
