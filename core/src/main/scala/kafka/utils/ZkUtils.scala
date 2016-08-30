@@ -228,15 +228,16 @@ class ZkUtils(val zkClient: ZkClient,
         case None => throw new KafkaException("Failed to parse the cluster id json [%s].".format(clusterIdString))
       }
     }
+
     readDataMaybeNull(clusterIdPath)._1 match {
       case Some(clusterId) => parseClusterId(clusterId)
       case None => {
         try {
           updateClusterId
-          zkClient.readData(clusterIdPath)
+          parseClusterId(zkClient.readData(clusterIdPath))
           } catch {
             case e: ZkNodeExistsException =>
-              zkClient.readData(clusterIdPath)
+              parseClusterId(zkClient.readData(clusterIdPath))
           }
         }
       }

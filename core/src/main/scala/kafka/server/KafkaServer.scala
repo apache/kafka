@@ -28,7 +28,9 @@ import kafka.log.LogManager
 import java.util.concurrent._
 import atomic.{AtomicBoolean, AtomicInteger}
 import java.io.{File, IOException}
+import java.nio.charset.StandardCharsets
 import java.util.UUID
+import javax.xml.bind.DatatypeConverter
 
 import kafka.security.auth.Authorizer
 import kafka.utils._
@@ -191,6 +193,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
 
         /* Get or create cluster_id */
         clusterId = getOrGenerateClusterId(zkUtils)
+        info(s"Cluster ID = $clusterId")
 
         /* start log manager */
         logManager = createLogManager(zkUtils.zkClient, brokerState)
@@ -318,9 +321,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
 
   def getOrGenerateClusterId(zkUtils: ZkUtils): String = {
     val uuid:UUID = UUID.randomUUID()
-    val base64EncodedUUID = new sun.misc.BASE64Encoder().encode(uuid.toString().getBytes())
+    val base64EncodedUUID = DatatypeConverter.printBase64Binary(uuid.toString().getBytes(StandardCharsets.UTF_8))
     val clusterId = zkUtils.getOrCreateClusterId(base64EncodedUUID)
-    info(s"Cluster ID = $clusterId")
     clusterId
   }
 

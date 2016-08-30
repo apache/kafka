@@ -17,7 +17,9 @@
 
 package kafka.server
 
-import java.util.Properties
+import java.nio.charset.StandardCharsets
+import java.util.{Properties, UUID}
+import javax.xml.bind.DatatypeConverter
 
 import kafka.common.Topic
 import kafka.utils.TestUtils
@@ -33,6 +35,43 @@ class MetadataRequestTest extends BaseRequestTest {
   override def propertyOverrides(properties: Properties) {
     properties.setProperty(KafkaConfig.RackProp, s"rack/${properties.getProperty(KafkaConfig.BrokerIdProp)}")
   }
+
+  @Test
+  def testClusterIdWithAllTopics() {
+    val v2MetadataResponse = sendMetadataRequest(MetadataRequest.allTopics(), 2)
+    val v2ClusterId = v2MetadataResponse.clusterId()
+    assertNotNull("clusterId should not be null", v2ClusterId)
+
+    val v1MetadataResponse = sendMetadataRequest(MetadataRequest.allTopics(), 1)
+    val v1ClusterId = v1MetadataResponse.clusterId()
+    assertEquals(s"v1 clusterId should be ${MetadataResponse.NO_CLUSTER_ID}", v1ClusterId, MetadataResponse.NO_CLUSTER_ID)
+  }
+
+  @Test
+  def testClusterIdWithNoTopics() {
+    val v2MetadataResponse = sendMetadataRequest(new MetadataRequest(List[String]().asJava), 2)
+    val v2ClusterId = v2MetadataResponse.clusterId()
+    assertNotNull("clusterId should not be null", v2ClusterId)
+
+    val v1MetadataResponse = sendMetadataRequest(MetadataRequest.allTopics(), 1)
+    val v1ClusterId = v1MetadataResponse.clusterId()
+    assertEquals(s"v1 clusterId should be ${MetadataResponse.NO_CLUSTER_ID}", v1ClusterId, MetadataResponse.NO_CLUSTER_ID)
+  }
+
+  @Test
+  def testClusterIdIsValidUUID() {
+    val metadataResponse = sendMetadataRequest(MetadataRequest.allTopics(), 2)
+    val clusterId = metadataResponse.clusterId()
+    val decodedUUID = DatatypeConverter.parseBase64Binary(clusterId)
+
+    try {
+      UUID.fromString(new String(decodedUUID, StandardCharsets.UTF_8))
+    } catch {
+      case e: IllegalArgumentException =>
+        fail("UUID is invalid.", e)
+    }
+  }
+
 
   @Test
   def testControllerId() {

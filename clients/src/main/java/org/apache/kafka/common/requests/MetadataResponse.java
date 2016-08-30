@@ -28,6 +28,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 public class MetadataResponse extends AbstractRequestResponse {
 
@@ -45,7 +46,8 @@ public class MetadataResponse extends AbstractRequestResponse {
     public static final int NO_CONTROLLER_ID = -1;
 
     private static final String CLUSTER_ID_KEY_NAME = "cluster_id";
-    public static final String NO_CLUSTER_ID = "none";
+    // Base 64 of 00000000-0000-0000-0000-000000000000
+    public static final String NO_CLUSTER_ID = new sun.misc.BASE64Encoder().encode(new UUID(0,0).toString().getBytes());
 
     // topic level field names
     private static final String TOPIC_ERROR_CODE_KEY_NAME = "topic_error_code";
