@@ -81,7 +81,7 @@ public class QueryableStateIntegrationTest {
     private static final int NUM_PARTITIONS = 2;
     private static final String OUTPUT_TOPIC_THREE = "output-three";
     private static final int QSRETRIES = 5;
-    private static final long QSBACKOFF = 20000L;
+    private static final long QSBACKOFF = 1000L;
     private Properties streamsConfiguration;
     private List<String> inputValues;
     private Set<String> inputValuesKeys;
@@ -234,7 +234,6 @@ public class QueryableStateIntegrationTest {
                 Long value = null;
                 int retries = 0;
                 while (retries < QSRETRIES && (metadata == null || store == null || value == null)) {
-                    System.out.println("Retry number " + retries);
                     try {
                         metadata = streams.metadataForKey(storeName, key, new StringSerializer());
                         if (metadata == null) {
@@ -299,17 +298,14 @@ public class QueryableStateIntegrationTest {
 
         // kill N-1 threads
         for (int i = 1; i < numThreads; i++) {
-            System.out.println("Shutting down thread " + i);
             streamRunnables[i].close();
             streamThreads[i].interrupt();
             streamThreads[i].join();
         }
 
         // query from the remaining thread
-        System.out.println("Verifying one last time");
         verifyAllKVKeys(streamRunnables, streamRunnables[0].getStream(), inputValuesKeys,
             new HashSet(Arrays.asList("word-count-store-" + STREAM_THREE)));
-        System.out.println("Shutting down thread " + 0);
         streamRunnables[0].close();
         streamThreads[0].interrupt();
         streamThreads[0].join();
