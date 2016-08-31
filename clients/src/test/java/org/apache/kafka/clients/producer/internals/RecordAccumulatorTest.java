@@ -21,7 +21,6 @@ import static org.junit.Assert.fail;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.Iterator;
@@ -447,7 +446,7 @@ public class RecordAccumulatorTest {
         expiredBatches = accum.abortExpiredBatches(requestTimeoutMs, metadata, time.milliseconds());
         assertEquals("The batch should not expire because request timeout has not passed.", 0, expiredBatches.size());
 
-        time.sleep(requestTimeoutMs+ 1);
+        time.sleep(requestTimeoutMs + 1);
         expiredBatches = accum.abortExpiredBatches(requestTimeoutMs, metadata, time.milliseconds());
         assertEquals("The batch should expire because request timeout has passed.", 1, expiredBatches.size());
         // subtest6 done
