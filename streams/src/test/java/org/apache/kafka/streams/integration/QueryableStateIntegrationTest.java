@@ -563,7 +563,6 @@ public class QueryableStateIntegrationTest {
      */
     private class ProducerRunnable implements Runnable {
         private String topic;
-        private boolean keepRunning = false;
         private final List<String> inputValues;
         private final int numIterations;
         private int currIteration = 0;
@@ -585,7 +584,6 @@ public class QueryableStateIntegrationTest {
 
         @Override
         public void run() {
-            keepRunning = true;
             Properties producerConfig = new Properties();
             producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
             producerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
@@ -598,7 +596,7 @@ public class QueryableStateIntegrationTest {
                 new KafkaProducer<>(producerConfig, new StringSerializer(), new StringSerializer());
 
             try {
-                while (keepRunning && getCurrIteration() < numIterations) {
+                while (getCurrIteration() < numIterations) {
                     for (int i = 0; i < inputValues.size(); i++) {
                         producer.send(new ProducerRecord<>(topic,
                             inputValues.get(i), inputValues.get(i)));
