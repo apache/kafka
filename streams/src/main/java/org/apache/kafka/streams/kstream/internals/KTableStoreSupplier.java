@@ -21,9 +21,8 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.internals.CachingKeyValueStore;
-import org.apache.kafka.streams.state.internals.ForwardingSupplier;
+import org.apache.kafka.streams.state.internals.ForwardingStateStoreSupplier;
 import org.apache.kafka.streams.state.internals.MeteredKeyValueStore;
 import org.apache.kafka.streams.state.internals.RocksDBStore;
 
@@ -33,7 +32,7 @@ import org.apache.kafka.streams.state.internals.RocksDBStore;
  * @param <K> the type of keys
  * @param <V> the type of values
  */
-public class KTableStoreSupplier<K, V> implements StateStoreSupplier, ForwardingSupplier<K, V> {
+public class KTableStoreSupplier<K, V> implements ForwardingStateStoreSupplier<K, V> {
 
     private final String name;
     private final Serde<K> keySerde;

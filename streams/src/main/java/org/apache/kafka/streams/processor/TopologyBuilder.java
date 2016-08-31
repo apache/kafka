@@ -29,7 +29,7 @@ import org.apache.kafka.streams.processor.internals.QuickUnion;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor.SubscriptionUpdates;
-import org.apache.kafka.streams.state.internals.ForwardingSupplier;
+import org.apache.kafka.streams.state.internals.ForwardingStateStoreSupplier;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -786,8 +786,8 @@ public class TopologyBuilder {
                     for (String stateStoreName : ((ProcessorNodeFactory) factory).stateStoreNames) {
                         if (!stateStoreMap.containsKey(stateStoreName)) {
                             final StateStoreSupplier supplier = stateFactories.get(stateStoreName).supplier;
-                            if (supplier instanceof ForwardingSupplier) {
-                                addCacheFlushListener(node, (ForwardingSupplier) supplier);
+                            if (supplier instanceof ForwardingStateStoreSupplier) {
+                                addCacheFlushListener(node, (ForwardingStateStoreSupplier) supplier);
                             }
                             stateStoreMap.put(stateStoreName, stateFactories.get(stateStoreName).supplier);
                         }
@@ -826,7 +826,7 @@ public class TopologyBuilder {
     }
 
     @SuppressWarnings("unchecked")
-    private void addCacheFlushListener(final ProcessorNode node, final ForwardingSupplier supplier) {
+    private void addCacheFlushListener(final ProcessorNode node, final ForwardingStateStoreSupplier supplier) {
         supplier.withFlushListener(new ProcessorNodeCacheFlushListener(node));
     }
 

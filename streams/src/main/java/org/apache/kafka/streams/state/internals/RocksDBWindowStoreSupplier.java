@@ -22,7 +22,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 
 /**
  * A {@link org.apache.kafka.streams.state.KeyValueStore} that stores all entries in a local RocksDB database.
@@ -32,7 +31,7 @@ import org.apache.kafka.streams.processor.StateStoreSupplier;
  *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
-public class RocksDBWindowStoreSupplier<K, V> implements StateStoreSupplier, ForwardingSupplier<Windowed<K>, V> {
+public class RocksDBWindowStoreSupplier<K, V> implements ForwardingStateStoreSupplier<Windowed<K>, V> {
 
     private final String name;
     private final long retentionPeriod;

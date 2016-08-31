@@ -22,7 +22,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 /**
@@ -33,7 +32,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
  *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
-public class RocksDBKeyValueStoreSupplier<K, V> implements StateStoreSupplier, ForwardingSupplier<K, V> {
+public class RocksDBKeyValueStoreSupplier<K, V> implements ForwardingStateStoreSupplier<K, V> {
 
     private final String name;
     private final Serde<K> keySerde;

@@ -17,8 +17,21 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 
-public interface ForwardingSupplier<K, V> {
+/**
+ * A {@link StateStoreSupplier} that supports forwarding of values that have been
+ * buffered in an {@link MemoryLRUCacheBytes}
+ * @param <K>
+ * @param <V>
+ */
+public interface ForwardingStateStoreSupplier<K, V> extends StateStoreSupplier {
 
+    /**
+     * Set the {@link CacheFlushListener} to be used with an {@link StateStore}
+     * when the {@link MemoryLRUCacheBytes} is flushed
+     * @param listener
+     */
     void withFlushListener(final CacheFlushListener<K, V> listener);
 }
