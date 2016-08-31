@@ -537,7 +537,7 @@ class ReplicaManager(val config: KafkaConfig,
         try {
           info("Fetching log segment for topic %s, partition %d, offset %d, size %d".format(topic, partition, offset, fetchSize))
 
-          // decide whether to only fetch from leader
+          // decide whether to only fetch from leaderisQuotaExceededBy
           val localReplica = if (fetchOnlyFromLeader)
             getLeaderReplicaIfLocal(topic, partition)
           else
@@ -564,7 +564,7 @@ class ReplicaManager(val config: KafkaConfig,
               //Try the read first, this tells us whether we need all of adjustedFetchSize for this partition
               var fetch = log.read(offset, adjustedFetchSize, maxOffsetOpt)
 
-              //If the read for this partition caused the quota to be excedded then zero it out, so it is excluded
+              //If the read for this partition caused the quota to be exceeded then zero it out, so it is excluded
               if(quota.isThrottled(TopicAndPartition(topic, partition))) {
                 if (quota.isQuotaExceededBy(check(totalThrottledBytesInFetch, quota.bound())))
                   fetch = log.read(offset, 0, maxOffsetOpt)

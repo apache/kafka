@@ -20,6 +20,7 @@ package kafka.utils
 import java.io._
 import java.nio._
 import java.nio.channels._
+import java.util.Properties
 import java.util.concurrent.locks.{ReadWriteLock, Lock}
 import java.lang.management._
 import javax.management._
@@ -58,6 +59,7 @@ object CoreUtils extends Logging {
 
   /**
     * Create a thread
+    *
     * @param name The name of the thread
     * @param daemon Whether the thread should block JVM shutdown
     * @param fun The function to execute in the thread
@@ -276,5 +278,11 @@ object CoreUtils extends Logging {
   def listenerListToEndPoints(listeners: String): immutable.Map[SecurityProtocol, EndPoint] = {
     val listenerList = parseCsvList(listeners)
     listenerList.map(listener => EndPoint.createEndPoint(listener)).map(ep => ep.protocolType -> ep).toMap
+  }
+
+  def wrapInProperties(key: String, value: String) = {
+    val props = new Properties()
+    props.put(key, value)
+    props
   }
 }

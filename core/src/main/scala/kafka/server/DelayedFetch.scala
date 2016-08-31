@@ -116,7 +116,7 @@ class DelayedFetch(delayMs: Long,
     }
 
     // Case D
-    if (accumulatedSize >= fetchMetadata.fetchMinBytes || (containsThrottledPartitions && !quota.isQuotaExceededBy(0)))
+    if (accumulatedSize >= fetchMetadata.fetchMinBytes || (containsThrottledPartitions && !quota.isQuotaExceededBy(fetchMetadata.fetchMinBytes)))
       forceComplete()
     else
       false

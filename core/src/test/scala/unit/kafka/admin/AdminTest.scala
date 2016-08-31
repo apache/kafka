@@ -17,6 +17,7 @@
 package kafka.admin
 
 import kafka.server.KafkaConfig._
+import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, InvalidReplicationFactorException, InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.metrics.Quota
 import org.junit.Assert._
@@ -34,6 +35,7 @@ import java.io.File
 import TestUtils._
 
 import scala.collection.{Map, immutable}
+import unit.kafka.admin.ReplicationQuotaUtils._
 
 class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
@@ -528,5 +530,99 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     AdminUtils.createTopic(zkUtils, "foo", numPartitions, 2, rackAwareMode = RackAwareMode.Safe)
     val assignment = zkUtils.getReplicaAssignmentForTopics(Seq("foo"))
     assertEquals(numPartitions, assignment.size)
+  }
+
+  @Test
+  def shouldThrottleReplicasDuringReplicaReassignment() {
+
+    // Given 4 brokers, a single partition, with replicas on the first 3 brokers only
+    val expectedReplicaAssignment = Map(0 -> List(0, 1, 2))
+    val topic = "test"
+    val servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, expectedReplicaAssignment)
+
+    // Given we plan to move replica 1 -> 3
+    val newReplicas = Seq(0, 2, 3)
+    val partitionToBeReassigned = 0
+    val topicAndPartition = TopicAndPartition(topic, partitionToBeReassigned)
+
+    try {
+      //Given throttle set so replication will take at least 1 sec for 1MB of data
+      val expectedThrottleRate: Long = 1024 * 1024
+      addMessages(num = 1024, size = 1024, topic, servers)
+
+      //When we intialise the command
+      val command = new ReassignPartitionsCommand(zkUtils, Map(topicAndPartition -> newReplicas), expectedThrottleRate)
+
+      //Then it should configure the throttle
+      checkThrottleConfigAddedToZK(expectedThrottleRate, servers, topic)
+
+      //When we start the partition move
+      val start = System.currentTimeMillis()
+      val commandStarted = command.reassignPartitions()
+
+      //Then
+      assertTrue(commandStarted)
+
+      //When command blocks until completion
+      command.awaitCompletion(100)
+
+      //Then command should have taken more than 1 second to complete as it is throttled
+      val took = System.currentTimeMillis() - start
+      assertTrue(s"Expected replication to be > 800ms but was $took", took > 950)
+      assertTrue(s"Expected replication to be < 20s but was $took", took < 20 * 1000)
+
+      //Also throttle should have been removed
+      checkThrottleConfigRemovedFromZK(topic, servers)
+
+    } finally
+      servers.foreach(_.shutdown())
+  }
+
+  @Test
+  def shouldChangeThrottleOnRerunOfReplicaReassignment() {
+
+    // Given 4 brokers, a single partition, with replicas on the first 3 brokers only
+    val expectedReplicaAssignment = Map(0 -> List(0, 1, 2))
+    val topic = "test"
+    val servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, expectedReplicaAssignment)
+
+    // Given we plan to move replica 1 -> 3
+    val newReplicas = Seq(0, 2, 3)
+    val partitionToBeReassigned = 0
+    val topicAndPartition = TopicAndPartition(topic, partitionToBeReassigned)
+
+    try {
+      //Given throttle set so replication will take at least 1 sec for 1MB of data
+      val expectedThrottleRate: Long = 1024 * 1024
+      addMessages(num = 1024, size = 1024, topic, servers)
+
+      //When we intialise the command
+      val command = new ReassignPartitionsCommand(zkUtils, Map(topicAndPartition -> newReplicas), expectedThrottleRate)
+
+      //Then it should configure the throttle
+      checkThrottleConfigAddedToZK(expectedThrottleRate, servers, topic)
+
+      //When we start the partition move
+      val start = System.currentTimeMillis()
+      val commandStarted = command.reassignPartitions()
+
+      //Then
+      assertTrue(commandStarted)
+
+      //When command blocks until completion
+      command.awaitCompletion(100)
+
+      //Then command should have taken more than 1 second to complete as it is throttled
+      val took = System.currentTimeMillis() - start
+      assertTrue(s"Expected replication to be > 800ms but was $took", took > 950)
+      assertTrue(s"Expected replication to be < 20s but was $took", took < 20 * 1000)
+
+      //Also throttle should have been removed
+      checkThrottleConfigRemovedFromZK(topic, servers)
+
+    } finally
+      servers.foreach(_.shutdown())
   }
 }

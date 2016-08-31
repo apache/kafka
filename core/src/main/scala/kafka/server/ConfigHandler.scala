@@ -77,16 +77,17 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
 
   def parseThrottledPartitions(topicConfig: Properties, brokerId: Int): Seq[Int] = {
     val configValue = topicConfig.get(LogConfig.ThrottledReplicasListProp).toString.trim
-
     ThrottledReplicaValidator.ensureValid(LogConfig.ThrottledReplicasListProp, configValue)
-
-    if (configValue == "*")
+    if (configValue.trim == "*")
       allReplicas
-    else
-      configValue
+    else if (configValue.trim == "")
+      Seq()
+    else {
+      configValue.trim
         .split(":")
         .filter(_.split("-")(1).toInt == brokerId) //match replica
         .map(_.split("-")(0).toInt).toSeq
+    }
   }
 }
 

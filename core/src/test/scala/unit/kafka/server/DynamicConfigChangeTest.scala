@@ -190,4 +190,19 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     //Then
     assertEquals(allReplicas, result)
   }
+
+  @Test
+  def shouldParseReplicationQuotaReset {
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
+    val props: Properties = new Properties()
+
+    //Given
+    props.put(ThrottledReplicasListProp, "")
+
+    //When
+    val result = configHandler.parseThrottledPartitions(props, 102)
+
+    //Then
+    assertEquals(Seq(), result)
+  }
 }
