@@ -249,7 +249,6 @@ public class QueryableStateIntegrationTest {
         private final int queryPort;
 
         StreamRunnable(String inputTopic, String outputTopic, String outputTopicWindow, int queryPort) {
-
             this.inputTopic = inputTopic;
             this.outputTopic = outputTopic;
             this.queryPort = queryPort;
@@ -271,43 +270,6 @@ public class QueryableStateIntegrationTest {
         public final KafkaStreams getStream() {
             return myStream;
         }
-    }
-
-
-    private void compareMetadata(StreamsMetadata actual, StreamsMetadata expected) {
-        assertThat(actual.hostInfo().host(), equalTo(expected.hostInfo().host()));
-        assertThat(actual.stateStoreNames(), equalTo(expected.stateStoreNames()));
-        // Note: hasItems, not containsAll, since internally streams might have lots of
-        // internal topics the user does not know about, such as repartitioned topics
-        assertThat(actual.topicPartitions(), hasItems(expected.topicPartitions().toArray(new TopicPartition[expected.topicPartitions().size()])));
-
-    }
-    /**
-     * Verifies all the metadata
-     * @param streams
-     * @param expectedMetadata
-     */
-    private void verifyAllStreamsMetadata(KafkaStreams streams, StreamsMetadata expectedMetadata) {
-        final Collection<StreamsMetadata> metadataCollection = streams.allMetadata();
-        for (StreamsMetadata metadata : metadataCollection) {
-            compareMetadata(metadata, expectedMetadata);
-        }
-
-    }
-
-    /**
-     * Verifies all the metadata
-     * @param streams
-     * @param expectedMetadata
-     */
-    private void verifyStreamsMetadataForEachStore(KafkaStreams streams, StreamsMetadata expectedMetadata) {
-        for (String stateStore : expectedMetadata.stateStoreNames()) {
-            final Collection<StreamsMetadata> metadataCollection = streams.allMetadataForStore(stateStore);
-            for (StreamsMetadata metadata : metadataCollection) {
-                compareMetadata(metadata, expectedMetadata);
-            }
-        }
-
     }
 
     private void verifyAllKVKeys(StreamRunnable[] streamRunnables, KafkaStreams streams, Set<String> keys, Set<String> stateStores) {
@@ -334,7 +296,7 @@ public class QueryableStateIntegrationTest {
         int num_threads = 2;
         StreamRunnable[] streamRunnables = new StreamRunnable[num_threads];
         Thread[] streamThreads = new Thread[num_threads];
-        final int numIterations = 500;
+        final int numIterations = 500000;
 
         // create concurrent producer
         ProducerRunnable producerRunnable = new ProducerRunnable(STREAM_THREE, inputValues, numIterations);
@@ -347,20 +309,22 @@ public class QueryableStateIntegrationTest {
             streamThreads[i].start();
         }
         producerThread.start();
-        Thread.sleep(60000L);
+
         waitUntilAtLeastNumRecordProcessed(OUTPUT_TOPIC_THREE, 1);
+        waitUntilAtLeastNumRecordProcessed(OUTPUT_TOPIC_THREE_WINDOW, 1);
 
         for (int i = 0; i < num_threads; i++) {
-            StreamsMetadata expectedMetadata = new StreamsMetadata(new HostInfo("localhost", i /* The port will equal thread number in this example */),
-                new HashSet<>(Arrays.asList("word-count-store-" + STREAM_THREE, "windowed-word-count-store-" + STREAM_THREE)),
-                new HashSet<>(Arrays.asList(new TopicPartition(STREAM_THREE, 0),
-                    new TopicPartition(STREAM_THREE, 1))));
-            //verifyAllStreamsMetadata(streamRunnables[i].getStream(), expectedMetadata);
-            //verifyStreamsMetadataForEachStore(streamRunnables[i].getStream(), expectedMetadata);
             verifyAllKVKeys(streamRunnables, streamRunnables[i].getStream(), inputValuesKeys,
                 new HashSet(Arrays.asList("word-count-store-" + STREAM_THREE)));
         }
 
+        // kill N-1 threads
+        for (int i = 1; i < num_threads; i++) {
+            streamRunnables[i].close();
+        }
+        // query from the remaining thread
+        verifyAllKVKeys(streamRunnables, streamRunnables[0].getStream(), inputValuesKeys,
+            new HashSet(Arrays.asList("word-count-store-" + STREAM_THREE)));
     }
 
     @Test
