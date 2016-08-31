@@ -18,7 +18,6 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -39,7 +38,6 @@ import org.apache.kafka.streams.kstream.internals.WindowedDeserializer;
 import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -60,7 +58,6 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -74,11 +71,8 @@ import java.util.HashMap;
 import java.util.TreeSet;
 
 
-import kafka.consumer.KafkaStream;
-
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
-import static org.hamcrest.CoreMatchers.hasItems;
 public class QueryableStateIntegrationTest {
 
     @ClassRule
@@ -88,12 +82,11 @@ public class QueryableStateIntegrationTest {
     private static final String STREAM_CONCURRENT = "stream-concurrent";
     private static final String OUTPUT_TOPIC = "output";
     private static final String OUTPUT_TOPIC_CONCURRENT = "output-concurrent";
-    private static final String OUTPUT_TOPIC_CONCURRENT_WINDOW = "output-concurrent-window";
     private static final String STREAM_THREE = "stream-three";
     private static final int NUM_PARTITIONS = 2;
     private static final String OUTPUT_TOPIC_THREE = "output-three";
-    private static final String OUTPUT_TOPIC_THREE_WINDOW = "output-three-window";
-    private static final int QUERY_PORT = 1234;
+    private static final int QSRETRIES = 5;
+    private static final long QSBACKOFF = 2000L;
     private Properties streamsConfiguration;
     private List<String> inputValues;
     private Set<String> inputValuesKeys;
@@ -108,9 +101,7 @@ public class QueryableStateIntegrationTest {
         CLUSTER.createTopic(STREAM_THREE, NUM_PARTITIONS, 1);
         CLUSTER.createTopic(OUTPUT_TOPIC);
         CLUSTER.createTopic(OUTPUT_TOPIC_CONCURRENT);
-        CLUSTER.createTopic(OUTPUT_TOPIC_CONCURRENT_WINDOW);
         CLUSTER.createTopic(OUTPUT_TOPIC_THREE);
-        CLUSTER.createTopic(OUTPUT_TOPIC_THREE_WINDOW);
     }
 
     @Before
@@ -184,7 +175,7 @@ public class QueryableStateIntegrationTest {
      * @param streamsConfiguration config
      * @return
      */
-    private KafkaStreams createCountStream(String inputTopic, String outputTopic, String outputTopicWindow, Properties streamsConfiguration) {
+    private KafkaStreams createCountStream(String inputTopic, String outputTopic, Properties streamsConfiguration) {
         KStreamBuilder builder = new KStreamBuilder();
         final Serde<String> stringSerde = Serdes.String();
         final KStream<String, String> textLines = builder.stream(stringSerde, stringSerde, inputTopic);
@@ -202,59 +193,24 @@ public class QueryableStateIntegrationTest {
         groupedByWord.count("word-count-store-" + inputTopic).to(Serdes.String(), Serdes.Long(), outputTopic);
 
         // Create a Windowed State Store that contains the word count for every 1 minute
-        groupedByWord.count(TimeWindows.of(60000), "windowed-word-count-store-" + inputTopic).to(new WindowedSerde<>(stringSerde),
-            Serdes.Long(), outputTopicWindow);
+        groupedByWord.count(TimeWindows.of(60000), "windowed-word-count-store-" + inputTopic);
 
         return new KafkaStreams(builder, streamsConfiguration);
     }
 
-
-    private class WindowedSerde<T> implements Serde<Windowed<T>> {
-
-        private final Serde<Windowed<T>> inner;
-
-        public WindowedSerde(Serde<T> serde) {
-            inner = Serdes.serdeFrom(
-                new WindowedSerializer<>(serde.serializer()),
-                new WindowedDeserializer<>(serde.deserializer()));
-        }
-
-        @Override
-        public Serializer<Windowed<T>> serializer() {
-            return inner.serializer();
-        }
-
-        @Override
-        public Deserializer<Windowed<T>> deserializer() {
-            return inner.deserializer();
-        }
-
-        @Override
-        public void configure(Map<String, ?> configs, boolean isKey) {
-            inner.serializer().configure(configs, isKey);
-            inner.deserializer().configure(configs, isKey);
-        }
-
-        @Override
-        public void close() {
-            inner.serializer().close();
-            inner.deserializer().close();
-        }
-
-    }
     private class StreamRunnable implements Runnable {
         private final KafkaStreams myStream;
         private final String inputTopic;
         private final String outputTopic;
         private final int queryPort;
 
-        StreamRunnable(String inputTopic, String outputTopic, String outputTopicWindow, int queryPort) {
+        StreamRunnable(String inputTopic, String outputTopic, int queryPort) {
             this.inputTopic = inputTopic;
             this.outputTopic = outputTopic;
             this.queryPort = queryPort;
             Properties props = (Properties)streamsConfiguration.clone();
             props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + queryPort);
-            this.myStream = createCountStream(inputTopic, outputTopic,outputTopicWindow, props);
+            this.myStream = createCountStream(inputTopic, outputTopic, props);
         }
 
         @Override
@@ -272,20 +228,48 @@ public class QueryableStateIntegrationTest {
         }
     }
 
-    private void verifyAllKVKeys(StreamRunnable[] streamRunnables, KafkaStreams streams, Set<String> keys, Set<String> stateStores) {
+    private void verifyAllKVKeys(StreamRunnable[] streamRunnables, KafkaStreams streams,
+                                 Set<String> keys, Set<String> stateStores) throws Exception {
         for (String storeName : stateStores) {
             for (String key : keys) {
 
                 // first query where the key is located
-                final StreamsMetadata metadata = streams.metadataForKey(storeName, key, new StringSerializer());
-                assertThat(metadata, notNullValue());
-                int index = metadata.hostInfo().port();
+                StreamsMetadata metadata = null;
+                ReadOnlyKeyValueStore<String, Long> store = null;
+                Long value = null;
+                int retries = 0;
+                while (retries < QSRETRIES && (metadata == null || store == null || value == null)) {
+                    System.out.println("Retry number " + retries);
+                    try {
+                        metadata = streams.metadataForKey(storeName, key, new StringSerializer());
+                        if (metadata == null) {
+                            retries++;
+                            Thread.sleep(QSBACKOFF);
+                            continue;
+                        }
+                        int index = metadata.hostInfo().port();
 
-                // next make sure the value is queryable
-                KafkaStreams streamsWithKey = streamRunnables[index].getStream();
-                final ReadOnlyKeyValueStore<String, Long> store = streamsWithKey.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+                        // next make sure the value is queryable
+                        KafkaStreams streamsWithKey = streamRunnables[index].getStream();
+                        store = streamsWithKey.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+                        if (store == null) {
+                            retries++;
+                            Thread.sleep(QSBACKOFF);
+                            continue;
+                        }
+                        value = store.get(key);
+                        if (value == null) {
+                            retries++;
+                            Thread.sleep(QSBACKOFF);
+                            continue;
+                        }
+                        retries++;
+                    } catch (Exception e) {
+                        retries++;
+                    }
+                }
+                assertThat(metadata, notNullValue());
                 assertThat(store, notNullValue());
-                final Long value = store.get(key);
                 assertThat(value, notNullValue());
             }
         }
@@ -304,14 +288,13 @@ public class QueryableStateIntegrationTest {
 
         // create three stream threads
         for (int i = 0; i < num_threads; i++) {
-            streamRunnables[i] = new StreamRunnable(STREAM_THREE, OUTPUT_TOPIC_THREE, OUTPUT_TOPIC_THREE_WINDOW, i);
+            streamRunnables[i] = new StreamRunnable(STREAM_THREE, OUTPUT_TOPIC_THREE, i);
             streamThreads[i] = new Thread(streamRunnables[i]);
             streamThreads[i].start();
         }
         producerThread.start();
 
         waitUntilAtLeastNumRecordProcessed(OUTPUT_TOPIC_THREE, 1);
-        waitUntilAtLeastNumRecordProcessed(OUTPUT_TOPIC_THREE_WINDOW, 1);
 
         for (int i = 0; i < num_threads; i++) {
             verifyAllKVKeys(streamRunnables, streamRunnables[i].getStream(), inputValuesKeys,
@@ -320,11 +303,21 @@ public class QueryableStateIntegrationTest {
 
         // kill N-1 threads
         for (int i = 1; i < num_threads; i++) {
+            System.out.println("Shutting down thread " + i);
             streamRunnables[i].close();
+            streamThreads[i].interrupt();
+            streamThreads[i].join();
         }
+
         // query from the remaining thread
+        System.out.println("Verifying one last time");
         verifyAllKVKeys(streamRunnables, streamRunnables[0].getStream(), inputValuesKeys,
             new HashSet(Arrays.asList("word-count-store-" + STREAM_THREE)));
+        System.out.println("Shutting down thread " + 0);
+        streamRunnables[0].close();
+        streamThreads[0].interrupt();
+        streamThreads[0].join();
+
     }
 
     @Test
@@ -334,7 +327,7 @@ public class QueryableStateIntegrationTest {
 
         ProducerRunnable producerRunnable = new ProducerRunnable(STREAM_CONCURRENT, inputValues, numIterations);
         Thread producerThread = new Thread(producerRunnable);
-        kafkaStreams = createCountStream(STREAM_CONCURRENT, OUTPUT_TOPIC_CONCURRENT, OUTPUT_TOPIC_CONCURRENT_WINDOW, streamsConfiguration);
+        kafkaStreams = createCountStream(STREAM_CONCURRENT, OUTPUT_TOPIC_CONCURRENT, streamsConfiguration);
         kafkaStreams.start();
         producerThread.start();
 
