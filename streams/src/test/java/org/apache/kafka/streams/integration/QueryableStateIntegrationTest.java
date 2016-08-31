@@ -18,11 +18,9 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
@@ -33,9 +31,6 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
-import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.WindowedDeserializer;
-import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -86,7 +81,7 @@ public class QueryableStateIntegrationTest {
     private static final int NUM_PARTITIONS = 2;
     private static final String OUTPUT_TOPIC_THREE = "output-three";
     private static final int QSRETRIES = 5;
-    private static final long QSBACKOFF = 2000L;
+    private static final long QSBACKOFF = 20000L;
     private Properties streamsConfiguration;
     private List<String> inputValues;
     private Set<String> inputValuesKeys;
@@ -208,7 +203,7 @@ public class QueryableStateIntegrationTest {
             this.inputTopic = inputTopic;
             this.outputTopic = outputTopic;
             this.queryPort = queryPort;
-            Properties props = (Properties)streamsConfiguration.clone();
+            Properties props = (Properties) streamsConfiguration.clone();
             props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + queryPort);
             this.myStream = createCountStream(inputTopic, outputTopic, props);
         }
@@ -266,6 +261,7 @@ public class QueryableStateIntegrationTest {
                         retries++;
                     } catch (Exception e) {
                         retries++;
+                        Thread.sleep(QSBACKOFF);
                     }
                 }
                 assertThat(metadata, notNullValue());
@@ -277,9 +273,9 @@ public class QueryableStateIntegrationTest {
 
     @Test
     public void queryOnRebalance() throws Exception {
-        int num_threads = 2;
-        StreamRunnable[] streamRunnables = new StreamRunnable[num_threads];
-        Thread[] streamThreads = new Thread[num_threads];
+        int numThreads = 2;
+        StreamRunnable[] streamRunnables = new StreamRunnable[numThreads];
+        Thread[] streamThreads = new Thread[numThreads];
         final int numIterations = 500000;
 
         // create concurrent producer
@@ -287,7 +283,7 @@ public class QueryableStateIntegrationTest {
         Thread producerThread = new Thread(producerRunnable);
 
         // create three stream threads
-        for (int i = 0; i < num_threads; i++) {
+        for (int i = 0; i < numThreads; i++) {
             streamRunnables[i] = new StreamRunnable(STREAM_THREE, OUTPUT_TOPIC_THREE, i);
             streamThreads[i] = new Thread(streamRunnables[i]);
             streamThreads[i].start();
@@ -296,13 +292,13 @@ public class QueryableStateIntegrationTest {
 
         waitUntilAtLeastNumRecordProcessed(OUTPUT_TOPIC_THREE, 1);
 
-        for (int i = 0; i < num_threads; i++) {
+        for (int i = 0; i < numThreads; i++) {
             verifyAllKVKeys(streamRunnables, streamRunnables[i].getStream(), inputValuesKeys,
                 new HashSet(Arrays.asList("word-count-store-" + STREAM_THREE)));
         }
 
         // kill N-1 threads
-        for (int i = 1; i < num_threads; i++) {
+        for (int i = 1; i < numThreads; i++) {
             System.out.println("Shutting down thread " + i);
             streamRunnables[i].close();
             streamThreads[i].interrupt();
