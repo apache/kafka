@@ -4,9 +4,9 @@
  * copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance with the License.  You may obtain a
  * copy of the License at
- *
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
  * Unless required by applicable law or agreed to in writing, software distributed under the License
  * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
  * or implied. See the License for the specific language governing permissions and limitations under
@@ -102,16 +102,16 @@ public class QueryableStateIntegrationTest {
         streamsConfiguration = new Properties();
         final String applicationId = "queryable-state";
 
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
-        streamsConfiguration
+        this.streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+        this.streamsConfiguration
             .put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
-        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG,
-                                 TestUtils.tempDirectory("qs-test")
-                                     .getPath());
-        streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsConfiguration
+        this.streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
+        this.streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        this.streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG,
+            TestUtils.tempDirectory("qs-test")
+                .getPath());
+        this.streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        this.streamsConfiguration
             .put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 
         stringComparator = new Comparator<KeyValue<String, String>>() {
@@ -122,7 +122,7 @@ public class QueryableStateIntegrationTest {
                 return o1.key.compareTo(o2.key);
             }
         };
-        stringLongComparator = new Comparator<KeyValue<String, Long>>() {
+        this.stringLongComparator = new Comparator<KeyValue<String, Long>>() {
 
             @Override
             public int compare(final KeyValue<String, Long> o1,
@@ -154,10 +154,10 @@ public class QueryableStateIntegrationTest {
 
     @After
     public void shutdown() throws IOException {
-        if (kafkaStreams != null) {
-            kafkaStreams.close();
+        if (this.kafkaStreams != null) {
+            this.kafkaStreams.close();
         }
-        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
+        IntegrationTestUtils.purgeLocalStreamsState(this.streamsConfiguration);
     }
 
 
@@ -372,7 +372,7 @@ public class QueryableStateIntegrationTest {
         KStreamBuilder builder = new KStreamBuilder();
         final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};
 
-        final Set<KeyValue<String, String>> batch1 = new TreeSet<>(stringComparator);
+        final Set<KeyValue<String, String>> batch1 = new TreeSet<>(this.stringComparator);
         batch1.addAll(Arrays.asList(
             new KeyValue<>(keys[0], "hello"),
             new KeyValue<>(keys[1], "goodbye"),
@@ -381,8 +381,8 @@ public class QueryableStateIntegrationTest {
             new KeyValue<>(keys[4], "kafka")));
 
 
-        final Set<KeyValue<String, Long>> expectedCount = new TreeSet<>(stringLongComparator);
-        for (String key : keys) {
+        final Set<KeyValue<String, Long>> expectedCount = new TreeSet<>(this.stringLongComparator);
+        for (final String key : keys) {
             expectedCount.add(new KeyValue<>(key, 1L));
         }
 
@@ -395,7 +395,7 @@ public class QueryableStateIntegrationTest {
                 StringSerializer.class,
                 new Properties()));
 
-        final KStream<String, String> s1 = builder.stream(STREAM_ONE);
+        final KStream<String, String> s1 = this.builder.stream(STREAM_ONE);
 
         // Non Windowed
         s1.groupByKey().count("my-count").to(Serdes.String(), Serdes.Long(), OUTPUT_TOPIC);
@@ -407,15 +407,15 @@ public class QueryableStateIntegrationTest {
         waitUntilAtLeastNumRecordProcessed(OUTPUT_TOPIC, 1);
 
         final ReadOnlyKeyValueStore<String, Long>
-            myCount = kafkaStreams.store("my-count", QueryableStoreTypes.<String, Long>keyValueStore());
+            myCount = this.kafkaStreams.store("my-count", QueryableStoreTypes.<String, Long>keyValueStore());
 
         final ReadOnlyWindowStore<String, Long> windowStore =
-                kafkaStreams.store("windowed-count", QueryableStoreTypes.<String, Long>windowStore());
+            this.kafkaStreams.store("windowed-count", QueryableStoreTypes.<String, Long>windowStore());
         verifyCanGetByKey(keys,
-                          expectedCount,
-                          expectedCount,
-                          windowStore,
-                          myCount);
+            expectedCount,
+            expectedCount,
+            windowStore,
+            myCount);
 
         verifyRangeAndAll(expectedCount, myCount);
 
@@ -423,11 +423,11 @@ public class QueryableStateIntegrationTest {
 
     private void verifyRangeAndAll(final Set<KeyValue<String, Long>> expectedCount,
                                    final ReadOnlyKeyValueStore<String, Long> myCount) {
-        final Set<KeyValue<String, Long>> countRangeResults = new TreeSet<>(stringLongComparator);
-        final Set<KeyValue<String, Long>> countAllResults = new TreeSet<>(stringLongComparator);
+        final Set<KeyValue<String, Long>> countRangeResults = new TreeSet<>(this.stringLongComparator);
+        final Set<KeyValue<String, Long>> countAllResults = new TreeSet<>(this.stringLongComparator);
         final Set<KeyValue<String, Long>>
             expectedRangeResults =
-            new TreeSet<>(stringLongComparator);
+            new TreeSet<>(this.stringLongComparator);
 
         expectedRangeResults.addAll(Arrays.asList(
             new KeyValue<>("hello", 1L),
@@ -458,15 +458,15 @@ public class QueryableStateIntegrationTest {
                                    final ReadOnlyWindowStore<String, Long> windowStore,
                                    final ReadOnlyKeyValueStore<String, Long> myCount)
         throws InterruptedException {
-        final Set<KeyValue<String, Long>> windowState = new TreeSet<>(stringLongComparator);
-        final Set<KeyValue<String, Long>> countState = new TreeSet<>(stringLongComparator);
+        final Set<KeyValue<String, Long>> windowState = new TreeSet<>(this.stringLongComparator);
+        final Set<KeyValue<String, Long>> countState = new TreeSet<>(this.stringLongComparator);
 
         final long timeout = System.currentTimeMillis() + 30000;
         while (windowState.size() < 5 &&
-               countState.size() < 5 &&
-               System.currentTimeMillis() < timeout) {
+            countState.size() < 5 &&
+            System.currentTimeMillis() < timeout) {
             Thread.sleep(10);
-            for (String key : keys) {
+            for (final String key : keys) {
                 windowState.addAll(fetch(windowStore, key));
                 final Long value = myCount.get(key);
                 if (value != null) {
@@ -551,9 +551,9 @@ public class QueryableStateIntegrationTest {
         config.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "queryable-state-consumer");
         config.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         config.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-                           StringDeserializer.class.getName());
+            StringDeserializer.class.getName());
         config.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-                           LongDeserializer.class.getName());
+            LongDeserializer.class.getName());
         IntegrationTestUtils.waitUntilMinValuesRecordsReceived(config,
                                                                topic,
                                                                numRecs,
@@ -562,11 +562,11 @@ public class QueryableStateIntegrationTest {
     }
 
     private Set<KeyValue<String, Long>> fetch(final ReadOnlyWindowStore<String, Long> store,
-                                                final String key) {
+                                              final String key) {
 
         final WindowStoreIterator<Long> fetch = store.fetch(key, 0, System.currentTimeMillis());
         if (fetch.hasNext()) {
-            KeyValue<Long, Long> next = fetch.next();
+            final KeyValue<Long, Long> next = fetch.next();
             return Collections.singleton(KeyValue.pair(key, next.value));
         }
         return Collections.emptySet();
