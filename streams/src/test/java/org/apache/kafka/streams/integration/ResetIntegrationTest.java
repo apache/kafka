@@ -18,9 +18,9 @@ package org.apache.kafka.streams.integration;
 
 import kafka.admin.AdminClient;
 import kafka.tools.StreamsResetter;
+import kafka.utils.MockTime;
 import kafka.utils.ZkUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
@@ -64,6 +64,7 @@ public class ResetIntegrationTest {
     private static final int NUM_BROKERS = 1;
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+    private final MockTime mockTime = CLUSTER.time;
 
     private static final String APP_ID = "cleanup-integration-test";
     private static final String INPUT_TOPIC = "inputTopic";
@@ -90,21 +91,25 @@ public class ResetIntegrationTest {
 
     @Before
     public void prepare() {
-        this.adminClient = AdminClient.createSimplePlaintext(CLUSTER.bootstrapServers());
+        adminClient = AdminClient.createSimplePlaintext(CLUSTER.bootstrapServers());
     }
 
     @After
     public void cleanup() {
-        if (this.adminClient != null) {
-            this.adminClient.close();
-            this.adminClient = null;
+        if (adminClient != null) {
+            adminClient.close();
+            adminClient = null;
         }
     }
 
     @Test
     public void testReprocessingFromScratchAfterReset() throws Exception {
         final Properties streamsConfiguration = prepareTest();
-        final Properties resultTopicConsumerConfig = prepareResultConsumer();
+        final Properties resultTopicConsumerConfig = TestUtils.consumerConfig(
+            CLUSTER.bootstrapServers(),
+            APP_ID + "-standard-consumer-" + OUTPUT_TOPIC,
+            LongDeserializer.class,
+            LongDeserializer.class);
 
         prepareInputData();
         final KStreamBuilder builder = setupTopology(OUTPUT_TOPIC_2);
@@ -112,19 +117,26 @@ public class ResetIntegrationTest {
         // RUN
         KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
         streams.start();
-        final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultTopicConsumerConfig, OUTPUT_TOPIC, 10);
+        final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+            resultTopicConsumerConfig,
+            OUTPUT_TOPIC,
+            10);
         // receive only first values to make sure intermediate user topic is not consumed completely
         // => required to test "seekToEnd" for intermediate topics
-        final KeyValue<Object, Object> result2 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultTopicConsumerConfig, OUTPUT_TOPIC_2, 1).get(0);
+        final KeyValue<Object, Object> result2 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+            resultTopicConsumerConfig,
+            OUTPUT_TOPIC_2,
+            1
+        ).get(0);
 
         streams.close();
-        TestUtils.waitForCondition(this.consumerGroupInactive, 5 * STREAMS_CONSUMER_TIMEOUT,
+        TestUtils.waitForCondition(consumerGroupInactive, 5 * STREAMS_CONSUMER_TIMEOUT,
             "Streams Application consumer group did not time out after " + (5 * STREAMS_CONSUMER_TIMEOUT) + " ms.");
 
         // RESET
         streams.cleanUp();
         cleanGlobal();
-        TestUtils.waitForCondition(this.consumerGroupInactive, 5 * CLEANUP_CONSUMER_TIMEOUT,
+        TestUtils.waitForCondition(consumerGroupInactive, 5 * CLEANUP_CONSUMER_TIMEOUT,
             "Reset Tool consumer group did not time out after " + (5 * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
 
         assertInternalTopicsGotDeleted();
@@ -132,8 +144,15 @@ public class ResetIntegrationTest {
         // RE-RUN
         streams = new KafkaStreams(setupTopology(OUTPUT_TOPIC_2_RERUN), streamsConfiguration);
         streams.start();
-        final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultTopicConsumerConfig, OUTPUT_TOPIC, 10);
-        final KeyValue<Object, Object> resultRerun2 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultTopicConsumerConfig, OUTPUT_TOPIC_2_RERUN, 1).get(0);
+        final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+            resultTopicConsumerConfig,
+            OUTPUT_TOPIC,
+            10);
+        final KeyValue<Object, Object> resultRerun2 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+            resultTopicConsumerConfig,
+            OUTPUT_TOPIC_2_RERUN,
+            1
+        ).get(0);
         streams.close();
 
         assertThat(resultRerun, equalTo(result));
@@ -159,36 +178,29 @@ public class ResetIntegrationTest {
         return streamsConfiguration;
     }
 
-    private Properties prepareResultConsumer() {
-        final Properties resultTopicConsumerConfig = new Properties();
-        resultTopicConsumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        resultTopicConsumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, APP_ID + "-standard-consumer-" + OUTPUT_TOPIC);
-        resultTopicConsumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        resultTopicConsumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
-        resultTopicConsumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
-
-        return resultTopicConsumerConfig;
-    }
-
     private void prepareInputData() throws Exception {
-        final Properties producerConfig = new Properties();
-        producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        producerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
-        producerConfig.put(ProducerConfig.RETRIES_CONFIG, 0);
-        producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
-        producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, StringSerializer.class);
 
-        final long startTs = System.currentTimeMillis();
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(0L, "aaa")), producerConfig, startTs + 10L);
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(1L, "bbb")), producerConfig, startTs + 20L);
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(0L, "ccc")), producerConfig, startTs + 30L);
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(1L, "ddd")), producerConfig, startTs + 40L);
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(0L, "eee")), producerConfig, startTs + 50L);
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(1L, "fff")), producerConfig, startTs + 60L);
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(0L, "ggg")), producerConfig, startTs + 61L);
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(1L, "hhh")), producerConfig, startTs + 62L);
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(0L, "iii")), producerConfig, startTs + 63L);
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(1L, "jjj")), producerConfig, startTs + 64L);
+        mockTime.sleep(10);
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(0L, "aaa")), producerConfig, mockTime.milliseconds());
+        mockTime.sleep(10);
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(1L, "bbb")), producerConfig, mockTime.milliseconds());
+        mockTime.sleep(10);
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(0L, "ccc")), producerConfig, mockTime.milliseconds());
+        mockTime.sleep(10);
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(1L, "ddd")), producerConfig, mockTime.milliseconds());
+        mockTime.sleep(10);
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(0L, "eee")), producerConfig, mockTime.milliseconds());
+        mockTime.sleep(10);
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(1L, "fff")), producerConfig, mockTime.milliseconds());
+        mockTime.sleep(1);
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(0L, "ggg")), producerConfig, mockTime.milliseconds());
+        mockTime.sleep(1);
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(1L, "hhh")), producerConfig, mockTime.milliseconds());
+        mockTime.sleep(1);
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(0L, "iii")), producerConfig, mockTime.milliseconds());
+        mockTime.sleep(1);
+        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(new KeyValue<>(1L, "jjj")), producerConfig, mockTime.milliseconds());
     }
 
     private KStreamBuilder setupTopology(final String outputTopic2) {
@@ -218,8 +230,8 @@ public class ResetIntegrationTest {
                     // must sleep long enough to avoid processing the whole intermediate topic before application gets stopped
                     // => want to test "skip over" unprocessed records
                     // increasing the sleep time only has disadvantage that test run time is increased
-                    Utils.sleep(this.sleep);
-                    this.sleep *= 2;
+                    mockTime.sleep(sleep);
+                    sleep *= 2;
                     return new KeyValue<>(key, value);
                 }
             })
@@ -287,7 +299,7 @@ public class ResetIntegrationTest {
     private class WaitUntilConsumerGroupGotClosed implements TestCondition {
         @Override
         public boolean conditionMet() {
-            return ResetIntegrationTest.this.adminClient.describeGroup(APP_ID).members().isEmpty();
+            return adminClient.describeGroup(APP_ID).members().isEmpty();
         }
     }
 
