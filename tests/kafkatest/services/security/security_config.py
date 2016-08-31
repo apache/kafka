@@ -15,43 +15,67 @@
 
 import os
 import subprocess
+from tempfile import mkdtemp
+from shutil import rmtree
 from ducktape.template import TemplateRenderer
 from kafkatest.services.security.minikdc import MiniKdc
 import itertools
 
-class Keytool(object):
+class SslStores(object):
+    def __init__(self):
+        self.ca_crt_path = "/tmp/test.ca.crt"
+        self.ca_jks_path = "/tmp/test.ca.jks"
+        self.ca_passwd = "test-ca-passwd"
 
-    @staticmethod
-    def generate_keystore_truststore(ssl_dir='.'):
+        self.truststore_path = "/tmp/test.truststore.jks"
+        self.truststore_passwd = "test-ts-passwd"
+        self.keystore_passwd = "test-ks-passwd"
+        self.key_passwd = "test-key-passwd"
+
+        for file in [self.ca_crt_path, self.ca_jks_path, self.truststore_path]:
+            if os.path.exists(file):
+                os.remove(file)
+
+    def generate_ca(self):
         """
-        Generate JKS keystore and truststore and return
-        Kafka SSL properties with these stores.
+        Generate CA private key and certificate.
         """
-        ks_path = os.path.join(ssl_dir, 'test.keystore.jks')
-        ks_password = 'test-ks-passwd'
-        key_password = 'test-key-passwd'
-        ts_path = os.path.join(ssl_dir, 'test.truststore.jks')
-        ts_password = 'test-ts-passwd'
-        if os.path.exists(ks_path):
-            os.remove(ks_path)
-        if os.path.exists(ts_path):
-            os.remove(ts_path)
-        
-        Keytool.runcmd("keytool -genkeypair -alias test -keyalg RSA -keysize 2048 -keystore %s -storetype JKS -keypass %s -storepass %s -dname CN=systemtest" % (ks_path, key_password, ks_password))
-        Keytool.runcmd("keytool -export -alias test -keystore %s -storepass %s -storetype JKS -rfc -file test.crt" % (ks_path, ks_password))
-        Keytool.runcmd("keytool -import -alias test -file test.crt -keystore %s -storepass %s -storetype JKS -noprompt" % (ts_path, ts_password))
-        os.remove('test.crt')
 
-        return {
-            'ssl.keystore.location' : ks_path,
-            'ssl.keystore.password' : ks_password,
-            'ssl.key.password' : key_password,
-            'ssl.truststore.location' : ts_path,
-            'ssl.truststore.password' : ts_password
-        }
+        self.runcmd("keytool -genkeypair -alias ca -keyalg RSA -keysize 2048 -keystore %s -storetype JKS -storepass %s -keypass %s -dname CN=SystemTestCA" % (self.ca_jks_path, self.ca_passwd, self.ca_passwd))
+        self.runcmd("keytool -export -alias ca -keystore %s -storepass %s -storetype JKS -rfc -file %s" % (self.ca_jks_path, self.ca_passwd, self.ca_crt_path))
 
-    @staticmethod
-    def runcmd(cmd):
+    def generate_truststore(self):
+        """
+        Generate JKS truststore containing CA certificate.
+        """
+
+        self.runcmd("keytool -importcert -alias ca -file %s -keystore %s -storepass %s -storetype JKS -noprompt" % (self.ca_crt_path, self.truststore_path, self.truststore_passwd))
+
+    def generate_and_copy_keystore(self, node):
+        """
+        Generate JKS keystore with certificate signed by the test CA.
+        The generated certificate has the node's hostname as a DNS SubjectAlternativeName.
+        """
+
+        ks_dir = mkdtemp(dir="/tmp")
+        ks_path = os.path.join(ks_dir, "test.keystore.jks")
+        csr_path = os.path.join(ks_dir, "test.kafka.csr")
+        crt_path = os.path.join(ks_dir, "test.kafka.crt")
+
+	self.runcmd("keytool -genkeypair -alias kafka -keyalg RSA -keysize 2048 -keystore %s -storepass %s -keypass %s -dname CN=systemtest -ext SAN=DNS:%s" % (ks_path, self.keystore_passwd, self.key_passwd, self.hostname(node)))
+	self.runcmd("keytool -certreq -keystore %s -storepass %s -keypass %s -alias kafka -file %s" % (ks_path, self.keystore_passwd, self.key_passwd, csr_path))
+	self.runcmd("keytool -gencert -keystore %s -storepass %s -alias ca -infile %s -outfile %s -dname CN=systemtest -ext SAN=DNS:%s" % (self.ca_jks_path, self.ca_passwd, csr_path, crt_path, self.hostname(node)))
+	self.runcmd("keytool -importcert -keystore %s -storepass %s -alias ca -file %s -noprompt" % (ks_path, self.keystore_passwd, self.ca_crt_path))
+	self.runcmd("keytool -importcert -keystore %s -storepass %s -keypass %s -alias kafka -file %s -noprompt" % (ks_path, self.keystore_passwd, self.key_passwd, crt_path))
+        node.account.scp_to(ks_path, SecurityConfig.KEYSTORE_PATH)
+        rmtree(ks_dir)
+
+    def hostname(self, node):
+        """ Hostname which may be overridden for testing validation failures
+        """
+        return node.account.hostname
+
+    def runcmd(self, cmd):
         proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         proc.communicate()
         if proc.returncode != 0:
@@ -73,7 +97,9 @@ class SecurityConfig(TemplateRenderer):
     KRB5CONF_PATH = "/mnt/security/krb5.conf"
     KEYTAB_PATH = "/mnt/security/keytab"
 
-    ssl_stores = Keytool.generate_keystore_truststore('.')
+    ssl_stores = SslStores()
+    ssl_stores.generate_ca()
+    ssl_stores.generate_truststore()
 
     def __init__(self, security_protocol=None, interbroker_security_protocol=None,
                  client_sasl_mechanism=SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SASL_MECHANISM_GSSAPI,
@@ -102,10 +128,11 @@ class SecurityConfig(TemplateRenderer):
         self.properties = {
             'security.protocol' : security_protocol,
             'ssl.keystore.location' : SecurityConfig.KEYSTORE_PATH,
-            'ssl.keystore.password' : SecurityConfig.ssl_stores['ssl.keystore.password'],
-            'ssl.key.password' : SecurityConfig.ssl_stores['ssl.key.password'],
+            'ssl.keystore.password' : SecurityConfig.ssl_stores.keystore_passwd,
+            'ssl.key.password' : SecurityConfig.ssl_stores.key_passwd,
             'ssl.truststore.location' : SecurityConfig.TRUSTSTORE_PATH,
-            'ssl.truststore.password' : SecurityConfig.ssl_stores['ssl.truststore.password'],
+            'ssl.truststore.password' : SecurityConfig.ssl_stores.truststore_passwd,
+            'ssl.endpoint.identification.algorithm' : 'HTTPS',
             'sasl.mechanism' : client_sasl_mechanism,
             'sasl.mechanism.inter.broker.protocol' : interbroker_sasl_mechanism,
             'sasl.kerberos.service.name' : 'kafka'
@@ -117,8 +144,8 @@ class SecurityConfig(TemplateRenderer):
 
     def setup_ssl(self, node):
         node.account.ssh("mkdir -p %s" % SecurityConfig.CONFIG_DIR, allow_fail=False)
-        node.account.scp_to(SecurityConfig.ssl_stores['ssl.keystore.location'], SecurityConfig.KEYSTORE_PATH)
-        node.account.scp_to(SecurityConfig.ssl_stores['ssl.truststore.location'], SecurityConfig.TRUSTSTORE_PATH)
+        node.account.scp_to(SecurityConfig.ssl_stores.truststore_path, SecurityConfig.TRUSTSTORE_PATH)
+        SecurityConfig.ssl_stores.generate_and_copy_keystore(node)
 
     def setup_sasl(self, node):
         node.account.ssh("mkdir -p %s" % SecurityConfig.CONFIG_DIR, allow_fail=False)
