@@ -237,7 +237,7 @@ object DumpLogSegments {
       if (bytes.isEmpty)
         ""
       else
-        String.format("%X", BigInt(1, bytes).bigInteger)
+        "%X".format(BigInt(1, bytes))
     }
 
     private def parseOffsets(offsetKey: OffsetKey, payload: ByteBuffer) = {
@@ -257,7 +257,7 @@ object DumpLogSegments {
     private def parseGroupMetadata(groupMetadataKey: GroupMetadataKey, payload: ByteBuffer) = {
       val groupId = groupMetadataKey.key
       val group = GroupMetadataManager.readGroupMessageValue(groupId, payload)
-      val protocolType = group.protocolType.getOrElse("NONE")
+      val protocolType = group.protocolType.getOrElse("")
 
       val assignment = group.allMemberMetadata.map { member =>
         if (protocolType == ConsumerProtocol.PROTOCOL_TYPE) {
