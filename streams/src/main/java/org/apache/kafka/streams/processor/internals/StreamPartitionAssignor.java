@@ -536,7 +536,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         if (metadataWithInternalTopics == null) {
             final Collection<Set<TopicPartition>> values = partitionsByHostState.values();
             final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
-            final List<PartitionInfo> partitionInfos = new ArrayList<>();
             for (Set<TopicPartition> value : values) {
                 for (TopicPartition topicPartition : value) {
                     topicToPartitionInfo.put(topicPartition, new PartitionInfo(topicPartition.topic(),
