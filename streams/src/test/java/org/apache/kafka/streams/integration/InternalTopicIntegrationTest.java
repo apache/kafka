@@ -212,6 +212,5 @@ public class InternalTopicIntegrationTest {
         // retention should be 1 day + the window duration
         final Long retention = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS) + durationMs;
         assertEquals(retention, Long.valueOf(properties.getProperty(LogConfig.RetentionMsProp())));
-        assertEquals(Long.valueOf(Long.MAX_VALUE), Long.valueOf(properties.getProperty(LogConfig.SegmentMsProp())));
     }
 }

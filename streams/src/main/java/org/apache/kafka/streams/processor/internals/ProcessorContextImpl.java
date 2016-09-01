@@ -44,10 +44,6 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     private final Serde<?> valSerde;
 
     private boolean initialized;
-    private Long timestamp;
-    private String topic;
-    private Long offset;
-    private Integer partition;
 
     @SuppressWarnings("unchecked")
     public ProcessorContextImpl(TaskId id,
@@ -140,46 +136,53 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         return stateMgr.getStore(name);
     }
 
-
+    /**
+     * @throws IllegalStateException if the task's record is null
+     */
     @Override
-    public synchronized String topic() {
-        if (topic == null || topic.equals(NONEXIST_TOPIC))
+    public String topic() {
+        if (task.record() == null)
+            throw new IllegalStateException("This should not happen as topic() should only be called while a record is processed");
+
+        String topic = task.record().topic();
+
+        if (topic.equals(NONEXIST_TOPIC))
             return null;
         else
             return topic;
     }
 
     /**
-     * @throws IllegalStateException if partition is null
+     * @throws IllegalStateException if the task's record is null
      */
     @Override
-    public synchronized int partition() {
-        if (partition == null) {
+    public int partition() {
+        if (task.record() == null)
             throw new IllegalStateException("This should not happen as partition() should only be called while a record is processed");
-        }
-        return partition;
+
+        return task.record().partition();
     }
 
     /**
-     * @throws IllegalStateException if offset is null
+     * @throws IllegalStateException if the task's record is null
      */
     @Override
-    public synchronized long offset() {
-        if (offset == null) {
+    public long offset() {
+        if (this.task.record() == null)
             throw new IllegalStateException("This should not happen as offset() should only be called while a record is processed");
-        }
-        return offset;
+
+        return this.task.record().offset();
     }
 
     /**
-     * @throws IllegalStateException if timestamp is null
+     * @throws IllegalStateException if the task's record is null
      */
     @Override
-    public synchronized long timestamp() {
-        if (timestamp == null) {
-            throw new IllegalStateException("This should not happen as timestamp should be set during record processing");
-        }
-        return timestamp;
+    public long timestamp() {
+        if (task.record() == null)
+            throw new IllegalStateException("This should not happen as timestamp() should only be called while a record is processed");
+
+        return task.record().timestamp;
     }
 
     @Override
@@ -215,12 +218,5 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     @Override
     public Map<String, Object> appConfigsWithPrefix(String prefix) {
         return config.originalsWithPrefix(prefix);
-    }
-
-    public synchronized void update(final StampedRecord record) {
-        this.timestamp = record.timestamp;
-        this.partition = record.partition();
-        this.offset = record.offset();
-        this.topic = record.topic();
     }
 }

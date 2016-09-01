@@ -899,14 +899,10 @@ public class TopologyBuilder {
         }
 
         final RocksDBWindowStoreSupplier windowStoreSupplier = (RocksDBWindowStoreSupplier) supplier;
-        final Map<String, String> logConfig = new HashMap<>(supplier.logConfig());
-        // set segment.ms to Long.MAX_VALUE so we avoid potentially rolling the segment
-        // on each message.
-        logConfig.put("segment.ms", String.valueOf(Long.MAX_VALUE));
         final InternalTopicConfig config = new InternalTopicConfig(name,
                                                                    Utils.mkSet(InternalTopicConfig.CleanupPolicy.compact,
                                                                                InternalTopicConfig.CleanupPolicy.delete),
-                                                                   logConfig);
+                                                                   supplier.logConfig());
         config.setRetentionMs(windowStoreSupplier.retentionPeriod());
         return config;
     }

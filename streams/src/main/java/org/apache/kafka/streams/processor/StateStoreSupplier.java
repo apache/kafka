@@ -39,6 +39,9 @@ public interface StateStoreSupplier {
     StateStore get();
 
     /**
+     * Returns a Map containing any log configs that will be used when creating the changelog for the {@link StateStore}
+     *
+     * Note: any unrecognized configs will be ignored.
      * @return Map containing any log configs to be used when creating the changelog for the {@link StateStore}
      */
     Map<String, String> logConfig();

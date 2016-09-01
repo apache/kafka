@@ -482,8 +482,7 @@ public class TopologyBuilderTest {
         assertTrue(policies.contains("delete"));
         assertEquals(2, policies.size());
         assertEquals("30000", properties.getProperty(InternalTopicManager.RETENTION_MS));
-        assertEquals(String.valueOf(Long.MAX_VALUE), properties.get("segment.ms"));
-        assertEquals(3, properties.size());
+        assertEquals(2, properties.size());
     }
 
     @SuppressWarnings("unchecked")

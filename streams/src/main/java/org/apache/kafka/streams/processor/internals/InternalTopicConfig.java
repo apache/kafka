@@ -53,7 +53,7 @@ public class InternalTopicConfig {
 
     /**
      * Get the configured properties for this topic. If rententionMs is set then
-     * we add additionalRetentionMs to work out the desired retention when cleanup.policy=compact_and_delete
+     * we add additionalRetentionMs to work out the desired retention when cleanup.policy=compact,delete
      *
      * @param additionalRetentionMs - added to retention to allow for clock drift etc
      * @return Properties to be used when creating the topic

@@ -324,8 +324,21 @@ public class Stores {
      */
     public interface KeyValueFactory<K, V> extends LoggedKeyValueFactory<K, V> {
 
+        /**
+         * Indicates that a changelog should be created for the store. The changelog will be created
+         * with the provided cleanupPolicy and configs.
+         *
+         * Note: Any unrecognized configs will be ignored.
+         * @param cleanupPolicy     cleanup policy to use for the changelog
+         * @param config            any configs that should be applied to the changelog
+         * @return  the factory to create an in-memory of persistent key-value store
+         */
         LoggedKeyValueFactory<K, V> logged(final String cleanupPolicy, final Map<String, String> config);
 
+        /**
+         * Indicates that a changelog should not be created for the key-value store
+         * @return the factory to create an in-memory of persistent key-value store
+         */
         LoggedKeyValueFactory<K, V> notLogged();
     }
 
