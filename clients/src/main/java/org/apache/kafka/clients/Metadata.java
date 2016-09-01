@@ -49,7 +49,11 @@ public final class Metadata {
 
     public static final long TOPIC_EXPIRY_MS = 5 * 60 * 1000;
     private static final long TOPIC_EXPIRY_NEEDS_UPDATE = -1L;
+    private static final int DEFAULT_REQUEST_TIMEOUT_MS = 30000;
+    private static final long DEFAULT_RETRY_BACKOFF_MS = 100L;
+    private static final long DEFAULT_METADATA_MAX_AGE_MS = 60 * 60 * 1000L;
 
+    private final int requestTimeoutMs;
     private final long refreshBackoffMs;
     private final long metadataExpireMs;
     private final long metadataStaleMs;
@@ -69,7 +73,7 @@ public final class Metadata {
      * Create a metadata instance with reasonable defaults
      */
     public Metadata() {
-        this(100L, 60 * 60 * 1000L);
+        this(DEFAULT_RETRY_BACKOFF_MS, DEFAULT_METADATA_MAX_AGE_MS);
     }
 
     public Metadata(long refreshBackoffMs, long metadataExpireMs) {
@@ -87,7 +91,8 @@ public final class Metadata {
     public Metadata(long refreshBackoffMs, long metadataExpireMs, boolean topicExpiryEnabled, Cluster cluster, ClusterResourceListeners clusterResourceListeners) {
         this.refreshBackoffMs = refreshBackoffMs;
         this.metadataExpireMs = metadataExpireMs;
-        this.metadataStaleMs = metadataExpireMs * 2;
+        this.requestTimeoutMs = requestTimeoutMs;
+        this.metadataStaleMs = metadataExpireMs + 3 * (requestTimeoutMs + refreshBackoffMs);
         this.topicExpiryEnabled = topicExpiryEnabled;
         this.lastRefreshMs = 0L;
         this.lastSuccessfulRefreshMs = 0L;
