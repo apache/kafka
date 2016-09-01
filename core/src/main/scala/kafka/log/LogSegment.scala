@@ -342,7 +342,7 @@ class LogSegment(val log: FileMessageSet,
    * The time this segment has waited to be rolled. If the first message in the segment does not have a timestamp,
    * the time is based on the create time of the segment. Otherwise the time is based on the timestamp of that message.
    */
-  def timeWaitedForRoll(now: Long) : Long= {
+  def timeWaitedForRoll(now: Long, messageTimestamp: Long) : Long= {
     // Load the timestamp of the first message into memory
     if (!rollingBasedTimestamp.isDefined) {
       val iter = log.iterator
@@ -352,7 +352,14 @@ class LogSegment(val log: FileMessageSet,
         // If the log is empty, we return time elapsed since the segment is created.
         return now - created
     }
-    now - {if (rollingBasedTimestamp.get >= 0) rollingBasedTimestamp.get else created}
+    // If the first message has a timestamp we use the message timestamp to determine when to roll a segment.
+    // Otherwise, we roll the log segment based on the create time of the log segment. We do this to avoid
+    // potential frequent log segment rolling during the partition reassignment. The log rolling will only based on
+    // message timestamp after the topic start to use message format 0.10.0 and above.
+    if (rollingBasedTimestamp.get >= 0)
+      messageTimestamp - rollingBasedTimestamp.get
+    else
+      now - created
   }
 
   /**

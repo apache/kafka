@@ -75,6 +75,7 @@ class LogTest extends JUnitSuite {
                       scheduler = time.scheduler,
                       time = time)
     assertEquals("Log begins with a single empty segment.", 1, log.numberOfSegments)
+    // Test the segment rolling behavior when messages do not have a timestamp.
     time.sleep(log.config.segmentMs + 1)
     log.append(set)
     assertEquals("Log doesn't roll if doing so creates an empty segment.", 1, log.numberOfSegments)
@@ -88,19 +89,24 @@ class LogTest extends JUnitSuite {
       assertEquals("Changing time beyond rollMs and appending should create a new segment.", numSegments, log.numberOfSegments)
     }
 
-    time.sleep(log.config.segmentMs + 1)
+    // Append a message with timestamp to a segment whose first messgae do not have a timestamp.
     val setWithTimestamp =
       TestUtils.singleMessageSet(payload = "test".getBytes, timestamp = time.milliseconds + log.config.segmentMs + 1)
+    log.append(setWithTimestamp)
+    assertEquals("Segment should not have been rolled out because the log rolling should be based on wall clock.", 4, log.numberOfSegments)
+
+    // Test the segment rolling behavior when messages have timestamps.
+    time.sleep(log.config.segmentMs + 1)
     log.append(setWithTimestamp)
     assertEquals("A new segment should have been rolled out", 5, log.numberOfSegments)
 
     time.sleep(log.config.segmentMs + 1)
-    log.append(set)
-    assertEquals("Log should not roll because the roll should depend on the index of the first time index entry.", 5, log.numberOfSegments)
+    log.append(setWithTimestamp)
+    assertEquals("Log should not roll because the roll should depend on timestamp of the first message.", 5, log.numberOfSegments)
 
-    time.sleep(log.config.segmentMs + 1)
-    log.append(set)
-    assertEquals("Log should roll because the time since the timestamp of first time index entry has expired.", 6, log.numberOfSegments)
+    val setWithExpiredTimestamp = TestUtils.singleMessageSet(payload = "test".getBytes, timestamp = time.milliseconds)
+    log.append(setWithExpiredTimestamp)
+    assertEquals("Log should roll because the timestamp in the message should make the log segment expire.", 6, log.numberOfSegments)
 
     val numSegments = log.numberOfSegments
     time.sleep(log.config.segmentMs + 1)
