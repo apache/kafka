@@ -38,6 +38,7 @@ public final class Cluster {
     private final Map<String, List<PartitionInfo>> availablePartitionsByTopic;
     private final Map<Integer, List<PartitionInfo>> partitionsByNode;
     private final Map<Integer, Node> nodesById;
+    private String clusterId;
 
     /**
      * Create a new cluster with the given nodes and partitions
@@ -49,7 +50,7 @@ public final class Cluster {
     public Cluster(Collection<Node> nodes,
                    Collection<PartitionInfo> partitions,
                    Set<String> unauthorizedTopics) {
-        this(false, nodes, partitions, unauthorizedTopics, Collections.<String>emptySet());
+        this(null, false, nodes, partitions, unauthorizedTopics, Collections.<String>emptySet());
     }
 
     /**
@@ -61,16 +62,25 @@ public final class Cluster {
                    Collection<PartitionInfo> partitions,
                    Set<String> unauthorizedTopics,
                    Set<String> internalTopics) {
-        this(false, nodes, partitions, unauthorizedTopics, internalTopics);
+        this(null, false, nodes, partitions, unauthorizedTopics, internalTopics);
     }
 
-    private Cluster(boolean isBootstrapConfigured,
+    public Cluster(String clusterId,
+                   Collection<Node> nodes,
+                   Collection<PartitionInfo> partitions,
+                   Set<String> unauthorizedTopics,
+                   Set<String> internalTopics) {
+        this(clusterId, false, nodes, partitions, unauthorizedTopics, internalTopics);
+    }
+
+    private Cluster(String clusterId,
+                    boolean isBootstrapConfigured,
                     Collection<Node> nodes,
                     Collection<PartitionInfo> partitions,
                     Set<String> unauthorizedTopics,
                     Set<String> internalTopics) {
         this.isBootstrapConfigured = isBootstrapConfigured;
-
+        this.clusterId = clusterId;
         // make a randomized, unmodifiable copy of the nodes
         List<Node> copy = new ArrayList<>(nodes);
         Collections.shuffle(copy);
@@ -128,7 +138,7 @@ public final class Cluster {
      * Create an empty cluster instance with no nodes and no topic-partitions.
      */
     public static Cluster empty() {
-        return new Cluster(new ArrayList<Node>(0), new ArrayList<PartitionInfo>(0), Collections.<String>emptySet(),
+        return new Cluster(null, new ArrayList<Node>(0), new ArrayList<PartitionInfo>(0), Collections.<String>emptySet(),
                 Collections.<String>emptySet());
     }
 
@@ -142,7 +152,7 @@ public final class Cluster {
         int nodeId = -1;
         for (InetSocketAddress address : addresses)
             nodes.add(new Node(nodeId--, address.getHostString(), address.getPort()));
-        return new Cluster(true, nodes, new ArrayList<PartitionInfo>(0), Collections.<String>emptySet(), Collections.<String>emptySet());
+        return new Cluster(null, true, nodes, new ArrayList<PartitionInfo>(0), Collections.<String>emptySet(), Collections.<String>emptySet());
     }
 
     /**
@@ -250,6 +260,13 @@ public final class Cluster {
         return isBootstrapConfigured;
     }
 
+    public String clusterId() {
+        return clusterId;
+    }
+
+    public ClusterResourceMeta getClusterResourceMeta(){
+        return new ClusterResourceMeta(clusterId());
+    }
     @Override
     public String toString() {
         return "Cluster(nodes = " + this.nodes + ", partitions = " + this.partitionsByTopicPartition.values() + ")";

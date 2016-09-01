@@ -689,6 +689,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }.foreach(_.get)
     assertEquals(numRecords, MockProducerInterceptor.ONSEND_COUNT.intValue())
     assertEquals(numRecords, MockProducerInterceptor.ON_SUCCESS_COUNT.intValue())
+    assertEquals(1, MockProducerInterceptor.ON_CLUSTER_UPDATE_COUNT.intValue())
     // send invalid record
     try {
       testProducer.send(null, null)
@@ -719,6 +720,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     testConsumer.commitSync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(2L))).asJava)
     assertEquals(2, testConsumer.committed(tp).offset)
     assertEquals(commitCountBefore + 1, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue())
+    assertEquals(1, MockConsumerInterceptor.ON_CLUSTER_UPDATE_COUNT.intValue())
 
     // commit async and verify onCommit is called
     val commitCallback = new CountConsumerCommitCallback()
@@ -726,6 +728,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     awaitCommitCallback(testConsumer, commitCallback)
     assertEquals(5, testConsumer.committed(tp).offset)
     assertEquals(commitCountBefore + 2, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue())
+    assertEquals(2, MockConsumerInterceptor.ON_CLUSTER_UPDATE_COUNT.intValue())
 
     testConsumer.close()
     testProducer.close()

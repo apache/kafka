@@ -20,9 +20,11 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.ClusterListener;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.test.MockClusterListener;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Test;
@@ -142,6 +144,27 @@ public class MetadataTest {
             expectedTopics.toArray(), metadata.topics().toArray());
 
         metadata.needMetadataForAllTopics(false);
+    }
+
+    @Test
+    public void testClusterListenerGetsNotifiedOfUpdate() {
+        long time = 0;
+        metadata.update(Cluster.empty(), time);
+        MockClusterListener mockClusterListener = new MockClusterListener();
+        metadata.addClusterListener(mockClusterListener);
+
+        metadata.update(new Cluster(
+                        "dummy",
+                        Arrays.asList(new Node(0, "host1", 1000)),
+                        Arrays.asList(
+                                new PartitionInfo("topic", 0, null, null, null),
+                                new PartitionInfo("topic1", 0, null, null, null)),
+                        Collections.<String>emptySet(),
+                        Collections.<String>emptySet()),
+                100);
+
+        assertEquals("Listener did not get cluster metadata correctly",
+                "dummy", mockClusterListener.getClusterResourceMeta().getClusterId());
     }
 
     @Test

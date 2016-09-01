@@ -20,21 +20,26 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerInterceptor;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.ClusterListener;
+import org.apache.kafka.common.ClusterResourceMeta;
 import org.apache.kafka.common.config.ConfigException;
 
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 
-public class MockProducerInterceptor implements ProducerInterceptor<String, String> {
+public class MockProducerInterceptor implements ClusterListener, ProducerInterceptor<String, String> {
     public static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
     public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
     public static final AtomicInteger ONSEND_COUNT = new AtomicInteger(0);
     public static final AtomicInteger ON_SUCCESS_COUNT = new AtomicInteger(0);
     public static final AtomicInteger ON_ERROR_COUNT = new AtomicInteger(0);
     public static final AtomicInteger ON_ERROR_WITH_METADATA_COUNT = new AtomicInteger(0);
+    public static final AtomicInteger ON_CLUSTER_UPDATE_COUNT = new AtomicInteger(0);
+
     public static final String APPEND_STRING_PROP = "mock.interceptor.append";
     private String appendStr;
+    private ClusterResourceMeta clusterResourceMeta;
 
     public MockProducerInterceptor() {
         INIT_COUNT.incrementAndGet();
@@ -86,5 +91,16 @@ public class MockProducerInterceptor implements ProducerInterceptor<String, Stri
         ON_SUCCESS_COUNT.set(0);
         ON_ERROR_COUNT.set(0);
         ON_ERROR_WITH_METADATA_COUNT.set(0);
+        ON_CLUSTER_UPDATE_COUNT.set(0);
+    }
+
+    @Override
+    public void onClusterUpdate(ClusterResourceMeta clusterMetadata) {
+        this.clusterResourceMeta = clusterMetadata;
+        ON_CLUSTER_UPDATE_COUNT.incrementAndGet();
+    }
+
+    public ClusterResourceMeta getClusterResourceMeta() {
+        return clusterResourceMeta;
     }
 }

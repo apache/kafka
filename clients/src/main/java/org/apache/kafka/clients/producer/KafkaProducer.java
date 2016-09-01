@@ -324,6 +324,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     ProducerInterceptor.class);
             this.interceptors = interceptorList.isEmpty() ? null : new ProducerInterceptors<>(interceptorList);
 
+            metadata.addClusterListeners(interceptorList);
+            metadata.addClusterListener(reporters);
+            metadata.addClusterListener(keySerializer);
+            metadata.addClusterListener(valueSerializer);
+
+
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId);
             log.debug("Kafka producer started");

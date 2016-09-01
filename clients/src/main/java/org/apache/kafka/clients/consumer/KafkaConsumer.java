@@ -681,6 +681,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     this.time,
                     this.retryBackoffMs);
 
+
+            metadata.addClusterListeners(interceptorList);
+            metadata.addClusterListener(reporters);
+            metadata.addClusterListener(keyDeserializer);
+            metadata.addClusterListener(valueDeserializer);
+
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId);
 

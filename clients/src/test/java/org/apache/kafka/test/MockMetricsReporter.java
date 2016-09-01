@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.ClusterListener;
+import org.apache.kafka.common.ClusterResourceMeta;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricsReporter;
 
@@ -23,9 +25,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class MockMetricsReporter implements MetricsReporter {
+public class MockMetricsReporter implements ClusterListener, MetricsReporter {
     public static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
     public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
+    private ClusterResourceMeta clusterResourceMeta;
 
     public MockMetricsReporter() {
 
@@ -51,4 +54,15 @@ public class MockMetricsReporter implements MetricsReporter {
     public void configure(Map<String, ?> configs) {
 
     }
+
+    @Override
+    public void onClusterUpdate(ClusterResourceMeta clusterMetadata) {
+        this.clusterResourceMeta = clusterMetadata;
+    }
+
+    public ClusterResourceMeta getClusterResourceMeta() {
+        return clusterResourceMeta;
+    }
+
+
 }

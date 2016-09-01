@@ -103,10 +103,12 @@ public class KafkaProducerTest {
                     props, new StringSerializer(), new StringSerializer());
             Assert.assertEquals(1, MockProducerInterceptor.INIT_COUNT.get());
             Assert.assertEquals(0, MockProducerInterceptor.CLOSE_COUNT.get());
+            Assert.assertEquals(1, MockProducerInterceptor.ON_CLUSTER_UPDATE_COUNT.get());
 
             producer.close();
             Assert.assertEquals(1, MockProducerInterceptor.INIT_COUNT.get());
             Assert.assertEquals(1, MockProducerInterceptor.CLOSE_COUNT.get());
+            Assert.assertEquals(1, MockProducerInterceptor.ON_CLUSTER_UPDATE_COUNT.get());
         } finally {
             // cleanup since we are using mutable static variables in MockProducerInterceptor
             MockProducerInterceptor.resetCounters();
