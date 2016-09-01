@@ -43,7 +43,7 @@ import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 
-import static org.hamcrest.CoreMatchers.notNullValue;
+import org.apache.kafka.test.TestCondition;
 import static org.junit.Assert.fail;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -80,8 +80,6 @@ public class QueryableStateIntegrationTest {
     private static final String STREAM_THREE = "stream-three";
     private static final int NUM_PARTITIONS = 2;
     private static final String OUTPUT_TOPIC_THREE = "output-three";
-    private static final int QSRETRIES = 5;
-    private static final long QSBACKOFF = 1000L;
     private Properties streamsConfiguration;
     private List<String> inputValues;
     private Set<String> inputValuesKeys;
@@ -195,14 +193,8 @@ public class QueryableStateIntegrationTest {
 
     private class StreamRunnable implements Runnable {
         private final KafkaStreams myStream;
-        private final String inputTopic;
-        private final String outputTopic;
-        private final int queryPort;
 
         StreamRunnable(String inputTopic, String outputTopic, int queryPort) {
-            this.inputTopic = inputTopic;
-            this.outputTopic = outputTopic;
-            this.queryPort = queryPort;
             Properties props = (Properties) streamsConfiguration.clone();
             props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + queryPort);
             this.myStream = createCountStream(inputTopic, outputTopic, props);
@@ -223,49 +215,29 @@ public class QueryableStateIntegrationTest {
         }
     }
 
-    private void verifyAllKVKeys(StreamRunnable[] streamRunnables, KafkaStreams streams,
-                                 Set<String> keys, Set<String> stateStores) throws Exception {
-        for (String storeName : stateStores) {
-            for (String key : keys) {
-
-                // first query where the key is located
-                StreamsMetadata metadata = null;
-                ReadOnlyKeyValueStore<String, Long> store = null;
-                Long value = null;
-                int retries = 0;
-                while (retries < QSRETRIES && (metadata == null || store == null || value == null)) {
-                    try {
-                        metadata = streams.metadataForKey(storeName, key, new StringSerializer());
+    private void verifyAllKVKeys(final StreamRunnable[] streamRunnables, final KafkaStreams streams,
+                                 final Set<String> keys, Set<String> stateStores) throws Exception {
+        for (final String storeName : stateStores) {
+            for (final String key : keys) {
+                TestUtils.waitForCondition(new TestCondition() {
+                    @Override
+                    public boolean conditionMet() {
+                        final StreamsMetadata metadata = streams.metadataForKey(storeName, key, new StringSerializer());
                         if (metadata == null) {
-                            retries++;
-                            Thread.sleep(QSBACKOFF);
-                            continue;
+                            return false;
                         }
-                        int index = metadata.hostInfo().port();
-
-                        // next make sure the value is queryable
-                        KafkaStreams streamsWithKey = streamRunnables[index].getStream();
-                        store = streamsWithKey.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
-                        if (store == null) {
-                            retries++;
-                            Thread.sleep(QSBACKOFF);
-                            continue;
+                        final int index = metadata.hostInfo().port();
+                        final KafkaStreams streamsWithKey = streamRunnables[index].getStream();
+                        final ReadOnlyKeyValueStore<String, Long> store;
+                        try {
+                            store = streamsWithKey.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+                        } catch (IllegalStateException e) {
+                            // Kafka Streams instance may have closed but rebalance hasn't happened
+                            return false;
                         }
-                        value = store.get(key);
-                        if (value == null) {
-                            retries++;
-                            Thread.sleep(QSBACKOFF);
-                            continue;
-                        }
-                        retries++;
-                    } catch (Exception e) {
-                        retries++;
-                        Thread.sleep(QSBACKOFF);
+                        return store != null && store.get(key) != null;
                     }
-                }
-                assertThat(metadata, notNullValue());
-                assertThat(store, notNullValue());
-                assertThat(value, notNullValue());
+                }, 30000, "waiting for metadata, store and value to be non null");
             }
         }
     }
@@ -309,6 +281,9 @@ public class QueryableStateIntegrationTest {
         streamRunnables[0].close();
         streamThreads[0].interrupt();
         streamThreads[0].join();
+        producerRunnable.shutdown();
+        producerThread.interrupt();
+        producerThread.join();
 
     }
 
@@ -339,7 +314,9 @@ public class QueryableStateIntegrationTest {
         }
         // finally check if all keys are there
         verifyGreaterOrEqual(inputValuesKeys.toArray(new String[inputValuesKeys.size()]), expectedWindowState, expectedCount, windowStore, myCount, true);
-
+        producerRunnable.shutdown();
+        producerThread.interrupt();
+        producerThread.join();
     }
 
     @Test
@@ -566,7 +543,7 @@ public class QueryableStateIntegrationTest {
         private final List<String> inputValues;
         private final int numIterations;
         private int currIteration = 0;
-
+        boolean shutdown = false;
         private final Random random = new Random();
 
         ProducerRunnable(String topic, List<String> inputValues, int numIterations) {
@@ -580,6 +557,9 @@ public class QueryableStateIntegrationTest {
         }
         public synchronized int getCurrIteration() {
             return currIteration;
+        }
+        public synchronized void shutdown() {
+            shutdown = true;
         }
 
         @Override
@@ -596,7 +576,7 @@ public class QueryableStateIntegrationTest {
                 new KafkaProducer<>(producerConfig, new StringSerializer(), new StringSerializer());
 
             try {
-                while (getCurrIteration() < numIterations) {
+                while (getCurrIteration() < numIterations && !shutdown) {
                     for (int i = 0; i < inputValues.size(); i++) {
                         producer.send(new ProducerRecord<>(topic,
                             inputValues.get(i), inputValues.get(i)));
