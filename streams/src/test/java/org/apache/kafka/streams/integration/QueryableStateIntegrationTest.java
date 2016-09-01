@@ -78,7 +78,7 @@ public class QueryableStateIntegrationTest {
     private static final String OUTPUT_TOPIC = "output";
     private static final String OUTPUT_TOPIC_CONCURRENT = "output-concurrent";
     private static final String STREAM_THREE = "stream-three";
-    private static final int NUM_PARTITIONS = 2;
+    private static final int NUM_PARTITIONS = 3;
     private static final String OUTPUT_TOPIC_THREE = "output-three";
     private Properties streamsConfiguration;
     private List<String> inputValues;
@@ -193,7 +193,7 @@ public class QueryableStateIntegrationTest {
 
     private class StreamRunnable implements Runnable {
         private final KafkaStreams myStream;
-
+        private boolean closed = false;
         StreamRunnable(String inputTopic, String outputTopic, int queryPort) {
             Properties props = (Properties) streamsConfiguration.clone();
             props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + queryPort);
@@ -207,7 +207,14 @@ public class QueryableStateIntegrationTest {
         }
 
         public void close() {
-            this.myStream.close();
+            if (!closed) {
+                this.myStream.close();
+                closed = true;
+            }
+        }
+
+        public boolean isClosed() {
+            return closed;
         }
 
         public final KafkaStreams getStream() {
@@ -244,7 +251,7 @@ public class QueryableStateIntegrationTest {
 
     @Test
     public void queryOnRebalance() throws Exception {
-        int numThreads = 2;
+        int numThreads = NUM_PARTITIONS;
         StreamRunnable[] streamRunnables = new StreamRunnable[numThreads];
         Thread[] streamThreads = new Thread[numThreads];
         final int numIterations = 500000;
@@ -261,30 +268,36 @@ public class QueryableStateIntegrationTest {
         }
         producerThread.start();
 
-        waitUntilAtLeastNumRecordProcessed(OUTPUT_TOPIC_THREE, 1);
+        try {
+            waitUntilAtLeastNumRecordProcessed(OUTPUT_TOPIC_THREE, 1);
 
-        for (int i = 0; i < numThreads; i++) {
-            verifyAllKVKeys(streamRunnables, streamRunnables[i].getStream(), inputValuesKeys,
+            for (int i = 0; i < numThreads; i++) {
+                verifyAllKVKeys(streamRunnables, streamRunnables[i].getStream(), inputValuesKeys,
+                    new HashSet(Arrays.asList("word-count-store-" + STREAM_THREE)));
+            }
+
+            // kill N-1 threads
+            for (int i = 1; i < numThreads; i++) {
+                streamRunnables[i].close();
+                streamThreads[i].interrupt();
+                streamThreads[i].join();
+            }
+
+            // query from the remaining thread
+            verifyAllKVKeys(streamRunnables, streamRunnables[0].getStream(), inputValuesKeys,
                 new HashSet(Arrays.asList("word-count-store-" + STREAM_THREE)));
+        } finally {
+            for (int i = 0; i < numThreads; i++) {
+                if (!streamRunnables[i].isClosed()) {
+                    streamRunnables[i].close();
+                    streamThreads[i].interrupt();
+                    streamThreads[i].join();
+                }
+            }
+            producerRunnable.shutdown();
+            producerThread.interrupt();
+            producerThread.join();
         }
-
-        // kill N-1 threads
-        for (int i = 1; i < numThreads; i++) {
-            streamRunnables[i].close();
-            streamThreads[i].interrupt();
-            streamThreads[i].join();
-        }
-
-        // query from the remaining thread
-        verifyAllKVKeys(streamRunnables, streamRunnables[0].getStream(), inputValuesKeys,
-            new HashSet(Arrays.asList("word-count-store-" + STREAM_THREE)));
-        streamRunnables[0].close();
-        streamThreads[0].interrupt();
-        streamThreads[0].join();
-        producerRunnable.shutdown();
-        producerThread.interrupt();
-        producerThread.join();
-
     }
 
     @Test
@@ -298,25 +311,28 @@ public class QueryableStateIntegrationTest {
         kafkaStreams.start();
         producerThread.start();
 
-        waitUntilAtLeastNumRecordProcessed(OUTPUT_TOPIC_CONCURRENT, 1);
+        try {
+            waitUntilAtLeastNumRecordProcessed(OUTPUT_TOPIC_CONCURRENT, 1);
 
-        final ReadOnlyKeyValueStore<String, Long>
-            myCount = kafkaStreams.store("word-count-store-" + STREAM_CONCURRENT, QueryableStoreTypes.<String, Long>keyValueStore());
+            final ReadOnlyKeyValueStore<String, Long>
+                myCount = kafkaStreams.store("word-count-store-" + STREAM_CONCURRENT, QueryableStoreTypes.<String, Long>keyValueStore());
 
-        final ReadOnlyWindowStore<String, Long> windowStore =
-            kafkaStreams.store("windowed-word-count-store-" + STREAM_CONCURRENT, QueryableStoreTypes.<String, Long>windowStore());
+            final ReadOnlyWindowStore<String, Long> windowStore =
+                kafkaStreams.store("windowed-word-count-store-" + STREAM_CONCURRENT, QueryableStoreTypes.<String, Long>windowStore());
 
 
-        Map<String, Long> expectedWindowState = new HashMap<>();
-        Map<String, Long> expectedCount = new HashMap<>();
-        while (producerRunnable.getCurrIteration() < numIterations) {
-            verifyGreaterOrEqual(inputValuesKeys.toArray(new String[inputValuesKeys.size()]), expectedWindowState, expectedCount, windowStore, myCount, false);
+            Map<String, Long> expectedWindowState = new HashMap<>();
+            Map<String, Long> expectedCount = new HashMap<>();
+            while (producerRunnable.getCurrIteration() < numIterations) {
+                verifyGreaterOrEqual(inputValuesKeys.toArray(new String[inputValuesKeys.size()]), expectedWindowState, expectedCount, windowStore, myCount, false);
+            }
+            // finally check if all keys are there
+            verifyGreaterOrEqual(inputValuesKeys.toArray(new String[inputValuesKeys.size()]), expectedWindowState, expectedCount, windowStore, myCount, true);
+        } finally {
+            producerRunnable.shutdown();
+            producerThread.interrupt();
+            producerThread.join();
         }
-        // finally check if all keys are there
-        verifyGreaterOrEqual(inputValuesKeys.toArray(new String[inputValuesKeys.size()]), expectedWindowState, expectedCount, windowStore, myCount, true);
-        producerRunnable.shutdown();
-        producerThread.interrupt();
-        producerThread.join();
     }
 
     @Test
