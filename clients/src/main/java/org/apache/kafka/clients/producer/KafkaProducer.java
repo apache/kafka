@@ -290,6 +290,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 this.requestTimeoutMs = config.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
             }
 
+            this.metadata = new Metadata(retryBackoffMs,
+                                         config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG),
+                                         true,
+                                         this.requestTimeoutMs);
+
             this.accumulator = new RecordAccumulator(config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
                     this.totalMemorySize,
                     this.compressionType,
