@@ -224,7 +224,7 @@ public final class RecordAccumulator {
      * Abort the batches that have been sitting in RecordAccumulator for more than the configured requestTimeout
      * due to metadata being unavailable
      */
-    public List<RecordBatch> abortExpiredBatches(int requestTimeout, Metadata metadata, long now) {
+    public List<RecordBatch> abortExpiredBatches(int requestTimeout, boolean staleMetadataNow, Metadata metadata, long now) {
         List<RecordBatch> expiredBatches = new ArrayList<>();
         Cluster cluster = metadata.fetch();
         int count = 0;
@@ -235,7 +235,7 @@ public final class RecordAccumulator {
             // This is to prevent later batches from being expired while an earlier batch is still in progress.
             // Note that `muted` is only ever populated if `max.in.flight.request.per.connection=1` so this protection
             // is only active in this case. Otherwise the expiration order is not guaranteed.
-            if (!muted.contains(tp) && (metadata.isStale(now) || cluster.leaderFor(tp) == null)) {
+            if (!muted.contains(tp) && (staleMetadataNow || cluster.leaderFor(tp) == null)) {
                 synchronized (dq) {
                     // iterate over the batches and expire them if they have been in the accumulator for more than requestTimeOut
                     RecordBatch lastBatch = dq.peekLast();

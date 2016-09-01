@@ -49,14 +49,11 @@ public final class Metadata {
 
     public static final long TOPIC_EXPIRY_MS = 5 * 60 * 1000;
     private static final long TOPIC_EXPIRY_NEEDS_UPDATE = -1L;
-    private static final int DEFAULT_REQUEST_TIMEOUT_MS = 30000;
     private static final long DEFAULT_RETRY_BACKOFF_MS = 100L;
     private static final long DEFAULT_METADATA_MAX_AGE_MS = 60 * 60 * 1000L;
 
-    private final int requestTimeoutMs;
     private final long refreshBackoffMs;
     private final long metadataExpireMs;
-    private final long metadataStaleMs;
     private int version;
     private long lastRefreshMs;
     private long lastSuccessfulRefreshMs;
@@ -88,11 +85,13 @@ public final class Metadata {
      * @param topicExpiryEnabled If true, enable expiry of unused topics
      * @param clusterResourceListeners List of ClusterResourceListeners which will receive metadata updates.
      */
+<<<<<<< HEAD
     public Metadata(long refreshBackoffMs, long metadataExpireMs, boolean topicExpiryEnabled, Cluster cluster, ClusterResourceListeners clusterResourceListeners) {
+=======
+    public Metadata(long refreshBackoffMs, long metadataExpireMs, boolean topicExpiryEnabled) {
+>>>>>>> refactored batch expiry logic into Sender
         this.refreshBackoffMs = refreshBackoffMs;
         this.metadataExpireMs = metadataExpireMs;
-        this.requestTimeoutMs = requestTimeoutMs;
-        this.metadataStaleMs = metadataExpireMs + 3 * (requestTimeoutMs + refreshBackoffMs);
         this.topicExpiryEnabled = topicExpiryEnabled;
         this.lastRefreshMs = 0L;
         this.lastSuccessfulRefreshMs = 0L;
@@ -129,13 +128,6 @@ public final class Metadata {
         long timeToExpire = needUpdate ? 0 : Math.max(this.lastSuccessfulRefreshMs + this.metadataExpireMs - nowMs, 0);
         long timeToAllowUpdate = this.lastRefreshMs + this.refreshBackoffMs - nowMs;
         return Math.max(timeToExpire, timeToAllowUpdate);
-    }
-
-    /**
-     * The metadata is stale if it has taken more than staleMs after last successful refresh. 
-     */
-    public synchronized  boolean isStale(long nowMs) {
-        return (nowMs - this.lastSuccessfulRefreshMs) > this.metadataStaleMs;
     }
 
     /**
@@ -275,6 +267,13 @@ public final class Metadata {
      */
     public synchronized long lastSuccessfulUpdate() {
         return this.lastSuccessfulRefreshMs;
+    }
+
+    /**
+     * The max allowable age of metadata.
+     */
+    public synchronized long getMetadataMaxAge() { 
+        return this.metadataExpireMs; 
     }
 
     /**

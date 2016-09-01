@@ -96,6 +96,9 @@ public class Sender implements Runnable {
 
     /* the max time to wait for the server to respond to the request*/
     private final int requestTimeout;
+    
+    /* the max time to wait before expiring batches. */
+    private final long metadataStaleMs;
 
     public Sender(KafkaClient client,
                   Metadata metadata,
@@ -120,6 +123,7 @@ public class Sender implements Runnable {
         this.clientId = clientId;
         this.sensors = new SenderMetrics(metrics);
         this.requestTimeout = requestTimeout;
+        this.metadataStaleMs = metadata.getMetadataMaxAge() + 3 * (requestTimeout + metadata.refreshBackoff());
     }
 
     /**
@@ -207,9 +211,9 @@ public class Sender implements Runnable {
                     this.accumulator.mutePartition(batch.topicPartition);
             }
         }
-
-        if (metadata.isStale(now) || !result.unknownLeaderTopics.isEmpty()) {
-            List<RecordBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, metadata, now);
+        boolean staleMetadataNow = (now - metadata.lastSuccessfulUpdate()) > this.metadataStaleMs;
+        if (staleMetadataNow || !result.unknownLeaderTopics.isEmpty()) {
+            List<RecordBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, staleMetadataNow, metadata, now);
             // update sensors
             for (RecordBatch expiredBatch : expiredBatches)
                 this.sensors.recordErrors(expiredBatch.topicPartition.topic(), expiredBatch.recordCount);
