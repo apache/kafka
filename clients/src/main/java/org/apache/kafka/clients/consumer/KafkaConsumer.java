@@ -18,6 +18,7 @@ import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
+import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.PollCondition;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
@@ -706,9 +707,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                   Metrics metrics,
                   SubscriptionState subscriptions,
                   Metadata metadata,
-                  boolean autoCommitEnabled,
-                  int autoCommitIntervalMs,
-                  int heartbeatIntervalMs,
                   long retryBackoffMs,
                   long requestTimeoutMs) {
         this.clientId = clientId;
@@ -1006,7 +1004,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         fetcher.sendFetches();
 
         long now = time.milliseconds();
-        client.poll(Math.min(coordinator.timeToNextPoll(now), timeout), now);
+        long pollTimeout = Math.min(coordinator.timeToNextPoll(now), timeout);
+
+        client.poll(pollTimeout, now, new PollCondition() {
+            @Override
+            public boolean pollNeeded() {
+                return !fetcher.hasCompletedFetches();
+            }
+        });
 
         // after the long poll, we should check whether the group needs to rebalance
         // prior to returning data so that the group can stabilize faster

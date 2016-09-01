@@ -123,6 +123,14 @@ public class Fetcher<K, V> {
     }
 
     /**
+     * Return whether we have any completed fetches pending return to the user. This method is thread-safe.
+     * @return true if there are completed fetches, false otherwise
+     */
+    public boolean hasCompletedFetches() {
+        return !completedFetches.isEmpty();
+    }
+
+    /**
      * Set-up a fetch request for any node that we have assigned partitions for which doesn't already have
      * an in-flight fetch or pending fetch data.
      */

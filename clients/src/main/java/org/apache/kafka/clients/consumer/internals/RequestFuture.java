@@ -15,8 +15,9 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.protocol.Errors;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Result of an asynchronous request from {@link ConsumerNetworkClient}. Use {@link ConsumerNetworkClient#poll(long)}
@@ -37,20 +38,19 @@ import java.util.List;
  *
  * @param <T> Return type of the result (Can be Void if there is no response)
  */
-public class RequestFuture<T> {
+public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
 
-    private boolean isDone = false;
-    private T value;
-    private RuntimeException exception;
-    private List<RequestFutureListener<T>> listeners = new ArrayList<>();
-
+    private final AtomicBoolean isDone = new AtomicBoolean(false);
+    private final AtomicReference<T> value = new AtomicReference<>();
+    private final AtomicReference<RuntimeException> exception = new AtomicReference<>();
+    private final ConcurrentLinkedQueue<RequestFutureListener<T>> listeners = new ConcurrentLinkedQueue<>();
 
     /**
      * Check whether the response is ready to be handled
      * @return true if the response is ready, false otherwise
      */
     public boolean isDone() {
-        return isDone;
+        return isDone.get();
     }
 
     /**
@@ -58,7 +58,7 @@ public class RequestFuture<T> {
      * @return the value if it exists or null
      */
     public T value() {
-        return value;
+        return value.get();
     }
 
     /**
@@ -66,7 +66,7 @@ public class RequestFuture<T> {
      * @return true if the request completed and was successful
      */
     public boolean succeeded() {
-        return isDone && exception == null;
+        return isDone() && exception.get() == null;
     }
 
     /**
@@ -74,7 +74,7 @@ public class RequestFuture<T> {
      * @return true if the request completed with a failure
      */
     public boolean failed() {
-        return isDone && exception != null;
+        return isDone() && exception.get() != null;
     }
 
     /**
@@ -83,7 +83,7 @@ public class RequestFuture<T> {
      * @return true if it is retriable, false otherwise
      */
     public boolean isRetriable() {
-        return exception instanceof RetriableException;
+        return exception.get() instanceof RetriableException;
     }
 
     /**
@@ -91,7 +91,7 @@ public class RequestFuture<T> {
      * @return The exception if it exists or null
      */
     public RuntimeException exception() {
-        return exception;
+        return exception.get();
     }
 
     /**
@@ -100,11 +100,10 @@ public class RequestFuture<T> {
      * @param value corresponding value (or null if there is none)
      */
     public void complete(T value) {
-        if (isDone)
+        if (!isDone.compareAndSet(false, true))
             throw new IllegalStateException("Invalid attempt to complete a request future which is already complete");
-        this.value = value;
-        this.isDone = true;
-        fireSuccess();
+        this.value.set(value);
+        fireSuccess(value);
     }
 
     /**
@@ -113,11 +112,10 @@ public class RequestFuture<T> {
      * @param e corresponding exception to be passed to caller
      */
     public void raise(RuntimeException e) {
-        if (isDone)
+        if (!isDone.compareAndSet(false, true))
             throw new IllegalStateException("Invalid attempt to complete a request future which is already complete");
-        this.exception = e;
-        this.isDone = true;
-        fireFailure();
+        this.exception.set(e);
+        fireFailure(e);
     }
 
     /**
@@ -128,14 +126,22 @@ public class RequestFuture<T> {
         raise(error.exception());
     }
 
-    private void fireSuccess() {
-        for (RequestFutureListener<T> listener : listeners)
+    private void fireSuccess(T value) {
+        while (true) {
+            RequestFutureListener<T> listener = listeners.poll();
+            if (listener == null)
+                break;
             listener.onSuccess(value);
+        }
     }
 
-    private void fireFailure() {
-        for (RequestFutureListener<T> listener : listeners)
+    private void fireFailure(RuntimeException exception) {
+        while (true) {
+            RequestFutureListener<T> listener = listeners.poll();
+            if (listener == null)
+                break;
             listener.onFailure(exception);
+        }
     }
 
     /**
@@ -143,11 +149,11 @@ public class RequestFuture<T> {
      * @param listener
      */
     public void addListener(RequestFutureListener<T> listener) {
-        if (isDone) {
-            if (exception != null)
-                listener.onFailure(exception);
+        if (isDone()) {
+            if (failed())
+                listener.onFailure(exception.get());
             else
-                listener.onSuccess(value);
+                listener.onSuccess(value.get());
         } else {
             this.listeners.add(listener);
         }
@@ -160,7 +166,7 @@ public class RequestFuture<T> {
      * @return The new future
      */
     public <S> RequestFuture<S> compose(final RequestFutureAdapter<T, S> adapter) {
-        final RequestFuture<S> adapted = new RequestFuture<S>();
+        final RequestFuture<S> adapted = new RequestFuture<>();
         addListener(new RequestFutureListener<T>() {
             @Override
             public void onSuccess(T value) {
@@ -190,7 +196,7 @@ public class RequestFuture<T> {
     }
 
     public static <T> RequestFuture<T> failure(RuntimeException e) {
-        RequestFuture<T> future = new RequestFuture<T>();
+        RequestFuture<T> future = new RequestFuture<>();
         future.raise(e);
         return future;
     }
@@ -217,4 +223,8 @@ public class RequestFuture<T> {
         return failure(new StaleMetadataException());
     }
 
+    @Override
+    public boolean pollNeeded() {
+        return !isDone.get();
+    }
 }

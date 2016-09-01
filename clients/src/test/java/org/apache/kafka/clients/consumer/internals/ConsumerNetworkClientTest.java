@@ -15,6 +15,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.WakeupException;
@@ -25,8 +26,10 @@ import org.apache.kafka.common.requests.HeartbeatRequest;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
+import org.easymock.EasyMock;
 import org.junit.Test;
 
+import java.util.Collections;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertEquals;
@@ -73,6 +76,42 @@ public class ConsumerNetworkClientTest {
         consumerClient.awaitPendingRequests(node);
         assertTrue(future1.succeeded());
         assertTrue(future2.succeeded());
+    }
+
+    @Test
+    public void skipPollWhenPollConditionSatisfied() {
+        NetworkClient mockNetworkClient = EasyMock.mock(NetworkClient.class);
+        ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(mockNetworkClient, metadata, time, 100, 1000);
+
+        EasyMock.replay(mockNetworkClient);
+
+        consumerClient.poll(0, time.milliseconds(), new ConsumerNetworkClient.PollCondition() {
+            @Override
+            public boolean pollNeeded() {
+                return false;
+            }
+        });
+
+        EasyMock.verify(mockNetworkClient);
+    }
+
+    @Test
+    public void invokePollWhenPollConditionNotSatisfied() {
+        NetworkClient mockNetworkClient = EasyMock.mock(NetworkClient.class);
+        ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(mockNetworkClient, metadata, time, 100, 1000);
+
+        EasyMock.expect(mockNetworkClient.poll(EasyMock.anyLong(), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
+
+        EasyMock.replay(mockNetworkClient);
+
+        consumerClient.poll(0, time.milliseconds(), new ConsumerNetworkClient.PollCondition() {
+            @Override
+            public boolean pollNeeded() {
+                return true;
+            }
+        });
+
+        EasyMock.verify(mockNetworkClient);
     }
 
     @Test
