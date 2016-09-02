@@ -532,6 +532,21 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
         this.partitionToTaskIds = partitionToTaskIds;
         this.partitionsByHostState = info.partitionsByHostState;
+        // only need to build when not coordinator
+        if (metadataWithInternalTopics == null) {
+            final Collection<Set<TopicPartition>> values = partitionsByHostState.values();
+            final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
+            for (Set<TopicPartition> value : values) {
+                for (TopicPartition topicPartition : value) {
+                    topicToPartitionInfo.put(topicPartition, new PartitionInfo(topicPartition.topic(),
+                                                                               topicPartition.partition(),
+                                                                               null,
+                                                                               new Node[0],
+                                                                               new Node[0]));
+                }
+            }
+            metadataWithInternalTopics = Cluster.empty().withPartitions(topicToPartitionInfo);
+        }
     }
 
     public Map<HostInfo, Set<TopicPartition>> getPartitionsByHostState() {
@@ -542,6 +557,9 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     }
 
     public Cluster clusterMetadata() {
+        if (metadataWithInternalTopics == null) {
+            return Cluster.empty();
+        }
         return metadataWithInternalTopics;
     }
 

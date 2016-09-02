@@ -53,7 +53,7 @@ class KafkaLog4jAppender(KafkaPathResolverMixin, BackgroundThreadService):
             cmd += " --security-protocol %s" % str(self.security_protocol)
         if self.security_protocol == SecurityConfig.SSL or self.security_protocol == SecurityConfig.SASL_SSL:
             cmd += " --ssl-truststore-location %s" % str(SecurityConfig.TRUSTSTORE_PATH)
-            cmd += " --ssl-truststore-password %s" % str(SecurityConfig.ssl_stores['ssl.truststore.password'])
+            cmd += " --ssl-truststore-password %s" % str(SecurityConfig.ssl_stores.truststore_passwd)
         if self.security_protocol == SecurityConfig.SASL_PLAINTEXT or \
                 self.security_protocol == SecurityConfig.SASL_SSL or \
                 self.security_protocol == SecurityConfig.SASL_MECHANISM_GSSAPI or \
