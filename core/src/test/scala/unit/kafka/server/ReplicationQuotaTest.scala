@@ -53,7 +53,7 @@ class ReplicationQuotaTest extends ZooKeeperTestHarness {
 
   @After
   override def tearDown() {
-    brokers.foreach(_.shutdown())
+    brokers.par.foreach(_.shutdown())
     producer.close()
     super.tearDown()
   }
@@ -182,62 +182,67 @@ class ReplicationQuotaTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def shouldMatchQuotaReplicatingFromThreeServersToOneWithThrottleOnTheThreeLeaders(): Unit = {
-    shouldMatchQuotaReplicatingFromThreeServersToOne(true)
+  def shouldMatchQuotaReplicatingFromSixServersToTwoWithThrottleOnTheSixLeaders(): Unit = {
+    shouldMatchQuotaReplicatingAnAsymetricTopology(true)
   }
 
   @Test
-  def shouldMatchQuotaReplicatingFromThreeServersToOneWithThrottleOnTheOneFollower(): Unit = {
-    shouldMatchQuotaReplicatingFromThreeServersToOne(false)
+  def shouldMatchQuotaReplicatingFromSixServersToTwoWithThrottleOnTheTwoFollowers(): Unit = {
+    shouldMatchQuotaReplicatingAnAsymetricTopology(false)
   }
 
-  def shouldMatchQuotaReplicatingFromThreeServersToOne(leaderThrottle: Boolean): Unit = {
-    val topic = "specific-replicas"
-    brokers = createBrokerConfigs(3, zkConnect).map(fromProps).map(TestUtils.createServer(_))
+  def shouldMatchQuotaReplicatingAnAsymetricTopology(leaderThrottle: Boolean): Unit = {
+    brokers = createBrokerConfigs(6, zkConnect).map(fromProps).map(TestUtils.createServer(_))
 
-    //Given three partitions, lead on nodes 0,1,2 but will followers on node 3 (which hasn't been started yet)
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, Map(0 -> Seq(0, 3), 1 -> Seq(1, 3), 2 -> Seq(2, 3)))
+    //Given three partitions, lead on nodes 0,1,2,3,4,5 but will followers on node 6,7 (not started yet)
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic,
+      Map(0 -> Seq(0, 6), 1 -> Seq(1, 6), 2 -> Seq(2, 6), 3 -> Seq(3, 7), 4 -> Seq(4, 7), 5 -> Seq(5, 7)))
 
     val msg = msg100KB
     val msgCount: Int = 100
     val expectedDuration = 5 //Keep the test to N seconds
     var throttle: Int = msgCount * msg.length / expectedDuration
-    if (!leaderThrottle) throttle = throttle * 3 //Follower throttle needs to replicate 3x as fast to get the same duration as there are three replicas to replicate
+    if (!leaderThrottle) throttle = throttle * 3 //Follower throttle needs to replicate 3x as fast to get the same duration as there are three replicas to replicate for each of the two follower brokers
 
     //Set the throttle on either the three leaders or the one follower
-    (0 to 3).foreach { brokerId =>
+    (0 to 7).foreach { brokerId =>
       changeBrokerConfig(zkUtils, Seq(brokerId), property(KafkaConfig.ThrottledReplicationRateLimitProp, throttle.toString))
     }
     if(leaderThrottle)
-      changeTopicConfig(zkUtils, topic, property(ThrottledReplicasListProp, "0-0:1-1:2-2"))//partition-broker:...
+      changeTopicConfig(zkUtils, topic, property(ThrottledReplicasListProp, "0-0:1-1:2-2:3-3:4-4:5-5"))//partition-broker:...
     else
-      changeTopicConfig(zkUtils, topic, property(ThrottledReplicasListProp, "0-3:1-3:2-3"))//partition-broker:...
+      changeTopicConfig(zkUtils, topic, property(ThrottledReplicasListProp, "0-6:1-6:2-6:3-7:4-7:5-7"))//partition-broker:...
 
     //Add data
     producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(brokers), retries = 5, acks = 0)
     (0 until msgCount).foreach { x =>
-      (0 to 2).foreach { partition =>
+      (0 to 5).foreach { partition =>
         producer.send(new ProducerRecord(topic, partition, null, msg)).get
       }
     }
 
-    //Ensure fully written: broker 1 has partition 1, broker 2 has partition 2 etc
-    (0 to 2).foreach { partitionOrBrokerId =>
+    //Ensure data is fully written: broker 1 has partition 1, broker 2 has partition 2 etc
+    (0 to 5).foreach { partitionOrBrokerId =>
       waitUntilTrue(() => waitForOffset(TopicAndPartition(topic, partitionOrBrokerId), msgCount, Seq(brokers(partitionOrBrokerId))), "Logs didn't match for partition ", 40000)
     }
 
     val start = System.currentTimeMillis()
 
-    //Create 4th, empty broker
-    val configs = createBrokerConfigs(4, zkConnect).map(fromProps)
-    brokers = brokers :+ TestUtils.createServer(configs(3))
+    //When we create a 4th, empty broker
+    val configs = createBrokerConfigs(8, zkConnect).map(fromProps)
+    brokers = brokers :+ TestUtils.createServer(configs(6))
+    brokers = brokers :+ TestUtils.createServer(configs(7))
 
-    //Wait for replicas 0,1,2 to fully replicated to broker 3
+    //Wait for replicas 0,1,2,3,4,5 to fully replicated to broker 6,7
     (0 to 2).foreach { partition =>
-      waitUntilTrue(() => waitForOffset(TopicAndPartition(topic, partition), msgCount, Seq(brokers(3))), "Logs didn't match for partition ", 40000)
+      waitUntilTrue(() => waitForOffset(TopicAndPartition(topic, partition), msgCount, Seq(brokers(6))), "Logs didn't match for partition ", 40000)
+    }
+    (3 to 5).foreach { partition =>
+      waitUntilTrue(() => waitForOffset(TopicAndPartition(topic, partition), msgCount, Seq(brokers(7))), "Logs didn't match for partition ", 40000)
     }
     val took = System.currentTimeMillis() - start
 
+    //Then the throttle should slow replication beyond the expected duration.
     val message = (s"Replication took to $took but was expected to take $expectedDuration")
     assertTrue(message, took > expectedDuration * 1000)
     assertTrue(message, took < expectedDuration * 1000 * 1.5)
