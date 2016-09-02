@@ -132,7 +132,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     //Check throttle config
     checkThrottleConfigAddedToZK(initialThrottle, servers, topicName)
 
-    //Now re-reun the same assignment with a larger throttle (again use a thread so we can check ZK whilst it runs)
+    //Now re-run the same assignment with a larger throttle, which should only act to increase the throttle and make progress (again use a thread so we can check ZK whilst it runs)
     val newThrottle = initialThrottle * 1000
 
     inThread() {

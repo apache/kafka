@@ -19,6 +19,7 @@ package unit.kafka.server
 
 import java.util.Properties
 
+import kafka.admin.AdminUtils
 import kafka.admin.AdminUtils._
 import kafka.common._
 import kafka.log.LogConfig._
@@ -42,24 +43,12 @@ class ReplicationQuotaTest extends ZooKeeperTestHarness {
 
   val msg100KB = new Array[Byte](100000)
   var brokers: Seq[KafkaServer] = null
-  var leader: KafkaServer = null
-  var follower: KafkaServer = null
-  val topic1 = "topic1"
+  val topic = "topic1"
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
-  var leaderByteRateMetricName: MetricName = null
-  var followerByteRateMetricName: MetricName = null
 
   @Before
   override def setUp() {
     super.setUp()
-    //Create two brokers with one partition then figure out who the leader is.
-    brokers = createBrokerConfigs(2, zkConnect).map(fromProps).map(TestUtils.createServer(_))
-    val leaders = TestUtils.createTopic(zkUtils, topic1, numPartitions = 1, replicationFactor = 2, servers = brokers)
-    leader = if (leaders(0).get == brokers.head.config.brokerId) brokers.head else brokers(1)
-    follower = if (leaders(0).get == brokers.head.config.brokerId) brokers(1) else brokers.head
-    producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(brokers), retries = 5, acks = 0)
-    leaderByteRateMetricName = leader.metrics.metricName("byte-rate", LeaderReplication.toString, "Tracking byte-rate for " + LeaderReplication)
-    followerByteRateMetricName = leader.metrics.metricName("byte-rate", FollowerReplication.toString, "Tracking byte-rate for" + FollowerReplication)
   }
 
   @After
@@ -75,11 +64,21 @@ class ReplicationQuotaTest extends ZooKeeperTestHarness {
 
   @Test //make this test faster by reducing the window lengths
   def shouldThrottleToDesiredRateOnLeaderOverTime(): Unit = {
+    brokers = createBrokerConfigs(2, zkConnect).map(fromProps).map(TestUtils.createServer(_))
+    producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(brokers), retries = 5, acks = 0)
+    val leaders = TestUtils.createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 2, servers = brokers)
+    val leader = if (leaders(0).get == brokers.head.config.brokerId) brokers.head else brokers(1)
+    val leaderByteRateMetricName = leader.metrics.metricName("byte-rate", LeaderReplication.toString, "Tracking byte-rate for " + LeaderReplication)
     shouldThrottleToDesiredRateOverTime(leader,  leaderByteRateMetricName)
   }
 
   @Test //make this test faster by reducing the window lengths
   def shouldThrottleToDesiredRateOFollowerOverTime(): Unit = {
+    brokers = createBrokerConfigs(2, zkConnect).map(fromProps).map(TestUtils.createServer(_))
+    producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(brokers), retries = 5, acks = 0)
+    val leaders = TestUtils.createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 2, servers = brokers)
+    val follower = if (leaders(0).get == brokers.head.config.brokerId) brokers(1) else brokers.head
+    val followerByteRateMetricName = follower.metrics.metricName("byte-rate", FollowerReplication.toString, "Tracking byte-rate for" + FollowerReplication)
     shouldThrottleToDesiredRateOverTime(follower, followerByteRateMetricName)
   }
 
@@ -103,16 +102,16 @@ class ReplicationQuotaTest extends ZooKeeperTestHarness {
 
     //Propagate throttle value and list of throttled partitions
     changeBrokerConfig(zkUtils, (0 until brokers.length), property(KafkaConfig.ThrottledReplicationRateLimitProp, throttle.toString))
-    changeTopicConfig(zkUtils, topic1, property(ThrottledReplicasListProp, "*"))
+    changeTopicConfig(zkUtils, topic, property(ThrottledReplicasListProp, "*"))
 
     val start = System.currentTimeMillis()
 
     //When we load with data (acks = 0)
     for (x <- 0 until msgCount)
-      producer.send(new ProducerRecord(topic1, msg))
+      producer.send(new ProducerRecord(topic, msg))
 
     //Wait for replication to complete
-    def logsMatchAtOffset() = waitForOffset(tp(topic1, 0), msgCount)
+    def logsMatchAtOffset() = waitForOffset(tp(topic, 0), msgCount)
     waitUntilTrue(logsMatchAtOffset, "Broker logs should be identical and have offset " + msgCount, 100000)
     val took = System.currentTimeMillis() - start
 
@@ -138,7 +137,8 @@ class ReplicationQuotaTest extends ZooKeeperTestHarness {
 
   //TODO need to work on the temporal comparisons prior to merge
   def shouldReplicateThrottledAndNonThrottledPartitionsConcurrently(throttleSide: QuotaType): Unit = {
-    val topic = "specific-replicas"
+    brokers = createBrokerConfigs(2, zkConnect).map(fromProps).map(TestUtils.createServer(_))
+    producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(brokers), retries = 5, acks = 0)
 
     //Given 4 partitions, all lead on server 0, we'll throttle two of them
     TestUtils.createTopic(zkUtils, topic, Map(0 -> Seq(0, 1), 1 -> Seq(0, 1), 2 -> Seq(0, 1), 3 -> Seq(0, 1)), brokers)
@@ -181,9 +181,71 @@ class ReplicationQuotaTest extends ZooKeeperTestHarness {
     assertEquals(s"Throttled partitions should have been slow. Was $took ms", expectedDuration, took, FifteenPercentError(expectedDuration))
   }
 
+  @Test
+  def shouldMatchQuotaReplicatingFromThreeServersToOneWithThrottleOnTheThreeLeaders(): Unit = {
+    shouldMatchQuotaReplicatingFromThreeServersToOne(true)
+  }
+
+  @Test
+  def shouldMatchQuotaReplicatingFromThreeServersToOneWithThrottleOnTheOneFollower(): Unit = {
+    shouldMatchQuotaReplicatingFromThreeServersToOne(false)
+  }
+
+  def shouldMatchQuotaReplicatingFromThreeServersToOne(leaderThrottle: Boolean): Unit = {
+    val topic = "specific-replicas"
+    brokers = createBrokerConfigs(3, zkConnect).map(fromProps).map(TestUtils.createServer(_))
+
+    //Given three partitions, lead on nodes 0,1,2 but will followers on node 3 (which hasn't been started yet)
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, Map(0 -> Seq(0, 3), 1 -> Seq(1, 3), 2 -> Seq(2, 3)))
+
+    val msg = msg100KB
+    val msgCount: Int = 100
+    val expectedDuration = 5 //Keep the test to N seconds
+    var throttle: Int = msgCount * msg.length / expectedDuration
+    if (!leaderThrottle) throttle = throttle * 3 //Follower throttle needs to replicate 3x as fast to get the same duration as there are three replicas to replicate
+
+    //Set the throttle on either the three leaders or the one follower
+    (0 to 3).foreach { brokerId =>
+      changeBrokerConfig(zkUtils, Seq(brokerId), property(KafkaConfig.ThrottledReplicationRateLimitProp, throttle.toString))
+    }
+    if(leaderThrottle)
+      changeTopicConfig(zkUtils, topic, property(ThrottledReplicasListProp, "0-0:1-1:2-2"))//partition-broker:...
+    else
+      changeTopicConfig(zkUtils, topic, property(ThrottledReplicasListProp, "0-3:1-3:2-3"))//partition-broker:...
+
+    //Add data
+    producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(brokers), retries = 5, acks = 0)
+    (0 until msgCount).foreach { x =>
+      (0 to 2).foreach { partition =>
+        producer.send(new ProducerRecord(topic, partition, null, msg)).get
+      }
+    }
+
+    //Ensure fully written: broker 1 has partition 1, broker 2 has partition 2 etc
+    (0 to 2).foreach { partitionOrBrokerId =>
+      waitUntilTrue(() => waitForOffset(TopicAndPartition(topic, partitionOrBrokerId), msgCount, Seq(brokers(partitionOrBrokerId))), "Logs didn't match for partition ", 40000)
+    }
+
+    val start = System.currentTimeMillis()
+
+    //Create 4th, empty broker
+    val configs = createBrokerConfigs(4, zkConnect).map(fromProps)
+    brokers = brokers :+ TestUtils.createServer(configs(3))
+
+    //Wait for replicas 0,1,2 to fully replicated to broker 3
+    (0 to 2).foreach { partition =>
+      waitUntilTrue(() => waitForOffset(TopicAndPartition(topic, partition), msgCount, Seq(brokers(3))), "Logs didn't match for partition ", 40000)
+    }
+    val took = System.currentTimeMillis() - start
+
+    val message = (s"Replication took to $took but was expected to take $expectedDuration")
+    assertTrue(message, took > expectedDuration * 1000)
+    assertTrue(message, took < expectedDuration * 1000 * 1.5)
+  }
+
   def tp(topic: String, partition: Int): TopicAndPartition = new TopicAndPartition(topic, partition)
 
-  def logsMatch(): Boolean = logsMatch(TopicAndPartition(topic1, 0))
+  def logsMatch(): Boolean = logsMatch(TopicAndPartition(topic, 0))
 
   def logsMatch(topicAndPart: TopicAndPartition): Boolean = {
     var result = true

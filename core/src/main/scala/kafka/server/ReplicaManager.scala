@@ -514,7 +514,7 @@ class ReplicaManager(val config: KafkaConfig,
     //TODO We can't ask the quota for more bytes than the bound, which can happen if the bound is low,
     //TODO so default to 0 for now. We should validate this by not allowing a throttle bound be smaller than
     //TODO the partition level max.bytes when the value is set in the ConfigCommand etc
-    //TODO so we should be able to remove this check before we merget
+    //TODO so we should be able to remove this check before we merge
     if (totalThrottledBytes > bound) 0 else totalThrottledBytes
   }
 
