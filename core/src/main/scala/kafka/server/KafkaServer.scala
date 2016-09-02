@@ -1,55 +1,59 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+  * Licensed to the Apache Software Foundation (ASF) under one or more
+  * contributor license agreements.  See the NOTICE file distributed with
+  * this work for additional information regarding copyright ownership.
+  * The ASF licenses this file to You under the Apache License, Version 2.0
+  * (the "License"); you may not use this file except in compliance with
+  * the License.  You may obtain a copy of the License at
+  *
+  *    http://www.apache.org/licenses/LICENSE-2.0
+  *
+  * Unless required by applicable law or agreed to in writing, software
+  * distributed under the License is distributed on an "AS IS" BASIS,
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
 
 package kafka.server
 
-import java.io.{File, IOException}
 import java.net.SocketTimeoutException
-import java.nio.charset.StandardCharsets
 import java.util
-import java.util.UUID
-import java.util.concurrent._
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
-import javax.xml.bind.DatatypeConverter
 
-import com.yammer.metrics.core.Gauge
 import kafka.admin._
 import kafka.api.KAFKA_0_9_0
-import kafka.cluster.{Broker, EndPoint}
-import kafka.common.{GenerateBrokerIdException, InconsistentBrokerMetadataException}
-import kafka.controller.{ControllerStats, KafkaController}
-import kafka.coordinator.GroupCoordinator
-import kafka.log.{CleanerConfig, LogConfig, LogManager}
-import kafka.metrics.KafkaMetricsGroup
-import kafka.network.{BlockingChannel, SocketServer}
+import kafka.log.LogConfig
+import kafka.log.CleanerConfig
+import kafka.log.LogManager
+import java.util.concurrent._
+import atomic.{AtomicBoolean, AtomicInteger}
+import java.io.{File, IOException}
+import java.nio.charset.StandardCharsets
+import java.util.UUID
+import javax.xml.bind.DatatypeConverter
+
 import kafka.security.auth.Authorizer
 import kafka.utils._
-import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.clients.{ClientRequest, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.Node
-import org.apache.kafka.common.metrics.{JmxReporter, Metrics, _}
-import org.apache.kafka.common.network._
+import org.apache.kafka.common.metrics._
+import org.apache.kafka.common.network.{ChannelBuilders, LoginType, Mode, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
+import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledShutdownResponse, RequestSend}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.AppInfoParser
 
-import scala.collection.JavaConverters._
 import scala.collection.mutable
+import scala.collection.JavaConverters._
+import org.I0Itec.zkclient.ZkClient
+import kafka.controller.{ControllerStats, KafkaController}
+import kafka.cluster.{Broker, EndPoint}
+import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException}
+import kafka.network.{BlockingChannel, SocketServer}
+import kafka.metrics.KafkaMetricsGroup
+import com.yammer.metrics.core.Gauge
+import kafka.coordinator.GroupCoordinator
 
 object KafkaServer {
   // Copy the subset of properties that are relevant to Logs
@@ -84,9 +88,9 @@ object KafkaServer {
 
 
 /**
- * Represents the lifecycle of a single Kafka broker. Handles all functionality required
- * to start up and shutdown a single Kafka node.
- */
+  * Represents the lifecycle of a single Kafka broker. Handles all functionality required
+  * to start up and shutdown a single Kafka node.
+  */
 class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
   private val startupComplete = new AtomicBoolean(false)
   private val isShuttingDown = new AtomicBoolean(false)
@@ -162,9 +166,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
   )
 
   /**
-   * Start up API for bringing up a single instance of the Kafka server.
-   * Instantiates the LogManager, the SocketServer and the request handlers - KafkaRequestHandlers
-   */
+    * Start up API for bringing up a single instance of the Kafka server.
+    * Instantiates the LogManager, the SocketServer and the request handlers - KafkaRequestHandlers
+    */
   def startup() {
     try {
       info("starting")
@@ -235,7 +239,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
 
         /* start dynamic config manager */
         dynamicConfigHandlers = Map[String, ConfigHandler](ConfigType.Topic -> new TopicConfigHandler(logManager, config),
-                                                           ConfigType.Client -> new ClientIdConfigHandler(apis.quotaManagers))
+          ConfigType.Client -> new ClientIdConfigHandler(apis.quotaManagers))
 
         // Apply all existing client configs to the ClientIdConfigHandler to bootstrap the overrides
         // TODO: Move this logic to DynamicConfigManager
@@ -259,7 +263,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         kafkaHealthcheck.startup()
 
         // Now that the broker id is successfully registered via KafkaHealthcheck, checkpoint it
-        checkpointBrokerMetadata(clusterId, config.brokerId)
+        checkpointBrokerId(config.brokerId)
 
         /* register broker metrics */
         registerStats()
@@ -299,77 +303,38 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
     chrootOption.foreach { chroot =>
       val zkConnForChrootCreation = config.zkConnect.substring(0, chrootIndex)
       val zkClientForChrootCreation = ZkUtils(zkConnForChrootCreation,
-                                              config.zkSessionTimeoutMs,
-                                              config.zkConnectionTimeoutMs,
-                                              secureAclsEnabled)
+        config.zkSessionTimeoutMs,
+        config.zkConnectionTimeoutMs,
+        secureAclsEnabled)
       zkClientForChrootCreation.makeSurePersistentPathExists(chroot)
       info(s"Created zookeeper path $chroot")
       zkClientForChrootCreation.zkClient.close()
     }
 
     val zkUtils = ZkUtils(config.zkConnect,
-                          config.zkSessionTimeoutMs,
-                          config.zkConnectionTimeoutMs,
-                          secureAclsEnabled)
+      config.zkSessionTimeoutMs,
+      config.zkConnectionTimeoutMs,
+      secureAclsEnabled)
     zkUtils.setupCommonPaths()
     zkUtils
   }
 
   def getOrGenerateClusterId(zkUtils: ZkUtils): String = {
 
-    var clusterId = zkUtils.getClusterId() match {
+    val clusterId = zkUtils.getClusterId match {
       case Some(id) => id
-      case None => null
-    }
-
-    val versionSet = mutable.HashSet[Int]()
-    val clusterIdSet = mutable.HashSet[String]()
-
-    for (logDir <- config.logDirs) {
-      val brokerMetadataOpt = brokerMetadataCheckpoints(logDir).read()
-      brokerMetadataOpt.foreach { brokerMetadata =>
-        versionSet.add(brokerMetadata.version)
-        if (brokerMetadata.version > 0)
-          clusterIdSet.add(brokerMetadata.clusterId)
+      case None => {
+        val uuid:UUID = UUID.randomUUID()
+        val base64EncodedUUID = DatatypeConverter.printBase64Binary(uuid.toString().getBytes(StandardCharsets.UTF_8))
+        zkUtils.createOrGetClusterId(base64EncodedUUID)
       }
     }
-
-    // Check if version of metadata is consistent.
-    if(versionSet.size > 1)
-      throw new InconsistentBrokerMetadataException(
-        s"Failed to match metadata version across log.dirs. This could happen if multiple brokers shared a log directory (log.dirs) " +
-          s"or partial data was manually copied from another broker. Found $versionSet")
-
-    // If version is 0 or if it is new cluster, clusterIdSet will be empty and a new cluster id will be generated and metadata will be updated.
-    // If the metadata version is 1 and clusterIdSet is non empty, verify that the cluster ID in ZK matches the cluster ID in meta.properties
-    if (clusterIdSet.size > 1)
-      throw new InconsistentBrokerMetadataException(
-        s"Failed to match cluster.id across log.dirs. This could happen if multiple brokers shared a log directory (log.dirs) " +
-          s"or partial data was manually copied from another broker. Found $clusterIdSet")
-    else if (clusterIdSet.size == 1 && clusterId == null)
-      throw new InconsistentBrokerMetadataException(
-        s"Found cluster.id ${clusterIdSet.last} in meta.properties but no /cluster/id found in zookeeper. " +
-          s"If you moved your data, make sure your configured cluster.id matches. " +
-          s"If you intend to create a new broker, you should remove all data in your data directories (log.dirs).")
-    else if (clusterIdSet.size == 1 && clusterIdSet.last != clusterId)
-      throw new InconsistentBrokerMetadataException(
-        s"Configured cluster.id ${clusterId} doesn't match stored cluster.id ${clusterIdSet.last} in meta.properties. " +
-          s"If you moved your data, make sure your configured cluster.id matches. " +
-          s"If you intend to create a new broker, you should remove all data in your data directories (log.dirs).")
-    else if (clusterIdSet.size == 0 && clusterId == null) {
-      val uuid: UUID = UUID.randomUUID()
-      val base64EncodedUUID = DatatypeConverter.printBase64Binary(uuid.toString().getBytes(StandardCharsets.UTF_8))
-      clusterId = zkUtils.createOrGetClusterId(base64EncodedUUID)
-    }
-
     clusterId
   }
 
-
-
   /**
-   *  Forces some dynamic jmx beans to be registered on server startup.
-   */
+    *  Forces some dynamic jmx beans to be registered on server startup.
+    */
   private def registerStats() {
     BrokerTopicStats.getBrokerAllTopicsStats()
     ControllerStats.uncleanLeaderElectionRate
@@ -377,8 +342,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
   }
 
   /**
-   *  Performs controlled shutdown
-   */
+    *  Performs controlled shutdown
+    */
   private def controlledShutdown() {
 
     def node(broker: Broker): Node = {
@@ -483,7 +448,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
               case ioe: IOException =>
                 ioException = true
                 warn("Error during controlled shutdown, possibly because leader movement took longer than the configured socket.timeout.ms: %s".format(ioe.getMessage))
-                // ignore and try again
+              // ignore and try again
             }
           }
           if (!shutdownSucceeded) {
@@ -556,7 +521,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
                 channel.disconnect()
                 channel = null
                 warn("Error during controlled shutdown, possibly because leader movement took longer than the configured socket.timeout.ms: %s".format(ioe.getMessage))
-                // ignore and try again
+              // ignore and try again
             }
           }
           if (!shutdownSucceeded) {
@@ -583,8 +548,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
       brokerState.newState(PendingControlledShutdown)
 
       val shutdownSucceeded =
-        // Before 0.9.0.0, `ControlledShutdownRequest` did not contain `client_id` and it's a mandatory field in
-        // `RequestHeader`, which is used by `NetworkClient`
+      // Before 0.9.0.0, `ControlledShutdownRequest` did not contain `client_id` and it's a mandatory field in
+      // `RequestHeader`, which is used by `NetworkClient`
         if (config.interBrokerProtocolVersion >= KAFKA_0_9_0)
           networkClientControlledShutdown(config.controlledShutdownMaxRetries.intValue)
         else blockingChannelControlledShutdown(config.controlledShutdownMaxRetries.intValue)
@@ -596,9 +561,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
   }
 
   /**
-   * Shutdown API for shutting down a single instance of the Kafka server.
-   * Shuts down the LogManager, the SocketServer and the log cleaner scheduler thread
-   */
+    * Shutdown API for shutting down a single instance of the Kafka server.
+    * Shuts down the LogManager, the SocketServer and the log cleaner scheduler thread
+    */
   def shutdown() {
     try {
       info("shutting down")
@@ -649,8 +614,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
   }
 
   /**
-   * After calling shutdown(), use this API to wait until the shutdown is complete
-   */
+    * After calling shutdown(), use this API to wait until the shutdown is complete
+    */
   def awaitShutdown(): Unit = shutdownLatch.await()
 
   def getLogManager(): LogManager = logManager
@@ -666,24 +631,24 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
     }
     // read the log configurations from zookeeper
     val cleanerConfig = CleanerConfig(numThreads = config.logCleanerThreads,
-                                      dedupeBufferSize = config.logCleanerDedupeBufferSize,
-                                      dedupeBufferLoadFactor = config.logCleanerDedupeBufferLoadFactor,
-                                      ioBufferSize = config.logCleanerIoBufferSize,
-                                      maxMessageSize = config.messageMaxBytes,
-                                      maxIoBytesPerSecond = config.logCleanerIoMaxBytesPerSecond,
-                                      backOffMs = config.logCleanerBackoffMs,
-                                      enableCleaner = config.logCleanerEnable)
+      dedupeBufferSize = config.logCleanerDedupeBufferSize,
+      dedupeBufferLoadFactor = config.logCleanerDedupeBufferLoadFactor,
+      ioBufferSize = config.logCleanerIoBufferSize,
+      maxMessageSize = config.messageMaxBytes,
+      maxIoBytesPerSecond = config.logCleanerIoMaxBytesPerSecond,
+      backOffMs = config.logCleanerBackoffMs,
+      enableCleaner = config.logCleanerEnable)
     new LogManager(logDirs = config.logDirs.map(new File(_)).toArray,
-                   topicConfigs = configs,
-                   defaultConfig = defaultLogConfig,
-                   cleanerConfig = cleanerConfig,
-                   ioThreads = config.numRecoveryThreadsPerDataDir,
-                   flushCheckMs = config.logFlushSchedulerIntervalMs,
-                   flushCheckpointMs = config.logFlushOffsetCheckpointIntervalMs,
-                   retentionCheckMs = config.logCleanupIntervalMs,
-                   scheduler = kafkaScheduler,
-                   brokerState = brokerState,
-                   time = time)
+      topicConfigs = configs,
+      defaultConfig = defaultLogConfig,
+      cleanerConfig = cleanerConfig,
+      ioThreads = config.numRecoveryThreadsPerDataDir,
+      flushCheckMs = config.logFlushSchedulerIntervalMs,
+      flushCheckpointMs = config.logFlushOffsetCheckpointIntervalMs,
+      retentionCheckMs = config.logCleanupIntervalMs,
+      scheduler = kafkaScheduler,
+      brokerState = brokerState,
+      time = time)
   }
 
   /**
@@ -694,7 +659,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
     * <li> config has broker.id and meta.properties contains broker.id if they don't match throws InconsistentBrokerIdException
     * <li> config has broker.id and there is no meta.properties file, creates new meta.properties and stores broker.id
     * <ol>
- *
+    *
     * @return A brokerId.
     */
   private def getBrokerId: Int =  {
@@ -709,14 +674,14 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
     }
 
     if(brokerIdSet.size > 1)
-      throw new InconsistentBrokerMetadataException(
+      throw new InconsistentBrokerIdException(
         s"Failed to match broker.id across log.dirs. This could happen if multiple brokers shared a log directory (log.dirs) " +
-        s"or partial data was manually copied from another broker. Found $brokerIdSet")
+          s"or partial data was manually copied from another broker. Found $brokerIdSet")
     else if(brokerId >= 0 && brokerIdSet.size == 1 && brokerIdSet.last != brokerId)
-      throw new InconsistentBrokerMetadataException(
+      throw new InconsistentBrokerIdException(
         s"Configured broker.id $brokerId doesn't match stored broker.id ${brokerIdSet.last} in meta.properties. " +
-        s"If you moved your data, make sure your configured broker.id matches. " +
-        s"If you intend to create a new broker, you should remove all data in your data directories (log.dirs).")
+          s"If you moved your data, make sure your configured broker.id matches. " +
+          s"If you intend to create a new broker, you should remove all data in your data directories (log.dirs).")
     else if(brokerIdSet.isEmpty && brokerId < 0 && config.brokerIdGenerationEnable)  // generate a new brokerId from Zookeeper
       brokerId = generateBrokerId
     else if(brokerIdSet.size == 1) // pick broker.id from meta.properties
@@ -725,19 +690,18 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
     brokerId
   }
 
-  private def checkpointBrokerMetadata(clusterId:String, brokerId: Int) {
+  private def checkpointBrokerId(brokerId: Int) {
     var logDirsWithoutMetaProps: List[String] = List()
 
-    // Write checkpoints if the metadata.properties is missing or has a previous version.
     for (logDir <- config.logDirs) {
       val brokerMetadataOpt = brokerMetadataCheckpoints(logDir).read()
-      if(brokerMetadataOpt.isEmpty || brokerMetadataOpt.get.version < 1)
-          logDirsWithoutMetaProps ++= List(logDir)
+      if(brokerMetadataOpt.isEmpty)
+        logDirsWithoutMetaProps ++= List(logDir)
     }
 
     for(logDir <- logDirsWithoutMetaProps) {
       val checkpoint = brokerMetadataCheckpoints(logDir)
-      checkpoint.write(new BrokerMetadata(brokerId, clusterId))
+      checkpoint.write(new BrokerMetadata(brokerId))
     }
   }
 
