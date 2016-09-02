@@ -20,8 +20,8 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerInterceptor;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.ClusterListener;
-import org.apache.kafka.common.ClusterResourceMeta;
+import org.apache.kafka.common.ClusterResourceListener;
+import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.config.ConfigException;
 
 import java.util.Map;
@@ -29,7 +29,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 
-public class MockProducerInterceptor implements ClusterListener, ProducerInterceptor<String, String> {
+public class MockProducerInterceptor implements ClusterResourceListener, ProducerInterceptor<String, String> {
     public static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
     public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
     public static final AtomicInteger ONSEND_COUNT = new AtomicInteger(0);
@@ -38,12 +38,12 @@ public class MockProducerInterceptor implements ClusterListener, ProducerInterce
     public static final AtomicInteger ON_ERROR_WITH_METADATA_COUNT = new AtomicInteger(0);
     public static final AtomicInteger ON_CLUSTER_UPDATE_COUNT = new AtomicInteger(0);
     public static final AtomicInteger EVENTS = new AtomicInteger(0);
-    public static final AtomicReference<ClusterResourceMeta> CLUSTER_META = new AtomicReference<>();
+    public static final AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
 
 
     public static final String APPEND_STRING_PROP = "mock.interceptor.append";
     private String appendStr;
-    private ClusterResourceMeta clusterResourceMeta;
+    private ClusterResource clusterResource;
 
     public MockProducerInterceptor() {
         INIT_COUNT.incrementAndGet();
@@ -104,15 +104,15 @@ public class MockProducerInterceptor implements ClusterListener, ProducerInterce
     }
 
     @Override
-    public void onClusterUpdate(ClusterResourceMeta clusterMetadata) {
-        this.clusterResourceMeta = clusterMetadata;
+    public void onClusterUpdate(ClusterResource clusterMetadata) {
+        this.clusterResource = clusterMetadata;
         ON_CLUSTER_UPDATE_COUNT.incrementAndGet();
         CLUSTER_META.set(clusterMetadata);
         EVENTS.incrementAndGet();
 
     }
 
-    public ClusterResourceMeta getClusterResourceMeta() {
-        return clusterResourceMeta;
+    public ClusterResource getClusterResource() {
+        return clusterResource;
     }
 }

@@ -16,17 +16,17 @@
  */
 package org.apache.kafka.test;
 
-import org.apache.kafka.common.ClusterListener;
-import org.apache.kafka.common.ClusterResourceMeta;
+import org.apache.kafka.common.ClusterResourceListener;
+import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class MockSerializer implements ClusterListener, Serializer<byte[]> {
+public class MockSerializer implements ClusterResourceListener, Serializer<byte[]> {
     public static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
     public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
-    private ClusterResourceMeta clusterResourceMeta;
+    private ClusterResource clusterResource;
 
     public MockSerializer() {
         INIT_COUNT.incrementAndGet();
@@ -47,11 +47,11 @@ public class MockSerializer implements ClusterListener, Serializer<byte[]> {
     }
 
     @Override
-    public void onClusterUpdate(ClusterResourceMeta clusterMetadata) {
-        this.clusterResourceMeta = clusterMetadata;
+    public void onClusterUpdate(ClusterResource clusterMetadata) {
+        this.clusterResource = clusterMetadata;
     }
 
-    public ClusterResourceMeta getClusterResourceMeta() {
-        return clusterResourceMeta;
+    public ClusterResource getClusterResource() {
+        return clusterResource;
     }
 }

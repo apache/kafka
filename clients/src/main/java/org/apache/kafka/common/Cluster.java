@@ -264,8 +264,8 @@ public final class Cluster {
         return clusterId;
     }
 
-    public ClusterResourceMeta getClusterResourceMeta() {
-        return new ClusterResourceMeta(clusterId());
+    public ClusterResource getClusterResource() {
+        return new ClusterResource(clusterId());
     }
     @Override
     public String toString() {

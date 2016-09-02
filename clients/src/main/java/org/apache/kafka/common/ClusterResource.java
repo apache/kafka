@@ -17,11 +17,11 @@
 
 package org.apache.kafka.common;
 
-public class ClusterResourceMeta {
+public class ClusterResource {
 
     private final String clusterId;
 
-    public ClusterResourceMeta(String clusterId) {
+    public ClusterResource(String clusterId) {
 
         this.clusterId = clusterId;
     }
@@ -32,7 +32,7 @@ public class ClusterResourceMeta {
 
     @Override
     public String toString() {
-        return "ClusterResourceMeta{" +
+        return "ClusterResource{" +
                 "clusterId='" + clusterId + '\'' +
                 '}';
     }

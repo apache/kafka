@@ -26,19 +26,19 @@ import java.util.List;
 
 public class ClusterResourceListeners {
 
-    private final List<ClusterListener> clusterListeners;
+    private final List<ClusterResourceListener> clusterResourceListeners;
 
     public ClusterResourceListeners() {
-        this.clusterListeners = new ArrayList<>();
+        this.clusterResourceListeners = new ArrayList<>();
     }
 
-    public List<ClusterListener> getClusterListeners() {
-        return clusterListeners;
+    public List<ClusterResourceListener> getClusterResourceListeners() {
+        return clusterResourceListeners;
     }
 
     public void add(Object candidate) {
-        if (candidate instanceof ClusterListener) {
-            clusterListeners.add((ClusterListener) candidate);
+        if (candidate instanceof ClusterResourceListener) {
+            clusterResourceListeners.add((ClusterResourceListener) candidate);
         }
     }
 
@@ -46,15 +46,15 @@ public class ClusterResourceListeners {
 
         for (Object candidate : candidateList) {
 
-            if (candidate instanceof ClusterListener) {
-                clusterListeners.add((ClusterListener) candidate);
+            if (candidate instanceof ClusterResourceListener) {
+                clusterResourceListeners.add((ClusterResourceListener) candidate);
             }
         }
     }
 
-    public void onClusterUpdate(ClusterResourceMeta cluster) {
-        for (ClusterListener clusterListener : clusterListeners) {
-            clusterListener.onClusterUpdate(cluster);
+    public void onClusterUpdate(ClusterResource cluster) {
+        for (ClusterResourceListener clusterResourceListener : clusterResourceListeners) {
+            clusterResourceListener.onClusterUpdate(cluster);
         }
     }
 

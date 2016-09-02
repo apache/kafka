@@ -23,8 +23,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.ClusterListener;
-import org.apache.kafka.common.ClusterResourceMeta;
+import org.apache.kafka.common.ClusterResourceListener;
+import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 
@@ -35,12 +35,12 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class MockConsumerInterceptor implements ClusterListener, ConsumerInterceptor<String, String> {
+public class MockConsumerInterceptor implements ClusterResourceListener, ConsumerInterceptor<String, String> {
     public static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
     public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
     public static final AtomicInteger ON_COMMIT_COUNT = new AtomicInteger(0);
     public static final AtomicInteger ON_CLUSTER_UPDATE_COUNT = new AtomicInteger(0);
-    private ClusterResourceMeta clusterResourceMeta;
+    private ClusterResource clusterResource;
 
     public MockConsumerInterceptor() {
         INIT_COUNT.incrementAndGet();
@@ -89,12 +89,12 @@ public class MockConsumerInterceptor implements ClusterListener, ConsumerInterce
     }
 
     @Override
-    public void onClusterUpdate(ClusterResourceMeta clusterMetadata) {
-        this.clusterResourceMeta = clusterMetadata;
+    public void onClusterUpdate(ClusterResource clusterMetadata) {
+        this.clusterResource = clusterMetadata;
         ON_CLUSTER_UPDATE_COUNT.incrementAndGet();
     }
 
-    public ClusterResourceMeta getClusterResourceMeta() {
-        return clusterResourceMeta;
+    public ClusterResource getClusterResource() {
+        return clusterResource;
     }
 }

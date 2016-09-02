@@ -13,6 +13,6 @@
 
 package org.apache.kafka.common;
 
-public interface ClusterListener {
-    void onClusterUpdate(ClusterResourceMeta clusterMetadata);
+public interface ClusterResourceListener {
+    void onClusterUpdate(ClusterResource clusterMetadata);
 }

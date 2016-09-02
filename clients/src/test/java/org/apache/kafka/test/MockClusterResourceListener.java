@@ -17,20 +17,20 @@
 
 package org.apache.kafka.test;
 
-import org.apache.kafka.common.ClusterListener;
-import org.apache.kafka.common.ClusterResourceMeta;
+import org.apache.kafka.common.ClusterResourceListener;
+import org.apache.kafka.common.ClusterResource;
 
-public class MockClusterListener implements ClusterListener {
+public class MockClusterResourceListener implements ClusterResourceListener {
 
 
-    private ClusterResourceMeta clusterResourceMeta;
+    private ClusterResource clusterResource;
 
     @Override
-    public void onClusterUpdate(ClusterResourceMeta clusterMetadata) {
-        this.clusterResourceMeta = clusterMetadata;
+    public void onClusterUpdate(ClusterResource clusterMetadata) {
+        this.clusterResource = clusterMetadata;
     }
 
-    public ClusterResourceMeta getClusterResourceMeta() {
-        return clusterResourceMeta;
+    public ClusterResource getClusterResource() {
+        return clusterResource;
     }
 }

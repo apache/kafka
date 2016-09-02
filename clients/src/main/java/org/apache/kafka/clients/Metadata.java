@@ -225,7 +225,7 @@ public final class Metadata {
         }
 
         if (cluster != null) {
-            clusterResourceListeners.onClusterUpdate(cluster.getClusterResourceMeta());
+            clusterResourceListeners.onClusterUpdate(cluster.getClusterResource());
         }
 
         notifyAll();

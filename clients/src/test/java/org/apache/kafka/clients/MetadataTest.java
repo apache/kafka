@@ -24,7 +24,7 @@ import org.apache.kafka.common.ClusterResourceListeners;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.test.MockClusterListener;
+import org.apache.kafka.test.MockClusterResourceListener;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Test;
@@ -150,7 +150,7 @@ public class MetadataTest {
     public void testClusterListenerGetsNotifiedOfUpdate() {
         long time = 0;
         metadata.update(Cluster.empty(), time);
-        MockClusterListener mockClusterListener = new MockClusterListener();
+        MockClusterResourceListener mockClusterListener = new MockClusterResourceListener();
         ClusterResourceListeners listeners = ClusterResourceListeners.empty();
         listeners.add(mockClusterListener);
         metadata.setClusterResourceListeners(listeners);
@@ -165,7 +165,7 @@ public class MetadataTest {
                 100);
 
         assertEquals("Listener did not get cluster metadata correctly",
-                "dummy", mockClusterListener.getClusterResourceMeta().getClusterId());
+                "dummy", mockClusterListener.getClusterResource().getClusterId());
     }
 
     @Test
