@@ -341,6 +341,14 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
+     * Flush any outgoing buffers and close the network client.
+     */
+    @Override
+    public void closeGracefully() {
+        this.selector.closeGracefully();
+    }
+
+    /**
      * Choose the node with the fewest outstanding requests which is at least eligible for connection. This method will
      * prefer a node with an existing connection, but will potentially choose a node for which we don't yet have a
      * connection if all existing connections are in use. This method will never choose a node for which there is no

@@ -39,6 +39,7 @@ class EchoServer extends Thread {
     private final List<Socket> sockets;
     private final SslFactory sslFactory;
     private final AtomicBoolean renegotiate = new AtomicBoolean();
+    private DataOutputStream echoOutputStream;
 
     public EchoServer(SecurityProtocol securityProtocol, Map<String, ?> configs) throws Exception {
         switch (securityProtocol) {
@@ -64,6 +65,10 @@ class EchoServer extends Thread {
         renegotiate.set(true);
     }
 
+    public void echoOutputStream(DataOutputStream outputStream) {
+        this.echoOutputStream = outputStream;
+    }
+
     @Override
     public void run() {
         try {
@@ -76,6 +81,8 @@ class EchoServer extends Thread {
                         try {
                             DataInputStream input = new DataInputStream(socket.getInputStream());
                             DataOutputStream output = new DataOutputStream(socket.getOutputStream());
+                            if (echoOutputStream != null)
+                                output = echoOutputStream;
                             while (socket.isConnected() && !socket.isClosed()) {
                                 int size = input.readInt();
                                 if (renegotiate.get()) {

@@ -48,6 +48,11 @@ public interface Selectable {
     public void close();
 
     /**
+     * Flush outgoing writes on all connected channels and close the selector
+     */
+    public void closeGracefully();
+
+    /**
      * Close the connection identified by the given id
      */
     public void close(String id);

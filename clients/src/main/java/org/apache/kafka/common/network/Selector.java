@@ -78,6 +78,7 @@ import org.slf4j.LoggerFactory;
 public class Selector implements Selectable {
 
     public static final long NO_IDLE_TIMEOUT_MS = -1;
+    private static final long CLOSE_TIMEOUT_MS = 60000;
     private static final Logger log = LoggerFactory.getLogger(Selector.class);
 
     private final java.nio.channels.Selector nioSelector;
@@ -230,6 +231,36 @@ public class Selector implements Selectable {
         }
         sensors.close();
         channelBuilder.close();
+    }
+
+    @Override
+    public void closeGracefully() {
+        try {
+            long endTimeMs = -1;
+            while (!channels.isEmpty()) {
+                List<String> connections = new ArrayList<>(channels.keySet());
+                for (String id : connections) {
+                    KafkaChannel channel = this.channels.get(id);
+                    if (channel != null && !channel.hasSend())
+                        close(channel);
+                }
+                if (!channels.isEmpty()) {
+                    long timeMs = time.milliseconds();
+                    if (endTimeMs == -1)
+                        endTimeMs = timeMs + CLOSE_TIMEOUT_MS;
+                    long timeRemainingMs = endTimeMs - timeMs;
+                    if (timeRemainingMs > 0)
+                        poll(timeRemainingMs);
+                    else {
+                        log.debug("Close timed out without completing outgoing writes on channels {}", channels.keySet());
+                        break;
+                    }
+                }
+            }
+        } catch (IOException e) {
+            log.error("Exception closing selector gracefully:", e);
+        }
+        close();
     }
 
     /**

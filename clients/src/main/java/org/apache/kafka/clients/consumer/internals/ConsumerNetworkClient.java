@@ -399,7 +399,7 @@ public class ConsumerNetworkClient implements Closeable {
     @Override
     public void close() throws IOException {
         synchronized (this) {
-            client.close();
+            client.closeGracefully();
         }
     }
 
