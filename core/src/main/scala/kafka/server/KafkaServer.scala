@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import java.net.SocketTimeoutException
+import java.net.{InetAddress, SocketTimeoutException}
 import java.util
 
 import kafka.admin._
@@ -259,13 +259,17 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         dynamicConfigManager.startup()
 
         /* tell everyone we are alive */
-        val listeners = config.advertisedListeners.map {case(protocol, endpoint) =>
-          if (endpoint.port == 0)
-            (protocol, EndPoint(endpoint.host, socketServer.boundPort(protocol), endpoint.protocolType))
-          else
-            (protocol, endpoint)
+        val advertisedListeners = config.advertisedListeners.mapValues { endpoint =>
+          val host =
+            if (Option(endpoint.host).map(_.trim).forall(host => host.isEmpty || host == "0.0.0.0"))
+              InetAddress.getLocalHost.getCanonicalHostName
+            else
+              endpoint.host
+          val port = if (endpoint.port == 0) socketServer.boundPort(endpoint.protocolType) else endpoint.port
+
+          endpoint.copy(host = host, port = port)
         }
-        kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, listeners, zkUtils, config.rack,
+        kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, advertisedListeners, zkUtils, config.rack,
           config.interBrokerProtocolVersion)
         kafkaHealthcheck.startup()
 
