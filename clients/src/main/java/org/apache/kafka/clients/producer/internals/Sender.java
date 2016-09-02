@@ -211,9 +211,9 @@ public class Sender implements Runnable {
                     this.accumulator.mutePartition(batch.topicPartition);
             }
         }
-        boolean staleMetadataNow = (now - metadata.lastSuccessfulUpdate()) > this.metadataStaleMs;
-        if (staleMetadataNow || !result.unknownLeaderTopics.isEmpty()) {
-            List<RecordBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, staleMetadataNow, metadata, now);
+        boolean isMetadataStale = (now - metadata.lastSuccessfulUpdate()) > this.metadataStaleMs;
+        if (isMetadataStale || !result.unknownLeaderTopics.isEmpty()) {
+            List<RecordBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, isMetadataStale, cluster, now);
             // update sensors
             for (RecordBatch expiredBatch : expiredBatches)
                 this.sensors.recordErrors(expiredBatch.topicPartition.topic(), expiredBatch.recordCount);
