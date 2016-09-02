@@ -100,9 +100,10 @@ public class SslSelectorTest extends SelectorTest {
             }
             selector.send(createSend(node, node + "-" + 0));
             requests++;
+            long expiryTime = System.currentTimeMillis() + 2000;
 
             // loop until we complete all requests
-            while (responses < reqs) {
+            while (responses < reqs && System.currentTimeMillis() < expiryTime) {
                 selector.poll(0L);
                 if (responses >= 100 && renegotiates == 0) {
                     renegotiates++;
@@ -125,6 +126,7 @@ public class SslSelectorTest extends SelectorTest {
                     selector.send(createSend(node, node + "-" + requests));
                 }
             }
+            assertTrue("Failed to complete all requests.", responses >= reqs);
         } finally {
             selector.close();
         }
