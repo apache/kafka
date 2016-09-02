@@ -15,7 +15,6 @@ package org.apache.kafka.clients.producer.internals;
 import java.util.Iterator;
 
 import org.apache.kafka.clients.producer.Callback;
-import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
