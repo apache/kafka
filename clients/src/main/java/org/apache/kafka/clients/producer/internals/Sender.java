@@ -123,6 +123,13 @@ public class Sender implements Runnable {
         this.clientId = clientId;
         this.sensors = new SenderMetrics(metrics);
         this.requestTimeout = requestTimeout;
+        
+        /* metadata becomes "stale" for batch expiry purpose when the time since the last successful update exceeds
+         * the metadataStaleMs value. This value must be greater than the metadata.max.age and some delta to allow
+         * a few retries. A small number of retries (3) are chosen because metadata retries have no upper bound. 
+         * However, as retries are subject to both regular request timeout and the backoff, staleness determination
+         * is delayed by that factor.
+         */
         this.metadataStaleMs = metadata.getMetadataMaxAge() + 3 * (requestTimeout + metadata.refreshBackoff());
     }
 
