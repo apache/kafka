@@ -100,6 +100,7 @@ class LogTest extends JUnitSuite {
     log.append(setWithTimestamp)
     assertEquals("A new segment should have been rolled out", 5, log.numberOfSegments)
 
+    // move the wall clock beyond log rolling time
     time.sleep(log.config.segmentMs + 1)
     log.append(setWithTimestamp)
     assertEquals("Log should not roll because the roll should depend on timestamp of the first message.", 5, log.numberOfSegments)
