@@ -26,7 +26,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.integration.utils.EmbeddedSingleZKKafkaCluster;
+import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
@@ -41,15 +41,14 @@ import org.apache.kafka.streams.state.StreamsMetadata;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-
 import org.apache.kafka.test.TestCondition;
 import static org.junit.Assert.fail;
+import static org.junit.Assert.assertTrue;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
-import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -71,8 +70,8 @@ import static org.hamcrest.core.IsEqual.equalTo;
 public class QueryableStateIntegrationTest {
     private static final int NUM_BROKERS = 2;
     @ClassRule
-    public static final EmbeddedSingleZKKafkaCluster CLUSTER =
-        new EmbeddedSingleZKKafkaCluster(NUM_BROKERS);
+    public static final EmbeddedKafkaCluster CLUSTER =
+        new EmbeddedKafkaCluster(NUM_BROKERS);
     private static final String STREAM_ONE = "stream-one";
     private static final String STREAM_CONCURRENT = "stream-concurrent";
     private static final String OUTPUT_TOPIC = "output";

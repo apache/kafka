@@ -29,14 +29,14 @@ import java.util.Properties;
 /**
  * Runs an in-memory, "embedded" Kafka cluster with 1 ZooKeeper instance and 1 Kafka broker.
  */
-public class EmbeddedSingleZKKafkaCluster extends ExternalResource {
+public class EmbeddedKafkaCluster extends ExternalResource {
 
-    private static final Logger log = LoggerFactory.getLogger(EmbeddedSingleZKKafkaCluster.class);
+    private static final Logger log = LoggerFactory.getLogger(EmbeddedKafkaCluster.class);
     private static final int DEFAULT_BROKER_PORT = 0; // 0 results in a random port being selected
     private EmbeddedZookeeper zookeeper = null;
     private final KafkaEmbedded[] brokers;
 
-    public EmbeddedSingleZKKafkaCluster(int numBrokers) {
+    public EmbeddedKafkaCluster(int numBrokers) {
         this.brokers = new KafkaEmbedded[numBrokers];
     }
 

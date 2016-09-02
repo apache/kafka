@@ -21,7 +21,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.integration.utils.EmbeddedSingleZKKafkaCluster;
+import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
@@ -49,8 +49,8 @@ import static org.hamcrest.core.Is.is;
 public class KStreamRepartitionJoinTest {
     private static final int NUM_BROKERS = 1;
     @ClassRule
-    public static final EmbeddedSingleZKKafkaCluster CLUSTER =
-        new EmbeddedSingleZKKafkaCluster(NUM_BROKERS);
+    public static final EmbeddedKafkaCluster CLUSTER =
+        new EmbeddedKafkaCluster(NUM_BROKERS);
 
     private static final long WINDOW_SIZE = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
 
