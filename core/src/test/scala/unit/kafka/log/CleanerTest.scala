@@ -436,7 +436,7 @@ class CleanerTest extends JUnitSuite {
     val start = 0
     val end = 2
     val offsetSeq = Seq(0L, 7206178L)
-    val offsets = writeToLog(log, (start until end) zip (start until end), offsetSeq)
+    writeToLog(log, (start until end) zip (start until end), offsetSeq)
     val endOffset = cleaner.buildOffsetMap(log, start, end, map)
     assertEquals("Last offset should be the end offset.", 7206178L, endOffset)
     assertEquals("Should have the expected number of messages in the map.", end - start, map.size)
@@ -449,14 +449,6 @@ class CleanerTest extends JUnitSuite {
       yield log.append(messageWithOffset(key, value, offset), assignOffsets = false).firstOffset
   }
 
-  private def messageWithOffset(key: Int, value: Int, offset: Long) =
-    new ByteBufferMessageSet(NoCompressionCodec, Seq(offset),
-                             new Message(key = key.toString.getBytes,
-                                         bytes = value.toString.getBytes,
-                                         timestamp = Message.NoTimestamp,
-                                         magicValue = Message.MagicValue_V1))
-  
-  
   def makeLog(dir: File = dir, config: LogConfig = logConfig) =
     new Log(dir = dir, config = config, recoveryPoint = 0L, scheduler = time.scheduler, time = time)
 
@@ -481,6 +473,10 @@ class CleanerTest extends JUnitSuite {
   
   def message(key: Int, value: Int) = 
     new ByteBufferMessageSet(new Message(key=key.toString.getBytes, bytes=value.toString.getBytes))
+
+  def messageWithOffset(key: Int, value: Int, offset: Long) = 
+    new ByteBufferMessageSet(NoCompressionCodec, new AtomicLong(offset),
+      new Message(key=key.toString.getBytes, bytes=value.toString.getBytes))
 
   def unkeyedMessage(value: Int) =
     new ByteBufferMessageSet(new Message(bytes=value.toString.getBytes))
