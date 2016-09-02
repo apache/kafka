@@ -26,7 +26,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.integration.utils.EmbeddedSingleNodeKafkaCluster;
+import org.apache.kafka.streams.integration.utils.EmbeddedSingleZKKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
@@ -69,16 +69,17 @@ import java.util.TreeSet;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 public class QueryableStateIntegrationTest {
-
+    private static final int NUM_BROKERS = 3;
     @ClassRule
-    public static final EmbeddedSingleNodeKafkaCluster CLUSTER =
-        new EmbeddedSingleNodeKafkaCluster();
+    public static final EmbeddedSingleZKKafkaCluster CLUSTER =
+        new EmbeddedSingleZKKafkaCluster(NUM_BROKERS);
     private static final String STREAM_ONE = "stream-one";
     private static final String STREAM_CONCURRENT = "stream-concurrent";
     private static final String OUTPUT_TOPIC = "output";
     private static final String OUTPUT_TOPIC_CONCURRENT = "output-concurrent";
     private static final String STREAM_THREE = "stream-three";
     private static final int NUM_PARTITIONS = 3;
+    private static final int NUM_REPLICAS = 3;
     private static final String OUTPUT_TOPIC_THREE = "output-three";
     private Properties streamsConfiguration;
     private List<String> inputValues;
@@ -91,7 +92,7 @@ public class QueryableStateIntegrationTest {
     public static void createTopics() {
         CLUSTER.createTopic(STREAM_ONE);
         CLUSTER.createTopic(STREAM_CONCURRENT);
-        CLUSTER.createTopic(STREAM_THREE, NUM_PARTITIONS, 1);
+        CLUSTER.createTopic(STREAM_THREE, NUM_PARTITIONS, NUM_REPLICAS);
         CLUSTER.createTopic(OUTPUT_TOPIC);
         CLUSTER.createTopic(OUTPUT_TOPIC_CONCURRENT);
         CLUSTER.createTopic(OUTPUT_TOPIC_THREE);

@@ -41,7 +41,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 
-import org.apache.kafka.streams.integration.utils.EmbeddedSingleNodeKafkaCluster;
+import org.apache.kafka.streams.integration.utils.EmbeddedSingleZKKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -52,8 +52,10 @@ import static org.junit.Assert.assertThat;
  * KTable (think: KStream.leftJoin(KTable)), i.e. an example of a stateful computation.
  */
 public class KStreamKTableJoinIntegrationTest {
+
+    private static final int NUM_BROKERS = 1;
     @ClassRule
-    public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster();
+    public static final EmbeddedSingleZKKafkaCluster CLUSTER = new EmbeddedSingleZKKafkaCluster(NUM_BROKERS);
     private static final String USER_CLICKS_TOPIC = "user-clicks";
     private static final String USER_REGIONS_TOPIC = "user-regions";
     private static final String USER_REGIONS_STORE_NAME = "user-regions-store-name";
