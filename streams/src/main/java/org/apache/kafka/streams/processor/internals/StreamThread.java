@@ -294,9 +294,6 @@ public class StreamThread extends Thread {
         boolean requiresPoll = true;
         boolean polledRecords = false;
 
-        // TODO: this can be removed after KIP-62
-        long lastPoll = 0L;
-
         if (topicPattern != null) {
             consumer.subscribe(topicPattern, rebalanceListener);
         } else {
@@ -314,7 +311,6 @@ public class StreamThread extends Thread {
                 boolean longPoll = totalNumBuffered == 0;
 
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(longPoll ? this.pollTimeMs : 0);
-                lastPoll = time.milliseconds();
 
                 if (rebalanceException != null)
                     throw new StreamsException("Failed to rebalance", rebalanceException);
@@ -354,11 +350,6 @@ public class StreamThread extends Thread {
                         if (task.commitNeeded())
                             commitOne(task);
                     }
-
-                    // if pollTimeMs has passed since the last poll, we poll to respond to a possible rebalance
-                    // even when we paused all partitions.
-                    if (lastPoll + this.pollTimeMs < this.timerStartedMs)
-                        requiresPoll = true;
 
                 } else {
                     // even when no task is assigned, we must poll to get a task.

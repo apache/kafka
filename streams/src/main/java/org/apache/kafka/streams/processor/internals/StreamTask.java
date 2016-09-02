@@ -21,9 +21,11 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.slf4j.Logger;
@@ -34,6 +36,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static java.lang.String.format;
 import static java.util.Collections.singleton;
 
 /**
@@ -189,6 +192,14 @@ public class StreamTask extends AbstractTask implements Punctuator {
             if (partitionGroup.topQueueSize() <= this.maxBufferedSize) {
                 requiresPoll = true;
             }
+        } catch (KafkaException ke) {
+            throw new StreamsException(format("exception caught in process. taskId=%s, processor=%s, topic=%s, partition=%d, offset=%d",
+                                              id.toString(),
+                                              currNode.name(),
+                                              currRecord.topic(),
+                                              currRecord.partition(),
+                                              currRecord.offset()
+                                              ), ke);
         } finally {
             this.currRecord = null;
             this.currNode = null;
@@ -229,6 +240,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
         try {
             node.processor().punctuate(timestamp);
+        } catch (KafkaException ke) {
+            throw new StreamsException("exception caught in punctuate. taskId=" + id + " processor=" + node.name(), ke);
         } finally {
             currNode = null;
             currRecord = null;
