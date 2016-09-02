@@ -69,7 +69,7 @@ import java.util.TreeSet;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 public class QueryableStateIntegrationTest {
-    private static final int NUM_BROKERS = 3;
+    private static final int NUM_BROKERS = 2;
     @ClassRule
     public static final EmbeddedSingleZKKafkaCluster CLUSTER =
         new EmbeddedSingleZKKafkaCluster(NUM_BROKERS);
@@ -78,8 +78,8 @@ public class QueryableStateIntegrationTest {
     private static final String OUTPUT_TOPIC = "output";
     private static final String OUTPUT_TOPIC_CONCURRENT = "output-concurrent";
     private static final String STREAM_THREE = "stream-three";
-    private static final int NUM_PARTITIONS = 3;
-    private static final int NUM_REPLICAS = 3;
+    private static final int NUM_PARTITIONS = NUM_BROKERS;
+    private static final int NUM_REPLICAS = NUM_BROKERS;
     private static final long WINDOW_SIZE = 60000L;
     private static final String OUTPUT_TOPIC_THREE = "output-three";
     private Properties streamsConfiguration;
