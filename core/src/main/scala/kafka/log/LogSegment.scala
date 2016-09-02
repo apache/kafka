@@ -340,11 +340,12 @@ class LogSegment(val log: FileMessageSet,
 
   /**
    * The time this segment has waited to be rolled.
-   * If the first message has a timestamp we use the message timestamp to determine when to roll a segment.
-   * A segment is rolled if the difference between the new message's timestamp and the first message's timestamp
-   * exceeds the segment rolling time.
-   * If the first message does not have a timestamp, a segment is rolled if the difference between the current
-   * wall clock time and the segment create time exceeds the segment rolling time.
+   * If the first message has a timestamp we use the message timestamp to determine when to roll a segment. A segment
+   * is rolled if the difference between the new message's timestamp and the first message's timestamp exceeds the
+   * segment rolling time.
+   * If the first message does not have a timestamp, we use the wall clock time to determine when to roll a segment. A
+   * segment is rolled if the difference between the current wall clock time and the segment create time exceeds the
+   * segment rolling time.
    */
   def timeWaitedForRoll(now: Long, messageTimestamp: Long) : Long = {
     // Load the timestamp of the first message into memory
