@@ -28,7 +28,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 
 public class MetadataResponse extends AbstractRequestResponse {
 
@@ -304,7 +303,7 @@ public class MetadataResponse extends AbstractRequestResponse {
     }
 
     public String clusterId() {
-        if (struct.hasField(CLUSTER_ID_KEY_NAME)){
+        if (struct.hasField(CLUSTER_ID_KEY_NAME)) {
             return (String) struct.get(CLUSTER_ID_KEY_NAME);
         } else {
             return NO_CLUSTER_ID;

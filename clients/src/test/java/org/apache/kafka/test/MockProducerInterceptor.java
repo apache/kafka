@@ -25,7 +25,6 @@ import org.apache.kafka.common.ClusterResourceMeta;
 import org.apache.kafka.common.config.ConfigException;
 
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 

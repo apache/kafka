@@ -224,10 +224,7 @@ public final class Metadata {
             this.cluster = cluster;
         }
 
-//        System.out.println("Is cluster null ?  " + (cluster == null));
-//        System.out.println("clusterResourceListeners =  " + clusterResourceListeners.getClusterListeners());
-
-        if(cluster != null){
+        if (cluster != null) {
             clusterResourceListeners.onClusterUpdate(cluster.getClusterResourceMeta());
         }
 

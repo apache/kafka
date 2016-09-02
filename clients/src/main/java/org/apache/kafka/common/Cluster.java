@@ -264,7 +264,7 @@ public final class Cluster {
         return clusterId;
     }
 
-    public ClusterResourceMeta getClusterResourceMeta(){
+    public ClusterResourceMeta getClusterResourceMeta() {
         return new ClusterResourceMeta(clusterId());
     }
     @Override
