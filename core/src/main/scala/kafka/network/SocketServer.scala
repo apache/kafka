@@ -443,7 +443,8 @@ private[kafka] class Processor(val id: Int,
             // that are sitting in the server's socket buffer
             curr.request.updateRequestMetrics
             trace("Socket server received empty response to send, registering for read: " + curr)
-            selector.unmute(curr.request.connectionId)
+            if (selector.channel(curr.request.connectionId) != null)
+                selector.unmute(curr.request.connectionId)
           case RequestChannel.SendAction =>
             sendResponse(curr)
           case RequestChannel.CloseConnectionAction =>
@@ -486,12 +487,14 @@ private[kafka] class Processor(val id: Int,
   private def processCompletedReceives() {
     selector.completedReceives.asScala.foreach { receive =>
       try {
-        val channel = selector.channel(receive.source)
+        val openChannel = selector.channel(receive.source)
+        val channel = if (openChannel != null) openChannel else selector.closedChannel(receive.source)
         val session = RequestChannel.Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, channel.principal.getName),
           channel.socketAddress)
         val req = RequestChannel.Request(processor = id, connectionId = receive.source, session = session, buffer = receive.payload, startTimeMs = time.milliseconds, securityProtocol = protocol)
         requestChannel.sendRequest(req)
-        selector.mute(receive.source)
+        if (openChannel != null)
+            selector.mute(openChannel.id)
       } catch {
         case e @ (_: InvalidRequestException | _: SchemaException) =>
           // note that even though we got an exception, we can assume that receive.source is valid. Issues with constructing a valid receive object were handled earlier

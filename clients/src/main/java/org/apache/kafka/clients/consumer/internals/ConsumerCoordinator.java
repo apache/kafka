@@ -408,6 +408,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         } finally {
             super.close();
         }
+        Node coordinator;
+        while ((coordinator = coordinator()) != null && client.pendingRequestCount(coordinator) > 0) {
+            client.poll(Long.MAX_VALUE);
+        }
     }
 
     // visible for testing
