@@ -80,6 +80,7 @@ public class QueryableStateIntegrationTest {
     private static final String STREAM_THREE = "stream-three";
     private static final int NUM_PARTITIONS = 3;
     private static final int NUM_REPLICAS = 3;
+    private static final long WINDOW_SIZE = 60000L;
     private static final String OUTPUT_TOPIC_THREE = "output-three";
     private Properties streamsConfiguration;
     private List<String> inputValues;
@@ -187,7 +188,7 @@ public class QueryableStateIntegrationTest {
         groupedByWord.count("word-count-store-" + inputTopic).to(Serdes.String(), Serdes.Long(), outputTopic);
 
         // Create a Windowed State Store that contains the word count for every 1 minute
-        groupedByWord.count(TimeWindows.of(60000), "windowed-word-count-store-" + inputTopic);
+        groupedByWord.count(TimeWindows.of(WINDOW_SIZE), "windowed-word-count-store-" + inputTopic);
 
         return new KafkaStreams(builder, streamsConfiguration);
     }
@@ -224,7 +225,7 @@ public class QueryableStateIntegrationTest {
     }
 
     private void verifyAllKVKeys(final StreamRunnable[] streamRunnables, final KafkaStreams streams,
-                                 final Set<String> keys, Set<String> stateStores) throws Exception {
+                                 final Set<String> keys, final Set<String> stateStores) throws Exception {
         for (final String storeName : stateStores) {
             for (final String key : keys) {
                 TestUtils.waitForCondition(new TestCondition() {
@@ -244,6 +245,34 @@ public class QueryableStateIntegrationTest {
                             return false;
                         }
                         return store != null && store.get(key) != null;
+                    }
+                }, 30000, "waiting for metadata, store and value to be non null");
+            }
+        }
+    }
+
+    private void verifyAllWindowedKeys(final StreamRunnable[] streamRunnables, final KafkaStreams streams,
+                                       final Set<String> keys, final Set<String> stateStores,
+                                       final Long from, final Long to) throws Exception {
+        for (final String storeName : stateStores) {
+            for (final String key : keys) {
+                TestUtils.waitForCondition(new TestCondition() {
+                    @Override
+                    public boolean conditionMet() {
+                        final StreamsMetadata metadata = streams.metadataForKey(storeName, key, new StringSerializer());
+                        if (metadata == null) {
+                            return false;
+                        }
+                        final int index = metadata.hostInfo().port();
+                        final KafkaStreams streamsWithKey = streamRunnables[index].getStream();
+                        final ReadOnlyWindowStore<String, Long> store;
+                        try {
+                            store = streamsWithKey.store(storeName, QueryableStoreTypes.<String, Long>windowStore());
+                        } catch (IllegalStateException e) {
+                            // Kafka Streams instance may have closed but rebalance hasn't happened
+                            return false;
+                        }
+                        return store != null && store.fetch(key, from, to) != null;
                     }
                 }, 30000, "waiting for metadata, store and value to be non null");
             }
@@ -275,6 +304,8 @@ public class QueryableStateIntegrationTest {
             for (int i = 0; i < numThreads; i++) {
                 verifyAllKVKeys(streamRunnables, streamRunnables[i].getStream(), inputValuesKeys,
                     new HashSet(Arrays.asList("word-count-store-" + STREAM_THREE)));
+                verifyAllWindowedKeys(streamRunnables, streamRunnables[i].getStream(), inputValuesKeys,
+                    new HashSet(Arrays.asList("windowed-word-count-store-" + STREAM_THREE)), 0L, WINDOW_SIZE);
             }
 
             // kill N-1 threads
@@ -287,6 +318,8 @@ public class QueryableStateIntegrationTest {
             // query from the remaining thread
             verifyAllKVKeys(streamRunnables, streamRunnables[0].getStream(), inputValuesKeys,
                 new HashSet(Arrays.asList("word-count-store-" + STREAM_THREE)));
+            verifyAllWindowedKeys(streamRunnables, streamRunnables[0].getStream(), inputValuesKeys,
+                new HashSet(Arrays.asList("windowed-word-count-store-" + STREAM_THREE)), 0L, WINDOW_SIZE);
         } finally {
             for (int i = 0; i < numThreads; i++) {
                 if (!streamRunnables[i].isClosed()) {
@@ -369,7 +402,7 @@ public class QueryableStateIntegrationTest {
         // Non Windowed
         s1.groupByKey().count("my-count").to(Serdes.String(), Serdes.Long(), OUTPUT_TOPIC);
 
-        s1.groupByKey().count(TimeWindows.of(60000L), "windowed-count");
+        s1.groupByKey().count(TimeWindows.of(WINDOW_SIZE), "windowed-count");
         kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
         kafkaStreams.start();
 
