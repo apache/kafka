@@ -17,43 +17,39 @@
 
 package kafka.server
 
-import java.net.SocketTimeoutException
-import java.util
-
-import kafka.admin._
-import kafka.api.KAFKA_0_9_0
-import kafka.log.LogConfig
-import kafka.log.CleanerConfig
-import kafka.log.LogManager
-import java.util.concurrent._
-import atomic.{AtomicBoolean, AtomicInteger}
 import java.io.{File, IOException}
+import java.net.SocketTimeoutException
 import java.nio.charset.StandardCharsets
+import java.util
 import java.util.UUID
+import java.util.concurrent._
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import javax.xml.bind.DatatypeConverter
 
+import com.yammer.metrics.core.Gauge
+import kafka.admin._
+import kafka.api.KAFKA_0_9_0
+import kafka.cluster.{Broker, EndPoint}
+import kafka.common.{GenerateBrokerIdException, InconsistentBrokerMetadataException}
+import kafka.controller.{ControllerStats, KafkaController}
+import kafka.coordinator.GroupCoordinator
+import kafka.log.{CleanerConfig, LogConfig, LogManager}
+import kafka.metrics.KafkaMetricsGroup
+import kafka.network.{BlockingChannel, SocketServer}
 import kafka.security.auth.Authorizer
 import kafka.utils._
+import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.clients.{ClientRequest, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.Node
-import org.apache.kafka.common.metrics._
-import org.apache.kafka.common.network.{ChannelBuilders, LoginType, Mode, NetworkReceive, Selectable, Selector}
+import org.apache.kafka.common.metrics.{JmxReporter, Metrics, _}
+import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
-import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledShutdownResponse, RequestSend}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.AppInfoParser
 
-import scala.collection.mutable
 import scala.collection.JavaConverters._
-import org.I0Itec.zkclient.ZkClient
-import kafka.controller.{ControllerStats, KafkaController}
-import kafka.cluster.{Broker, EndPoint}
-import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException}
-import kafka.network.{BlockingChannel, SocketServer}
-import kafka.metrics.KafkaMetricsGroup
-import com.yammer.metrics.core.Gauge
-import kafka.coordinator.GroupCoordinator
+import scala.collection.mutable
 
 object KafkaServer {
   // Copy the subset of properties that are relevant to Logs
@@ -263,7 +259,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         kafkaHealthcheck.startup()
 
         // Now that the broker id is successfully registered via KafkaHealthcheck, checkpoint it
-        checkpointBrokerId(config.brokerId)
+        checkpointBrokerMetadata(clusterId, config.brokerId)
 
         /* register broker metrics */
         registerStats()
@@ -320,9 +316,52 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
   }
 
   def getOrGenerateClusterId(zkUtils: ZkUtils): String = {
-    val uuid:UUID = UUID.randomUUID()
-    val base64EncodedUUID = DatatypeConverter.printBase64Binary(uuid.toString().getBytes(StandardCharsets.UTF_8))
-    val clusterId = zkUtils.getOrCreateClusterId(base64EncodedUUID)
+
+    var clusterId = zkUtils.getClusterId() match {
+      case Some(id) => id
+      case None => null
+    }
+
+    val versionSet = mutable.HashSet[Int]()
+    val clusterIdSet = mutable.HashSet[String]()
+
+    for (logDir <- config.logDirs) {
+      val brokerMetadataOpt = brokerMetadataCheckpoints(logDir).read()
+      brokerMetadataOpt.foreach { brokerMetadata =>
+        versionSet.add(brokerMetadata.version)
+        if (brokerMetadata.version > 0)
+          clusterIdSet.add(brokerMetadata.clusterId)
+      }
+    }
+
+    // Check if version of metadata is consistent.
+    if(versionSet.size > 1)
+      throw new InconsistentBrokerMetadataException(
+        s"Failed to match metadata version across log.dirs. This could happen if multiple brokers shared a log directory (log.dirs) " +
+          s"or partial data was manually copied from another broker. Found $versionSet")
+
+    // If version is 0 or if it is new cluster, clusterIdSet will be empty and a new cluster id will be generated and metadata will be updated.
+    // If the metadata version is 1 and clusterIdSet is non empty, verify that the cluster ID in ZK matches the cluster ID in meta.properties
+    if (clusterIdSet.size > 1)
+      throw new InconsistentBrokerMetadataException(
+        s"Failed to match cluster.id across log.dirs. This could happen if multiple brokers shared a log directory (log.dirs) " +
+          s"or partial data was manually copied from another broker. Found $clusterIdSet")
+    else if (clusterIdSet.size == 1 && clusterId == null)
+      throw new InconsistentBrokerMetadataException(
+        s"Found cluster.id ${clusterIdSet.last} in meta.properties but no /cluster/id found in zookeeper. " +
+          s"If you moved your data, make sure your configured cluster.id matches. " +
+          s"If you intend to create a new broker, you should remove all data in your data directories (log.dirs).")
+    else if (clusterIdSet.size == 1 && clusterIdSet.last != clusterId)
+      throw new InconsistentBrokerMetadataException(
+        s"Configured cluster.id ${clusterId} doesn't match stored cluster.id ${clusterIdSet.last} in meta.properties. " +
+          s"If you moved your data, make sure your configured cluster.id matches. " +
+          s"If you intend to create a new broker, you should remove all data in your data directories (log.dirs).")
+    else if (clusterIdSet.size == 0 && clusterId == null) {
+      val uuid: UUID = UUID.randomUUID()
+      val base64EncodedUUID = DatatypeConverter.printBase64Binary(uuid.toString().getBytes(StandardCharsets.UTF_8))
+      clusterId = zkUtils.createOrGetClusterId(base64EncodedUUID)
+    }
+
     clusterId
   }
 
@@ -670,11 +709,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
     }
 
     if(brokerIdSet.size > 1)
-      throw new InconsistentBrokerIdException(
+      throw new InconsistentBrokerMetadataException(
         s"Failed to match broker.id across log.dirs. This could happen if multiple brokers shared a log directory (log.dirs) " +
         s"or partial data was manually copied from another broker. Found $brokerIdSet")
     else if(brokerId >= 0 && brokerIdSet.size == 1 && brokerIdSet.last != brokerId)
-      throw new InconsistentBrokerIdException(
+      throw new InconsistentBrokerMetadataException(
         s"Configured broker.id $brokerId doesn't match stored broker.id ${brokerIdSet.last} in meta.properties. " +
         s"If you moved your data, make sure your configured broker.id matches. " +
         s"If you intend to create a new broker, you should remove all data in your data directories (log.dirs).")
@@ -686,18 +725,19 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
     brokerId
   }
 
-  private def checkpointBrokerId(brokerId: Int) {
+  private def checkpointBrokerMetadata(clusterId:String, brokerId: Int) {
     var logDirsWithoutMetaProps: List[String] = List()
 
+    // Write checkpoints if the metadata.properties is missing or has a previous version.
     for (logDir <- config.logDirs) {
       val brokerMetadataOpt = brokerMetadataCheckpoints(logDir).read()
-      if(brokerMetadataOpt.isEmpty)
+      if(brokerMetadataOpt.isEmpty || brokerMetadataOpt.get.version < 1)
           logDirsWithoutMetaProps ++= List(logDir)
     }
 
     for(logDir <- logDirsWithoutMetaProps) {
       val checkpoint = brokerMetadataCheckpoints(logDir)
-      checkpoint.write(new BrokerMetadata(brokerId))
+      checkpoint.write(new BrokerMetadata(brokerId, clusterId))
     }
   }
 

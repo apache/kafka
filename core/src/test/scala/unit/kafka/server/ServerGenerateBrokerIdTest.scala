@@ -130,7 +130,7 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
     try {
       server1.startup()
     } catch {
-      case e: kafka.common.InconsistentBrokerIdException => //success
+      case e: kafka.common.InconsistentBrokerMetadataException => //success
     }
     server1.shutdown()
     CoreUtils.delete(server1.config.logDirs)

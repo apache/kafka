@@ -27,7 +27,7 @@ import kafka.consumer.{ConsumerThreadId, TopicCount}
 import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch, ReassignedPartitionsContext}
 import kafka.server.ConfigType
 import kafka.utils.ZkUtils._
-import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkException, ZkMarshallingError, ZkNoNodeException, ZkNodeExistsException}
+import org.I0Itec.zkclient.exception._
 import org.I0Itec.zkclient.serialize.ZkSerializer
 import org.I0Itec.zkclient.{ZkClient, ZkConnection}
 import org.apache.kafka.common.config.ConfigException
@@ -210,15 +210,8 @@ class ZkUtils(val zkClient: ZkClient,
     }
   }
 
-  def getOrCreateClusterId(proposedClusterId:String): String = {
 
-    def updateClusterId: Unit = {
-      val jsonMap = Map("version" -> "1",
-        "id" -> proposedClusterId
-      )
-      updatePersistentPath(clusterIdPath, Json.encode(jsonMap))
-    }
-
+  def getClusterId(): Option[String] = {
     def parseClusterId(clusterIdString: String): String = {
 
       Json.parseFull(clusterIdString) match {
@@ -230,19 +223,29 @@ class ZkUtils(val zkClient: ZkClient,
     }
 
     readDataMaybeNull(clusterIdPath)._1 match {
-      case Some(clusterId) => parseClusterId(clusterId)
-      case None => {
-        try {
-          updateClusterId
-          parseClusterId(zkClient.readData(clusterIdPath))
-          } catch {
-            case e: ZkNodeExistsException =>
-              parseClusterId(zkClient.readData(clusterIdPath))
-          }
-        }
-      }
+      case Some(clusterId) => Some(parseClusterId(clusterId))
+      case None => None
     }
+  }
 
+  def createOrGetClusterId(proposedClusterId: String): String = {
+    val jsonMap = Map("version" -> "1",
+      "id" -> proposedClusterId
+    )
+    val data = Json.encode(jsonMap)
+
+    try {
+      createParentPath(clusterIdPath)
+      ZkPath.createPersistent(zkClient, clusterIdPath, data, DefaultAcls)
+      proposedClusterId
+    } catch {
+      case e: ZkNodeExistsException =>
+        getClusterId match {
+          case Some(clusterId) => clusterId
+          case None => throw new KafkaException("Failed to get cluster id from Zookeeper. This can only happen if /cluster/id is deleted from Zookeeper.")
+        }
+    }
+  }
 
   def getSortedBrokerList(): Seq[Int] =
     getChildren(BrokerIdsPath).map(_.toInt).sorted
