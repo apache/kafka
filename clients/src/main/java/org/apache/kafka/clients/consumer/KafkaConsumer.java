@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.ClusterResourceListeners;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -682,10 +683,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     this.retryBackoffMs);
 
 
-            metadata.addClusterListeners(interceptorList);
-            metadata.addClusterListener(reporters);
-            metadata.addClusterListener(keyDeserializer);
-            metadata.addClusterListener(valueDeserializer);
+            ClusterResourceListeners clusterResourceListeners = ClusterResourceListeners.empty();
+            clusterResourceListeners.addAll(interceptorList);
+            clusterResourceListeners.addAll(reporters);
+            clusterResourceListeners.add(keyDeserializer);
+            clusterResourceListeners.add(valueDeserializer);
+            metadata.setClusterResourceListeners(clusterResourceListeners);
 
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId);

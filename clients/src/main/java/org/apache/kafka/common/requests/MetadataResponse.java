@@ -276,7 +276,7 @@ public class MetadataResponse extends AbstractRequestResponse {
             }
         }
 
-        return new Cluster(this.brokers, partitions, topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED), internalTopics);
+        return new Cluster(this.clusterId(), this.brokers, partitions, topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED), internalTopics);
     }
 
     /**

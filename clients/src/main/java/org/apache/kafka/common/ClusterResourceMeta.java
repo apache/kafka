@@ -12,4 +12,11 @@ public class ClusterResourceMeta {
     public String getClusterId() {
         return clusterId;
     }
+
+    @Override
+    public String toString() {
+        return "ClusterResourceMeta{" +
+                "clusterId='" + clusterId + '\'' +
+                '}';
+    }
 }

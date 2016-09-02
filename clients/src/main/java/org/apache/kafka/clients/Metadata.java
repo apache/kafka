@@ -13,10 +13,11 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.ClusterListener;
+import org.apache.kafka.common.ClusterResourceListeners;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.requests.MetadataResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,7 +60,7 @@ public final class Metadata {
     /* Topics with expiry time */
     private final Map<String, Long> topics;
     private final List<Listener> listeners;
-    private final List<ClusterListener> clusterListeners;
+    private ClusterResourceListeners clusterResourceListeners;
     private boolean needMetadataForAllTopics;
     private final boolean topicExpiryEnabled;
 
@@ -92,7 +93,7 @@ public final class Metadata {
         this.needUpdate = false;
         this.topics = new HashMap<>();
         this.listeners = new ArrayList<>();
-        this.clusterListeners = new ArrayList<>();
+        this.clusterResourceListeners = ClusterResourceListeners.empty();
         this.needMetadataForAllTopics = false;
     }
 
@@ -223,9 +224,12 @@ public final class Metadata {
             this.cluster = cluster;
         }
 
+//        System.out.println("Is cluster null ?  " + (cluster == null));
+//        System.out.println("clusterResourceListeners =  " + clusterResourceListeners.getClusterListeners());
 
-        for (ClusterListener clusterListener: clusterListeners)
-            clusterListener.onClusterUpdate(cluster.getClusterResourceMeta());
+        if(cluster != null){
+            clusterResourceListeners.onClusterUpdate(cluster.getClusterResourceMeta());
+        }
 
         notifyAll();
         log.debug("Updated cluster metadata version {} to {}", this.version, this.cluster);
@@ -289,19 +293,8 @@ public final class Metadata {
         this.listeners.remove(listener);
     }
 
-
-    public void addClusterListener(Object candidate) {
-        if (candidate instanceof ClusterListener) {
-            clusterListeners.add((ClusterListener) candidate);
-        }
-    }
-
-    public void addClusterListeners(List candidateList) {
-        for (Object candidate : candidateList) {
-            if (candidate instanceof ClusterListener) {
-                clusterListeners.add((ClusterListener) candidate);
-            }
-        }
+    public void setClusterResourceListeners(ClusterResourceListeners clusterResourceListeners) {
+        this.clusterResourceListeners = clusterResourceListeners;
     }
 
     /**
@@ -316,7 +309,7 @@ public final class Metadata {
         Collection<PartitionInfo> partitionInfos = new ArrayList<>();
         List<Node> nodes = Collections.emptyList();
         Set<String> internalTopics = Collections.emptySet();
-        String clusterId = null;
+        String clusterId = MetadataResponse.NO_CLUSTER_ID;
         if (cluster != null) {
             clusterId = cluster.clusterId();
             internalTopics = cluster.internalTopics();

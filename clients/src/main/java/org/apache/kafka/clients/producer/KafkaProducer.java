@@ -31,6 +31,7 @@ import org.apache.kafka.clients.producer.internals.RecordAccumulator;
 import org.apache.kafka.clients.producer.internals.Sender;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.ClusterResourceListeners;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.PartitionInfo;
@@ -272,6 +273,37 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     retryBackoffMs,
                     metrics,
                     time);
+
+            if (keySerializer == null) {
+                this.keySerializer = config.getConfiguredInstance(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+                        Serializer.class);
+                this.keySerializer.configure(config.originals(), true);
+            } else {
+                config.ignore(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG);
+                this.keySerializer = keySerializer;
+            }
+            if (valueSerializer == null) {
+                this.valueSerializer = config.getConfiguredInstance(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+                        Serializer.class);
+                this.valueSerializer.configure(config.originals(), false);
+            } else {
+                config.ignore(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG);
+                this.valueSerializer = valueSerializer;
+            }
+
+            // load interceptors and make sure they get clientId
+            userProvidedConfigs.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
+            List<ProducerInterceptor<K, V>> interceptorList = (List) (new ProducerConfig(userProvidedConfigs)).getConfiguredInstances(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
+                    ProducerInterceptor.class);
+            this.interceptors = interceptorList.isEmpty() ? null : new ProducerInterceptors<>(interceptorList);
+
+            ClusterResourceListeners clusterResourceListeners = ClusterResourceListeners.empty();
+            clusterResourceListeners.addAll(interceptorList);
+            clusterResourceListeners.addAll(reporters);
+            clusterResourceListeners.add(keySerializer);
+            clusterResourceListeners.add(valueSerializer);
+            metadata.setClusterResourceListeners(clusterResourceListeners);
+
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
             this.metadata.update(Cluster.bootstrap(addresses), time.milliseconds());
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config.values());
@@ -300,34 +332,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.ioThread.start();
 
             this.errors = this.metrics.sensor("errors");
-
-            if (keySerializer == null) {
-                this.keySerializer = config.getConfiguredInstance(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
-                        Serializer.class);
-                this.keySerializer.configure(config.originals(), true);
-            } else {
-                config.ignore(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG);
-                this.keySerializer = keySerializer;
-            }
-            if (valueSerializer == null) {
-                this.valueSerializer = config.getConfiguredInstance(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
-                        Serializer.class);
-                this.valueSerializer.configure(config.originals(), false);
-            } else {
-                config.ignore(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG);
-                this.valueSerializer = valueSerializer;
-            }
-
-            // load interceptors and make sure they get clientId
-            userProvidedConfigs.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
-            List<ProducerInterceptor<K, V>> interceptorList = (List) (new ProducerConfig(userProvidedConfigs)).getConfiguredInstances(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
-                    ProducerInterceptor.class);
-            this.interceptors = interceptorList.isEmpty() ? null : new ProducerInterceptors<>(interceptorList);
-
-            metadata.addClusterListeners(interceptorList);
-            metadata.addClusterListener(reporters);
-            metadata.addClusterListener(keySerializer);
-            metadata.addClusterListener(valueSerializer);
 
 
             config.logUnused();

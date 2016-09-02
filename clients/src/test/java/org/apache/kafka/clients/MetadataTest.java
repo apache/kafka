@@ -20,7 +20,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.ClusterListener;
+import org.apache.kafka.common.ClusterResourceListeners;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -151,8 +151,9 @@ public class MetadataTest {
         long time = 0;
         metadata.update(Cluster.empty(), time);
         MockClusterListener mockClusterListener = new MockClusterListener();
-        metadata.addClusterListener(mockClusterListener);
-
+        ClusterResourceListeners listeners = ClusterResourceListeners.empty();
+        listeners.add(mockClusterListener);
+        metadata.setClusterResourceListeners(listeners);
         metadata.update(new Cluster(
                         "dummy",
                         Arrays.asList(new Node(0, "host1", 1000)),

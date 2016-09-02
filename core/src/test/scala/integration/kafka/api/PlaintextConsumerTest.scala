@@ -15,7 +15,6 @@ package kafka.api
 
 import java.util
 import java.util.Properties
-
 import java.util.regex.Pattern
 
 import kafka.log.LogConfig
@@ -23,10 +22,10 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.KafkaProducer
-import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer, ByteArraySerializer}
-import org.apache.kafka.test.{MockProducerInterceptor, MockConsumerInterceptor}
+import org.apache.kafka.common.serialization.{ByteArraySerializer, StringDeserializer, StringSerializer}
+import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{ClusterListener, TopicPartition}
 import org.apache.kafka.common.errors.{InvalidTopicException, RecordTooLargeException}
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
@@ -36,6 +35,8 @@ import org.junit.Test
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
 import java.util.Locale
+
+import org.apache.kafka.test
 
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {
@@ -681,15 +682,25 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     producerProps.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockProducerInterceptor")
     producerProps.put("mock.interceptor.append", appendStr)
     val testProducer = new KafkaProducer[String, String](producerProps, new StringSerializer, new StringSerializer)
+    assertEquals(1, MockProducerInterceptor.ON_CLUSTER_UPDATE_COUNT.intValue())
+    // Assert that this is the first event and cluster id is not null.
+    assertEquals(1, MockProducerInterceptor.EVENTS.intValue())
 
     // produce records
     val numRecords = 10
-    (0 until numRecords).map { i =>
+    // Send one record and make sure clusterId is set after send
+    testProducer.send(new ProducerRecord(tp.topic(), tp.partition(), s"key 0", s"value 0"))
+    assertNotNull(MockProducerInterceptor.CLUSTER_META)
+    assertEquals(48, MockProducerInterceptor.CLUSTER_META.get().getClusterId().length())
+
+    (1 until numRecords).map { i =>
       testProducer.send(new ProducerRecord(tp.topic(), tp.partition(), s"key $i", s"value $i"))
     }.foreach(_.get)
     assertEquals(numRecords, MockProducerInterceptor.ONSEND_COUNT.intValue())
     assertEquals(numRecords, MockProducerInterceptor.ON_SUCCESS_COUNT.intValue())
-    assertEquals(1, MockProducerInterceptor.ON_CLUSTER_UPDATE_COUNT.intValue())
+    assertEquals(2, MockProducerInterceptor.ON_CLUSTER_UPDATE_COUNT.intValue())
+
+
     // send invalid record
     try {
       testProducer.send(null, null)
