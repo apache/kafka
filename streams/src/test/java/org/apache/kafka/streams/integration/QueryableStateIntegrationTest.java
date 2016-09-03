@@ -58,7 +58,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
-import java.util.Random;
 import java.util.Set;
 import java.util.Map;
 import java.util.HashMap;
@@ -224,59 +223,57 @@ public class QueryableStateIntegrationTest {
     }
 
     private void verifyAllKVKeys(final StreamRunnable[] streamRunnables, final KafkaStreams streams,
-                                 final Set<String> keys, final Set<String> stateStores) throws Exception {
-        for (final String storeName : stateStores) {
-            for (final String key : keys) {
-                TestUtils.waitForCondition(new TestCondition() {
-                    @Override
-                    public boolean conditionMet() {
-                        final StreamsMetadata metadata = streams.metadataForKey(storeName, key, new StringSerializer());
-                        if (metadata == null) {
-                            return false;
-                        }
-                        final int index = metadata.hostInfo().port();
-                        final KafkaStreams streamsWithKey = streamRunnables[index].getStream();
-                        final ReadOnlyKeyValueStore<String, Long> store;
-                        try {
-                            store = streamsWithKey.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
-                        } catch (IllegalStateException e) {
-                            // Kafka Streams instance may have closed but rebalance hasn't happened
-                            return false;
-                        }
-                        return store != null && store.get(key) != null;
+                                 final Set<String> keys, final String storeName) throws Exception {
+        for (final String key : keys) {
+            TestUtils.waitForCondition(new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    final StreamsMetadata metadata = streams.metadataForKey(storeName, key, new StringSerializer());
+                    if (metadata == null) {
+                        return false;
                     }
-                }, 30000, "waiting for metadata, store and value to be non null");
-            }
+                    final int index = metadata.hostInfo().port();
+                    final KafkaStreams streamsWithKey = streamRunnables[index].getStream();
+                    final ReadOnlyKeyValueStore<String, Long> store;
+                    try {
+                        store = streamsWithKey.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+                    } catch (IllegalStateException e) {
+                        // Kafka Streams instance may have closed but rebalance hasn't happened
+                        return false;
+                    }
+                    return store != null && store.get(key) != null;
+                }
+            }, 30000, "waiting for metadata, store and value to be non null");
         }
     }
 
+
     private void verifyAllWindowedKeys(final StreamRunnable[] streamRunnables, final KafkaStreams streams,
-                                       final Set<String> keys, final Set<String> stateStores,
+                                       final Set<String> keys, final String storeName ,
                                        final Long from, final Long to) throws Exception {
-        for (final String storeName : stateStores) {
-            for (final String key : keys) {
-                TestUtils.waitForCondition(new TestCondition() {
-                    @Override
-                    public boolean conditionMet() {
-                        final StreamsMetadata metadata = streams.metadataForKey(storeName, key, new StringSerializer());
-                        if (metadata == null) {
-                            return false;
-                        }
-                        final int index = metadata.hostInfo().port();
-                        final KafkaStreams streamsWithKey = streamRunnables[index].getStream();
-                        final ReadOnlyWindowStore<String, Long> store;
-                        try {
-                            store = streamsWithKey.store(storeName, QueryableStoreTypes.<String, Long>windowStore());
-                        } catch (IllegalStateException e) {
-                            // Kafka Streams instance may have closed but rebalance hasn't happened
-                            return false;
-                        }
-                        return store != null && store.fetch(key, from, to) != null;
+        for (final String key : keys) {
+            TestUtils.waitForCondition(new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    final StreamsMetadata metadata = streams.metadataForKey(storeName, key, new StringSerializer());
+                    if (metadata == null) {
+                        return false;
                     }
-                }, 30000, "waiting for metadata, store and value to be non null");
-            }
+                    final int index = metadata.hostInfo().port();
+                    final KafkaStreams streamsWithKey = streamRunnables[index].getStream();
+                    final ReadOnlyWindowStore<String, Long> store;
+                    try {
+                        store = streamsWithKey.store(storeName, QueryableStoreTypes.<String, Long>windowStore());
+                    } catch (IllegalStateException e) {
+                        // Kafka Streams instance may have closed but rebalance hasn't happened
+                        return false;
+                    }
+                    return store != null && store.fetch(key, from, to) != null;
+                }
+            }, 30000, "waiting for metadata, store and value to be non null");
         }
     }
+
 
     @Test
     public void queryOnRebalance() throws Exception {
@@ -302,9 +299,9 @@ public class QueryableStateIntegrationTest {
 
             for (int i = 0; i < numThreads; i++) {
                 verifyAllKVKeys(streamRunnables, streamRunnables[i].getStream(), inputValuesKeys,
-                    new HashSet(Arrays.asList("word-count-store-" + STREAM_THREE)));
+                    "word-count-store-" + STREAM_THREE);
                 verifyAllWindowedKeys(streamRunnables, streamRunnables[i].getStream(), inputValuesKeys,
-                    new HashSet(Arrays.asList("windowed-word-count-store-" + STREAM_THREE)), 0L, WINDOW_SIZE);
+                    "windowed-word-count-store-" + STREAM_THREE, 0L, WINDOW_SIZE);
             }
 
             // kill N-1 threads
@@ -316,9 +313,9 @@ public class QueryableStateIntegrationTest {
 
             // query from the remaining thread
             verifyAllKVKeys(streamRunnables, streamRunnables[0].getStream(), inputValuesKeys,
-                new HashSet(Arrays.asList("word-count-store-" + STREAM_THREE)));
+                "word-count-store-" + STREAM_THREE);
             verifyAllWindowedKeys(streamRunnables, streamRunnables[0].getStream(), inputValuesKeys,
-                new HashSet(Arrays.asList("windowed-word-count-store-" + STREAM_THREE)), 0L, WINDOW_SIZE);
+                "windowed-word-count-store-" + STREAM_THREE, 0L, WINDOW_SIZE);
         } finally {
             for (int i = 0; i < numThreads; i++) {
                 if (!streamRunnables[i].isClosed()) {
@@ -348,7 +345,7 @@ public class QueryableStateIntegrationTest {
             waitUntilAtLeastNumRecordProcessed(OUTPUT_TOPIC_CONCURRENT, 1);
 
             final ReadOnlyKeyValueStore<String, Long>
-                myCount = kafkaStreams.store("word-count-store-" + STREAM_CONCURRENT, QueryableStoreTypes.<String, Long>keyValueStore());
+                keyValueStore = kafkaStreams.store("word-count-store-" + STREAM_CONCURRENT, QueryableStoreTypes.<String, Long>keyValueStore());
 
             final ReadOnlyWindowStore<String, Long> windowStore =
                 kafkaStreams.store("windowed-word-count-store-" + STREAM_CONCURRENT, QueryableStoreTypes.<String, Long>windowStore());
@@ -357,10 +354,12 @@ public class QueryableStateIntegrationTest {
             Map<String, Long> expectedWindowState = new HashMap<>();
             Map<String, Long> expectedCount = new HashMap<>();
             while (producerRunnable.getCurrIteration() < numIterations) {
-                verifyGreaterOrEqual(inputValuesKeys.toArray(new String[inputValuesKeys.size()]), expectedWindowState, expectedCount, windowStore, myCount, false);
+                verifyGreaterOrEqual(inputValuesKeys.toArray(new String[inputValuesKeys.size()]), expectedWindowState,
+                    expectedCount, windowStore, keyValueStore, false);
             }
             // finally check if all keys are there
-            verifyGreaterOrEqual(inputValuesKeys.toArray(new String[inputValuesKeys.size()]), expectedWindowState, expectedCount, windowStore, myCount, true);
+            verifyGreaterOrEqual(inputValuesKeys.toArray(new String[inputValuesKeys.size()]), expectedWindowState,
+                expectedCount, windowStore, keyValueStore, true);
         } finally {
             producerRunnable.shutdown();
             producerThread.interrupt();
@@ -483,7 +482,7 @@ public class QueryableStateIntegrationTest {
      * Note: this method changes the values in expectedWindowState and expectedCount
      * @param keys All the keys we ever expect to find
      * @param expectedWindowState Expected window state
-     * @param expectedCount Expected cound
+     * @param expectedCount Expected count
      * @param windowStore Window Store
      * @param myCount CountStore
      * @param failIfKeyNotFound if true, tests fails if an expected key is not found in store. If false,
@@ -492,10 +491,10 @@ public class QueryableStateIntegrationTest {
      * @throws InterruptedException
      */
     private void verifyGreaterOrEqual(final String[] keys,
-                                      Map<String, Long> expectedWindowState,
+                                      Map<String, Long> expectedWindowedCount,
                                       Map<String, Long> expectedCount,
                                       final ReadOnlyWindowStore<String, Long> windowStore,
-                                      final ReadOnlyKeyValueStore<String, Long> myCount,
+                                      final ReadOnlyKeyValueStore<String, Long> keyValueStore,
                                       boolean failIfKeyNotFound)
         throws InterruptedException {
         final Map<String, Long> windowState = new HashMap<>();
@@ -507,7 +506,7 @@ public class QueryableStateIntegrationTest {
                 fail("Key not found " + key);
             }
             windowState.putAll(map);
-            final Long value = myCount.get(key);
+            final Long value = keyValueStore.get(key);
             if (value != null) {
                 countState.put(key, value);
             } else {
@@ -518,8 +517,8 @@ public class QueryableStateIntegrationTest {
         }
 
         for (Map.Entry<String, Long> actualWindowStateEntry : windowState.entrySet()) {
-            if (expectedWindowState.containsKey(actualWindowStateEntry.getKey())) {
-                Long expectedValue = expectedWindowState.get(actualWindowStateEntry.getKey());
+            if (expectedWindowedCount.containsKey(actualWindowStateEntry.getKey())) {
+                Long expectedValue = expectedWindowedCount.get(actualWindowStateEntry.getKey());
                 assertTrue(actualWindowStateEntry.getValue() >= expectedValue);
             } else {
                 if (failIfKeyNotFound) {
@@ -527,7 +526,7 @@ public class QueryableStateIntegrationTest {
                 }
             }
             // return this for next round of comparisons
-            expectedWindowState.put(actualWindowStateEntry.getKey(), actualWindowStateEntry.getValue());
+            expectedWindowedCount.put(actualWindowStateEntry.getKey(), actualWindowStateEntry.getValue());
         }
 
         for (Map.Entry<String, Long> actualCountStateEntry : countState.entrySet()) {
@@ -593,7 +592,6 @@ public class QueryableStateIntegrationTest {
         private final int numIterations;
         private int currIteration = 0;
         boolean shutdown = false;
-        private final Random random = new Random();
 
         ProducerRunnable(String topic, List<String> inputValues, int numIterations) {
             this.topic = topic;
@@ -601,7 +599,7 @@ public class QueryableStateIntegrationTest {
             this.numIterations = numIterations;
         }
 
-        public synchronized void incrementInteration() {
+        private synchronized void incrementInteration() {
             currIteration++;
         }
         public synchronized int getCurrIteration() {
@@ -624,17 +622,11 @@ public class QueryableStateIntegrationTest {
                 producer =
                 new KafkaProducer<>(producerConfig, new StringSerializer(), new StringSerializer());
 
-            try {
-                while (getCurrIteration() < numIterations && !shutdown) {
-                    for (int i = 0; i < inputValues.size(); i++) {
-                        producer.send(new ProducerRecord<>(topic,
-                            inputValues.get(i), inputValues.get(i)));
-                    }
-                    Thread.sleep(0L);
-                    incrementInteration();
+            while (getCurrIteration() < numIterations && !shutdown) {
+                for (int i = 0; i < inputValues.size(); i++) {
+                    producer.send(new ProducerRecord<String, String>(topic, inputValues.get(i)));
                 }
-            } catch (InterruptedException i) {
-                Thread.currentThread().interrupt();
+                incrementInteration();
             }
         }
     }
