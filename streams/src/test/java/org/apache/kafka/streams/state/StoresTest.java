@@ -35,7 +35,7 @@ public class StoresTest {
         final StateStoreSupplier supplier = Stores.create("store")
                 .withKeys(Serdes.String())
                 .withValues(Serdes.String())
-                .logged("delete", Collections.singletonMap("retention.ms", "1000"))
+                .logged(Collections.singletonMap("retention.ms", "1000"))
                 .inMemory()
                 .build();
 
@@ -61,7 +61,7 @@ public class StoresTest {
         final StateStoreSupplier supplier = Stores.create("store")
                 .withKeys(Serdes.String())
                 .withValues(Serdes.String())
-                .logged("delete", Collections.singletonMap("retention.ms", "1000"))
+                .logged(Collections.singletonMap("retention.ms", "1000"))
                 .persistent()
                 .build();
 

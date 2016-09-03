@@ -41,8 +41,9 @@ public interface StateStoreSupplier {
     /**
      * Returns a Map containing any log configs that will be used when creating the changelog for the {@link StateStore}
      *
-     * Note: any unrecognized configs will be ignored.
+     * Note: any unrecognized configs will be ignored by the Kafka brokers.
      * @return Map containing any log configs to be used when creating the changelog for the {@link StateStore}
+     * If {@code loggingEnabled} returns false, this function will always return an empty map
      */
     Map<String, String> logConfig();
 

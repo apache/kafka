@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
-import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryLRUCacheStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
@@ -27,8 +26,6 @@ import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -51,13 +48,8 @@ public class Stores {
                     public <V> KeyValueFactory<K, V> withValues(final Serde<V> valueSerde) {
 
                         return new KeyValueFactory<K, V>() {
-                            public LoggedKeyValueFactory<K, V> logged(final String cleanupPolicy, final Map<String, String> config) {
-                                if (!InternalTopicManager.isValidCleanupPolicy(cleanupPolicy)) {
-                                    throw new IllegalArgumentException("cleanup policy: " + cleanupPolicy + " is not valid");
-                                }
-                                final Map<String, String> logConfig = new HashMap<>(config);
-                                logConfig.put("cleanup.policy", cleanupPolicy.toLowerCase(Locale.ROOT));
-                                return loggedKeyValueFactory(name, true, logConfig, keySerde, valueSerde);
+                            public LoggedKeyValueFactory<K, V> logged(final Map<String, String> config) {
+                                return loggedKeyValueFactory(name, true, config, keySerde, valueSerde);
                             }
 
                             public LoggedKeyValueFactory<K, V> notLogged() {
@@ -329,11 +321,10 @@ public class Stores {
          * with the provided cleanupPolicy and configs.
          *
          * Note: Any unrecognized configs will be ignored.
-         * @param cleanupPolicy     cleanup policy to use for the changelog
          * @param config            any configs that should be applied to the changelog
          * @return  the factory to create an in-memory of persistent key-value store
          */
-        LoggedKeyValueFactory<K, V> logged(final String cleanupPolicy, final Map<String, String> config);
+        LoggedKeyValueFactory<K, V> logged(final Map<String, String> config);
 
         /**
          * Indicates that a changelog should not be created for the key-value store

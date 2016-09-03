@@ -43,6 +43,7 @@ public class InternalTopicConfig {
         this.logConfig = logConfig;
     }
 
+    /* for test use only */
     boolean isCompacted() {
         return cleanupPolicies.contains(CleanupPolicy.compact);
     }
