@@ -379,13 +379,12 @@ class MockSink(object):
 
 class MockSource(object):
 
-    def __init__(self, cc, topics, mode=None, delay_sec=10, name="mock-source"):
+    def __init__(self, cc, mode=None, delay_sec=10, name="mock-source"):
         self.cc = cc
         self.logger = self.cc.logger
         self.name = name
         self.mode = mode
         self.delay_sec = delay_sec
-        self.topics = topics
 
     def start(self):
         self.logger.info("Creating connector MockSourceConnector %s", self.name)
@@ -393,8 +392,6 @@ class MockSource(object):
             'name': self.name,
             'connector.class': 'org.apache.kafka.connect.tools.MockSourceConnector',
             'tasks.max': 1,
-            'topics': ",".join(self.topics),
             'mock_mode': self.mode,
             'delay_ms': self.delay_sec * 1000
         })
-        

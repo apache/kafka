@@ -339,20 +339,25 @@ class LogSegment(val log: FileMessageSet,
   }
 
   /**
-   * The time this segment has waited to be rolled. If the first message in the segment does not have a timestamp,
-   * the time is based on the create time of the segment. Otherwise the time is based on the timestamp of that message.
+   * The time this segment has waited to be rolled.
+   * If the first message has a timestamp we use the message timestamp to determine when to roll a segment. A segment
+   * is rolled if the difference between the new message's timestamp and the first message's timestamp exceeds the
+   * segment rolling time.
+   * If the first message does not have a timestamp, we use the wall clock time to determine when to roll a segment. A
+   * segment is rolled if the difference between the current wall clock time and the segment create time exceeds the
+   * segment rolling time.
    */
-  def timeWaitedForRoll(now: Long) : Long= {
+  def timeWaitedForRoll(now: Long, messageTimestamp: Long) : Long = {
     // Load the timestamp of the first message into memory
-    if (!rollingBasedTimestamp.isDefined) {
+    if (rollingBasedTimestamp.isEmpty) {
       val iter = log.iterator
       if (iter.hasNext)
         rollingBasedTimestamp = Some(iter.next.message.timestamp)
-      else
-        // If the log is empty, we return time elapsed since the segment is created.
-        return now - created
     }
-    now - {if (rollingBasedTimestamp.get >= 0) rollingBasedTimestamp.get else created}
+    rollingBasedTimestamp match {
+      case Some(t) if t >= 0 => messageTimestamp - t
+      case _ => now - created
+    }
   }
 
   /**

@@ -163,10 +163,10 @@ public class ProcessorTopologyTestDriver {
         // Set up all of the topic+partition information and subscribe the consumer to each ...
         for (String topic : topology.sourceTopics()) {
             TopicPartition tp = new TopicPartition(topic, 1);
-            consumer.assign(Collections.singletonList(tp));
             partitionsByTopic.put(topic, tp);
             offsetsByTopicPartition.put(tp, new AtomicLong());
         }
+        consumer.assign(offsetsByTopicPartition.keySet());
 
         task = new StreamTask(id,
             applicationId,
