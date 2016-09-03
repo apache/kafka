@@ -479,12 +479,13 @@ public class QueryableStateIntegrationTest {
     }
 
     /**
+     * Verify that the new count is greater than or equal to the previous count.
      * Note: this method changes the values in expectedWindowState and expectedCount
      * @param keys All the keys we ever expect to find
-     * @param expectedWindowState Expected window state
+     * @param expectedWindowedCount Expected windowed count
      * @param expectedCount Expected count
      * @param windowStore Window Store
-     * @param myCount CountStore
+     * @param keyValueStore Key-value store
      * @param failIfKeyNotFound if true, tests fails if an expected key is not found in store. If false,
      *                          the method merely inserts the new found key into the list of
      *                          expected keys.
