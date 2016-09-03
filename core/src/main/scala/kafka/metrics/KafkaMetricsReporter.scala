@@ -50,7 +50,8 @@ trait KafkaMetricsReporter {
 object KafkaMetricsReporter {
   val ReporterStarted: AtomicBoolean = new AtomicBoolean(false)
 
-  def startReporters (verifiableProps: VerifiableProperties) {
+  def startReporters (verifiableProps: VerifiableProperties):List[KafkaMetricsReporter] = {
+    var reporters = List[KafkaMetricsReporter]()
     ReporterStarted synchronized {
       if (!ReporterStarted.get()) {
         val metricsConfig = new KafkaMetricsConfig(verifiableProps)
@@ -58,6 +59,7 @@ object KafkaMetricsReporter {
           metricsConfig.reporters.foreach(reporterType => {
             val reporter = CoreUtils.createObject[KafkaMetricsReporter](reporterType)
             reporter.init(verifiableProps)
+            reporters ++= List(reporter)
             reporter match {
               case bean: KafkaMetricsReporterMBean => CoreUtils.registerMBean(reporter, bean.getMBeanName)
               case _ =>
@@ -67,6 +69,7 @@ object KafkaMetricsReporter {
         }
       }
     }
+    reporters
   }
 }
 

@@ -35,7 +35,7 @@ import javax.xml.bind.DatatypeConverter
 import kafka.security.auth.Authorizer
 import kafka.utils._
 import org.apache.kafka.clients.{ClientRequest, ManualMetadataUpdater, NetworkClient}
-import org.apache.kafka.common.Node
+import org.apache.kafka.common.{ClusterResource, ClusterResourceListeners, Node}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.network.{ChannelBuilders, LoginType, Mode, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
@@ -141,6 +141,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
   val brokerMetaPropsFile = "meta.properties"
   val brokerMetadataCheckpoints = config.logDirs.map(logDir => (logDir, new BrokerMetadataCheckpoint(new File(logDir + File.separator +brokerMetaPropsFile)))).toMap
   var clusterId: String = null
+  val clusterResourceListeners  = ClusterResourceListeners.empty()
 
   newGauge(
     "BrokerState",
@@ -194,6 +195,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         /* Get or create cluster_id */
         clusterId = getOrGenerateClusterId(zkUtils)
         info(s"Cluster ID = $clusterId")
+
+        /* Send events to metric reporters who implement ClusterResourceListener */
+        clusterResourceListeners.addAll(reporters)
+        clusterResourceListeners.onClusterUpdate(new ClusterResource(clusterId))
 
         /* start log manager */
         logManager = createLogManager(zkUtils.zkClient, brokerState)

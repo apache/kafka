@@ -24,13 +24,18 @@ import kafka.utils.{VerifiableProperties, Logging}
 
 object KafkaServerStartable {
   def fromProps(serverProps: Properties) = {
-    KafkaMetricsReporter.startReporters(new VerifiableProperties(serverProps))
-    new KafkaServerStartable(KafkaConfig.fromProps(serverProps))
+    val reporters = KafkaMetricsReporter.startReporters(new VerifiableProperties(serverProps))
+    new KafkaServerStartable(KafkaConfig.fromProps(serverProps), reporters)
   }
 }
 
-class KafkaServerStartable(val serverConfig: KafkaConfig) extends Logging {
+class KafkaServerStartable(val serverConfig: KafkaConfig, reporters: List[KafkaMetricsReporter]) extends Logging {
   private val server = new KafkaServer(serverConfig)
+
+  // Add Coda Hale metric reporters which implement ClusterResourceListener interface to ClusterResourceListeners.
+  for(reporter <- reporters) {
+    server.clusterResourceListeners.add(reporter)
+  }
 
   def startup() {
     try {
