@@ -42,6 +42,7 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private InternalProcessorContext context;
     private StateSerdes<K, V> serdes;
     private boolean sendOldValues;
+    private Thread streamThread;
 
     public CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying,
                                 final Serde<K> keySerde,
@@ -64,6 +65,9 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
     public void init(final ProcessorContext context, final StateStore root) {
         underlying.init(context, root);
         initInternal(context);
+        // save the stream thread as we only ever want to trigger a flush
+        // when the stream thread is the the current thread.
+        streamThread = Thread.currentThread();
     }
 
     @SuppressWarnings("unchecked")
@@ -137,7 +141,11 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
             if (rawValue == null) {
                 return null;
             }
-            cache.put(name, rawKey, new MemoryLRUCacheBytesEntry(rawValue));
+            // only update the cache if this call is on the streamThread
+            // as we don't want other threads to trigger an eviction/flush
+            if (Thread.currentThread().equals(streamThread)) {
+                cache.put(name, rawKey, new MemoryLRUCacheBytesEntry(rawValue));
+            }
             return serdes.valueFrom(rawValue);
         }
 
