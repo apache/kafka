@@ -3,13 +3,18 @@
  * agreements.  See the NOTICE file distributed with this work for additional information regarding
  * copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance with the License.  You may obtain a
- * copy of the License at <p> http://www.apache.org/licenses/LICENSE-2.0 <p> Unless required by
- * applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See
- * the License for the specific language governing permissions and limitations under the License.
+ * copy of the License at
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software distributed under the License
+ * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+ * or implied. See the License for the specific language governing permissions and limitations under
+ * the License.
  */
 package org.apache.kafka.streams.integration;
 
+import kafka.utils.MockTime;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
@@ -18,7 +23,6 @@ import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -57,7 +61,7 @@ public class KStreamAggregationIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER =
         new EmbeddedKafkaCluster(NUM_BROKERS);
     private static volatile int testNo = 0;
-    private final MockTime mockTime = new MockTime();
+    private final MockTime mockTime = CLUSTER.time;
     private KStreamBuilder builder;
     private Properties streamsConfiguration;
     private KafkaStreams kafkaStreams;
@@ -73,39 +77,39 @@ public class KStreamAggregationIntegrationTest {
     @Before
     public void before() {
         testNo++;
-        this.builder = new KStreamBuilder();
+        builder = new KStreamBuilder();
         createTopics();
-        this.streamsConfiguration = new Properties();
+        streamsConfiguration = new Properties();
         final String applicationId = "kgrouped-stream-test-" +
             testNo;
-        this.streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
-        this.streamsConfiguration
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+        streamsConfiguration
             .put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        this.streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
-        this.streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        this.streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
+        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
 
-        final KeyValueMapper<Integer, String, String> mapper = MockKeyValueMapper.<Integer, String>SelectValueMapper();
-        this.stream = this.builder.stream(Serdes.Integer(), Serdes.String(), this.streamOneInput);
-        this.groupedStream = this.stream
+        final KeyValueMapper<Integer, String, String> mapper = MockKeyValueMapper.SelectValueMapper();
+        stream = builder.stream(Serdes.Integer(), Serdes.String(), streamOneInput);
+        groupedStream = stream
             .groupBy(
                 mapper,
                 Serdes.String(),
                 Serdes.String());
 
-        this.reducer = new Reducer<String>() {
+        reducer = new Reducer<String>() {
             @Override
             public String apply(final String value1, final String value2) {
                 return value1 + ":" + value2;
             }
         };
-        this.initializer = new Initializer<Integer>() {
+        initializer = new Initializer<Integer>() {
             @Override
             public Integer apply() {
                 return 0;
             }
         };
-        this.aggregator = new Aggregator<String, String, Integer>() {
+        aggregator = new Aggregator<String, String, Integer>() {
             @Override
             public Integer apply(final String aggKey, final String value, final Integer aggregate) {
                 return aggregate + value.length();
@@ -115,23 +119,23 @@ public class KStreamAggregationIntegrationTest {
 
     @After
     public void whenShuttingDown() throws IOException {
-        if (this.kafkaStreams != null) {
-            this.kafkaStreams.close();
+        if (kafkaStreams != null) {
+            kafkaStreams.close();
         }
-        IntegrationTestUtils.purgeLocalStreamsState(this.streamsConfiguration);
+        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
 
     @Test
     public void shouldReduce() throws Exception {
-        produceMessages(this.mockTime.milliseconds());
-        this.groupedStream
-            .reduce(this.reducer, "reduce-by-key")
-            .to(Serdes.String(), Serdes.String(), this.outputTopic);
+        produceMessages(mockTime.milliseconds());
+        groupedStream
+            .reduce(reducer, "reduce-by-key")
+            .to(Serdes.String(), Serdes.String(), outputTopic);
 
         startStreams();
 
-        produceMessages(this.mockTime.milliseconds());
+        produceMessages(mockTime.milliseconds());
 
         final List<KeyValue<String, String>> results = receiveMessages(
             new StringDeserializer(),
@@ -168,21 +172,22 @@ public class KStreamAggregationIntegrationTest {
 
     @Test
     public void shouldReduceWindowed() throws Exception {
-        final long firstBatchTimestamp = this.mockTime.milliseconds() - 1000;
+        final long firstBatchTimestamp = mockTime.milliseconds();
+        mockTime.sleep(1000);
         produceMessages(firstBatchTimestamp);
-        final long secondBatchTimestamp = this.mockTime.milliseconds();
+        final long secondBatchTimestamp = mockTime.milliseconds();
         produceMessages(secondBatchTimestamp);
         produceMessages(secondBatchTimestamp);
 
-        this.groupedStream
-            .reduce(this.reducer, TimeWindows.of(500L), "reduce-time-windows")
+        groupedStream
+            .reduce(reducer, TimeWindows.of(500L), "reduce-time-windows")
             .toStream(new KeyValueMapper<Windowed<String>, String, String>() {
                 @Override
                 public String apply(final Windowed<String> windowedKey, final String value) {
                     return windowedKey.key() + "@" + windowedKey.window().start();
                 }
             })
-            .to(Serdes.String(), Serdes.String(), this.outputTopic);
+            .to(Serdes.String(), Serdes.String(), outputTopic);
 
         startStreams();
 
@@ -228,17 +233,17 @@ public class KStreamAggregationIntegrationTest {
 
     @Test
     public void shouldAggregate() throws Exception {
-        produceMessages(this.mockTime.milliseconds());
-        this.groupedStream.aggregate(
-            this.initializer,
-            this.aggregator,
+        produceMessages(mockTime.milliseconds());
+        groupedStream.aggregate(
+            initializer,
+            aggregator,
             Serdes.Integer(),
             "aggregate-by-selected-key")
-            .to(Serdes.String(), Serdes.Integer(), this.outputTopic);
+            .to(Serdes.String(), Serdes.Integer(), outputTopic);
 
         startStreams();
 
-        produceMessages(this.mockTime.milliseconds());
+        produceMessages(mockTime.milliseconds());
 
         final List<KeyValue<String, Integer>> results = receiveMessages(
             new StringDeserializer(),
@@ -268,15 +273,16 @@ public class KStreamAggregationIntegrationTest {
 
     @Test
     public void shouldAggregateWindowed() throws Exception {
-        final long firstTimestamp = this.mockTime.milliseconds() - 1000;
+        final long firstTimestamp = mockTime.milliseconds();
+        mockTime.sleep(1000);
         produceMessages(firstTimestamp);
-        final long secondTimestamp = this.mockTime.milliseconds();
+        final long secondTimestamp = mockTime.milliseconds();
         produceMessages(secondTimestamp);
         produceMessages(secondTimestamp);
 
-        this.groupedStream.aggregate(
-            this.initializer,
-            this.aggregator,
+        groupedStream.aggregate(
+            initializer,
+            aggregator,
             TimeWindows.of(500L),
             Serdes.Integer(), "aggregate-by-key-windowed")
             .toStream(new KeyValueMapper<Windowed<String>, Integer, String>() {
@@ -285,7 +291,7 @@ public class KStreamAggregationIntegrationTest {
                     return windowedKey.key() + "@" + windowedKey.window().start();
                 }
             })
-            .to(Serdes.String(), Serdes.Integer(), this.outputTopic);
+            .to(Serdes.String(), Serdes.Integer(), outputTopic);
 
         startStreams();
 
@@ -331,14 +337,14 @@ public class KStreamAggregationIntegrationTest {
 
     @Test
     public void shouldCount() throws Exception {
-        produceMessages(this.mockTime.milliseconds());
+        produceMessages(mockTime.milliseconds());
 
-        this.groupedStream.count("count-by-key")
-            .to(Serdes.String(), Serdes.Long(), this.outputTopic);
+        groupedStream.count("count-by-key")
+            .to(Serdes.String(), Serdes.Long(), outputTopic);
 
         startStreams();
 
-        produceMessages(this.mockTime.milliseconds());
+        produceMessages(mockTime.milliseconds());
 
         final List<KeyValue<String, Long>> results = receiveMessages(
             new StringDeserializer(),
@@ -367,18 +373,18 @@ public class KStreamAggregationIntegrationTest {
 
     @Test
     public void shouldGroupByKey() throws Exception {
-        final long timestamp = this.mockTime.milliseconds();
+        final long timestamp = mockTime.milliseconds();
         produceMessages(timestamp);
         produceMessages(timestamp);
 
-        this.stream.groupByKey(Serdes.Integer(), Serdes.String())
+        stream.groupByKey(Serdes.Integer(), Serdes.String())
             .count(TimeWindows.of(500L), "count-windows")
             .toStream(new KeyValueMapper<Windowed<Integer>, Long, String>() {
                 @Override
                 public String apply(final Windowed<Integer> windowedKey, final Long value) {
                     return windowedKey.key() + "@" + windowedKey.window().start();
                 }
-            }).to(Serdes.String(), Serdes.Long(), this.outputTopic);
+            }).to(Serdes.String(), Serdes.Long(), outputTopic);
 
         startStreams();
 
@@ -413,7 +419,7 @@ public class KStreamAggregationIntegrationTest {
     private void produceMessages(final long timestamp)
         throws ExecutionException, InterruptedException {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
-            this.streamOneInput,
+            streamOneInput,
             Arrays.asList(
                 new KeyValue<>(1, "A"),
                 new KeyValue<>(2, "B"),
@@ -430,15 +436,15 @@ public class KStreamAggregationIntegrationTest {
 
 
     private void createTopics() {
-        this.streamOneInput = "stream-one-" + testNo;
-        this.outputTopic = "output-" + testNo;
-        CLUSTER.createTopic(this.streamOneInput, 3, 1);
-        CLUSTER.createTopic(this.outputTopic);
+        streamOneInput = "stream-one-" + testNo;
+        outputTopic = "output-" + testNo;
+        CLUSTER.createTopic(streamOneInput, 3, 1);
+        CLUSTER.createTopic(outputTopic);
     }
 
     private void startStreams() {
-        this.kafkaStreams = new KafkaStreams(this.builder, this.streamsConfiguration);
-        this.kafkaStreams.start();
+        kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
+        kafkaStreams.start();
     }
 
 
@@ -459,7 +465,7 @@ public class KStreamAggregationIntegrationTest {
         consumerProperties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
             valueDeserializer.getClass().getName());
         return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerProperties,
-            this.outputTopic,
+            outputTopic,
             numMessages, 60 * 1000);
 
     }

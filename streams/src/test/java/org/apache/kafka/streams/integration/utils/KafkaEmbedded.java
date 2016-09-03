@@ -54,6 +54,7 @@ public class KafkaEmbedded {
     private static final String DEFAULT_ZK_CONNECT = "127.0.0.1:2181";
     private static final int DEFAULT_ZK_SESSION_TIMEOUT_MS = 10 * 1000;
     private static final int DEFAULT_ZK_CONNECTION_TIMEOUT_MS = 8 * 1000;
+
     private final Properties effectiveConfig;
     private final File logDir;
     public final TemporaryFolder tmpFolder;
@@ -66,16 +67,16 @@ public class KafkaEmbedded {
      *               broker should listen to.  Note that you cannot change the `log.dirs` setting
      *               currently.
      */
-    public KafkaEmbedded(final Properties config) throws IOException {
-        this.tmpFolder = new TemporaryFolder();
-        this.tmpFolder.create();
-        this.logDir = this.tmpFolder.newFolder();
-        this.effectiveConfig = effectiveConfigFrom(config);
+    public KafkaEmbedded(final Properties config, final MockTime time) throws IOException {
+        tmpFolder = new TemporaryFolder();
+        tmpFolder.create();
+        logDir = tmpFolder.newFolder();
+        effectiveConfig = effectiveConfigFrom(config);
         final boolean loggingEnabled = true;
-        final KafkaConfig kafkaConfig = new KafkaConfig(this.effectiveConfig, loggingEnabled);
+        final KafkaConfig kafkaConfig = new KafkaConfig(effectiveConfig, loggingEnabled);
         log.debug("Starting embedded Kafka broker (with log.dirs={} and ZK ensemble at {}) ...",
-            this.logDir, zookeeperConnect());
-        this.kafka = TestUtils.createServer(kafkaConfig, new MockTime());
+            logDir, zookeeperConnect());
+        kafka = TestUtils.createServer(kafkaConfig, time);
         log.debug("Startup of embedded Kafka broker at {} completed (with ZK ensemble at {}) ...",
             brokerList(), zookeeperConnect());
     }
@@ -100,7 +101,7 @@ public class KafkaEmbedded {
         effectiveConfig.put(KafkaConfig$.MODULE$.ControlledShutdownEnableProp(), true);
 
         effectiveConfig.putAll(initialConfig);
-        effectiveConfig.setProperty(KafkaConfig$.MODULE$.LogDirProp(), this.logDir.getAbsolutePath());
+        effectiveConfig.setProperty(KafkaConfig$.MODULE$.LogDirProp(), logDir.getAbsolutePath());
         return effectiveConfig;
     }
 
@@ -110,7 +111,7 @@ public class KafkaEmbedded {
      * You can use this to tell Kafka producers and consumers how to connect to this instance.
      */
     public String brokerList() {
-        return this.kafka.config().hostName() + ":" + this.kafka.boundPort(SecurityProtocol.PLAINTEXT);
+        return kafka.config().hostName() + ":" + kafka.boundPort(SecurityProtocol.PLAINTEXT);
     }
 
 
@@ -118,7 +119,7 @@ public class KafkaEmbedded {
      * The ZooKeeper connection string aka `zookeeper.connect`.
      */
     public String zookeeperConnect() {
-        return this.effectiveConfig.getProperty("zookeeper.connect", DEFAULT_ZK_CONNECT);
+        return effectiveConfig.getProperty("zookeeper.connect", DEFAULT_ZK_CONNECT);
     }
 
     /**
@@ -127,12 +128,12 @@ public class KafkaEmbedded {
     public void stop() {
         log.debug("Shutting down embedded Kafka broker at {} (with ZK ensemble at {}) ...",
             brokerList(), zookeeperConnect());
-        this.kafka.shutdown();
-        this.kafka.awaitShutdown();
-        log.debug("Removing logs.dir at {} ...", this.logDir);
-        final List<String> logDirs = Collections.singletonList(this.logDir.getAbsolutePath());
+        kafka.shutdown();
+        kafka.awaitShutdown();
+        log.debug("Removing logs.dir at {} ...", logDir);
+        final List<String> logDirs = Collections.singletonList(logDir.getAbsolutePath());
         CoreUtils.delete(scala.collection.JavaConversions.asScalaBuffer(logDirs).seq());
-        this.tmpFolder.delete();
+        tmpFolder.delete();
         log.debug("Shutdown of embedded Kafka broker at {} completed (with ZK ensemble at {}) ...",
             brokerList(), zookeeperConnect());
     }

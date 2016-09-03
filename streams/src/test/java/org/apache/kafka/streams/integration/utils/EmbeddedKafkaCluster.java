@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.integration.utils;
 
 import kafka.server.KafkaConfig$;
+import kafka.utils.MockTime;
 import kafka.zk.EmbeddedZookeeper;
 import org.junit.rules.ExternalResource;
 import org.slf4j.Logger;
@@ -40,11 +41,13 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         this.brokers = new KafkaEmbedded[numBrokers];
     }
 
+    public MockTime time = new MockTime();
+
     /**
      * Creates and starts a Kafka cluster.
      */
     public void start() throws IOException, InterruptedException {
-        Properties brokerConfig = new Properties();
+        final Properties brokerConfig = new Properties();
 
         log.debug("Initiating embedded Kafka cluster startup");
         log.debug("Starting a ZooKeeper instance");
@@ -59,7 +62,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         for (int i = 0; i < this.brokers.length; i++) {
             brokerConfig.put(KafkaConfig$.MODULE$.BrokerIdProp(), i);
             log.debug("Starting a Kafka instance on port {} ...", brokerConfig.getProperty(KafkaConfig$.MODULE$.PortProp()));
-            brokers[i] = new KafkaEmbedded(brokerConfig);
+            brokers[i] = new KafkaEmbedded(brokerConfig, time);
 
             log.debug("Kafka instance is running at {}, connected to ZooKeeper at {}",
                 brokers[i].brokerList(), brokers[i].zookeeperConnect());
@@ -79,7 +82,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     /**
      * The ZooKeeper connection string aka `zookeeper.connect` in `hostnameOrIp:port` format.
      * Example: `127.0.0.1:2181`.
-     *
+     * <p>
      * You can use this to e.g. tell Kafka brokers how to connect to this instance.
      */
     public String zKConnectString() {
@@ -88,7 +91,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
     /**
      * This cluster's `bootstrap.servers` value.  Example: `127.0.0.1:9092`.
-     *
+     * <p>
      * You can use this to tell Kafka producers how to connect to this cluster.
      */
     public String bootstrapServers() {
@@ -108,7 +111,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      *
      * @param topic The name of the topic.
      */
-    public void createTopic(String topic) {
+    public void createTopic(final String topic) {
         createTopic(topic, 1, 1, new Properties());
     }
 
@@ -119,7 +122,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      * @param partitions  The number of partitions for this topic.
      * @param replication The replication factor for (the partitions of) this topic.
      */
-    public void createTopic(String topic, int partitions, int replication) {
+    public void createTopic(final String topic, final int partitions, final int replication) {
         createTopic(topic, partitions, replication, new Properties());
     }
 

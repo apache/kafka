@@ -14,6 +14,7 @@
  */
 package org.apache.kafka.streams.integration;
 
+import kafka.utils.MockTime;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -69,8 +70,8 @@ import static org.hamcrest.core.IsEqual.equalTo;
 public class QueryableStateIntegrationTest {
     private static final int NUM_BROKERS = 2;
     @ClassRule
-    public static final EmbeddedKafkaCluster CLUSTER =
-        new EmbeddedKafkaCluster(NUM_BROKERS);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+    private final MockTime mockTime = CLUSTER.time;
     private static final String STREAM_ONE = "stream-one";
     private static final String STREAM_CONCURRENT = "stream-concurrent";
     private static final String OUTPUT_TOPIC = "output";
@@ -102,16 +103,16 @@ public class QueryableStateIntegrationTest {
         streamsConfiguration = new Properties();
         final String applicationId = "queryable-state";
 
-        this.streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
-        this.streamsConfiguration
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+        streamsConfiguration
             .put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        this.streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
-        this.streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        this.streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG,
+        streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
+        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG,
             TestUtils.tempDirectory("qs-test")
                 .getPath());
-        this.streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        this.streamsConfiguration
+        streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration
             .put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 
         stringComparator = new Comparator<KeyValue<String, String>>() {
@@ -122,7 +123,7 @@ public class QueryableStateIntegrationTest {
                 return o1.key.compareTo(o2.key);
             }
         };
-        this.stringLongComparator = new Comparator<KeyValue<String, Long>>() {
+        stringLongComparator = new Comparator<KeyValue<String, Long>>() {
 
             @Override
             public int compare(final KeyValue<String, Long> o1,
@@ -154,10 +155,10 @@ public class QueryableStateIntegrationTest {
 
     @After
     public void shutdown() throws IOException {
-        if (this.kafkaStreams != null) {
-            this.kafkaStreams.close();
+        if (kafkaStreams != null) {
+            kafkaStreams.close();
         }
-        IntegrationTestUtils.purgeLocalStreamsState(this.streamsConfiguration);
+        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
 
@@ -372,7 +373,7 @@ public class QueryableStateIntegrationTest {
         KStreamBuilder builder = new KStreamBuilder();
         final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};
 
-        final Set<KeyValue<String, String>> batch1 = new TreeSet<>(this.stringComparator);
+        final Set<KeyValue<String, String>> batch1 = new TreeSet<>(stringComparator);
         batch1.addAll(Arrays.asList(
             new KeyValue<>(keys[0], "hello"),
             new KeyValue<>(keys[1], "goodbye"),
@@ -381,7 +382,7 @@ public class QueryableStateIntegrationTest {
             new KeyValue<>(keys[4], "kafka")));
 
 
-        final Set<KeyValue<String, Long>> expectedCount = new TreeSet<>(this.stringLongComparator);
+        final Set<KeyValue<String, Long>> expectedCount = new TreeSet<>(stringLongComparator);
         for (final String key : keys) {
             expectedCount.add(new KeyValue<>(key, 1L));
         }
@@ -393,9 +394,10 @@ public class QueryableStateIntegrationTest {
                 CLUSTER.bootstrapServers(),
                 StringSerializer.class,
                 StringSerializer.class,
-                new Properties()));
+                new Properties()),
+            mockTime);
 
-        final KStream<String, String> s1 = this.builder.stream(STREAM_ONE);
+        final KStream<String, String> s1 = builder.stream(STREAM_ONE);
 
         // Non Windowed
         s1.groupByKey().count("my-count").to(Serdes.String(), Serdes.Long(), OUTPUT_TOPIC);
@@ -407,10 +409,10 @@ public class QueryableStateIntegrationTest {
         waitUntilAtLeastNumRecordProcessed(OUTPUT_TOPIC, 1);
 
         final ReadOnlyKeyValueStore<String, Long>
-            myCount = this.kafkaStreams.store("my-count", QueryableStoreTypes.<String, Long>keyValueStore());
+            myCount = kafkaStreams.store("my-count", QueryableStoreTypes.<String, Long>keyValueStore());
 
         final ReadOnlyWindowStore<String, Long> windowStore =
-            this.kafkaStreams.store("windowed-count", QueryableStoreTypes.<String, Long>windowStore());
+            kafkaStreams.store("windowed-count", QueryableStoreTypes.<String, Long>windowStore());
         verifyCanGetByKey(keys,
             expectedCount,
             expectedCount,
@@ -423,11 +425,11 @@ public class QueryableStateIntegrationTest {
 
     private void verifyRangeAndAll(final Set<KeyValue<String, Long>> expectedCount,
                                    final ReadOnlyKeyValueStore<String, Long> myCount) {
-        final Set<KeyValue<String, Long>> countRangeResults = new TreeSet<>(this.stringLongComparator);
-        final Set<KeyValue<String, Long>> countAllResults = new TreeSet<>(this.stringLongComparator);
+        final Set<KeyValue<String, Long>> countRangeResults = new TreeSet<>(stringLongComparator);
+        final Set<KeyValue<String, Long>> countAllResults = new TreeSet<>(stringLongComparator);
         final Set<KeyValue<String, Long>>
             expectedRangeResults =
-            new TreeSet<>(this.stringLongComparator);
+            new TreeSet<>(stringLongComparator);
 
         expectedRangeResults.addAll(Arrays.asList(
             new KeyValue<>("hello", 1L),
@@ -458,8 +460,8 @@ public class QueryableStateIntegrationTest {
                                    final ReadOnlyWindowStore<String, Long> windowStore,
                                    final ReadOnlyKeyValueStore<String, Long> myCount)
         throws InterruptedException {
-        final Set<KeyValue<String, Long>> windowState = new TreeSet<>(this.stringLongComparator);
-        final Set<KeyValue<String, Long>> countState = new TreeSet<>(this.stringLongComparator);
+        final Set<KeyValue<String, Long>> windowState = new TreeSet<>(stringLongComparator);
+        final Set<KeyValue<String, Long>> countState = new TreeSet<>(stringLongComparator);
 
         final long timeout = System.currentTimeMillis() + 30000;
         while (windowState.size() < 5 &&

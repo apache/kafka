@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,6 +17,11 @@
 package org.apache.kafka.streams.integration;
 
 
+import kafka.admin.AdminUtils;
+import kafka.log.LogConfig;
+import kafka.utils.MockTime;
+import kafka.utils.ZKStringSerializer$;
+import kafka.utils.ZkUtils;
 import org.I0Itec.zkclient.ZkClient;
 import org.I0Itec.zkclient.ZkConnection;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -28,6 +33,8 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.integration.utils.EmbeddedSingleNodeKafkaCluster;
+import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueMapper;
@@ -37,19 +44,16 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
-import static org.junit.Assert.assertEquals;
+import scala.Tuple2;
+import scala.collection.Iterator;
+import scala.collection.Map;
+
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
 
-import kafka.admin.AdminUtils;
-import kafka.log.LogConfig;
-import kafka.utils.ZKStringSerializer$;
-import kafka.utils.ZkUtils;
-import scala.Tuple2;
-import scala.collection.Iterator;
-import scala.collection.Map;
+import static org.junit.Assert.assertEquals;
 
 /**
  * Tests related to internal topics in streams
@@ -58,6 +62,7 @@ public class InternalTopicIntegrationTest {
     private static final int NUM_BROKERS = 1;
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+    private final MockTime mockTime = CLUSTER.time;
     private static final String DEFAULT_INPUT_TOPIC = "inputTopic";
     private static final String DEFAULT_OUTPUT_TOPIC = "outputTopic";
     private static final int DEFAULT_ZK_SESSION_TIMEOUT_MS = 10 * 1000;
@@ -71,6 +76,7 @@ public class InternalTopicIntegrationTest {
 
     /**
      * Validates that any state changelog topics are compacted
+     *
      * @return true if topics have a valid config, false otherwise
      */
     private boolean isUsingCompactionForStateChangelogTopics() {
@@ -80,20 +86,20 @@ public class InternalTopicIntegrationTest {
         // createTopic() will only seem to work (it will return without error).  The topic will exist in
         // only ZooKeeper and will be returned when listing topics, but Kafka itself does not create the
         // topic.
-        ZkClient zkClient = new ZkClient(
+        final ZkClient zkClient = new ZkClient(
             CLUSTER.zKConnectString(),
             DEFAULT_ZK_SESSION_TIMEOUT_MS,
             DEFAULT_ZK_CONNECTION_TIMEOUT_MS,
             ZKStringSerializer$.MODULE$);
-        boolean isSecure = false;
-        ZkUtils zkUtils = new ZkUtils(zkClient, new ZkConnection(CLUSTER.zKConnectString()), isSecure);
+        final boolean isSecure = false;
+        final ZkUtils zkUtils = new ZkUtils(zkClient, new ZkConnection(CLUSTER.zKConnectString()), isSecure);
 
-        Map<String, Properties> topicConfigs = AdminUtils.fetchAllTopicConfigs(zkUtils);
-        Iterator it = topicConfigs.iterator();
+        final Map<String, Properties> topicConfigs = AdminUtils.fetchAllTopicConfigs(zkUtils);
+        final Iterator it = topicConfigs.iterator();
         while (it.hasNext()) {
-            Tuple2<String, Properties> topicConfig = (Tuple2<String, Properties>) it.next();
-            String topic = topicConfig._1;
-            Properties prop = topicConfig._2;
+            final Tuple2<String, Properties> topicConfig = (Tuple2<String, Properties>) it.next();
+            final String topic = topicConfig._1;
+            final Properties prop = topicConfig._2;
 
             // state changelogs should be compacted
             if (topic.endsWith(ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX)) {
@@ -110,7 +116,7 @@ public class InternalTopicIntegrationTest {
 
     @Test
     public void shouldCompactTopicsForStateChangelogs() throws Exception {
-        List<String> inputValues = Arrays.asList("hello", "world", "world", "hello world");
+        final List<String> inputValues = Arrays.asList("hello", "world", "world", "hello world");
 
         //
         // Step 1: Configure and start a simple word count topology
@@ -118,7 +124,7 @@ public class InternalTopicIntegrationTest {
         final Serde<String> stringSerde = Serdes.String();
         final Serde<Long> longSerde = Serdes.Long();
 
-        Properties streamsConfiguration = new Properties();
+        final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "compact-topics-integration-test");
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
@@ -126,37 +132,37 @@ public class InternalTopicIntegrationTest {
         streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        KStreamBuilder builder = new KStreamBuilder();
+        final KStreamBuilder builder = new KStreamBuilder();
 
-        KStream<String, String> textLines = builder.stream(DEFAULT_INPUT_TOPIC);
+        final KStream<String, String> textLines = builder.stream(DEFAULT_INPUT_TOPIC);
 
-        KStream<String, Long> wordCounts = textLines
+        final KStream<String, Long> wordCounts = textLines
             .flatMapValues(new ValueMapper<String, Iterable<String>>() {
                 @Override
-                public Iterable<String> apply(String value) {
+                public Iterable<String> apply(final String value) {
                     return Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+"));
                 }
             }).groupBy(MockKeyValueMapper.<String, String>SelectValueMapper())
-                .count("Counts").toStream();
+            .count("Counts").toStream();
 
         wordCounts.to(stringSerde, longSerde, DEFAULT_OUTPUT_TOPIC);
 
         // Remove any state from previous test runs
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
 
-        KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
+        final KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
         streams.start();
 
         //
         // Step 2: Produce some input data to the input topic.
         //
-        Properties producerConfig = new Properties();
+        final Properties producerConfig = new Properties();
         producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         producerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
         producerConfig.put(ProducerConfig.RETRIES_CONFIG, 0);
         producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        IntegrationTestUtils.produceValuesSynchronously(DEFAULT_INPUT_TOPIC, inputValues, producerConfig);
+        IntegrationTestUtils.produceValuesSynchronously(DEFAULT_INPUT_TOPIC, inputValues, producerConfig, mockTime);
 
         //
         // Step 3: Verify the state changelog topics are compact
