@@ -16,15 +16,6 @@
  */
 package org.apache.kafka.clients;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
-import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -42,6 +33,15 @@ import org.apache.kafka.test.MockSelector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class NetworkClientTest {
 
@@ -203,6 +203,26 @@ public class NetworkClientTest {
         long delay = client.connectionDelay(node, time.milliseconds());
 
         assertEquals(reconnectBackoffMsTest, delay);
+    }
+
+    @Test
+    public void testDisconnectDuringUserMetadataRequest() {
+        // this test ensures that the default metadata updater does not intercept a user-initiated
+        // metadata request when the remote node disconnects with the request in-flight.
+        awaitReady(client, node);
+        RequestHeader reqHeader = client.nextRequestHeader(ApiKeys.METADATA);
+
+        Struct req = new MetadataRequest(Collections.<String>emptyList()).toStruct();
+        RequestSend send = new RequestSend(node.idString(), reqHeader, req);
+        ClientRequest request = new ClientRequest(time.milliseconds(), true, send, null);
+        client.send(request, time.milliseconds());
+        client.poll(requestTimeoutMs, time.milliseconds());
+        assertEquals(1, client.inFlightRequestCount(node.idString()));
+
+        selector.close(node.idString());
+        List<ClientResponse> responses = client.poll(requestTimeoutMs, time.milliseconds());
+        assertEquals(1, responses.size());
+        assertTrue(responses.iterator().next().wasDisconnected());
     }
     
     private static class TestCallbackHandler implements RequestCompletionHandler {

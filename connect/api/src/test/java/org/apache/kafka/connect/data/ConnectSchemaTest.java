@@ -300,4 +300,11 @@ public class ConnectSchemaTest {
         assertNotEquals(s1, differentField);
     }
 
+    @Test
+    public void testEmptyStruct() {
+        final ConnectSchema emptyStruct = new ConnectSchema(Schema.Type.STRUCT, false, null, null, null, null);
+        assertEquals(0, emptyStruct.fields().size());
+        new Struct(emptyStruct);
+    }
+
 }

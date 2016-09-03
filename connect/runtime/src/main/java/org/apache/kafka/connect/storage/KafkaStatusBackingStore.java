@@ -64,11 +64,11 @@ import java.util.Set;
  * but it can avoid specific unsafe conditions. In particular, we putSafe()
  * allows writes in the following conditions:
  *
- * 3) It is (probably) safe to overwrite the state if there is no previous
+ * 1) It is (probably) safe to overwrite the state if there is no previous
  *    value.
- * 1) It is (probably) safe to overwrite the state if the previous value was
+ * 2) It is (probably) safe to overwrite the state if the previous value was
  *    set by a worker with the same workerId.
- * 2) It is (probably) safe to overwrite the previous state if the current
+ * 3) It is (probably) safe to overwrite the previous state if the current
  *    generation is higher than the previous .
  *
  * Basically all these conditions do is reduce the window for conflicts. They
@@ -201,7 +201,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         final int sequence;
         synchronized (this) {
             this.generation = status.generation();
-            if (safeWrite && !entry.canWrite(status))
+            if (safeWrite && !entry.canWriteSafely(status))
                 return;
             sequence = entry.increment();
         }
@@ -216,7 +216,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
                         synchronized (KafkaStatusBackingStore.this) {
                             if (entry.isDeleted()
                                     || status.generation() != generation
-                                    || (safeWrite && !entry.canWrite(status, sequence)))
+                                    || (safeWrite && !entry.canWriteSafely(status, sequence)))
                                 return;
                         }
                         kafkaLog.send(key, value, this);
@@ -448,14 +448,14 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
             return deleted;
         }
 
-        public boolean canWrite(T status) {
-            return value != null &&
-                    (value.workerId().equals(status.workerId())
-                    || value.generation() <= status.generation());
+        public boolean canWriteSafely(T status) {
+            return value == null
+                    || value.workerId().equals(status.workerId())
+                    || value.generation() <= status.generation();
         }
 
-        public boolean canWrite(T status, int sequence) {
-            return canWrite(status) && this.sequence == sequence;
+        public boolean canWriteSafely(T status, int sequence) {
+            return canWriteSafely(status) && this.sequence == sequence;
         }
 
     }

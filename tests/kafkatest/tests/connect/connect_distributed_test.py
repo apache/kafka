@@ -23,7 +23,7 @@ from kafkatest.services.security.security_config import SecurityConfig
 from ducktape.utils.util import wait_until
 from ducktape.mark import matrix
 import subprocess, itertools, time
-from collections import Counter
+from collections import Counter, namedtuple
 import operator
 
 class ConnectDistributedTest(Test):
@@ -155,7 +155,43 @@ class ConnectDistributedTest(Test):
         wait_until(lambda: self.connector_is_running(self.sink), timeout_sec=10,
                    err_msg="Failed to see connector transition to the RUNNING state")
 
-    
+    @matrix(delete_before_reconfig=[False, True])
+    def test_bad_connector_class(self, delete_before_reconfig):
+        """
+        For the same connector name, first configure it with a bad connector class name such that it fails to start, verify that it enters a FAILED state.
+        Restart should also fail.
+        Then try to rectify by reconfiguring it as a MockConnector and verifying it successfully transitions to RUNNING.
+        """
+        self.setup_services()
+        self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
+        self.cc.start()
+
+        connector_name = 'bad-to-good-test'
+
+        connector = namedtuple('BadConnector', ['name', 'tasks'])(connector_name, 1)
+        config = {
+            'name': connector.name,
+            'tasks.max': connector.tasks,
+            'connector.class': 'java.util.HashMap'
+        }
+        self.cc.create_connector(config)
+
+        wait_until(lambda: self.connector_is_failed(connector), timeout_sec=10, err_msg="Failed to see connector transition to FAILED state")
+
+        try:
+            self.cc.restart_connector(connector_name)
+        except ConnectRestError:
+            pass
+        else:
+            raise AssertionError("Expected restart of %s to fail" % connector_name)
+
+        if delete_before_reconfig:
+            self.cc.delete_connector(connector_name)
+
+        config['connector.class'] = 'org.apache.kafka.connect.tools.MockSourceConnector'
+        self.cc.set_connector_config(connector_name, config)
+        wait_until(lambda: self.connector_is_running(connector), timeout_sec=10, err_msg="Failed to see connector transition to the RUNNING state")
+
     @matrix(connector_type=["source", "sink"])
     def test_restart_failed_task(self, connector_type):
         self.setup_services()
@@ -166,7 +202,7 @@ class ConnectDistributedTest(Test):
         if connector_type == "sink":
             connector = MockSink(self.cc, self.topics.keys(), mode='task-failure', delay_sec=5)
         else:
-            connector = MockSource(self.cc, self.topics.keys(), mode='task-failure', delay_sec=5)
+            connector = MockSource(self.cc, mode='task-failure', delay_sec=5)
             
         connector.start()
 
