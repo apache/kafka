@@ -105,10 +105,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
         this.consumedOffsets = new HashMap<>();
 
         // create the record recordCollector that maintains the produced offsets
-        this.recordCollector = new RecordCollector(producer);
-        this.recordCollector.setStreamTask(id().toString());
+        this.recordCollector = new RecordCollector(producer, id().toString());
 
-        log.info("stream-task[{}] Creating restoration consumer client", id());
+        log.info("task [{}] Creating restoration consumer client", id());
 
         // initialize the topology with its own context
         this.processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics);
@@ -170,11 +169,11 @@ public class StreamTask extends AbstractTask implements Punctuator {
             this.currNode = recordInfo.node();
             TopicPartition partition = recordInfo.partition();
 
-            log.debug("stream-task [{}] Start processing one record [{}]", id(), currRecord);
+            log.debug("task [{}] Start processing one record [{}]", id(), currRecord);
 
             this.currNode.process(currRecord.key(), currRecord.value());
 
-            log.debug("stream-task [{}] Completed processing one record [{}]", id(), currRecord);
+            log.debug("task [{}] Completed processing one record [{}]", id(), currRecord);
 
             // update the consumed offset map after processing is done
             consumedOffsets.put(partition, currRecord.offset());
@@ -223,7 +222,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
     @Override
     public void punctuate(ProcessorNode node, long timestamp) {
         if (currNode != null)
-            throw new IllegalStateException("stream-task [" + id() + "] Current node is not null");
+            throw new IllegalStateException(String.format("task [%s] Current node is not null", id()));
 
         currNode = node;
         currRecord = new StampedRecord(DUMMY_RECORD, timestamp);
@@ -292,7 +291,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      */
     public void schedule(long interval) {
         if (currNode == null)
-            throw new IllegalStateException("stream-task [" + id() + "] Current node is null");
+            throw new IllegalStateException(String.format("task [%s] Current node is null", id()));
 
         punctuationQueue.schedule(new PunctuationSchedule(currNode, interval));
     }

@@ -89,7 +89,7 @@ public class ProcessorStateManager {
         this.sourceStoreToSourceTopic = sourceStoreToSourceTopic;
 
         if (!stateDirectory.lock(taskId, 5)) {
-            throw new IOException("task [" + taskId + "] Failed to lock the state directory: " + baseDir.getCanonicalPath());
+            throw new IOException(String.format("task [%s] Failed to lock the state directory: %s", taskId, baseDir.getCanonicalPath()));
         }
 
         // load the checkpoint information
@@ -117,11 +117,11 @@ public class ProcessorStateManager {
     public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
 
         if (store.name().equals(CHECKPOINT_FILE_NAME)) {
-            throw new IllegalArgumentException("task [" + taskId + "]  Illegal store name: " + CHECKPOINT_FILE_NAME);
+            throw new IllegalArgumentException(String.format("task [%s]  Illegal store name: %s", taskId, CHECKPOINT_FILE_NAME));
         }
 
         if (this.stores.containsKey(store.name())) {
-            throw new IllegalArgumentException("task [" + taskId + "]  Store " + store.name() + " has already been registered.");
+            throw new IllegalArgumentException(String.format("task [%s]  Store %s has already been registered.", taskId, store.name()));
         }
 
         if (loggingEnabled) {
@@ -135,7 +135,7 @@ public class ProcessorStateManager {
         } else if (sourceStoreToSourceTopic != null && sourceStoreToSourceTopic.containsKey(store.name())) {
             topic = sourceStoreToSourceTopic.get(store.name());
         } else {
-            throw new IllegalArgumentException("task [" + taskId + "]  Store is neither built from source topic, nor has a changelog.");
+            throw new IllegalArgumentException(String.format("task [%s]  Store is neither built from source topic, nor has a changelog.", taskId));
         }
 
         // block until the partition is ready for this state changelog topic or time has elapsed
@@ -153,7 +153,7 @@ public class ProcessorStateManager {
 
             List<PartitionInfo> partitionInfos = restoreConsumer.partitionsFor(topic);
             if (partitionInfos == null) {
-                throw new StreamsException("task [" + taskId + "]  Could not find partition info for topic: " + topic);
+                throw new StreamsException(String.format("task [%s]  Could not find partition info for topic: %s", taskId, topic));
             }
             for (PartitionInfo partitionInfo : partitionInfos) {
                 if (partitionInfo.partition() == partition) {
@@ -164,7 +164,7 @@ public class ProcessorStateManager {
         } while (partitionNotFound && System.currentTimeMillis() < startTime + waitTime);
 
         if (partitionNotFound)
-            throw new StreamsException("task [" + taskId + "]  Store " + store.name() + "'s change log (" + topic + ") does not contain partition " + partition);
+            throw new StreamsException(String.format("task [%s]  Store %s's change log (%s) does not contain partition %s", taskId, store.name(), topic, partition));
 
         this.stores.put(store.name(), store);
 
@@ -181,7 +181,7 @@ public class ProcessorStateManager {
 
         // subscribe to the store's partition
         if (!restoreConsumer.subscription().isEmpty()) {
-            throw new IllegalStateException("task [" + taskId + "]  Restore consumer should have not subscribed to any partitions beforehand");
+            throw new IllegalStateException(String.format("task [%s]  Restore consumer should have not subscribed to any partitions beforehand", taskId));
         }
         TopicPartition storePartition = new TopicPartition(topicName, getPartition(topicName));
         restoreConsumer.assign(Collections.singletonList(storePartition));
@@ -217,7 +217,7 @@ public class ProcessorStateManager {
                 } else if (restoreConsumer.position(storePartition) > endOffset) {
                     // For a logging enabled changelog (no offset limit),
                     // the log end offset should not change while restoring since it is only written by this thread.
-                    throw new IllegalStateException("task [" + taskId + "] Log end offset should not change while restoring");
+                    throw new IllegalStateException(String.format("task [%s] Log end offset should not change while restoring", taskId));
                 }
             }
 
