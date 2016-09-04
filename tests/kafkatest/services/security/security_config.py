@@ -70,7 +70,7 @@ class SslStores(object):
         self.runcmd("keytool -gencert -keystore %s -storepass %s -alias ca -infile %s -outfile %s -dname CN=systemtest -ext SAN=DNS:%s -startdate %s" % (self.ca_jks_path, self.ca_passwd, csr_path, crt_path, self.hostname(node), self.startdate))
         self.runcmd("keytool -importcert -keystore %s -storepass %s -alias ca -file %s -noprompt" % (ks_path, self.keystore_passwd, self.ca_crt_path))
         self.runcmd("keytool -importcert -keystore %s -storepass %s -keypass %s -alias kafka -file %s -noprompt" % (ks_path, self.keystore_passwd, self.key_passwd, crt_path))
-        node.account.scp_to(ks_path, SecurityConfig.KEYSTORE_PATH)
+        node.account.copy_to(ks_path, SecurityConfig.KEYSTORE_PATH)
         rmtree(ks_dir)
 
     def hostname(self, node):
