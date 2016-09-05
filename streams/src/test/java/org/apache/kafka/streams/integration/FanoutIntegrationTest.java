@@ -38,7 +38,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
 
-import org.apache.kafka.streams.integration.utils.EmbeddedSingleNodeKafkaCluster;
+import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -64,8 +64,9 @@ import static org.junit.Assert.assertThat;
  * </pre>
  */
 public class FanoutIntegrationTest {
+    private static final int NUM_BROKERS = 1;
     @ClassRule
-    public static final EmbeddedSingleNodeKafkaCluster CLUSTER = new EmbeddedSingleNodeKafkaCluster();
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
     private static final String INPUT_TOPIC_A = "A";
     private static final String OUTPUT_TOPIC_B = "B";
     private static final String OUTPUT_TOPIC_C = "C";
