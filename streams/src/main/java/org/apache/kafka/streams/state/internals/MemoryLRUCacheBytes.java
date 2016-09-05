@@ -77,7 +77,7 @@ public class MemoryLRUCacheBytes {
         }
 
         final Set<Bytes> keys = dirtKeys.get(namespace);
-        if (keys == null) {
+        if (keys == null || keys.isEmpty()) {
             return;
         }
         final List<DirtyEntry> entries  = new ArrayList<>();

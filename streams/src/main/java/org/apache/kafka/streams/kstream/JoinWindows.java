@@ -104,7 +104,7 @@ public class JoinWindows extends Windows<TimeWindow> {
 
     @Override
     public long size() {
-        return after;
+        return after + before;
     }
 
     @Override
