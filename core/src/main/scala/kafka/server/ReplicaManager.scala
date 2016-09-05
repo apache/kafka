@@ -28,7 +28,7 @@ import kafka.controller.KafkaController
 import kafka.log.{LogAppendInfo, LogManager}
 import kafka.message.{ByteBufferMessageSet, InvalidMessageException, Message, MessageSet}
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.QuotaFactory.{UnbreakableQuota}
+import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.utils._
 import org.apache.kafka.common.errors.{ControllerMovedException, CorruptRecordException, InvalidTimestampException,
                                         InvalidTopicException, NotLeaderForPartitionException, OffsetOutOfRangeException,
@@ -461,7 +461,7 @@ class ReplicaManager(val config: KafkaConfig,
                     replicaId: Int,
                     fetchMinBytes: Int,
                     fetchInfo: immutable.Map[TopicAndPartition, PartitionFetchInfo],
-                    quota: ReadOnlyQuota = UnbreakableQuota,
+                    quota: ReadOnlyQuota = UnboundedQuota,
                     responseCallback: Map[TopicAndPartition, FetchResponsePartitionData] => Unit) {
     val isFromFollower = replicaId >= 0
     val fetchOnlyFromLeader: Boolean = replicaId != Request.DebuggingConsumerId

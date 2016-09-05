@@ -24,7 +24,7 @@ import kafka.cluster.Replica
 import kafka.common.TopicAndPartition
 import kafka.log.Log
 import kafka.message.{ByteBufferMessageSet, Message, MessageSet}
-import kafka.server.QuotaFactory.UnbreakableQuota
+import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.utils._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.{MockTime => JMockTime}
@@ -148,9 +148,9 @@ class SimpleFetchTest {
     val initialAllTopicsCount = BrokerTopicStats.getBrokerAllTopicsStats().totalFetchRequestRate.count()
 
     assertEquals("Reading committed data should return messages only up to high watermark", messagesToHW,
-      replicaManager.readFromLocalLog(true, true, fetchInfo, UnbreakableQuota).get(topicAndPartition).get.info.messageSet.head.message)
+      replicaManager.readFromLocalLog(true, true, fetchInfo, UnboundedQuota).get(topicAndPartition).get.info.messageSet.head.message)
     assertEquals("Reading any data can return messages up to the end of the log", messagesToLEO,
-      replicaManager.readFromLocalLog(true, false, fetchInfo, UnbreakableQuota).get(topicAndPartition).get.info.messageSet.head.message)
+      replicaManager.readFromLocalLog(true, false, fetchInfo, UnboundedQuota).get(topicAndPartition).get.info.messageSet.head.message)
 
     assertEquals("Counts should increment after fetch", initialTopicCount+2, BrokerTopicStats.getBrokerTopicStats(topic).totalFetchRequestRate.count())
     assertEquals("Counts should increment after fetch", initialAllTopicsCount+2, BrokerTopicStats.getBrokerAllTopicsStats().totalFetchRequestRate.count())

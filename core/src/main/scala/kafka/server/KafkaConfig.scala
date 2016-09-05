@@ -531,8 +531,8 @@ object KafkaConfig {
   val NumReplicationQuotaSamplesDoc = "The number of samples to retain in memory for replication quotas"
   val QuotaWindowSizeSecondsDoc = "The time span of each sample for client quotas"
   val ReplicationQuotaWindowSizeSecondsDoc = "The time span of each sample for replication quotas"
-  val ThrottledReplicationRateLimitDoc = "An long representing an upper bound on replication traffic for replicas enumerated in the " +
-    "property quota.replication.throttled.replicas. This property can be set dynamically."
+  val ThrottledReplicationRateLimitDoc = "A long representing the upper bound on replication traffic for replicas enumerated in the " +
+    s"property $ThrottledReplicationRateLimitProp. This property can be set dynamically."
 
   val DeleteTopicEnableDoc = "Enables delete topic. Delete topic through the admin tool will have no effect if this config is turned off"
   val CompressionTypeDoc = "Specify the final compression type for a given topic. This configuration accepts the standard compression codecs " +

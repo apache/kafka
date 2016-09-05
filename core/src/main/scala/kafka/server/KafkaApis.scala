@@ -24,9 +24,9 @@ import java.util.Properties
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api._
 import kafka.cluster.Partition
-import kafka.server.QuotaFactory.{UnbreakableQuota, QuotaManagers}
+import kafka.server.QuotaFactory.{UnboundedQuota, QuotaManagers}
 import kafka.server.QuotaType.{Produce, Fetch}
-import kafka.{server, common}
+import kafka.common
 import kafka.common._
 import kafka.controller.KafkaController
 import kafka.coordinator.{GroupCoordinator, JoinGroupResult}
@@ -511,7 +511,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  def sizeOfThrottledPartitions(fetchRequest: FetchRequest, mergedPartitionData: Map[TopicAndPartition, FetchResponsePartitionData], quota: ReplicationQuotaManager): Int = {
+  private def sizeOfThrottledPartitions(fetchRequest: FetchRequest, mergedPartitionData: Map[TopicAndPartition, FetchResponsePartitionData], quota: ReplicationQuotaManager): Int = {
     val throttledPartitions = mergedPartitionData.filter { case (partition, _) => quota.isThrottled(partition) }
     val sizeOfThrottledPartitions = FetchResponse.responseSize(throttledPartitions.groupBy(_._1.topic), fetchRequest.versionId)
     deleteMeUsefulLogging(quota, throttledPartitions, sizeOfThrottledPartitions)
@@ -530,7 +530,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def replicationQuota(fetchRequest: FetchRequest): ReadOnlyQuota =
-    if (fetchRequest.isFromFollower) quotas.leaderReplication else UnbreakableQuota
+    if (fetchRequest.isFromFollower) quotas.leaderReplication else UnboundedQuota
 
   /**
    * Handle an offset request
