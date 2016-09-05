@@ -827,11 +827,6 @@ public class TopologyBuilder {
         return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap, new ArrayList<>(stateStoreMap.values()), sourceStoreToSourceTopic);
     }
 
-    @SuppressWarnings("unchecked")
-    private void addCacheFlushListener(final ProcessorNode node, final ForwardingStateStoreSupplier supplier) {
-        supplier.get(new ProcessorNodeCacheFlushListener(node));
-    }
-
     /**
      * Returns the map of topic groups keyed by the group id.
      * A topic group is a group of topics in the same task.
