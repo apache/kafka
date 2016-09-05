@@ -123,6 +123,10 @@ public class MemoryLRUCacheBytes {
             callListener(toRemove.key, toRemove);
             remove(toRemove);
             treeMap.remove(key);
+
+            if (toRemove.entry.isDirty()) {
+                removeDirtyKey(namespace, key);
+            }
         }
     }
 
@@ -148,10 +152,12 @@ public class MemoryLRUCacheBytes {
             putHead(node);
             treeMap.put(cacheKey, node);
         }
+        if (value.isDirty()) {
+            addDirtyKey(namespace, cacheKey);
+        }
 
         currentSizeBytes += node.size();
         maybeEvict();
-        addDirtyKey(namespace, cacheKey);
     }
 
     public synchronized MemoryLRUCacheBytesEntry putIfAbsent(final String namespace, byte[] key, MemoryLRUCacheBytesEntry value) {
@@ -189,17 +195,17 @@ public class MemoryLRUCacheBytes {
         if (treeMap.size() == 0) {
             this.map.remove(namespace);
         }
-        addDirtyKey(namespace, cacheKey);
+        removeDirtyKey(namespace, cacheKey);
         return value.entry();
     }
 
 
     public synchronized int dirtySize(final String namespace) {
-        final TreeMap<Bytes, LRUNode> treeMap = map.get(namespace);
-        if (treeMap == null) {
+        final Set<Bytes> dirtyKeys = dirtKeys.get(namespace);
+        if (dirtyKeys == null) {
             return 0;
         }
-        return treeMap.size();
+        return dirtyKeys.size();
     }
 
     public int size() {
@@ -238,6 +244,13 @@ public class MemoryLRUCacheBytes {
         // first remove and then add so we can maintain ordering as the arrival order of the records.
         dirtyKeys.remove(cacheKey);
         dirtyKeys.add(cacheKey);
+    }
+
+    private void removeDirtyKey(final String namespace, final Bytes cacheKey) {
+        if (dirtKeys.containsKey(namespace)) {
+            final Set<Bytes> dirtyKeys = dirtKeys.get(namespace);
+            dirtyKeys.remove(cacheKey);
+        }
     }
 
     private void remove(LRUNode node) {

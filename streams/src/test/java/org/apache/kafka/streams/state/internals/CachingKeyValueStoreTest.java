@@ -80,7 +80,7 @@ public class CachingKeyValueStoreTest {
     @Test
     public void shouldFlushEvictedItemsIntoUnderlyingStore() throws Exception {
         int added = addItemsToCache();
-        // should only have only been one record evicted
+        // should only have one record evicted
         assertEquals(1, underlyingStore.approximateNumEntries());
         // 1 dirty key + entries in store;
         assertEquals(added, store.approximateNumEntries());

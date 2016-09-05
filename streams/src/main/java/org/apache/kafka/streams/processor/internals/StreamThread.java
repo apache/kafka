@@ -154,6 +154,7 @@ public class StreamThread extends Thread {
         super("StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement());
 
         this.applicationId = applicationId;
+        String threadName = getName();
         this.config = config;
         this.builder = builder;
         this.sourceTopics = builder.sourceTopics();
@@ -162,11 +163,14 @@ public class StreamThread extends Thread {
         this.processId = processId;
         this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
         this.streamsMetadataState = streamsMetadataState;
-        this.cacheSizeBytes = config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
-            config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG);
+        if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) < 0) {
+            log.info("Negative cache size passed in thread [{}]. Disabling cache", threadName);
+        }
+        this.cacheSizeBytes = Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
+            config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG));
         this.cache = new MemoryLRUCacheBytes(cacheSizeBytes);
         // set the producer and consumer clients
-        String threadName = getName();
+
         threadClientId = clientId + "-" + threadName;
         log.info("Creating producer client for stream thread [{}]", threadName);
         this.producer = clientSupplier.getProducer(config.getProducerConfigs(threadClientId));
