@@ -85,8 +85,10 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
     else {
       configValue.trim
         .split(":")
-        .filter(_.split("-")(1).toInt == brokerId) //match replica
-        .map(_.split("-")(0).toInt).toSeq
+        .map(_.split("-"))
+        .filter(_(1).toInt == brokerId //Filter this replica
+        )
+        .map(_(0).toInt).toSeq //convert to list of partition ids
     }
   }
 }
