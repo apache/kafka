@@ -770,7 +770,7 @@ public class TopologyBuilder {
         Map<String, ProcessorNode> processorMap = new HashMap<>();
         Map<String, SourceNode> topicSourceMap = new HashMap<>();
         Map<String, SinkNode> topicSinkMap = new HashMap<>();
-        Map<String, StateStoreSupplier> stateStoreMap = new LinkedHashMap<>();
+        Map<String, StateStore> stateStoreMap = new LinkedHashMap<>();
 
         // create processor nodes in a topological order ("nodeFactories" is already topologically sorted)
         for (NodeFactory factory : nodeFactories.values()) {
@@ -787,9 +787,11 @@ public class TopologyBuilder {
                         if (!stateStoreMap.containsKey(stateStoreName)) {
                             final StateStoreSupplier supplier = stateFactories.get(stateStoreName).supplier;
                             if (supplier instanceof ForwardingStateStoreSupplier) {
-                                addCacheFlushListener(node, (ForwardingStateStoreSupplier) supplier);
+                                ForwardingStateStoreSupplier forwardingSupplier = (ForwardingStateStoreSupplier) supplier;
+                                stateStoreMap.put(stateStoreName, forwardingSupplier.get(new ProcessorNodeCacheFlushListener<>(node)));
+                            } else {
+                                stateStoreMap.put(stateStoreName, supplier.get());
                             }
-                            stateStoreMap.put(stateStoreName, stateFactories.get(stateStoreName).supplier);
                         }
                     }
                 } else if (factory instanceof SourceNodeFactory) {
@@ -827,7 +829,7 @@ public class TopologyBuilder {
 
     @SuppressWarnings("unchecked")
     private void addCacheFlushListener(final ProcessorNode node, final ForwardingStateStoreSupplier supplier) {
-        supplier.withFlushListener(new ProcessorNodeCacheFlushListener(node));
+        supplier.get(new ProcessorNodeCacheFlushListener(node));
     }
 
     /**

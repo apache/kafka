@@ -30,7 +30,7 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.test.MockProcessorNode;
 import org.apache.kafka.test.MockSourceNode;
@@ -75,7 +75,7 @@ public class StreamTaskTest {
                 }
             },
             Collections.<String, SinkNode>emptyMap(),
-            Collections.<StateStoreSupplier>emptyList(),
+            Collections.<StateStore>emptyList(),
             Collections.<String, String>emptyMap()
     );
     private File baseDir;

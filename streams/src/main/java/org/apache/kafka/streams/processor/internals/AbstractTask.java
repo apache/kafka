@@ -23,7 +23,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes;
 
@@ -75,8 +74,7 @@ public abstract class AbstractTask {
         // set initial offset limits
         initializeOffsetLimits();
 
-        for (StateStoreSupplier stateStoreSupplier : this.topology.stateStoreSuppliers()) {
-            StateStore store = stateStoreSupplier.get();
+        for (StateStore store : this.topology.stateStores()) {
             store.init(this.processorContext, store);
         }
     }

@@ -232,13 +232,13 @@ public class TopologyBuilderTest {
         builder.addStateStore(supplier);
         builder.setApplicationId("X");
 
-        assertEquals(0, builder.build(null).stateStoreSuppliers().size());
+        assertEquals(0, builder.build(null).stateStores().size());
 
         builder.addSource("source-1", "topic-1");
         builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
         builder.connectProcessorAndStateStores("processor-1", "store-1");
 
-        List<StateStoreSupplier> suppliers = builder.build(null).stateStoreSuppliers();
+        List<StateStore> suppliers = builder.build(null).stateStores();
         assertEquals(1, suppliers.size());
         assertEquals(supplier.name(), suppliers.get(0).name());
     }

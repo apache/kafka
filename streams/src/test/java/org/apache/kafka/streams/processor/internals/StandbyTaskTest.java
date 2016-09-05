@@ -29,7 +29,6 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockStateStoreSupplier;
@@ -74,9 +73,9 @@ public class StandbyTaskTest {
             Collections.<ProcessorNode>emptyList(),
             Collections.<String, SourceNode>emptyMap(),
             Collections.<String, SinkNode>emptyMap(),
-            Utils.<StateStoreSupplier>mkList(
-                    new MockStateStoreSupplier(storeName1, false),
-                    new MockStateStoreSupplier(storeName2, true)
+            Utils.mkList(
+                    new MockStateStoreSupplier(storeName1, false).get(),
+                    new MockStateStoreSupplier(storeName2, true).get()
             ),
             Collections.<String, String>emptyMap()
     );
@@ -87,8 +86,8 @@ public class StandbyTaskTest {
             Collections.<ProcessorNode>emptyList(),
             Collections.<String, SourceNode>emptyMap(),
             Collections.<String, SinkNode>emptyMap(),
-            Utils.<StateStoreSupplier>mkList(
-                    new MockStateStoreSupplier(ktable.topic(), true, false)
+            Utils.mkList(
+                    new MockStateStoreSupplier(ktable.topic(), true, false).get()
             ),
             new HashMap<String, String>() {
             {

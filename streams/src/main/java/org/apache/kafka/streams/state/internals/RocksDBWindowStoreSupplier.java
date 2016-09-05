@@ -65,16 +65,17 @@ public class RocksDBWindowStoreSupplier<K, V> implements ForwardingStateStoreSup
     }
 
     public StateStore get() {
-        RocksDBWindowStore<K, V> store = new RocksDBWindowStore<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, windowSize, cacheFlushListener);
-        if (enableCaching) {
-            store.enableCaching();
-        }
-
+        RocksDBWindowStore<K, V> store = new RocksDBWindowStore<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, windowSize, null);
         return new MeteredWindowStore<>(store.enableLogging(), "rocksdb-window", time);
     }
 
     @Override
-    public void withFlushListener(final CacheFlushListener<Windowed<K>, V> listener) {
-        this.cacheFlushListener = listener;
+    public StateStore get(final CacheFlushListener<Windowed<K>, V> listener) {
+        RocksDBWindowStore<K, V> store = new RocksDBWindowStore<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, windowSize, listener);
+        if (enableCaching) {
+            store.enableCaching();
+        }
+        return new MeteredWindowStore<>(store.enableLogging(), "rocksdb-window", time);
+
     }
 }

@@ -70,14 +70,20 @@ public class RocksDBWindowStoreTest {
 
     @SuppressWarnings("unchecked")
     protected <K, V> WindowStore<K, V> createWindowStore(ProcessorContext context, final boolean enableCaching) {
-        RocksDBWindowStoreSupplier supplier = new RocksDBWindowStoreSupplier<>(windowName, retentionPeriod, numSegments, true, intSerde, stringSerde, windowSize, enableCaching);
-        supplier.withFlushListener(new CacheFlushListener() {
-            @Override
-            public void forward(final Object key, final Change value, final RecordContext recordContext, final InternalProcessorContext context) {
 
-            }
-        });
-        WindowStore<K, V> store = (WindowStore<K, V>) supplier.get();
+        RocksDBWindowStoreSupplier supplier = new RocksDBWindowStoreSupplier<>(windowName, retentionPeriod, numSegments, true, intSerde, stringSerde, windowSize, enableCaching);
+        WindowStore<K, V> store;
+        if (enableCaching) {
+            store = (WindowStore<K, V>) supplier.get(new CacheFlushListener() {
+                @Override
+                public void forward(final Object key, final Change value, final RecordContext recordContext, final InternalProcessorContext context) {
+
+                }
+            });
+        } else {
+            store = (WindowStore<K, V>) supplier.get();
+        }
+
         store.init(context, store);
         return store;
     }

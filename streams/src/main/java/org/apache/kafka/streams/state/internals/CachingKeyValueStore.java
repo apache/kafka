@@ -36,8 +36,8 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private final KeyValueStore<Bytes, byte[]> underlying;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
-    private final String name;
     private final CacheFlushListener<K, V> flushListener;
+    private String name;
     private MemoryLRUCacheBytes cache;
     private InternalProcessorContext context;
     private StateSerdes<K, V> serdes;
@@ -51,13 +51,12 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.underlying = underlying;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
-        this.name = underlying.name();
         this.flushListener = flushListener;
     }
 
     @Override
     public String name() {
-        return name;
+        return underlying.name();
     }
 
     @SuppressWarnings("unchecked")
@@ -76,6 +75,8 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.serdes = new StateSerdes<>(underlying.name(),
                                         keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                                         valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+
+        this.name = context.taskId() + "-" + underlying.name();
         this.cache = context.getCache();
         cache.addDirtyEntryFlushListener(name, new MemoryLRUCacheBytes.DirtyEntryFlushListener() {
             @Override

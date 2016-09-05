@@ -75,7 +75,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
             supplier = factory.build();
         }
 
-        ((ForwardingStateStoreSupplier) supplier).withFlushListener(new CacheFlushListener() {
+        ((ForwardingStateStoreSupplier) supplier).get(new CacheFlushListener() {
             @Override
             public void forward(final Object key, final Change value, final RecordContext recordContext, final InternalProcessorContext context) {
 

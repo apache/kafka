@@ -38,7 +38,6 @@ public class KTableStoreSupplier<K, V> implements ForwardingStateStoreSupplier<K
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private final Time time;
-    private CacheFlushListener<K, V> cacheFlushListener;
 
     protected KTableStoreSupplier(String name,
                                   Serde<K> keySerde,
@@ -55,13 +54,14 @@ public class KTableStoreSupplier<K, V> implements ForwardingStateStoreSupplier<K
     }
 
     public StateStore get() {
-        final CachingKeyValueStore<K, V> store = new CachingKeyValueStore<>(new RocksDBStore<>(name, Serdes.Bytes(), Serdes.ByteArray()),
-                                                                                             keySerde, valueSerde, cacheFlushListener);
-        return new MeteredKeyValueStore<>(store, "rocksdb-state", time);
+        return new MeteredKeyValueStore<>(new RocksDBStore<>(name, Serdes.Bytes(), Serdes.ByteArray()),
+                "rocksdb-state", time);
     }
 
     @Override
-    public void withFlushListener(final CacheFlushListener<K, V> listener) {
-        this.cacheFlushListener = listener;
+    public StateStore get(final CacheFlushListener<K, V> listener) {
+        final CachingKeyValueStore<K, V> store = new CachingKeyValueStore<>(new RocksDBStore<>(name, Serdes.Bytes(), Serdes.ByteArray()),
+                                                                            keySerde, valueSerde, listener);
+        return new MeteredKeyValueStore<>(store, "rocksdb-state", time);
     }
 }

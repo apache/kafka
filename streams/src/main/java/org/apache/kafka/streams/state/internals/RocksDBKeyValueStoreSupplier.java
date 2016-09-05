@@ -39,7 +39,6 @@ public class RocksDBKeyValueStoreSupplier<K, V> implements ForwardingStateStoreS
     private final Serde<V> valueSerde;
     private final Time time;
     private final boolean enableCaching;
-    private CacheFlushListener<K, V> cacheFlushListener;
 
     public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, boolean enableCaching) {
         this(name, keySerde, valueSerde, null, enableCaching);
@@ -58,21 +57,22 @@ public class RocksDBKeyValueStoreSupplier<K, V> implements ForwardingStateStoreS
     }
 
     public StateStore get() {
+        KeyValueStore<K, V> store = new RocksDBStore<>(name, keySerde, valueSerde).enableLogging();
+        return new MeteredKeyValueStore<>(store, "rocksdb-state", time);
+    }
+
+    @Override
+    public StateStore get(final CacheFlushListener<K, V> listener) {
         KeyValueStore<K, V> store;
         if (enableCaching) {
             store = new CachingKeyValueStore<>(new RocksDBStore<>(name, Serdes.Bytes(),
                                                                   Serdes.ByteArray()).enableLogging(),
                                                keySerde,
-                                               valueSerde, cacheFlushListener);
+                                               valueSerde, listener);
         } else {
             store = new RocksDBStore<>(name, keySerde, valueSerde).enableLogging();
         }
         return new MeteredKeyValueStore<>(store, "rocksdb-state", time);
-    }
-
-    @Override
-    public void withFlushListener(final CacheFlushListener listener) {
-        this.cacheFlushListener = listener;
 
     }
 }

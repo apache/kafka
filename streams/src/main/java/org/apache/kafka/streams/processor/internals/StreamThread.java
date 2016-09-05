@@ -624,7 +624,7 @@ public class StreamThread extends Thread {
 
         ProcessorTopology topology = builder.build(id.topicGroupId);
 
-        if (!topology.stateStoreSuppliers().isEmpty()) {
+        if (!topology.stateStores().isEmpty()) {
             return new StandbyTask(id, applicationId, partitions, topology, consumer, restoreConsumer, config, sensors, stateDirectory);
         } else {
             return null;

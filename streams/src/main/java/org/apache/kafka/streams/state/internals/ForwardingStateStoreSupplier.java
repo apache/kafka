@@ -29,9 +29,9 @@ import org.apache.kafka.streams.processor.StateStoreSupplier;
 public interface ForwardingStateStoreSupplier<K, V> extends StateStoreSupplier {
 
     /**
-     * Set the {@link CacheFlushListener} to be used with an {@link StateStore}
-     * when the {@link MemoryLRUCacheBytes} is flushed
+     * Return a new {@link StateStore} instance that uses the passed in {@link CacheFlushListener}
+     * when caching is enabled & the {@link MemoryLRUCacheBytes} is flushed
      * @param listener
      */
-    void withFlushListener(final CacheFlushListener<K, V> listener);
+    StateStore get(final CacheFlushListener<K, V> listener);
 }

@@ -26,7 +26,6 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContextImpl;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -71,8 +70,7 @@ public class KStreamTestDriver {
         this.context.setRecordContext(new ProcessorRecordContextImpl(0, 0, 0, "topic", null));
 
 
-        for (StateStoreSupplier stateStoreSupplier : topology.stateStoreSuppliers()) {
-            StateStore store = stateStoreSupplier.get();
+        for (StateStore store : topology.stateStores()) {
             store.init(context, store);
         }
 
