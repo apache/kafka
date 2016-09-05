@@ -36,7 +36,7 @@ object QuotaFactory {
     override def isQuotaExceededBy(bytes: Int): Boolean = false
   }
 
-  case class QuotaManagers(fetchQuotaManager: ClientQuotaManager, produceQuotaManager: ClientQuotaManager, leaderReplication: ReplicationQuotaManager, followerReplication: ReplicationQuotaManager)
+  case class QuotaManagers(fetch: ClientQuotaManager, produce: ClientQuotaManager, leader: ReplicationQuotaManager, follower: ReplicationQuotaManager)
 
   def time = new SystemTime
 

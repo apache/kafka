@@ -123,7 +123,7 @@ class ReplicaManagerQuotasTest {
     replay(logManager)
 
     replicaManager = new ReplicaManager(configs.head, metrics, time, jTime, zkUtils, scheduler, logManager,
-      new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics).followerReplication)
+      new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics).follower)
 
     //create the two replicas
     for(p <- Seq(topicAndPartition1, topicAndPartition2)) {

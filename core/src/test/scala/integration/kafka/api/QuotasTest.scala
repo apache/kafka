@@ -150,8 +150,8 @@ class QuotasTest extends KafkaServerTestHarness {
     AdminUtils.changeClientIdConfig(zkUtils, consumerId2, props)
 
     TestUtils.retry(10000) {
-      val overrideProducerQuota = leaderNode.apis.quotas.produceQuotaManager.quota(producerId2)
-      val overrideConsumerQuota = leaderNode.apis.quotas.fetchQuotaManager.quota(consumerId2)
+      val overrideProducerQuota = leaderNode.apis.quotas.produce.quota(producerId2)
+      val overrideConsumerQuota = leaderNode.apis.quotas.fetch.quota(consumerId2)
 
       assertEquals(s"ClientId $producerId2 must have unlimited producer quota", Quota.upperBound(Long.MaxValue), overrideProducerQuota)
       assertEquals(s"ClientId $consumerId2 must have unlimited consumer quota", Quota.upperBound(Long.MaxValue), overrideConsumerQuota)

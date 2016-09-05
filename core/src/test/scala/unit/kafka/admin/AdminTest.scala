@@ -441,8 +441,8 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
       TestUtils.retry(10000) {
         for (server <- servers) {
           assertEquals("KafkaConfig was not updated", limit, server.config.throttledReplicationRateLimit)
-          assertEquals("Leader Quota Manager was not updated", limit, server.quotaManagers.leaderReplication.bound())
-          assertEquals("Follower Quota Manager was not updated", limit, server.quotaManagers.followerReplication.bound())
+          assertEquals("Leader Quota Manager was not updated", limit, server.quotaManagers.leader.bound())
+          assertEquals("Follower Quota Manager was not updated", limit, server.quotaManagers.follower.bound())
         }
       }
     }
@@ -493,8 +493,8 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     // Test that the existing clientId overrides are read
     val server = TestUtils.createServer(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
     try {
-      assertEquals(new Quota(1000, true), server.apis.quotas.produceQuotaManager.quota(clientId))
-      assertEquals(new Quota(2000, true), server.apis.quotas.fetchQuotaManager.quota(clientId))
+      assertEquals(new Quota(1000, true), server.apis.quotas.produce.quota(clientId))
+      assertEquals(new Quota(2000, true), server.apis.quotas.fetch.quota(clientId))
     } finally {
       server.shutdown()
       CoreUtils.delete(server.config.logDirs)

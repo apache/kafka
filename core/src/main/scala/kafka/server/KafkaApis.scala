@@ -393,7 +393,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // When this callback is triggered, the remote API call has completed
       request.apiRemoteCompleteTimeMs = SystemTime.milliseconds
 
-      quotas.produceQuotaManager.recordAndMaybeThrottle(
+      quotas.produce.recordAndMaybeThrottle(
         request.header.clientId,
         numBytesAppended,
         produceResponseCallback)
@@ -487,12 +487,12 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       if (fetchRequest.isFromFollower) {
         //We've already evaluated against the quota and are good to go. Just need to record it now.
-        val size = sizeOfThrottledPartitions(fetchRequest, mergedPartitionData, quotas.leaderReplication)
-        quotas.leaderReplication.record(size)
+        val size = sizeOfThrottledPartitions(fetchRequest, mergedPartitionData, quotas.leader)
+        quotas.leader.record(size)
         fetchResponseCallback(0)
       } else {
         val size = FetchResponse.responseSize(mergedPartitionData.groupBy(_._1.topic), fetchRequest.versionId)
-        quotas.fetchQuotaManager.recordAndMaybeThrottle(fetchRequest.clientId, size, fetchResponseCallback)
+        quotas.fetch.recordAndMaybeThrottle(fetchRequest.clientId, size, fetchResponseCallback)
       }
     }
 
@@ -529,7 +529,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def replicationQuota(fetchRequest: FetchRequest): ReadOnlyQuota =
-    if (fetchRequest.isFromFollower) quotas.leaderReplication else UnboundedQuota
+    if (fetchRequest.isFromFollower) quotas.leader else UnboundedQuota
 
   /**
    * Handle an offset request
@@ -1043,8 +1043,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def close() {
-    quotas.produceQuotaManager.shutdown()
-    quotas.fetchQuotaManager.shutdown()
+    quotas.produce.shutdown()
+    quotas.fetch.shutdown()
     info("Shutdown complete.")
   }
 

@@ -71,8 +71,8 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
 
     if (topicConfig.containsKey(LogConfig.ThrottledReplicasListProp)) {
       val partitions = parseThrottledPartitions(topicConfig, brokerId)
-      quotas.leaderReplication.markReplicasAsThrottled(topic, partitions)
-      quotas.followerReplication.markReplicasAsThrottled(topic, partitions)
+      quotas.leader.markReplicasAsThrottled(topic, partitions)
+      quotas.follower.markReplicasAsThrottled(topic, partitions)
       logger.info(s"Setting throttled partitions on broker $brokerId to ${partitions.map(_.toString)}")
     }
   }
@@ -109,17 +109,17 @@ class ClientIdConfigHandler(private val quotaManagers: QuotaManagers) extends Co
   //TODO - this may require special support for config being removed. Check before merge.
   def processConfigChanges(clientId: String, clientConfig: Properties) {
     if (clientConfig.containsKey(ClientConfigOverride.ProducerOverride)) {
-      quotaManagers.produceQuotaManager.updateQuota(clientId,
+      quotaManagers.produce.updateQuota(clientId,
         new Quota(clientConfig.getProperty(ClientConfigOverride.ProducerOverride).toLong, true))
     } else {
-      quotaManagers.fetchQuotaManager.resetQuota(clientId)
+      quotaManagers.fetch.resetQuota(clientId)
     }
 
     if (clientConfig.containsKey(ClientConfigOverride.ConsumerOverride)) {
-      quotaManagers.fetchQuotaManager.updateQuota(clientId,
+      quotaManagers.fetch.updateQuota(clientId,
         new Quota(clientConfig.getProperty(ClientConfigOverride.ConsumerOverride).toLong, true))
     } else {
-      quotaManagers.produceQuotaManager.resetQuota(clientId)
+      quotaManagers.produce.resetQuota(clientId)
     }
   }
 }
@@ -137,8 +137,8 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig, private val quo
       if (properties.containsKey(ThrottledReplicationRateLimitProp)) {
         val limit = properties.getProperty(ThrottledReplicationRateLimitProp).toLong
         brokerConfig.mutateConfig(ThrottledReplicationRateLimitProp, limit)
-        quotaManagers.leaderReplication.updateQuota(upperBound(limit))
-        quotaManagers.followerReplication.updateQuota(upperBound(limit))
+        quotaManagers.leader.updateQuota(upperBound(limit))
+        quotaManagers.follower.updateQuota(upperBound(limit))
       }
     }
   }

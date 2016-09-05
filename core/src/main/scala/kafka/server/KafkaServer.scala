@@ -199,7 +199,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
 
         /* start replica manager */
         replicaManager = new ReplicaManager(config, metrics, time, kafkaMetricsTime, zkUtils, kafkaScheduler, logManager,
-          isShuttingDown, quotaManagers.followerReplication)
+          isShuttingDown, quotaManagers.follower)
         replicaManager.startup()
 
         /* start kafka controller */

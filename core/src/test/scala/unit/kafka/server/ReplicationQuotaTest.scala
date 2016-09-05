@@ -153,7 +153,7 @@ class ReplicationQuotaTest extends ZooKeeperTestHarness {
     changeTopicConfig(zkUtils, topic, property(ThrottledReplicasListProp, s"0-$side:2-$side")) //partition 0 & 2 are throttled
 
     //Useful functions
-    def configPropagatedCondition(): Boolean = brokers(side).quotaManagers.leaderReplication.isThrottled(new TopicAndPartition(topic, 0)) //doesn't matter if we check leader or follower replication
+    def configPropagatedCondition(): Boolean = brokers(side).quotaManagers.leader.isThrottled(new TopicAndPartition(topic, 0)) //doesn't matter if we check leader or follower replication
     def logsMatchRegular() = waitForOffset(tp(topic, 1), msgCount) && waitForOffset(tp(topic, 3), msgCount)
     def logsMatchThrottled() = waitForOffset(tp(topic, 0), msgCount) && waitForOffset(tp(topic, 2), msgCount) //the throttled ones
 
