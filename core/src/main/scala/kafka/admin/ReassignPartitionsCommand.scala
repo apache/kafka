@@ -286,6 +286,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: collection.Map[Top
     AdminUtils.changeBrokerConfig(zkUtils, brokerIds, CoreUtils.wrapInProperties(KafkaConfig.ThrottledReplicationRateLimitProp, throttle.toString))
 
     //Apply the list of throttled replicas to all topics with partitions being moved
+    //TODO - change to move destination replicas only
     val topics = partitions.keySet.map(tp => tp.topic).toSeq.distinct
     for (topic <- topics)
       AdminUtils.changeTopicConfig(zkUtils, topic, CoreUtils.wrapInProperties(LogConfig.ThrottledReplicasListProp, "*"))
