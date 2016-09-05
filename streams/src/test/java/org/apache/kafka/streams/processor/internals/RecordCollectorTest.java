@@ -66,7 +66,7 @@ public class RecordCollectorTest {
 
         RecordCollector collector = new RecordCollector(
                 new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer),
-                null);
+                "RecordCollectorTest-TestSpecificPartition");
 
         collector.send(new ProducerRecord<>("topic1", 0, "999", "0"), stringSerializer, stringSerializer);
         collector.send(new ProducerRecord<>("topic1", 0, "999", "0"), stringSerializer, stringSerializer);
@@ -98,7 +98,7 @@ public class RecordCollectorTest {
 
         RecordCollector collector = new RecordCollector(
                 new MockProducer<>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer),
-                null);
+                "RecordCollectorTest-TestStreamPartitioner");
 
         collector.send(new ProducerRecord<>("topic1", "3", "0"), stringSerializer, stringSerializer, streamPartitioner);
         collector.send(new ProducerRecord<>("topic1", "9", "0"), stringSerializer, stringSerializer, streamPartitioner);
