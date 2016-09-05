@@ -17,12 +17,10 @@
 
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.serialization.Serde;
-
 /**
  * The windowed key interface used in {@link KTable}, used for representing a windowed table result
  * from windowed stream aggregations (e.g. as returned by
- * {@link KGroupedStream#aggregate(Initializer, Aggregator, Windows, Serde, String)}).
+ * {@link KGroupedStream#aggregate(Initializer, Aggregator, Windows, org.apache.kafka.common.serialization.Serde, String)}).
  *
  * @param <K> Type of the key
  */
