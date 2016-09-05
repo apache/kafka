@@ -61,8 +61,6 @@ abstract class AbstractFetcherThread(name: String,
   // process fetched data
   def processPartitionData(topicAndPartition: TopicAndPartition, fetchOffset: Long, partitionData: PD)
 
-  def fetchResponseProcessingComplete(responseData: Map[TopicAndPartition, PD])
-
   // handle a partition whose offset is out of range and return a new fetch offset
   def handleOffsetOutOfRange(topicAndPartition: TopicAndPartition): Long
 
@@ -181,7 +179,6 @@ abstract class AbstractFetcherThread(name: String,
       debug("handling partitions with error for %s".format(partitionsWithError))
       handlePartitionsWithErrors(partitionsWithError)
     }
-    fetchResponseProcessingComplete(responseData)
   }
 
   def addPartitions(partitionAndOffsets: Map[TopicAndPartition, Long]) {

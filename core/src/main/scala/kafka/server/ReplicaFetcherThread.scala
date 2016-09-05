@@ -135,6 +135,8 @@ class ReplicaFetcherThread(name: String,
       if (logger.isTraceEnabled)
         trace("Follower %d set replica high watermark for partition [%s,%d] to %s"
           .format(replica.brokerId, topic, partitionId, followerHighWatermark))
+      if (quota.isThrottled(topicAndPartition))
+        quota.record(partitionData.toByteBufferMessageSet.sizeInBytes)
     } catch {
       case e: KafkaStorageException =>
         fatal(s"Disk error while replicating data for $topicAndPartition", e)
@@ -279,17 +281,6 @@ class ReplicaFetcherThread(name: String,
     }
     trace("Created a fetch request for partitions " + partitionMap.keys.map(_.toString))
     new FetchRequest(new JFetchRequest(replicaId, maxWait, minBytes, requestMap.asJava))
-  }
-
-  override def fetchResponseProcessingComplete(responseData: Map[TopicAndPartition, PD]) = {
-    //Record the bytes returned for any throttled partitions
-    val throttledBytes = responseData.map { case (partition, data) =>
-      if (quota.isThrottled(partition))
-        data.toByteBufferMessageSet.sizeInBytes
-      else 0
-    }.sum
-    if (throttledBytes > 0)
-      quota.record(throttledBytes)
   }
 }
 
