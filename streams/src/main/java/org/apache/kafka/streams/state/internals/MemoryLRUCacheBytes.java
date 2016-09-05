@@ -120,7 +120,9 @@ public class MemoryLRUCacheBytes {
             final TreeMap<Bytes, LRUNode> treeMap = this.map.get(namespace);
             final LRUNode toRemove = treeMap.get(key);
             currentSizeBytes -= toRemove.size();
-            callListener(toRemove.key, toRemove);
+            if (toRemove.entry.isDirty()) {
+                callListener(toRemove.key, toRemove);
+            }
             remove(toRemove);
             treeMap.remove(key);
 

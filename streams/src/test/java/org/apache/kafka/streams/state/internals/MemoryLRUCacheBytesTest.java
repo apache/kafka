@@ -357,6 +357,19 @@ public class MemoryLRUCacheBytesTest {
     }
 
     @Test
+    public void shouldNotForwardCleanEntryOnEviction() throws Exception {
+        final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(0);
+        final List<MemoryLRUCacheBytes.DirtyEntry> received = new ArrayList<>();
+        cache.addDirtyEntryFlushListener("name", new MemoryLRUCacheBytes.DirtyEntryFlushListener() {
+            @Override
+            public void apply(final List<MemoryLRUCacheBytes.DirtyEntry> dirty) {
+                received.addAll(dirty);
+            }
+        });
+        cache.put("name", new byte[] {1}, cleanEntry(new byte[]{0}));
+        assertEquals(0, received.size());
+    }
+    @Test
     public void shouldPutIfAbsent() throws Exception {
         final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(100000);
         final byte[] key = {10};
