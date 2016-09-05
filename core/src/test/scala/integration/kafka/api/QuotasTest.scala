@@ -183,6 +183,43 @@ class QuotasTest extends KafkaServerTestHarness {
     assertEquals("Should not have been throttled", 0.0, allMetrics(consumerMetricName).value(), 0.0)
   }
 
+  @Test
+  def testQuotaOverrideDelete() {
+    // Override producerId1 and consumerId1 quotas to unlimited
+    val props = new Properties()
+    props.put(ClientConfigOverride.ProducerOverride, Long.MaxValue.toString)
+    props.put(ClientConfigOverride.ConsumerOverride, Long.MaxValue.toString)
+
+    AdminUtils.changeClientIdConfig(zkUtils, producerId1, props)
+    AdminUtils.changeClientIdConfig(zkUtils, consumerId1, props)
+
+    val allMetrics: mutable.Map[MetricName, KafkaMetric] = leaderNode.metrics.metrics().asScala
+    val producerMetricName = leaderNode.metrics.metricName("throttle-time",
+                                                           ApiKeys.PRODUCE.name,
+                                                           "Tracking throttle-time per client",
+                                                           "client-id", producerId1)
+    val consumerMetricName = leaderNode.metrics.metricName("throttle-time",
+                                                           ApiKeys.FETCH.name,
+                                                           "Tracking throttle-time per client",
+                                                           "client-id", consumerId1)
+    val numRecords = 1000
+    produce(producers.head, numRecords)
+    assertTrue("Should not have been throttled", allMetrics(producerMetricName).value() == 0)
+    consume(consumers.head, numRecords)
+    assertTrue("Should not have been throttled", allMetrics(consumerMetricName).value() == 0)
+
+    // Delete producerId1 and consumerId1 quota overrides. Consumer and producer should now be
+    // throttled since broker defaults are very small
+    val emptyProps = new Properties()
+    AdminUtils.changeClientIdConfig(zkUtils, producerId1, emptyProps)
+    AdminUtils.changeClientIdConfig(zkUtils, consumerId1, emptyProps)
+    produce(producers.head, numRecords)
+
+    assertTrue("Should have been throttled", allMetrics(producerMetricName).value() > 0)
+    consume(consumers.head, numRecords)
+    assertTrue("Should have been throttled", allMetrics(consumerMetricName).value() > 0)
+  }
+
   def produce(p: KafkaProducer[Array[Byte], Array[Byte]], count: Int): Int = {
     var numBytesProduced = 0
     for (i <- 0 to count) {

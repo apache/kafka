@@ -276,6 +276,10 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     }
   }
 
+  def removeQuotaOverride(clientId: String) = {
+    updateQuota(clientId, defaultQuota)
+  }
+
   private def clientRateMetricName(clientId: String): MetricName = {
     metrics.metricName("byte-rate", apiKey,
                    "Tracking byte-rate per client",

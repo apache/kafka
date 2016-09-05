@@ -82,11 +82,13 @@ class ClientIdConfigHandler(private val quotaManagers: Map[Short, ClientQuotaMan
     if (clientConfig.containsKey(ClientConfigOverride.ProducerOverride)) {
       quotaManagers(ApiKeys.PRODUCE.id).updateQuota(clientId,
         new Quota(clientConfig.getProperty(ClientConfigOverride.ProducerOverride).toLong, true))
-    }
+    } else
+      quotaManagers(ApiKeys.PRODUCE.id).removeQuotaOverride(clientId)
 
     if (clientConfig.containsKey(ClientConfigOverride.ConsumerOverride)) {
       quotaManagers(ApiKeys.FETCH.id).updateQuota(clientId,
         new Quota(clientConfig.getProperty(ClientConfigOverride.ConsumerOverride).toLong, true))
-    }
+    } else
+      quotaManagers(ApiKeys.FETCH.id).removeQuotaOverride(clientId)
   }
 }
