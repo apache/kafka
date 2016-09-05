@@ -102,7 +102,7 @@ object ClientConfigOverride {
   * This implementation reports the overrides to the respective ClientQuotaManager objects
   */
 class ClientIdConfigHandler(private val quotaManagers: QuotaManagers) extends ConfigHandler {
-
+  //TODO - this may require special support for config being removed. Check before merge.
   def processConfigChanges(clientId: String, clientConfig: Properties) {
     if (clientConfig.containsKey(ClientConfigOverride.ProducerOverride)) {
       quotaManagers.client(QuotaType.Produce).updateQuota(clientId,
@@ -128,6 +128,7 @@ class ClientIdConfigHandler(private val quotaManagers: QuotaManagers) extends Co
 class BrokerConfigHandler(private val config: KafkaConfig, private val quotaManagers: QuotaManagers) extends ConfigHandler with Logging{
 
   def processConfigChanges(proposedConfigChangeBrokerId: String, proposedProperties: Properties) {
+    //TODO - this may require special support for config being removed. Check before merge.
     if(config.brokerId == proposedConfigChangeBrokerId.trim.toInt) {
       val limit = proposedProperties.getProperty(KafkaConfig.ThrottledReplicationRateLimitProp).toLong
       config.mutateConfig(KafkaConfig.ThrottledReplicationRateLimitProp, limit)

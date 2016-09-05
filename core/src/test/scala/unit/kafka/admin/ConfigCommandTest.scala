@@ -148,7 +148,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   @Test (expected = classOf[IllegalArgumentException])
   def shouldNotUpdateBrokerConfigIfMalformed(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
-      "--entity-name", "1,2,3",
+      "--entity-name", "1,2,3", //Don't support multiple brokers currently
       "--entity-type", "brokers",
       "--alter",
       "--add-config", "a=b"))
