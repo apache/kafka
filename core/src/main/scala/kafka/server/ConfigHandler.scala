@@ -22,11 +22,13 @@ import java.util.Properties
 import kafka.api.ApiVersion
 import kafka.log.{LogConfig, LogManager}
 import kafka.server.Constants._
+import kafka.server.KafkaConfig._
 import kafka.server.QuotaFactory.{QuotaManagers}
 import kafka.utils.Logging
 import org.apache.kafka.common.config.ConfigDef.Validator
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.metrics.Quota
+import org.apache.kafka.common.metrics.Quota._
 import scala.collection.JavaConverters._
 
 /**
@@ -127,16 +129,16 @@ class ClientIdConfigHandler(private val quotaManagers: QuotaManagers) extends Co
   * The callback provides the brokerId and the full properties set read from ZK.
   * This implementation reports the overrides to the respective ReplicationQuotaManager objects
   */
-class BrokerConfigHandler(private val config: KafkaConfig, private val quotaManagers: QuotaManagers) extends ConfigHandler with Logging{
-
-  def processConfigChanges(proposedConfigChangeBrokerId: String, proposedProperties: Properties) {
+class BrokerConfigHandler(private val brokerConfig: KafkaConfig, private val quotaManagers: QuotaManagers) extends ConfigHandler with Logging {
+  def processConfigChanges(brokerId: String, properties: Properties) {
     //TODO - this may require special support for config being removed. Check before merge.
-    if(config.brokerId == proposedConfigChangeBrokerId.trim.toInt) {
-      val limit = proposedProperties.getProperty(KafkaConfig.ThrottledReplicationRateLimitProp).toLong
-      config.mutateConfig(KafkaConfig.ThrottledReplicationRateLimitProp, limit)
-      if (proposedProperties.containsKey(KafkaConfig.ThrottledReplicationRateLimitProp)) {
-        quotaManagers.leaderReplication.updateQuota(new Quota(limit, true))
-        quotaManagers.followerReplication.updateQuota(new Quota(limit, true))
+    if (brokerConfig.brokerId == brokerId.trim.toInt) {
+      //Alter throttle limit:
+      if (properties.containsKey(ThrottledReplicationRateLimitProp)) {
+        val limit = properties.getProperty(ThrottledReplicationRateLimitProp).toLong
+        brokerConfig.mutateConfig(ThrottledReplicationRateLimitProp, limit)
+        quotaManagers.leaderReplication.updateQuota(upperBound(limit))
+        quotaManagers.followerReplication.updateQuota(upperBound(limit))
       }
     }
   }
@@ -151,7 +153,7 @@ object ThrottledReplicaValidator extends Validator {
     }
   }
 
-  def isValid(value: String): Boolean = {
+  private def isValid(value: String): Boolean = {
     val proposed = value.trim
     proposed.equals("*") || proposed.matches("([0-9]+-[0-9]+)?(:[0-9]+-[0-9]+)*")
   }

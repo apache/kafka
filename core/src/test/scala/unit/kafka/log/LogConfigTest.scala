@@ -21,6 +21,7 @@ import java.util.Properties
 
 import kafka.server.{ThrottledReplicaValidator, KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils
+import org.apache.kafka.common.config.ConfigException
 import org.junit.{Assert, Test}
 import org.junit.Assert._
 import org.scalatest.Assertions._
@@ -65,21 +66,30 @@ class LogConfigTest {
 
   @Test
   def shouldValidateThrottledReplicasConfig() {
-    assertTrue(ThrottledReplicaValidator.isValid("*"))
-    assertTrue(ThrottledReplicaValidator.isValid("* "))
-    assertTrue(ThrottledReplicaValidator.isValid(""))
-    assertTrue(ThrottledReplicaValidator.isValid(" "))
-    assertTrue(ThrottledReplicaValidator.isValid("100-10"))
-    assertTrue(ThrottledReplicaValidator.isValid("100-10:12-10"))
-    assertTrue(ThrottledReplicaValidator.isValid("100-10:12-10:15-1"))
-    assertTrue(ThrottledReplicaValidator.isValid("100-10:12-10:15-1  "))
+    assertTrue(isValid("*"))
+    assertTrue(isValid("* "))
+    assertTrue(isValid(""))
+    assertTrue(isValid(" "))
+    assertTrue(isValid("100-10"))
+    assertTrue(isValid("100-10:12-10"))
+    assertTrue(isValid("100-10:12-10:15-1"))
+    assertTrue(isValid("100-10:12-10:15-1  "))
 
-    assertFalse(ThrottledReplicaValidator.isValid("100"))
-    assertFalse(ThrottledReplicaValidator.isValid("100-"))
-    assertFalse(ThrottledReplicaValidator.isValid("100-0:"))
-    assertFalse(ThrottledReplicaValidator.isValid("100-0:10"))
-    assertFalse(ThrottledReplicaValidator.isValid("100-0:10-"))
-    assertFalse(ThrottledReplicaValidator.isValid("100-0:10-   "))
+    assertFalse(isValid("100"))
+    assertFalse(isValid("100-"))
+    assertFalse(isValid("100-0:"))
+    assertFalse(isValid("100-0:10"))
+    assertFalse(isValid("100-0:10-"))
+    assertFalse(isValid("100-0:10-   "))
+  }
+
+  def isValid(configValue: String): Boolean = {
+    try {
+      ThrottledReplicaValidator.ensureValid("", configValue)
+    } catch {
+      case e: ConfigException => return false
+    }
+    true
   }
 
   private def assertPropertyInvalid(name: String, values: AnyRef*) {
