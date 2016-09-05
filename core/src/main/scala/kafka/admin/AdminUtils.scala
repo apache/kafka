@@ -38,7 +38,14 @@ import collection.Map
 import collection.Set
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 
-object AdminUtils extends Logging {
+trait AdminUtilities {
+  def changeTopicConfig(zkUtils: ZkUtils, topic: String, configs: Properties)
+  def changeClientIdConfig(zkUtils: ZkUtils, clientId: String, configs: Properties)
+  def changeBrokerConfig(zkUtils: ZkUtils, brokerIds: Seq[Int], configs: Properties)
+  def fetchEntityConfig(zkUtils: ZkUtils,entityType: String, entityName: String): Properties
+}
+
+object AdminUtils extends Logging with AdminUtilities{
   val rand = new Random
   val AdminClientId = "__admin_client"
   val EntityConfigChangeZnodePrefix = "config_change_"

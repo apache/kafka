@@ -37,7 +37,7 @@ import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener, ZkClient}
 object ConfigType {
   val Topic = "topics"
   val Client = "clients"
-  val Broker: String = "broker"
+  val Broker = "brokers"
 }
 
 /**

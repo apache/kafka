@@ -573,6 +573,8 @@ object KafkaConfig {
   val SaslKerberosMinTimeBeforeReloginDoc = SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_DOC
   val SaslKerberosPrincipalToLocalRulesDoc = SaslConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_DOC
 
+  def mutableConfigs = Seq(KafkaConfig.ThrottledReplicationRateLimitProp)
+
   private val configDef = {
     import ConfigDef.Importance._
     import ConfigDef.Range._
@@ -970,10 +972,12 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
     * Mutate specific configuration values which are allowed to be mutated
     */
   def mutateConfig(prop: String, value: Long): Unit ={
+    if (!KafkaConfig.mutableConfigs.contains(prop)){
+      throw new IllegalArgumentException("Property $prop cannot be mutated as it's not configured as a mutable property")
+    }
     CoreUtils.inWriteLock(lock){
       prop match {
         case KafkaConfig.ThrottledReplicationRateLimitProp => throttledReplicationRateLimitMutable = value
-        case default => throw new IllegalArgumentException("Property $prop cannot be mutated as it's not configured as a mutable property")
       }
     }
   }

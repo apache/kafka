@@ -22,7 +22,7 @@ import java.util.Properties
 import joptsimple._
 import kafka.admin.TopicCommand._
 import kafka.log.{Defaults, LogConfig}
-import kafka.server.{ClientConfigOverride, ConfigType}
+import kafka.server.{KafkaConfig, ClientConfigOverride, ConfigType}
 import kafka.utils.{CommandLineUtils, ZkUtils}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Utils
@@ -32,7 +32,7 @@ import scala.collection._
 
 
 /**
- * This script can be used to change configs for topics/clients dynamically
+ * This script can be used to change configs for topics/clients/brokers dynamically
  */
 object ConfigCommand {
 
@@ -41,7 +41,7 @@ object ConfigCommand {
     val opts = new ConfigCommandOptions(args)
 
     if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(opts.parser, "Add/Remove entity (topics/clients) configs")
+      CommandLineUtils.printUsageAndDie(opts.parser, "Add/Remove entity (topics/clients/broker) configs")
 
     opts.checkArgs()
 
@@ -64,7 +64,7 @@ object ConfigCommand {
     }
   }
 
-  private def alterConfig(zkUtils: ZkUtils, opts: ConfigCommandOptions) {
+  def alterConfig(zkUtils: ZkUtils, opts: ConfigCommandOptions, utils: AdminUtilities = AdminUtils) {
     val configsToBeAdded = parseConfigsToBeAdded(opts)
     val configsToBeDeleted = parseConfigsToBeDeleted(opts)
     val entityType = opts.options.valueOf(opts.entityType)
@@ -72,17 +72,17 @@ object ConfigCommand {
     warnOnMaxMessagesChange(configsToBeAdded, opts.options.has(opts.forceOpt))
 
     // compile the final set of configs
-    val configs = AdminUtils.fetchEntityConfig(zkUtils, entityType, entityName)
+    val configs = utils.fetchEntityConfig(zkUtils, entityType, entityName)
     configs.putAll(configsToBeAdded)
     configsToBeDeleted.foreach(config => configs.remove(config))
 
-    if (entityType.equals(ConfigType.Topic)) {
-      AdminUtils.changeTopicConfig(zkUtils, entityName, configs)
-      println("Updated config for topic: \"%s\".".format(entityName))
-    } else {
-      AdminUtils.changeClientIdConfig(zkUtils, entityName, configs)
-      println("Updated config for clientId: \"%s\".".format(entityName))
+    entityType match {
+      case ConfigType.Topic =>  utils.changeTopicConfig(zkUtils, entityName, configs)
+      case ConfigType.Client =>  utils.changeClientIdConfig(zkUtils, entityName, configs)
+      case ConfigType.Broker => utils.changeBrokerConfig(zkUtils, parseBroker(entityName), configs)
+      case _ => throw new IllegalArgumentException(s"$entityType is not a known entityType. Should be one of ${ConfigType.Topic}, ${ConfigType.Client}, ${ConfigType.Broker}")
     }
+    println(s"Updated config for EntityType:$entityType => EntityName:'$entityName'.")
   }
 
   def warnOnMaxMessagesChange(configs: Properties, force: Boolean): Unit = {
@@ -94,6 +94,15 @@ object ConfigCommand {
       error(TopicCommand.longMessageSizeWarning(maxMessageBytes))
       if (!force)
         TopicCommand.askToProceed
+    }
+  }
+
+  private def parseBroker(broker: String): Seq[Int] = {
+    try {
+      return Seq(broker.toInt)
+    }catch {
+      case e: NumberFormatException =>
+        throw new IllegalArgumentException("The broker's Entity Name must be a single integer value")
     }
   }
 
@@ -145,16 +154,17 @@ object ConfigCommand {
             .ofType(classOf[String])
     val alterOpt = parser.accepts("alter", "Alter the configuration for the entity.")
     val describeOpt = parser.accepts("describe", "List configs for the given entity.")
-    val entityType = parser.accepts("entity-type", "Type of entity (topics/clients)")
+    val entityType = parser.accepts("entity-type", "Type of entity (topics/clients/brokers)")
             .withRequiredArg
             .ofType(classOf[String])
-    val entityName = parser.accepts("entity-name", "Name of entity (topic name/client id)")
+    val entityName = parser.accepts("entity-name", "Name of entity (topic name/client id/broker id)")
             .withRequiredArg
             .ofType(classOf[String])
 
     val nl = System.getProperty("line.separator")
     val addConfig = parser.accepts("add-config", "Key Value pairs configs to add 'k1=v1,k2=v2'. The following is a list of valid configurations: " +
             "For entity_type '" + ConfigType.Topic + "': " + nl + LogConfig.configNames.map("\t" + _).mkString(nl) + nl +
+            "For entity_type '" + ConfigType.Broker + "': " + nl + KafkaConfig.mutableConfigs.map("\t" + _).mkString(nl) + nl +
             "For entity_type '" + ConfigType.Client + "': " + nl + "\t" + ClientConfigOverride.ProducerOverride
                                                             + nl + "\t" + ClientConfigOverride.ConsumerOverride)
             .withRequiredArg
@@ -190,10 +200,9 @@ object ConfigCommand {
           throw new IllegalArgumentException("At least one of --add-config or --delete-config must be specified with --alter")
       }
       val entityTypeVal = options.valueOf(entityType)
-      if(! entityTypeVal.equals(ConfigType.Topic) && ! entityTypeVal.equals(ConfigType.Client)) {
-        throw new IllegalArgumentException("--entity-type must be '%s' or '%s'".format(ConfigType.Topic, ConfigType.Client))
+      if(! entityTypeVal.equals(ConfigType.Topic) && ! entityTypeVal.equals(ConfigType.Client) && ! entityTypeVal.equals(ConfigType.Broker)) {
+        throw new IllegalArgumentException("--entity-type must be '%s' or '%s' or '%s'".format(ConfigType.Topic, ConfigType.Client, ConfigType.Broker))
       }
     }
   }
-
 }
