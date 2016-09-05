@@ -166,14 +166,14 @@ public class ProcessorStateManager {
         if (partitionNotFound)
             throw new StreamsException("Store " + store.name() + "'s change log (" + topic + ") does not contain partition " + partition);
 
-        this.stores.put(store.name(), store);
-
         if (isStandby) {
             if (store.persistent())
                 restoreCallbacks.put(topic, stateRestoreCallback);
         } else {
             restoreActiveState(topic, stateRestoreCallback);
         }
+
+        this.stores.put(store.name(), store);
     }
 
     private void restoreActiveState(String topicName, StateRestoreCallback stateRestoreCallback) {

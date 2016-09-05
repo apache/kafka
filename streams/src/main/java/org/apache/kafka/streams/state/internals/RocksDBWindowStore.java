@@ -66,6 +66,12 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         public void destroy() {
             Utils.delete(dbDir);
         }
+
+        @Override
+        public void openDB(final ProcessorContext context) {
+            super.openDB(context);
+            open = true;
+        }
     }
 
     private static class RocksDBWindowStoreIterator<V> implements WindowStoreIterator<V> {
