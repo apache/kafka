@@ -116,18 +116,25 @@ public final class Sensor {
     }
 
     /**
-     * Evaluate whether the value passed causes the quota to be exceeded on any metric
-     * @param delta A delta to be added to each metric before it is evalutated
-     * @throws QuotaViolationException if evaluating this value moves a metric beyond its configured maximum or minimum
-     *         bound
+     * Check if we have violated our quota for any metric that has a configured quota
      */
-    public void checkQuotaWithDelta(double value) {
-        checkQuotaWithDelta(value, time.milliseconds());
+    public void checkQuotas() {
+        checkQuotaWithDelta(0, time.milliseconds());
     }
 
     /**
      * Evaluate whether the value passed causes the quota to be exceeded on any metric
      * @param delta A delta to be added to each metric before it is evalutated
+     * @throws QuotaViolationException if evaluating this value moves a metric beyond its configured maximum or minimum
+     *         bound
+     */
+    public void checkQuotaWithDelta(double delta) {
+        checkQuotaWithDelta(delta, time.milliseconds());
+    }
+
+    /**
+     * Evaluate whether the value passed causes the quota to be exceeded on any metric
+     * @param delta A delta to be added to each metric before it is evaluated
      * @param timeMs The current POSIX time in milliseconds
      * @throws QuotaViolationException if evaluating this value moves a metric beyond its configured maximum or minimum
      *         bound
