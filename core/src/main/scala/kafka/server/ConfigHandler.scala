@@ -109,17 +109,17 @@ class ClientIdConfigHandler(private val quotaManagers: QuotaManagers) extends Co
   //TODO - this may require special support for config being removed. Check before merge.
   def processConfigChanges(clientId: String, clientConfig: Properties) {
     if (clientConfig.containsKey(ClientConfigOverride.ProducerOverride)) {
-      quotaManagers.client(QuotaType.Produce).updateQuota(clientId,
+      quotaManagers.produceQuotaManager.updateQuota(clientId,
         new Quota(clientConfig.getProperty(ClientConfigOverride.ProducerOverride).toLong, true))
     } else {
-      quotaManagers.client(QuotaType.Produce).resetQuota(clientId)
+      quotaManagers.fetchQuotaManager.resetQuota(clientId)
     }
 
     if (clientConfig.containsKey(ClientConfigOverride.ConsumerOverride)) {
-      quotaManagers.client(QuotaType.Fetch).updateQuota(clientId,
+      quotaManagers.fetchQuotaManager.updateQuota(clientId,
         new Quota(clientConfig.getProperty(ClientConfigOverride.ConsumerOverride).toLong, true))
     } else {
-      quotaManagers.client(QuotaType.Produce).resetQuota(clientId)
+      quotaManagers.produceQuotaManager.resetQuota(clientId)
     }
   }
 }

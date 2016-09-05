@@ -17,18 +17,16 @@
 package kafka.server
 
 import kafka.common.TopicAndPartition
+import kafka.server.QuotaType._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.SystemTime
 
-import scala.collection.Map
-
-object QuotaType  {
-  case object Fetch extends QuotaType
-  case object Produce extends QuotaType
-  case object LeaderReplication extends QuotaType
-  case object FollowerReplication extends QuotaType
+object QuotaType {
+  val Fetch = "Fetch"
+  val Produce = "Produce"
+  val LeaderReplication = "LeaderReplication"
+  val FollowerReplication = "FollowerReplication"
 }
-sealed trait QuotaType
 
 object QuotaFactory {
 
@@ -38,38 +36,36 @@ object QuotaFactory {
     override def isQuotaExceededBy(bytes: Int): Boolean = false
   }
 
-  case class QuotaManagers(client: Map[QuotaType, ClientQuotaManager], leaderReplication: ReplicationQuotaManager, followerReplication: ReplicationQuotaManager)
+  case class QuotaManagers(fetchQuotaManager: ClientQuotaManager, produceQuotaManager: ClientQuotaManager, leaderReplication: ReplicationQuotaManager, followerReplication: ReplicationQuotaManager)
 
-  /*
-   * Returns a Map of all quota managers configured. The request Api key is the key for the Map
-   */
+  def time = new SystemTime
+
   def instantiate(cfg: KafkaConfig, metrics: Metrics): QuotaManagers = {
-    val producerQuotaManagerCfg = ClientQuotaManagerConfig(
+    QuotaManagers(
+      new ClientQuotaManager(clientFetchConfig(cfg), metrics, Fetch, time),
+      new ClientQuotaManager(clientProduceConfig(cfg), metrics, Produce, time),
+      new ReplicationQuotaManager(replicationConfig(cfg), metrics, LeaderReplication, time),
+      new ReplicationQuotaManager(replicationConfig(cfg), metrics, FollowerReplication, time)
+    )
+  }
+
+  def clientProduceConfig(cfg: KafkaConfig): ClientQuotaManagerConfig =
+    ClientQuotaManagerConfig(
       quotaBytesPerSecondDefault = cfg.producerQuotaBytesPerSecondDefault,
       numQuotaSamples = cfg.numQuotaSamples,
       quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
     )
 
-    val consumerQuotaManagerCfg = ClientQuotaManagerConfig(
+  def clientFetchConfig(cfg: KafkaConfig): ClientQuotaManagerConfig =
+    ClientQuotaManagerConfig(
       quotaBytesPerSecondDefault = cfg.consumerQuotaBytesPerSecondDefault,
       numQuotaSamples = cfg.numQuotaSamples,
       quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
     )
 
-    val replicationQuotaManagerCfg = ReplicationQuotaManagerConfig(
+  def replicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig =
+    ReplicationQuotaManagerConfig(
       numQuotaSamples = cfg.numReplicationQuotaSamples,
       quotaWindowSizeSeconds = cfg.replicationQuotaWindowSizeSeconds
     )
-
-    val clientQuotaManagers = Map[QuotaType, ClientQuotaManager](
-      QuotaType.Produce ->
-        new ClientQuotaManager(producerQuotaManagerCfg, metrics, QuotaType.Produce.toString, new org.apache.kafka.common.utils.SystemTime),
-      QuotaType.Fetch ->
-        new ClientQuotaManager(consumerQuotaManagerCfg, metrics, QuotaType.Fetch.toString, new org.apache.kafka.common.utils.SystemTime)
-    )
-
-    val leader = new ReplicationQuotaManager(replicationQuotaManagerCfg, metrics, QuotaType.LeaderReplication.toString, new SystemTime)
-    val follower = new ReplicationQuotaManager(replicationQuotaManagerCfg, metrics, QuotaType.FollowerReplication.toString, new SystemTime)
-    QuotaManagers(clientQuotaManagers, leader, follower)
-  }
 }

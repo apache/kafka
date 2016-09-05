@@ -25,7 +25,6 @@ import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api._
 import kafka.cluster.Partition
 import kafka.server.QuotaFactory.{UnboundedQuota, QuotaManagers}
-import kafka.server.QuotaType.{Produce, Fetch}
 import kafka.common
 import kafka.common._
 import kafka.controller.KafkaController
@@ -394,7 +393,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // When this callback is triggered, the remote API call has completed
       request.apiRemoteCompleteTimeMs = SystemTime.milliseconds
 
-      quotas.client(Produce).recordAndMaybeThrottle(
+      quotas.produceQuotaManager.recordAndMaybeThrottle(
         request.header.clientId,
         numBytesAppended,
         produceResponseCallback)
@@ -493,7 +492,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         fetchResponseCallback(0)
       } else {
         val size = FetchResponse.responseSize(mergedPartitionData.groupBy(_._1.topic), fetchRequest.versionId)
-        quotas.client(Fetch).recordAndMaybeThrottle(fetchRequest.clientId, size, fetchResponseCallback)
+        quotas.fetchQuotaManager.recordAndMaybeThrottle(fetchRequest.clientId, size, fetchResponseCallback)
       }
     }
 
@@ -1044,9 +1043,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def close() {
-    quotas.client.foreach { case (apiKey, quotaManager) =>
-      quotaManager.shutdown()
-    }
+    quotas.produceQuotaManager.shutdown()
+    quotas.fetchQuotaManager.shutdown()
     info("Shutdown complete.")
   }
 

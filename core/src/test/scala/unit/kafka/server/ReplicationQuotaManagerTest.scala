@@ -26,7 +26,6 @@ import org.apache.kafka.common.utils.MockTime
 import org.junit.Assert.{assertFalse, assertTrue, assertEquals}
 import org.junit.Test
 
-
 class ReplicationQuotaManagerTest {
   private val time = new MockTime
 
@@ -43,7 +42,7 @@ class ReplicationQuotaManagerTest {
 
   @Test
   def shouldExceedQuotaThenReturnBackBelowBoundAsTimePasses(): Unit = {
-    val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(numQuotaSamples = 10, quotaWindowSizeSeconds = 1), newMetrics, QuotaType.LeaderReplication.toString, time) {
+    val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(numQuotaSamples = 10, quotaWindowSizeSeconds = 1), newMetrics, QuotaType.LeaderReplication, time) {
       override def newRateInstance() = new FixedWindowRate() //TODO - decide which rate is best prior to merge
     }
 
@@ -85,7 +84,7 @@ class ReplicationQuotaManagerTest {
 
   @Test
   def shouldExceedWhenProposedBytesExceedQuota(): Unit = {
-    val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(numQuotaSamples = 10, quotaWindowSizeSeconds = 1), newMetrics, QuotaType.LeaderReplication.toString, time) {
+    val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(numQuotaSamples = 10, quotaWindowSizeSeconds = 1), newMetrics, QuotaType.LeaderReplication, time) {
       override def newRateInstance() = new FixedWindowRate() //TODO - decide which rate is best prior to merge
     }
 
@@ -119,7 +118,7 @@ class ReplicationQuotaManagerTest {
 
   @Test
   def shouldSupportWildcardThrottledReplicas(): Unit = {
-    val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(), newMetrics, QuotaType.LeaderReplication.toString, time)
+    val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(), newMetrics, QuotaType.LeaderReplication, time)
 
     //When
     quota.markReplicasAsThrottled("MyTopic")

@@ -58,7 +58,6 @@ class ReplicationQuotaTest extends ZooKeeperTestHarness {
     super.tearDown()
   }
 
-  //TODO do a test that mimics a bootstrapping broker
   //TODO tests show the producer timing out. This is us throttling an ISR partition. Should reconsider this issue.
   //TODO speed up by altering quota.window.num & quota.window.size.seconds and reducing throttle
 
@@ -78,7 +77,7 @@ class ReplicationQuotaTest extends ZooKeeperTestHarness {
     producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(brokers), retries = 5, acks = 0)
     val leaders = TestUtils.createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 2, servers = brokers)
     val follower = if (leaders(0).get == brokers.head.config.brokerId) brokers(1) else brokers.head
-    val followerByteRateMetricName = follower.metrics.metricName("byte-rate", FollowerReplication.toString, "Tracking byte-rate for" + FollowerReplication)
+    val followerByteRateMetricName = follower.metrics.metricName("byte-rate", FollowerReplication, "Tracking byte-rate for" + FollowerReplication)
     shouldThrottleToDesiredRateOverTime(follower, followerByteRateMetricName)
   }
 
@@ -136,7 +135,7 @@ class ReplicationQuotaTest extends ZooKeeperTestHarness {
   }
 
   //TODO need to work on the temporal comparisons prior to merge
-  def shouldReplicateThrottledAndNonThrottledPartitionsConcurrently(throttleSide: QuotaType): Unit = {
+  def shouldReplicateThrottledAndNonThrottledPartitionsConcurrently(throttleSide: String): Unit = {
     brokers = createBrokerConfigs(2, zkConnect).map(fromProps).map(TestUtils.createServer(_))
     producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(brokers), retries = 5, acks = 0)
 

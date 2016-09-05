@@ -65,11 +65,11 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     props.put(ClientConfigOverride.ProducerOverride, "1000")
     props.put(ClientConfigOverride.ConsumerOverride, "2000")
     AdminUtils.changeClientIdConfig(zkUtils, clientId, props)
-    val quotaManagers: Map[QuotaType, ClientQuotaManager] = servers.head.apis.quotas.client
+    val quotaManagers = servers.head.apis.quotas
 
     TestUtils.retry(10000) {
-      val overrideProducerQuota = quotaManagers.get(QuotaType.Produce).get.quota(clientId)
-      val overrideConsumerQuota = quotaManagers.get(QuotaType.Fetch).get.quota(clientId)
+      val overrideProducerQuota = quotaManagers.produceQuotaManager.quota(clientId)
+      val overrideConsumerQuota = quotaManagers.fetchQuotaManager.quota(clientId)
 
       assertEquals(s"ClientId $clientId must have overridden producer quota of 1000",
         Quota.upperBound(1000), overrideProducerQuota)
@@ -84,8 +84,8 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     AdminUtils.changeClientIdConfig(zkUtils, clientId, new Properties())
 
     TestUtils.retry(10000) {
-      val producerQuota = quotaManagers.get(QuotaType.Produce).get.quota(clientId)
-      val consumerQuota = quotaManagers.get(QuotaType.Fetch).get.quota(clientId)
+      val producerQuota = quotaManagers.produceQuotaManager.quota(clientId)
+      val consumerQuota = quotaManagers.fetchQuotaManager.quota(clientId)
 
       assertEquals(s"ClientId $clientId must have reset producer quota to " + defaultProducerQuota,
         Quota.upperBound(defaultProducerQuota), producerQuota)
