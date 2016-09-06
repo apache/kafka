@@ -36,7 +36,7 @@ import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
 
-class ReplicationQuotaTest extends ZooKeeperTestHarness {
+class ReplicationQuotasTest extends ZooKeeperTestHarness {
   def TenPercentError(value: Int): Int = Math.round(value * 0.1).toInt
 
   def FifteenPercentError(value: Int): Int = Math.round(value * 0.15).toInt
