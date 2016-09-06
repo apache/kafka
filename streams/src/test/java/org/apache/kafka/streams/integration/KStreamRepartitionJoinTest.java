@@ -216,7 +216,7 @@ public class KStreamRepartitionJoinTest {
                 return value1 + ":" + value2;
             }
         };
-        String output = "join-rhs-stream-mapped";
+        String output = "join-rhs-stream-mapped-" + testNo;
         streamTwo
             .join(streamOne.map(keyMapper),
                   joiner,
@@ -235,7 +235,7 @@ public class KStreamRepartitionJoinTest {
 
         final KStream<Integer, String> map2 = streamTwo.map(MockKeyValueMapper.<Integer, String>NoOpKeyValueMapper());
 
-        String outputTopic = "left-join";
+        String outputTopic = "left-join-" + testNo;
         map1.leftJoin(map2,
                       valueJoiner,
                       getJoinWindow(),
@@ -269,7 +269,7 @@ public class KStreamRepartitionJoinTest {
                 return value1 + ":" + value2;
             }
         };
-        String topic = "map-join-join";
+        String topic = "map-join-join-" + testNo;
         join.map(kvMapper)
             .join(streamFour.map(kvMapper),
                   joiner,
