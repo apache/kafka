@@ -374,11 +374,11 @@ public class StreamThread extends Thread {
                     // even when no task is assigned, we must poll to get a task.
                     requiresPoll = true;
                 }
-                maybeCommit();
+
             } else {
                 requiresPoll = true;
             }
-
+            maybeCommit();
             maybeUpdateStandbyTasks();
 
             maybeClean();
