@@ -50,6 +50,11 @@ import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
 
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
+
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
@@ -66,6 +71,8 @@ import java.util.TreeSet;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
+
+@RunWith(Parameterized.class)
 public class QueryableStateIntegrationTest {
     private static final int NUM_BROKERS = 2;
     @ClassRule
@@ -97,6 +104,15 @@ public class QueryableStateIntegrationTest {
         CLUSTER.createTopic(OUTPUT_TOPIC_THREE);
     }
 
+    @Parameter
+    public long cacheSizeBytes;
+
+    //Single parameter, use Object[]
+    @Parameters
+    public static Object[] data() {
+        return new Object[] {0, 10 * 1024 * 1024L};
+    }
+
     @Before
     public void before() throws IOException {
         streamsConfiguration = new Properties();
@@ -114,6 +130,8 @@ public class QueryableStateIntegrationTest {
         streamsConfiguration
             .put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1);
+        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
+
         stringComparator = new Comparator<KeyValue<String, String>>() {
 
             @Override

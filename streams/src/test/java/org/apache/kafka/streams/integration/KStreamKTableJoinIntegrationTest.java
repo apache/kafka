@@ -36,6 +36,10 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
 
 import java.util.Arrays;
 import java.util.List;
@@ -51,6 +55,8 @@ import static org.junit.Assert.assertThat;
  * End-to-end integration test that demonstrates how to perform a join between a KStream and a
  * KTable (think: KStream.leftJoin(KTable)), i.e. an example of a stateful computation.
  */
+
+@RunWith(Parameterized.class)
 public class KStreamKTableJoinIntegrationTest {
 
     private static final int NUM_BROKERS = 1;
@@ -66,6 +72,15 @@ public class KStreamKTableJoinIntegrationTest {
         CLUSTER.createTopic(USER_CLICKS_TOPIC);
         CLUSTER.createTopic(USER_REGIONS_TOPIC);
         CLUSTER.createTopic(OUTPUT_TOPIC);
+    }
+
+    @Parameter
+    public long cacheSizeBytes;
+
+    //Single parameter, use Object[]
+    @Parameters
+    public static Object[] data() {
+        return new Object[] {0, 10 * 1024 * 1024L};
     }
 
     /**
@@ -149,6 +164,7 @@ public class KStreamKTableJoinIntegrationTest {
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG,
                                  TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1);
+        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
 
         // Remove any state from previous test runs
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
