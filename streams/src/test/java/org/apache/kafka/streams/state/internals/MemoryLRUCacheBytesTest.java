@@ -284,8 +284,8 @@ public class MemoryLRUCacheBytesTest {
         iterator.peekNextKey();
     }
 
-    @Test(expected = NoSuchElementException.class)
-    public void shouldThrowIfNoNextKey() throws Exception {
+    @Test
+    public void shouldReturnFalseIfNoNextKey() throws Exception {
         final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(10000L);
         final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator iterator = cache.range("", new byte[]{0}, new byte[]{1});
         assertFalse(iterator.hasNext());

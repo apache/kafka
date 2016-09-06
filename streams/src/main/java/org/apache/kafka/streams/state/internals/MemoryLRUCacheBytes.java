@@ -323,7 +323,7 @@ public class MemoryLRUCacheBytes {
     public synchronized MemoryLRUCacheBytesIterator range(final String namespace, final byte[] from, final byte[] to) {
         final TreeMap<Bytes, LRUNode> treeMap = this.map.get(namespace);
         if (treeMap == null) {
-            throw new NoSuchElementException("Namespace " + namespace + " doesn't exist");
+            return new MemoryLRUCacheBytesIterator(namespace, Collections.<Bytes>emptyIterator(), Collections.<Bytes, LRUNode>emptyMap());
         }
         return new MemoryLRUCacheBytesIterator(namespace, keySetIterator(treeMap.navigableKeySet().subSet(cacheKey(from), true, cacheKey(to), true)), treeMap);
     }
@@ -331,7 +331,7 @@ public class MemoryLRUCacheBytes {
     public MemoryLRUCacheBytesIterator all(final String namespace) {
         final TreeMap<Bytes, LRUNode> treeMap = this.map.get(namespace);
         if (treeMap == null) {
-            throw new NoSuchElementException("Namespace " + namespace + " doesn't exist");
+            return new MemoryLRUCacheBytesIterator(namespace, Collections.<Bytes>emptyIterator(), Collections.<Bytes, LRUNode>emptyMap());
         }
         return new MemoryLRUCacheBytesIterator(namespace, keySetIterator(treeMap.keySet()), treeMap);
     }
