@@ -58,7 +58,7 @@ public class CachingKeyValueStoreTest {
         underlyingStore = new InMemoryKeyValueStore<>(storeName);
         cacheFlushListener = new CacheFlushListenerStub();
         store = new CachingKeyValueStore<>(underlyingStore, Serdes.String(), Serdes.String(), cacheFlushListener);
-        maxCacheSizeBytes = 100;
+        maxCacheSizeBytes = 150;
         cache = new MemoryLRUCacheBytes(maxCacheSizeBytes);
         context = new MockProcessorContext(null, null, null, null, (RecordCollector) null, cache);
         topic = "topic";
@@ -141,7 +141,7 @@ public class CachingKeyValueStoreTest {
         while (cachedSize < maxCacheSizeBytes) {
             final String kv = String.valueOf(i++);
             store.put(kv, kv);
-            cachedSize += memoryCacheEntrySize(kv.getBytes(), kv.getBytes(), topic);
+            cachedSize += memoryCacheEntrySize("", kv.getBytes(), kv.getBytes(), topic);
         }
         return i;
     }

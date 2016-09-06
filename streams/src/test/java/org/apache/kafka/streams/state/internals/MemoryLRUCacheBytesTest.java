@@ -30,6 +30,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class MemoryLRUCacheBytesTest {
 
@@ -44,7 +45,7 @@ public class MemoryLRUCacheBytesTest {
         final KeyValue<String, String> kv = toInsert.get(0);
         final String name = "name";
         MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(
-                toInsert.size() * memoryCacheEntrySize(kv.key.getBytes(), kv.value.getBytes(), ""));
+                toInsert.size() * memoryCacheEntrySize(name, kv.key.getBytes(), kv.value.getBytes(), ""));
 
         for (int i = 0; i < toInsert.size(); i++) {
             byte[] key = toInsert.get(i).key.getBytes();
@@ -60,6 +61,62 @@ public class MemoryLRUCacheBytesTest {
         }
     }
 
+    private void checkOverheads(double entryFactor, double systemFactor, long desiredCacheSize, int keySizeBytes,
+                            int valueSizeBytes) {
+        Runtime runtime = Runtime.getRuntime();
+        byte[] key = new byte[keySizeBytes];
+        byte[] value = new byte[valueSizeBytes];
+        final String name = "name";
+        long numElements = desiredCacheSize / memoryCacheEntrySize(name, key, value, "");
+
+        System.gc();
+        long prevRuntimeMemory = runtime.totalMemory() - runtime.freeMemory();
+
+        MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(desiredCacheSize);
+        long size = cache.sizeBytes();
+        assertEquals(size, 0);
+        for (int i = 0; i < numElements; i++) {
+            String keyStr = "K" + i;
+            key = keyStr.getBytes();
+            value = new byte[valueSizeBytes];
+            cache.put(name, key, new MemoryLRUCacheBytesEntry(value, true, 1L, 1L, 1, ""));
+        }
+
+
+        System.gc();
+        double floor = desiredCacheSize - desiredCacheSize * entryFactor;
+        double ceiling = desiredCacheSize + desiredCacheSize * entryFactor;
+        long usedRuntimeMemory = runtime.totalMemory() - runtime.freeMemory() - prevRuntimeMemory;
+        assertTrue(floor <= (double) cache.sizeBytes()
+            && (double) cache.sizeBytes() <= ceiling);
+        assertTrue("Used memory size " + usedRuntimeMemory + " greater than expected " + cache.sizeBytes() * systemFactor,
+            cache.sizeBytes() * systemFactor >= usedRuntimeMemory);
+    }
+
+    @Test
+    public void cacheOverheadsSmallValues() {
+        Runtime runtime = Runtime.getRuntime();
+        double factor = 0.05;
+        double systemFactor = 2.5;
+        long desiredCacheSize = Math.min(1 * 1024 * 1024 * 1024L, runtime.maxMemory());
+        int keySizeBytes = 8;
+        int valueSizeBytes = 100;
+
+        checkOverheads(factor, systemFactor, desiredCacheSize, keySizeBytes, valueSizeBytes);
+    }
+
+    @Test
+    public void cacheOverheadsLargeValues() {
+        Runtime runtime = Runtime.getRuntime();
+        double factor = 0.05;
+        double systemFactor = 1.5;
+        long desiredCacheSize = Math.min(1 * 1024 * 1024 * 1024L, runtime.maxMemory());
+        int keySizeBytes = 8;
+        int valueSizeBytes = 1000;
+
+        checkOverheads(factor, systemFactor, desiredCacheSize, keySizeBytes, valueSizeBytes);
+    }
+
     @Test
     public void headTail() throws IOException {
         List<KeyValue<String, String>> toInsert = Arrays.asList(
@@ -70,7 +127,7 @@ public class MemoryLRUCacheBytesTest {
                 new KeyValue<>("K5", "V5"));
         final KeyValue<String, String> kv = toInsert.get(0);
         final String namespace = "jo";
-        final int length = memoryCacheEntrySize(kv.key.getBytes(), kv.value.getBytes(), "");
+        final int length = memoryCacheEntrySize(namespace, kv.key.getBytes(), kv.value.getBytes(), "");
 
         MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(
                 toInsert.size() * length);
@@ -86,14 +143,20 @@ public class MemoryLRUCacheBytesTest {
         }
     }
 
-    static int memoryCacheEntrySize(byte[] key, byte[] value, final String topic) {
+    static int memoryCacheEntrySize(String namespace, byte[] key, byte[] value, final String topic) {
         return key.length +
                 value.length +
                 1 + // isDirty
                 8 + // timestamp
                 8 + // offset
                 4 +
-                topic.length();
+                topic.length() +
+                // LRU Node entries
+                key.length +
+                namespace.length() +
+                8 + // entry
+                8 + // previous
+                8; // next
     }
 
     @Test
@@ -111,7 +174,7 @@ public class MemoryLRUCacheBytesTest {
         final KeyValue<String, String> kv = toInsert.get(0);
         final String namespace = "kafka";
         MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(
-                memoryCacheEntrySize(kv.key.getBytes(), kv.value.getBytes(), ""));
+                memoryCacheEntrySize(namespace, kv.key.getBytes(), kv.value.getBytes(), ""));
         cache.addDirtyEntryFlushListener(namespace, new MemoryLRUCacheBytes.DirtyEntryFlushListener() {
             @Override
             public void apply(final List<MemoryLRUCacheBytes.DirtyEntry> dirty) {
@@ -251,7 +314,7 @@ public class MemoryLRUCacheBytesTest {
     @Test
     public void shouldSkipEntriesWhereValueHasBeenEvictedFromCache() throws Exception {
         final String namespace = "streams";
-        final int entrySize = memoryCacheEntrySize(new byte[1], new byte[1], "");
+        final int entrySize = memoryCacheEntrySize(namespace, new byte[1], new byte[1], "");
         final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(entrySize * 5);
         byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}};
         for (int i = 0; i < 5; i++) {

@@ -311,7 +311,12 @@ public class MemoryLRUCacheBytes {
         }
 
         public long size() {
-            return key.get().length + entry.size();
+            return key.get().length +
+                namespace.length() +
+                8 + // entry
+                8 + // previous
+                8 + // next
+                entry.size();
         }
     }
 
