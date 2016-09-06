@@ -162,12 +162,12 @@ public class StreamThread extends Thread {
         // set the producer and consumer clients
         String threadName = getName();
         threadClientId = clientId + "-" + threadName;
-        log.info("Creating producer client for stream thread [{}]", threadName);
+        log.info("stream-thread [{}] Creating producer client", threadName);
         this.producer = clientSupplier.getProducer(config.getProducerConfigs(threadClientId));
-        log.info("Creating consumer client for stream thread [{}]", threadName);
+        log.info("stream-thread [{}] Creating consumer client", threadName);
         this.consumer = clientSupplier.getConsumer(
                 config.getConsumerConfigs(this, applicationId, threadClientId));
-        log.info("Creating restore consumer client for stream thread [{}]", threadName);
+        log.info("stream-thread [{}] Creating restore consumer client", threadName);
         this.restoreConsumer = clientSupplier.getRestoreConsumer(
                 config.getRestoreConsumerConfigs(threadClientId));
 
@@ -210,7 +210,7 @@ public class StreamThread extends Thread {
      */
     @Override
     public void run() {
-        log.info("Starting stream thread [" + this.getName() + "]");
+        log.info("Starting stream thread [{}]", this.getName());
 
         try {
             runLoop();
@@ -220,7 +220,7 @@ public class StreamThread extends Thread {
         } catch (Exception e) {
             // we have caught all Kafka related exceptions, and other runtime exceptions
             // should be due to user application errors
-            log.error("Streams application error during processing in thread [" + this.getName() + "]: ", e);
+            log.error("stream-thread [{}] Streams application error during processing: ", this.getName(),  e);
             throw e;
         } finally {
             shutdown();
@@ -239,7 +239,7 @@ public class StreamThread extends Thread {
     }
 
     private void shutdown() {
-        log.info("Shutting down stream thread [" + this.getName() + "]");
+        log.info("Shutting down stream-thread [{}]", this.getName());
 
         // Exceptions should not prevent this call from going through all shutdown steps
         try {
@@ -258,22 +258,22 @@ public class StreamThread extends Thread {
         try {
             producer.close();
         } catch (Throwable e) {
-            log.error("Failed to close producer in thread [" + this.getName() + "]: ", e);
+            log.error("stream-thread [{}] Failed to close producer: ", this.getName(), e);
         }
         try {
             consumer.close();
         } catch (Throwable e) {
-            log.error("Failed to close consumer in thread [" + this.getName() + "]: ", e);
+            log.error("stream-thread [{}] Failed to close consumer: ", this.getName(), e);
         }
         try {
             restoreConsumer.close();
         } catch (Throwable e) {
-            log.error("Failed to close restore consumer in thread [" + this.getName() + "]: ", e);
+            log.error("stream-thread [{}] Failed to close restore consumer: ", this.getName(), e);
         }
 
         removeStreamTasks();
 
-        log.info("Stream thread shutdown complete [" + this.getName() + "]");
+        log.info("stream-thread [{}] Stream thread shutdown complete", this.getName());
     }
 
     /**
@@ -317,7 +317,7 @@ public class StreamThread extends Thread {
                 lastPoll = time.milliseconds();
 
                 if (rebalanceException != null)
-                    throw new StreamsException("Failed to rebalance", rebalanceException);
+                    throw new StreamsException(String.format("stream-thread [%s] Failed to rebalance", this.getName()), rebalanceException);
 
                 if (!records.isEmpty()) {
                     for (TopicPartition partition : records.partitions()) {
@@ -406,8 +406,8 @@ public class StreamThread extends Thread {
                     StandbyTask task = standbyTasksByPartition.get(partition);
 
                     if (task == null) {
-                        log.error("missing standby task for partition {}", partition);
-                        throw new StreamsException("missing standby task for partition " + partition);
+                        log.error("stream-thread [{}]  missing standby task for partition {} ", this.getName(), partition);
+                        throw new StreamsException(String.format("stream-thread [%s] missing standby task for partition %s", this.getName(), partition));
                     }
 
                     List<ConsumerRecord<byte[], byte[]>> remaining = task.update(partition, records.records(partition));
@@ -422,7 +422,7 @@ public class StreamThread extends Thread {
 
     private boolean stillRunning() {
         if (!running.get()) {
-            log.debug("Shutting down at user request.");
+            log.debug("stream-thread [{}] Shutting down at user request", this.getName());
             return false;
         }
 
@@ -437,7 +437,7 @@ public class StreamThread extends Thread {
                 sensors.punctuateTimeSensor.record(computeLatency());
 
         } catch (KafkaException e) {
-            log.error("Failed to punctuate active task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
+            log.error("stream-thread [{}] Failed to punctuate active task #{}", this.getName(), task.id(), e);
             throw e;
         }
     }
@@ -449,7 +449,7 @@ public class StreamThread extends Thread {
         long now = time.milliseconds();
 
         if (commitTimeMs >= 0 && lastCommitMs + commitTimeMs < now) {
-            log.trace("Committing processor instances because the commit interval has elapsed.");
+            log.trace("stream-thread [{}] Committing processor instances because the commit interval has elapsed", this.getName());
 
             commitAll();
             lastCommitMs = now;
@@ -490,10 +490,10 @@ public class StreamThread extends Thread {
             task.commit();
         } catch (CommitFailedException e) {
             // commit failed. Just log it.
-            log.warn("Failed to commit " + task.getClass().getSimpleName() + " #" + task.id() + " in thread [" + this.getName() + "]: ", e);
+            log.warn("stream-thread [{}] Failed to commit {} #{}", this.getName(), task.getClass().getSimpleName(), task.id(), e);
         } catch (KafkaException e) {
             // commit failed due to an unexpected exception. Log it and rethrow the exception.
-            log.error("Failed to commit " + task.getClass().getSimpleName() + " #" + task.id() + " in thread [" + this.getName() + "]: ", e);
+            log.error("stream-thread [{}] Failed to commit {} #{}", this.getName(), task.getClass().getSimpleName(), task.id(), e);
             throw e;
         }
 
@@ -549,7 +549,7 @@ public class StreamThread extends Thread {
 
     private void addStreamTasks(Collection<TopicPartition> assignment) {
         if (partitionAssignor == null)
-            throw new IllegalStateException("Partition assignor has not been initialized while adding stream tasks: this should not happen.");
+            throw new IllegalStateException(String.format("stream-thread [%s] Partition assignor has not been initialized while adding stream tasks: this should not happen.", this.getName()));
 
         HashMap<TaskId, Set<TopicPartition>> partitionsForTask = new HashMap<>();
 
@@ -577,7 +577,7 @@ public class StreamThread extends Thread {
                 for (TopicPartition partition : partitions)
                     activeTasksByPartition.put(partition, task);
             } catch (StreamsException e) {
-                log.error("Failed to create an active task #" + taskId + " in thread [" + this.getName() + "]: ", e);
+                log.error("stream-thread [{}] Failed to create an active task #{}", this.getName(), taskId, e);
                 throw e;
             }
         }
@@ -595,16 +595,16 @@ public class StreamThread extends Thread {
             activeTasksByPartition.clear();
 
         } catch (Exception e) {
-            log.error("Failed to remove stream tasks in thread [" + this.getName() + "]: ", e);
+            log.error("stream-thread [{}] Failed to remove stream tasks", this.getName(), e);
         }
     }
 
     private void closeOne(AbstractTask task) {
-        log.info("Removing a task {}", task.id());
+        log.info("stream-thread [{}] Removing a task {}", this.getName(), task.id());
         try {
             task.close();
         } catch (StreamsException e) {
-            log.error("Failed to close a " + task.getClass().getSimpleName() + " #" + task.id() + " in thread [" + this.getName() + "]: ", e);
+            log.error("stream-thread [{}] Failed to close a {}  #{}", this.getName(), task.getClass().getSimpleName(), task.id(), e);
         }
         sensors.taskDestructionSensor.record();
     }
@@ -623,7 +623,7 @@ public class StreamThread extends Thread {
 
     private void addStandbyTasks() {
         if (partitionAssignor == null)
-            throw new IllegalStateException("Partition assignor has not been initialized while adding standby tasks: this should not happen.");
+            throw new IllegalStateException(String.format("stream-thread [%s] Partition assignor has not been initialized while adding standby tasks: this should not happen.", this.getName()));
 
         Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
 
@@ -669,6 +669,7 @@ public class StreamThread extends Thread {
     public String toString() {
         StringBuilder sb = new StringBuilder("StreamsThread appId:" + this.applicationId + "\n");
         sb.append("\tStreamsThread clientId:" + clientId + "\n");
+        sb.append("\tStreamsThread threadId:" + this.getName() + "\n");
 
         // iterate and print active tasks
         if (activeTasks != null) {
@@ -706,7 +707,7 @@ public class StreamThread extends Thread {
             restoreConsumer.assign(Collections.<TopicPartition>emptyList());
 
         } catch (Exception e) {
-            log.error("Failed to remove standby tasks in thread [" + this.getName() + "]: ", e);
+            log.error("Failed to remove standby tasks in thread [{}]: ", this.getName(), e);
         }
     }
 

@@ -46,7 +46,7 @@ public class TaskAssignorTest {
 
         // # of clients and # of tasks are equal.
         tasks = mkSet(0, 1, 2, 3, 4, 5);
-        assignments = TaskAssignor.assign(states, tasks, 0);
+        assignments = TaskAssignor.assign(states, tasks, 0, "TaskAssignorTest-TestAssignWithoutStandby");
         numActiveTasks = 0;
         numAssignedTasks = 0;
         for (ClientState<Integer> assignment : assignments.values()) {
@@ -60,7 +60,7 @@ public class TaskAssignorTest {
 
         // # of clients < # of tasks
         tasks = mkSet(0, 1, 2, 3, 4, 5, 6, 7);
-        assignments = TaskAssignor.assign(states, tasks, 0);
+        assignments = TaskAssignor.assign(states, tasks, 0, "TaskAssignorTest-TestAssignWithoutStandby");
         numActiveTasks = 0;
         numAssignedTasks = 0;
         for (ClientState<Integer> assignment : assignments.values()) {
@@ -76,7 +76,7 @@ public class TaskAssignorTest {
 
         // # of clients > # of tasks
         tasks = mkSet(0, 1, 2, 3);
-        assignments = TaskAssignor.assign(states, tasks, 0);
+        assignments = TaskAssignor.assign(states, tasks, 0, "TaskAssignorTest-TestAssignWithoutStandby");
         numActiveTasks = 0;
         numAssignedTasks = 0;
         for (ClientState<Integer> assignment : assignments.values()) {
@@ -108,7 +108,7 @@ public class TaskAssignorTest {
         // 1 standby replicas.
         numActiveTasks = 0;
         numAssignedTasks = 0;
-        assignments = TaskAssignor.assign(states, tasks, 1);
+        assignments = TaskAssignor.assign(states, tasks, 1, "TaskAssignorTest-TestAssignWithStandby");
         for (ClientState<Integer> assignment : assignments.values()) {
             numActiveTasks += assignment.activeTasks.size();
             numAssignedTasks += assignment.assignedTasks.size();
@@ -122,7 +122,7 @@ public class TaskAssignorTest {
         tasks = mkSet(0, 1, 2, 3, 4, 5, 6, 7);
 
         // 1 standby replicas.
-        assignments = TaskAssignor.assign(states, tasks, 1);
+        assignments = TaskAssignor.assign(states, tasks, 1, "TaskAssignorTest-TestAssignWithStandby");
         numActiveTasks = 0;
         numAssignedTasks = 0;
         for (ClientState<Integer> assignment : assignments.values()) {
@@ -140,7 +140,7 @@ public class TaskAssignorTest {
         tasks = mkSet(0, 1, 2, 3);
 
         // 1 standby replicas.
-        assignments = TaskAssignor.assign(states, tasks, 1);
+        assignments = TaskAssignor.assign(states, tasks, 1, "TaskAssignorTest-TestAssignWithStandby");
         numActiveTasks = 0;
         numAssignedTasks = 0;
         for (ClientState<Integer> assignment : assignments.values()) {
@@ -158,7 +158,7 @@ public class TaskAssignorTest {
         tasks = mkSet(0, 1);
 
         // 1 standby replicas.
-        assignments = TaskAssignor.assign(states, tasks, 1);
+        assignments = TaskAssignor.assign(states, tasks, 1, "TaskAssignorTest-TestAssignWithStandby");
         numActiveTasks = 0;
         numAssignedTasks = 0;
         for (ClientState<Integer> assignment : assignments.values()) {
@@ -173,7 +173,7 @@ public class TaskAssignorTest {
         assertEquals(tasks.size() * 2, numAssignedTasks);
 
         // 2 standby replicas.
-        assignments = TaskAssignor.assign(states, tasks, 2);
+        assignments = TaskAssignor.assign(states, tasks, 2, "TaskAssignorTest-TestAssignWithStandby");
         numActiveTasks = 0;
         numAssignedTasks = 0;
         for (ClientState<Integer> assignment : assignments.values()) {
@@ -187,7 +187,7 @@ public class TaskAssignorTest {
         assertEquals(tasks.size() * 3, numAssignedTasks);
 
         // 3 standby replicas.
-        assignments = TaskAssignor.assign(states, tasks, 3);
+        assignments = TaskAssignor.assign(states, tasks, 3, "TaskAssignorTest-TestAssignWithStandby");
         numActiveTasks = 0;
         numAssignedTasks = 0;
         for (ClientState<Integer> assignment : assignments.values()) {
@@ -220,7 +220,7 @@ public class TaskAssignorTest {
             state.prevAssignedTasks.add(task);
             states.put(i++, state);
         }
-        assignments = TaskAssignor.assign(states, mkSet(0, 1, 2, 3, 4, 5), 0);
+        assignments = TaskAssignor.assign(states, mkSet(0, 1, 2, 3, 4, 5), 0, "TaskAssignorTest-TestStickiness");
         for (int client : states.keySet()) {
             Set<Integer> oldActive = states.get(client).prevActiveTasks;
             Set<Integer> oldAssigned = states.get(client).prevAssignedTasks;
@@ -244,7 +244,7 @@ public class TaskAssignorTest {
             }
             states.put(i++, state);
         }
-        assignments = TaskAssignor.assign(states, mkSet(0, 1, 2, 3), 0);
+        assignments = TaskAssignor.assign(states, mkSet(0, 1, 2, 3), 0, "TaskAssignorTest-TestStickiness");
         for (int client : states.keySet()) {
             Set<Integer> oldActive = states.get(client).prevActiveTasks;
             Set<Integer> oldAssigned = states.get(client).prevAssignedTasks;
@@ -266,7 +266,7 @@ public class TaskAssignorTest {
             state.prevAssignedTasks.addAll(taskSet);
             states.put(i++, state);
         }
-        assignments = TaskAssignor.assign(states, mkSet(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11), 0);
+        assignments = TaskAssignor.assign(states, mkSet(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11), 0, "TaskAssignorTest-TestStickiness");
         for (int client : states.keySet()) {
             Set<Integer> oldActive = states.get(client).prevActiveTasks;
             Set<Integer> oldAssigned = states.get(client).prevAssignedTasks;
