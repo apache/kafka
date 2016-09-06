@@ -57,9 +57,9 @@ import static org.hamcrest.core.Is.is;
 
 public class KStreamAggregationIntegrationTest {
     private static final int NUM_BROKERS = 1;
+
     @ClassRule
-    public static final EmbeddedKafkaCluster CLUSTER =
-        new EmbeddedKafkaCluster(NUM_BROKERS);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
     private static volatile int testNo = 0;
     private final MockTime mockTime = CLUSTER.time;
     private KStreamBuilder builder;
@@ -80,8 +80,7 @@ public class KStreamAggregationIntegrationTest {
         builder = new KStreamBuilder();
         createTopics();
         streamsConfiguration = new Properties();
-        final String applicationId = "kgrouped-stream-test-" +
-            testNo;
+        final String applicationId = "kgrouped-stream-test-" + testNo;
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration
             .put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -457,16 +456,15 @@ public class KStreamAggregationIntegrationTest {
         final Properties consumerProperties = new Properties();
         consumerProperties
             .setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "kgroupedstream-test-" +
-            testNo);
+        consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "kgroupedstream-test-" + testNo);
         consumerProperties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        consumerProperties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-            keyDeserializer.getClass().getName());
-        consumerProperties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-            valueDeserializer.getClass().getName());
-        return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerProperties,
+        consumerProperties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass().getName());
+        consumerProperties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass().getName());
+        return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+            consumerProperties,
             outputTopic,
-            numMessages, 60 * 1000);
+            numMessages,
+            60 * 1000);
 
     }
 

@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.integration.utils;
 
-
 import kafka.admin.AdminUtils;
 import kafka.admin.RackAwareMode;
 import kafka.server.KafkaConfig;

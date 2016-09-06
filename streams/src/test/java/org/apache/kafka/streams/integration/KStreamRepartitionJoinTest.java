@@ -3,10 +3,14 @@
  * agreements.  See the NOTICE file distributed with this work for additional information regarding
  * copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance with the License.  You may obtain a
- * copy of the License at <p> http://www.apache.org/licenses/LICENSE-2.0 <p> Unless required by
- * applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See
- * the License for the specific language governing permissions and limitations under the License.
+ * copy of the License at
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software distributed under the License
+ * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+ * or implied. See the License for the specific language governing permissions and limitations under
+ * the License.
  */
 package org.apache.kafka.streams.integration;
 
@@ -49,10 +53,9 @@ import static org.hamcrest.core.Is.is;
 
 public class KStreamRepartitionJoinTest {
     private static final int NUM_BROKERS = 1;
-    @ClassRule
-    public static final EmbeddedKafkaCluster CLUSTER =
-        new EmbeddedKafkaCluster(NUM_BROKERS);
 
+    @ClassRule
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
     private final MockTime mockTime = CLUSTER.time;
     private static final long WINDOW_SIZE = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
 
@@ -180,8 +183,7 @@ public class KStreamRepartitionJoinTest {
         final KStream<Integer, Integer> flatMapped = streamOne.flatMap(
             new KeyValueMapper<Long, Integer, Iterable<KeyValue<Integer, Integer>>>() {
                 @Override
-                public Iterable<KeyValue<Integer, Integer>> apply(final Long key,
-                                                                  final Integer value) {
+                public Iterable<KeyValue<Integer, Integer>> apply(final Long key, final Integer value) {
                     return Collections.singletonList(new KeyValue<>(value, value));
                 }
             });
@@ -210,8 +212,7 @@ public class KStreamRepartitionJoinTest {
                 Serdes.Integer())
             .to(Serdes.Integer(), Serdes.String(), output);
 
-        return new ExpectedOutputOnTopic(Arrays.asList("A:1", "B:2", "C:3", "D:4", "E:5"),
-            output);
+        return new ExpectedOutputOnTopic(Arrays.asList("A:1", "B:2", "C:3", "D:4", "E:5"), output);
     }
 
     public ExpectedOutputOnTopic mapBothStreamsAndLeftJoin() throws Exception {
@@ -231,8 +232,7 @@ public class KStreamRepartitionJoinTest {
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
     }
 
-    private ExpectedOutputOnTopic joinTwoMappedStreamsOneThatHasBeenPreviouslyJoined() throws
-        Exception {
+    private ExpectedOutputOnTopic joinTwoMappedStreamsOneThatHasBeenPreviouslyJoined() throws Exception {
         final KStream<Integer, Integer> map1 = streamOne.map(keyMapper);
 
         final KeyValueMapper<Integer, String, KeyValue<Integer, String>>
@@ -264,8 +264,7 @@ public class KStreamRepartitionJoinTest {
             .to(Serdes.Integer(), Serdes.String(), topic);
 
 
-        return new ExpectedOutputOnTopic(Arrays.asList("1:A:A", "2:B:B", "3:C:C", "4:D:D", "5:E:E"),
-            topic);
+        return new ExpectedOutputOnTopic(Arrays.asList("1:A:A", "2:B:B", "3:C:C", "4:D:D", "5:E:E"), topic);
     }
 
     private JoinWindows getJoinWindow() {
@@ -369,19 +368,18 @@ public class KStreamRepartitionJoinTest {
 
         final Properties config = new Properties();
 
-        config
-            .setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         config.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "kstream-test");
         config.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         config.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
             IntegerDeserializer.class.getName());
         config.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
             valueDeserializer.getClass().getName());
-        final List<String> received = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(config,
+        final List<String> received = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(
+            config,
             topic,
             numMessages,
-            60 *
-                1000);
+            60 * 1000);
         Collections.sort(received);
         return received;
     }

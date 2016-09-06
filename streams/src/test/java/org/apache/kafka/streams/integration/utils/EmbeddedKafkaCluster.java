@@ -37,8 +37,8 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     private EmbeddedZookeeper zookeeper = null;
     private final KafkaEmbedded[] brokers;
 
-    public EmbeddedKafkaCluster(int numBrokers) {
-        this.brokers = new KafkaEmbedded[numBrokers];
+    public EmbeddedKafkaCluster(final int numBrokers) {
+        brokers = new KafkaEmbedded[numBrokers];
     }
 
     public MockTime time = new MockTime();
@@ -59,7 +59,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         brokerConfig.put(KafkaConfig$.MODULE$.LogCleanerDedupeBufferSizeProp(), 2 * 1024 * 1024L);
         brokerConfig.put(KafkaConfig$.MODULE$.GroupMinSessionTimeoutMsProp(), 0);
 
-        for (int i = 0; i < this.brokers.length; i++) {
+        for (int i = 0; i < brokers.length; i++) {
             brokerConfig.put(KafkaConfig$.MODULE$.BrokerIdProp(), i);
             log.debug("Starting a Kafka instance on port {} ...", brokerConfig.getProperty(KafkaConfig$.MODULE$.PortProp()));
             brokers[i] = new KafkaEmbedded(brokerConfig, time);
@@ -73,8 +73,8 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      * Stop the Kafka cluster.
      */
     public void stop() {
-        for (int i = 0; i < this.brokers.length; i++) {
-            brokers[i].stop();
+        for (final KafkaEmbedded broker : brokers) {
+            broker.stop();
         }
         zookeeper.shutdown();
     }
@@ -134,14 +134,14 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      * @param replication The replication factor for (partitions of) this topic.
      * @param topicConfig Additional topic-level configuration settings.
      */
-    public void createTopic(String topic,
-                            int partitions,
-                            int replication,
-                            Properties topicConfig) {
+    public void createTopic(final String topic,
+                            final int partitions,
+                            final int replication,
+                            final Properties topicConfig) {
         brokers[0].createTopic(topic, partitions, replication, topicConfig);
     }
 
-    public void deleteTopic(String topic) {
+    public void deleteTopic(final String topic) {
         brokers[0].deleteTopic(topic);
     }
 }

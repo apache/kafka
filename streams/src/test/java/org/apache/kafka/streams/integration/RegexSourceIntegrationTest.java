@@ -66,7 +66,6 @@ import static org.junit.Assert.fail;
  * End-to-end integration test based on using regex and named topics for creating sources, using
  * an embedded Kafka cluster.
  */
-
 public class RegexSourceIntegrationTest {
     private static final int NUM_BROKERS = 1;
     @ClassRule
