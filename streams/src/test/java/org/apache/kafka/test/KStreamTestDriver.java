@@ -67,7 +67,7 @@ public class KStreamTestDriver {
         this.stateDir = stateDir;
         this.cache = new MemoryLRUCacheBytes(DEFAULT_CACHE_SIZE_BYTES);
         this.context = new MockProcessorContext(this, stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
-        this.context.setRecordContext(new ProcessorRecordContextImpl(0, 0, 0, "topic", null));
+        this.context.setRecordContext(new ProcessorRecordContextImpl(0, 0, 0, "topic", null, false));
 
 
         for (StateStore store : topology.stateStores()) {
@@ -130,7 +130,7 @@ public class KStreamTestDriver {
     }
 
     private ProcessorRecordContext createRecordContext(ProcessorNode node, long timestamp) {
-        return new ProcessorRecordContextImpl(timestamp, -1, -1, "topic", node);
+        return new ProcessorRecordContextImpl(timestamp, -1, -1, "topic", node, false);
     }
 
     @SuppressWarnings("unchecked")

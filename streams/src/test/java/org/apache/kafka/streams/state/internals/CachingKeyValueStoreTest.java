@@ -62,7 +62,7 @@ public class CachingKeyValueStoreTest {
         cache = new MemoryLRUCacheBytes(maxCacheSizeBytes);
         context = new MockProcessorContext(null, null, null, null, (RecordCollector) null, cache);
         topic = "topic";
-        context.setRecordContext(new ProcessorRecordContextImpl(10, 0, 0, topic, null));
+        context.setRecordContext(new ProcessorRecordContextImpl(10, 0, 0, topic, null, false));
         store.init(context, null);
     }
 

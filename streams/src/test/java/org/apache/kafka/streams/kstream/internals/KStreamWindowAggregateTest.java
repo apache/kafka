@@ -159,7 +159,7 @@ public class KStreamWindowAggregateTest {
     }
 
     private void setRecordContext(final long time, final String topic) {
-        ((MockProcessorContext) driver.context()).setRecordContext(new ProcessorRecordContextImpl(time, 0, 0, topic, null));
+        ((MockProcessorContext) driver.context()).setRecordContext(new ProcessorRecordContextImpl(time, 0, 0, topic, null, false));
     }
 
     @Test

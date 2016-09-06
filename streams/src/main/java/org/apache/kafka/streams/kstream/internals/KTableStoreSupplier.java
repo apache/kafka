@@ -64,4 +64,9 @@ public class KTableStoreSupplier<K, V> implements ForwardingStateStoreSupplier<K
                                                                             keySerde, valueSerde, listener);
         return new MeteredKeyValueStore<>(store, "rocksdb-state", time);
     }
+
+    @Override
+    public boolean cachingEnabled() {
+        return true;
+    }
 }

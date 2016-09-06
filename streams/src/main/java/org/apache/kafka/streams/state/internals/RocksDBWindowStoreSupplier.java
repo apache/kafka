@@ -78,4 +78,9 @@ public class RocksDBWindowStoreSupplier<K, V> implements ForwardingStateStoreSup
         return new MeteredWindowStore<>(store.enableLogging(), "rocksdb-window", time);
 
     }
+
+    @Override
+    public boolean cachingEnabled() {
+        return enableCaching;
+    }
 }

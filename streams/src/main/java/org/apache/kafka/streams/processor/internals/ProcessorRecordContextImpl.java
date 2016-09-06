@@ -27,19 +27,22 @@ public class ProcessorRecordContextImpl implements ProcessorRecordContext {
     private final long offset;
     private final String topic;
     private final int partition;
+    private final boolean forward;
     private ProcessorNode node;
 
     public ProcessorRecordContextImpl(final long timestamp,
                                       final long offset,
                                       final int partition,
                                       final String topic,
-                                      final ProcessorNode node) {
+                                      final ProcessorNode node,
+                                      final boolean forward) {
 
         this.timestamp = timestamp;
         this.offset = offset;
         this.node = node;
         this.topic = topic;
         this.partition = partition;
+        this.forward = forward;
     }
 
     public long offset() {
@@ -63,44 +66,54 @@ public class ProcessorRecordContextImpl implements ProcessorRecordContext {
     @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(K key, V value) {
-        ProcessorNode currNode = node;
-        try {
-            for (ProcessorNode child : (List<ProcessorNode>) node.children()) {
-                node = child;
-                child.process(key, value);
+        if (shouldForward()) {
+            ProcessorNode currNode = node;
+            try {
+                for (ProcessorNode child : (List<ProcessorNode>) node.children()) {
+                    node = child;
+                    child.process(key, value);
+                }
+            } finally {
+                node = currNode;
             }
-        } finally {
-            node = currNode;
         }
 
     }
 
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value, int childIndex) {
-        ProcessorNode old = node;
-        final ProcessorNode child = (ProcessorNode<K, V>) node.children().get(childIndex);
-        node = child;
-        try {
-            child.process(key, value);
-        } finally {
-            node = old;
+        if (shouldForward()) {
+            ProcessorNode old = node;
+            final ProcessorNode child = (ProcessorNode<K, V>) node.children().get(childIndex);
+            node = child;
+            try {
+                child.process(key, value);
+            } finally {
+                node = old;
+            }
         }
     }
 
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value, String childName) {
-        for (ProcessorNode child : (List<ProcessorNode<K, V>>) node.children()) {
-            if (child.name().equals(childName)) {
-                ProcessorNode old = node;
-                node = child;
-                try {
-                    child.process(key, value);
-                    return;
-                } finally {
-                    node = old;
+        if (shouldForward()) {
+            for (ProcessorNode child : (List<ProcessorNode<K, V>>) node.children()) {
+                if (child.name().equals(childName)) {
+                    ProcessorNode old = node;
+                    node = child;
+                    try {
+                        child.process(key, value);
+                        return;
+                    } finally {
+                        node = old;
+                    }
                 }
             }
         }
+    }
+
+    private boolean shouldForward() {
+        return forward || !node.stateStoreCachingEnabled();
     }
 
     @Override

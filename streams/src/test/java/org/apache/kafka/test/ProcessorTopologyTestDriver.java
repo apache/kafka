@@ -39,6 +39,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -186,7 +187,7 @@ public class ProcessorTopologyTestDriver {
                 public void recordLatency(Sensor sensor, long startNs, long endNs) {
                     // do nothing
                 }
-            }, new StateDirectory(applicationId, TestUtils.tempDirectory().getPath()), null);
+            }, new StateDirectory(applicationId, TestUtils.tempDirectory().getPath()), new MemoryLRUCacheBytes(1024 * 1024));
     }
 
     /**

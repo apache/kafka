@@ -172,7 +172,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
             TopicPartition partition = recordInfo.partition();
 
             log.debug("Start processing one record [{}]", currRecord);
-            final ProcessorRecordContext recordContext = createRecordContext(currNode);
+            final ProcessorRecordContext recordContext = createRecordContext(currNode, false);
             processorContext.setRecordContext(recordContext);
             this.currNode.process(currRecord.key(), currRecord.value());
 
@@ -231,7 +231,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         currNode = node;
         currRecord = new StampedRecord(DUMMY_RECORD, timestamp);
         // what to do here? Punctuate on this record doesn't mean we've seen it.
-        processorContext.setRecordContext(createRecordContext(node));
+        processorContext.setRecordContext(createRecordContext(node, true));
         try {
             node.processor().punctuate(timestamp);
         } finally {
@@ -339,8 +339,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
         return new RecordQueue(partition, source);
     }
 
-    private ProcessorRecordContextImpl createRecordContext(final ProcessorNode childNode) {
-        return new ProcessorRecordContextImpl(currRecord.timestamp, currRecord.offset(), currRecord.partition(), currRecord.topic(), childNode);
+    private ProcessorRecordContextImpl createRecordContext(final ProcessorNode childNode, final boolean forwardWhenConnectedToCachedStores) {
+        return new ProcessorRecordContextImpl(currRecord.timestamp, currRecord.offset(), currRecord.partition(), currRecord.topic(), childNode, forwardWhenConnectedToCachedStores);
     }
 
     /**

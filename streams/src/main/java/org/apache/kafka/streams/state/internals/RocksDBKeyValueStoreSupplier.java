@@ -75,4 +75,9 @@ public class RocksDBKeyValueStoreSupplier<K, V> implements ForwardingStateStoreS
         return new MeteredKeyValueStore<>(store, "rocksdb-state", time);
 
     }
+
+    @Override
+    public boolean cachingEnabled() {
+        return enableCaching;
+    }
 }

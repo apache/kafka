@@ -788,6 +788,7 @@ public class TopologyBuilder {
                             final StateStoreSupplier supplier = stateFactories.get(stateStoreName).supplier;
                             if (supplier instanceof ForwardingStateStoreSupplier) {
                                 ForwardingStateStoreSupplier forwardingSupplier = (ForwardingStateStoreSupplier) supplier;
+                                node.setStateStoreCachingEnabled(forwardingSupplier.cachingEnabled());
                                 stateStoreMap.put(stateStoreName, forwardingSupplier.get(new ProcessorNodeCacheFlushListener<>(node)));
                             } else {
                                 stateStoreMap.put(stateStoreName, supplier.get());
@@ -826,7 +827,7 @@ public class TopologyBuilder {
 
         return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap, new ArrayList<>(stateStoreMap.values()), sourceStoreToSourceTopic);
     }
-
+    
     /**
      * Returns the map of topic groups keyed by the group id.
      * A topic group is a group of topics in the same task.

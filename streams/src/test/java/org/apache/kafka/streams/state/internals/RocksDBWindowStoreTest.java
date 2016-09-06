@@ -130,7 +130,7 @@ public class RocksDBWindowStoreTest {
     }
 
     private ProcessorRecordContext createRecordContext(final long time) {
-        return new ProcessorRecordContextImpl(time, 0, 0, "topic", null);
+        return new ProcessorRecordContextImpl(time, 0, 0, "topic", null, false);
     }
 
     @Test

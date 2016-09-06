@@ -34,4 +34,7 @@ public interface ForwardingStateStoreSupplier<K, V> extends StateStoreSupplier {
      * @param listener
      */
     StateStore get(final CacheFlushListener<K, V> listener);
+
+    boolean cachingEnabled();
+
 }

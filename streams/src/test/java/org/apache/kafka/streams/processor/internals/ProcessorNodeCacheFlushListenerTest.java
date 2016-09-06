@@ -47,7 +47,7 @@ public class ProcessorNodeCacheFlushListenerTest {
         children = Arrays.asList(new TheProcessorNode("one"),
                                  new TheProcessorNode("two"));
         context = new MockProcessorContext(StateSerdes.withBuiltinTypes("state", String.class, String.class), null);
-        initialRecordContext = new ProcessorRecordContextImpl(-1, -1, -1, "", parent);
+        initialRecordContext = new ProcessorRecordContextImpl(-1, -1, -1, "", parent, false);
         context.setRecordContext(initialRecordContext);
         for (TheProcessorNode child : children) {
             parent.addChild(child);
@@ -60,8 +60,8 @@ public class ProcessorNodeCacheFlushListenerTest {
     public void shouldForwardToChildrenWithCorrectContext() throws Exception {
         listener.forward("key", new Change<>("value", null), new RecordContextStub(1, 1, 1, "topic"), context);
 
-        assertEquals(new ProcessorRecordContextImpl(1, 1, 1, "topic", children.get(0)), children.get(0).recordContexts.get("key"));
-        assertEquals(new ProcessorRecordContextImpl(1, 1, 1, "topic", children.get(1)), children.get(1).recordContexts.get("key"));
+        assertEquals(new ProcessorRecordContextImpl(1, 1, 1, "topic", children.get(0), false), children.get(0).recordContexts.get("key"));
+        assertEquals(new ProcessorRecordContextImpl(1, 1, 1, "topic", children.get(1), false), children.get(1).recordContexts.get("key"));
         assertEquals(1, children.get(0).recordContexts.size());
         assertEquals(1, children.get(1).recordContexts.size());
     }

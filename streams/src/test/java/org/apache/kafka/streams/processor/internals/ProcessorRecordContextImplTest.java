@@ -32,7 +32,7 @@ public class ProcessorRecordContextImplTest {
     @Before
     public void setUp() throws Exception {
         parentNode = new MockProcessorNode(-1L);
-        processorRecordContext = new ProcessorRecordContextImpl(0, 0, 0, "t", parentNode);
+        processorRecordContext = new ProcessorRecordContextImpl(0, 0, 0, "t", parentNode, false);
     }
 
     @Test
@@ -66,6 +66,34 @@ public class ProcessorRecordContextImplTest {
         processorRecordContext.forward("key", "value", first.name());
         assertEquals(1, first.numReceived);
         assertEquals(0, second.numReceived);
+    }
+
+    @Test
+    public void shouldNotForwardToChildrenWhenCachingEnabledAndForwardIsFalse() throws Exception {
+        final MockProcessorNode<Object, Object> first = new MockProcessorNode<>(-1);
+        parentNode.setStateStoreCachingEnabled(true);
+        parentNode.addChild(first);
+        processorRecordContext.forward("key", "value");
+        assertEquals(0, first.numReceived);
+    }
+
+    @Test
+    public void shouldForwardToChildrenWhenCachingEnabledAndForwardIsTrue() throws Exception {
+        final MockProcessorNode<Object, Object> first = new MockProcessorNode<>(-1);
+        parentNode.setStateStoreCachingEnabled(true);
+        parentNode.addChild(first);
+        processorRecordContext = new ProcessorRecordContextImpl(0, 0, 0, "t", parentNode, true);
+        processorRecordContext.forward("key", "value");
+        assertEquals(1, first.numReceived);
+    }
+
+    @Test
+    public void shouldForwardWhenCachingNotEnabled() throws Exception {
+        final MockProcessorNode<Object, Object> first = new MockProcessorNode<>(-1);
+        parentNode.setStateStoreCachingEnabled(false);
+        parentNode.addChild(first);
+        processorRecordContext.forward("key", "value");
+        assertEquals(1, first.numReceived);
     }
 
 }

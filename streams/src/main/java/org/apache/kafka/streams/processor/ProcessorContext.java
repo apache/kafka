@@ -191,5 +191,9 @@ public interface ProcessorContext {
      */
     Map<String, Object> appConfigsWithPrefix(String prefix);
 
+    /**
+     * Returns the current {@link ProcessorRecordContext}
+     * @return the current {@link ProcessorRecordContext}
+     */
     ProcessorRecordContext processorRecordContext();
 }

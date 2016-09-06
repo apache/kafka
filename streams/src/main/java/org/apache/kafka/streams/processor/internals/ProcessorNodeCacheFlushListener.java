@@ -41,7 +41,7 @@ public class ProcessorNodeCacheFlushListener<K, V> implements CacheFlushListener
                                                                                                          recordContext.offset(),
                                                                                                          recordContext.partition(),
                                                                                                          recordContext.topic(),
-                                                                                                         processorNode);
+                                                                                                         processorNode, true);
                 context.setRecordContext(processorRecordContext);
                 processorNode.process(key, value);
             }

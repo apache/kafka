@@ -46,7 +46,7 @@ public class MemoryLRUCacheBytes {
     private LRUNode tail = null;
     private final Map<String, TreeMap<Bytes, LRUNode>> map;
     private final Map<String, DirtyEntryFlushListener> listeners;
-    private final Map<String, Set<Bytes>> dirtKeys;
+    private final Map<String, Set<Bytes>> dirtyKeys;
 
 
     public interface DirtyEntryFlushListener {
@@ -58,7 +58,7 @@ public class MemoryLRUCacheBytes {
         this.maxCacheSizeBytes = maxCacheSizeBytes;
         this.map = new HashMap<>();
         listeners = new HashMap<>();
-        dirtKeys = new HashMap<>();
+        dirtyKeys = new HashMap<>();
     }
 
     /**
@@ -76,7 +76,7 @@ public class MemoryLRUCacheBytes {
             throw new IllegalArgumentException("No listener for namespace " + namespace + " registered with cache");
         }
 
-        final Set<Bytes> keys = dirtKeys.get(namespace);
+        final Set<Bytes> keys = dirtyKeys.get(namespace);
         if (keys == null || keys.isEmpty()) {
             return;
         }
@@ -203,7 +203,7 @@ public class MemoryLRUCacheBytes {
 
 
     public synchronized int dirtySize(final String namespace) {
-        final Set<Bytes> dirtyKeys = dirtKeys.get(namespace);
+        final Set<Bytes> dirtyKeys = this.dirtyKeys.get(namespace);
         if (dirtyKeys == null) {
             return 0;
         }
@@ -239,18 +239,18 @@ public class MemoryLRUCacheBytes {
 
 
     private void addDirtyKey(final String namespace, final Bytes cacheKey) {
-        if (!dirtKeys.containsKey(namespace)) {
-            dirtKeys.put(namespace, new LinkedHashSet<Bytes>());
+        if (!dirtyKeys.containsKey(namespace)) {
+            dirtyKeys.put(namespace, new LinkedHashSet<Bytes>());
         }
-        final Set<Bytes> dirtyKeys = dirtKeys.get(namespace);
+        final Set<Bytes> dirtyKeys = this.dirtyKeys.get(namespace);
         // first remove and then add so we can maintain ordering as the arrival order of the records.
         dirtyKeys.remove(cacheKey);
         dirtyKeys.add(cacheKey);
     }
 
     private void removeDirtyKey(final String namespace, final Bytes cacheKey) {
-        if (dirtKeys.containsKey(namespace)) {
-            final Set<Bytes> dirtyKeys = dirtKeys.get(namespace);
+        if (dirtyKeys.containsKey(namespace)) {
+            final Set<Bytes> dirtyKeys = this.dirtyKeys.get(namespace);
             dirtyKeys.remove(cacheKey);
         }
     }
