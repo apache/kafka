@@ -62,6 +62,7 @@ public class StreamThreadStateStoreProviderTest {
     private StreamThreadStateStoreProvider provider;
     private StateDirectory stateDirectory;
     private File stateDir;
+    private boolean storesAvailable;
 
     @Before
     public void before() throws IOException {
@@ -105,6 +106,7 @@ public class StreamThreadStateStoreProviderTest {
         tasks.put(new TaskId(0, 1),
                   taskTwo);
 
+        storesAvailable = true;
         thread = new StreamThread(builder, streamsConfig, clientSupplier,
                                   applicationId,
                                   "clientId", UUID.randomUUID(), new Metrics(),
@@ -112,6 +114,11 @@ public class StreamThreadStateStoreProviderTest {
             @Override
             public Map<TaskId, StreamTask> tasks() {
                 return tasks;
+            }
+
+            @Override
+            public boolean allStateStoresAvailable() {
+                return storesAvailable;
             }
         };
         provider = new StreamThreadStateStoreProvider(thread);
@@ -161,6 +168,12 @@ public class StreamThreadStateStoreProviderTest {
     public void shouldReturnEmptyListIfStoreExistsButIsNotOfTypeValueStore() throws Exception {
         assertEquals(Collections.emptyList(), provider.stores("window-store",
                                                               QueryableStoreTypes.keyValueStore()));
+    }
+
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowInvalidStoreExceptionIfNotAllStoresAvailable() throws Exception {
+        storesAvailable = false;
+        provider.stores("kv-store", QueryableStoreTypes.keyValueStore());
     }
 
     private StreamTask createStreamsTask(final String applicationId,

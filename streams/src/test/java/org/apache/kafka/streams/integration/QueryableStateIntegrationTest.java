@@ -39,9 +39,12 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.StreamsMetadata;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.internals.InvalidStateStoreException;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.test.TestCondition;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 import static org.junit.Assert.assertTrue;
 import org.junit.After;
@@ -72,6 +75,7 @@ public class QueryableStateIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER =
         new EmbeddedKafkaCluster(NUM_BROKERS);
     private static final String STREAM_ONE = "stream-one";
+    private static final String STREAM_TWO = "stream-two";
     private static final String STREAM_CONCURRENT = "stream-concurrent";
     private static final String OUTPUT_TOPIC = "output";
     private static final String OUTPUT_TOPIC_CONCURRENT = "output-concurrent";
@@ -90,6 +94,7 @@ public class QueryableStateIntegrationTest {
     @BeforeClass
     public static void createTopics() {
         CLUSTER.createTopic(STREAM_ONE);
+        CLUSTER.createTopic(STREAM_TWO, 4, 1);
         CLUSTER.createTopic(STREAM_CONCURRENT);
         CLUSTER.createTopic(STREAM_THREE, NUM_PARTITIONS, NUM_REPLICAS);
         CLUSTER.createTopic(OUTPUT_TOPIC);
@@ -418,6 +423,70 @@ public class QueryableStateIntegrationTest {
                           myCount);
 
         verifyRangeAndAll(expectedCount, myCount);
+
+    }
+
+    @Test
+    public void shouldNotMakeStoreAvailableUntilAllStoresAvailable() throws Exception {
+        final KStreamBuilder builder = new KStreamBuilder();
+        final KStream<String, String> stream = builder.stream(STREAM_TWO);
+
+        final String storeName = "count-by-key";
+        stream.groupByKey().count(storeName);
+        kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
+        kafkaStreams.start();
+
+        final KeyValue<String, String> hello = KeyValue.pair("hello", "hello");
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+                STREAM_TWO,
+                Arrays.asList(hello, hello, hello, hello, hello, hello, hello, hello),
+                TestUtils.producerConfig(
+                        CLUSTER.bootstrapServers(),
+                        StringSerializer.class,
+                        StringSerializer.class,
+                        new Properties()));
+
+        final int maxWaitMs = 30000;
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                try {
+                    kafkaStreams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+                    return true;
+                } catch (InvalidStateStoreException ise) {
+                    return false;
+                }
+            }
+        }, maxWaitMs, "waiting for store " + storeName);
+
+        final ReadOnlyKeyValueStore<String, Long> store = kafkaStreams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return new Long(8).equals(store.get("hello"));
+            }
+        }, maxWaitMs, "wait for count to be 8");
+
+        // close stream
+        kafkaStreams.close();
+
+        // start again
+        kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
+        kafkaStreams.start();
+
+        // make sure we never get any value other than 8 for hello
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                try {
+                    assertEquals(Long.valueOf(8L), kafkaStreams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore()).get("hello"));
+                    return true;
+                } catch (InvalidStateStoreException ise) {
+                    return false;
+                }
+            }
+        }, maxWaitMs, "waiting for store " + storeName);
 
     }
 

@@ -37,6 +37,9 @@ public class StreamThreadStateStoreProvider implements StateStoreProvider {
     @SuppressWarnings("unchecked")
     @Override
     public <T> List<T> stores(final String storeName, final QueryableStoreType<T> queryableStoreType) {
+        if (!streamThread.allStateStoresAvailable()) {
+            throw new InvalidStateStoreException("Store: " + storeName + " is currently not available");
+        }
         final List<T> stores = new ArrayList<>();
         for (StreamTask streamTask : streamThread.tasks().values()) {
             final StateStore store = streamTask.getStore(storeName);
