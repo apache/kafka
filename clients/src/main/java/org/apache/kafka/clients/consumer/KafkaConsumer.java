@@ -982,9 +982,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Do one round of polling. In addition to checking for new data, this does any needed
-     * heart-beating, auto-commits, and offset updates.
-     * @param timeout The maximum time to block in the underlying poll
+     * Do one round of polling. In addition to checking for new data, this does any needed offset commits
+     * (if auto-commit is enabled), and offset resets (if an offset reset policy is defined).
+     * @param timeout The maximum time to block in the underlying call to {@link ConsumerNetworkClient#poll(long)}.
      * @return The fetched records (may be empty)
      */
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(long timeout) {
