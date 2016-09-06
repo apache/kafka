@@ -36,7 +36,7 @@ import scala.collection.JavaConverters._
 import scala.collection.Map
 import scala.collection.mutable
 
-class QuotasTest extends KafkaServerTestHarness {
+class ClientQuotasTest extends KafkaServerTestHarness {
   private val producerBufferSize = 300000
   private val producerId1 = "QuotasTestProducer-1"
   private val producerId2 = "QuotasTestProducer-2"
