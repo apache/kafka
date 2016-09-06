@@ -76,11 +76,11 @@ class MiniKdc(KafkaPathResolverMixin, Service):
         self.kafka_nodes = kafka_nodes
         self.extra_principals = extra_principals
 
-        # context.scratch_dir uses a ducktape feature:
+        # context.local_scratch_dir uses a ducktape feature:
         # each test_context object has a unique local scratch directory which is available for the duration of the test
         # which is automatically garbage collected after the test finishes
-        MiniKdc._set_local_keytab_file(context.scratch_dir)
-        MiniKdc._set_local_krb5conf_file(context.scratch_dir)
+        MiniKdc._set_local_keytab_file(context.local_scratch_dir)
+        MiniKdc._set_local_krb5conf_file(context.local_scratch_dir)
 
     def replace_in_file(self, file_path, pattern, subst):
         fh, abs_path = mkstemp()

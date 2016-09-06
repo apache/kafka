@@ -120,7 +120,7 @@ class SecurityConfig(TemplateRenderer):
             # This generates keystore/trustore files in a local scratch directory which gets
             # automatically destroyed after the test is run
             # Creating within the scratch directory allows us to run tests in parallel without fear of collision
-            SecurityConfig.ssl_stores = SslStores(context.scratch_dir)
+            SecurityConfig.ssl_stores = SslStores(context.local_scratch_dir)
             SecurityConfig.ssl_stores.generate_ca()
             SecurityConfig.ssl_stores.generate_truststore()
 
