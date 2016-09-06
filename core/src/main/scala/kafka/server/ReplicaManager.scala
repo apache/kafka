@@ -517,8 +517,8 @@ class ReplicaManager(val config: KafkaConfig,
                        readOnlyCommitted: Boolean,
                        readPartitionInfo: Map[TopicAndPartition, PartitionFetchInfo],
                        quota: ReadOnlyQuota): Map[TopicAndPartition, LogReadResult] = {
+    var throttledTotal = 0
 
-    var totalThrottledBytesInFetch = 0
     readPartitionInfo.map { case (TopicAndPartition(topic, partition), PartitionFetchInfo(offset, fetchSize)) =>
       BrokerTopicStats.getBrokerTopicStats(topic).totalFetchRequestRate.mark()
       BrokerTopicStats.getBrokerAllTopicsStats().totalFetchRequestRate.mark()
@@ -558,10 +558,13 @@ class ReplicaManager(val config: KafkaConfig,
 
               //If the read for this partition caused the quota to be exceeded then zero it out, so it is excluded
               if (quota.isThrottled(TopicAndPartition(topic, partition))) {
-                if (quota.isQuotaExceededBy(totalThrottledBytesInFetch))
+                //TODO - Ideally we'd check the quota based on throttledTotal + fetch.messageSet.sizeInBytes => but it fails to retain the correct rate.
+                //TODO   This is because fetch.messageSet.sizeInBytes is typically 1MB, and the quota is typically not much more than that.
+                if (quota.isQuotaExceededBy(throttledTotal))
+                  //TODO - is this of reusing fetchOffsetMetadata is def correct?
                   fetch = FetchDataInfo(fetch.fetchOffsetMetadata, MessageSet.Empty)
                 else
-                  totalThrottledBytesInFetch += fetch.messageSet.sizeInBytes
+                  throttledTotal += fetch.messageSet.sizeInBytes
               }
               fetch
             case None =>

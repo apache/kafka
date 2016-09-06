@@ -133,7 +133,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     * @param value
     */
   def record(value: Long) = {
-    logger.info("Updating sensor with throttled bytes for " + replicationType + " value " + value)
+    logger.info("Recording throttled bytes for outgoing request for type:" + replicationType + " value:" + value)
     try {
       sensor.record(value)
     } catch {

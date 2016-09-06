@@ -70,7 +70,7 @@ class DelayedFetch(delayMs: Long,
    */
   override def tryComplete() : Boolean = {
     var accumulatedSize = 0
-    var containsThrottledPartitions = false
+    var accumulatedThrottledSize = 0
     fetchMetadata.fetchPartitionStatus.foreach {
       case (topicAndPartition, fetchStatus) =>
         val fetchOffset = fetchStatus.startOffsetMetadata
@@ -101,7 +101,7 @@ class DelayedFetch(delayMs: Long,
                 if (!quota.isThrottled(topicAndPartition))
                   accumulatedSize += math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.fetchSize)
                 else
-                  containsThrottledPartitions = true
+                  accumulatedThrottledSize += math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.fetchSize)
               }
             }
           }
@@ -116,7 +116,9 @@ class DelayedFetch(delayMs: Long,
     }
 
     // Case D
-    if (accumulatedSize >= fetchMetadata.fetchMinBytes || (containsThrottledPartitions && !quota.isQuotaExceededBy(fetchMetadata.fetchMinBytes)))
+    if (accumulatedSize >= fetchMetadata.fetchMinBytes
+      || (accumulatedThrottledSize > 0 && !quota.isQuotaExceededBy(Math.max(fetchMetadata.fetchMinBytes, accumulatedThrottledSize))))
+      // TODO work in progress - we need the check the accumulated size also, else we'll forceComplete responses which will be empty (as we check accumulated size in readFromLog)
       forceComplete()
     else
       false
