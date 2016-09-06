@@ -74,6 +74,7 @@ public class KStreamRepartitionJoinTest {
     private String streamOneInput;
     private String streamTwoInput;
     private String streamFourInput;
+    private static volatile int testNo = 0;
 
     @Parameter
     public long cacheSizeBytes;
@@ -86,7 +87,8 @@ public class KStreamRepartitionJoinTest {
 
     @Before
     public void before() {
-        String applicationId = "kstream-repartition-join-test";
+        testNo++;
+        String applicationId = "kstream-repartition-join-test-" + testNo;
         builder = new KStreamBuilder();
         createTopics();
         streamsConfiguration = new Properties();
@@ -147,7 +149,7 @@ public class KStreamRepartitionJoinTest {
     }
 
     private ExpectedOutputOnTopic mapStreamOneAndJoin() {
-        String mapOneStreamAndJoinOutput = "map-one-join-output";
+        String mapOneStreamAndJoinOutput = "map-one-join-output-" + testNo;
         doJoin(streamOne.map(keyMapper), streamTwo, mapOneStreamAndJoinOutput);
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, mapOneStreamAndJoinOutput);
     }
@@ -156,8 +158,8 @@ public class KStreamRepartitionJoinTest {
         final KStream<Integer, Integer> map1 = streamOne.map(keyMapper);
         final KStream<Integer, String> map2 = streamTwo.map(MockKeyValueMapper.<Integer, String>NoOpKeyValueMapper());
 
-        doJoin(map1, map2, "map-both-streams-and-join");
-        return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, "map-both-streams-and-join");
+        doJoin(map1, map2, "map-both-streams-and-join-" + testNo);
+        return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, "map-both-streams-and-join-" + testNo);
     }
 
 
@@ -173,7 +175,7 @@ public class KStreamRepartitionJoinTest {
                 }
             }).map(keyMapper);
 
-        String outputTopic = "map-map-join";
+        String outputTopic = "map-map-join-" + testNo;
         doJoin(mapMapStream, streamTwo, outputTopic);
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
     }
@@ -184,7 +186,7 @@ public class KStreamRepartitionJoinTest {
         final KStream<Integer, Integer> keySelected =
                 streamOne.selectKey(MockKeyValueMapper.<Long, Integer>SelectValueMapper());
 
-        String outputTopic = "select-key-join";
+        String outputTopic = "select-key-join-" + testNo;
         doJoin(keySelected, streamTwo, outputTopic);
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
     }
@@ -200,7 +202,7 @@ public class KStreamRepartitionJoinTest {
                 }
             });
 
-        String outputTopic = "flat-map-join";
+        String outputTopic = "flat-map-join-" + testNo;
         doJoin(flatMapped, streamTwo, outputTopic);
 
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
@@ -360,9 +362,9 @@ public class KStreamRepartitionJoinTest {
     }
 
     private void createTopics() {
-        streamOneInput = "stream-one";
-        streamTwoInput = "stream-two";
-        streamFourInput = "stream-four";
+        streamOneInput = "stream-one-" + testNo;
+        streamTwoInput = "stream-two-" + testNo;
+        streamFourInput = "stream-four-" + testNo;
         CLUSTER.createTopic(streamOneInput);
         CLUSTER.createTopic(streamTwoInput);
         CLUSTER.createTopic(streamFourInput);
