@@ -33,7 +33,8 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.test.TestUtils;
-import org.junit.BeforeClass;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -41,6 +42,7 @@ import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
@@ -62,16 +64,44 @@ public class KStreamKTableJoinIntegrationTest {
     private static final int NUM_BROKERS = 1;
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
-    private static final String USER_CLICKS_TOPIC = "user-clicks";
-    private static final String USER_REGIONS_TOPIC = "user-regions";
-    private static final String USER_REGIONS_STORE_NAME = "user-regions-store-name";
-    private static final String OUTPUT_TOPIC = "output-topic";
+    private String userClicksTopic;
+    private String userRegionsTopic;
+    private String userRegionsStoreName;
+    private String outputTopic;
+    private static volatile int testNo = 0;
+    private KafkaStreams kafkaStreams;
+    private Properties streamsConfiguration;
 
-    @BeforeClass
-    public static void startKafkaCluster() throws Exception {
-        CLUSTER.createTopic(USER_CLICKS_TOPIC);
-        CLUSTER.createTopic(USER_REGIONS_TOPIC);
-        CLUSTER.createTopic(OUTPUT_TOPIC);
+    @Before
+    public void before() {
+        testNo++;
+        userClicksTopic = "user-clicks-" + testNo;
+        userRegionsTopic = "user-regions-" + testNo;
+        userRegionsStoreName = "user-regions-store-name-" + testNo;
+        outputTopic = "output-topic-" + testNo;
+        CLUSTER.createTopic(userClicksTopic);
+        CLUSTER.createTopic(userRegionsTopic);
+        CLUSTER.createTopic(outputTopic);
+        streamsConfiguration = new Properties();
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "join-integration-test-" + testNo);
+        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
+        streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG,
+            TestUtils.tempDirectory().getPath());
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1);
+        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
+
+    }
+
+    @After
+    public void whenShuttingDown() throws IOException {
+        if (kafkaStreams != null) {
+            kafkaStreams.close();
+        }
+        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
     @Parameter
@@ -154,20 +184,6 @@ public class KStreamKTableJoinIntegrationTest {
         final Serde<String> stringSerde = Serdes.String();
         final Serde<Long> longSerde = Serdes.Long();
 
-        Properties streamsConfiguration = new Properties();
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "join-integration-test");
-        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
-        streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG,
-                                 TestUtils.tempDirectory().getPath());
-        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1);
-        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
-
-        // Remove any state from previous test runs
-        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
 
         KStreamBuilder builder = new KStreamBuilder();
 
@@ -175,7 +191,7 @@ public class KStreamKTableJoinIntegrationTest {
         //
         // Because this is a KStream ("record stream"), multiple records for the same user will be
         // considered as separate click-count events, each of which will be added to the total count.
-        KStream<String, Long> userClicksStream = builder.stream(stringSerde, longSerde, USER_CLICKS_TOPIC);
+        KStream<String, Long> userClicksStream = builder.stream(stringSerde, longSerde, userClicksTopic);
 
         // This KTable contains information such as "alice" -> "europe".
         //
@@ -189,7 +205,7 @@ public class KStreamKTableJoinIntegrationTest {
         // subsequently processed in the `leftJoin`, the latest region update for "alice" is "europe"
         // (which overrides her previous region value of "asia").
         KTable<String, String> userRegionsTable =
-            builder.table(stringSerde, stringSerde, USER_REGIONS_TOPIC, USER_REGIONS_STORE_NAME);
+            builder.table(stringSerde, stringSerde, userRegionsTopic, userRegionsStoreName);
 
         // Compute the number of clicks per region, e.g. "europe" -> 13L.
         //
@@ -230,10 +246,10 @@ public class KStreamKTableJoinIntegrationTest {
             }, "ClicksPerRegionUnwindowed");
 
         // Write the (continuously updating) results to the output topic.
-        clicksPerRegion.to(stringSerde, longSerde, OUTPUT_TOPIC);
+        clicksPerRegion.to(stringSerde, longSerde, outputTopic);
 
-        KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
-        streams.start();
+        kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
+        kafkaStreams.start();
 
         //
         // Step 2: Publish user-region information.
@@ -247,7 +263,7 @@ public class KStreamKTableJoinIntegrationTest {
         userRegionsProducerConfig.put(ProducerConfig.RETRIES_CONFIG, 0);
         userRegionsProducerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         userRegionsProducerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        IntegrationTestUtils.produceKeyValuesSynchronously(USER_REGIONS_TOPIC, userRegions, userRegionsProducerConfig);
+        IntegrationTestUtils.produceKeyValuesSynchronously(userRegionsTopic, userRegions, userRegionsProducerConfig);
 
         //
         // Step 3: Publish some user click events.
@@ -258,7 +274,7 @@ public class KStreamKTableJoinIntegrationTest {
         userClicksProducerConfig.put(ProducerConfig.RETRIES_CONFIG, 0);
         userClicksProducerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         userClicksProducerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
-        IntegrationTestUtils.produceKeyValuesSynchronously(USER_CLICKS_TOPIC, userClicks, userClicksProducerConfig);
+        IntegrationTestUtils.produceKeyValuesSynchronously(userClicksTopic, userClicks, userClicksProducerConfig);
 
         //
         // Step 4: Verify the application's output data.
@@ -270,8 +286,7 @@ public class KStreamKTableJoinIntegrationTest {
         consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
         List<KeyValue<String, Long>> actualClicksPerRegion = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig,
-            OUTPUT_TOPIC, expectedClicksPerRegion.size());
-        streams.close();
+            outputTopic, expectedClicksPerRegion.size());
         assertThat(actualClicksPerRegion, equalTo(expectedClicksPerRegion));
     }
 
