@@ -79,15 +79,18 @@ public class ConsumerNetworkClientTest {
     }
 
     @Test
-    public void skipPollWhenPollConditionSatisfied() {
+    public void doNotBlockIfPollConditionIsSatisfied() {
         NetworkClient mockNetworkClient = EasyMock.mock(NetworkClient.class);
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(mockNetworkClient, metadata, time, 100, 1000);
 
+        // expect poll, but with no timeout
+        EasyMock.expect(mockNetworkClient.poll(EasyMock.eq(0L), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
+
         EasyMock.replay(mockNetworkClient);
 
-        consumerClient.poll(0, time.milliseconds(), new ConsumerNetworkClient.PollCondition() {
+        consumerClient.poll(Long.MAX_VALUE, time.milliseconds(), new ConsumerNetworkClient.PollCondition() {
             @Override
-            public boolean pollNeeded() {
+            public boolean shouldBlock() {
                 return false;
             }
         });
@@ -96,17 +99,17 @@ public class ConsumerNetworkClientTest {
     }
 
     @Test
-    public void invokePollWhenPollConditionNotSatisfied() {
+    public void blockWhenPollConditionNotSatisfied() {
         NetworkClient mockNetworkClient = EasyMock.mock(NetworkClient.class);
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(mockNetworkClient, metadata, time, 100, 1000);
 
-        EasyMock.expect(mockNetworkClient.poll(EasyMock.anyLong(), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
+        EasyMock.expect(mockNetworkClient.poll(EasyMock.eq(Long.MAX_VALUE), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
 
         EasyMock.replay(mockNetworkClient);
 
-        consumerClient.poll(0, time.milliseconds(), new ConsumerNetworkClient.PollCondition() {
+        consumerClient.poll(Long.MAX_VALUE, time.milliseconds(), new ConsumerNetworkClient.PollCondition() {
             @Override
-            public boolean pollNeeded() {
+            public boolean shouldBlock() {
                 return true;
             }
         });

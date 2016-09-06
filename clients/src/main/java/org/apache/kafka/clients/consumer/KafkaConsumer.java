@@ -1008,7 +1008,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
         client.poll(pollTimeout, now, new PollCondition() {
             @Override
-            public boolean pollNeeded() {
+            public boolean shouldBlock() {
                 return !fetcher.hasCompletedFetches();
             }
         });

@@ -223,7 +223,7 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
     }
 
     @Override
-    public boolean pollNeeded() {
+    public boolean shouldBlock() {
         return !isDone.get();
     }
 }

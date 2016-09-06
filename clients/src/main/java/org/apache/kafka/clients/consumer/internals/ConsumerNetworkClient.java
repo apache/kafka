@@ -211,11 +211,13 @@ public class ConsumerNetworkClient implements Closeable {
             trySend(now);
 
             // check whether the poll is still needed by the caller. Note that if the expected completion
-            // condition becomes satisfied after the call to pollNeeded (because of a fired completion
+            // condition becomes satisfied after the call to shouldBlock() (because of a fired completion
             // handler), the client will be woken up.
-            if (pollCondition == null || pollCondition.pollNeeded()) {
+            if (pollCondition == null || pollCondition.shouldBlock()) {
                 client.poll(timeout, now);
                 now = time.milliseconds();
+            } else {
+                client.poll(0, now);
             }
 
             // handle any disconnects by failing the active requests. note that disconnects must
@@ -488,7 +490,7 @@ public class ConsumerNetworkClient implements Closeable {
          * Return whether the caller is still awaiting an IO event.
          * @return true if so, false otherwise.
          */
-        boolean pollNeeded();
+        boolean shouldBlock();
     }
 
 }
