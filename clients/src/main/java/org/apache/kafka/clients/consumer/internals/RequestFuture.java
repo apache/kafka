@@ -17,7 +17,6 @@ import org.apache.kafka.common.protocol.Errors;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Result of an asynchronous request from {@link ConsumerNetworkClient}. Use {@link ConsumerNetworkClient#poll(long)}
@@ -41,8 +40,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
 
     private final AtomicBoolean isDone = new AtomicBoolean(false);
-    private final AtomicReference<T> value = new AtomicReference<>();
-    private final AtomicReference<RuntimeException> exception = new AtomicReference<>();
+    private volatile T value = null;
+    private volatile RuntimeException exception = null;
     private final ConcurrentLinkedQueue<RequestFutureListener<T>> listeners = new ConcurrentLinkedQueue<>();
 
     /**
@@ -58,7 +57,7 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      * @return the value if it exists or null
      */
     public T value() {
-        return value.get();
+        return value;
     }
 
     /**
@@ -66,7 +65,7 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      * @return true if the request completed and was successful
      */
     public boolean succeeded() {
-        return isDone() && exception.get() == null;
+        return isDone() && exception == null;
     }
 
     /**
@@ -74,7 +73,7 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      * @return true if the request completed with a failure
      */
     public boolean failed() {
-        return isDone() && exception.get() != null;
+        return isDone() && exception != null;
     }
 
     /**
@@ -83,7 +82,7 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      * @return true if it is retriable, false otherwise
      */
     public boolean isRetriable() {
-        return exception.get() instanceof RetriableException;
+        return exception instanceof RetriableException;
     }
 
     /**
@@ -91,7 +90,7 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      * @return The exception if it exists or null
      */
     public RuntimeException exception() {
-        return exception.get();
+        return exception;
     }
 
     /**
@@ -102,7 +101,7 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
     public void complete(T value) {
         if (!isDone.compareAndSet(false, true))
             throw new IllegalStateException("Invalid attempt to complete a request future which is already complete");
-        this.value.set(value);
+        this.value = value;
         fireSuccess(value);
     }
 
@@ -114,7 +113,7 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
     public void raise(RuntimeException e) {
         if (!isDone.compareAndSet(false, true))
             throw new IllegalStateException("Invalid attempt to complete a request future which is already complete");
-        this.exception.set(e);
+        this.exception = e;
         fireFailure(e);
     }
 
@@ -151,9 +150,9 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
     public void addListener(RequestFutureListener<T> listener) {
         if (isDone()) {
             if (failed())
-                listener.onFailure(exception.get());
+                listener.onFailure(exception);
             else
-                listener.onSuccess(value.get());
+                listener.onSuccess(value);
         } else {
             this.listeners.add(listener);
         }
