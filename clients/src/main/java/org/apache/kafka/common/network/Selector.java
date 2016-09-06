@@ -13,6 +13,7 @@
 package org.apache.kafka.common.network;
 
 import java.io.IOException;
+import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.channels.CancelledKeyException;
@@ -361,7 +362,9 @@ public class Selector implements Selectable {
 
             } catch (Exception e) {
                 String desc = channel.socketDescription();
-                if (e instanceof IOException)
+                if (e instanceof ConnectException)
+                    log.warn("Cannot connect to {}", desc, e);
+                else if (e instanceof IOException)
                     log.debug("Connection with {} disconnected", desc, e);
                 else
                     log.warn("Unexpected error from {}; closing connection", desc, e);
