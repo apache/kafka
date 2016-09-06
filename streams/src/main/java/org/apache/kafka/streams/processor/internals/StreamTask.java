@@ -107,9 +107,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
         this.consumedOffsets = new HashMap<>();
 
         // create the record recordCollector that maintains the produced offsets
-        this.recordCollector = new RecordCollector(producer);
+        this.recordCollector = new RecordCollector(producer, id().toString());
 
-        log.info("Creating restoration consumer client for stream task #" + id());
+        log.info("task [{}] Creating restoration consumer client", id());
 
         // initialize the topology with its own context
         this.processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics, cache);
@@ -176,7 +176,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
             processorContext.setRecordContext(recordContext);
             this.currNode.process(currRecord.key(), currRecord.value());
 
-            log.debug("Completed processing one record [{}]", currRecord);
+            log.debug("task [{}] Completed processing one record [{}]", id(), currRecord);
 
             // update the consumed offset map after processing is done
             consumedOffsets.put(partition, currRecord.offset());
@@ -226,7 +226,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
     @Override
     public void punctuate(ProcessorNode node, long timestamp) {
         if (currNode != null)
-            throw new IllegalStateException("Current node is not null");
+            throw new IllegalStateException(String.format("task [%s] Current node is not null", id()));
 
         currNode = node;
         currRecord = new StampedRecord(DUMMY_RECORD, timestamp);
@@ -297,7 +297,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      */
     public void schedule(long interval) {
         if (currNode == null)
-            throw new IllegalStateException("Current node is null");
+            throw new IllegalStateException(String.format("task [%s] Current node is null", id()));
 
         punctuationQueue.schedule(new PunctuationSchedule(currNode, interval));
     }

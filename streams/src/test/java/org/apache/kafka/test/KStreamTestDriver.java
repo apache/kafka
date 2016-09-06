@@ -200,7 +200,7 @@ public class KStreamTestDriver {
 
     private class MockRecordCollector extends RecordCollector {
         public MockRecordCollector() {
-            super(null);
+            super(null, "KStreamTestDriver");
         }
 
         @Override
