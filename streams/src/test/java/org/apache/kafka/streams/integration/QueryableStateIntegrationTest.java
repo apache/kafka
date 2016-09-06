@@ -73,11 +73,11 @@ import static org.hamcrest.core.IsEqual.equalTo;
 
 @RunWith(Parameterized.class)
 public class QueryableStateIntegrationTest {
-    private static final int NUM_BROKERS = 2;
+    private static final int NUM_BROKERS = 1;
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER =
         new EmbeddedKafkaCluster(NUM_BROKERS);
-    private static final int NUM_PARTITIONS = NUM_BROKERS;
+    private static final int NUM_PARTITIONS = 2;
     private static final int NUM_REPLICAS = NUM_BROKERS;
     private static final long WINDOW_SIZE = 60000L;
     private String streamOne = "stream-one";
@@ -300,7 +300,7 @@ public class QueryableStateIntegrationTest {
     }
 
 
-    //@Test
+    @Test
     public void queryOnRebalance() throws Exception {
         int numThreads = NUM_PARTITIONS;
         StreamRunnable[] streamRunnables = new StreamRunnable[numThreads];
