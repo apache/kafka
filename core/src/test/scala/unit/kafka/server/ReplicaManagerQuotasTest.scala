@@ -1,19 +1,19 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+  * Licensed to the Apache Software Foundation (ASF) under one or more
+  * contributor license agreements.  See the NOTICE file distributed with
+  * this work for additional information regarding copyright ownership.
+  * The ASF licenses this file to You under the Apache License, Version 2.0
+  * (the "License"); you may not use this file except in compliance with
+  * the License.  You may obtain a copy of the License at
+  *
+  * http://www.apache.org/licenses/LICENSE-2.0
+  *
+  * Unless required by applicable law or agreed to in writing, software
+  * distributed under the License is distributed on an "AS IS" BASIS,
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
 package unit.kafka.server
 
 
@@ -27,7 +27,7 @@ import kafka.log.Log
 import kafka.message.{ByteBufferMessageSet, Message}
 import kafka.server._
 import kafka.utils._
-import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.metrics.{Quota, Metrics}
 import org.apache.kafka.common.utils.{MockTime => JMockTime}
 import org.easymock.EasyMock
 import org.easymock.EasyMock._
@@ -40,15 +40,18 @@ class ReplicaManagerQuotasTest {
   val time = new MockTime
   val jTime = new JMockTime
   val metrics = new Metrics
-  val message = new Message("some-data-in-a-message".getBytes())
+  var message = new Message("some-data-in-a-message".getBytes())
   val topicAndPartition1 = TopicAndPartition("test-topic", 1)
   val topicAndPartition2 = TopicAndPartition("test-topic", 2)
   val fetchInfo = Map(topicAndPartition1 -> PartitionFetchInfo(0, 100), topicAndPartition2 -> PartitionFetchInfo(0, 100))
   var replicaManager: ReplicaManager = null
+  val overhead: Int = 17
 
   @Test
-  def shouldExcludeSubsequentThrottledPartitions(): Unit ={
-    val quota = mockQuota
+  def shouldExcludeSubsequentThrottledPartitions(): Unit = {
+    setUpMocks(fetchInfo)
+
+    val quota = mockQuota(1000000)
     expect(quota.isQuotaExceededBy(anyObject())).andReturn(false).once()
     expect(quota.isQuotaExceededBy(anyObject())).andReturn(true).once()
     replay(quota)
@@ -62,8 +65,10 @@ class ReplicaManagerQuotasTest {
   }
 
   @Test
-  def shouldGetNoMessagesIfQuotasExceededOnSubsequentPartitions(): Unit ={
-    val quota = mockQuota
+  def shouldGetNoMessagesIfQuotasExceededOnSubsequentPartitions(): Unit = {
+    setUpMocks(fetchInfo)
+
+    val quota = mockQuota(1000000)
     expect(quota.isQuotaExceededBy(anyObject())).andReturn(true).once()
     expect(quota.isQuotaExceededBy(anyObject())).andReturn(true).once()
     replay(quota)
@@ -76,8 +81,10 @@ class ReplicaManagerQuotasTest {
   }
 
   @Test
-  def shouldGetBothMessagesIfQuotasAllow(): Unit ={
-    val quota= mockQuota
+  def shouldGetBothMessagesIfQuotasAllow(): Unit = {
+    setUpMocks(fetchInfo)
+
+    val quota = mockQuota(1000000)
     expect(quota.isQuotaExceededBy(anyObject())).andReturn(false).once()
     expect(quota.isQuotaExceededBy(anyObject())).andReturn(false).once()
     replay(quota)
@@ -89,8 +96,34 @@ class ReplicaManagerQuotasTest {
       fetch.get(topicAndPartition2).get.info.messageSet.size)
   }
 
-  @Before
-  def setUp() {
+  @Test
+  def shouldStopReadingPartitionsWhenQuotaExceeded(): Unit = {
+    //Given 10 partitions, with a 1K message in each
+    val fetchInfo = (0 until 10)
+      .map { partition => TopicAndPartition("test-topic", partition) -> PartitionFetchInfo(0, 500)}.toMap
+    setUpMocks(fetchInfo, new Message(new Array[Byte](1000)))
+
+    //And a quota bound of 5000B/s (i.e. half the bytes in the log)
+    val quota: Quota = Quota.upperBound(5000)
+
+    //When we read all ten partitions from the log
+    val fetch = replicaManager.readFromLocalLog(true, true, fetchInfo, mockQuotaManager(quota))
+
+    //Then we should only have read 5 of the 10 messages
+    assertEquals(5, fetch.map(_._2.info.messageSet.size).sum, 0)
+
+    //And we should only read up to the quota bound, and no further
+    assertEquals(quota.bound(), fetch.map(_._2.info.messageSet.sizeInBytes).sum, 170)
+  }
+
+  def mockQuotaManager(quota: Quota): ReadOnlyQuota = {
+    new ReadOnlyQuota() {
+      override def isThrottled(topicAndPartition: TopicAndPartition): Boolean = true
+      override def isQuotaExceededBy(bytes: Long): Boolean = !quota.acceptable(bytes)
+    }
+  }
+
+  def setUpMocks(fetchInfo: Map[TopicAndPartition, PartitionFetchInfo], message: Message = this.message) {
     val zkUtils = createNiceMock(classOf[ZkUtils])
     val scheduler = createNiceMock(classOf[KafkaScheduler])
 
@@ -118,15 +151,14 @@ class ReplicaManagerQuotasTest {
     val logManager = createMock(classOf[kafka.log.LogManager])
 
     //Return the same log for each partition as it doesn't matter
-    expect(logManager.getLog(topicAndPartition1)).andReturn(Some(log)).anyTimes()
-    expect(logManager.getLog(topicAndPartition2)).andReturn(Some(log)).anyTimes()
+    expect(logManager.getLog(anyObject())).andReturn(Some(log)).anyTimes()
     replay(logManager)
 
     replicaManager = new ReplicaManager(configs.head, metrics, time, jTime, zkUtils, scheduler, logManager,
       new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics).follower)
 
     //create the two replicas
-    for(p <- Seq(topicAndPartition1, topicAndPartition2)) {
+    for (p <- fetchInfo.keySet) {
       val partition = replicaManager.getOrCreatePartition(p.topic, p.partition)
       val replica = new Replica(configs.head.brokerId, partition, time, 0, Some(log))
       replica.highWatermark = new LogOffsetMetadata(5)
@@ -143,10 +175,9 @@ class ReplicaManagerQuotasTest {
     metrics.close()
   }
 
-  def mockQuota: ReadOnlyQuota = {
+  def mockQuota(bound: Long): ReadOnlyQuota = {
     val quota = createMock(classOf[ReadOnlyQuota])
     expect(quota.isThrottled(anyObject())).andReturn(true).anyTimes()
-    expect(quota.bound()).andReturn(1000000).anyTimes()
     quota
   }
 }

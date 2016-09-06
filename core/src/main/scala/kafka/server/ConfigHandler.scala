@@ -71,8 +71,8 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
 
     if (topicConfig.containsKey(LogConfig.ThrottledReplicasListProp)) {
       val partitions = parseThrottledPartitions(topicConfig, brokerId)
-      quotas.leader.markReplicasAsThrottled(topic, partitions)
-      quotas.follower.markReplicasAsThrottled(topic, partitions)
+      quotas.leader.markThrottled(topic, partitions)
+      quotas.follower.markThrottled(topic, partitions)
       logger.info(s"Setting throttled partitions on broker $brokerId to ${partitions.map(_.toString)}")
     }
   }

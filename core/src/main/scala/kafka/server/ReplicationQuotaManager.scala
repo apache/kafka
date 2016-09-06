@@ -50,11 +50,8 @@ object ReplicationQuotaManagerConfig {
 }
 
 trait ReadOnlyQuota {
-  def bound(): Int
-
   def isThrottled(topicAndPartition: TopicAndPartition): Boolean
-
-  def isQuotaExceededBy(bytes: Int): Boolean
+  def isQuotaExceededBy(bytes: Long): Boolean
 }
 
 object Constants {
@@ -95,17 +92,6 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
   }
 
   /**
-    * Retrieve the current quota object
-    *
-    * @return
-    */
-  def getQuota(): Quota = {
-    inReadLock(lock) {
-      quota
-    }
-  }
-
-  /**
     * Check if the quota is currently exceeded
     *
     * @return
@@ -116,7 +102,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     * Check if the quota will be exceeded by the passed value. This method does not record anything, but is equivalent to
     * increasing the quota by the passed value then checking if it has been exceeded.
     */
-  override def isQuotaExceededBy(value: Int): Boolean = {
+  override def isQuotaExceededBy(value: Long): Boolean = {
     try {
       sensor.checkQuotaWithDelta(value)
     } catch {
@@ -125,18 +111,6 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
         return true
     }
     false
-  }
-
-  /**
-    * Returns the bound of the configured quota
-    *
-    * @return
-    */
-  override def bound(): Int = {
-    if (getQuota != null)
-      getQuota.bound().toInt
-    else
-      Int.MaxValue
   }
 
   /**
@@ -158,7 +132,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     *
     * @param value
     */
-  def record(value: Int) = {
+  def record(value: Long) = {
     logger.info("Updating sensor with throttled bytes for " + replicationType + " value " + value)
     try {
       sensor.record(value)
@@ -177,7 +151,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     * @param partitions the set of throttled partitions
     * @return
     */
-  def markReplicasAsThrottled(topic: String, partitions: Seq[Int]): Unit = {
+  def markThrottled(topic: String, partitions: Seq[Int]): Unit = {
     throttledPartitions.put(topic, partitions)
   }
 
@@ -187,16 +161,9 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     * @param topic
     * @return
     */
-  def markReplicasAsThrottled(topic: String): Unit = {
-    markReplicasAsThrottled(topic, allReplicas)
+  def markThrottled(topic: String): Unit = {
+    markThrottled(topic, allReplicas)
   }
-
-  /**
-    * Returns the current rate of throttled replication
-    *
-    * @return
-    */
-  def rate(): Double = sensor.metrics.get(0).value
 
   private def createSensor(quota: Quota, name: String): Sensor = {
     var sensor = metrics.getSensor(name)

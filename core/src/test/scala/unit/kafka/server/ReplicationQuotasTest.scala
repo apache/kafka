@@ -37,9 +37,9 @@ import org.junit.{After, Before, Test}
 import scala.collection.JavaConverters._
 
 class ReplicationQuotasTest extends ZooKeeperTestHarness {
-  def TenPercentError(value: Int): Int = Math.round(value * 0.1).toInt
+  def tenPercentError(value: Int): Int = Math.round(value * 0.1).toInt
 
-  def FifteenPercentError(value: Int): Int = Math.round(value * 0.15).toInt
+  def fifteenPercentError(value: Int): Int = Math.round(value * 0.15).toInt
 
   val msg100KB = new Array[Byte](100000)
   var brokers: Seq[KafkaServer] = null
@@ -58,16 +58,14 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     super.tearDown()
   }
 
-  //TODO tests show the producer timing out. This is us throttling an ISR partition. Should reconsider this issue.
-  //TODO speed up by altering quota.window.num & quota.window.size.seconds and reducing throttle
-
   @Test //make this test faster by reducing the window lengths
   def shouldThrottleToDesiredRateOnLeaderOverTime(): Unit = {
     brokers = createBrokerConfigs(2, zkConnect).map(fromProps).map(TestUtils.createServer(_))
     producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(brokers), retries = 5, acks = 0)
     val leaders = TestUtils.createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 2, servers = brokers)
     val leader = if (leaders(0).get == brokers.head.config.brokerId) brokers.head else brokers(1)
-    val leaderByteRateMetricName = leader.metrics.metricName("byte-rate", LeaderReplication.toString, "Tracking byte-rate for " + LeaderReplication)
+    val leaderByteRateMetricName = leader.metrics.metricName("byte-rate", LeaderReplication, "Tracking byte-rate for " + LeaderReplication)
+
     shouldThrottleToDesiredRateOverTime(leader,  leaderByteRateMetricName)
   }
 
@@ -78,6 +76,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     val leaders = TestUtils.createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 2, servers = brokers)
     val follower = if (leaders(0).get == brokers.head.config.brokerId) brokers(1) else brokers.head
     val followerByteRateMetricName = follower.metrics.metricName("byte-rate", FollowerReplication, "Tracking byte-rate for" + FollowerReplication)
+
     shouldThrottleToDesiredRateOverTime(follower, followerByteRateMetricName)
   }
 
@@ -115,8 +114,9 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     val took = System.currentTimeMillis() - start
 
     //Then the recorded rate should match the quota we defined
-    val throttledRateFromLeader: Double = brokerUnderTest.metrics.metrics.asScala(metricName).value()
-    assertEquals(throttle, throttledRateFromLeader, TenPercentError(throttle))
+    val throttledRateFromLeader = brokerUnderTest.metrics.metrics.asScala(metricName).value()
+    info(s"Expected:$throttle, Recorded Rate was:$throttledRateFromLeader")
+    assertEquals(throttle, throttledRateFromLeader, tenPercentError(throttle))
 
     //Then also check it took the expected amount of time (don't merge this as is)
     val expectedDuration = msgCount / (throttle / msg.length) * 1000
@@ -177,7 +177,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     val expectedDuration = msgCount / (throttle / msg.length) * 1000 * 2 // i.e 2 throttled partitions
     took = System.currentTimeMillis() - start
     info(s"expected: $expectedDuration, was: $took")
-    assertEquals(s"Throttled partitions should have been slow. Was $took ms", expectedDuration, took, FifteenPercentError(expectedDuration))
+    assertEquals(s"Throttled partitions should have been slow. Was $took ms", expectedDuration, took, fifteenPercentError(expectedDuration))
   }
 
   @Test

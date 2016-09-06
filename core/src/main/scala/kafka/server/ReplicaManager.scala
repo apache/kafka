@@ -510,14 +510,6 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  def check(totalThrottledBytes: Int, bound: Int): Int = {
-    //TODO We can't ask the quota for more bytes than the bound, which can happen if the bound is low,
-    //TODO so default to 0 for now. We should validate this by not allowing a throttle bound be smaller than
-    //TODO the partition level max.bytes when the value is set in the ConfigCommand etc
-    //TODO so we should be able to remove this check before we merge
-    if (totalThrottledBytes > bound) 0 else totalThrottledBytes
-  }
-
   /**
    * Read from a single topic/partition at the given offset upto maxSize bytes
    */
@@ -565,9 +557,9 @@ class ReplicaManager(val config: KafkaConfig,
               var fetch = log.read(offset, adjustedFetchSize, maxOffsetOpt)
 
               //If the read for this partition caused the quota to be exceeded then zero it out, so it is excluded
-              if(quota.isThrottled(TopicAndPartition(topic, partition))) {
-                if (quota.isQuotaExceededBy(check(totalThrottledBytesInFetch, quota.bound())))
-                  fetch = log.read(offset, 0, maxOffsetOpt)
+              if (quota.isThrottled(TopicAndPartition(topic, partition))) {
+                if (quota.isQuotaExceededBy(totalThrottledBytesInFetch))
+                  fetch = FetchDataInfo(fetch.fetchOffsetMetadata, MessageSet.Empty)
                 else
                   totalThrottledBytesInFetch += fetch.messageSet.sizeInBytes
               }

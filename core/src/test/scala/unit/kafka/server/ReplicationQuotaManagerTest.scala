@@ -19,12 +19,14 @@ package unit.kafka.server
 import java.util.Collections
 
 import kafka.common.TopicAndPartition
-import kafka.server.{QuotaType, ReplicationQuotaManager, ReplicationQuotaManagerConfig}
+import kafka.server.QuotaType._
+import kafka.server.{ReplicationQuotaManager, ReplicationQuotaManagerConfig}
 import org.apache.kafka.common.metrics.stats.FixedWindowRate
 import org.apache.kafka.common.metrics.{Quota, MetricConfig, Metrics}
 import org.apache.kafka.common.utils.MockTime
 import org.junit.Assert.{assertFalse, assertTrue, assertEquals}
 import org.junit.Test
+import scala.collection.JavaConverters._
 
 class ReplicationQuotaManagerTest {
   private val time = new MockTime
@@ -32,7 +34,7 @@ class ReplicationQuotaManagerTest {
   @Test
   def shouldThrottleOnlyDefinedReplicas() {
     val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(), newMetrics, "consumer", time)
-    quota.markReplicasAsThrottled("topic1", Seq(1, 2, 3))
+    quota.markThrottled("topic1", Seq(1, 2, 3))
 
     assertTrue(quota.isThrottled(tp1(1)))
     assertTrue(quota.isThrottled(tp1(2)))
@@ -42,7 +44,8 @@ class ReplicationQuotaManagerTest {
 
   @Test
   def shouldExceedQuotaThenReturnBackBelowBoundAsTimePasses(): Unit = {
-    val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(numQuotaSamples = 10, quotaWindowSizeSeconds = 1), newMetrics, QuotaType.LeaderReplication, time) {
+    val metrics = newMetrics()
+    val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(numQuotaSamples = 10, quotaWindowSizeSeconds = 1), metrics, LeaderReplication, time) {
       override def newRateInstance() = new FixedWindowRate() //TODO - decide which rate is best prior to merge
     }
 
@@ -60,31 +63,37 @@ class ReplicationQuotaManagerTest {
 
     //Then it should break the quota
     assertTrue(quota.isQuotaExceeded())
-    assertEquals(101, quota.rate, 0)
+    assertEquals(101, rate(metrics), 0)
 
     //When we sleep for half the window
     time.sleep(500)
 
     //Then Our rate should be based on just half the window
     assertTrue(quota.isQuotaExceeded())
-    assertEquals(101, quota.rate, 0)
+    assertEquals(101, rate(metrics), 0)
 
     //When we sleep for the remainder of the window
     time.sleep(501)
 
     //Then the rate should be back down to below the quota
     assertFalse(quota.isQuotaExceeded())
-    assertEquals(101d / 2, quota.rate, 0)
+    assertEquals(101d / 2, rate(metrics), 0)
 
     //Sleep for 2 more window
     time.sleep(2 * 1000)
     assertFalse(quota.isQuotaExceeded())
-    assertEquals(101d / 4, quota.rate, 0)
+    assertEquals(101d / 4, rate(metrics), 0)
+  }
+
+  def rate(metrics: Metrics): Double = {
+    val metricName = metrics.metricName("byte-rate", LeaderReplication, "Tracking byte-rate for " + LeaderReplication)
+    val leaderThrottledRate = metrics.metrics.asScala(metricName).value()
+    leaderThrottledRate
   }
 
   @Test
   def shouldExceedWhenProposedBytesExceedQuota(): Unit = {
-    val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(numQuotaSamples = 10, quotaWindowSizeSeconds = 1), newMetrics, QuotaType.LeaderReplication, time) {
+    val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(numQuotaSamples = 10, quotaWindowSizeSeconds = 1), newMetrics, LeaderReplication, time) {
       override def newRateInstance() = new FixedWindowRate() //TODO - decide which rate is best prior to merge
     }
 
@@ -118,10 +127,10 @@ class ReplicationQuotaManagerTest {
 
   @Test
   def shouldSupportWildcardThrottledReplicas(): Unit = {
-    val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(), newMetrics, QuotaType.LeaderReplication, time)
+    val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(), newMetrics, LeaderReplication, time)
 
     //When
-    quota.markReplicasAsThrottled("MyTopic")
+    quota.markThrottled("MyTopic")
 
     //Then
     assertTrue(quota.isThrottled(TopicAndPartition("MyTopic", 0)))
@@ -130,7 +139,7 @@ class ReplicationQuotaManagerTest {
 
   def tp1(id: Int): TopicAndPartition = new TopicAndPartition("topic1", id)
 
-  def newMetrics: Metrics = {
+  def newMetrics(): Metrics = {
     new Metrics(new MetricConfig(), Collections.emptyList(), time)
   }
 }
