@@ -31,6 +31,8 @@ class SslStores(object):
         self.truststore_passwd = "test-ts-passwd"
         self.keystore_passwd = "test-ks-passwd"
         self.key_passwd = "test-key-passwd"
+        # Allow upto one hour of clock skew between host and VMs
+        self.startdate = "-1H"
 
         for file in [self.ca_crt_path, self.ca_jks_path, self.truststore_path]:
             if os.path.exists(file):
@@ -41,7 +43,7 @@ class SslStores(object):
         Generate CA private key and certificate.
         """
 
-        self.runcmd("keytool -genkeypair -alias ca -keyalg RSA -keysize 2048 -keystore %s -storetype JKS -storepass %s -keypass %s -dname CN=SystemTestCA" % (self.ca_jks_path, self.ca_passwd, self.ca_passwd))
+        self.runcmd("keytool -genkeypair -alias ca -keyalg RSA -keysize 2048 -keystore %s -storetype JKS -storepass %s -keypass %s -dname CN=SystemTestCA -startdate %s" % (self.ca_jks_path, self.ca_passwd, self.ca_passwd, self.startdate))
         self.runcmd("keytool -export -alias ca -keystore %s -storepass %s -storetype JKS -rfc -file %s" % (self.ca_jks_path, self.ca_passwd, self.ca_crt_path))
 
     def generate_truststore(self):
@@ -62,9 +64,9 @@ class SslStores(object):
         csr_path = os.path.join(ks_dir, "test.kafka.csr")
         crt_path = os.path.join(ks_dir, "test.kafka.crt")
 
-	self.runcmd("keytool -genkeypair -alias kafka -keyalg RSA -keysize 2048 -keystore %s -storepass %s -keypass %s -dname CN=systemtest -ext SAN=DNS:%s" % (ks_path, self.keystore_passwd, self.key_passwd, self.hostname(node)))
+	self.runcmd("keytool -genkeypair -alias kafka -keyalg RSA -keysize 2048 -keystore %s -storepass %s -keypass %s -dname CN=systemtest -ext SAN=DNS:%s -startdate %s" % (ks_path, self.keystore_passwd, self.key_passwd, self.hostname(node), self.startdate))
 	self.runcmd("keytool -certreq -keystore %s -storepass %s -keypass %s -alias kafka -file %s" % (ks_path, self.keystore_passwd, self.key_passwd, csr_path))
-	self.runcmd("keytool -gencert -keystore %s -storepass %s -alias ca -infile %s -outfile %s -dname CN=systemtest -ext SAN=DNS:%s" % (self.ca_jks_path, self.ca_passwd, csr_path, crt_path, self.hostname(node)))
+	self.runcmd("keytool -gencert -keystore %s -storepass %s -alias ca -infile %s -outfile %s -dname CN=systemtest -ext SAN=DNS:%s -startdate %s" % (self.ca_jks_path, self.ca_passwd, csr_path, crt_path, self.hostname(node), self.startdate))
 	self.runcmd("keytool -importcert -keystore %s -storepass %s -alias ca -file %s -noprompt" % (ks_path, self.keystore_passwd, self.ca_crt_path))
 	self.runcmd("keytool -importcert -keystore %s -storepass %s -keypass %s -alias kafka -file %s -noprompt" % (ks_path, self.keystore_passwd, self.key_passwd, crt_path))
         node.account.scp_to(ks_path, SecurityConfig.KEYSTORE_PATH)
