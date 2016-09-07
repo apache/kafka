@@ -61,6 +61,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
@@ -79,7 +80,8 @@ public class QueryableStateIntegrationTest {
     private static final String STREAM_TWO = "stream-two";
     private static final int NUM_PARTITIONS = NUM_BROKERS;
     private static final int NUM_REPLICAS = NUM_BROKERS;
-    private static final long WINDOW_SIZE = 60000L;
+    // sufficiently large window size such that everything falls into 1 window
+    private static final long WINDOW_SIZE = TimeUnit.MILLISECONDS.convert(2, TimeUnit.DAYS);
     private static final String OUTPUT_TOPIC_THREE = "output-three";
     private Properties streamsConfiguration;
     private List<String> inputValues;
@@ -513,10 +515,8 @@ public class QueryableStateIntegrationTest {
             final Long value = keyValueStore.get(key);
             if (value != null) {
                 countState.put(key, value);
-            } else {
-                if (failIfKeyNotFound) {
-                    fail("Key not found " + key);
-                }
+            } else if (failIfKeyNotFound) {
+                fail("Key not found " + key);
             }
         }
 
@@ -524,10 +524,6 @@ public class QueryableStateIntegrationTest {
             if (expectedWindowedCount.containsKey(actualWindowStateEntry.getKey())) {
                 final Long expectedValue = expectedWindowedCount.get(actualWindowStateEntry.getKey());
                 assertTrue(actualWindowStateEntry.getValue() >= expectedValue);
-            } else {
-                if (failIfKeyNotFound) {
-                    fail("Key not found " + actualWindowStateEntry.getKey());
-                }
             }
             // return this for next round of comparisons
             expectedWindowedCount.put(actualWindowStateEntry.getKey(), actualWindowStateEntry.getValue());
@@ -537,10 +533,6 @@ public class QueryableStateIntegrationTest {
             if (expectedCount.containsKey(actualCountStateEntry.getKey())) {
                 final Long expectedValue = expectedCount.get(actualCountStateEntry.getKey());
                 assertTrue(actualCountStateEntry.getValue() >= expectedValue);
-            } else {
-                if (failIfKeyNotFound) {
-                    fail("Key not found " + actualCountStateEntry.getKey());
-                }
             }
             // return this for next round of comparisons
             expectedCount.put(actualCountStateEntry.getKey(), actualCountStateEntry.getValue());
