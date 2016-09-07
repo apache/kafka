@@ -1014,7 +1014,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         client.poll(pollTimeout, now, new PollCondition() {
             @Override
             public boolean shouldBlock() {
-                // since a fetch might be completed by the background check, we need this poll condition
+                // since a fetch might be completed by the background thread, we need this poll condition
                 // to ensure that we do not block unnecessarily in poll()
                 return !fetcher.hasCompletedFetches() && fetcher.hasInFlightFetches();
             }
