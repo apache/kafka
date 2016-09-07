@@ -39,6 +39,7 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.LogEntry;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
@@ -617,12 +618,14 @@ public class Fetcher<K, V> {
     private ConsumerRecord<K, V> parseRecord(TopicPartition partition, LogEntry logEntry) {
         Record record = logEntry.record();
 
-        if (this.checkCrcs && !record.isValid())
-            throw new KafkaException("Record for partition " + partition + " at offset "
-                    + logEntry.offset() + " is corrupt (stored crc = " + record.checksum()
-                    + ", computed crc = "
-                    + record.computeChecksum()
-                    + ")");
+        if (this.checkCrcs) {
+            try {
+                record.ensureValid();
+            } catch (InvalidRecordException e) {
+                throw new KafkaException("Record for partition " + partition + " at offset " + logEntry.offset()
+                        + " is invalid, cause: " + e.getMessage());
+            }
+        }
 
         try {
             long offset = logEntry.offset();

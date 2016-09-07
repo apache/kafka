@@ -92,8 +92,8 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
             if (offset < logStartOffset) {
               // don't bother with the warning if compact and delete are enabled.
               if (!isCompactAndDelete(log))
-                warn("Resetting first dirty offset to log start offset %d since the checkpointed offset %d is invalid."
-                    .format(logStartOffset, offset))
+                warn("Resetting first dirty offset for %s to log start offset %d since the checkpointed offset %d is invalid."
+                    .format(topicAndPartition, logStartOffset, offset))
               logStartOffset
             } else {
               offset
