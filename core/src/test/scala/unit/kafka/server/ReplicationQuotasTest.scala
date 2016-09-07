@@ -282,11 +282,9 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
   }
 
   def waitForOffset(topicAndPart: TopicAndPartition, offset: Int, servers: Seq[KafkaServer] = brokers): Boolean = {
-    var result = true
-    result = result && servers.forall { item =>
-      offset == (if (item.getLogManager().getLog(topicAndPart) == None) 0 else item.getLogManager().getLog(topicAndPart).get.logEndOffset)
+    servers.forall { item =>
+      offset == item.getLogManager.getLog(topicAndPart).map(_.logEndOffset).getOrElse(0)
     }
-    result
   }
 
   def property(key: String, value: String) = {

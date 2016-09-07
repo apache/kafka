@@ -39,7 +39,7 @@ import org.apache.kafka.common.protocol.{Errors, ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.requests.{ControlledShutdownResponse, ControlledShutdownRequest, RequestSend}
 import org.apache.kafka.common.security.JaasUtils
-import org.apache.kafka.common.utils.{SystemTime, AppInfoParser}
+import org.apache.kafka.common.utils.AppInfoParser
 
 import scala.collection
 import scala.collection.{Map, mutable}
@@ -174,7 +174,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
       val canStartup = isStartingUp.compareAndSet(false, true)
       if (canStartup) {
         metrics = new Metrics(metricConfig, reporters, kafkaMetricsTime, true)
-        quotaManagers = QuotaFactory.instantiate(config, metrics, new SystemTime)
+        quotaManagers = QuotaFactory.instantiate(config, metrics)
 
         brokerState.newState(Starting)
 
