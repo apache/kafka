@@ -24,6 +24,8 @@ import org.apache.kafka.common.metrics.{Metrics, Sensor, MeasurableStat, MetricC
 /**
   * Class which centralises the logic for creating/accessing sensors.
   * The quota can be updated by wrapping it in the passed MetricConfig
+  *
+  * The later arguments are passed as methods as they are only called when the sensor is instantiated.
   */
 class SensorAccess {
 
