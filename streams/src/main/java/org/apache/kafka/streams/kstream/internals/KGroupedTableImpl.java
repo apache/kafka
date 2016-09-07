@@ -77,10 +77,10 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     @Override
     public <T> KTable<K, T> aggregate(Initializer<T> initializer,
                             Aggregator<K, V, T> adder,
-                            Aggregator<K, V, T> substractor,
+                            Aggregator<K, V, T> subtractor,
                             String storeName) {
 
-        return aggregate(initializer, adder, substractor, null, storeName);
+        return aggregate(initializer, adder, subtractor, null, storeName);
     }
 
     private <T> KTable<K, T> doAggregate(ProcessorSupplier<K, Change<V>> aggregateSupplier,
