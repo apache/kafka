@@ -143,8 +143,8 @@ public class MemoryLRUCacheBytes {
 
         final TreeMap<Bytes, LRUNode> treeMap = this.map.get(namespace);
 
-        if (treeMap.containsKey(cacheKey)) {
-            node = treeMap.get(cacheKey);
+        node = treeMap.get(cacheKey);
+        if (node != null) {
             currentSizeBytes -= node.size();
             node.update(value);
             updateLRU(node);
@@ -210,13 +210,13 @@ public class MemoryLRUCacheBytes {
         return dirtyKeys.size();
     }
 
-    public int size() {
-        int size = 0;
+    public long size() {
+        long size = 0;
         for (Map.Entry<String, TreeMap<Bytes, LRUNode>> entry: this.map.entrySet()) {
             size += entry.getValue().size();
         }
         if (size < 0) {
-            return Integer.MAX_VALUE;
+            return Long.MAX_VALUE;
         }
         return size;
     }

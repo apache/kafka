@@ -137,7 +137,7 @@ public class InMemoryKeyValueStoreSupplier<K, V> implements StateStoreSupplier {
 
         @Override
         public void enableSendingOldValues() {
-
+            throw new UnsupportedOperationException("enableSendingOldValues is not supported");
         }
 
         @Override

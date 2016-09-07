@@ -68,6 +68,6 @@ class DelegatingPeekingKeyValueIterator<K, V> implements PeekingKeyValueIterator
 
     @Override
     public void remove() {
-
+        throw new UnsupportedOperationException("remove not supported");
     }
 }

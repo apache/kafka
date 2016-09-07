@@ -548,7 +548,7 @@ public class QueryableStateIntegrationTest {
                 assertTrue(actualWindowStateEntry.getValue() >= expectedValue);
             } else {
                 if (failIfKeyNotFound) {
-                    fail("Key not found " + actualWindowStateEntry.getKey());
+                    fail("Key not found in window store " + actualWindowStateEntry.getKey() + " value=" + actualWindowStateEntry.getValue());
                 }
             }
             // return this for next round of comparisons
@@ -561,7 +561,7 @@ public class QueryableStateIntegrationTest {
                 assertTrue(actualCountStateEntry.getValue() >= expectedValue);
             } else {
                 if (failIfKeyNotFound) {
-                    fail("Key not found " + actualCountStateEntry.getKey());
+                    fail("Key not found in key value store " + actualCountStateEntry.getKey());
                 }
             }
             // return this for next round of comparisons

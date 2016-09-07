@@ -98,7 +98,7 @@ class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void enableSendingOldValues() {
-
+        throw new UnsupportedOperationException("enableSendingOldValues is not valid for InMemoryKeyValueStore");
     }
 
     @Override
