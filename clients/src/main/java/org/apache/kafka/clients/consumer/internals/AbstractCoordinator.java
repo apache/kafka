@@ -207,9 +207,14 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     protected synchronized RequestFuture<Void> lookupCoordinator() {
-        if (findCoordinatorFuture == null)
-            findCoordinatorFuture = sendGroupCoordinatorRequest();
-        return findCoordinatorFuture;
+        RequestFuture<Void> future = findCoordinatorFuture;
+        if (future == null) {
+            future = sendGroupCoordinatorRequest();
+            // If no brokers are available, return a failed future without setting findCoordinatorFuture
+            if (!future.isDone())
+                findCoordinatorFuture = future;
+        }
+        return future;
     }
 
     private synchronized void clearFindCoordinatorFuture() {
