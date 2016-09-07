@@ -41,7 +41,7 @@ import scala.collection._
 
 object ZkUtils {
   val ConsumersPath = "/consumers"
-  val clusterIdPath = "/cluster/id"
+  val ClusterIdPath = "/cluster/id"
   val BrokerIdsPath = "/brokers/ids"
   val BrokerTopicsPath = "/brokers/topics"
   val ControllerPath = "/controller"
@@ -222,7 +222,7 @@ class ZkUtils(val zkClient: ZkClient,
       }
     }
 
-    readDataMaybeNull(clusterIdPath)._1 match {
+    readDataMaybeNull(ClusterIdPath)._1 match {
       case Some(clusterId) => Some(parseClusterId(clusterId))
       case None => None
     }
@@ -235,8 +235,8 @@ class ZkUtils(val zkClient: ZkClient,
     val data = Json.encode(jsonMap)
 
     try {
-      createParentPath(clusterIdPath)
-      ZkPath.createPersistent(zkClient, clusterIdPath, data, DefaultAcls)
+      createParentPath(ClusterIdPath)
+      ZkPath.createPersistent(zkClient, ClusterIdPath, data, DefaultAcls)
       proposedClusterId
     } catch {
       case e: ZkNodeExistsException =>
