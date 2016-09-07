@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.metrics.Stat;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -36,7 +37,7 @@ import java.util.Objects;
 
 /**
  * The implementation class of {@link KGroupedTable}.
- * 
+ *
  * @param <K> the key type
  * @param <V> the value type
  */
@@ -70,28 +71,41 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         Objects.requireNonNull(adder, "adder can't be null");
         Objects.requireNonNull(subtractor, "subtractor can't be null");
         Objects.requireNonNull(storeName, "storeName can't be null");
-        ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(storeName, initializer, adder, subtractor);
-        return doAggregate(aggregateSupplier, aggValueSerde, AGGREGATE_NAME, storeName);
+        return aggregate(initializer, adder, subtractor, keyValueStore(aggValueSerde, storeName));
+    }
+
+
+    @Override
+    public <T> KTable<K, T> aggregate(Initializer<T> initializer,
+                                      Aggregator<K, V, T> adder,
+                                      Aggregator<K, V, T> subtractor,
+                                      StateStoreSupplier storeSupplier) {
+        Objects.requireNonNull(initializer, "initializer can't be null");
+        Objects.requireNonNull(adder, "adder can't be null");
+        Objects.requireNonNull(subtractor, "subtractor can't be null");
+        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
+        ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(storeSupplier.name(), initializer, adder, subtractor);
+        return doAggregate(aggregateSupplier, AGGREGATE_NAME, storeSupplier);
     }
 
     @Override
     public <T> KTable<K, T> aggregate(Initializer<T> initializer,
-                            Aggregator<K, V, T> adder,
-                            Aggregator<K, V, T> substractor,
-                            String storeName) {
+                                      Aggregator<K, V, T> adder,
+                                      Aggregator<K, V, T> substractor,
+                                      String storeName) {
 
         return aggregate(initializer, adder, substractor, null, storeName);
     }
 
+
     private <T> KTable<K, T> doAggregate(ProcessorSupplier<K, Change<V>> aggregateSupplier,
-                                         Serde<T> aggValueSerde,
                                          String functionName,
-                                         String storeName) {
+                                         StateStoreSupplier storeSupplier) {
         String sinkName = topology.newName(KStreamImpl.SINK_NAME);
         String sourceName = topology.newName(KStreamImpl.SOURCE_NAME);
         String funcName = topology.newName(functionName);
 
-        String topic = storeName + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
+        String topic = storeSupplier.name() + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
 
         Serializer<K> keySerializer = keySerde == null ? null : keySerde.serializer();
         Deserializer<K> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
@@ -100,12 +114,6 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
         ChangedSerializer<V> changedValueSerializer = new ChangedSerializer<>(valueSerializer);
         ChangedDeserializer<V> changedValueDeserializer = new ChangedDeserializer<>(valueDeserializer);
-
-        StateStoreSupplier aggregateStore = Stores.create(storeName)
-            .withKeys(keySerde)
-            .withValues(aggValueSerde)
-            .persistent()
-            .build();
 
         // send the aggregate key-value pairs to the intermediate topic for partitioning
         topology.addInternalTopic(topic);
@@ -116,10 +124,10 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
         // aggregate the values with the aggregator and local store
         topology.addProcessor(funcName, aggregateSupplier, sourceName);
-        topology.addStateStore(aggregateStore, funcName);
+        topology.addStateStore(storeSupplier, funcName);
 
         // return the KTable representation with the intermediate topic as the sources
-        return new KTableImpl<>(topology, funcName, aggregateSupplier, Collections.singleton(sourceName), storeName);
+        return new KTableImpl<>(topology, funcName, aggregateSupplier, Collections.singleton(sourceName), storeSupplier.name());
     }
 
     @Override
@@ -129,8 +137,16 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         Objects.requireNonNull(adder, "adder can't be null");
         Objects.requireNonNull(subtractor, "subtractor can't be null");
         Objects.requireNonNull(storeName, "storeName can't be null");
-        ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableReduce<>(storeName, adder, subtractor);
-        return doAggregate(aggregateSupplier, valSerde, REDUCE_NAME, storeName);
+        return reduce(adder, subtractor, keyValueStore(valSerde, storeName));
+    }
+
+    @Override
+    public KTable<K, V> reduce(Reducer<V> adder, Reducer<V> subtractor, StateStoreSupplier storeSupplier) {
+        Objects.requireNonNull(adder, "adder can't be null");
+        Objects.requireNonNull(subtractor, "subtractor can't be null");
+        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
+        ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableReduce<>(storeSupplier.name(), adder, subtractor);
+        return doAggregate(aggregateSupplier, REDUCE_NAME, storeSupplier);
     }
 
     @Override
@@ -155,5 +171,19 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                 },
                 Serdes.Long(), storeName);
     }
+
+    private <T> StateStoreSupplier keyValueStore(final Serde<T> aggValueSerde, final String name) {
+        return storeFactory(aggValueSerde, name).build();
+    }
+
+    private <T> Stores.PersistentKeyValueFactory<K, T> storeFactory(final Serde<T> aggValueSerde,
+                                                                    final String storeName) {
+        return Stores.create(storeName)
+                .withKeys(keySerde)
+                .withValues(aggValueSerde)
+                .persistent();
+
+    }
+
 
 }

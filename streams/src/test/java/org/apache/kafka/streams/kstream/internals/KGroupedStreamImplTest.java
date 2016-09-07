@@ -22,6 +22,7 @@ import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockReducer;
@@ -45,7 +46,14 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreNameOnReduce() throws Exception {
-        groupedStream.reduce(MockReducer.STRING_ADDER, null);
+        String s = null;        // to avoid ambiguous method call
+        groupedStream.reduce(MockReducer.STRING_ADDER, s);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullStoreSupplierOnReduce() throws Exception {
+        StateStoreSupplier s = null;        // to avoid ambiguous method call
+        groupedStream.reduce(MockReducer.STRING_ADDER, s);
     }
 
     @Test(expected = NullPointerException.class)
@@ -60,7 +68,14 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreNameWithWindowedReduce() throws Exception {
-        groupedStream.reduce(MockReducer.STRING_ADDER, TimeWindows.of(10), null);
+        String s = null;            // to avoid ambiguous method call
+        groupedStream.reduce(MockReducer.STRING_ADDER, TimeWindows.of(10), s);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullStoreSupplierWithWindowedReduce() throws Exception {
+        StateStoreSupplier s = null;            // to avoid ambiguous method call
+        groupedStream.reduce(MockReducer.STRING_ADDER, TimeWindows.of(10), s);
     }
 
     @Test(expected = NullPointerException.class)
@@ -75,8 +90,16 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreNameOnAggregate() throws Exception {
-        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, Serdes.String(), null);
+        String s = null;            // to avoid ambiguous method call
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, Serdes.String(), s);
     }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullStoreSupplierOnAggregate() throws Exception {
+        StateStoreSupplier s = null;            // to avoid ambiguous method call
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, Serdes.String(), s);
+    }
+
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullInitializerOnWindowedAggregate() throws Exception {
@@ -95,6 +118,14 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreNameOnWindowedAggregate() throws Exception {
-        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, TimeWindows.of(10), Serdes.String(), null);
+        String s = null;        // to avoid ambiguous method call
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, TimeWindows.of(10), Serdes.String(), s);
     }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullStoreSupplierOnWindowedAggregate() throws Exception {
+        StateStoreSupplier s = null;        // to avoid ambiguous method call
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, TimeWindows.of(10), Serdes.String(), s);
+    }
+
 }
