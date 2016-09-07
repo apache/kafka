@@ -524,11 +524,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       info("Sending replication fetch response which includes throttled partitions: [" + throttledPartitions.keySet.map(_.toString) + "] totalling (in B): " + sizeOfThrottledPartitions)
     else
       info("Throttle Engaged... sending fetch response with no throttled partitions")
-    info("******************************************************")
     val metricName = metrics.metricName("byte-rate", LeaderReplication, "Tracking byte-rate for " + LeaderReplication)
-    val leaderThrottledRate = metrics.metrics.asScala(metricName).value()
-    info("Leader Throttled Rate is currently " + leaderThrottledRate)
-    info("******************************************************")
+    if (metrics.metrics.containsKey(metricName)) {
+      info("******************************************************")
+      val leaderThrottledRate = metrics.metrics.asScala(metricName).value()
+      info("Leader Throttled Rate is currently " + leaderThrottledRate)
+      info("******************************************************")
+    }
   }
 
   def replicationQuota(fetchRequest: FetchRequest): ReplicaQuota =

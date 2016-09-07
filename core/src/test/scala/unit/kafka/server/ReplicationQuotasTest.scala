@@ -63,13 +63,13 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
   //TODO    replica.lag.time.max.ms. This could cause replicas to drop out of the ISR. 1MB is 10Mb/s. But this is maybe something we could work around.
 
   @Test //make this test faster by reducing the window lengths
-  def shouldThrottleToDesiredRateOnLeaderOverTime(): Unit = {
-    shouldThrottleToDesiredRateOverTime(true)
+  def shouldThrottleToDesiredRateOFollowerOverTime(): Unit = {
+    shouldThrottleToDesiredRateOverTime(false)
   }
 
   @Test //make this test faster by reducing the window lengths
-  def shouldThrottleToDesiredRateOFollowerOverTime(): Unit = {
-    shouldThrottleToDesiredRateOverTime(false)
+  def shouldThrottleToDesiredRateOnLeaderOverTime(): Unit = {
+    shouldThrottleToDesiredRateOverTime(true)
   }
 
   //TODO need to work on the temporal comparisons prior to merge

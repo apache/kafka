@@ -71,6 +71,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   private val defaultQuota = Quota.upperBound(config.quotaBytesPerSecondDefault)
   private val lock = new ReentrantReadWriteLock()
   private val delayQueue = new DelayQueue[ThrottledResponse]()
+  private val sensorAccessor = new SensorAccess
   val throttledRequestReaper = new ThrottledRequestReaper(delayQueue)
   throttledRequestReaper.start()
 
@@ -163,71 +164,24 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * First sensor of the tuple is the quota enforcement sensor. Second one is the throttle time sensor
    */
   private def getOrCreateQuotaSensors(clientId: String): ClientSensors = {
-
-    // Names of the sensors to access
-    val quotaSensorName = getQuotaSensorName(clientId)
-    val throttleTimeSensorName = getThrottleTimeSensorName(clientId)
-    var quotaSensor: Sensor = null
-    var throttleTimeSensor: Sensor = null
-
-    /* Acquire the read lock to fetch the sensors. It is safe to call getSensor from multiple threads.
-     * The read lock allows a thread to create a sensor in isolation. The thread creating the sensor
-     * will acquire the write lock and prevent the sensors from being read while they are being created.
-     * It should be sufficient to simply check if the sensor is null without acquiring a read lock but the
-     * sensor being present doesn't mean that it is fully initialized i.e. all the Metrics may not have been added.
-     * This read lock waits until the writer thread has released its lock i.e. fully initialized the sensor
-     * at which point it is safe to read
-     */
-    lock.readLock().lock()
-    try {
-      quotaSensor = metrics.getSensor(quotaSensorName)
-      throttleTimeSensor = metrics.getSensor(throttleTimeSensorName)
-    }
-    finally {
-      lock.readLock().unlock()
-    }
-
-    /* If the sensor is null, try to create it else return the created sensor
-     * Either of the sensors can be null, hence null checks on both
-     */
-    if (quotaSensor == null || throttleTimeSensor == null) {
-      /* Acquire a write lock because the sensor may not have been created and we only want one thread to create it.
-       * Note that multiple threads may acquire the write lock if they all see a null sensor initially
-       * In this case, the writer checks the sensor after acquiring the lock again.
-       * This is safe from Double Checked Locking because the references are read
-       * after acquiring read locks and hence they cannot see a partially published reference
-       */
-      lock.writeLock().lock()
-      try {
-        // Set the var for both sensors in case another thread has won the race to acquire the write lock. This will
-        // ensure that we initialise `ClientSensors` with non-null parameters.
-        quotaSensor = metrics.getSensor(quotaSensorName)
-        throttleTimeSensor = metrics.getSensor(throttleTimeSensorName)
-        if (throttleTimeSensor == null) {
-          // create the throttle time sensor also. Use default metric config
-          throttleTimeSensor = metrics.sensor(throttleTimeSensorName,
-                                              null,
-                                              ClientQuotaManagerConfig.InactiveSensorExpirationTimeSeconds)
-          throttleTimeSensor.add(metrics.metricName("throttle-time",
-                                                apiKey,
-                                                "Tracking average throttle-time per client",
-                                                "client-id",
-                                                clientId), new Avg())
-        }
-
-
-        if (quotaSensor == null) {
-          quotaSensor = metrics.sensor(quotaSensorName,
-                                       getQuotaMetricConfig(quota(clientId)),
-                                       ClientQuotaManagerConfig.InactiveSensorExpirationTimeSeconds)
-          quotaSensor.add(clientRateMetricName(clientId), new Rate())
-        }
-      } finally {
-        lock.writeLock().unlock()
-      }
-    }
-    // return the read or created sensors
-    ClientSensors(quotaSensor, throttleTimeSensor)
+    ClientSensors(
+      sensorAccessor.getOrCreate(
+        getQuotaSensorName(clientId),
+        ClientQuotaManagerConfig.InactiveSensorExpirationTimeSeconds,
+        lock, metrics,
+        () => clientRateMetricName(clientId),
+        () => getQuotaMetricConfig(quota(clientId)),
+        () => new Rate()
+      ),
+      sensorAccessor.getOrCreate(getThrottleTimeSensorName(clientId),
+        ClientQuotaManagerConfig.InactiveSensorExpirationTimeSeconds,
+        lock,
+        metrics,
+        () => metrics.metricName("throttle-time", apiKey, "Tracking average throttle-time per client", "client-id", clientId),
+        () => null,
+        () => new Avg()
+      )
+    )
   }
 
   private def getThrottleTimeSensorName(clientId: String): String = apiKey + "ThrottleTime-" + clientId
