@@ -67,13 +67,13 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
       logs.foreach(_.config = logConfig)
     }
 
-    val brokerId: Int = kafkaConfig.brokerId
+    val brokerId = kafkaConfig.brokerId
 
     if (topicConfig.containsKey(LogConfig.ThrottledReplicasListProp)) {
       val partitions = parseThrottledPartitions(topicConfig, brokerId)
       quotas.leader.markThrottled(topic, partitions)
       quotas.follower.markThrottled(topic, partitions)
-      logger.info(s"Setting throttled partitions on broker $brokerId to ${partitions.map(_.toString)}")
+      logger.info(s"Setting throttled partitions on broker $brokerId to $partitions")
     }
   }
 
@@ -146,10 +146,9 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig, private val quo
 
 object ThrottledReplicaValidator extends Validator {
   override def ensureValid(name: String, value: scala.Any): Unit = {
-    if (!value.isInstanceOf[String])
-      throw new ConfigException(name, value, s"$name  must be a string")
-    if (!isValid(value.toString)) {
-      throw new ConfigException(name, value, s"$name  must match for format [number]-[number]:[number]-[number]:[number]-[number] etc")
+    value match {
+      case s:String => if (!isValid(value.toString)) throw new ConfigException(name, value, s"$name  must match for format [number]-[number]:[number]-[number]:[number]-[number] etc")
+      case _ => throw new ConfigException(name, value, s"$name  must be a string")
     }
   }
 

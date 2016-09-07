@@ -74,8 +74,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
   private val throttledPartitions = new ConcurrentHashMap[String, Seq[Int]]()
   private var quota: Quota = null
   private val sensorAccess = new SensorAccess
-
-  private def rateMetricName(): MetricName = metrics.metricName("byte-rate", replicationType, s"Tracking byte-rate for $replicationType")
+  private val rateMetricName = metrics.metricName("byte-rate", replicationType, s"Tracking byte-rate for $replicationType")
 
   /**
     * Update the quota
@@ -180,7 +179,15 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
   }
 
   private def sensor(): Sensor = {
-    sensorAccess.getOrCreate(replicationType, InactiveSensorExpirationTimeSeconds, lock, metrics, () => rateMetricName(), () => getQuotaMetricConfig(quota), () => newRateInstance())
+    sensorAccess.getOrCreate(
+      replicationType,
+      InactiveSensorExpirationTimeSeconds,
+      lock,
+      metrics,
+      () => rateMetricName,
+      () => getQuotaMetricConfig(quota),
+      () => newRateInstance()
+    )
   }
 
   protected def newRateInstance(): Rate = new SimpleRate()
