@@ -206,22 +206,14 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
-    protected RequestFuture<Void> lookupCoordinator() {
-        if (findCoordinatorFuture == null) {
+    protected synchronized RequestFuture<Void> lookupCoordinator() {
+        if (findCoordinatorFuture == null)
             findCoordinatorFuture = sendGroupCoordinatorRequest();
-            findCoordinatorFuture.addListener(new RequestFutureListener<Void>() {
-                @Override
-                public void onSuccess(Void value) {
-                    findCoordinatorFuture = null;
-                }
-
-                @Override
-                public void onFailure(RuntimeException e) {
-                    findCoordinatorFuture = null;
-                }
-            });
-        }
         return findCoordinatorFuture;
+    }
+
+    private synchronized void clearFindCoordinatorFuture() {
+        findCoordinatorFuture = null;
     }
 
     /**
@@ -270,16 +262,6 @@ public abstract class AbstractCoordinator implements Closeable {
         // when sending heartbeats and does not necessarily require us to rejoin the group.
         ensureCoordinatorReady();
 
-        if (!needRejoin())
-            return;
-
-        // call onJoinPrepare if needed. We set a flag to make sure that we do not call it a second
-        // time if the client is woken up before a pending rebalance completes.
-        if (needsJoinPrepare) {
-            onJoinPrepare(generation.generationId, generation.memberId);
-            needsJoinPrepare = false;
-        }
-
         if (heartbeatThread == null) {
             heartbeatThread = new HeartbeatThread();
             heartbeatThread.start();
@@ -287,6 +269,16 @@ public abstract class AbstractCoordinator implements Closeable {
 
         while (needRejoin()) {
             ensureCoordinatorReady();
+
+            // call onJoinPrepare if needed. We set a flag to make sure that we do not call it a second
+            // time if the client is woken up before a pending rebalance completes. This must be called
+            // on each iteration of the loop because an event requiring a rebalance (such as a metadata
+            // refresh which changes the matched subscription set) can occur while another rebalance is
+            // still in progress.
+            if (needsJoinPrepare) {
+                onJoinPrepare(generation.generationId, generation.memberId);
+                needsJoinPrepare = false;
+            }
 
             // ensure that there are no pending requests to the coordinator. This is important
             // in particular to avoid resending a pending JoinGroup request.
@@ -532,6 +524,7 @@ public abstract class AbstractCoordinator implements Closeable {
             // for the coordinator in the underlying network client layer
             // TODO: this needs to be better handled in KAFKA-1935
             Errors error = Errors.forCode(groupCoordinatorResponse.errorCode());
+            clearFindCoordinatorFuture();
             if (error == Errors.NONE) {
                 synchronized (AbstractCoordinator.this) {
                     AbstractCoordinator.this.coordinator = new Node(
@@ -549,6 +542,12 @@ public abstract class AbstractCoordinator implements Closeable {
                 log.debug("Group coordinator lookup for group {} failed: {}", groupId, error.message());
                 future.raise(error);
             }
+        }
+
+        @Override
+        public void onFailure(RuntimeException e, RequestFuture<Void> future) {
+            clearFindCoordinatorFuture();
+            super.onFailure(e, future);
         }
     }
 
@@ -820,7 +819,6 @@ public abstract class AbstractCoordinator implements Closeable {
         @Override
         public void run() {
             try {
-                RequestFuture findCoordinatorFuture = null;
 
                 while (true) {
                     synchronized (AbstractCoordinator.this) {
@@ -843,8 +841,8 @@ public abstract class AbstractCoordinator implements Closeable {
                         long now = time.milliseconds();
 
                         if (coordinatorUnknown()) {
-                            if (findCoordinatorFuture == null || findCoordinatorFuture.isDone())
-                                findCoordinatorFuture = lookupCoordinator();
+                            if (findCoordinatorFuture == null)
+                                lookupCoordinator();
                             else
                                 AbstractCoordinator.this.wait(retryBackoffMs);
                         } else if (heartbeat.sessionTimeoutExpired(now)) {

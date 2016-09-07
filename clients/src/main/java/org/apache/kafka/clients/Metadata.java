@@ -101,8 +101,8 @@ public final class Metadata {
     }
 
     /**
-     * Add the topic to maintain in the metadata. If topic expiry is enabled, expiry will
-     * time be reset on the next update.
+     * Add the topic to maintain in the metadata. If topic expiry is enabled, expiry time
+     * will be reset on the next update.
      */
     public synchronized void add(String topic) {
         topics.put(topic, TOPIC_EXPIRY_NEEDS_UPDATE);
@@ -211,8 +211,15 @@ public final class Metadata {
         for (Listener listener: listeners)
             listener.onMetadataUpdate(cluster);
 
-        // Do this after notifying listeners as subscribed topics' list can be changed by listeners
-        this.cluster = this.needMetadataForAllTopics ? getClusterForCurrentTopics(cluster) : cluster;
+
+        if (this.needMetadataForAllTopics) {
+            // the listener may change the interested topics, which could cause another metadata refresh.
+            // If we have already fetched all topics, however, another fetch should be unnecessary.
+            this.needUpdate = false;
+            this.cluster = getClusterForCurrentTopics(cluster);
+        } else {
+            this.cluster = cluster;
+        }
 
         notifyAll();
         log.debug("Updated cluster metadata version {} to {}", this.version, this.cluster);
@@ -287,7 +294,7 @@ public final class Metadata {
         Set<String> unauthorizedTopics = new HashSet<>();
         Collection<PartitionInfo> partitionInfos = new ArrayList<>();
         List<Node> nodes = Collections.emptyList();
-        Set<String> internalTopics = Collections.<String>emptySet();
+        Set<String> internalTopics = Collections.emptySet();
         if (cluster != null) {
             internalTopics = cluster.internalTopics();
             unauthorizedTopics.addAll(cluster.unauthorizedTopics());

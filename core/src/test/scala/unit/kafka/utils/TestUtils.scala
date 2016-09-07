@@ -274,8 +274,9 @@ object TestUtils extends Logging {
   def singleMessageSet(payload: Array[Byte],
                        codec: CompressionCodec = NoCompressionCodec,
                        key: Array[Byte] = null,
+                       timestamp: Long = Message.NoTimestamp,
                        magicValue: Byte = Message.CurrentMagicValue) =
-    new ByteBufferMessageSet(compressionCodec = codec, messages = new Message(payload, key, Message.NoTimestamp, magicValue))
+    new ByteBufferMessageSet(compressionCodec = codec, messages = new Message(payload, key, timestamp, magicValue))
 
   /**
    * Generate an array of random bytes

@@ -77,6 +77,7 @@ import org.slf4j.LoggerFactory;
  */
 public class Selector implements Selectable {
 
+    public static final long NO_IDLE_TIMEOUT_MS = -1;
     private static final Logger log = LoggerFactory.getLogger(Selector.class);
 
     private final java.nio.channels.Selector nioSelector;
@@ -93,25 +94,36 @@ public class Selector implements Selectable {
     private final String metricGrpPrefix;
     private final Map<String, String> metricTags;
     private final ChannelBuilder channelBuilder;
-    private final Map<String, Long> lruConnections;
-    private final long connectionsMaxIdleNanos;
     private final int maxReceiveSize;
     private final boolean metricsPerConnection;
-    private long currentTimeNanos;
-    private long nextIdleCloseCheckTime;
-
+    private final IdleExpiryManager idleExpiryManager;
 
     /**
      * Create a new nioSelector
+     *
+     * @param maxReceiveSize Max size in bytes of a single network receive (use {@link NetworkReceive#UNLIMITED} for no limit)
+     * @param connectionMaxIdleMs Max idle connection time (use {@link #NO_IDLE_TIMEOUT_MS} to disable idle timeout)
+     * @param metrics Registry for Selector metrics
+     * @param time Time implementation
+     * @param metricGrpPrefix Prefix for the group of metrics registered by Selector
+     * @param metricTags Additional tags to add to metrics registered by Selector
+     * @param metricsPerConnection Whether or not to enable per-connection metrics
+     * @param channelBuilder Channel builder for every new connection
      */
-    public Selector(int maxReceiveSize, long connectionMaxIdleMs, Metrics metrics, Time time, String metricGrpPrefix, Map<String, String> metricTags, boolean metricsPerConnection, ChannelBuilder channelBuilder) {
+    public Selector(int maxReceiveSize,
+                    long connectionMaxIdleMs,
+                    Metrics metrics,
+                    Time time,
+                    String metricGrpPrefix,
+                    Map<String, String> metricTags,
+                    boolean metricsPerConnection,
+                    ChannelBuilder channelBuilder) {
         try {
             this.nioSelector = java.nio.channels.Selector.open();
         } catch (IOException e) {
             throw new KafkaException(e);
         }
         this.maxReceiveSize = maxReceiveSize;
-        this.connectionsMaxIdleNanos = connectionMaxIdleMs * 1000 * 1000;
         this.time = time;
         this.metricGrpPrefix = metricGrpPrefix;
         this.metricTags = metricTags;
@@ -125,11 +137,8 @@ public class Selector implements Selectable {
         this.failedSends = new ArrayList<>();
         this.sensors = new SelectorMetrics(metrics);
         this.channelBuilder = channelBuilder;
-        // initial capacity and load factor are default, we set them explicitly because we want to set accessOrder = true
-        this.lruConnections = new LinkedHashMap<>(16, .75F, true);
-        currentTimeNanos = time.nanoseconds();
-        nextIdleCloseCheckTime = currentTimeNanos + connectionsMaxIdleNanos;
         this.metricsPerConnection = metricsPerConnection;
+        this.idleExpiryManager = connectionMaxIdleMs < 0 ? null : new IdleExpiryManager(time, connectionMaxIdleMs);
     }
 
     public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder) {
@@ -276,22 +285,26 @@ public class Selector implements Selectable {
         long startSelect = time.nanoseconds();
         int readyKeys = select(timeout);
         long endSelect = time.nanoseconds();
-        currentTimeNanos = endSelect;
         this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());
 
         if (readyKeys > 0 || !immediatelyConnectedKeys.isEmpty()) {
-            pollSelectionKeys(this.nioSelector.selectedKeys(), false);
-            pollSelectionKeys(immediatelyConnectedKeys, true);
+            pollSelectionKeys(this.nioSelector.selectedKeys(), false, endSelect);
+            pollSelectionKeys(immediatelyConnectedKeys, true, endSelect);
         }
 
         addToCompletedReceives();
 
         long endIo = time.nanoseconds();
         this.sensors.ioTime.record(endIo - endSelect, time.milliseconds());
-        maybeCloseOldestConnection();
+
+        // we use the time at the end of select to ensure that we don't close any connections that
+        // have just been processed in pollSelectionKeys
+        maybeCloseOldestConnection(endSelect);
     }
 
-    private void pollSelectionKeys(Iterable<SelectionKey> selectionKeys, boolean isImmediatelyConnected) {
+    private void pollSelectionKeys(Iterable<SelectionKey> selectionKeys,
+                                   boolean isImmediatelyConnected,
+                                   long currentTimeNanos) {
         Iterator<SelectionKey> iterator = selectionKeys.iterator();
         while (iterator.hasNext()) {
             SelectionKey key = iterator.next();
@@ -300,7 +313,8 @@ public class Selector implements Selectable {
 
             // register all per-connection metrics at once
             sensors.maybeRegisterConnectionMetrics(channel.id());
-            lruConnections.put(channel.id(), currentTimeNanos);
+            if (idleExpiryManager != null)
+                idleExpiryManager.update(channel.id(), currentTimeNanos);
 
             try {
 
@@ -409,24 +423,20 @@ public class Selector implements Selectable {
             unmute(channel);
     }
 
-    private void maybeCloseOldestConnection() {
-        if (currentTimeNanos > nextIdleCloseCheckTime) {
-            if (lruConnections.isEmpty()) {
-                nextIdleCloseCheckTime = currentTimeNanos + connectionsMaxIdleNanos;
-            } else {
-                Map.Entry<String, Long> oldestConnectionEntry = lruConnections.entrySet().iterator().next();
-                Long connectionLastActiveTime = oldestConnectionEntry.getValue();
-                nextIdleCloseCheckTime = connectionLastActiveTime + connectionsMaxIdleNanos;
-                if (currentTimeNanos > nextIdleCloseCheckTime) {
-                    String connectionId = oldestConnectionEntry.getKey();
-                    if (log.isTraceEnabled())
-                        log.trace("About to close the idle connection from " + connectionId
-                                + " due to being idle for " + (currentTimeNanos - connectionLastActiveTime) / 1000 / 1000 + " millis");
+    private void maybeCloseOldestConnection(long currentTimeNanos) {
+        if (idleExpiryManager == null)
+            return;
 
-                    disconnected.add(connectionId);
-                    close(connectionId);
-                }
-            }
+        Map.Entry<String, Long> expiredConnection = idleExpiryManager.pollExpiredConnection(currentTimeNanos);
+        if (expiredConnection != null) {
+            String connectionId = expiredConnection.getKey();
+
+            if (log.isTraceEnabled())
+                log.trace("About to close the idle connection from {} due to being idle for {} millis",
+                        connectionId, (currentTimeNanos - expiredConnection.getValue()) / 1000 / 1000);
+
+            disconnected.add(connectionId);
+            close(connectionId);
         }
     }
 
@@ -480,8 +490,10 @@ public class Selector implements Selectable {
         }
         this.stagedReceives.remove(channel);
         this.channels.remove(channel.id());
-        this.lruConnections.remove(channel.id());
         this.sensors.connectionClosed.record();
+
+        if (idleExpiryManager != null)
+            idleExpiryManager.remove(channel.id());
     }
 
 
@@ -723,6 +735,47 @@ public class Selector implements Selectable {
                 metrics.removeMetric(metricName);
             for (Sensor sensor : sensors)
                 metrics.removeSensor(sensor.name());
+        }
+    }
+
+    // helper class for tracking least recently used connections to enable idle connection closing
+    private static class IdleExpiryManager {
+        private final Map<String, Long> lruConnections;
+        private final long connectionsMaxIdleNanos;
+        private long nextIdleCloseCheckTime;
+
+        public IdleExpiryManager(Time time, long connectionsMaxIdleMs) {
+            this.connectionsMaxIdleNanos = connectionsMaxIdleMs * 1000 * 1000;
+            // initial capacity and load factor are default, we set them explicitly because we want to set accessOrder = true
+            this.lruConnections = new LinkedHashMap<>(16, .75F, true);
+            this.nextIdleCloseCheckTime = time.nanoseconds() + this.connectionsMaxIdleNanos;
+        }
+
+        public void update(String connectionId, long currentTimeNanos) {
+            lruConnections.put(connectionId, currentTimeNanos);
+        }
+
+        public Map.Entry<String, Long> pollExpiredConnection(long currentTimeNanos) {
+            if (currentTimeNanos <= nextIdleCloseCheckTime)
+                return null;
+
+            if (lruConnections.isEmpty()) {
+                nextIdleCloseCheckTime = currentTimeNanos + connectionsMaxIdleNanos;
+                return null;
+            }
+
+            Map.Entry<String, Long> oldestConnectionEntry = lruConnections.entrySet().iterator().next();
+            Long connectionLastActiveTime = oldestConnectionEntry.getValue();
+            nextIdleCloseCheckTime = connectionLastActiveTime + connectionsMaxIdleNanos;
+
+            if (currentTimeNanos > nextIdleCloseCheckTime)
+                return oldestConnectionEntry;
+            else
+                return null;
+        }
+
+        public void remove(String connectionId) {
+            lruConnections.remove(connectionId);
         }
     }
 

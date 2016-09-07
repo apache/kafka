@@ -484,7 +484,7 @@ public class NetworkClient implements KafkaClient {
     private static void correlate(RequestHeader requestHeader, ResponseHeader responseHeader) {
         if (requestHeader.correlationId() != responseHeader.correlationId())
             throw new IllegalStateException("Correlation id for response (" + responseHeader.correlationId()
-                    + ") does not match request (" + requestHeader.correlationId() + ")");
+                    + ") does not match request (" + requestHeader.correlationId() + "), request header: " + requestHeader);
     }
 
     /**
@@ -559,7 +559,7 @@ public class NetworkClient implements KafkaClient {
         public boolean maybeHandleDisconnection(ClientRequest request) {
             ApiKeys requestKey = ApiKeys.forId(request.request().header().apiKey());
 
-            if (requestKey == ApiKeys.METADATA) {
+            if (requestKey == ApiKeys.METADATA && request.isInitiatedByNetworkClient()) {
                 Cluster cluster = metadata.fetch();
                 if (cluster.isBootstrapConfigured()) {
                     int nodeId = Integer.parseInt(request.request().destination());

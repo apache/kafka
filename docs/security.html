@@ -75,11 +75,11 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
 
         The next step is to add the generated CA to the **clients' truststore** so that the clients can trust this CA:
         <pre>
-        keytool -keystore server.truststore.jks -alias CARoot <b>-import</b> -file ca-cert</pre>
-
-        <b>Note:</b> If you configure the Kafka brokers to require client authentication by setting ssl.client.auth to be "requested" or "required" on the <a href="#config_broker">Kafka brokers config</a> then you must provide a truststore for the Kafka brokers as well and it should have all the CA certificates that clients keys were signed by.
-        <pre>
         keytool -keystore client.truststore.jks -alias CARoot -import -file ca-cert</pre>
+
+        <b>Note:</b> If you configure the Kafka brokers to require client authentication by setting ssl.client.auth to be "requested" or "required" on the <a href="#config_broker">Kafka brokers config</a> then you must provide a truststore for the Kafka brokers as well and it should have all the CA certificates that clients' keys were signed by.
+        <pre>
+        keytool -keystore server.truststore.jks -alias CARoot <b>-import</b> -file ca-cert</pre>
 
         In contrast to the keystore in step 1 that stores each machine's own identity, the truststore of a client stores all the certificates that the client should trust. Importing a certificate into one's truststore also means trusting all certificates that are signed by that certificate. As the analogy above, trusting the government (CA) also means trusting all passports (certificates) that it has issued. This attribute is called the chain of trust, and it is particularly useful when deploying SSL on a large Kafka cluster. You can sign all certificates in the cluster with a single CA, and have all machines share the same truststore that trusts the CA. That way all machines can authenticate all other machines.</li>
 
@@ -145,6 +145,7 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
             <li>ssl.enabled.protocols=TLSv1.2,TLSv1.1,TLSv1 (list out the SSL protocols that you are going to accept from clients. Do note that SSL is deprecated in favor of TLS and using SSL in production is not recommended)</li>
             <li>ssl.keystore.type=JKS</li>
             <li>ssl.truststore.type=JKS</li>
+            <li>ssl.secure.random.implementation=SHA1PRNG</li>
         </ol>
         If you want to enable SSL for inter-broker communication, add the following to the broker properties file (it defaults to PLAINTEXT)
         <pre>
@@ -153,6 +154,14 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
         <p>
         Due to import regulations in some countries, the Oracle implementation limits the strength of cryptographic algorithms available by default. If stronger algorithms are needed (for example, AES with 256-bit keys), the <a href="http://www.oracle.com/technetwork/java/javase/downloads/index.html">JCE Unlimited Strength Jurisdiction Policy Files</a> must be obtained and installed in the JDK/JRE. See the
         <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/SunProviders.html">JCA Providers Documentation</a> for more information.
+        </p>
+
+        <p>
+        The JRE/JDK will have a default pseudo-random number generator (PRNG) that is used for cryptography operations, so it is not required to configure the
+        implementation used with the <pre>ssl.secure.random.implementation</pre>. However, there are performance issues with some implementations (notably, the
+        default chosen on Linux systems, <pre>NativePRNG</pre>, utilizes a global lock). In cases where performance of SSL connections becomes an issue,
+        consider explicitly setting the implementation to be used. The <pre>SHA1PRNG</pre> implementation is non-blocking, and has shown very good performance
+        characteristics under heavy load (50 MB/sec of produced messages, plus replication traffic, per-broker).
         </p>
 
         Once you start the broker you should be able to see in the server.log

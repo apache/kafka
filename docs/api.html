@@ -168,19 +168,20 @@ Examples showing how to use the consumer are given in the
 
 <h3><a id="streamsapi" href="#streamsapi">2.3 Streams API</a></h3>
 
-As of the 0.10.0 release we have added a new client library named <b>Kafka Streams</b> to let users implement their stream processing
-applications with data stored in Kafka topics. Kafka Streams is considered alpha quality and its public APIs are likely to change in
-future releases.
-You can use Kafka Streams by adding a dependency on the streams jar using
-the following example maven co-ordinates (you can change the version numbers with new releases):
+As of the 0.10.0 release we have added a stream processing engine to Apache Kafka called Kafka Streams, which is a client library that lets users implement their own stream processing applications for data stored in Kafka topics.
+You can use Kafka Streams from within your Java applications by adding a dependency on the kafka-streams jar using the following maven co-ordinates:
 
 <pre>
 	&lt;dependency&gt;
 	    &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
 	    &lt;artifactId&gt;kafka-streams&lt;/artifactId&gt;
-	    &lt;version&gt;0.10.0.0&lt;/version&gt;
+	    &lt;version&gt;0.10.0.1&lt;/version&gt;
 	&lt;/dependency&gt;
 </pre>
 
 Examples showing how to use this library are given in the
-<a href="http://kafka.apache.org/0100/javadoc/index.html?org/apache/kafka/streams/KafkaStreams.html" title="Kafka 0.10.0 Javadoc">javadocs</a> (note those classes annotated with <b>@InterfaceStability.Unstable</b>, indicating their public APIs may change without backward-compatibility in future releases).
+<a href="http://kafka.apache.org/0100/javadoc/index.html?org/apache/kafka/streams/KafkaStreams.html" title="Kafka 0.10.0 Javadoc">javadocs</a> and <a href="streams.html" title="Kafka Streams Overview">kafka streams overview</a>.
+<p>
+    Please note that Kafka Streams is a new component of Kafka, and its public APIs may change in future releases.
+    We use the <b>@InterfaceStability.Unstable</b> annotation to denote classes whose APIs may change without backward-compatibility in future releases.
+</p>
