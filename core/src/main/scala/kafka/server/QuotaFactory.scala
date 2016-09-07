@@ -19,7 +19,7 @@ package kafka.server
 import kafka.common.TopicAndPartition
 import kafka.server.QuotaType._
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.utils.SystemTime
+import org.apache.kafka.common.utils.Time
 
 object QuotaType {
   val Fetch = "Fetch"
@@ -37,9 +37,7 @@ object QuotaFactory {
 
   case class QuotaManagers(fetch: ClientQuotaManager, produce: ClientQuotaManager, leader: ReplicationQuotaManager, follower: ReplicationQuotaManager)
 
-  def time = new SystemTime
-
-  def instantiate(cfg: KafkaConfig, metrics: Metrics): QuotaManagers = {
+  def instantiate(cfg: KafkaConfig, metrics: Metrics, time: Time): QuotaManagers = {
     QuotaManagers(
       new ClientQuotaManager(clientFetchConfig(cfg), metrics, Fetch, time),
       new ClientQuotaManager(clientProduceConfig(cfg), metrics, Produce, time),
