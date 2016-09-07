@@ -117,7 +117,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
 
         if (!(o instanceof StreamThread)) {
-            KafkaException ex = new KafkaException(o.getClass().getName() + " is not an instance of " + StreamThread.class.getName());
+            KafkaException ex = new KafkaException(String.format("%s is not an instance of %s", o.getClass().getName(), StreamThread.class.getName()));
             log.error(ex.getMessage(), ex);
             throw ex;
         }
@@ -129,16 +129,16 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         if (userEndPoint != null && !userEndPoint.isEmpty()) {
             final String[] hostPort = userEndPoint.split(":");
             if (hostPort.length != 2) {
-                throw new ConfigException(String.format("Config %s isn't in the correct format. Expected a host:port pair" +
+                throw new ConfigException(String.format("stream-thread [%s] Config %s isn't in the correct format. Expected a host:port pair" +
                                                        " but received %s",
-                                                        StreamsConfig.APPLICATION_SERVER_CONFIG, userEndPoint));
+                        streamThread.getName(), StreamsConfig.APPLICATION_SERVER_CONFIG, userEndPoint));
             } else {
                 try {
                     Integer.valueOf(hostPort[1]);
                     this.userEndPointConfig = userEndPoint;
                 } catch (NumberFormatException nfe) {
-                    throw new ConfigException(String.format("Invalid port %s supplied in %s for config %s",
-                                                           hostPort[1], userEndPoint, StreamsConfig.APPLICATION_SERVER_CONFIG));
+                    throw new ConfigException(String.format("stream-thread [%s] Invalid port %s supplied in %s for config %s",
+                            streamThread.getName(), hostPort[1], userEndPoint, StreamsConfig.APPLICATION_SERVER_CONFIG));
                 }
             }
 
@@ -149,7 +149,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                     (String) configs.get(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG),
                     configs.containsKey(StreamsConfig.REPLICATION_FACTOR_CONFIG) ? (Integer) configs.get(StreamsConfig.REPLICATION_FACTOR_CONFIG) : 1);
         } else {
-            log.info("Config '{}' isn't supplied and hence no internal topics will be created.", StreamsConfig.ZOOKEEPER_CONNECT_CONFIG);
+            log.info("stream-thread [{}] Config '{}' isn't supplied and hence no internal topics will be created.",  streamThread.getName(), StreamsConfig.ZOOKEEPER_CONNECT_CONFIG);
         }
     }
 
@@ -189,7 +189,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         Map<TopicPartition, PartitionInfo> partitionInfos = new HashMap<>();
         // if ZK is specified, prepare the internal source topic before calling partition grouper
         if (internalTopicManager != null) {
-            log.debug("Starting to validate internal topics in partition assignor.");
+            log.debug("stream-thread [{}] Starting to validate internal topics in partition assignor.", streamThread.getName());
 
             for (Map.Entry<String, Set<TaskId>> entry : topicToTaskIds.entrySet()) {
                 String topic = entry.getKey();
@@ -220,7 +220,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                     partitionInfos.put(new TopicPartition(partition.topic(), partition.partition()), partition);
             }
 
-            log.info("Completed validating internal topics in partition assignor.");
+            log.info("stream-thread [{}] Completed validating internal topics in partition assignor", streamThread.getName());
         } else {
             List<String> missingTopics = new ArrayList<>();
             for (String topic : topicToTaskIds.keySet()) {
@@ -230,8 +230,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 }
             }
             if (!missingTopics.isEmpty()) {
-                log.warn("Topic {} do not exists but couldn't created as the config '{}' isn't supplied",
-                         missingTopics, StreamsConfig.ZOOKEEPER_CONNECT_CONFIG);
+                log.warn("stream-thread [{}] Topic {} do not exists but couldn't created as the config '{}' isn't supplied",
+                        streamThread.getName(), missingTopics, StreamsConfig.ZOOKEEPER_CONNECT_CONFIG);
 
             }
         }
@@ -389,7 +389,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
 
         // assign tasks to clients
-        states = TaskAssignor.assign(states, partitionsForTask.keySet(), numStandbyReplicas);
+        states = TaskAssignor.assign(states, partitionsForTask.keySet(), numStandbyReplicas, streamThread.getName());
 
         final List<AssignmentSupplier> assignmentSuppliers = new ArrayList<>();
 
@@ -523,8 +523,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 taskIds.add(iter.next());
             } else {
                 TaskAssignmentException ex = new TaskAssignmentException(
-                        "failed to find a task id for the partition=" + partition.toString() +
-                        ", partitions=" + partitions.size() + ", assignmentInfo=" + info.toString()
+                        String.format("stream-thread [%s] failed to find a task id for the partition=%s" +
+                        ", partitions=%d, assignmentInfo=%s", streamThread.getName(), partition.toString(), partitions.size(), info.toString())
                 );
                 log.error(ex.getMessage(), ex);
                 throw ex;
@@ -581,14 +581,14 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 List<PartitionInfo> infos = metadata.partitionsForTopic(topic);
 
                 if (infos == null)
-                    throw new TopologyBuilderException("External source topic not found: " + topic);
+                    throw new TopologyBuilderException(String.format("stream-thread [%s] External source topic not found: %s", streamThread.getName(), topic));
 
                 if (numPartitions == -1) {
                     numPartitions = infos.size();
                 } else if (numPartitions != infos.size()) {
                     String[] topics = copartitionGroup.toArray(new String[copartitionGroup.size()]);
                     Arrays.sort(topics);
-                    throw new TopologyBuilderException("Topics not copartitioned: [" + Utils.mkString(Arrays.asList(topics), ",") + "]");
+                    throw new TopologyBuilderException(String.format("stream-thread [%s] Topics not copartitioned: [%s]", streamThread.getName(), Utils.mkString(Arrays.asList(topics), ",")));
                 }
             }
         }
