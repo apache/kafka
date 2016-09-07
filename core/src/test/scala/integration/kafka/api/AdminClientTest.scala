@@ -66,7 +66,7 @@ class AdminClientTest extends IntegrationTestHarness with Logging {
     consumers.head.subscribe(List(topic))
     TestUtils.waitUntilTrue(() => {
       consumers.head.poll(0)
-      !consumers.head.assignment().isEmpty
+      !consumers.head.assignment.isEmpty
     }, "Expected non-empty assignment")
 
     val groups = client.listAllGroupsFlattened
@@ -77,23 +77,22 @@ class AdminClientTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
-  def testDescribeGroup() {
+  def testGetConsumerGroupSummary() {
     consumers.head.subscribe(List(topic))
     TestUtils.waitUntilTrue(() => {
       consumers.head.poll(0)
-      !consumers.head.assignment().isEmpty
+      !consumers.head.assignment.isEmpty
     }, "Expected non-empty assignment")
 
-    val group = client.describeGroup(groupId)
-    assertEquals("consumer", group.protocolType)
-    assertEquals("range", group.protocol)
+    val group = client.describeConsumerGroup(groupId)
+    assertEquals("range", group.assignmentStrategy)
     assertEquals("Stable", group.state)
-    assertFalse(group.members.isEmpty)
+    assertFalse(group.consumers.isEmpty)
 
-    val member = group.members.head
+    val member = group.consumers.get.head
     assertEquals(clientId, member.clientId)
-    assertFalse(member.clientHost.isEmpty)
-    assertFalse(member.memberId.isEmpty)
+    assertFalse(member.host.isEmpty)
+    assertFalse(member.consumerId.isEmpty)
   }
 
   @Test
@@ -101,17 +100,18 @@ class AdminClientTest extends IntegrationTestHarness with Logging {
     consumers.head.subscribe(List(topic))
     TestUtils.waitUntilTrue(() => {
       consumers.head.poll(0)
-      !consumers.head.assignment().isEmpty
+      !consumers.head.assignment.isEmpty
     }, "Expected non-empty assignment")
 
-    val consumerSummaries = client.describeConsumerGroup(groupId)
-    assertEquals(1, consumerSummaries.size)
-    assertEquals(Some(Set(tp, tp2)), consumerSummaries.map(_.head.assignment.toSet))
+    val consumerGroupSummary = client.describeConsumerGroup(groupId)
+    assertEquals(1, consumerGroupSummary.consumers.get.size)
+    assertEquals(List(tp, tp2), consumerGroupSummary.consumers.get.flatMap(_.assignment))
   }
 
   @Test
   def testDescribeConsumerGroupForNonExistentGroup() {
     val nonExistentGroup = "non" + groupId
-    assertTrue("Expected empty ConsumerSummary list", client.describeConsumerGroup(nonExistentGroup).isEmpty)
+    val sum = client.describeConsumerGroup(nonExistentGroup).consumers
+    assertTrue("Expected empty ConsumerSummary list", client.describeConsumerGroup(nonExistentGroup).consumers.get.isEmpty)
   }
 }
