@@ -21,7 +21,7 @@ import kafka.common.TopicAndPartition
 import kafka.server.Constants._
 import kafka.server.ReplicationQuotaManagerConfig._
 import kafka.utils.CoreUtils._
-import kafka.utils.{CoreUtils, Logging}
+import kafka.utils.Logging
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics._
 import java.util.concurrent.locks.ReentrantReadWriteLock
@@ -49,7 +49,7 @@ object ReplicationQuotaManagerConfig {
   val InactiveSensorExpirationTimeSeconds = 3600
 }
 
-trait ReadOnlyQuota {
+trait ReplicaQuota {
   def isThrottled(topicAndPartition: TopicAndPartition): Boolean
   def isQuotaExceeded(): Boolean
 }
@@ -69,7 +69,7 @@ object Constants {
 class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
                               private val metrics: Metrics,
                               private val replicationType: String,
-                              private val time: Time) extends Logging with ReadOnlyQuota {
+                              private val time: Time) extends Logging with ReplicaQuota {
   private val lock = new ReentrantReadWriteLock()
   private val throttledPartitions = new ConcurrentHashMap[String, Seq[Int]]()
   private var quota: Quota = null
@@ -180,7 +180,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     *
     * @return
     */
-  def bound(): Long = {
+  def upperBound(): Long = {
     inReadLock(lock) {
       if (quota != null)
         quota.bound().toInt

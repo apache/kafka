@@ -461,7 +461,7 @@ class ReplicaManager(val config: KafkaConfig,
                     replicaId: Int,
                     fetchMinBytes: Int,
                     fetchInfo: immutable.Map[TopicAndPartition, PartitionFetchInfo],
-                    quota: ReadOnlyQuota = UnboundedQuota,
+                    quota: ReplicaQuota = UnboundedQuota,
                     responseCallback: Map[TopicAndPartition, FetchResponsePartitionData] => Unit) {
     val isFromFollower = replicaId >= 0
     val fetchOnlyFromLeader: Boolean = replicaId != Request.DebuggingConsumerId
@@ -516,7 +516,7 @@ class ReplicaManager(val config: KafkaConfig,
   def readFromLocalLog(fetchOnlyFromLeader: Boolean,
                        readOnlyCommitted: Boolean,
                        readPartitionInfo: Map[TopicAndPartition, PartitionFetchInfo],
-                       quota: ReadOnlyQuota): Map[TopicAndPartition, LogReadResult] = {
+                       quota: ReplicaQuota): Map[TopicAndPartition, LogReadResult] = {
     logger.info("Starting readFromLocalLog for partitions " + readPartitionInfo.map(_._1))
 
     readPartitionInfo.map { case (TopicAndPartition(topic, partition), PartitionFetchInfo(offset, fetchSize)) =>

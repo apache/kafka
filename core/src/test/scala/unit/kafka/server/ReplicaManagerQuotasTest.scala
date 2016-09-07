@@ -148,8 +148,8 @@ class ReplicaManagerQuotasTest {
     metrics.close()
   }
 
-  def mockQuota(bound: Long): ReadOnlyQuota = {
-    val quota = createMock(classOf[ReadOnlyQuota])
+  def mockQuota(bound: Long): ReplicaQuota = {
+    val quota = createMock(classOf[ReplicaQuota])
     expect(quota.isThrottled(anyObject())).andReturn(true).anyTimes()
     quota
   }

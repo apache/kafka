@@ -54,7 +54,7 @@ case class FetchMetadata(fetchMinBytes: Int,
 class DelayedFetch(delayMs: Long,
                    fetchMetadata: FetchMetadata,
                    replicaManager: ReplicaManager,
-                   quota: ReadOnlyQuota,
+                   quota: ReplicaQuota,
                    responseCallback: Map[TopicAndPartition, FetchResponsePartitionData] => Unit)
   extends DelayedOperation(delayMs) {
 

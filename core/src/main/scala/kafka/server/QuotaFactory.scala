@@ -30,7 +30,7 @@ object QuotaType {
 
 object QuotaFactory {
 
-  object UnboundedQuota extends ReadOnlyQuota {
+  object UnboundedQuota extends ReplicaQuota {
     override def isThrottled(topicAndPartition: TopicAndPartition): Boolean = false
     override def isQuotaExceeded(): Boolean = false
   }

@@ -531,7 +531,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     info("******************************************************")
   }
 
-  def replicationQuota(fetchRequest: FetchRequest): ReadOnlyQuota =
+  def replicationQuota(fetchRequest: FetchRequest): ReplicaQuota =
     if (fetchRequest.isFromFollower) quotas.leader else UnboundedQuota
 
   /**
