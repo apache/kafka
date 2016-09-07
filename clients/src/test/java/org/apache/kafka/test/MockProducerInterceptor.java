@@ -36,14 +36,11 @@ public class MockProducerInterceptor implements ClusterResourceListener, Produce
     public static final AtomicInteger ON_SUCCESS_COUNT = new AtomicInteger(0);
     public static final AtomicInteger ON_ERROR_COUNT = new AtomicInteger(0);
     public static final AtomicInteger ON_ERROR_WITH_METADATA_COUNT = new AtomicInteger(0);
-    public static final AtomicInteger ON_CLUSTER_UPDATE_COUNT = new AtomicInteger(0);
-    public static final AtomicInteger EVENTS = new AtomicInteger(0);
     public static final AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
 
 
     public static final String APPEND_STRING_PROP = "mock.interceptor.append";
     private String appendStr;
-    private ClusterResource clusterResource;
 
     public MockProducerInterceptor() {
         INIT_COUNT.incrementAndGet();
@@ -67,7 +64,6 @@ public class MockProducerInterceptor implements ClusterResourceListener, Produce
     @Override
     public ProducerRecord<String, String> onSend(ProducerRecord<String, String> record) {
         ONSEND_COUNT.incrementAndGet();
-        EVENTS.incrementAndGet();
         ProducerRecord<String, String> newRecord = new ProducerRecord<>(
                 record.topic(), record.partition(), record.key(), record.value().concat(appendStr));
         return newRecord;
@@ -75,8 +71,6 @@ public class MockProducerInterceptor implements ClusterResourceListener, Produce
 
     @Override
     public void onAcknowledgement(RecordMetadata metadata, Exception exception) {
-        EVENTS.incrementAndGet();
-
         if (exception != null) {
             ON_ERROR_COUNT.incrementAndGet();
             if (metadata != null) {
@@ -98,21 +92,11 @@ public class MockProducerInterceptor implements ClusterResourceListener, Produce
         ON_SUCCESS_COUNT.set(0);
         ON_ERROR_COUNT.set(0);
         ON_ERROR_WITH_METADATA_COUNT.set(0);
-        ON_CLUSTER_UPDATE_COUNT.set(0);
-        EVENTS.set(0);
-
+        CLUSTER_META.set(null);
     }
 
     @Override
     public void onClusterUpdate(ClusterResource clusterMetadata) {
-        this.clusterResource = clusterMetadata;
-        ON_CLUSTER_UPDATE_COUNT.incrementAndGet();
         CLUSTER_META.set(clusterMetadata);
-        EVENTS.incrementAndGet();
-
-    }
-
-    public ClusterResource getClusterResource() {
-        return clusterResource;
     }
 }

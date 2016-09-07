@@ -33,14 +33,17 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class MockConsumerInterceptor implements ClusterResourceListener, ConsumerInterceptor<String, String> {
     public static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
     public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
     public static final AtomicInteger ON_COMMIT_COUNT = new AtomicInteger(0);
-    public static final AtomicInteger ON_CLUSTER_UPDATE_COUNT = new AtomicInteger(0);
-    private ClusterResource clusterResource;
+    public static final AtomicBoolean IS_CLUSTER_ID_PRESENT_BEFORE_ON_CONSUME = new AtomicBoolean();
+    public static final AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
+
 
     public MockConsumerInterceptor() {
         INIT_COUNT.incrementAndGet();
@@ -56,6 +59,11 @@ public class MockConsumerInterceptor implements ClusterResourceListener, Consume
 
     @Override
     public ConsumerRecords<String, String> onConsume(ConsumerRecords<String, String> records) {
+        if (CLUSTER_META.get() != null
+                && CLUSTER_META.get().getClusterId() != null
+                && CLUSTER_META.get().getClusterId().length() == 48)
+            IS_CLUSTER_ID_PRESENT_BEFORE_ON_CONSUME.set(true);
+
         Map<TopicPartition, List<ConsumerRecord<String, String>>> recordMap = new HashMap<>();
         for (TopicPartition tp : records.partitions()) {
             List<ConsumerRecord<String, String>> lst = new ArrayList<>();
@@ -85,16 +93,12 @@ public class MockConsumerInterceptor implements ClusterResourceListener, Consume
         INIT_COUNT.set(0);
         CLOSE_COUNT.set(0);
         ON_COMMIT_COUNT.set(0);
-        ON_CLUSTER_UPDATE_COUNT.set(0);
+        CLUSTER_META.set(null);
+        IS_CLUSTER_ID_PRESENT_BEFORE_ON_CONSUME.set(false);
     }
 
     @Override
     public void onClusterUpdate(ClusterResource clusterMetadata) {
-        this.clusterResource = clusterMetadata;
-        ON_CLUSTER_UPDATE_COUNT.incrementAndGet();
-    }
-
-    public ClusterResource getClusterResource() {
-        return clusterResource;
+        CLUSTER_META.set(clusterMetadata);
     }
 }

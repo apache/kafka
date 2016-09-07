@@ -25,7 +25,7 @@ import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringDeserializer, StringSerializer}
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.{ClusterListener, TopicPartition}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{InvalidTopicException, RecordTooLargeException}
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
@@ -682,9 +682,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     producerProps.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockProducerInterceptor")
     producerProps.put("mock.interceptor.append", appendStr)
     val testProducer = new KafkaProducer[String, String](producerProps, new StringSerializer, new StringSerializer)
-    assertEquals(1, MockProducerInterceptor.ON_CLUSTER_UPDATE_COUNT.intValue())
-    // Assert that this is the first event and cluster id is not null.
-    assertEquals(1, MockProducerInterceptor.EVENTS.intValue())
 
     // produce records
     val numRecords = 10
@@ -698,9 +695,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }.foreach(_.get)
     assertEquals(numRecords, MockProducerInterceptor.ONSEND_COUNT.intValue())
     assertEquals(numRecords, MockProducerInterceptor.ON_SUCCESS_COUNT.intValue())
-    assertEquals(2, MockProducerInterceptor.ON_CLUSTER_UPDATE_COUNT.intValue())
-
-
     // send invalid record
     try {
       testProducer.send(null, null)
@@ -718,6 +712,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     testConsumer.assign(List(tp).asJava)
     testConsumer.seek(tp, 0)
 
+
     // consume and verify that values are modified by interceptors
     val records = consumeRecords(testConsumer, numRecords)
     for (i <- 0 until numRecords) {
@@ -726,12 +721,16 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       assertEquals(s"value $i$appendStr".toUpperCase(Locale.ROOT), new String(record.value()))
     }
 
+    // Check that cluster id is present after the first poll call.
+    assertTrue(MockConsumerInterceptor.IS_CLUSTER_ID_PRESENT_BEFORE_ON_CONSUME.get())
+    assertNotNull(MockConsumerInterceptor.CLUSTER_META)
+    assertEquals(48, MockConsumerInterceptor.CLUSTER_META.get().getClusterId().length())
+
     // commit sync and verify onCommit is called
     val commitCountBefore = MockConsumerInterceptor.ON_COMMIT_COUNT.intValue()
     testConsumer.commitSync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(2L))).asJava)
     assertEquals(2, testConsumer.committed(tp).offset)
     assertEquals(commitCountBefore + 1, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue())
-    assertEquals(1, MockConsumerInterceptor.ON_CLUSTER_UPDATE_COUNT.intValue())
 
     // commit async and verify onCommit is called
     val commitCallback = new CountConsumerCommitCallback()
@@ -739,7 +738,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     awaitCommitCallback(testConsumer, commitCallback)
     assertEquals(5, testConsumer.committed(tp).offset)
     assertEquals(commitCountBefore + 2, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue())
-    assertEquals(2, MockConsumerInterceptor.ON_CLUSTER_UPDATE_COUNT.intValue())
 
     testConsumer.close()
     testProducer.close()

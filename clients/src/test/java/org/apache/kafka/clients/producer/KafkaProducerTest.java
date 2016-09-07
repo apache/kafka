@@ -103,12 +103,13 @@ public class KafkaProducerTest {
                     props, new StringSerializer(), new StringSerializer());
             Assert.assertEquals(1, MockProducerInterceptor.INIT_COUNT.get());
             Assert.assertEquals(0, MockProducerInterceptor.CLOSE_COUNT.get());
-            Assert.assertEquals(1, MockProducerInterceptor.ON_CLUSTER_UPDATE_COUNT.get());
+
+            // Cluster metadata will only be updated on calling onSend.
+            Assert.assertNull(MockProducerInterceptor.CLUSTER_META.get().getClusterId());
 
             producer.close();
             Assert.assertEquals(1, MockProducerInterceptor.INIT_COUNT.get());
             Assert.assertEquals(1, MockProducerInterceptor.CLOSE_COUNT.get());
-            Assert.assertEquals(1, MockProducerInterceptor.ON_CLUSTER_UPDATE_COUNT.get());
         } finally {
             // cleanup since we are using mutable static variables in MockProducerInterceptor
             MockProducerInterceptor.resetCounters();
@@ -159,6 +160,7 @@ public class KafkaProducerTest {
                 Collections.<String>emptySet(),
                 Collections.<String>emptySet());
         final Cluster cluster = new Cluster(
+                "dummy",
                 Collections.singletonList(new Node(0, "host1", 1000)),
                 Arrays.asList(new PartitionInfo(topic, 0, null, null, null)),
                 Collections.<String>emptySet(),

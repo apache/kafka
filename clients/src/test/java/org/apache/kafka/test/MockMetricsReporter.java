@@ -24,11 +24,12 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class MockMetricsReporter implements ClusterResourceListener, MetricsReporter {
     public static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
     public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
-    private ClusterResource clusterResource;
+    public static final AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
 
     public MockMetricsReporter() {
 
@@ -57,12 +58,7 @@ public class MockMetricsReporter implements ClusterResourceListener, MetricsRepo
 
     @Override
     public void onClusterUpdate(ClusterResource clusterMetadata) {
-        this.clusterResource = clusterMetadata;
+        CLUSTER_META.set(clusterMetadata);
     }
-
-    public ClusterResource getClusterResource() {
-        return clusterResource;
-    }
-
 
 }

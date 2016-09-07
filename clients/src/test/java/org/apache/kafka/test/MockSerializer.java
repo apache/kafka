@@ -22,11 +22,13 @@ import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class MockSerializer implements ClusterResourceListener, Serializer<byte[]> {
     public static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
     public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
-    private ClusterResource clusterResource;
+    public static final AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
+
 
     public MockSerializer() {
         INIT_COUNT.incrementAndGet();
@@ -48,10 +50,6 @@ public class MockSerializer implements ClusterResourceListener, Serializer<byte[
 
     @Override
     public void onClusterUpdate(ClusterResource clusterMetadata) {
-        this.clusterResource = clusterMetadata;
-    }
-
-    public ClusterResource getClusterResource() {
-        return clusterResource;
+        CLUSTER_META.set(clusterMetadata);
     }
 }
