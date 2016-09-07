@@ -25,9 +25,9 @@ import org.apache.kafka.common.MetricName;
 public class QuotaViolationException extends KafkaException {
 
     private static final long serialVersionUID = 1L;
-    public MetricName metricName;
-    public Double value;
-    public Double bound;
+    private final MetricName metricName;
+    private final double value;
+    private final double bound;
 
     public QuotaViolationException(MetricName metricName, Double value, Double bound) {
         super(String.format(
@@ -38,5 +38,17 @@ public class QuotaViolationException extends KafkaException {
         this.metricName = metricName;
         this.value = value;
         this.bound = bound;
+    }
+
+    public MetricName metricName() {
+        return metricName;
+    }
+
+    public double value() {
+        return value;
+    }
+
+    public double bound() {
+        return bound;
     }
 }
