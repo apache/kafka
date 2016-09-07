@@ -67,6 +67,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * This class manage the fetching process with the brokers.
@@ -87,6 +88,7 @@ public class Fetcher<K, V> {
     private final FetchManagerMetrics sensors;
     private final SubscriptionState subscriptions;
     private final ConcurrentLinkedQueue<CompletedFetch> completedFetches;
+    private final AtomicInteger numInFlightFetches = new AtomicInteger(0);
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
 
@@ -131,6 +133,15 @@ public class Fetcher<K, V> {
     }
 
     /**
+     * Check whether there are in-flight fetches. This is used to avoid unnecessary blocking in
+     * {@link ConsumerNetworkClient#poll(long)} if there are no fetches to wait for. This method is thread-safe.
+     * @return true if there are, false otherwise
+     */
+    public boolean hasInFlightFetches() {
+        return numInFlightFetches.get() > 0;
+    }
+
+    /**
      * Set-up a fetch request for any node that we have assigned partitions for which doesn't already have
      * an in-flight fetch or pending fetch data.
      */
@@ -138,10 +149,14 @@ public class Fetcher<K, V> {
         for (Map.Entry<Node, FetchRequest> fetchEntry: createFetchRequests().entrySet()) {
             final FetchRequest request = fetchEntry.getValue();
             final Node fetchTarget = fetchEntry.getKey();
+
+            numInFlightFetches.incrementAndGet();
             client.send(fetchTarget, ApiKeys.FETCH, request)
                     .addListener(new RequestFutureListener<ClientResponse>() {
                         @Override
                         public void onSuccess(ClientResponse resp) {
+                            numInFlightFetches.decrementAndGet();
+
                             FetchResponse response = new FetchResponse(resp.responseBody());
                             Set<TopicPartition> partitions = new HashSet<>(response.responseData().keySet());
                             FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, partitions);
@@ -159,6 +174,7 @@ public class Fetcher<K, V> {
 
                         @Override
                         public void onFailure(RuntimeException e) {
+                            numInFlightFetches.decrementAndGet();
                             log.debug("Fetch request to {} failed", fetchTarget, e);
                         }
                     });

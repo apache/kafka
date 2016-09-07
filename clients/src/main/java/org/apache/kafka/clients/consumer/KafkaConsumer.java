@@ -1003,13 +1003,20 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         // send any new fetches (won't resend pending fetches)
         fetcher.sendFetches();
 
+        // if no fetches could be sent at the moment (which can happen if a partition leader is in the
+        // blackout period following a disconnect), then we only block for the retry backoff duration.
+        if (!fetcher.hasInFlightFetches())
+            timeout = retryBackoffMs;
+
         long now = time.milliseconds();
         long pollTimeout = Math.min(coordinator.timeToNextPoll(now), timeout);
 
         client.poll(pollTimeout, now, new PollCondition() {
             @Override
             public boolean shouldBlock() {
-                return !fetcher.hasCompletedFetches();
+                // since a fetch might be completed by the background check, we need this poll condition
+                // to ensure that we do not block unnecessarily in poll()
+                return !fetcher.hasCompletedFetches() && fetcher.hasInFlightFetches();
             }
         });
 
