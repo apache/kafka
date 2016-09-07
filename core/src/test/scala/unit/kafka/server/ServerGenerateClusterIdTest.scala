@@ -16,7 +16,6 @@
   */
 package unit.kafka.server
 
-import java.io.File
 import java.util.Properties
 
 import kafka.server.{KafkaConfig, KafkaServer}
