@@ -51,7 +51,7 @@ public class StateStoreTestUtils {
 
     static class NoOpRecordCollector extends RecordCollector {
         public NoOpRecordCollector() {
-            super(null);
+            super(null, "StateStoreTestUtils");
         }
 
         @Override
