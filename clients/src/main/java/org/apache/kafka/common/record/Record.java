@@ -256,18 +256,21 @@ public final class Record {
      * Returns true if the crc stored with the record matches the crc computed off the record contents
      */
     public boolean isValid() {
-        return checksum() == computeChecksum();
+        return size() >= CRC_LENGTH && checksum() == computeChecksum();
     }
 
     /**
      * Throw an InvalidRecordException if isValid is false for this record
      */
     public void ensureValid() {
-        if (!isValid())
-            throw new InvalidRecordException("Record is corrupt (stored crc = " + checksum()
-                                             + ", computed crc = "
-                                             + computeChecksum()
-                                             + ")");
+        if (!isValid()) {
+            if (size() < CRC_LENGTH)
+                throw new InvalidRecordException("Record is corrupt (crc could not be retrieved as the record is too "
+                        + "small, size = " + size() + ")");
+            else
+                throw new InvalidRecordException("Record is corrupt (stored crc = " + checksum()
+                        + ", computed crc = " + computeChecksum() + ")");
+        }
     }
 
     /**
