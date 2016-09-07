@@ -53,7 +53,7 @@ public interface KGroupedStream  <K, V> {
     /**
      * Combine values of this stream by the grouped key into a new instance of ever-updating
      * {@link KTable}. The resulting {@link KTable} will be materialized in a local state
-     * store with the custom state store supplier. Also a changelog topic named "${applicationId}-${storeName}-changelog"
+     * store with the given custom state store supplier. Also a changelog topic named "${applicationId}-${storeName}-changelog"
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *

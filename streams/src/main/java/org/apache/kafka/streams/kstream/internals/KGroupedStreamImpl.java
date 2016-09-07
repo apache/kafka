@@ -62,7 +62,8 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
     }
 
     @Override
-    public KTable<K, V> reduce(Reducer<V> reducer, StateStoreSupplier storeSupplier) {
+    public KTable<K, V> reduce(Reducer<V> reducer,
+                               StateStoreSupplier storeSupplier) {
         Objects.requireNonNull(reducer, "reducer can't be null");
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
         return doAggregate(
@@ -86,7 +87,9 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
 
     @SuppressWarnings("unchecked")
     @Override
-    public <W extends Window> KTable<Windowed<K>, V> reduce(Reducer<V> reducer, Windows<W> windows, StateStoreSupplier storeSupplier) {
+    public <W extends Window> KTable<Windowed<K>, V> reduce(Reducer<V> reducer,
+                                                            Windows<W> windows,
+                                                            StateStoreSupplier storeSupplier) {
         Objects.requireNonNull(reducer, "reducer can't be null");
         Objects.requireNonNull(windows, "windows can't be null");
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
@@ -109,7 +112,9 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
     }
 
     @Override
-    public <T> KTable<K, T> aggregate(Initializer<T> initializer, Aggregator<K, V, T> aggregator, Serde<T> aggValueSerde,
+    public <T> KTable<K, T> aggregate(Initializer<T> initializer,
+                                      Aggregator<K, V, T> aggregator,
+                                      Serde<T> aggValueSerde,
                                       StateStoreSupplier storeSupplier) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
@@ -137,8 +142,11 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
 
     @SuppressWarnings("unchecked")
     @Override
-    public <W extends Window, T> KTable<Windowed<K>, T> aggregate(Initializer<T> initializer, Aggregator<K, V, T> aggregator,
-                                                                  Windows<W> windows, Serde<T> aggValueSerde, StateStoreSupplier storeSupplier) {
+    public <W extends Window, T> KTable<Windowed<K>, T> aggregate(Initializer<T> initializer,
+                                                                  Aggregator<K, V, T> aggregator,
+                                                                  Windows<W> windows,
+                                                                  Serde<T> aggValueSerde,
+                                                                  StateStoreSupplier storeSupplier) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
         Objects.requireNonNull(windows, "windows can't be null");

@@ -79,7 +79,7 @@ public class KGroupedTableImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullStoreNameOnReduce() throws Exception {
-        String s = null;    // to avoid ambiguous method call
+        String s = null;             // to avoid ambiguous method call
         groupedTable.reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, s);
     }
 

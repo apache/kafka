@@ -141,7 +141,9 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     }
 
     @Override
-    public KTable<K, V> reduce(Reducer<V> adder, Reducer<V> subtractor, StateStoreSupplier storeSupplier) {
+    public KTable<K, V> reduce(Reducer<V> adder,
+                               Reducer<V> subtractor,
+                               StateStoreSupplier storeSupplier) {
         Objects.requireNonNull(adder, "adder can't be null");
         Objects.requireNonNull(subtractor, "subtractor can't be null");
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
