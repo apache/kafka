@@ -35,8 +35,8 @@ public class StoresTest {
         final StateStoreSupplier supplier = Stores.create("store")
                 .withKeys(Serdes.String())
                 .withValues(Serdes.String())
-                .logged(Collections.singletonMap("retention.ms", "1000"))
                 .inMemory()
+                .enableLogging(Collections.singletonMap("retention.ms", "1000"))
                 .build();
 
         final Map<String, String> config = supplier.logConfig();
@@ -49,8 +49,8 @@ public class StoresTest {
         final StateStoreSupplier supplier = Stores.create("store")
                 .withKeys(Serdes.String())
                 .withValues(Serdes.String())
-                .notLogged()
                 .inMemory()
+                .disableLogging()
                 .build();
 
         assertFalse(supplier.loggingEnabled());
@@ -61,8 +61,8 @@ public class StoresTest {
         final StateStoreSupplier supplier = Stores.create("store")
                 .withKeys(Serdes.String())
                 .withValues(Serdes.String())
-                .logged(Collections.singletonMap("retention.ms", "1000"))
                 .persistent()
+                .enableLogging(Collections.singletonMap("retention.ms", "1000"))
                 .build();
 
         final Map<String, String> config = supplier.logConfig();
@@ -75,8 +75,8 @@ public class StoresTest {
         final StateStoreSupplier supplier = Stores.create("store")
                 .withKeys(Serdes.String())
                 .withValues(Serdes.String())
-                .notLogged()
                 .persistent()
+                .disableLogging()
                 .build();
 
         assertFalse(supplier.loggingEnabled());
