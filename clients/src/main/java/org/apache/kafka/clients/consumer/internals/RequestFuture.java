@@ -16,7 +16,7 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Result of an asynchronous request from {@link ConsumerNetworkClient}. Use {@link ConsumerNetworkClient#poll(long)}
@@ -39,9 +39,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
 
-    private final AtomicBoolean isDone = new AtomicBoolean(false);
-    private volatile T value = null;
-    private volatile RuntimeException exception = null;
+    private static final Object NULL_SENTINEL = new Object();
+    private final AtomicReference<Object> result = new AtomicReference<>();
     private final ConcurrentLinkedQueue<RequestFutureListener<T>> listeners = new ConcurrentLinkedQueue<>();
 
     /**
@@ -49,15 +48,21 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      * @return true if the response is ready, false otherwise
      */
     public boolean isDone() {
-        return isDone.get();
+        return result.get() != null;
     }
 
     /**
      * Get the value corresponding to this request (only available if the request succeeded)
      * @return the value if it exists or null
      */
+    @SuppressWarnings("unchecked")
     public T value() {
-        return value;
+        if (!succeeded())
+            throw new IllegalStateException("Attempt to retrieve value from future which hasn't successfully completed");
+        Object res = result.get();
+        if (res == NULL_SENTINEL)
+            return null;
+        return (T) res;
     }
 
     /**
@@ -65,7 +70,7 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      * @return true if the request completed and was successful
      */
     public boolean succeeded() {
-        return isDone() && exception == null;
+        return !failed() && result.get() != null;
     }
 
     /**
@@ -73,7 +78,7 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      * @return true if the request completed with a failure
      */
     public boolean failed() {
-        return isDone() && exception != null;
+        return result.get() instanceof RuntimeException;
     }
 
     /**
@@ -82,7 +87,7 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      * @return true if it is retriable, false otherwise
      */
     public boolean isRetriable() {
-        return exception instanceof RetriableException;
+        return exception() instanceof RetriableException;
     }
 
     /**
@@ -90,7 +95,9 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      * @return The exception if it exists or null
      */
     public RuntimeException exception() {
-        return exception;
+        if (!failed())
+            throw new IllegalStateException("Attempt to retrieve exception from future which hasn't failed");
+        return (RuntimeException) result.get();
     }
 
     /**
@@ -99,10 +106,10 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      * @param value corresponding value (or null if there is none)
      */
     public void complete(T value) {
-        if (!isDone.compareAndSet(false, true))
+        Object val = value == null ? NULL_SENTINEL : value;
+        if (!result.compareAndSet(null, val))
             throw new IllegalStateException("Invalid attempt to complete a request future which is already complete");
-        this.value = value;
-        fireSuccess(value);
+        fireSuccess();
     }
 
     /**
@@ -111,10 +118,13 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      * @param e corresponding exception to be passed to caller
      */
     public void raise(RuntimeException e) {
-        if (!isDone.compareAndSet(false, true))
+        if (e == null)
+            throw new IllegalArgumentException("The exception passed to raise must not be null");
+
+        if (!result.compareAndSet(null, e))
             throw new IllegalStateException("Invalid attempt to complete a request future which is already complete");
-        this.exception = e;
-        fireFailure(e);
+
+        fireFailure();
     }
 
     /**
@@ -125,7 +135,8 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
         raise(error.exception());
     }
 
-    private void fireSuccess(T value) {
+    private void fireSuccess() {
+        T value = value();
         while (true) {
             RequestFutureListener<T> listener = listeners.poll();
             if (listener == null)
@@ -134,7 +145,8 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
         }
     }
 
-    private void fireFailure(RuntimeException exception) {
+    private void fireFailure() {
+        RuntimeException exception = exception();
         while (true) {
             RequestFutureListener<T> listener = listeners.poll();
             if (listener == null)
@@ -145,17 +157,14 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
 
     /**
      * Add a listener which will be notified when the future completes
-     * @param listener
+     * @param listener non-null listener to add
      */
     public void addListener(RequestFutureListener<T> listener) {
-        if (isDone()) {
-            if (failed())
-                listener.onFailure(exception);
-            else
-                listener.onSuccess(value);
-        } else {
-            this.listeners.add(listener);
-        }
+        this.listeners.add(listener);
+        if (failed())
+            fireFailure();
+        else if (succeeded())
+            fireSuccess();
     }
 
     /**
@@ -224,6 +233,6 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
 
     @Override
     public boolean shouldBlock() {
-        return !isDone.get();
+        return !isDone();
     }
 }
