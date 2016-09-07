@@ -32,7 +32,7 @@ object QuotaFactory {
 
   object UnboundedQuota extends ReadOnlyQuota {
     override def isThrottled(topicAndPartition: TopicAndPartition): Boolean = false
-    override def isQuotaExceededBy(bytes: Long): Boolean = false
+    override def isQuotaExceeded(): Boolean = false
   }
 
   case class QuotaManagers(fetch: ClientQuotaManager, produce: ClientQuotaManager, leader: ReplicationQuotaManager, follower: ReplicationQuotaManager)

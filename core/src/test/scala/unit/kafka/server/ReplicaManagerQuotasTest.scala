@@ -52,8 +52,8 @@ class ReplicaManagerQuotasTest {
     setUpMocks(fetchInfo)
 
     val quota = mockQuota(1000000)
-    expect(quota.isQuotaExceededBy(anyObject())).andReturn(false).once()
-    expect(quota.isQuotaExceededBy(anyObject())).andReturn(true).once()
+    expect(quota.isQuotaExceeded()).andReturn(false).once()
+    expect(quota.isQuotaExceeded()).andReturn(true).once()
     replay(quota)
 
     val fetch = replicaManager.readFromLocalLog(true, true, fetchInfo, quota)
@@ -69,8 +69,8 @@ class ReplicaManagerQuotasTest {
     setUpMocks(fetchInfo)
 
     val quota = mockQuota(1000000)
-    expect(quota.isQuotaExceededBy(anyObject())).andReturn(true).once()
-    expect(quota.isQuotaExceededBy(anyObject())).andReturn(true).once()
+    expect(quota.isQuotaExceeded()).andReturn(true).once()
+    expect(quota.isQuotaExceeded()).andReturn(true).once()
     replay(quota)
 
     val fetch = replicaManager.readFromLocalLog(true, true, fetchInfo, quota)
@@ -85,8 +85,8 @@ class ReplicaManagerQuotasTest {
     setUpMocks(fetchInfo)
 
     val quota = mockQuota(1000000)
-    expect(quota.isQuotaExceededBy(anyObject())).andReturn(false).once()
-    expect(quota.isQuotaExceededBy(anyObject())).andReturn(false).once()
+    expect(quota.isQuotaExceeded()).andReturn(false).once()
+    expect(quota.isQuotaExceeded()).andReturn(false).once()
     replay(quota)
 
     val fetch = replicaManager.readFromLocalLog(true, true, fetchInfo, quota)
@@ -94,33 +94,6 @@ class ReplicaManagerQuotasTest {
       fetch.get(topicAndPartition1).get.info.messageSet.size)
     assertEquals("Given two partitions, with both non-throttled, we should get both messages", 1,
       fetch.get(topicAndPartition2).get.info.messageSet.size)
-  }
-
-  @Test
-  def shouldStopReadingPartitionsWhenQuotaExceeded(): Unit = {
-    //Given 10 partitions, with a 1K message in each
-    val fetchInfo = (0 until 10)
-      .map { partition => TopicAndPartition("test-topic", partition) -> PartitionFetchInfo(0, 500)}.toMap
-    setUpMocks(fetchInfo, new Message(new Array[Byte](1000)))
-
-    //And a quota bound of 5000B/s (i.e. half the bytes in the log)
-    val quota: Quota = Quota.upperBound(5000)
-
-    //When we read all ten partitions from the log
-    val fetch = replicaManager.readFromLocalLog(true, true, fetchInfo, mockQuotaManager(quota))
-
-    //Then we should only have read 5 of the 10 messages
-    assertEquals(5, fetch.map(_._2.info.messageSet.size).sum, 0)
-
-    //And we should only read up to the quota bound, and no further
-    assertEquals(quota.bound(), fetch.map(_._2.info.messageSet.sizeInBytes).sum, 170)
-  }
-
-  def mockQuotaManager(quota: Quota): ReadOnlyQuota = {
-    new ReadOnlyQuota() {
-      override def isThrottled(topicAndPartition: TopicAndPartition): Boolean = true
-      override def isQuotaExceededBy(bytes: Long): Boolean = !quota.acceptable(bytes)
-    }
   }
 
   def setUpMocks(fetchInfo: Map[TopicAndPartition, PartitionFetchInfo], message: Message = this.message) {

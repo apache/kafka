@@ -92,40 +92,6 @@ class ReplicationQuotaManagerTest {
   }
 
   @Test
-  def shouldExceedWhenProposedBytesExceedQuota(): Unit = {
-    val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(numQuotaSamples = 10, quotaWindowSizeSeconds = 1), newMetrics, LeaderReplication, time) {
-      override def newRateInstance() = new FixedWindowRate() //TODO - decide which rate is best prior to merge
-    }
-
-    //Given
-    quota.updateQuota(new Quota(100, true))
-
-    //Then
-    assertFalse(quota.isQuotaExceededBy(0))
-    assertFalse(quota.isQuotaExceededBy(50))
-    assertTrue(quota.isQuotaExceededBy(101))
-
-    //When add value
-    quota.record(100)
-
-    //Then
-    assertFalse(quota.isQuotaExceededBy(0))
-    assertTrue(quota.isQuotaExceededBy(1))
-
-    //When advance over window boundary
-    time.sleep(1000)
-
-    //Then
-    assertFalse(quota.isQuotaExceededBy(0))
-    assertTrue(quota.isQuotaExceededBy(201)) //need twice the quota now
-
-    //When we go past total number of samples + 1, so should reset first
-    time.sleep(10 * 1000)
-    assertFalse(quota.isQuotaExceededBy(100))
-    assertTrue(quota.isQuotaExceededBy(101))
-  }
-
-  @Test
   def shouldSupportWildcardThrottledReplicas(): Unit = {
     val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(), newMetrics, LeaderReplication, time)
 

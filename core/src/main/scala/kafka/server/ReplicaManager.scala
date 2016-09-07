@@ -485,7 +485,7 @@ class ReplicaManager(val config: KafkaConfig,
     //                        3) has enough data to respond
     //                        4) some error happens while reading data
     if(timeout <= 0 || fetchInfo.size <= 0 || bytesReadable >= fetchMinBytes || errorReadingData) {
-      info("Sending response immediately (skipping purgatory)")
+      info(s"Sending response immediately (skipping purgatory) [bytesReadable=$bytesReadable]")
       val fetchPartitionData = logReadResults.mapValues(result =>
         FetchResponsePartitionData(result.errorCode, result.hw, result.info.messageSet))
       responseCallback(fetchPartitionData)
@@ -517,19 +517,17 @@ class ReplicaManager(val config: KafkaConfig,
                        readOnlyCommitted: Boolean,
                        readPartitionInfo: Map[TopicAndPartition, PartitionFetchInfo],
                        quota: ReadOnlyQuota): Map[TopicAndPartition, LogReadResult] = {
-    var throttledTotal = 0
+    logger.info("Starting readFromLocalLog for partitions " + readPartitionInfo.map(_._1))
 
     readPartitionInfo.map { case (TopicAndPartition(topic, partition), PartitionFetchInfo(offset, fetchSize)) =>
       BrokerTopicStats.getBrokerTopicStats(topic).totalFetchRequestRate.mark()
       BrokerTopicStats.getBrokerAllTopicsStats().totalFetchRequestRate.mark()
 
-      logger.info("starting readFromLocalLog for "+ readPartitionInfo.map(_._1))
-
       val partitionDataAndOffsetInfo =
         try {
-          info("Fetching log segment for topic %s, partition %d, offset %d, size %d".format(topic, partition, offset, fetchSize))
+          trace("Fetching log segment for topic %s, partition %d, offset %d, size %d".format(topic, partition, offset, fetchSize))
 
-          // decide whether to only fetch from leaderisQuotaExceededBy
+          // decide whether to only fetch from leader
           val localReplica = if (fetchOnlyFromLeader)
             getLeaderReplicaIfLocal(topic, partition)
           else
@@ -556,16 +554,9 @@ class ReplicaManager(val config: KafkaConfig,
               //Try the read first, this tells us whether we need all of adjustedFetchSize for this partition
               var fetch = log.read(offset, adjustedFetchSize, maxOffsetOpt)
 
-              //If the read for this partition caused the quota to be exceeded then zero it out, so it is excluded
-              if (quota.isThrottled(TopicAndPartition(topic, partition))) {
-                //TODO - Ideally we'd check the quota based on throttledTotal + fetch.messageSet.sizeInBytes => but it fails to retain the correct rate.
-                //TODO   This is because fetch.messageSet.sizeInBytes is typically 1MB, and the quota is typically not much more than that.
-                if (quota.isQuotaExceededBy(throttledTotal))
-                  //TODO - is this of reusing fetchOffsetMetadata is def correct?
-                  fetch = FetchDataInfo(fetch.fetchOffsetMetadata, MessageSet.Empty)
-                else
-                  throttledTotal += fetch.messageSet.sizeInBytes
-              }
+              //If the partition is marked as throttled, and we are over-quota then exclude it
+              if (quota.isThrottled(TopicAndPartition(topic, partition)) && quota.isQuotaExceeded) //TODO - could also check ISR inclusion??
+                fetch = FetchDataInfo(fetch.fetchOffsetMetadata, MessageSet.Empty)
               fetch
             case None =>
               error("Leader for partition [%s,%d] does not have a local log".format(topic, partition))

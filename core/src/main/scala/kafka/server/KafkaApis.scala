@@ -527,7 +527,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     info("******************************************************")
     val metricName = metrics.metricName("byte-rate", LeaderReplication, "Tracking byte-rate for " + LeaderReplication)
     val leaderThrottledRate = metrics.metrics.asScala(metricName).value()
-    info("Rate is currently " + leaderThrottledRate)
+    info("Leader Throttled Rate is currently " + leaderThrottledRate)
     info("******************************************************")
   }
 

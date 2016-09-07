@@ -51,7 +51,7 @@ object ReplicationQuotaManagerConfig {
 
 trait ReadOnlyQuota {
   def isThrottled(topicAndPartition: TopicAndPartition): Boolean
-  def isQuotaExceededBy(bytes: Long): Boolean
+  def isQuotaExceeded(): Boolean
 }
 
 object Constants {
@@ -70,7 +70,6 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
                               private val metrics: Metrics,
                               private val replicationType: String,
                               private val time: Time) extends Logging with ReadOnlyQuota {
-
   private val lock = new ReentrantReadWriteLock()
   private val throttledPartitions = new ConcurrentHashMap[String, Seq[Int]]()
   private var quota: Quota = null
@@ -96,18 +95,12 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     *
     * @return
     */
-  def isQuotaExceeded(): Boolean = isQuotaExceededBy(0)
-
-  /**
-    * Check if the quota will be exceeded by the passed value. This method does not record anything, but is equivalent to
-    * increasing the quota by the passed value then checking if it has been exceeded.
-    */
-  override def isQuotaExceededBy(value: Long): Boolean = {
+  override def isQuotaExceeded(): Boolean = {
     try {
-      sensor.checkQuotaWithDelta(value)
+      sensor.checkQuotas()
     } catch {
       case qve: QuotaViolationException =>
-        logger.info("%s: Quota violated for sensor (%s), metric: (%s), metric-value: (%f), bound: (%f), proposedValue (%s)".format(replicationType, sensor.name(), qve.metricName, qve.value, qve.bound, value))
+        logger.info("%s: Quota violated for sensor (%s), metric: (%s), metric-value: (%f), bound: (%f)".format(replicationType, sensor.name(), qve.metricName, qve.value, qve.bound))
         return true
     }
     false
@@ -180,6 +173,20 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
       .timeWindow(config.quotaWindowSizeSeconds, TimeUnit.SECONDS)
       .samples(config.numQuotaSamples)
       .quota(quota)
+  }
+
+  /**
+    * Returns the bound of the configured quota
+    *
+    * @return
+    */
+  def bound(): Long = {
+    inReadLock(lock) {
+      if (quota != null)
+        quota.bound().toInt
+      else
+        Long.MaxValue
+    }
   }
 
   protected def newRateInstance(): Rate = new SimpleRate()

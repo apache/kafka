@@ -98,10 +98,11 @@ class DelayedFetch(delayMs: Long,
                 return forceComplete()
               } else if (fetchOffset.messageOffset < endOffset.messageOffset) {
                 // we take the partition fetch size as upper bound when accumulating the bytes (skip if a throttled partition)
-                if (!quota.isThrottled(topicAndPartition))
-                  accumulatedSize += math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.fetchSize)
+                val bytesAvailable = math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.fetchSize)
+                if (quota.isThrottled(topicAndPartition))
+                  accumulatedThrottledSize += bytesAvailable
                 else
-                  accumulatedThrottledSize += math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.fetchSize)
+                  accumulatedSize += bytesAvailable
               }
             }
           }
@@ -117,8 +118,7 @@ class DelayedFetch(delayMs: Long,
 
     // Case D
     if (accumulatedSize >= fetchMetadata.fetchMinBytes
-      || (accumulatedThrottledSize > 0 && !quota.isQuotaExceededBy(Math.max(fetchMetadata.fetchMinBytes, accumulatedThrottledSize))))
-      // TODO work in progress - we need the check the accumulated size also, else we'll forceComplete responses which will be empty (as we check accumulated size in readFromLog)
+      || (accumulatedThrottledSize >= fetchMetadata.fetchMinBytes && !quota.isQuotaExceeded()))
       forceComplete()
     else
       false
