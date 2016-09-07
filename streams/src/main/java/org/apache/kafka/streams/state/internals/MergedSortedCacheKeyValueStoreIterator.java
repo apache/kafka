@@ -32,17 +32,17 @@ import java.util.NoSuchElementException;
  * @param <V>
  */
 class MergedSortedCacheKeyValueStoreIterator<K, V> implements KeyValueIterator<K, V> {
-    private final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator cacheIter;
+    private final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator cacheIterator;
     private final PeekingKeyValueIterator<Bytes, byte[]> storeIterator;
     private final KeyValueStore<Bytes, byte[]> store;
     private final StateSerdes<K, V> serdes;
     private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
 
     public MergedSortedCacheKeyValueStoreIterator(final KeyValueStore<Bytes, byte[]> store,
-                                                  final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator cacheIter,
+                                                  final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator cacheIterator,
                                                   final PeekingKeyValueIterator<Bytes, byte[]> storeIterator,
                                                   final StateSerdes<K, V> serdes) {
-        this.cacheIter = cacheIter;
+        this.cacheIterator = cacheIterator;
         this.storeIterator = storeIterator;
         this.store = store;
         this.serdes = serdes;
@@ -50,8 +50,7 @@ class MergedSortedCacheKeyValueStoreIterator<K, V> implements KeyValueIterator<K
 
     @Override
     public boolean hasNext() {
-        final boolean storeHasNext = storeIterator.hasNext();
-        return cacheIter.hasNext() || storeHasNext;
+        return cacheIterator.hasNext() || storeIterator.hasNext();
     }
 
 
@@ -62,8 +61,8 @@ class MergedSortedCacheKeyValueStoreIterator<K, V> implements KeyValueIterator<K
         }
 
         byte[] nextCacheKey = null;
-        if (cacheIter.hasNext()) {
-            nextCacheKey = cacheIter.peekNextKey();
+        if (cacheIterator.hasNext()) {
+            nextCacheKey = cacheIterator.peekNextKey();
         }
 
         byte[] nextStoreKey = null;
@@ -94,7 +93,7 @@ class MergedSortedCacheKeyValueStoreIterator<K, V> implements KeyValueIterator<K
     }
 
     private KeyValue<K, V> nextCacheValue() {
-        final KeyValue<byte[], MemoryLRUCacheBytesEntry> next = cacheIter.next();
+        final KeyValue<byte[], MemoryLRUCacheBytesEntry> next = cacheIterator.next();
         return KeyValue.pair(serdes.keyFrom(next.key), serdes.valueFrom(next.value.value));
     }
 
@@ -110,7 +109,7 @@ class MergedSortedCacheKeyValueStoreIterator<K, V> implements KeyValueIterator<K
 
     @Override
     public void close() {
-        cacheIter.close();
+        cacheIterator.close();
         storeIterator.close();
     }
 }

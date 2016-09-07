@@ -61,10 +61,4 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
         return merged;
     }
 
-
-    @Test
-    public void should() throws Exception {
-
-    }
-
 }
