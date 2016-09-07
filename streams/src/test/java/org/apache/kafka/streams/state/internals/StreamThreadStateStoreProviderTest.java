@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -117,7 +118,7 @@ public class StreamThreadStateStoreProviderTest {
             }
 
             @Override
-            public boolean allStateStoresAvailable() {
+            public boolean isInitialized() {
                 return storesAvailable;
             }
         };
