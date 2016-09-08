@@ -71,7 +71,7 @@ public class KGroupedStreamImplTest {
         String s = null;            // to avoid ambiguous method call
         groupedStream.reduce(MockReducer.STRING_ADDER, TimeWindows.of(10), s);
     }
-  
+
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreSupplierWithWindowedReduce() throws Exception {
         StateStoreSupplier s = null;            // to avoid ambiguous method call
