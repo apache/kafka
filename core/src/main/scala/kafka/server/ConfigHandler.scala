@@ -106,7 +106,6 @@ object ClientConfigOverride {
   * This implementation reports the overrides to the respective ClientQuotaManager objects
   */
 class ClientIdConfigHandler(private val quotaManagers: QuotaManagers) extends ConfigHandler {
-  //TODO - this may require special support for config being removed. Check before merge.
   def processConfigChanges(clientId: String, clientConfig: Properties) {
     if (clientConfig.containsKey(ClientConfigOverride.ProducerOverride)) {
       quotaManagers.produce.updateQuota(clientId,
