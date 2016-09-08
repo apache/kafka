@@ -107,20 +107,14 @@ public class MemoryLRUCacheBytes {
 
     private void maybeEvict() {
         while (sizeBytes() > maxCacheSizeBytes) {
-            final Bytes key = tail.key;
-            final String namespace = tail.namespace;
-            final TreeMap<Bytes, LRUNode> treeMap = this.map.get(namespace);
-            final LRUNode toRemove = treeMap.get(key);
+            final LRUNode toRemove = tail;
+            final TreeMap<Bytes, LRUNode> treeMap = this.map.get(toRemove.namespace);
             currentSizeBytes -= toRemove.size();
             if (toRemove.entry.isDirty()) {
                 flush(toRemove.namespace);
             }
             remove(toRemove);
-            treeMap.remove(key);
-
-            if (toRemove.entry.isDirty()) {
-                removeDirtyKey(namespace, key);
-            }
+            treeMap.remove(toRemove.key);
         }
     }
 
