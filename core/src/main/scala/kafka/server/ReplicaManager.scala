@@ -485,7 +485,6 @@ class ReplicaManager(val config: KafkaConfig,
     //                        3) has enough data to respond
     //                        4) some error happens while reading data
     if(timeout <= 0 || fetchInfo.size <= 0 || bytesReadable >= fetchMinBytes || errorReadingData) {
-      info(s"Sending response immediately (skipping purgatory) [bytesReadable=$bytesReadable]")
       val fetchPartitionData = logReadResults.mapValues(result =>
         FetchResponsePartitionData(result.errorCode, result.hw, result.info.messageSet))
       responseCallback(fetchPartitionData)
@@ -501,8 +500,6 @@ class ReplicaManager(val config: KafkaConfig,
       // create a list of (topic, partition) pairs to use as keys for this delayed fetch operation
       val delayedFetchKeys = fetchPartitionStatus.keys.map(new TopicPartitionOperationKey(_)).toSeq
 
-      info(s"Request delayed in purgatory as bytesReadable = $bytesReadable and fetchMinBytes = $fetchMinBytes")
-
       // try to complete the request immediately, otherwise put it into the purgatory;
       // this is because while the delayed fetch operation is being created, new requests
       // may arrive and hence make this operation completable.
@@ -517,8 +514,6 @@ class ReplicaManager(val config: KafkaConfig,
                        readOnlyCommitted: Boolean,
                        readPartitionInfo: Map[TopicAndPartition, PartitionFetchInfo],
                        quota: ReplicaQuota): Map[TopicAndPartition, LogReadResult] = {
-    logger.info("Starting readFromLocalLog for partitions " + readPartitionInfo.map(_._1))
-
     readPartitionInfo.map { case (TopicAndPartition(topic, partition), PartitionFetchInfo(offset, fetchSize)) =>
       BrokerTopicStats.getBrokerTopicStats(topic).totalFetchRequestRate.mark()
       BrokerTopicStats.getBrokerAllTopicsStats().totalFetchRequestRate.mark()

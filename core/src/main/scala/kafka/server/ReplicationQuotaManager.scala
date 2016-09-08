@@ -99,7 +99,8 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
       sensor.checkQuotas()
     } catch {
       case qve: QuotaViolationException =>
-        logger.info("%s: Quota violated for sensor (%s), metric: (%s), metric-value: (%f), bound: (%f)".format(replicationType, sensor.name(), qve.metricName, qve.value, qve.bound))
+        if(logger.isTraceEnabled)
+          logger.trace("%s: Quota violated for sensor (%s), metric: (%s), metric-value: (%f), bound: (%f)".format(replicationType, sensor.name(), qve.metricName, qve.value, qve.bound))
         return true
     }
     false
@@ -125,13 +126,12 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     * @param value
     */
   def record(value: Long) = {
-    logger.info("Recording throttled bytes for outgoing request for type:" + replicationType + " value:" + value)
     try {
       sensor.record(value)
     } catch {
       case qve: QuotaViolationException =>
-        logger.info("record: Quota violated, but ignored, for sensor (%s), metric: (%s), metric-value: (%f), bound: (%f), recordedValue (%s)".format(sensor.name(), qve.metricName, qve.value, qve.bound, value))
-      //TODO should we strap a metric around this violation?? as it means we're not hitting target.
+        if(logger.isTraceEnabled)
+          logger.trace("Record: Quota violated, but ignored, for sensor (%s), metric: (%s), metric-value: (%f), bound: (%f), recordedValue (%s)".format(sensor.name(), qve.metricName, qve.value, qve.bound, value))
     }
   }
 

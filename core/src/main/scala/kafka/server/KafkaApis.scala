@@ -513,24 +513,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def sizeOfThrottledPartitions(fetchRequest: FetchRequest, mergedPartitionData: Map[TopicAndPartition, FetchResponsePartitionData], quota: ReplicationQuotaManager): Int = {
     val throttledPartitions = mergedPartitionData.filter { case (partition, _) => quota.isThrottled(partition) }
-    val sizeOfThrottledPartitions = FetchResponse.responseSize(throttledPartitions.groupBy(_._1.topic), fetchRequest.versionId)
-    deleteMeUsefulLogging(quota, throttledPartitions, sizeOfThrottledPartitions)
-    sizeOfThrottledPartitions
-  }
-
-  //TODO Useful but DON'T MERGE ME
-  def deleteMeUsefulLogging(quota: ReplicationQuotaManager, throttledPartitions:  Map[TopicAndPartition, FetchResponsePartitionData], sizeOfThrottledPartitions: Int ): Unit = {
-    if(throttledPartitions.size == 0 || sizeOfThrottledPartitions > 100)
-      info("Sending replication fetch response which includes throttled partitions: [" + throttledPartitions.keySet.map(_.toString) + "] totalling (in B): " + sizeOfThrottledPartitions)
-    else
-      info("Throttle Engaged... sending fetch response with no throttled partitions")
-    val metricName = metrics.metricName("byte-rate", LeaderReplication, "Tracking byte-rate for " + LeaderReplication)
-    if (metrics.metrics.containsKey(metricName)) {
-      info("******************************************************")
-      val leaderThrottledRate = metrics.metrics.asScala(metricName).value()
-      info("Leader Throttled Rate is currently " + leaderThrottledRate)
-      info("******************************************************")
-    }
+    FetchResponse.responseSize(throttledPartitions.groupBy(_._1.topic), fetchRequest.versionId)
   }
 
   def replicationQuota(fetchRequest: FetchRequest): ReplicaQuota =

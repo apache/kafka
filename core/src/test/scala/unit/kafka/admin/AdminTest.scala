@@ -17,7 +17,6 @@
 package kafka.admin
 
 import kafka.server.KafkaConfig._
-import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, InvalidReplicationFactorException, InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.metrics.Quota
 import org.junit.Assert._
@@ -29,7 +28,7 @@ import kafka.log._
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.{Logging, TestUtils, ZkUtils}
 import kafka.common.TopicAndPartition
-import kafka.server.{QuotaType, ConfigType, KafkaConfig, KafkaServer}
+import kafka.server.{ConfigType, KafkaConfig, KafkaServer}
 import java.io.File
 
 import TestUtils._
