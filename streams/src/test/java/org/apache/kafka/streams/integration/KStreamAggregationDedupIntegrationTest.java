@@ -12,9 +12,7 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -38,10 +36,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -58,7 +52,6 @@ import static org.hamcrest.core.Is.is;
  * Similar to KStreamAggregationIntegrationTest but with dedupping enabled
  * by virtue of having a large commit interval
  */
-@RunWith(value = Parameterized.class)
 public class KStreamAggregationDedupIntegrationTest {
     private static final int NUM_BROKERS = 1;
     @ClassRule
@@ -77,14 +70,6 @@ public class KStreamAggregationDedupIntegrationTest {
     private Aggregator<String, String, Integer> aggregator;
     private KStream<Integer, String> stream;
 
-    @Parameter(value = 0)
-    public long commitIntervalMs;
-
-    //Single parameter, use Object[]
-    @Parameters
-    public static Object[] data() {
-        return new Object[] {2 * 1000L};
-    }
 
     @Before
     public void before() {
@@ -100,7 +85,7 @@ public class KStreamAggregationDedupIntegrationTest {
         streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
-        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitIntervalMs);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 2000);
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10 * 1024 * 1024L);
 
         KeyValueMapper<Integer, String, String> mapper = MockKeyValueMapper.<Integer, String>SelectValueMapper();
@@ -236,168 +221,6 @@ public class KStreamAggregationDedupIntegrationTest {
         ));
     }
 
-    @Test
-    public void shouldAggregate() throws Exception {
-        produceMessages(System.currentTimeMillis());
-        groupedStream.aggregate(
-            initializer,
-            aggregator,
-            Serdes.Integer(),
-            "aggregate-by-selected-key")
-            .to(Serdes.String(), Serdes.Integer(), outputTopic);
-
-        startStreams();
-
-        produceMessages(System.currentTimeMillis());
-
-        List<KeyValue<String, Integer>> results = receiveMessages(
-            new StringDeserializer(),
-            new IntegerDeserializer()
-            , 5);
-
-        Collections.sort(results, new Comparator<KeyValue<String, Integer>>() {
-            @Override
-            public int compare(KeyValue<String, Integer> o1, KeyValue<String, Integer> o2) {
-                return KStreamAggregationDedupIntegrationTest.compare(o1, o2);
-            }
-        });
-
-        assertThat(results, is(Arrays.asList(
-            KeyValue.pair("A", 2),
-            KeyValue.pair("B", 2),
-            KeyValue.pair("C", 2),
-            KeyValue.pair("D", 2),
-            KeyValue.pair("E", 2)
-        )));
-    }
-
-    @Test
-    public void shouldAggregateWindowed() throws Exception {
-        long firstTimestamp = System.currentTimeMillis() - 1000;
-        produceMessages(firstTimestamp);
-        long secondTimestamp = System.currentTimeMillis();
-        produceMessages(secondTimestamp);
-        produceMessages(secondTimestamp);
-
-        groupedStream.aggregate(
-            initializer,
-            aggregator,
-            TimeWindows.of(500L),
-            Serdes.Integer(), "aggregate-by-key-windowed")
-            .toStream(new KeyValueMapper<Windowed<String>, Integer, String>() {
-                @Override
-                public String apply(Windowed<String> windowedKey, Integer value) {
-                    return windowedKey.key() + "@" + windowedKey.window().start();
-                }
-            })
-            .to(Serdes.String(), Serdes.Integer(), outputTopic);
-
-        startStreams();
-
-        List<KeyValue<String, Integer>> windowedMessages = receiveMessages(
-            new StringDeserializer(),
-            new IntegerDeserializer()
-            , 10);
-
-        Comparator<KeyValue<String, Integer>>
-            comparator =
-            new Comparator<KeyValue<String, Integer>>() {
-                @Override
-                public int compare(final KeyValue<String, Integer> o1,
-                                   final KeyValue<String, Integer> o2) {
-                    return KStreamAggregationDedupIntegrationTest.compare(o1, o2);
-                }
-            };
-
-        Collections.sort(windowedMessages, comparator);
-
-        long firstWindow = firstTimestamp / 500 * 500;
-        long secondWindow = secondTimestamp / 500 * 500;
-
-        assertThat(windowedMessages, is(
-            Arrays.asList(
-                new KeyValue<>("A@" + firstWindow, 1),
-                new KeyValue<>("A@" + secondWindow, 2),
-                new KeyValue<>("B@" + firstWindow, 1),
-                new KeyValue<>("B@" + secondWindow, 2),
-                new KeyValue<>("C@" + firstWindow, 1),
-                new KeyValue<>("C@" + secondWindow, 2),
-                new KeyValue<>("D@" + firstWindow, 1),
-                new KeyValue<>("D@" + secondWindow, 2),
-                new KeyValue<>("E@" + firstWindow, 1),
-                new KeyValue<>("E@" + secondWindow, 2)
-            )));
-    }
-
-    @Test
-    public void shouldCount() throws Exception {
-        produceMessages(System.currentTimeMillis());
-
-        groupedStream.count("count-by-key")
-            .to(Serdes.String(), Serdes.Long(), outputTopic);
-
-        startStreams();
-
-        produceMessages(System.currentTimeMillis());
-
-        List<KeyValue<String, Long>> results = receiveMessages(
-            new StringDeserializer(),
-            new LongDeserializer()
-            , 5);
-        Collections.sort(results, new Comparator<KeyValue<String, Long>>() {
-            @Override
-            public int compare(KeyValue<String, Long> o1, KeyValue<String, Long> o2) {
-                return KStreamAggregationDedupIntegrationTest.compare(o1, o2);
-            }
-        });
-
-        assertThat(results, is(Arrays.asList(
-            KeyValue.pair("A", 2L),
-            KeyValue.pair("B", 2L),
-            KeyValue.pair("C", 2L),
-            KeyValue.pair("D", 2L),
-            KeyValue.pair("E", 2L)
-        )));
-    }
-
-    @Test
-    public void shouldGroupByKey() throws Exception {
-        long timestamp = System.currentTimeMillis();
-        produceMessages(timestamp);
-        produceMessages(timestamp);
-
-        stream.groupByKey(Serdes.Integer(), Serdes.String())
-            .count(TimeWindows.of(500L), "count-windows")
-            .toStream(new KeyValueMapper<Windowed<Integer>, Long, String>() {
-                @Override
-                public String apply(final Windowed<Integer> windowedKey, final Long value) {
-                    return windowedKey.key() + "@" + windowedKey.window().start();
-                }
-            }).to(Serdes.String(), Serdes.Long(), outputTopic);
-
-        startStreams();
-
-        List<KeyValue<String, Long>> results = receiveMessages(
-            new StringDeserializer(),
-            new LongDeserializer()
-            , 5);
-        Collections.sort(results, new Comparator<KeyValue<String, Long>>() {
-            @Override
-            public int compare(KeyValue<String, Long> o1, KeyValue<String, Long> o2) {
-                return KStreamAggregationDedupIntegrationTest.compare(o1, o2);
-            }
-        });
-
-        long window = timestamp / 500 * 500;
-        assertThat(results, is(Arrays.asList(
-            KeyValue.pair("1@" + window, 2L),
-            KeyValue.pair("2@" + window, 2L),
-            KeyValue.pair("3@" + window, 2L),
-            KeyValue.pair("4@" + window, 2L),
-            KeyValue.pair("5@" + window, 2L)
-        )));
-
-    }
 
 
     private void produceMessages(long timestamp)
