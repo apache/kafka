@@ -83,7 +83,7 @@ public class KStreamAggregationDedupIntegrationTest {
     //Single parameter, use Object[]
     @Parameters
     public static Object[] data() {
-        return new Object[] {1 * 1000L};
+        return new Object[] {2 * 1000L};
     }
 
     @Before
