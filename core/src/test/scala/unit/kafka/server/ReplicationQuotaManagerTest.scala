@@ -21,7 +21,7 @@ import java.util.Collections
 import kafka.common.TopicAndPartition
 import kafka.server.QuotaType._
 import kafka.server.{ReplicationQuotaManager, ReplicationQuotaManagerConfig}
-import org.apache.kafka.common.metrics.stats.FixedWindowRate
+import org.apache.kafka.common.metrics.stats.{Rate, SimpleRate}
 import org.apache.kafka.common.metrics.{Quota, MetricConfig, Metrics}
 import org.apache.kafka.common.utils.MockTime
 import org.junit.Assert.{assertFalse, assertTrue, assertEquals}
@@ -45,44 +45,57 @@ class ReplicationQuotaManagerTest {
   @Test
   def shouldExceedQuotaThenReturnBackBelowBoundAsTimePasses(): Unit = {
     val metrics = newMetrics()
-    val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(numQuotaSamples = 10, quotaWindowSizeSeconds = 1), metrics, LeaderReplication, time) {
-      override def newRateInstance() = new FixedWindowRate() //TODO - decide which rate is best prior to merge
-    }
+    val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(numQuotaSamples = 10, quotaWindowSizeSeconds = 1), metrics, LeaderReplication, time)
 
     //Given
     quota.updateQuota(new Quota(100, true))
 
-    //When we record anything
-    quota.record(100)
+    //Quota should not be broken when we start
+    assertFalse(quota.isQuotaExceeded())
+
+    //First window is fixed, so we'll skip it
+    time.sleep(1000)
+
+    //When we record up to the quota value after half a window
+    time.sleep(500)
+    quota.record(1)
 
     //Then it should not break the quota
     assertFalse(quota.isQuotaExceeded())
 
+    //When we record half the quota (half way through the window), we still should not break
+    quota.record(149) //150B, 1.5s
+    assertFalse(quota.isQuotaExceeded())
+
     //Add a byte to push over quota
-    quota.record(1)
+    quota.record(1) //151B, 1.5s
 
     //Then it should break the quota
+    assertEquals(151 / 1.5, rate(metrics), 0) //151B, 1.5s
     assertTrue(quota.isQuotaExceeded())
-    assertEquals(101, rate(metrics), 0)
 
-    //When we sleep for half the window
-    time.sleep(500)
+    //When we sleep for the remaining half the window
+    time.sleep(500) //151B, 2s
 
-    //Then Our rate should be based on just half the window
-    assertTrue(quota.isQuotaExceeded())
-    assertEquals(101, rate(metrics), 0)
-
-    //When we sleep for the remainder of the window
-    time.sleep(501)
-
-    //Then the rate should be back down to below the quota
+    //Then Our rate should have halved (i.e back down below the quota)
     assertFalse(quota.isQuotaExceeded())
-    assertEquals(101d / 2, rate(metrics), 0)
+    assertEquals(151d / 2, rate(metrics), 0.1) //151B, 2s
+
+    //When we sleep for another half a window (now half way through second window)
+    time.sleep(500)
+    quota.record(99) //250B, 2.5s
+
+    //Then the rate should be exceeded again
+    assertEquals(250 / 2.5, rate(metrics), 0) //250B, 2.5s
+    assertFalse(quota.isQuotaExceeded())
+    quota.record(1)
+    assertTrue(quota.isQuotaExceeded())
+    assertEquals(251 / 2.5, rate(metrics), 0)
 
     //Sleep for 2 more window
-    time.sleep(2 * 1000)
+    time.sleep(2 * 1000) //so now at 3.5s
     assertFalse(quota.isQuotaExceeded())
-    assertEquals(101d / 4, rate(metrics), 0)
+    assertEquals(251d / 4.5, rate(metrics), 0)
   }
 
   def rate(metrics: Metrics): Double = {

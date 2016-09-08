@@ -186,9 +186,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
       metrics,
       () => rateMetricName,
       () => getQuotaMetricConfig(quota),
-      () => newRateInstance()
+      () => new SimpleRate()
     )
   }
-
-  protected def newRateInstance(): Rate = new SimpleRate()
 }
