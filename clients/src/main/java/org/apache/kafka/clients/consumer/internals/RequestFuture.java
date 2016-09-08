@@ -39,8 +39,8 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
 
-    private static final Object NULL_SENTINEL = new Object();
-    private final AtomicReference<Object> result = new AtomicReference<>();
+    private static final Object INCOMPLETE_SENTINEL = new Object();
+    private final AtomicReference<Object> result = new AtomicReference<>(INCOMPLETE_SENTINEL);
     private final ConcurrentLinkedQueue<RequestFutureListener<T>> listeners = new ConcurrentLinkedQueue<>();
 
     /**
@@ -48,21 +48,19 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      * @return true if the response is ready, false otherwise
      */
     public boolean isDone() {
-        return result.get() != null;
+        return result.get() != INCOMPLETE_SENTINEL;
     }
 
     /**
      * Get the value corresponding to this request (only available if the request succeeded)
-     * @return the value if it exists or null
+     * @return the value set in {@link #complete(Object)}
+     * @throws IllegalStateException if the future is not complete or failed
      */
     @SuppressWarnings("unchecked")
     public T value() {
         if (!succeeded())
             throw new IllegalStateException("Attempt to retrieve value from future which hasn't successfully completed");
-        Object res = result.get();
-        if (res == NULL_SENTINEL)
-            return null;
-        return (T) res;
+        return (T) result.get();
     }
 
     /**
@@ -70,7 +68,7 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      * @return true if the request completed and was successful
      */
     public boolean succeeded() {
-        return !failed() && result.get() != null;
+        return isDone() && !failed();
     }
 
     /**
@@ -85,6 +83,7 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      * Check if the request is retriable (convenience method for checking if
      * the exception is an instance of {@link RetriableException}.
      * @return true if it is retriable, false otherwise
+     * @throws IllegalStateException if the future is not complete or completed successfully
      */
     public boolean isRetriable() {
         return exception() instanceof RetriableException;
@@ -92,7 +91,8 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
 
     /**
      * Get the exception from a failed result (only available if the request failed)
-     * @return The exception if it exists or null
+     * @return the exception set in {@link #raise(RuntimeException)}
+     * @throws IllegalStateException if the future is not complete or completed successfully
      */
     public RuntimeException exception() {
         if (!failed())
@@ -104,10 +104,10 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      * Complete the request successfully. After this call, {@link #succeeded()} will return true
      * and the value can be obtained through {@link #value()}.
      * @param value corresponding value (or null if there is none)
+     * @throws IllegalStateException if the future has already been completed
      */
     public void complete(T value) {
-        Object val = value == null ? NULL_SENTINEL : value;
-        if (!result.compareAndSet(null, val))
+        if (!result.compareAndSet(INCOMPLETE_SENTINEL, value))
             throw new IllegalStateException("Invalid attempt to complete a request future which is already complete");
         fireSuccess();
     }
@@ -116,12 +116,13 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      * Raise an exception. The request will be marked as failed, and the caller can either
      * handle the exception or throw it.
      * @param e corresponding exception to be passed to caller
+     * @throws IllegalStateException if the future has already been completed
      */
     public void raise(RuntimeException e) {
         if (e == null)
             throw new IllegalArgumentException("The exception passed to raise must not be null");
 
-        if (!result.compareAndSet(null, e))
+        if (!result.compareAndSet(INCOMPLETE_SENTINEL, e))
             throw new IllegalStateException("Invalid attempt to complete a request future which is already complete");
 
         fireFailure();

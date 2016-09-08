@@ -27,6 +27,7 @@ public class RequestFutureTest {
         RequestFuture<String> future = new RequestFuture<>();
         String value = "foo";
         future.complete(value);
+        assertTrue(future.isDone());
         assertEquals(value, future.value());
     }
 
@@ -35,6 +36,7 @@ public class RequestFutureTest {
         RequestFuture<String> future = new RequestFuture<>();
         RuntimeException exception = new RuntimeException();
         future.raise(exception);
+        assertTrue(future.isDone());
         assertEquals(exception, future.exception());
     }
 
@@ -42,6 +44,7 @@ public class RequestFutureTest {
     public void testVoidFuture() {
         RequestFuture<Void> future = new RequestFuture<>();
         future.complete(null);
+        assertTrue(future.isDone());
         assertNull(future.value());
     }
 
