@@ -133,7 +133,6 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig, private val quo
   def processConfigChanges(brokerId: String, properties: Properties) {
     if (brokerConfig.brokerId == brokerId.trim.toInt) {
       val limit = if (properties.containsKey(ThrottledReplicationRateLimitProp)) properties.getProperty(ThrottledReplicationRateLimitProp).toLong else Defaults.ThrottledReplicationLimit
-      brokerConfig.mutateConfig(ThrottledReplicationRateLimitProp, limit)
       quotaManagers.leader.updateQuota(upperBound(limit))
       quotaManagers.follower.updateQuota(upperBound(limit))
     }

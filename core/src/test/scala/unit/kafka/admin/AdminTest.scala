@@ -446,7 +446,6 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     def checkConfig(limit: Long) {
       TestUtils.retry(10000) {
         for (server <- servers) {
-          assertEquals("KafkaConfig was not updated", limit, server.config.throttledReplicationRateLimit)
           assertEquals("Leader Quota Manager was not updated", limit, server.quotaManagers.leader.upperBound)
           assertEquals("Follower Quota Manager was not updated", limit, server.quotaManagers.follower.upperBound)
         }

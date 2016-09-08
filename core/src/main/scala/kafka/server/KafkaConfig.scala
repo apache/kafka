@@ -963,25 +963,6 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val listeners = getListeners
   val advertisedListeners = getAdvertisedListeners
 
-  /** ********** Mutable Configuration ***************/
-  private var throttledReplicationRateLimitMutable = getLong(KafkaConfig.ThrottledReplicationRateLimitProp)
-
-  def throttledReplicationRateLimit() = {CoreUtils.inReadLock(lock){throttledReplicationRateLimitMutable}}
-
-  /**
-    * Mutate specific configuration values which are allowed to be mutated
-    */
-  def mutateConfig(prop: String, value: Long): Unit ={
-    if (!KafkaConfig.mutableConfigs.contains(prop)){
-      throw new IllegalArgumentException("Property $prop cannot be mutated as it's not configured as a mutable property")
-    }
-    CoreUtils.inWriteLock(lock){
-      prop match {
-        case KafkaConfig.ThrottledReplicationRateLimitProp => throttledReplicationRateLimitMutable = value
-      }
-    }
-  }
-
   private def getLogRetentionTimeMillis: Long = {
     val millisInMinute = 60L * 1000L
     val millisInHour = 60L * millisInMinute
