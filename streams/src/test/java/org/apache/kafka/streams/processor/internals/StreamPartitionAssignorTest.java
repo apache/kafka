@@ -735,15 +735,15 @@ public class StreamPartitionAssignorTest {
         }
 
         @Override
-        public void makeReady(String topic, int numPartitions, boolean compactTopic) {
-            readyTopics.put(topic, numPartitions);
+        public void makeReady(InternalTopicConfig topic, int numPartitions) {
+            readyTopics.put(topic.name(), numPartitions);
 
             List<PartitionInfo> partitions = new ArrayList<>();
             for (int i = 0; i < numPartitions; i++) {
-                partitions.add(new PartitionInfo(topic, i, null, null, null));
+                partitions.add(new PartitionInfo(topic.name(), i, null, null, null));
             }
 
-            restoreConsumer.updatePartitions(topic, partitions);
+            restoreConsumer.updatePartitions(topic.name(), partitions);
         }
     }
 }

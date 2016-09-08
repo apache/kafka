@@ -15,6 +15,7 @@
 package org.apache.kafka.streams.state.internals;
 
 
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.state.NoOpWindowStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.junit.Before;
@@ -23,7 +24,6 @@ import org.junit.Test;
 import java.util.Collections;
 
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 
 public class QueryableStoreProviderTest {
 
@@ -41,14 +41,14 @@ public class QueryableStoreProviderTest {
                 Collections.<StateStoreProvider>singletonList(theStoreProvider));
     }
 
-    @Test
-    public void shouldReturnNullIfKVStoreDoesntExist() throws Exception {
-        assertNull(storeProvider.getStore("not-a-store", QueryableStoreTypes.keyValueStore()));
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowExceptionIfKVStoreDoesntExist() throws Exception {
+        storeProvider.getStore("not-a-store", QueryableStoreTypes.keyValueStore());
     }
 
-    @Test
-    public void shouldReturnNullIfWindowStoreDoesntExist() throws Exception {
-        assertNull(storeProvider.getStore("not-a-store", QueryableStoreTypes.windowStore()));
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowExceptionIfWindowStoreDoesntExist() throws Exception {
+        storeProvider.getStore("not-a-store", QueryableStoreTypes.windowStore());
     }
 
     @Test
@@ -61,14 +61,14 @@ public class QueryableStoreProviderTest {
         assertNotNull(storeProvider.getStore(windowStore, QueryableStoreTypes.windowStore()));
     }
 
-    @Test
-    public void shouldNotReturnKVStoreWhenIsWindowStore() throws Exception {
-        assertNull(storeProvider.getStore(windowStore, QueryableStoreTypes.keyValueStore()));
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowExceptionWhenLookingForWindowStoreWithDifferentType() throws Exception {
+        storeProvider.getStore(windowStore, QueryableStoreTypes.keyValueStore());
     }
 
-    @Test
-    public void shouldNotReturnWindowStoreWhenIsKVStore() throws Exception {
-        assertNull(storeProvider.getStore(keyValueStore, QueryableStoreTypes.windowStore()));
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowExceptionWhenLookingForKVStoreWithDifferentType() throws Exception {
+        storeProvider.getStore(keyValueStore, QueryableStoreTypes.windowStore());
     }
 
 

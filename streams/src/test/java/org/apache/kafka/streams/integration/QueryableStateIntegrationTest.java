@@ -40,6 +40,7 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.StreamsMetadata;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -64,6 +65,7 @@ import java.util.TreeSet;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -73,10 +75,11 @@ public class QueryableStateIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
     private final MockTime mockTime = CLUSTER.time;
     private static final String STREAM_ONE = "stream-one";
+    private static final String STREAM_TWO = "stream-two";
     private static final String STREAM_CONCURRENT = "stream-concurrent";
     private static final String OUTPUT_TOPIC = "output";
     private static final String OUTPUT_TOPIC_CONCURRENT = "output-concurrent";
-    private static final String STREAM_TWO = "stream-two";
+    private static final String STREAM_THREE = "stream-three";
     private static final int NUM_PARTITIONS = NUM_BROKERS;
     private static final int NUM_REPLICAS = NUM_BROKERS;
     private static final long WINDOW_SIZE = 60000L;
@@ -93,6 +96,7 @@ public class QueryableStateIntegrationTest {
         CLUSTER.createTopic(STREAM_ONE);
         CLUSTER.createTopic(STREAM_CONCURRENT);
         CLUSTER.createTopic(STREAM_TWO, NUM_PARTITIONS, NUM_REPLICAS);
+        CLUSTER.createTopic(STREAM_THREE, 4, 1);
         CLUSTER.createTopic(OUTPUT_TOPIC);
         CLUSTER.createTopic(OUTPUT_TOPIC_CONCURRENT);
         CLUSTER.createTopic(OUTPUT_TOPIC_THREE);
@@ -420,6 +424,71 @@ public class QueryableStateIntegrationTest {
             myCount);
 
         verifyRangeAndAll(expectedCount, myCount);
+
+    }
+
+    @Test
+    public void shouldNotMakeStoreAvailableUntilAllStoresAvailable() throws Exception {
+        final KStreamBuilder builder = new KStreamBuilder();
+        final KStream<String, String> stream = builder.stream(STREAM_THREE);
+
+        final String storeName = "count-by-key";
+        stream.groupByKey().count(storeName);
+        kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
+        kafkaStreams.start();
+
+        final KeyValue<String, String> hello = KeyValue.pair("hello", "hello");
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+                STREAM_THREE,
+                Arrays.asList(hello, hello, hello, hello, hello, hello, hello, hello),
+                TestUtils.producerConfig(
+                        CLUSTER.bootstrapServers(),
+                        StringSerializer.class,
+                        StringSerializer.class,
+                        new Properties()),
+                mockTime);
+
+        final int maxWaitMs = 30000;
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                try {
+                    kafkaStreams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+                    return true;
+                } catch (InvalidStateStoreException ise) {
+                    return false;
+                }
+            }
+        }, maxWaitMs, "waiting for store " + storeName);
+
+        final ReadOnlyKeyValueStore<String, Long> store = kafkaStreams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return new Long(8).equals(store.get("hello"));
+            }
+        }, maxWaitMs, "wait for count to be 8");
+
+        // close stream
+        kafkaStreams.close();
+
+        // start again
+        kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
+        kafkaStreams.start();
+
+        // make sure we never get any value other than 8 for hello
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                try {
+                    assertEquals(Long.valueOf(8L), kafkaStreams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore()).get("hello"));
+                    return true;
+                } catch (InvalidStateStoreException ise) {
+                    return false;
+                }
+            }
+        }, maxWaitMs, "waiting for store " + storeName);
 
     }
 
