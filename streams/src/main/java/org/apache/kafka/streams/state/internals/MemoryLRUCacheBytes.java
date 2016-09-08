@@ -48,7 +48,6 @@ public class MemoryLRUCacheBytes {
     private final Map<String, DirtyEntryFlushListener> listeners;
     private final Map<String, Set<Bytes>> dirtyKeys;
 
-
     public interface DirtyEntryFlushListener {
         void apply(final List<DirtyEntry> dirty);
     }
@@ -84,19 +83,12 @@ public class MemoryLRUCacheBytes {
         for (Bytes key : keys) {
             final MemoryLRUCacheBytesEntry entry = get(namespace, key.get());
             entries.add(new DirtyEntry(key, entry.value, entry));
+            entry.markClean();
         }
         listener.apply(entries);
         keys.clear();
     }
 
-    private void callListener(final Bytes key, final LRUNode node) {
-        final MemoryLRUCacheBytesEntry entry = node.entry();
-        final DirtyEntryFlushListener listener = listeners.get(node.namespace);
-        if (listener == null) {
-            return;
-        }
-        listener.apply(Collections.singletonList(new DirtyEntry(key, entry.value, entry)));
-    }
 
     public synchronized MemoryLRUCacheBytesEntry get(final String namespace, byte[] key) {
         MemoryLRUCacheBytesEntry entry = null;
@@ -121,7 +113,7 @@ public class MemoryLRUCacheBytes {
             final LRUNode toRemove = treeMap.get(key);
             currentSizeBytes -= toRemove.size();
             if (toRemove.entry.isDirty()) {
-                callListener(toRemove.key, toRemove);
+                flush(toRemove.namespace);
             }
             remove(toRemove);
             treeMap.remove(key);

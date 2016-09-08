@@ -316,6 +316,12 @@ public class MemoryLRUCacheBytesTest {
         final String namespace = "streams";
         final int entrySize = memoryCacheEntrySize(namespace, new byte[1], new byte[1], "");
         final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(entrySize * 5);
+        cache.addDirtyEntryFlushListener(namespace, new MemoryLRUCacheBytes.DirtyEntryFlushListener() {
+            @Override
+            public void apply(final List<MemoryLRUCacheBytes.DirtyEntry> dirty) {
+
+            }
+        });
         byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}};
         for (int i = 0; i < 5; i++) {
             cache.put(namespace, bytes[i], dirtyEntry(bytes[i]));

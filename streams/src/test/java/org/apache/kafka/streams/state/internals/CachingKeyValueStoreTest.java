@@ -80,9 +80,8 @@ public class CachingKeyValueStoreTest {
     @Test
     public void shouldFlushEvictedItemsIntoUnderlyingStore() throws Exception {
         int added = addItemsToCache();
-        // should only have one record evicted
-        assertEquals(1, underlyingStore.approximateNumEntries());
-        // 1 dirty key + entries in store;
+        // all dirty entries should have been flushed
+        assertEquals(added, underlyingStore.approximateNumEntries());
         assertEquals(added, store.approximateNumEntries());
         assertNotNull(underlyingStore.get(Bytes.wrap("0".getBytes())));
     }
@@ -90,8 +89,7 @@ public class CachingKeyValueStoreTest {
     @Test
     public void shouldForwardDirtyItemToListenerWhenEvicted() throws Exception {
         int numRecords = addItemsToCache();
-        assertEquals(1, cacheFlushListener.forwarded.size());
-        assertFalse(cacheFlushListener.forwarded.containsKey(String.valueOf(numRecords - 1)));
+        assertEquals(numRecords, cacheFlushListener.forwarded.size());
     }
 
     @Test
