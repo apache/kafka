@@ -78,7 +78,7 @@ public interface KGroupedTable<K, V> {
      *
      * @param initializer   the instance of {@link Initializer}
      * @param adder         the instance of {@link Aggregator} for addition
-     * @param subtractor    the instance of {@link Aggregator} for subtraction
+     * @param substractor   the instance of {@link Aggregator} for subtraction
      * @param aggValueSerde value serdes for materializing the aggregated table,
      *                      if not specified the default serdes defined in the configs will be used
      * @param storeName     the name of the underlying {@link KTable} state store
@@ -88,7 +88,7 @@ public interface KGroupedTable<K, V> {
      */
     <T> KTable<K, T> aggregate(Initializer<T> initializer,
                                Aggregator<K, V, T> adder,
-                               Aggregator<K, V, T> subtractor,
+                               Aggregator<K, V, T> substractor,
                                Serde<T> aggValueSerde,
                                String storeName);
 
@@ -124,27 +124,17 @@ public interface KGroupedTable<K, V> {
      *
      * @param initializer   the instance of {@link Initializer}
      * @param adder         the instance of {@link Aggregator} for addition
-<<<<<<< HEAD
      * @param substractor   the instance of {@link Aggregator} for subtraction
      * @param storeSupplier the state store supplier {@link StateStoreSupplier}
-=======
-     * @param subtractor   the instance of {@link Aggregator} for subtraction
-     * @param storeName     the name of the underlying {@link KTable} state store
->>>>>>> trunk
      * @param <T>           the value type of the aggregated {@link KTable}
      * @return a {@link KTable} with same key and aggregated value type {@code T},
      * containing aggregated values for each key
      */
     <T> KTable<K, T> aggregate(Initializer<T> initializer,
                                Aggregator<K, V, T> adder,
-<<<<<<< HEAD
                                Aggregator<K, V, T> substractor,
                                StateStoreSupplier storeSupplier);
 
-=======
-                               Aggregator<K, V, T> subtractor,
-                               String storeName);
->>>>>>> trunk
 
     /**
      * Count number of records of this stream by the selected key into a new instance of {@link KTable}.
