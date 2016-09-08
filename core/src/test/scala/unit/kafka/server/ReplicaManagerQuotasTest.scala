@@ -39,12 +39,11 @@ class ReplicaManagerQuotasTest {
   val time = new MockTime
   val jTime = new JMockTime
   val metrics = new Metrics
-  var message = new Message("some-data-in-a-message".getBytes())
+  val message = new Message("some-data-in-a-message".getBytes())
   val topicAndPartition1 = TopicAndPartition("test-topic", 1)
   val topicAndPartition2 = TopicAndPartition("test-topic", 2)
   val fetchInfo = Map(topicAndPartition1 -> PartitionFetchInfo(0, 100), topicAndPartition2 -> PartitionFetchInfo(0, 100))
   var replicaManager: ReplicaManager = null
-  val overhead: Int = 17
 
   @Test
   def shouldExcludeSubsequentThrottledPartitions(): Unit = {
