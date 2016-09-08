@@ -963,37 +963,11 @@ public class ConfigDef {
         StringBuilder b = new StringBuilder();
 
         for (ConfigKey def : configs) {
-            b.append("``");
-            b.append(def.name);
-            b.append("``\n");
-            for (String docLine : def.documentation.split("\n")) {
-                if (docLine.length() == 0) {
-                    continue;
-                }
-                b.append("  ");
-                b.append(docLine);
-                b.append("\n\n");
-            }
-            b.append("  * Type: ");
-            b.append(def.type.toString().toLowerCase(Locale.ROOT));
-            b.append("\n");
-            if (def.defaultValue != null) {
-                b.append("  * Default: ");
-                if (def.type == Type.STRING) {
-                    b.append("\"");
-                    b.append(def.defaultValue);
-                    b.append("\"");
-                } else {
-                    b.append(def.defaultValue);
-                }
-                b.append("\n");
-            }
-            b.append("  * Importance: ");
-            b.append(def.importance.toString().toLowerCase(Locale.ROOT));
-            b.append("\n\n");
+            b.append(getConfigKeyDetails(def));
         }
         return b.toString();
     }
+
 
     /**
      * Get the configs with new metadata(group, orderInGroup, dependents) formatted with reStructuredText, suitable for embedding in Sphinx
@@ -1006,45 +980,19 @@ public class ConfigDef {
 
         for (ConfigKey def : configs) {
 
-            if (!def.group.equalsIgnoreCase(lastKeyGroupName)) {
-                b.append(def.group);
-                b.append("\n");
-                char[] underLine = new char[def.group.length()];
-                Arrays.fill(underLine, '^');
-                b.append(new String(underLine));
-                b.append("\n\n");
-            }
-            lastKeyGroupName = def.group;
-
-            b.append("``");
-            b.append(def.name);
-            b.append("``\n");
-
-            for (String docLine : def.documentation.split("\n")) {
-                if (docLine.length() == 0) {
-                    continue;
+            if(def.group != null) {
+                if (!lastKeyGroupName.equalsIgnoreCase(def.group)) {
+                    b.append(def.group);
+                    b.append("\n");
+                    char[] underLine = new char[def.group.length()];
+                    Arrays.fill(underLine, '^');
+                    b.append(new String(underLine));
+                    b.append("\n\n");
                 }
-                b.append("  ");
-                b.append(docLine);
-                b.append("\n\n");
+                lastKeyGroupName = def.group;
             }
-            b.append("  * Type: ");
-            b.append(def.type.toString().toLowerCase(Locale.ROOT));
-            b.append("\n");
-            if (def.defaultValue != null) {
-                b.append("  * Default: ");
-                if (def.type == Type.STRING) {
-                    b.append("\"");
-                    b.append(def.defaultValue);
-                    b.append("\"");
-                } else {
-                    b.append(def.defaultValue);
-                }
-                b.append("\n");
-            }
-            b.append("  * Importance: ");
-            b.append(def.importance.toString().toLowerCase(Locale.ROOT));
-            b.append("\n");
+
+            b.append(getConfigKeyDetails(def));
 
             if (def.dependents != null && def.dependents.size() > 0) {
                 int j = 0;
@@ -1062,6 +1010,44 @@ public class ConfigDef {
             b.append("\n");
         }
         return b.toString();
+    }
+
+    /**
+     * Shared content on Rst and Enriched Rst.
+     */
+    private StringBuilder getConfigKeyDetails(ConfigKey def){
+        StringBuilder b = new StringBuilder();
+
+        b.append("``");
+        b.append(def.name);
+        b.append("``\n");
+        for (String docLine : def.documentation.split("\n")) {
+            if (docLine.length() == 0) {
+                continue;
+            }
+            b.append("  ");
+            b.append(docLine);
+            b.append("\n\n");
+        }
+        b.append("  * Type: ");
+        b.append(def.type.toString().toLowerCase(Locale.ROOT));
+        b.append("\n");
+        if (def.defaultValue != null) {
+            b.append("  * Default: ");
+            if (def.type == Type.STRING) {
+                b.append("\"");
+                b.append(def.defaultValue);
+                b.append("\"");
+            } else {
+                b.append(def.defaultValue);
+            }
+            b.append("\n");
+        }
+        b.append("  * Importance: ");
+        b.append(def.importance.toString().toLowerCase(Locale.ROOT));
+        b.append("\n\n");
+
+        return b;
     }
 
     /**
@@ -1103,7 +1089,7 @@ public class ConfigDef {
         Collections.sort(configs, new Comparator<ConfigKey>() {
             public int compare(ConfigKey k1, ConfigKey k2) {
                 // sort by group
-                int cmp = k1.group.compareTo(k2.group);
+                int cmp = k1.group == null ? (k2.group == null ? 0 : 1) : (k2.group == null ? -1 : k1.group.compareTo(k2.group));
                 if (cmp == 0) {
                     // then sort with order in group
                     return Integer.compare(k1.orderInGroup, k2.orderInGroup);
