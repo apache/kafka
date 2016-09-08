@@ -165,7 +165,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
   def upperBound(): Long = {
     inReadLock(lock) {
       if (quota != null)
-        quota.bound().toInt
+        quota.bound().toLong
       else
         Long.MaxValue
     }

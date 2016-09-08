@@ -55,6 +55,7 @@ object Defaults {
   val MessageFormatVersion = kafka.server.Defaults.LogMessageFormatVersion
   val MessageTimestampType = kafka.server.Defaults.LogMessageTimestampType
   val MessageTimestampDifferenceMaxMs = kafka.server.Defaults.LogMessageTimestampDifferenceMaxMs
+  val ThrottledReplicasList = ""
 }
 
 case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfig.configDef, props, false) {
@@ -284,7 +285,7 @@ object LogConfig {
         KafkaConfig.LogMessageTimestampTypeProp)
       .define(MessageTimestampDifferenceMaxMsProp, LONG, Defaults.MessageTimestampDifferenceMaxMs,
         atLeast(0), MEDIUM, MessageTimestampDifferenceMaxMsDoc, KafkaConfig.LogMessageTimestampDifferenceMaxMsProp)
-      .define(ThrottledReplicasListProp, STRING, "", ThrottledReplicaValidator, MEDIUM, ThrottledReplicasListDoc, ThrottledReplicasListProp) //TODO - not providing a server default config here - probably a bad idea - should think/discuss
+      .define(ThrottledReplicasListProp, STRING, Defaults.ThrottledReplicasList, ThrottledReplicaValidator, MEDIUM, ThrottledReplicasListDoc, ThrottledReplicasListProp)
   }
 
   def apply(): LogConfig = LogConfig(new Properties())

@@ -387,20 +387,22 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     val topic = "my-topic"
     val server = TestUtils.createServer(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
 
-    def makeConfig(messageSize: Int, retentionMs: Long) = {
-      var props = new Properties()
+    def makeConfig(messageSize: Int, retentionMs: Long, throttledReplicas: String) = {
+      val props = new Properties()
       props.setProperty(LogConfig.MaxMessageBytesProp, messageSize.toString)
       props.setProperty(LogConfig.RetentionMsProp, retentionMs.toString)
+      props.setProperty(LogConfig.ThrottledReplicasListProp, throttledReplicas)
       props
     }
 
-    def checkConfig(messageSize: Int, retentionMs: Long) {
+    def checkConfig(messageSize: Int, retentionMs: Long, throttledReplicas: String) {
       TestUtils.retry(10000) {
         for(part <- 0 until partitions) {
           val logOpt = server.logManager.getLog(TopicAndPartition(topic, part))
           assertTrue(logOpt.isDefined)
           assertEquals(retentionMs, logOpt.get.config.retentionMs)
           assertEquals(messageSize, logOpt.get.config.maxMessageSize)
+          assertEquals(throttledReplicas, logOpt.get.config.throttledReplicasList)
         }
       }
     }
@@ -409,17 +411,21 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
       // create a topic with a few config overrides and check that they are applied
       val maxMessageSize = 1024
       val retentionMs = 1000*1000
-      AdminUtils.createTopic(server.zkUtils, topic, partitions, 1, makeConfig(maxMessageSize, retentionMs))
-      checkConfig(maxMessageSize, retentionMs)
+      AdminUtils.createTopic(server.zkUtils, topic, partitions, 1, makeConfig(maxMessageSize, retentionMs, "0-0"))
+      checkConfig(maxMessageSize, retentionMs, "0-0")
 
       // now double the config values for the topic and check that it is applied
-      val newConfig: Properties = makeConfig(2*maxMessageSize, 2 * retentionMs)
-      AdminUtils.changeTopicConfig(server.zkUtils, topic, makeConfig(2*maxMessageSize, 2 * retentionMs))
-      checkConfig(2*maxMessageSize, 2 * retentionMs)
+      val newConfig: Properties = makeConfig(2 * maxMessageSize, 2 * retentionMs, "*")
+      AdminUtils.changeTopicConfig(server.zkUtils, topic, makeConfig(2*maxMessageSize, 2 * retentionMs, "*"))
+      checkConfig(2 * maxMessageSize, 2 * retentionMs, "*")
 
       // Verify that the same config can be read from ZK
       val configInZk = AdminUtils.fetchEntityConfig(server.zkUtils, ConfigType.Topic, topic)
       assertEquals(newConfig, configInZk)
+
+      //Now delete the config
+      AdminUtils.changeTopicConfig(server.zkUtils, topic, new Properties)
+      checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, Defaults.ThrottledReplicasList)
     } finally {
       server.shutdown()
       CoreUtils.delete(server.config.logDirs)
@@ -464,6 +470,11 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
         val configInZk = AdminUtils.fetchEntityConfig(servers(brokerId).zkUtils, ConfigType.Broker, brokerId.toString)
         assertEquals(newLimit, configInZk.getProperty(KafkaConfig.ThrottledReplicationRateLimitProp).toInt)
       }
+
+      //Now delete the config
+      AdminUtils.changeBrokerConfig(servers(0).zkUtils, brokerIds, new Properties)
+      checkConfig(kafka.server.Defaults.ThrottledReplicationLimit)
+
     } finally {
       servers.foreach(_.shutdown())
       servers.foreach(server => CoreUtils.delete(server.config.logDirs))

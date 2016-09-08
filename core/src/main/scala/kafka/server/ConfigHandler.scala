@@ -131,15 +131,11 @@ class ClientIdConfigHandler(private val quotaManagers: QuotaManagers) extends Co
   */
 class BrokerConfigHandler(private val brokerConfig: KafkaConfig, private val quotaManagers: QuotaManagers) extends ConfigHandler with Logging {
   def processConfigChanges(brokerId: String, properties: Properties) {
-    //TODO - this may require special support for config being removed. Check before merge.
     if (brokerConfig.brokerId == brokerId.trim.toInt) {
-      //Alter throttle limit:
-      if (properties.containsKey(ThrottledReplicationRateLimitProp)) {
-        val limit = properties.getProperty(ThrottledReplicationRateLimitProp).toLong
-        brokerConfig.mutateConfig(ThrottledReplicationRateLimitProp, limit)
-        quotaManagers.leader.updateQuota(upperBound(limit))
-        quotaManagers.follower.updateQuota(upperBound(limit))
-      }
+      val limit = if (properties.containsKey(ThrottledReplicationRateLimitProp)) properties.getProperty(ThrottledReplicationRateLimitProp).toLong else Defaults.ThrottledReplicationLimit
+      brokerConfig.mutateConfig(ThrottledReplicationRateLimitProp, limit)
+      quotaManagers.leader.updateQuota(upperBound(limit))
+      quotaManagers.follower.updateQuota(upperBound(limit))
     }
   }
 }
