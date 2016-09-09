@@ -171,6 +171,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
             log.debug("task [{}] Start processing one record [{}]", id(), currRecord);
 
+            updateContext(currRecord);
             this.currNode.process(currRecord.key(), currRecord.value());
 
             log.debug("task [{}] Completed processing one record [{}]", id(), currRecord);
@@ -226,13 +227,17 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
         currNode = node;
         currRecord = new StampedRecord(DUMMY_RECORD, timestamp);
-
+        updateContext(currRecord);
         try {
             node.processor().punctuate(timestamp);
         } finally {
             currNode = null;
             currRecord = null;
         }
+    }
+
+    private void updateContext(final StampedRecord record) {
+        ((ProcessorContextImpl) processorContext).update(record);
     }
 
     public StampedRecord record() {

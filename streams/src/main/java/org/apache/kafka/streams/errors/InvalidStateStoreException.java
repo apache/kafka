@@ -12,14 +12,18 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.streams.errors;
 
 /**
  * Indicates that there was a problem when trying to access
  * a {@link org.apache.kafka.streams.processor.StateStore}, i.e, the Store is no longer valid because it is closed
  * or doesn't exist any more due to a rebalance.
+ *
+ * These exceptions may be transient, i.e., during a rebalance it won't be possible to query the stores as they are
+ * being (re)-initialized. Once the rebalance has completed the stores will be available again. Hence, it is valid
+ * to backoff and retry when handling this exception.
  */
-public class InvalidStateStoreException extends RuntimeException {
+public class InvalidStateStoreException extends StreamsException {
 
     public InvalidStateStoreException(final String message) {
         super(message);

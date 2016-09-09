@@ -15,11 +15,13 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 
 /**
  * A key value store that only supports read operations.
  * Implementations should be thread-safe as concurrent reads and writes
- * are expected
+ * are expected.
+ *
  * @param <K> the key type
  * @param <V> the value type
  */
@@ -27,11 +29,12 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 public interface ReadOnlyKeyValueStore<K, V> {
 
     /**
-     * Get the value corresponding to this key
+     * Get the value corresponding to this key.
      *
      * @param key The key to fetch
      * @return The value or null if no value is found.
      * @throws NullPointerException If null is used for key.
+     * @throws InvalidStateStoreException if the store is not initialized
      */
     V get(K key);
 
@@ -43,6 +46,7 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * @param to The last key that could be in the range
      * @return The iterator for this range.
      * @throws NullPointerException If null is used for from or to.
+     * @throws InvalidStateStoreException if the store is not initialized
      */
     KeyValueIterator<K, V> range(K from, K to);
 
@@ -51,6 +55,7 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * The returned iterator must be safe from {@link java.util.ConcurrentModificationException}s
      * and must not return null values. No ordering guarantees are provided.
      * @return An iterator of all key/value pairs in the store.
+     * @throws InvalidStateStoreException if the store is not initialized
      */
     KeyValueIterator<K, V> all();
 
@@ -61,6 +66,7 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * where an exact count is expensive to calculate.
      *
      * @return an approximate count of key-value mappings in the store.
+     * @throws InvalidStateStoreException if the store is not initialized
      */
     long approximateNumEntries();
 }

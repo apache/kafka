@@ -14,6 +14,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 
@@ -45,7 +46,7 @@ public class QueryableStoreProvider {
             allStores.addAll(storeProvider.stores(storeName, queryableStoreType));
         }
         if (allStores.isEmpty()) {
-            return null;
+            throw new InvalidStateStoreException("Store: " + storeName + " is currently not available");
         }
         return queryableStoreType.create(
                 new WrappingStoreProvider(storeProviders),

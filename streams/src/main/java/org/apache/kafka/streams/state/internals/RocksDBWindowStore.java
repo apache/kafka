@@ -23,6 +23,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -65,6 +66,12 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
         public void destroy() {
             Utils.delete(dbDir);
+        }
+
+        @Override
+        public void openDB(final ProcessorContext context) {
+            super.openDB(context);
+            open = true;
         }
     }
 

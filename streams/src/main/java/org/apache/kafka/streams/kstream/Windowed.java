@@ -18,9 +18,9 @@
 package org.apache.kafka.streams.kstream;
 
 /**
- * The windowed key interface used in {@link KTable}, used for representing a windowed table result from windowed stream aggregations,
- * i.e. {@link KStream#aggregateByKey(Initializer, Aggregator, Windows, org.apache.kafka.common.serialization.Serde,
- * org.apache.kafka.common.serialization.Serde)}
+ * Used to represent windowed stream aggregations (e.g. as returned by
+ * {@link KGroupedStream#aggregate(Initializer, Aggregator, Windows, org.apache.kafka.common.serialization.Serde, String)}),
+ * which have the type {@code <Windowed<K>, V>}.
  *
  * @param <K> Type of the key
  */
