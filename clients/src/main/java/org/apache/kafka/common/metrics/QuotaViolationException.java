@@ -29,7 +29,7 @@ public class QuotaViolationException extends KafkaException {
     private final double value;
     private final double bound;
 
-    public QuotaViolationException(MetricName metricName, Double value, Double bound) {
+    public QuotaViolationException(MetricName metricName, double value, double bound) {
         super(String.format(
                 "'%s' violated quota. Actual: %f, Threshold: %f",
                 metricName,
