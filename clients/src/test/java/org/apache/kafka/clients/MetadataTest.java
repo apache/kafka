@@ -149,11 +149,11 @@ public class MetadataTest {
     @Test
     public void testClusterListenerGetsNotifiedOfUpdate() {
         long time = 0;
-        metadata.update(Cluster.empty(), time);
         MockClusterResourceListener mockClusterListener = new MockClusterResourceListener();
-        ClusterResourceListeners listeners = ClusterResourceListeners.empty();
+        ClusterResourceListeners listeners = new ClusterResourceListeners();
         listeners.add(mockClusterListener);
-        metadata.setClusterResourceListeners(listeners);
+        metadata = new Metadata(refreshBackoffMs, metadataExpireMs, false, listeners);
+        metadata.update(Cluster.empty(), time);
         metadata.update(new Cluster(
                         "dummy",
                         Arrays.asList(new Node(0, "host1", 1000)),
@@ -165,7 +165,7 @@ public class MetadataTest {
                 100);
 
         assertEquals("MockClusterResourceListener did not get cluster metadata correctly",
-                "dummy", mockClusterListener.getClusterResource().getClusterId());
+                "dummy", mockClusterListener.clusterResource().getClusterId());
     }
 
     @Test

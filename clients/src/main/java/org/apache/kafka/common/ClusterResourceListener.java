@@ -14,5 +14,5 @@
 package org.apache.kafka.common;
 
 public interface ClusterResourceListener {
-    void onClusterUpdate(ClusterResource clusterMetadata);
+    void onUpdate(ClusterResource clusterResource);
 }

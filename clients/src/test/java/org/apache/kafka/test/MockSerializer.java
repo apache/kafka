@@ -56,7 +56,7 @@ public class MockSerializer implements ClusterResourceListener, Serializer<byte[
     }
 
     @Override
-    public void onClusterUpdate(ClusterResource clusterMetadata) {
-        CLUSTER_META.set(clusterMetadata);
+    public void onUpdate(ClusterResource clusterResource) {
+        CLUSTER_META.set(clusterResource);
     }
 }

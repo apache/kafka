@@ -32,9 +32,6 @@ public class ClusterResourceListeners {
         this.clusterResourceListeners = new ArrayList<>();
     }
 
-    public List<ClusterResourceListener> getClusterResourceListeners() {
-        return clusterResourceListeners;
-    }
 
     public void add(Object candidate) {
         if (candidate instanceof ClusterResourceListener) {
@@ -43,22 +40,16 @@ public class ClusterResourceListeners {
     }
 
     public void addAll(List candidateList) {
-
         for (Object candidate : candidateList) {
-
-            if (candidate instanceof ClusterResourceListener) {
+            if (candidate instanceof ClusterResourceListener)
                 clusterResourceListeners.add((ClusterResourceListener) candidate);
-            }
         }
     }
 
-    public void onClusterUpdate(ClusterResource cluster) {
+    public void onUpdate(ClusterResource cluster) {
         for (ClusterResourceListener clusterResourceListener : clusterResourceListeners) {
-            clusterResourceListener.onClusterUpdate(cluster);
+            clusterResourceListener.onUpdate(cluster);
         }
     }
 
-    public static ClusterResourceListeners empty() {
-        return new ClusterResourceListeners();
-    }
 }

@@ -59,13 +59,13 @@ class MetadataRequestTest extends BaseRequestTest {
   }
 
   @Test
-  def testClusterIdIsValidUUID() {
+  def testClusterIdIsValidUuid() {
     val metadataResponse = sendMetadataRequest(MetadataRequest.allTopics(), 2)
     val clusterId = metadataResponse.clusterId()
-    val decodedUUID = DatatypeConverter.parseBase64Binary(clusterId)
+    val decodedUuid = DatatypeConverter.parseBase64Binary(clusterId)
 
     try {
-      UUID.fromString(new String(decodedUUID, StandardCharsets.UTF_8))
+      UUID.fromString(new String(decodedUuid, StandardCharsets.UTF_8))
     } catch {
       case e: IllegalArgumentException =>
         fail("UUID is invalid.", e)

@@ -120,11 +120,11 @@ public class Protocol {
 
     public static final Schema METADATA_RESPONSE_V2 = new Schema(new Field("brokers", new ArrayOf(METADATA_BROKER_V1),
                                                                     "Host and port information for all brokers."),
-                                                                    new Field("cluster_id", NULLABLE_STRING,
-                                                                            "The cluster id that this broker belongs to."),
-                                                                    new Field("controller_id", INT32,
-                                                                            "The broker id of the controller broker."),
-                                                                    new Field("topic_metadata", new ArrayOf(TOPIC_METADATA_V1)));
+                                                                 new Field("cluster_id", NULLABLE_STRING,
+                                                                     "The cluster id that this broker belongs to."),
+                                                                 new Field("controller_id", INT32,
+                                                                     "The broker id of the controller broker."),
+                                                                 new Field("topic_metadata", new ArrayOf(TOPIC_METADATA_V1)));
 
 
     public static final Schema[] METADATA_REQUEST = new Schema[] {METADATA_REQUEST_V0, METADATA_REQUEST_V1, METADATA_REQUEST_V2};

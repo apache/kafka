@@ -27,7 +27,7 @@ import kafka.consumer.{ConsumerThreadId, TopicCount}
 import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch, ReassignedPartitionsContext}
 import kafka.server.ConfigType
 import kafka.utils.ZkUtils._
-import org.I0Itec.zkclient.exception._
+import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkException, ZkMarshallingError, ZkNoNodeException, ZkNodeExistsException}
 import org.I0Itec.zkclient.serialize.ZkSerializer
 import org.I0Itec.zkclient.{ZkClient, ZkConnection}
 import org.apache.kafka.common.config.ConfigException
@@ -235,8 +235,7 @@ class ZkUtils(val zkClient: ZkClient,
     val data = Json.encode(jsonMap)
 
     try {
-      createParentPath(ClusterIdPath)
-      ZkPath.createPersistent(zkClient, ClusterIdPath, data, DefaultAcls)
+      createPersistentPath(ClusterIdPath, data)
       proposedClusterId
     } catch {
       case e: ZkNodeExistsException =>

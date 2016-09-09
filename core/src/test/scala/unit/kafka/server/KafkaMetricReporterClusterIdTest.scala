@@ -28,7 +28,7 @@ import org.junit.{Before, Test}
 
 class MockKafkaMetricsReporter extends KafkaMetricsReporter with ClusterResourceListener {
 
-  override def onClusterUpdate(clusterMetadata: ClusterResource): Unit = {
+  override def onUpdate(clusterMetadata: ClusterResource): Unit = {
     MockKafkaMetricsReporter.CLUSTER_META.set(clusterMetadata)
   }
 
@@ -48,12 +48,12 @@ class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
   override def setUp() {
     super.setUp()
     props1 = TestUtils.createBrokerConfig(1, zkConnect)
-    props1.setProperty("kafka.metrics.reporters", "kafka.server.MockCodaHaleMetricsReporter")
+    props1.setProperty("kafka.metrics.reporters", "kafka.server.MockKafkaMetricsReporter")
     config1 = KafkaConfig.fromProps(props1)
   }
 
   @Test
-  def testAutoGenerateClusterId() {
+  def testClusterIdPresent() {
     val server1 = KafkaServerStartable.fromProps(props1)
     server1.startup()
 

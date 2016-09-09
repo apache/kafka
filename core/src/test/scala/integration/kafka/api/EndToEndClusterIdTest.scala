@@ -52,7 +52,7 @@ object MockConsumerMetricsReporter {
 
 class MockConsumerMetricsReporter extends MockMetricsReporter with ClusterResourceListener {
 
-  override def onClusterUpdate(clusterMetadata: ClusterResource) {
+  override def onUpdate(clusterMetadata: ClusterResource) {
     MockConsumerMetricsReporter.CLUSTER_META.set(clusterMetadata)
   }
 }
@@ -63,7 +63,7 @@ object MockProducerMetricsReporter {
 
 class MockProducerMetricsReporter extends MockMetricsReporter with ClusterResourceListener {
 
-  override def onClusterUpdate(clusterMetadata: ClusterResource) {
+  override def onUpdate(clusterMetadata: ClusterResource) {
     MockProducerMetricsReporter.CLUSTER_META.set(clusterMetadata)
   }
 }
@@ -74,7 +74,7 @@ object MockBrokerMetricsReporter {
 
 class MockBrokerMetricsReporter extends MockMetricsReporter with ClusterResourceListener {
 
-  override def onClusterUpdate(clusterMetadata: ClusterResource) {
+  override def onUpdate(clusterMetadata: ClusterResource) {
     MockBrokerMetricsReporter.CLUSTER_META.set(clusterMetadata)
   }
 }

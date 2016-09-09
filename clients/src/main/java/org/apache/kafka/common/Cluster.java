@@ -38,7 +38,7 @@ public final class Cluster {
     private final Map<String, List<PartitionInfo>> availablePartitionsByTopic;
     private final Map<Integer, List<PartitionInfo>> partitionsByNode;
     private final Map<Integer, Node> nodesById;
-    private String clusterId;
+    private final ClusterResource clusterResource;
 
     /**
      * Create a new cluster with the given nodes and partitions
@@ -80,7 +80,7 @@ public final class Cluster {
                     Set<String> unauthorizedTopics,
                     Set<String> internalTopics) {
         this.isBootstrapConfigured = isBootstrapConfigured;
-        this.clusterId = clusterId;
+        this.clusterResource = new ClusterResource(clusterId);
         // make a randomized, unmodifiable copy of the nodes
         List<Node> copy = new ArrayList<>(nodes);
         Collections.shuffle(copy);
@@ -260,16 +260,12 @@ public final class Cluster {
         return isBootstrapConfigured;
     }
 
-    public String clusterId() {
-        return clusterId;
-    }
-
-    public ClusterResource getClusterResource() {
-        return new ClusterResource(clusterId());
+    public ClusterResource clusterResource() {
+        return clusterResource;
     }
     @Override
     public String toString() {
-        return "Cluster(nodes = " + this.nodes + ", partitions = " + this.partitionsByTopicPartition.values() + ")";
+        return "Cluster(id = " + clusterResource.getClusterId() + ", nodes = " + this.nodes + ", partitions = " + this.partitionsByTopicPartition.values() + ")";
     }
 
 }

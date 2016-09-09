@@ -22,15 +22,14 @@ import org.apache.kafka.common.ClusterResource;
 
 public class MockClusterResourceListener implements ClusterResourceListener {
 
-
     private ClusterResource clusterResource;
 
     @Override
-    public void onClusterUpdate(ClusterResource clusterMetadata) {
-        this.clusterResource = clusterMetadata;
+    public void onUpdate(ClusterResource clusterResource) {
+        this.clusterResource = clusterResource;
     }
 
-    public ClusterResource getClusterResource() {
+    public ClusterResource clusterResource() {
         return clusterResource;
     }
 }

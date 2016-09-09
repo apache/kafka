@@ -60,7 +60,7 @@ public final class Metadata {
     /* Topics with expiry time */
     private final Map<String, Long> topics;
     private final List<Listener> listeners;
-    private ClusterResourceListeners clusterResourceListeners;
+    private final ClusterResourceListeners clusterResourceListeners;
     private boolean needMetadataForAllTopics;
     private final boolean topicExpiryEnabled;
 
@@ -72,7 +72,11 @@ public final class Metadata {
     }
 
     public Metadata(long refreshBackoffMs, long metadataExpireMs) {
-        this(refreshBackoffMs, metadataExpireMs, false);
+        this(refreshBackoffMs, metadataExpireMs, false, new ClusterResourceListeners());
+    }
+
+    public Metadata(long refreshBackoffMs, long metadataExpireMs, boolean topicExpiryEnabled) {
+        this(refreshBackoffMs, metadataExpireMs, topicExpiryEnabled, new ClusterResourceListeners());
     }
 
     /**
@@ -81,8 +85,9 @@ public final class Metadata {
      *        polling
      * @param metadataExpireMs The maximum amount of time that metadata can be retained without refresh
      * @param topicExpiryEnabled If true, enable expiry of unused topics
+     * @param clusterResourceListeners List of ClusterResourceListeners which will receive metadata updates.
      */
-    public Metadata(long refreshBackoffMs, long metadataExpireMs, boolean topicExpiryEnabled) {
+    public Metadata(long refreshBackoffMs, long metadataExpireMs, boolean topicExpiryEnabled, ClusterResourceListeners clusterResourceListeners) {
         this.refreshBackoffMs = refreshBackoffMs;
         this.metadataExpireMs = metadataExpireMs;
         this.topicExpiryEnabled = topicExpiryEnabled;
@@ -93,7 +98,7 @@ public final class Metadata {
         this.needUpdate = false;
         this.topics = new HashMap<>();
         this.listeners = new ArrayList<>();
-        this.clusterResourceListeners = ClusterResourceListeners.empty();
+        this.clusterResourceListeners = clusterResourceListeners;
         this.needMetadataForAllTopics = false;
     }
 
@@ -225,7 +230,7 @@ public final class Metadata {
         }
 
         if (cluster != null) {
-            clusterResourceListeners.onClusterUpdate(cluster.getClusterResource());
+            clusterResourceListeners.onUpdate(cluster.clusterResource());
         }
 
         notifyAll();
@@ -290,10 +295,6 @@ public final class Metadata {
         this.listeners.remove(listener);
     }
 
-    public void setClusterResourceListeners(ClusterResourceListeners clusterResourceListeners) {
-        this.clusterResourceListeners = clusterResourceListeners;
-    }
-
     /**
      * MetadataUpdate Listener
      */
@@ -308,7 +309,7 @@ public final class Metadata {
         Set<String> internalTopics = Collections.emptySet();
         String clusterId = MetadataResponse.NO_CLUSTER_ID;
         if (cluster != null) {
-            clusterId = cluster.clusterId();
+            clusterId = cluster.clusterResource().getClusterId();
             internalTopics = cluster.internalTopics();
             unauthorizedTopics.addAll(cluster.unauthorizedTopics());
             unauthorizedTopics.retainAll(this.topics.keySet());
