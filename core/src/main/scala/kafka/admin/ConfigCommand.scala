@@ -176,6 +176,7 @@ object ConfigCommand {
             .withValuesSeparatedBy(',')
     val helpOpt = parser.accepts("help", "Print usage information.")
     val forceOpt = parser.accepts("force", "Suppress console prompts")
+    val jsonOpt = parser.accepts("json", "Configurations can be specified as JSON. This allows the comma separated lists to be passed as values.")
     val options = parser.parse(args : _*)
 
     val allOpts: Set[OptionSpec[_]] = Set(alterOpt, describeOpt, entityType, entityName, addConfig, deleteConfig, helpOpt)
@@ -191,17 +192,14 @@ object ConfigCommand {
       CommandLineUtils.checkInvalidArgs(parser, options, alterOpt, Set(describeOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, Set(alterOpt, addConfig, deleteConfig))
       if(options.has(alterOpt)) {
-        if(! options.has(entityName))
-          throw new IllegalArgumentException("--entity-name must be specified with --alter")
+        require(options.has(entityName), "--entity-name must be specified with --alter")
 
         val isAddConfigPresent: Boolean = options.has(addConfig)
         val isDeleteConfigPresent: Boolean = options.has(deleteConfig)
         if(! isAddConfigPresent && ! isDeleteConfigPresent)
           throw new IllegalArgumentException("At least one of --add-config or --delete-config must be specified with --alter")
       }
-      if(ConfigType.all.contains(options.valueOf(entityType))) {
-        throw new IllegalArgumentException(s"--entity-type must be one of ${ConfigType.all}")
-      }
+      require(ConfigType.all.contains(options.valueOf(entityType), s"--entity-type must be one of ${ConfigType.all}"))
     }
   }
 }
