@@ -137,7 +137,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     assertEquals(actual.values.flatten.toSeq.distinct.sorted, Seq(101, 102))
 
     //Then command should have taken more than 1 second to complete as it is throttled
-    assertTrue(s"Expected replication to be > 800ms but was $took", took > expectedDurationSecs * 0.9 * 1000)
+    assertTrue(s"Expected replication to be > ${expectedDurationSecs * 0.9 * 1000} but was $took", took > expectedDurationSecs * 0.9 * 1000)
     assertTrue(s"Expected replication to be < 20s but was $took", took < expectedDurationSecs * 2 * 1000)
   }
 

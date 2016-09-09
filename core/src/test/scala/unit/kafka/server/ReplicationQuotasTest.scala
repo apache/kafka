@@ -36,7 +36,9 @@ import org.junit.{After, Before, Test}
 import scala.collection.JavaConverters._
 
 /**
-  * This test will fail if the quota is < 1MB/s as 1MB is the default for replica.fetch.max.bytes.
+  * This is the main test which ensure Replication Quotas work correctly.
+  *
+  * The test will fail if the quota is < 1MB/s as 1MB is the default for replica.fetch.max.bytes.
   * So with a throttle of 100KB/s, 1 fetch of 1 partition would fill 10s of quota. In turn causing
   * the throttled broker to pause for > 10s
   *
