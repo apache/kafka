@@ -97,7 +97,7 @@ public class ThreadCacheTest {
         Runtime runtime = Runtime.getRuntime();
         double factor = 0.05;
         double systemFactor = 2.5;
-        long desiredCacheSize = Math.min(1024 * 1024L, runtime.maxMemory());
+        long desiredCacheSize = Math.min(100 * 1024 * 1024L, runtime.maxMemory());
         int keySizeBytes = 8;
         int valueSizeBytes = 100;
 
@@ -109,7 +109,7 @@ public class ThreadCacheTest {
         Runtime runtime = Runtime.getRuntime();
         double factor = 0.05;
         double systemFactor = 1.5;
-        long desiredCacheSize = Math.min(1024 * 1024L, runtime.maxMemory());
+        long desiredCacheSize = Math.min(100 * 1024 * 1024L, runtime.maxMemory());
         int keySizeBytes = 8;
         int valueSizeBytes = 1000;
 
