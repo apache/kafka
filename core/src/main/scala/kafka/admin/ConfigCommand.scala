@@ -41,7 +41,7 @@ object ConfigCommand {
     val opts = new ConfigCommandOptions(args)
 
     if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(opts.parser, "Add/Remove entity (topics/clients/broker) configs")
+      CommandLineUtils.printUsageAndDie(opts.parser, "Add/Remove entity config for a topic, client or broker")
 
     opts.checkArgs()
 
