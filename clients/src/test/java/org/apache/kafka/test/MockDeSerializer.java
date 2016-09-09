@@ -16,31 +16,38 @@
  */
 package org.apache.kafka.test;
 
-import org.apache.kafka.common.metrics.KafkaMetric;
-import org.apache.kafka.common.metrics.MetricsReporter;
+import org.apache.kafka.common.ClusterResource;
+import org.apache.kafka.common.ClusterResourceListener;
+import org.apache.kafka.common.serialization.Deserializer;
 
-import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
-public class MockMetricsReporter implements MetricsReporter {
+public class MockDeserializer implements ClusterResourceListener, Deserializer<byte[]> {
     public static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
     public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
+    public static final AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
+    public static final AtomicBoolean IS_CLUSTER_ID_PRESENT_BEFORE_DESERIALIZE = new AtomicBoolean();
 
-    public MockMetricsReporter() {
 
-    }
-
-    @Override
-    public void init(List<KafkaMetric> metrics) {
+    public MockDeserializer() {
         INIT_COUNT.incrementAndGet();
     }
 
     @Override
-    public void metricChange(KafkaMetric metric) {}
+    public void configure(Map<String, ?> configs, boolean isKey) {
+    }
 
     @Override
-    public void metricRemoval(KafkaMetric metric) {}
+    public byte[] deserialize(String topic, byte[] data) {
+        if (CLUSTER_META.get() != null
+                && CLUSTER_META.get().getClusterId() != null
+                && CLUSTER_META.get().getClusterId().length() == 48)
+            IS_CLUSTER_ID_PRESENT_BEFORE_DESERIALIZE.set(true);
+        return data;
+    }
 
     @Override
     public void close() {
@@ -48,8 +55,7 @@ public class MockMetricsReporter implements MetricsReporter {
     }
 
     @Override
-    public void configure(Map<String, ?> configs) {
-
+    public void onClusterUpdate(ClusterResource clusterMetadata) {
+        CLUSTER_META.set(clusterMetadata);
     }
-
 }

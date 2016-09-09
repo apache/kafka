@@ -21,6 +21,7 @@ import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -28,6 +29,8 @@ public class MockSerializer implements ClusterResourceListener, Serializer<byte[
     public static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
     public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
     public static final AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
+    public static final AtomicBoolean IS_CLUSTER_ID_PRESENT_BEFORE_SERIALIZE = new AtomicBoolean();
+
 
 
     public MockSerializer() {
@@ -40,6 +43,10 @@ public class MockSerializer implements ClusterResourceListener, Serializer<byte[
 
     @Override
     public byte[] serialize(String topic, byte[] data) {
+        if (CLUSTER_META.get() != null
+                && CLUSTER_META.get().getClusterId() != null
+                && CLUSTER_META.get().getClusterId().length() == 48)
+            IS_CLUSTER_ID_PRESENT_BEFORE_SERIALIZE.set(true);
         return data;
     }
 
