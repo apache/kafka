@@ -20,11 +20,11 @@ import java.util.Map;
  * 
  */
 final class ClusterConnectionStates {
-    private final long reconnectBackoffMs;
+    private final ReconnectAttemptPolicy reconnectAttemptPolicy;
     private final Map<String, NodeConnectionState> nodeState;
 
-    public ClusterConnectionStates(long reconnectBackoffMs) {
-        this.reconnectBackoffMs = reconnectBackoffMs;
+    public ClusterConnectionStates(ReconnectAttemptPolicy reconnectAttemptPolicy) {
+        this.reconnectAttemptPolicy = reconnectAttemptPolicy;
         this.nodeState = new HashMap<String, NodeConnectionState>();
     }
 
@@ -40,7 +40,7 @@ final class ClusterConnectionStates {
         if (state == null)
             return true;
         else
-            return state.state == ConnectionState.DISCONNECTED && now - state.lastConnectAttemptMs >= this.reconnectBackoffMs;
+            return state.state == ConnectionState.DISCONNECTED && now - state.lastConnectAttemptMs >= state.reconnectBackoffMs;
     }
 
     /**
@@ -53,7 +53,7 @@ final class ClusterConnectionStates {
         if (state == null)
             return false;
         else
-            return state.state == ConnectionState.DISCONNECTED && now - state.lastConnectAttemptMs < this.reconnectBackoffMs;
+            return state.state == ConnectionState.DISCONNECTED && now - state.lastConnectAttemptMs < state.reconnectBackoffMs;
     }
 
     /**
@@ -68,7 +68,7 @@ final class ClusterConnectionStates {
         if (state == null) return 0;
         long timeWaited = now - state.lastConnectAttemptMs;
         if (state.state == ConnectionState.DISCONNECTED) {
-            return Math.max(this.reconnectBackoffMs - timeWaited, 0);
+            return Math.max(state.reconnectBackoffMs - timeWaited, 0);
         } else {
             // When connecting or connected, we should be able to delay indefinitely since other events (connection or
             // data acked) will cause a wakeup once data can be sent.
@@ -82,7 +82,11 @@ final class ClusterConnectionStates {
      * @param now The current time.
      */
     public void connecting(String id, long now) {
-        nodeState.put(id, new NodeConnectionState(ConnectionState.CONNECTING, now));
+        // a new scheduler should not be created for a new connection attempt.
+        ReconnectAttemptPolicy.ReconnectAttemptScheduler scheduler = nodeState.containsKey(id) ?
+                nodeState.get(id).reconnectAttemptScheduler :
+                reconnectAttemptPolicy.newScheduler();
+        nodeState.put(id, new NodeConnectionState(ConnectionState.CONNECTING, now, scheduler));
     }
 
     /**
@@ -101,6 +105,9 @@ final class ClusterConnectionStates {
     public void connected(String id) {
         NodeConnectionState nodeState = nodeState(id);
         nodeState.state = ConnectionState.CONNECTED;
+        // always refresh the scheduler after connecting successfully.
+        nodeState.reconnectAttemptScheduler = reconnectAttemptPolicy.newScheduler();
+        nodeState.reconnectBackoffMs = nodeState.reconnectAttemptScheduler.nextReconnectBackoffMs();
     }
 
     /**
@@ -111,6 +118,7 @@ final class ClusterConnectionStates {
     public void disconnected(String id, long now) {
         NodeConnectionState nodeState = nodeState(id);
         nodeState.state = ConnectionState.DISCONNECTED;
+        nodeState.reconnectBackoffMs = nodeState.reconnectAttemptScheduler.nextReconnectBackoffMs();
         nodeState.lastConnectAttemptMs = now;
     }
 
@@ -152,10 +160,13 @@ final class ClusterConnectionStates {
 
         ConnectionState state;
         long lastConnectAttemptMs;
+        long reconnectBackoffMs;
+        ReconnectAttemptPolicy.ReconnectAttemptScheduler reconnectAttemptScheduler;
 
-        public NodeConnectionState(ConnectionState state, long lastConnectAttempt) {
+        public NodeConnectionState(ConnectionState state, long lastConnectAttempt, ReconnectAttemptPolicy.ReconnectAttemptScheduler reconnectAttemptScheduler) {
             this.state = state;
             this.lastConnectAttemptMs = lastConnectAttempt;
+            this.reconnectAttemptScheduler = reconnectAttemptScheduler;
         }
 
         public String toString() {

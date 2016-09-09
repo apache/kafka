@@ -228,7 +228,7 @@ object AdminClient {
       metadata,
       "admin-" + AdminClientIdSequence.getAndIncrement(),
       DefaultMaxInFlightRequestsPerConnection,
-      DefaultReconnectBackoffMs,
+      new ConstantReconnectAttemptPolicy(DefaultReconnectBackoffMs),
       DefaultSendBufferBytes,
       DefaultReceiveBufferBytes,
       DefaultRequestTimeoutMs,

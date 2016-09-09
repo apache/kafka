@@ -139,6 +139,21 @@ public class ProducerConfig extends AbstractConfig {
                                                     + "These methods can be blocked either because the buffer is full or metadata unavailable."
                                                     + "Blocking in the user-supplied serializers or partitioner will not be counted against this timeout.";
 
+    /**
+     * <code>reconnect.attempts.policy</code>
+     */
+    public static final String RECONNECT_ATTEMPTS_POLICY_CLASS_CONFIG = CommonClientConfigs.RECONNECT_ATTEMPTS_POLICY_CLASS_CONFIG;
+
+    /**
+     * <code>reconnect.exponential.baseDelayMs/code>
+     */
+    public static final String RECONNECT_EXPONENTIAL_BASE_DELAY_MS_CONFIG = CommonClientConfigs.RECONNECT_EXPONENTIAL_BASE_DELAY_MS_CONFIG;
+
+    /**
+     * <code>reconnect.exponential.maxDelayMs</code>
+     */
+    public static final String RECONNECT_EXPONENTIAL_MAX_DELAY_MS_CONFIG = CommonClientConfigs.RECONNECT_EXPONENTIAL_MAX_DELAY_MS_CONFIG;
+
     /** <code>block.on.buffer.full</code> */
     /**
      * @deprecated This config will be removed in a future release. Please use {@link #MAX_BLOCK_MS_CONFIG}.
@@ -245,6 +260,23 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(RECONNECT_BACKOFF_MS_CONFIG, Type.LONG, 50L, atLeast(0L), Importance.LOW, CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC)
                                 .define(METRIC_REPORTER_CLASSES_CONFIG, Type.LIST, "", Importance.LOW, CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
                                 .define(RETRY_BACKOFF_MS_CONFIG, Type.LONG, 100L, atLeast(0L), Importance.LOW, CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
+                                .define(RECONNECT_ATTEMPTS_POLICY_CLASS_CONFIG,
+                                        Type.CLASS,
+                                        "org.apache.kafka.clients.ConstantReconnectAttemptPolicy",
+                                        Importance.HIGH,
+                                        CommonClientConfigs.RECONNECT_ATTEMPTS_POLICY_CLASS_DOC)
+                                .define(RECONNECT_EXPONENTIAL_BASE_DELAY_MS_CONFIG,
+                                        Type.LONG,
+                                        50L,
+                                        atLeast(0L),
+                                        Importance.LOW,
+                                        CommonClientConfigs.RECONNECT_EXPONENTIAL_BASE_DELAY_MS_DOC)
+                                .define(RECONNECT_EXPONENTIAL_MAX_DELAY_MS_CONFIG,
+                                        Type.LONG,
+                                        5000L,
+                                        atLeast(0L),
+                                        Importance.LOW,
+                                        CommonClientConfigs.RECONNECT_EXPONENTIAL_MAX_DELAY_MS_DOC)
                                 .define(METADATA_FETCH_TIMEOUT_CONFIG,
                                         Type.LONG,
                                         60 * 1000,
