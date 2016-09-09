@@ -18,6 +18,7 @@ import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
+import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient.PollCondition;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
@@ -989,9 +990,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Do one round of polling. In addition to checking for new data, this does any needed
-     * heart-beating, auto-commits, and offset updates.
-     * @param timeout The maximum time to block in the underlying poll
+     * Do one round of polling. In addition to checking for new data, this does any needed offset commits
+     * (if auto-commit is enabled), and offset resets (if an offset reset policy is defined).
+     * @param timeout The maximum time to block in the underlying call to {@link ConsumerNetworkClient#poll(long)}.
      * @return The fetched records (may be empty)
      */
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(long timeout) {
@@ -1010,8 +1011,23 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         // send any new fetches (won't resend pending fetches)
         fetcher.sendFetches();
 
+        // if no fetches could be sent at the moment (which can happen if a partition leader is in the
+        // blackout period following a disconnect, or if the partition leader is unknown), then we only
+        // block for the retry backoff duration.
+        if (!fetcher.hasInFlightFetches())
+            timeout = Math.min(timeout, retryBackoffMs);
+
         long now = time.milliseconds();
-        client.poll(Math.min(coordinator.timeToNextPoll(now), timeout), now);
+        long pollTimeout = Math.min(coordinator.timeToNextPoll(now), timeout);
+
+        client.poll(pollTimeout, now, new PollCondition() {
+            @Override
+            public boolean shouldBlock() {
+                // since a fetch might be completed by the background thread, we need this poll condition
+                // to ensure that we do not block unnecessarily in poll()
+                return !fetcher.hasCompletedFetches() && fetcher.hasInFlightFetches();
+            }
+        });
 
         // after the long poll, we should check whether the group needs to rebalance
         // prior to returning data so that the group can stabilize faster
