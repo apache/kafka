@@ -39,8 +39,9 @@ public class SubscriptionStateTest {
     private final SubscriptionState state = new SubscriptionState(OffsetResetStrategy.EARLIEST);
     private final String topic = "test";
     private final String topic1 = "test1";
-    private final TopicPartition tp0 = new TopicPartition("test", 0);
-    private final TopicPartition tp1 = new TopicPartition("test", 1);
+    private final TopicPartition tp0 = new TopicPartition(topic, 0);
+    private final TopicPartition tp1 = new TopicPartition(topic, 1);
+    private final TopicPartition t1p0 = new TopicPartition(topic1, 0);
     private final MockRebalanceListener rebalanceListener = new MockRebalanceListener();
 
     @Test
@@ -57,6 +58,62 @@ public class SubscriptionStateTest {
         assertTrue(state.assignedPartitions().isEmpty());
         assertFalse(state.isAssigned(tp0));
         assertFalse(state.isFetchable(tp0));
+    }
+
+    @Test
+    public void partitionAssignmentChangeOnTopicSubscription() {
+        state.assignFromUser(new HashSet<>(Arrays.asList(tp0, tp1)));
+        // assigned partitions should immediately change
+        assertEquals(2, state.assignedPartitions().size());
+        assertTrue(state.assignedPartitions().contains(tp0));
+        assertTrue(state.assignedPartitions().contains(tp1));
+
+        state.unsubscribe();
+        // assigned partitions should immediately change
+        assertTrue(state.assignedPartitions().isEmpty());
+
+        state.subscribe(singleton(topic1), rebalanceListener);
+        // assigned partitions should remain unchanged
+        assertTrue(state.assignedPartitions().isEmpty());
+
+        state.assignFromSubscribed(asList(t1p0));
+        // assigned partitions should immediately change
+        assertEquals(singleton(t1p0), state.assignedPartitions());
+
+        state.subscribe(singleton(topic), rebalanceListener);
+        // assigned partitions should remain unchanged
+        assertEquals(singleton(t1p0), state.assignedPartitions());
+
+        state.unsubscribe();
+        // assigned partitions should immediately change
+        assertTrue(state.assignedPartitions().isEmpty());
+    }
+
+    @Test
+    public void partitionAssignmentChangeOnPatternSubscription() {
+        state.subscribe(Pattern.compile(".*"), rebalanceListener);
+        // assigned partitions should remain unchanged
+        assertTrue(state.assignedPartitions().isEmpty());
+
+        state.subscribeFromPattern(new HashSet<>(Arrays.asList(topic, topic1)));
+        // assigned partitions should remain unchanged
+        assertTrue(state.assignedPartitions().isEmpty());
+
+        state.assignFromSubscribed(asList(tp1));
+        // assigned partitions should immediately change
+        assertEquals(singleton(tp1), state.assignedPartitions());
+
+        state.subscribe(Pattern.compile(".*t"), rebalanceListener);
+        // assigned partitions should remain unchanged
+        assertEquals(singleton(tp1), state.assignedPartitions());
+
+        state.subscribeFromPattern(singleton(topic));
+        // assigned partitions should remain unchanged
+        assertEquals(singleton(tp1), state.assignedPartitions());
+
+        state.unsubscribe();
+        // assigned partitions should immediately change
+        assertTrue(state.assignedPartitions().isEmpty());
     }
 
     @Test
@@ -217,5 +274,5 @@ public class SubscriptionStateTest {
         }
 
     }
-    
+
 }

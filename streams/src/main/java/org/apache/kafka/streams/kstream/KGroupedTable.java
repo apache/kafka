@@ -59,7 +59,7 @@ public interface KGroupedTable<K, V> {
      *
      * @param initializer   the instance of {@link Initializer}
      * @param adder         the instance of {@link Aggregator} for addition
-     * @param substractor   the instance of {@link Aggregator} for subtraction
+     * @param subtractor    the instance of {@link Aggregator} for subtraction
      * @param aggValueSerde value serdes for materializing the aggregated table,
      *                      if not specified the default serdes defined in the configs will be used
      * @param storeName     the name of the underlying {@link KTable} state store
@@ -69,7 +69,7 @@ public interface KGroupedTable<K, V> {
      */
     <T> KTable<K, T> aggregate(Initializer<T> initializer,
                                Aggregator<K, V, T> adder,
-                               Aggregator<K, V, T> substractor,
+                               Aggregator<K, V, T> subtractor,
                                Serde<T> aggValueSerde,
                                String storeName);
 
@@ -83,7 +83,7 @@ public interface KGroupedTable<K, V> {
      *
      * @param initializer   the instance of {@link Initializer}
      * @param adder         the instance of {@link Aggregator} for addition
-     * @param substractor   the instance of {@link Aggregator} for subtraction
+     * @param subtractor   the instance of {@link Aggregator} for subtraction
      * @param storeName     the name of the underlying {@link KTable} state store
      * @param <T>           the value type of the aggregated {@link KTable}
      * @return a {@link KTable} with same key and aggregated value type {@code T},
@@ -91,7 +91,7 @@ public interface KGroupedTable<K, V> {
      */
     <T> KTable<K, T> aggregate(Initializer<T> initializer,
                                Aggregator<K, V, T> adder,
-                               Aggregator<K, V, T> substractor,
+                               Aggregator<K, V, T> subtractor,
                                String storeName);
 
     /**
