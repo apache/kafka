@@ -84,8 +84,8 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
       case "" => Seq()
       case "*" => allReplicas
       case _ => configValue.trim
-        .split(":")
-        .map(_.split(","))
+        .split(",")
+        .map(_.split(":"))
         .filter(_ (1).toInt == brokerId) //Filter this replica
         .map(_ (0).toInt).toSeq //convert to list of partition ids
     }
@@ -145,6 +145,6 @@ object ThrottledReplicaValidator extends Validator {
   }
 
   private def isValid(proposed: String): Boolean = {
-    proposed.trim.equals("*") || proposed.trim.matches("([0-9]+,[0-9]+)?(:[0-9]+,[0-9]+)*")
+    proposed.trim.equals("*") || proposed.trim.matches("([0-9]+:[0-9]+)?(,[0-9]+:[0-9]+)*")
   }
 }

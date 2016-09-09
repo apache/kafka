@@ -410,8 +410,8 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
       // create a topic with a few config overrides and check that they are applied
       val maxMessageSize = 1024
       val retentionMs = 1000*1000
-      AdminUtils.createTopic(server.zkUtils, topic, partitions, 1, makeConfig(maxMessageSize, retentionMs, "0,101:1,102"))
-      checkConfig(maxMessageSize, retentionMs, "0,101:1,102")
+      AdminUtils.createTopic(server.zkUtils, topic, partitions, 1, makeConfig(maxMessageSize, retentionMs, "0:101,1:102"))
+      checkConfig(maxMessageSize, retentionMs, "0:101,1:102")
 
       // now double the config values for the topic and check that it is applied
       val newConfig: Properties = makeConfig(2 * maxMessageSize, 2 * retentionMs, "*")

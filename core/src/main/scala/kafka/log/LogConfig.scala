@@ -195,7 +195,7 @@ object LogConfig {
     "a message and the timestamp specified in the message. If message.timestamp.type=CreateTime, a message will be rejected " +
     "if the difference in timestamp exceeds this threshold. This configuration is ignored if message.timestamp.type=LogAppendTime."
   val ThrottledReplicasListDoc = "A list of replicas for which log replication should be throttled. The list should describe a set of " +
-    "replicas in the form [PartitionId]-[BrokerId]:[PartitionId]-[BrokerId]:..."
+    "replicas in the form [PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:..."
 
   private class LogConfigDef extends ConfigDef {
 

@@ -169,7 +169,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val props: Properties = new Properties()
 
     //Given
-    props.put(ThrottledReplicasListProp, "0,101:0,102:1,101:1,102")
+    props.put(ThrottledReplicasListProp, "0:101,0:102,1:101,1:102")
 
     //When/Then
     assertEquals(Seq(0,1), configHandler.parseThrottledPartitions(props, 102))
