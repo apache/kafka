@@ -73,7 +73,7 @@ class MirrorMaker(KafkaPathResolverMixin, Service):
 
     def __init__(self, context, num_nodes, source, target, whitelist=None, blacklist=None, num_streams=1,
                  new_consumer=False, consumer_timeout_ms=None, offsets_storage="kafka",
-                 offset_commit_interval_ms=60000):
+                 offset_commit_interval_ms=60000, log_level="DEBUG", interceptor_classes=None):
         """
         MirrorMaker mirrors messages from one or more source clusters to a single destination cluster.
 
@@ -91,7 +91,7 @@ class MirrorMaker(KafkaPathResolverMixin, Service):
             offset_commit_interval_ms:  how frequently the mirror maker consumer commits offsets
         """
         super(MirrorMaker, self).__init__(context, num_nodes=num_nodes)
-        self.log_level = "DEBUG"
+        self.log_level = log_level
         self.new_consumer = new_consumer
         self.consumer_timeout_ms = consumer_timeout_ms
         self.num_streams = num_streams
@@ -108,6 +108,7 @@ class MirrorMaker(KafkaPathResolverMixin, Service):
             raise Exception("offsets_storage should be 'kafka' or 'zookeeper'. Instead found %s" % self.offsets_storage)
 
         self.offset_commit_interval_ms = offset_commit_interval_ms
+        self.interceptor_classes = interceptor_classes
 
     def start_cmd(self, node):
         cmd = "export LOG_DIR=%s;" % MirrorMaker.LOG_DIR
