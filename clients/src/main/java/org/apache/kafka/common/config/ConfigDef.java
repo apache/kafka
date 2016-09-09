@@ -944,7 +944,7 @@ public class ConfigDef {
 
         for (ConfigKey def : configs) {
 
-            if(def.group != null) {
+            if (def.group != null) {
                 if (!lastKeyGroupName.equalsIgnoreCase(def.group)) {
                     b.append(def.group);
                     b.append("\n");
@@ -979,7 +979,7 @@ public class ConfigDef {
     /**
      * Shared content on Rst and Enriched Rst.
      */
-    private StringBuilder getConfigKeyDetails(ConfigKey def){
+    private StringBuilder getConfigKeyDetails(ConfigKey def) {
         StringBuilder b = new StringBuilder();
 
         b.append("``");
