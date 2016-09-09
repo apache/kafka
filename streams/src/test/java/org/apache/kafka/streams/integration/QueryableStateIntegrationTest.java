@@ -40,11 +40,13 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.StreamsMetadata;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import static org.junit.Assert.fail;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
@@ -67,9 +69,11 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
+
 
 
 @RunWith(Parameterized.class)
@@ -79,15 +83,17 @@ public class QueryableStateIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER =
         new EmbeddedKafkaCluster(NUM_BROKERS);
     private final MockTime mockTime = CLUSTER.time;
-    private static final int NUM_PARTITIONS = 2;
-    private static final int NUM_REPLICAS = NUM_BROKERS;
-    private static final long WINDOW_SIZE = 60000L;
     private String streamOne = "stream-one";
+    private String streamTwo = "stream-two";
+    private String streamThree = "stream-three";
     private String streamConcurrent = "stream-concurrent";
     private String outputTopic = "output";
     private String outputTopicConcurrent = "output-concurrent";
-    private String streamThree = "stream-three";
     private String outputTopicThree = "output-three";
+    // sufficiently large window size such that everything falls into 1 window
+    private static final long WINDOW_SIZE = TimeUnit.MILLISECONDS.convert(2, TimeUnit.DAYS);
+    private static final int NUM_PARTITIONS = 2;
+    private static final int NUM_REPLICAS = NUM_BROKERS;
     private Properties streamsConfiguration;
     private List<String> inputValues;
     private Set<String> inputValuesKeys;
@@ -103,9 +109,11 @@ public class QueryableStateIntegrationTest {
         outputTopic = outputTopic + "-" + testNo;
         outputTopicConcurrent = outputTopicConcurrent + "-" + testNo;
         outputTopicThree = outputTopicThree + "-" + testNo;
+        streamTwo = streamTwo + "-" + testNo;
         CLUSTER.createTopic(streamOne);
         CLUSTER.createTopic(streamConcurrent);
-        CLUSTER.createTopic(streamThree, NUM_PARTITIONS, NUM_REPLICAS);
+        CLUSTER.createTopic(streamTwo, NUM_PARTITIONS, NUM_REPLICAS);
+        CLUSTER.createTopic(streamThree, 4, 1);
         CLUSTER.createTopic(outputTopic);
         CLUSTER.createTopic(outputTopicConcurrent);
         CLUSTER.createTopic(outputTopicThree);
@@ -266,6 +274,9 @@ public class QueryableStateIntegrationTest {
                     final ReadOnlyKeyValueStore<String, Long> store;
                     try {
                         store = streamsWithKey.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+                    } catch (final InvalidStateStoreException e) {
+                        // rebalance
+                        return false;
                     } catch (final IllegalStateException e) {
                         // Kafka Streams instance may have closed but rebalance hasn't happened
                         return false;
@@ -452,6 +463,71 @@ public class QueryableStateIntegrationTest {
 
     }
 
+    @Test
+    public void shouldNotMakeStoreAvailableUntilAllStoresAvailable() throws Exception {
+        final KStreamBuilder builder = new KStreamBuilder();
+        final KStream<String, String> stream = builder.stream(streamThree);
+
+        final String storeName = "count-by-key";
+        stream.groupByKey().count(storeName);
+        kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
+        kafkaStreams.start();
+
+        final KeyValue<String, String> hello = KeyValue.pair("hello", "hello");
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+                streamThree,
+                Arrays.asList(hello, hello, hello, hello, hello, hello, hello, hello),
+                TestUtils.producerConfig(
+                        CLUSTER.bootstrapServers(),
+                        StringSerializer.class,
+                        StringSerializer.class,
+                        new Properties()),
+                mockTime);
+
+        final int maxWaitMs = 30000;
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                try {
+                    kafkaStreams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+                    return true;
+                } catch (InvalidStateStoreException ise) {
+                    return false;
+                }
+            }
+        }, maxWaitMs, "waiting for store " + storeName);
+
+        final ReadOnlyKeyValueStore<String, Long> store = kafkaStreams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return new Long(8).equals(store.get("hello"));
+            }
+        }, maxWaitMs, "wait for count to be 8");
+
+        // close stream
+        kafkaStreams.close();
+
+        // start again
+        kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
+        kafkaStreams.start();
+
+        // make sure we never get any value other than 8 for hello
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                try {
+                    assertEquals(Long.valueOf(8L), kafkaStreams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore()).get("hello"));
+                    return true;
+                } catch (InvalidStateStoreException ise) {
+                    return false;
+                }
+            }
+        }, maxWaitMs, "waiting for store " + storeName);
+
+    }
+
     private void verifyRangeAndAll(final Set<KeyValue<String, Long>> expectedCount,
                                    final ReadOnlyKeyValueStore<String, Long> myCount) {
         final Set<KeyValue<String, Long>> countRangeResults = new TreeSet<>(stringLongComparator);
@@ -542,10 +618,8 @@ public class QueryableStateIntegrationTest {
             final Long value = keyValueStore.get(key);
             if (value != null) {
                 countState.put(key, value);
-            } else {
-                if (failIfKeyNotFound) {
-                    fail("Key not found " + key);
-                }
+            } else if (failIfKeyNotFound) {
+                fail("Key not found " + key);
             }
         }
 
@@ -553,10 +627,6 @@ public class QueryableStateIntegrationTest {
             if (expectedWindowedCount.containsKey(actualWindowStateEntry.getKey())) {
                 final Long expectedValue = expectedWindowedCount.get(actualWindowStateEntry.getKey());
                 assertTrue(actualWindowStateEntry.getValue() >= expectedValue);
-            } else {
-                if (failIfKeyNotFound) {
-                    fail("Key not found in window store " + actualWindowStateEntry.getKey() + " value=" + actualWindowStateEntry.getValue());
-                }
             }
             // return this for next round of comparisons
             expectedWindowedCount.put(actualWindowStateEntry.getKey(), actualWindowStateEntry.getValue());
@@ -566,10 +636,6 @@ public class QueryableStateIntegrationTest {
             if (expectedCount.containsKey(actualCountStateEntry.getKey())) {
                 final Long expectedValue = expectedCount.get(actualCountStateEntry.getKey());
                 assertTrue(actualCountStateEntry.getValue() >= expectedValue);
-            } else {
-                if (failIfKeyNotFound) {
-                    fail("Key not found in key value store " + actualCountStateEntry.getKey());
-                }
             }
             // return this for next round of comparisons
             expectedCount.put(actualCountStateEntry.getKey(), actualCountStateEntry.getValue());

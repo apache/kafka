@@ -163,7 +163,7 @@ public class ProcessorContextImpl implements InternalProcessorContext, RecordCol
     }
 
     /**
-     * @throws IllegalStateException if the task's record is null
+     * @throws IllegalStateException if partition is null
      */
     @Override
     public int partition() {
@@ -174,7 +174,7 @@ public class ProcessorContextImpl implements InternalProcessorContext, RecordCol
     }
 
     /**
-     * @throws IllegalStateException if the task's record is null
+     * @throws IllegalStateException if offset is null
      */
     @Override
     public long offset() {
@@ -185,7 +185,7 @@ public class ProcessorContextImpl implements InternalProcessorContext, RecordCol
     }
 
     /**
-     * @throws IllegalStateException if the task's record is null
+     * @throws IllegalStateException if timestamp is null
      */
     @Override
     public long timestamp() {

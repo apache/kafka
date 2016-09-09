@@ -44,6 +44,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -70,7 +71,7 @@ public class RocksDBWindowStoreTest {
     @SuppressWarnings("unchecked")
     protected <K, V> WindowStore<K, V> createWindowStore(ProcessorContext context, final boolean enableCaching) {
 
-        RocksDBWindowStoreSupplier supplier = new RocksDBWindowStoreSupplier<>(windowName, retentionPeriod, numSegments, true, intSerde, stringSerde, windowSize);
+        RocksDBWindowStoreSupplier supplier = new RocksDBWindowStoreSupplier<>(windowName, retentionPeriod, numSegments, true, intSerde, stringSerde, windowSize, true, Collections.<String, String>emptyMap());
         WindowStore<K, V> store;
         if (enableCaching) {
             store = (WindowStore<K, V>) supplier.get(new CacheFlushListener() {
@@ -82,7 +83,6 @@ public class RocksDBWindowStoreTest {
         } else {
             store = (WindowStore<K, V>) supplier.get();
         }
-
         store.init(context, store);
         return store;
     }

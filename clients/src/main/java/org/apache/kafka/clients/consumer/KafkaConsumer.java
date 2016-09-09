@@ -552,7 +552,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * A consumer is instantiated by providing a {@link java.util.Properties} object as configuration.
      * <p>
      * Valid configuration strings are documented at {@link ConsumerConfig}
-     * 
+     *
      * @param properties The consumer configuration properties
      */
     public KafkaConsumer(Properties properties) {
@@ -706,9 +706,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                   Metrics metrics,
                   SubscriptionState subscriptions,
                   Metadata metadata,
-                  boolean autoCommitEnabled,
-                  int autoCommitIntervalMs,
-                  int heartbeatIntervalMs,
                   long retryBackoffMs,
                   long requestTimeoutMs) {
         this.clientId = clientId;
@@ -872,6 +869,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void unsubscribe() {
         acquire();
         try {
+            // make sure the offsets of topic partitions the consumer is unsubscribing from
+            // are committed since there will be no following rebalance
+            this.coordinator.maybeAutoCommitOffsetsNow();
+
             log.debug("Unsubscribed all topics or patterns and assigned partitions");
             this.subscriptions.unsubscribe();
             this.coordinator.maybeLeaveGroup();
@@ -912,6 +913,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         throw new IllegalArgumentException("Topic partitions to assign to cannot have null or empty topic");
                     topics.add(topic);
                 }
+
+                // make sure the offsets of topic partitions the consumer is unsubscribing from
+                // are committed since there will be no following rebalance
+                this.coordinator.maybeAutoCommitOffsetsNow();
 
                 log.debug("Subscribed to partition(s): {}", Utils.join(partitions, ", "));
                 this.subscriptions.assignFromUser(new HashSet<>(partitions));

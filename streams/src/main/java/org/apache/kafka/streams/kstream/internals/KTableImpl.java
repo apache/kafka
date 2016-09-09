@@ -33,10 +33,12 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
 
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
+import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
 
@@ -416,10 +418,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public void materialize(KTableSource<K, ?> source) {
         synchronized (source) {
             if (!source.isMaterialized()) {
-                StateStoreSupplier storeSupplier =
-                        new KTableStoreSupplier<>(source.storeName, keySerde, valSerde, null);
+                StateStoreSupplier storeSupplier = new RocksDBKeyValueStoreSupplier<>(source.storeName,
+                                                                                      keySerde,
+                                                                                      valSerde,
+                                                                                      false,
+                                                                                      Collections.<String, String>emptyMap());
                 // mark this state as non internal hence it is read directly from a user topic
-                topology.addStateStore(storeSupplier, false, name);
+                topology.addStateStore(storeSupplier, name);
                 source.materialize();
             }
         }

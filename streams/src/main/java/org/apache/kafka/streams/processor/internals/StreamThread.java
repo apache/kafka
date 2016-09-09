@@ -106,6 +106,7 @@ public class StreamThread extends Thread {
 
     private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
     private boolean processStandbyRecords = false;
+    private AtomicBoolean initialized = new AtomicBoolean(false);
 
     private final long cacheSizeBytes;
     private ThreadCache cache;
@@ -118,6 +119,7 @@ public class StreamThread extends Thread {
                 addStandbyTasks();
                 lastCleanMs = time.milliseconds(); // start the cleaning cycle
                 streamsMetadataState.onChange(partitionAssignor.getPartitionsByHostState(), partitionAssignor.clusterMetadata());
+                initialized.set(true);
             } catch (Throwable t) {
                 rebalanceException = t;
                 throw t;
@@ -127,6 +129,7 @@ public class StreamThread extends Thread {
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> assignment) {
             try {
+                initialized.set(false);
                 commitAll();
                 lastCleanMs = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
             } catch (Throwable t) {
@@ -141,6 +144,10 @@ public class StreamThread extends Thread {
             }
         }
     };
+
+    public boolean isInitialized() {
+        return initialized.get();
+    }
 
     public StreamThread(TopologyBuilder builder,
                         StreamsConfig config,

@@ -20,10 +20,12 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 class NamedCache {
     private final String name;
@@ -179,8 +181,19 @@ class NamedCache {
         return cache.size();
     }
 
-    synchronized Set<Bytes> keySubSet(final Bytes from,  final Bytes to) {
-        return cache.navigableKeySet().subSet(from, true, to, true);
+    synchronized Iterator<Bytes> range(final Bytes from, final Bytes to) {
+        return keySetIterator(cache.navigableKeySet().subSet(from, true, to, true));
+    }
+
+    private Iterator<Bytes> keySetIterator(final Set<Bytes> keySet) {
+        final TreeSet<Bytes> copy = new TreeSet<>();
+        copy.addAll(keySet);
+        return copy.iterator();
+    }
+    
+
+    synchronized Iterator<Bytes> all() {
+        return keySetIterator(cache.navigableKeySet());
     }
 
     synchronized LRUCacheEntry first() {
@@ -195,10 +208,6 @@ class NamedCache {
             return null;
         }
         return tail.entry;
-    }
-
-    synchronized Set<Bytes> keySet() {
-        return cache.navigableKeySet();
     }
 
     synchronized long dirtySize() {

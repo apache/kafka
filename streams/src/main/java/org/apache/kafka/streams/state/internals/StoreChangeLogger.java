@@ -109,7 +109,7 @@ public class StoreChangeLogger<K, V> {
             }
             for (K k : this.dirty) {
                 V v = getter.get(k);
-                collector.send(new ProducerRecord<>(this.topic, this.partition, k, v), keySerializer, valueSerializer);
+                collector.send(new ProducerRecord<>(this.topic, this.partition, context.timestamp(), k, v), keySerializer, valueSerializer);
             }
             this.removed.clear();
             this.dirty.clear();

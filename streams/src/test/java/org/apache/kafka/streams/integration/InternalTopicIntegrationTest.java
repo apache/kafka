@@ -35,10 +35,12 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.TestUtils;
+import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -50,8 +52,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Tests related to internal topics in streams
@@ -65,6 +69,8 @@ public class InternalTopicIntegrationTest {
     private static final String DEFAULT_OUTPUT_TOPIC = "outputTopic";
     private static final int DEFAULT_ZK_SESSION_TIMEOUT_MS = 10 * 1000;
     private static final int DEFAULT_ZK_CONNECTION_TIMEOUT_MS = 8 * 1000;
+    private Properties streamsConfiguration;
+    private String applicationId = "compact-topics-integration-test";
 
     @BeforeClass
     public static void startKafkaCluster() throws Exception {
@@ -72,14 +78,20 @@ public class InternalTopicIntegrationTest {
         CLUSTER.createTopic(DEFAULT_OUTPUT_TOPIC);
     }
 
-    /**
-     * Validates that any state changelog topics are compacted
-     *
-     * @return true if topics have a valid config, false otherwise
-     */
-    private boolean isUsingCompactionForStateChangelogTopics() {
-        boolean valid = true;
+    @Before
+    public void before() {
+        streamsConfiguration = new Properties();
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
+        streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+    }
 
+
+    private Properties getTopicConfigProperties(final String changelog) {
         // Note: You must initialize the ZkClient with ZKStringSerializer.  If you don't, then
         // createTopic() will only seem to work (it will return without error).  The topic will exist in
         // only ZooKeeper and will be returned when listing topics, but Kafka itself does not create the
@@ -89,33 +101,28 @@ public class InternalTopicIntegrationTest {
             DEFAULT_ZK_SESSION_TIMEOUT_MS,
             DEFAULT_ZK_CONNECTION_TIMEOUT_MS,
             ZKStringSerializer$.MODULE$);
-        final boolean isSecure = false;
-        final ZkUtils zkUtils = new ZkUtils(zkClient, new ZkConnection(CLUSTER.zKConnectString()), isSecure);
+        try {
+            final boolean isSecure = false;
+            final ZkUtils zkUtils = new ZkUtils(zkClient, new ZkConnection(CLUSTER.zKConnectString()), isSecure);
 
-        final Map<String, Properties> topicConfigs = AdminUtils.fetchAllTopicConfigs(zkUtils);
-        final Iterator it = topicConfigs.iterator();
-        while (it.hasNext()) {
-            final Tuple2<String, Properties> topicConfig = (Tuple2<String, Properties>) it.next();
-            final String topic = topicConfig._1;
-            final Properties prop = topicConfig._2;
-
-            // state changelogs should be compacted
-            if (topic.endsWith(ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX)) {
-                if (!prop.containsKey(LogConfig.CleanupPolicyProp()) ||
-                    !prop.getProperty(LogConfig.CleanupPolicyProp()).equals(LogConfig.Compact())) {
-                    valid = false;
-                    break;
+            final Map<String, Properties> topicConfigs = AdminUtils.fetchAllTopicConfigs(zkUtils);
+            final Iterator it = topicConfigs.iterator();
+            while (it.hasNext()) {
+                final Tuple2<String, Properties> topicConfig = (Tuple2<String, Properties>) it.next();
+                final String topic = topicConfig._1;
+                final Properties prop = topicConfig._2;
+                if (topic.equals(changelog)) {
+                    return prop;
                 }
             }
+            return new Properties();
+        } finally {
+            zkClient.close();
         }
-        zkClient.close();
-        return valid;
     }
 
     @Test
     public void shouldCompactTopicsForStateChangelogs() throws Exception {
-        final List<String> inputValues = Arrays.asList("hello", "world", "world", "hello world");
-
         //
         // Step 1: Configure and start a simple word count topology
         //
@@ -154,6 +161,17 @@ public class InternalTopicIntegrationTest {
         //
         // Step 2: Produce some input data to the input topic.
         //
+        produceData(Arrays.asList("hello", "world", "world", "hello world"));
+
+        //
+        // Step 3: Verify the state changelog topics are compact
+        //
+        streams.close();
+        final Properties properties = getTopicConfigProperties(ProcessorStateManager.storeChangelogTopic(applicationId, "Counts"));
+        assertEquals(LogConfig.Compact(), properties.getProperty(LogConfig.CleanupPolicyProp()));
+    }
+
+    private void produceData(final List<String> inputValues) throws java.util.concurrent.ExecutionException, InterruptedException {
         final Properties producerConfig = new Properties();
         producerConfig.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         producerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
@@ -161,11 +179,47 @@ public class InternalTopicIntegrationTest {
         producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         IntegrationTestUtils.produceValuesSynchronously(DEFAULT_INPUT_TOPIC, inputValues, producerConfig, mockTime);
+    }
+
+    @Test
+    public void shouldUseCompactAndDeleteForWindowStoreChangelogs() throws Exception {
+        KStreamBuilder builder = new KStreamBuilder();
+
+        KStream<String, String> textLines = builder.stream(DEFAULT_INPUT_TOPIC);
+
+        final int durationMs = 2000;
+        textLines
+                .flatMapValues(new ValueMapper<String, Iterable<String>>() {
+                    @Override
+                    public Iterable<String> apply(String value) {
+                        return Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+"));
+                    }
+                }).groupBy(MockKeyValueMapper.<String, String>SelectValueMapper())
+                .count(TimeWindows.of(1000).until(durationMs), "CountWindows").toStream();
+
+
+        // Remove any state from previous test runs
+        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
+
+        KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
+        streams.start();
+
+        //
+        // Step 2: Produce some input data to the input topic.
+        //
+        produceData(Arrays.asList("hello", "world", "world", "hello world"));
 
         //
         // Step 3: Verify the state changelog topics are compact
         //
         streams.close();
-        assertEquals(isUsingCompactionForStateChangelogTopics(), true);
+        final Properties properties = getTopicConfigProperties(ProcessorStateManager.storeChangelogTopic(applicationId, "CountWindows"));
+        final List<String> policies = Arrays.asList(properties.getProperty(LogConfig.CleanupPolicyProp()).split(","));
+        assertEquals(2, policies.size());
+        assertTrue(policies.contains(LogConfig.Compact()));
+        assertTrue(policies.contains(LogConfig.Delete()));
+        // retention should be 1 day + the window duration
+        final Long retention = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS) + durationMs;
+        assertEquals(retention, Long.valueOf(properties.getProperty(LogConfig.RetentionMsProp())));
     }
 }
