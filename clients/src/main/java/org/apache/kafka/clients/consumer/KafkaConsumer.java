@@ -1004,9 +1004,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         fetcher.sendFetches();
 
         // if no fetches could be sent at the moment (which can happen if a partition leader is in the
-        // blackout period following a disconnect), then we only block for the retry backoff duration.
+        // blackout period following a disconnect, or if the partition leader is unknown), then we only
+        // block for the retry backoff duration.
         if (!fetcher.hasInFlightFetches())
-            timeout = retryBackoffMs;
+            timeout = Math.min(timeout, retryBackoffMs);
 
         long now = time.milliseconds();
         long pollTimeout = Math.min(coordinator.timeToNextPoll(now), timeout);
