@@ -14,7 +14,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.junit.Test;
 
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -46,6 +46,12 @@ public class RequestFutureTest {
         future.complete(null);
         assertTrue(future.isDone());
         assertNull(future.value());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testRuntimeExceptionInComplete() {
+        RequestFuture<Exception> future = new RequestFuture<>();
+        future.complete(new RuntimeException());
     }
 
     @Test(expected = IllegalStateException.class)
@@ -94,42 +100,24 @@ public class RequestFutureTest {
     public void listenerInvokedIfAddedBeforeFutureCompletion() {
         RequestFuture<Void> future = new RequestFuture<>();
 
-        final AtomicBoolean wasInvoked = new AtomicBoolean(false);
-        future.addListener(new RequestFutureListener<Void>() {
-            @Override
-            public void onSuccess(Void value) {
-                wasInvoked.set(true);
-            }
-
-            @Override
-            public void onFailure(RuntimeException e) {
-
-            }
-        });
+        MockRequestFutureListener<Void> listener = new MockRequestFutureListener<>();
+        future.addListener(listener);
 
         future.complete(null);
-        assertTrue(wasInvoked.get());
+
+        assertOnSuccessInvoked(listener);
     }
 
     @Test
     public void listenerInvokedIfAddedBeforeFutureFailure() {
         RequestFuture<Void> future = new RequestFuture<>();
 
-        final AtomicBoolean wasInvoked = new AtomicBoolean(false);
-        future.addListener(new RequestFutureListener<Void>() {
-            @Override
-            public void onSuccess(Void value) {
-
-            }
-
-            @Override
-            public void onFailure(RuntimeException e) {
-                wasInvoked.set(true);
-            }
-        });
+        MockRequestFutureListener<Void> listener = new MockRequestFutureListener<>();
+        future.addListener(listener);
 
         future.raise(new RuntimeException());
-        assertTrue(wasInvoked.get());
+
+        assertOnFailureInvoked(listener);
     }
 
     @Test
@@ -137,20 +125,10 @@ public class RequestFutureTest {
         RequestFuture<Void> future = new RequestFuture<>();
         future.complete(null);
 
-        final AtomicBoolean wasInvoked = new AtomicBoolean(false);
-        future.addListener(new RequestFutureListener<Void>() {
-            @Override
-            public void onSuccess(Void value) {
-                wasInvoked.set(true);
-            }
+        MockRequestFutureListener<Void> listener = new MockRequestFutureListener<>();
+        future.addListener(listener);
 
-            @Override
-            public void onFailure(RuntimeException e) {
-
-            }
-        });
-
-        assertTrue(wasInvoked.get());
+        assertOnSuccessInvoked(listener);
     }
 
     @Test
@@ -158,20 +136,42 @@ public class RequestFutureTest {
         RequestFuture<Void> future = new RequestFuture<>();
         future.raise(new RuntimeException());
 
-        final AtomicBoolean wasInvoked = new AtomicBoolean(false);
-        future.addListener(new RequestFutureListener<Void>() {
-            @Override
-            public void onSuccess(Void value) {
+        MockRequestFutureListener<Void> listener = new MockRequestFutureListener<>();
+        future.addListener(listener);
 
-            }
+        assertOnFailureInvoked(listener);
+    }
 
-            @Override
-            public void onFailure(RuntimeException e) {
-                wasInvoked.set(true);
-            }
-        });
+    @Test
+    public void listenersInvokedIfAddedBeforeAndAfterFailure() {
+        RequestFuture<Void> future = new RequestFuture<>();
 
-        assertTrue(wasInvoked.get());
+        MockRequestFutureListener<Void> beforeListener = new MockRequestFutureListener<>();
+        future.addListener(beforeListener);
+
+        future.raise(new RuntimeException());
+
+        MockRequestFutureListener<Void> afterListener = new MockRequestFutureListener<>();
+        future.addListener(afterListener);
+
+        assertOnFailureInvoked(beforeListener);
+        assertOnFailureInvoked(afterListener);
+    }
+
+    @Test
+    public void listenersInvokedIfAddedBeforeAndAfterCompletion() {
+        RequestFuture<Void> future = new RequestFuture<>();
+
+        MockRequestFutureListener<Void> beforeListener = new MockRequestFutureListener<>();
+        future.addListener(beforeListener);
+
+        future.complete(null);
+
+        MockRequestFutureListener<Void> afterListener = new MockRequestFutureListener<>();
+        future.addListener(afterListener);
+
+        assertOnSuccessInvoked(beforeListener);
+        assertOnSuccessInvoked(afterListener);
     }
 
     @Test
@@ -207,6 +207,31 @@ public class RequestFutureTest {
         assertTrue(composed.isDone());
         assertTrue(composed.failed());
         assertEquals(e, composed.exception());
+    }
+
+    private static <T> void assertOnSuccessInvoked(MockRequestFutureListener<T> listener) {
+        assertEquals(1, listener.numOnSuccessCalls.get());
+        assertEquals(0, listener.numOnFailureCalls.get());
+    }
+
+    private static <T> void assertOnFailureInvoked(MockRequestFutureListener<T> listener) {
+        assertEquals(0, listener.numOnSuccessCalls.get());
+        assertEquals(1, listener.numOnFailureCalls.get());
+    }
+
+    private static class MockRequestFutureListener<T> implements RequestFutureListener<T> {
+        private final AtomicInteger numOnSuccessCalls = new AtomicInteger(0);
+        private final AtomicInteger numOnFailureCalls = new AtomicInteger(0);
+
+        @Override
+        public void onSuccess(T value) {
+            numOnSuccessCalls.incrementAndGet();
+        }
+
+        @Override
+        public void onFailure(RuntimeException e) {
+            numOnFailureCalls.incrementAndGet();
+        }
     }
 
 }

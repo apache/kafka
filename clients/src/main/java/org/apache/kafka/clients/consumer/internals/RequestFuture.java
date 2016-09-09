@@ -105,8 +105,12 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      * and the value can be obtained through {@link #value()}.
      * @param value corresponding value (or null if there is none)
      * @throws IllegalStateException if the future has already been completed
+     * @throws IllegalArgumentException if the argument is an instance of {@link RuntimeException}
      */
     public void complete(T value) {
+        if (value instanceof RuntimeException)
+            throw new IllegalArgumentException("The argument to complete can not be an instance of RuntimeException");
+
         if (!result.compareAndSet(INCOMPLETE_SENTINEL, value))
             throw new IllegalStateException("Invalid attempt to complete a request future which is already complete");
         fireSuccess();
