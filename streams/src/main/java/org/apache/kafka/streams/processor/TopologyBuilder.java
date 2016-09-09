@@ -21,8 +21,11 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
+import org.apache.kafka.streams.kstream.internals.CacheEnabledProcessor;
+import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
+import org.apache.kafka.streams.kstream.internals.Change;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
-import org.apache.kafka.streams.processor.internals.ProcessorNodeCacheFlushListener;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.QuickUnion;
@@ -144,6 +147,21 @@ public class TopologyBuilder {
         @Override
         public ProcessorNode build() {
             return new ProcessorNode(name, supplier.get(), stateStoreNames);
+        }
+    }
+
+    private static class ProcessorNodeCacheFlushListener implements CacheFlushListener<Object, Object> {
+        @SuppressWarnings("unchecked")
+        @Override
+        public void forward(final Object key, final Change<Object> value, final RecordContext recordContext, final InternalProcessorContext context) {
+            final RecordContext previous  = context.recordContext();
+            context.setRecordContext(recordContext);
+            try {
+                context.forward(key, value);
+            } finally {
+                context.setRecordContext(previous);
+            }
+
         }
     }
 
@@ -771,6 +789,7 @@ public class TopologyBuilder {
         Map<String, SourceNode> topicSourceMap = new HashMap<>();
         Map<String, SinkNode> topicSinkMap = new HashMap<>();
         Map<String, StateStore> stateStoreMap = new LinkedHashMap<>();
+        Map<StateStore, ProcessorNode> storeToProcessorNodeMap = new HashMap<>();
 
         // create processor nodes in a topological order ("nodeFactories" is already topologically sorted)
         for (NodeFactory factory : nodeFactories.values()) {
@@ -786,12 +805,15 @@ public class TopologyBuilder {
                     for (String stateStoreName : ((ProcessorNodeFactory) factory).stateStoreNames) {
                         if (!stateStoreMap.containsKey(stateStoreName)) {
                             final StateStoreSupplier supplier = stateFactories.get(stateStoreName).supplier;
-                            if (supplier instanceof ForwardingStateStoreSupplier) {
+                            if (supplier instanceof ForwardingStateStoreSupplier && ((ProcessorNodeFactory) factory).supplier instanceof CacheEnabledProcessor) {
                                 ForwardingStateStoreSupplier forwardingSupplier = (ForwardingStateStoreSupplier) supplier;
-                                node.setStateStoreCachingEnabled(forwardingSupplier.cachingEnabled());
-                                stateStoreMap.put(stateStoreName, forwardingSupplier.get(new ProcessorNodeCacheFlushListener<>(node)));
+                                final StateStore stateStore = forwardingSupplier.get(new ProcessorNodeCacheFlushListener());
+                                stateStoreMap.put(stateStoreName, stateStore);
+                                storeToProcessorNodeMap.put(stateStore, node);
                             } else {
-                                stateStoreMap.put(stateStoreName, supplier.get());
+                                final StateStore stateStore = supplier.get();
+                                stateStoreMap.put(stateStoreName, stateStore);
+                                storeToProcessorNodeMap.put(stateStore, node);
                             }
                         }
                     }
@@ -825,7 +847,7 @@ public class TopologyBuilder {
             }
         }
 
-        return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap, new ArrayList<>(stateStoreMap.values()), sourceStoreToSourceTopic);
+        return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap, new ArrayList<>(stateStoreMap.values()), sourceStoreToSourceTopic, storeToProcessorNodeMap);
     }
     
     /**

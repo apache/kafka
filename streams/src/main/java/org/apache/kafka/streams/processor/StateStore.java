@@ -64,10 +64,4 @@ public interface StateStore {
      * @return {@code true} if the store is open
      */
     boolean isOpen();
-
-    /**
-     * This store should forward both the current and old value
-     * when forwarding {@link org.apache.kafka.streams.kstream.internals.Change}s
-     */
-    void enableSendingOldValues();
 }

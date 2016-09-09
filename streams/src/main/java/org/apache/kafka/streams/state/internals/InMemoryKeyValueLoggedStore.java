@@ -89,10 +89,6 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
         return inner.isOpen();
     }
 
-    @Override
-    public void enableSendingOldValues() {
-
-    }
 
     @Override
     public V get(K key) {

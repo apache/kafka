@@ -17,13 +17,27 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.RecordContext;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 
 /**
  * For internal use so we can update the {@link ProcessorRecordContext}
  * when we are forwarding items that have been evicted or flushed from
- * {@link org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes}
+ * {@link ThreadCache}
  */
 public interface InternalProcessorContext extends ProcessorContext {
-    void setRecordContext(ProcessorRecordContext recordContext);
+    /**
+     * @param recordContext the {@link RecordContext} for the record about to be processes
+     */
+    void setRecordContext(RecordContext recordContext);
+
+    /**
+     * @param currentNode the current {@link ProcessorNode}
+     */
+    void setCurrentNode(ProcessorNode currentNode);
+
+    /**
+     * Get the thread-global cache
+     */
+    ThreadCache getCache();
 }

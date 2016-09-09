@@ -20,11 +20,11 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 import java.io.File;
 import java.util.Map;
 
@@ -121,7 +121,7 @@ public class StandbyContextImpl implements InternalProcessorContext, RecordColle
     }
 
     @Override
-    public MemoryLRUCacheBytes getCache() {
+    public ThreadCache getCache() {
         throw new UnsupportedOperationException("this should not happen: getCache() not supported in standby tasks.");
     }
 
@@ -208,12 +208,18 @@ public class StandbyContextImpl implements InternalProcessorContext, RecordColle
     }
 
     @Override
-    public ProcessorRecordContext processorRecordContext() {
-        throw new UnsupportedOperationException("this should not happen: processorRecordContext not supported in standby tasks.");
+    public RecordContext recordContext() {
+        throw new UnsupportedOperationException("this should not happen: recordContext not supported in standby tasks.");
     }
 
     @Override
-    public void setRecordContext(final ProcessorRecordContext recordContext) {
+    public void setRecordContext(final RecordContext recordContext) {
         throw new UnsupportedOperationException("this should not happen: setRecordContext not supported in standby tasks.");
+    }
+
+
+    @Override
+    public void setCurrentNode(final ProcessorNode currentNode) {
+        throw new UnsupportedOperationException("this should not happen: setCurrentNode not supported in standby tasks.");
     }
 }

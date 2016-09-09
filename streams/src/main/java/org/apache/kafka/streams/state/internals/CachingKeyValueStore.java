@@ -31,14 +31,14 @@ import org.apache.kafka.streams.state.StateSerdes;
 import java.util.ArrayList;
 import java.util.List;
 
-public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
+public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CanSendOldValues {
 
     private final KeyValueStore<Bytes, byte[]> underlying;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private final CacheFlushListener<K, V> flushListener;
     private String name;
-    private MemoryLRUCacheBytes cache;
+    private ThreadCache cache;
     private InternalProcessorContext context;
     private StateSerdes<K, V> serdes;
     private boolean sendOldValues;
@@ -77,12 +77,12 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
                                         valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
         this.name = context.taskId() + "-" + underlying.name();
-        this.cache = context.getCache();
-        cache.addDirtyEntryFlushListener(name, new MemoryLRUCacheBytes.DirtyEntryFlushListener() {
+        this.cache = this.context.getCache();
+        cache.addDirtyEntryFlushListener(name, new ThreadCache.DirtyEntryFlushListener() {
             @Override
-            public void apply(final List<MemoryLRUCacheBytes.DirtyEntry> entries) {
+            public void apply(final List<ThreadCache.DirtyEntry> entries) {
                 final List<KeyValue<Bytes, byte[]>> keyValues = new ArrayList<>();
-                for (MemoryLRUCacheBytes.DirtyEntry entry : entries) {
+                for (ThreadCache.DirtyEntry entry : entries) {
                     keyValues.add(KeyValue.pair(entry.key(), entry.newValue()));
                     flushListener.forward(serdes.keyFrom(entry.key().get()),
                                           change(entry.newValue(), underlying.get(entry.key())),
@@ -136,7 +136,7 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     private V get(final byte[] rawKey) {
-        final MemoryLRUCacheBytesEntry entry = cache.get(name, rawKey);
+        final LRUCacheEntry entry = cache.get(name, rawKey);
         if (entry == null) {
             final byte[] rawValue = underlying.get(Bytes.wrap(rawKey));
             if (rawValue == null) {
@@ -145,7 +145,7 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
             // only update the cache if this call is on the streamThread
             // as we don't want other threads to trigger an eviction/flush
             if (Thread.currentThread().equals(streamThread)) {
-                cache.put(name, rawKey, new MemoryLRUCacheBytesEntry(rawValue));
+                cache.put(name, rawKey, new LRUCacheEntry(rawValue));
             }
             return serdes.valueFrom(rawValue);
         }
@@ -162,14 +162,14 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
         final byte[] origFrom = serdes.rawKey(from);
         final byte[] origTo = serdes.rawKey(to);
         final PeekingKeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>(underlying.range(Bytes.wrap(origFrom), Bytes.wrap(origTo)));
-        final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, origFrom, origTo);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, origFrom, origTo);
         return new MergedSortedCacheKeyValueStoreIterator<>(underlying, cacheIterator, storeIterator, serdes);
     }
 
     @Override
     public KeyValueIterator<K, V> all() {
         final PeekingKeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>(underlying.all());
-        final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator cacheIterator = cache.all(name);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(name);
         return new MergedSortedCacheKeyValueStoreIterator<>(underlying, cacheIterator, storeIterator, serdes);
     }
 
@@ -189,8 +189,8 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     private synchronized void put(final byte[] rawKey, final V value) {
         final byte[] rawValue = serdes.rawValue(value);
-        cache.put(name, rawKey, new MemoryLRUCacheBytesEntry(rawValue, true, context.offset(),
-                                                               context.timestamp(), context.partition(), context.topic()));
+        cache.put(name, rawKey, new LRUCacheEntry(rawValue, true, context.offset(),
+                                                  context.timestamp(), context.partition(), context.topic()));
     }
 
     @Override

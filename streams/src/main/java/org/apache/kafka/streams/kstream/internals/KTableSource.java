@@ -23,8 +23,9 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.CanSendOldValues;
 
-public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
+public class KTableSource<K, V> implements ProcessorSupplier<K, V>, CacheEnabledProcessor {
 
     public final String storeName;
 
@@ -73,7 +74,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
             super.init(context);
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
             if (sendOldValues) {
-                store.enableSendingOldValues();
+                ((CanSendOldValues) store).enableSendingOldValues();
             }
         }
 

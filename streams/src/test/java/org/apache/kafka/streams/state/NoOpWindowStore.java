@@ -52,11 +52,6 @@ public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
     }
 
     @Override
-    public void enableSendingOldValues() {
-
-    }
-
-    @Override
     public WindowStoreIterator fetch(final Object key, final long timeFrom, final long timeTo) {
         return null;
     }

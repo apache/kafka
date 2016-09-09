@@ -43,7 +43,7 @@ import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.HostInfo;
-import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -108,7 +108,7 @@ public class StreamThread extends Thread {
     private boolean processStandbyRecords = false;
 
     private final long cacheSizeBytes;
-    private MemoryLRUCacheBytes cache;
+    private ThreadCache cache;
 
     final ConsumerRebalanceListener rebalanceListener = new ConsumerRebalanceListener() {
         @Override
@@ -168,7 +168,7 @@ public class StreamThread extends Thread {
         }
         this.cacheSizeBytes = Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
             config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG));
-        this.cache = new MemoryLRUCacheBytes(cacheSizeBytes);
+        this.cache = new ThreadCache(cacheSizeBytes);
         // set the producer and consumer clients
 
         threadClientId = clientId + "-" + threadName;

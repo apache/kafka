@@ -32,14 +32,14 @@ import java.util.NoSuchElementException;
  * @param <V>
  */
 class MergedSortedCacheKeyValueStoreIterator<K, V> implements KeyValueIterator<K, V> {
-    private final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator cacheIterator;
+    private final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator;
     private final PeekingKeyValueIterator<Bytes, byte[]> storeIterator;
     private final KeyValueStore<Bytes, byte[]> store;
     private final StateSerdes<K, V> serdes;
     private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
 
     public MergedSortedCacheKeyValueStoreIterator(final KeyValueStore<Bytes, byte[]> store,
-                                                  final MemoryLRUCacheBytes.MemoryLRUCacheBytesIterator cacheIterator,
+                                                  final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator,
                                                   final PeekingKeyValueIterator<Bytes, byte[]> storeIterator,
                                                   final StateSerdes<K, V> serdes) {
         this.cacheIterator = cacheIterator;
@@ -93,7 +93,7 @@ class MergedSortedCacheKeyValueStoreIterator<K, V> implements KeyValueIterator<K
     }
 
     private KeyValue<K, V> nextCacheValue() {
-        final KeyValue<byte[], MemoryLRUCacheBytesEntry> next = cacheIterator.next();
+        final KeyValue<byte[], LRUCacheEntry> next = cacheIterator.next();
         return KeyValue.pair(serdes.keyFrom(next.key), serdes.valueFrom(next.value.value));
     }
 

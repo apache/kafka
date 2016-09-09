@@ -105,7 +105,6 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
             .withKeys(keySerde)
             .withValues(aggValueSerde)
             .persistent()
-            .enableCaching()
             .build();
 
         // send the aggregate key-value pairs to the intermediate topic for partitioning

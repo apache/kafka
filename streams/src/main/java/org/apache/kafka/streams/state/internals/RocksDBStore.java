@@ -206,11 +206,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public void enableSendingOldValues() {
-
-    }
-
-    @Override
     public synchronized V get(K key) {
         validateStoreOpen();
         byte[] byteValue = getInternal(serdes.rawKey(key));

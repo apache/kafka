@@ -20,7 +20,6 @@ package org.apache.kafka.streams.processor;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes;
 
 import java.io.File;
 import java.util.Map;
@@ -87,11 +86,6 @@ public interface ProcessorContext {
      * @return The state store instance
      */
     StateStore getStateStore(String name);
-
-    /**
-     * Get the thread-global cache
-     */
-    MemoryLRUCacheBytes getCache();
 
     /**
      * Schedules a periodic operation for processors. A processor may call this method during
@@ -192,8 +186,8 @@ public interface ProcessorContext {
     Map<String, Object> appConfigsWithPrefix(String prefix);
 
     /**
-     * Returns the current {@link ProcessorRecordContext}
-     * @return the current {@link ProcessorRecordContext}
+     * Returns the current {@link RecordContext}
+     * @return the current {@link RecordContext}
      */
-    ProcessorRecordContext processorRecordContext();
+    RecordContext recordContext();
 }

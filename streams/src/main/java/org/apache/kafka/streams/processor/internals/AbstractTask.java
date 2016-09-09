@@ -24,7 +24,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -41,7 +41,7 @@ public abstract class AbstractTask {
     protected final ProcessorStateManager stateMgr;
     protected final Set<TopicPartition> partitions;
     protected InternalProcessorContext processorContext;
-    protected final MemoryLRUCacheBytes cache;
+    protected final ThreadCache cache;
     /**
      * @throws ProcessorStateException if the state manager cannot be created
      */
@@ -53,7 +53,7 @@ public abstract class AbstractTask {
                            Consumer<byte[], byte[]> restoreConsumer,
                            boolean isStandby,
                            StateDirectory stateDirectory,
-                           final MemoryLRUCacheBytes cache) {
+                           final ThreadCache cache) {
         this.id = id;
         this.applicationId = applicationId;
         this.partitions = new HashSet<>(partitions);
@@ -63,7 +63,7 @@ public abstract class AbstractTask {
 
         // create the processor state manager
         try {
-            this.stateMgr = new ProcessorStateManager(applicationId, id, partitions, restoreConsumer, isStandby, stateDirectory, topology.sourceStoreToSourceTopic());
+            this.stateMgr = new ProcessorStateManager(applicationId, id, partitions, restoreConsumer, isStandby, stateDirectory, topology.sourceStoreToSourceTopic(), topology.storeToProcessorNodeMap());
 
         } catch (IOException e) {
             throw new ProcessorStateException("Error while creating the state manager", e);
@@ -99,7 +99,7 @@ public abstract class AbstractTask {
         return processorContext;
     }
 
-    public final MemoryLRUCacheBytes cache() {
+    public final ThreadCache cache() {
         return cache;
     }
 

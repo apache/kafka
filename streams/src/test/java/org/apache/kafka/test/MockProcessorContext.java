@@ -21,14 +21,15 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.File;
 import java.util.Collections;
@@ -44,12 +45,12 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
     private final Serde<?> valSerde;
     private final RecordCollector.Supplier recordCollectorSupplier;
     private final File stateDir;
-    private final MemoryLRUCacheBytes cache;
+    private final ThreadCache cache;
     private Map<String, StateStore> storeMap = new LinkedHashMap<>();
     private Map<String, StateRestoreCallback> restoreFuncs = new HashMap<>();
 
     long timestamp = -1L;
-    private ProcessorRecordContext recordContext;
+    private RecordContext recordContext;
 
     public MockProcessorContext(StateSerdes<?, ?> serdes, RecordCollector collector) {
         this(null, null, serdes.keySerde(), serdes.valueSerde(), collector, null);
@@ -59,7 +60,7 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
                                 Serde<?> keySerde,
                                 Serde<?> valSerde,
                                 final RecordCollector collector,
-                                final MemoryLRUCacheBytes cache) {
+                                final ThreadCache cache) {
         this(driver, stateDir, keySerde, valSerde,
                 new RecordCollector.Supplier() {
                     @Override
@@ -73,7 +74,7 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
                                 Serde<?> keySerde,
                                 Serde<?> valSerde,
                                 RecordCollector.Supplier collectorSupplier,
-                                final MemoryLRUCacheBytes cache) {
+                                final ThreadCache cache) {
         this.driver = driver;
         this.stateDir = stateDir;
         this.keySerde = keySerde;
@@ -117,7 +118,7 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
     }
 
     @Override
-    public MemoryLRUCacheBytes getCache() {
+    public ThreadCache getCache() {
         return cache;
     }
 
@@ -225,7 +226,7 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
     }
 
     @Override
-    public ProcessorRecordContext processorRecordContext() {
+    public RecordContext recordContext() {
         return recordContext;
     }
 
@@ -241,11 +242,13 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
     }
 
     @Override
-    public void setRecordContext(final ProcessorRecordContext recordContext) {
+    public void setRecordContext(final RecordContext recordContext) {
         this.recordContext = recordContext;
-        if (driver != null) {
-            driver.setRecordContext(recordContext);
-        }
+    }
+
+    @Override
+    public void setCurrentNode(final ProcessorNode currentNode) {
+
     }
 
 }

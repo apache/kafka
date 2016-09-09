@@ -132,11 +132,6 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public void enableSendingOldValues() {
-        throw new UnsupportedOperationException("enableSendingOldValues is not valid for MemoryLRUCache");
-    }
-
-    @Override
     public synchronized V get(K key) {
         return this.map.get(key);
     }

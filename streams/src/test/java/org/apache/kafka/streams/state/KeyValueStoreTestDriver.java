@@ -33,7 +33,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
-import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
@@ -180,7 +180,7 @@ public class KeyValueStoreTestDriver<K, V> {
     private final MockProcessorContext context;
     private final Map<String, StateStore> storeMap = new HashMap<>();
     private static final long DEFAULT_CACHE_SIZE_BYTES = 1 * 1024 * 1024L;
-    private final MemoryLRUCacheBytes cache = new MemoryLRUCacheBytes(DEFAULT_CACHE_SIZE_BYTES);
+    private final ThreadCache cache = new ThreadCache(DEFAULT_CACHE_SIZE_BYTES);
     private final StreamsMetrics metrics = new StreamsMetrics() {
         @Override
         public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {
@@ -270,7 +270,7 @@ public class KeyValueStoreTestDriver<K, V> {
                 return new StreamsConfig(props).originalsWithPrefix(prefix);
             }
             @Override
-            public MemoryLRUCacheBytes getCache() {
+            public ThreadCache getCache() {
                 return cache;
             }
         };

@@ -27,7 +27,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
-public class MeteredWindowStore<K, V> implements WindowStore<K, V> {
+public class MeteredWindowStore<K, V> implements WindowStore<K, V>, CanSendOldValues {
 
     protected final WindowStore<K, V> inner;
     protected final String metricScope;
@@ -81,7 +81,11 @@ public class MeteredWindowStore<K, V> implements WindowStore<K, V> {
 
     @Override
     public void enableSendingOldValues() {
-        inner.enableSendingOldValues();
+        if (inner instanceof CanSendOldValues) {
+            ((CanSendOldValues) inner).enableSendingOldValues();
+        } else {
+            throw new UnsupportedOperationException("Cannot enableSendingOldValues as it is unsupported by inner store");
+        }
     }
 
     @Override

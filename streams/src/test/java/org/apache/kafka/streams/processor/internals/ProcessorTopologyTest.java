@@ -29,7 +29,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -211,15 +210,6 @@ public class ProcessorTopologyTest {
         assertNoOutputRecord(OUTPUT_TOPIC_1);
     }
 
-    @Test
-    public void shouldIgnoreForwardInProcessorsConnectedToCacheEnabledStateStores() {
-        driver = new ProcessorTopologyTestDriver(config, createCacheEnableStatefulTopology("my-store"), "my-store");
-        driver.process(INPUT_TOPIC_1, "a", "a", STRING_SERIALIZER, STRING_SERIALIZER);
-        assertNextOutputRecord(OUTPUT_TOPIC_1, "a", "a");
-        assertNoOutputRecord(OUTPUT_TOPIC_1);
-    }
-
-
 
     protected void assertNextOutputRecord(String topic, String key, String value) {
         ProducerRecord<String, String> record = driver.readOutput(topic, STRING_DESERIALIZER, STRING_DESERIALIZER);
@@ -280,15 +270,6 @@ public class ProcessorTopologyTest {
                                     .addSink("counts", OUTPUT_TOPIC_1, "processor");
     }
 
-    private TopologyBuilder createCacheEnableStatefulTopology(final String storeName) {
-        return new TopologyBuilder().addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
-                .addProcessor("processor", define(new StatefulProcessorThatForwards(storeName)), "source")
-                .addStateStore(
-                        Stores.create(storeName).withStringKeys().withStringValues().persistent().enableCaching().build(),
-                        "processor"
-                ).addProcessor("change-processor", define(new ChangeForwardingProcessor()), "processor")
-                .addSink("output", OUTPUT_TOPIC_1, "change-processor");
-    }
 
     protected TopologyBuilder createSimpleMultiSourceTopology(int partition) {
         return new TopologyBuilder().addSource("source-1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
@@ -297,14 +278,6 @@ public class ProcessorTopologyTest {
                 .addSource("source-2", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_2)
                 .addProcessor("processor-2", define(new ForwardingProcessor()), "source-2")
                 .addSink("sink-2", OUTPUT_TOPIC_2, constantPartitioner(partition), "processor-2");
-    }
-
-    private class ChangeForwardingProcessor extends AbstractProcessor<String, Change<String>> {
-
-        @Override
-        public void process(final String key, final Change<String> value) {
-            context().forward(key, value.newValue);
-        }
     }
 
     /**
@@ -426,30 +399,6 @@ public class ProcessorTopologyTest {
                 return processor;
             }
         };
-    }
-
-
-    @SuppressWarnings("unchecked")
-    public class StatefulProcessorThatForwards extends AbstractProcessor<String, String> {
-
-        private final String storeName;
-        private KeyValueStore<String, String> store;
-
-        public StatefulProcessorThatForwards(final String storeName) {
-            this.storeName = storeName;
-        }
-
-        @Override
-        public void init(final ProcessorContext context) {
-            super.init(context);
-            store = (KeyValueStore<String, String>) context.getStateStore(storeName);
-        }
-
-        @Override
-        public void process(final String key, final String value) {
-            store.put(key, value);
-            context().forward(key, new Change(value, null));
-        }
     }
 
     public static class CustomTimestampExtractor implements TimestampExtractor {

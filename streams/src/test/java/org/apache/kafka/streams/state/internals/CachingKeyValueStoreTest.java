@@ -21,7 +21,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.kstream.internals.Change;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContextImpl;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
@@ -36,7 +36,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.streams.state.internals.MemoryLRUCacheBytesTest.memoryCacheEntrySize;
+import static org.apache.kafka.streams.state.internals.ThreadCacheTest.memoryCacheEntrySize;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
@@ -46,7 +46,7 @@ public class CachingKeyValueStoreTest {
     private CachingKeyValueStore<String, String> store;
     private MockProcessorContext context;
     private InMemoryKeyValueStore<Bytes, byte[]> underlyingStore;
-    private MemoryLRUCacheBytes cache;
+    private ThreadCache cache;
     private int maxCacheSizeBytes;
     private CacheFlushListenerStub cacheFlushListener;
     private String topic;
@@ -58,10 +58,10 @@ public class CachingKeyValueStoreTest {
         cacheFlushListener = new CacheFlushListenerStub();
         store = new CachingKeyValueStore<>(underlyingStore, Serdes.String(), Serdes.String(), cacheFlushListener);
         maxCacheSizeBytes = 150;
-        cache = new MemoryLRUCacheBytes(maxCacheSizeBytes);
+        cache = new ThreadCache(maxCacheSizeBytes);
         context = new MockProcessorContext(null, null, null, null, (RecordCollector) null, cache);
         topic = "topic";
-        context.setRecordContext(new ProcessorRecordContextImpl(10, 0, 0, topic, null, false));
+        context.setRecordContext(new ProcessorRecordContext(10, 0, 0, topic));
         store.init(context, null);
     }
 
@@ -138,7 +138,7 @@ public class CachingKeyValueStoreTest {
         while (cachedSize < maxCacheSizeBytes) {
             final String kv = String.valueOf(i++);
             store.put(kv, kv);
-            cachedSize += memoryCacheEntrySize("", kv.getBytes(), kv.getBytes(), topic);
+            cachedSize += memoryCacheEntrySize(kv.getBytes(), kv.getBytes(), topic);
         }
         return i;
     }

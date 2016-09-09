@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.CanSendOldValues;
 
 public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T> {
 
@@ -61,7 +62,9 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
             super.init(context);
 
             store = (KeyValueStore<K, T>) context.getStateStore(storeName);
-            store.enableSendingOldValues();
+            if (sendOldValues) {
+                ((CanSendOldValues) store).enableSendingOldValues();
+            }
         }
 
         /**

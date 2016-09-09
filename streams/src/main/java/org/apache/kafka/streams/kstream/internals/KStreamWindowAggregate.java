@@ -28,10 +28,11 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.internals.CanSendOldValues;
 
 import java.util.Map;
 
-public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, T> {
+public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, T>, CacheEnabledProcessor {
 
     private final String storeName;
     private final Windows<W> windows;
@@ -67,6 +68,9 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
             super.init(context);
 
             windowStore = (WindowStore<K, T>) context.getStateStore(storeName);
+            if (sendOldValues) {
+                ((CanSendOldValues) windowStore).enableSendingOldValues();
+            }
         }
 
         @Override

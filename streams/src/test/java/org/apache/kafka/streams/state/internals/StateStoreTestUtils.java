@@ -122,9 +122,5 @@ public class StateStoreTestUtils {
             return false;
         }
 
-        @Override
-        public void enableSendingOldValues() {
-
-        }
     }
 }

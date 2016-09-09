@@ -24,10 +24,9 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
-import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -85,7 +84,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
                       StreamsConfig config,
                       StreamsMetrics metrics,
                       StateDirectory stateDirectory,
-                      MemoryLRUCacheBytes cache) {
+                      ThreadCache cache) {
         super(id, applicationId, partitions, topology, consumer, restoreConsumer, false, stateDirectory, cache);
         this.punctuationQueue = new PunctuationQueue();
         this.maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
@@ -172,8 +171,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
             TopicPartition partition = recordInfo.partition();
 
             log.debug("Start processing one record [{}]", currRecord);
-            final ProcessorRecordContext recordContext = createRecordContext(currNode, false);
+            final ProcessorRecordContext recordContext = createRecordContext();
             processorContext.setRecordContext(recordContext);
+            processorContext.setCurrentNode(currNode);
             this.currNode.process(currRecord.key(), currRecord.value());
 
             log.debug("task [{}] Completed processing one record [{}]", id(), currRecord);
@@ -194,6 +194,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
             }
         } finally {
             processorContext.setRecordContext(null);
+            processorContext.setCurrentNode(null);
             this.currRecord = null;
             this.currNode = null;
         }
@@ -231,11 +232,13 @@ public class StreamTask extends AbstractTask implements Punctuator {
         currNode = node;
         currRecord = new StampedRecord(DUMMY_RECORD, timestamp);
         // what to do here? Punctuate on this record doesn't mean we've seen it.
-        processorContext.setRecordContext(createRecordContext(node, true));
+        processorContext.setRecordContext(createRecordContext());
+        processorContext.setCurrentNode(node);
         try {
             node.processor().punctuate(timestamp);
         } finally {
             processorContext.setRecordContext(null);
+            processorContext.setCurrentNode(null);
             currNode = null;
             currRecord = null;
         }
@@ -254,7 +257,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      */
     public void commit() {
         // 1) flush local state
-        stateMgr.flush();
+        stateMgr.flush(processorContext);
 
         // 2) flush produced records in the downstream and change logs of local states
         recordCollector.flush();
@@ -339,8 +342,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
         return new RecordQueue(partition, source);
     }
 
-    private ProcessorRecordContextImpl createRecordContext(final ProcessorNode childNode, final boolean forwardWhenConnectedToCachedStores) {
-        return new ProcessorRecordContextImpl(currRecord.timestamp, currRecord.offset(), currRecord.partition(), currRecord.topic(), childNode, forwardWhenConnectedToCachedStores);
+    private ProcessorRecordContext createRecordContext() {
+        return new ProcessorRecordContext(currRecord.timestamp, currRecord.offset(), currRecord.partition(), currRecord.topic());
     }
 
     /**

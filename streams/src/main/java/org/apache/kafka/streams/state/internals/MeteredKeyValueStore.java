@@ -36,7 +36,7 @@ import java.util.List;
  * @param <K>
  * @param <V>
  */
-public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
+public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V>, CanSendOldValues {
 
     protected final KeyValueStore<K, V> inner;
     protected final String metricScope;
@@ -100,7 +100,11 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void enableSendingOldValues() {
-        this.inner.enableSendingOldValues();
+        if (inner instanceof CanSendOldValues) {
+            ((CanSendOldValues) inner).enableSendingOldValues();
+        } else {
+            throw new UnsupportedOperationException("Cannot enableSendingOldValues as it is unsupported by inner store");
+        }
     }
 
     @Override

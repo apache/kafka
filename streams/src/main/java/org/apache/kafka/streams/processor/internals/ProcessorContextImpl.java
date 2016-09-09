@@ -21,13 +21,14 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.File;
+import java.util.List;
 import java.util.Map;
 
 public class ProcessorContextImpl implements InternalProcessorContext, RecordCollector.Supplier {
@@ -43,9 +44,10 @@ public class ProcessorContextImpl implements InternalProcessorContext, RecordCol
     private final StreamsConfig config;
     private final Serde<?> keySerde;
     private final Serde<?> valSerde;
-    private final MemoryLRUCacheBytes cache;
+    private final ThreadCache cache;
     private boolean initialized;
-    private ProcessorRecordContext recordContext;
+    private RecordContext recordContext;
+    private ProcessorNode currentNode;
 
     @SuppressWarnings("unchecked")
     public ProcessorContextImpl(TaskId id,
@@ -54,7 +56,7 @@ public class ProcessorContextImpl implements InternalProcessorContext, RecordCol
                                 RecordCollector collector,
                                 ProcessorStateManager stateMgr,
                                 StreamsMetrics metrics,
-                                final MemoryLRUCacheBytes cache) {
+                                final ThreadCache cache) {
         this.id = id;
         this.task = task;
         this.metrics = metrics;
@@ -140,7 +142,7 @@ public class ProcessorContextImpl implements InternalProcessorContext, RecordCol
     }
 
     @Override
-    public MemoryLRUCacheBytes getCache() {
+    public ThreadCache getCache() {
         return cache;
     }
 
@@ -193,19 +195,48 @@ public class ProcessorContextImpl implements InternalProcessorContext, RecordCol
         return recordContext.timestamp();
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(K key, V value) {
-        recordContext.forward(key, value);
+        ProcessorNode previousNode = currentNode;
+        try {
+            for (ProcessorNode child : (List<ProcessorNode>) currentNode.children()) {
+                currentNode = child;
+                child.process(key, value);
+            }
+        } finally {
+            currentNode = previousNode;
+        }
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(K key, V value, int childIndex) {
-        recordContext.forward(key, value, childIndex);
+        ProcessorNode previousNode = currentNode;
+        final ProcessorNode child = (ProcessorNode<K, V>) currentNode.children().get(childIndex);
+        currentNode = child;
+        try {
+            child.process(key, value);
+        } finally {
+            currentNode = previousNode;
+        }
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(K key, V value, String childName) {
-        recordContext.forward(key, value, childName);
+        for (ProcessorNode child : (List<ProcessorNode<K, V>>) currentNode.children()) {
+            if (child.name().equals(childName)) {
+                ProcessorNode previousNode = currentNode;
+                currentNode = child;
+                try {
+                    child.process(key, value);
+                    return;
+                } finally {
+                    currentNode = previousNode;
+                }
+            }
+        }
     }
 
     @Override
@@ -229,12 +260,17 @@ public class ProcessorContextImpl implements InternalProcessorContext, RecordCol
     }
 
     @Override
-    public void setRecordContext(final ProcessorRecordContext recordContext) {
+    public void setRecordContext(final RecordContext recordContext) {
         this.recordContext = recordContext;
     }
 
     @Override
-    public ProcessorRecordContext processorRecordContext() {
+    public RecordContext recordContext() {
         return this.recordContext;
+    }
+
+    @Override
+    public void setCurrentNode(final ProcessorNode currentNode) {
+        this.currentNode = currentNode;
     }
 }

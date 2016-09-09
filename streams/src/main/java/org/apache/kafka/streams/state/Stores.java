@@ -74,7 +74,6 @@ public class Stores {
                             @Override
                             public PersistentKeyValueFactory<K, V> persistent() {
                                 return new PersistentKeyValueFactory<K, V>() {
-                                    private boolean enableCaching = false;
                                     private long windowSize;
                                     private int numSegments = 0;
                                     private long retentionPeriod = 0L;
@@ -94,17 +93,12 @@ public class Stores {
                                     public StateStoreSupplier build() {
                                         if (numSegments > 0) {
                                             return new RocksDBWindowStoreSupplier<>(name, retentionPeriod, numSegments,
-                                                                                    retainDuplicates, keySerde, valueSerde, windowSize, enableCaching);
+                                                                                    retainDuplicates, keySerde, valueSerde, windowSize);
                                         }
 
-                                        return new RocksDBKeyValueStoreSupplier<>(name, keySerde, valueSerde, enableCaching);
+                                        return new RocksDBKeyValueStoreSupplier<>(name, keySerde, valueSerde);
                                     }
 
-                                    @Override
-                                    public PersistentKeyValueFactory<K, V> enableCaching() {
-                                        this.enableCaching = true;
-                                        return this;
-                                    }
                                 };
                             }
                         };
@@ -339,10 +333,5 @@ public class Stores {
          */
         StateStoreSupplier build();
 
-
-        /**
-         * Enable caching
-         */
-        PersistentKeyValueFactory<K, V> enableCaching();
     }
 }

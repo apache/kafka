@@ -23,15 +23,14 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorRecordContext;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContextImpl;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
-import org.apache.kafka.streams.state.internals.MemoryLRUCacheBytes;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.File;
 import java.util.HashSet;
@@ -43,12 +42,11 @@ public class KStreamTestDriver {
 
     private final ProcessorTopology topology;
     private final MockProcessorContext context;
-    private MemoryLRUCacheBytes cache;
+    private ThreadCache cache;
     private static final long DEFAULT_CACHE_SIZE_BYTES = 1 * 1024 * 1024L;
     public final File stateDir;
 
     private ProcessorNode currNode;
-    private ProcessorRecordContext recordContext;
 
     public KStreamTestDriver(KStreamBuilder builder) {
         this(builder, null, Serdes.ByteArray(), Serdes.ByteArray());
@@ -65,9 +63,9 @@ public class KStreamTestDriver {
         builder.setApplicationId("TestDriver");
         this.topology = builder.build(null);
         this.stateDir = stateDir;
-        this.cache = new MemoryLRUCacheBytes(DEFAULT_CACHE_SIZE_BYTES);
+        this.cache = new ThreadCache(DEFAULT_CACHE_SIZE_BYTES);
         this.context = new MockProcessorContext(this, stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
-        this.context.setRecordContext(new ProcessorRecordContextImpl(0, 0, 0, "topic", null, false));
+        this.context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
 
 
         for (StateStore store : topology.stateStores()) {
@@ -95,14 +93,18 @@ public class KStreamTestDriver {
         // if yes, skip
         if (topicName.endsWith(ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX))
             return;
-
-        setRecordContext(createRecordContext(currNode, 0));
-
+        context.setRecordContext(createRecordContext(context.timestamp()));
+        context.setCurrentNode(currNode);
         try {
             forward(key, value);
         } finally {
             currNode = null;
+            context.setCurrentNode(null);
         }
+    }
+
+    private ProcessorRecordContext createRecordContext(long timestamp) {
+        return new ProcessorRecordContext(timestamp, -1, -1, "topic");
     }
 
 
@@ -111,7 +113,7 @@ public class KStreamTestDriver {
             if (processor.processor() != null) {
                 currNode = processor;
                 try {
-                    context.setRecordContext(createRecordContext(currNode, timestamp));
+                    context.setRecordContext(createRecordContext(timestamp));
                     processor.processor().punctuate(timestamp);
                 } finally {
                     currNode = null;
@@ -126,21 +128,43 @@ public class KStreamTestDriver {
 
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value) {
-        recordContext.forward(key, value);
-    }
-
-    private ProcessorRecordContext createRecordContext(ProcessorNode node, long timestamp) {
-        return new ProcessorRecordContextImpl(timestamp, -1, -1, "topic", node, false);
+        ProcessorNode thisNode = currNode;
+        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) currNode.children()) {
+            currNode = childNode;
+            try {
+                childNode.process(key, value);
+            } finally {
+                currNode = thisNode;
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value, int childIndex) {
-        recordContext.forward(key, value, childIndex);
+        ProcessorNode thisNode = currNode;
+        ProcessorNode childNode = (ProcessorNode<K, V>) thisNode.children().get(childIndex);
+        currNode = childNode;
+        try {
+            childNode.process(key, value);
+        } finally {
+            currNode = thisNode;
+        }
     }
 
     @SuppressWarnings("unchecked")
     public <K, V> void forward(K key, V value, String childName) {
-        recordContext.forward(key, value, childName);
+        ProcessorNode thisNode = currNode;
+        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
+            if (childNode.name().equals(childName)) {
+                currNode = childNode;
+                try {
+                    childNode.process(key, value);
+                } finally {
+                    currNode = thisNode;
+                }
+                break;
+            }
+        }
     }
 
     public void close() {
@@ -154,10 +178,7 @@ public class KStreamTestDriver {
             }
         }
 
-        // close all state stores
-        for (StateStore store : context.allStateStores().values()) {
-            store.close();
-        }
+        flushState();
     }
 
     public Set<String> allProcessorNames() {
@@ -188,15 +209,22 @@ public class KStreamTestDriver {
     }
 
     public void flushState() {
-        for (StateStore stateStore : context.allStateStores().values()) {
-            stateStore.flush();
+        final ProcessorNode current = currNode;
+        try {
+            for (StateStore stateStore : context.allStateStores().values()) {
+                final ProcessorNode processorNode = topology.storeToProcessorNodeMap().get(stateStore);
+                if (processorNode != null) {
+                    currNode = processorNode;
+                }
+                stateStore.flush();
+            }
+        } finally {
+            currNode = current;
+
         }
 
     }
 
-    public void setRecordContext(final ProcessorRecordContext recordContext) {
-        this.recordContext = recordContext;
-    }
 
     private class MockRecordCollector extends RecordCollector {
         public MockRecordCollector() {

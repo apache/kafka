@@ -38,18 +38,16 @@ public class RocksDBKeyValueStoreSupplier<K, V> implements ForwardingStateStoreS
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private final Time time;
-    private final boolean enableCaching;
 
-    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, boolean enableCaching) {
-        this(name, keySerde, valueSerde, null, enableCaching);
+    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde) {
+        this(name, keySerde, valueSerde, null);
     }
 
-    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, Time time, boolean enableCaching) {
+    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, Time time) {
         this.name = name;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.time = time;
-        this.enableCaching = enableCaching;
     }
 
     public String name() {
@@ -63,21 +61,13 @@ public class RocksDBKeyValueStoreSupplier<K, V> implements ForwardingStateStoreS
 
     @Override
     public StateStore get(final CacheFlushListener<K, V> listener) {
-        KeyValueStore<K, V> store;
-        if (enableCaching) {
-            store = new CachingKeyValueStore<>(new RocksDBStore<>(name, Serdes.Bytes(),
-                                                                  Serdes.ByteArray()).enableLogging(),
-                                               keySerde,
-                                               valueSerde, listener);
-        } else {
-            store = new RocksDBStore<>(name, keySerde, valueSerde).enableLogging();
-        }
+        final KeyValueStore<K, V> store = new CachingKeyValueStore<>(new RocksDBStore<>(name, Serdes.Bytes(),
+                                                              Serdes.ByteArray()).enableLogging(),
+                                           keySerde,
+                                           valueSerde, listener);
+
         return new MeteredKeyValueStore<>(store, "rocksdb-state", time);
 
     }
 
-    @Override
-    public boolean cachingEnabled() {
-        return enableCaching;
-    }
 }

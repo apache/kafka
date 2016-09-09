@@ -22,7 +22,7 @@ import org.apache.kafka.streams.processor.StateStoreSupplier;
 
 /**
  * A {@link StateStoreSupplier} that supports forwarding of values that have been
- * buffered in an {@link MemoryLRUCacheBytes}
+ * buffered in an {@link ThreadCache}
  * @param <K>
  * @param <V>
  */
@@ -30,11 +30,9 @@ public interface ForwardingStateStoreSupplier<K, V> extends StateStoreSupplier {
 
     /**
      * Return a new {@link StateStore} instance that uses the passed in {@link CacheFlushListener}
-     * when caching is enabled & the {@link MemoryLRUCacheBytes} is flushed
+     * when caching is enabled & the {@link ThreadCache} is flushed
      * @param listener
      */
     StateStore get(final CacheFlushListener<K, V> listener);
-
-    boolean cachingEnabled();
 
 }

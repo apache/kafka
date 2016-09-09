@@ -51,6 +51,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     }
 
+    @SuppressWarnings("unchecked")
     private <K, V> KeyValueStore<K, V> createStore(final ProcessorContext context, final Class<K> keyClass, final Class<V> valueClass, final boolean useContextSerdes, final boolean enableCaching) {
         StateStoreSupplier supplier;
         if (useContextSerdes) {
@@ -59,9 +60,6 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
                     .withKeys(context.keySerde())
                     .withValues(context.valueSerde())
                     .persistent();
-            if (enableCaching) {
-                factory.enableCaching();
-            }
             supplier = factory.build();
         } else {
             final Stores.PersistentKeyValueFactory<K, V> factory = Stores
@@ -69,20 +67,21 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
                     .withKeys(keyClass)
                     .withValues(valueClass)
                     .persistent();
-            if (enableCaching) {
-                factory.enableCaching();
-            }
             supplier = factory.build();
         }
 
-        ((ForwardingStateStoreSupplier) supplier).get(new CacheFlushListener() {
-            @Override
-            public void forward(final Object key, final Change value, final RecordContext recordContext, final InternalProcessorContext context) {
+        KeyValueStore<K, V> store;
+        if (enableCaching) {
+            store = (KeyValueStore<K, V>) ((ForwardingStateStoreSupplier) supplier).get(new CacheFlushListener() {
+                @Override
+                public void forward(final Object key, final Change value, final RecordContext recordContext, final InternalProcessorContext context) {
 
-            }
-        });
+                }
+            });
+        } else {
+            store = (KeyValueStore<K, V>) supplier.get();
+        }
 
-        KeyValueStore<K, V> store = (KeyValueStore<K, V>) supplier.get();
         store.init(context, store);
         return store;
     }
