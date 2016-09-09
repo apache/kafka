@@ -16,17 +16,10 @@ import kafka.admin.AdminUtils
 import kafka.log.LogConfig
 import kafka.server.{KafkaConfig, ConfigType, KafkaServer}
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.producer.ProducerRecord
 
 import scala.collection.Seq
 
 object ReplicationQuotaUtils {
-
-  def addMessages(num: Int, size:Int = 1000, topic: String, servers: Seq[KafkaServer]): Unit ={
-    val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers), retries = 5, acks = 0)
-    for (x <- 0 until num)
-      producer.send(new ProducerRecord(topic, new Array[Byte](size))).get
-  }
 
   def checkThrottleConfigRemovedFromZK(topic: String, servers: Seq[KafkaServer]): Boolean = {
     TestUtils.waitUntilTrue(() => {

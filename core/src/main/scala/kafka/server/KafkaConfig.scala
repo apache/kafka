@@ -790,7 +790,6 @@ object KafkaConfig {
 }
 
 class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends AbstractConfig(KafkaConfig.configDef, props, doLog) {
-  private val lock = new ReentrantReadWriteLock()
 
   def this(props: java.util.Map[_, _]) = this(props, true)
 

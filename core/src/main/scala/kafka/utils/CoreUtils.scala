@@ -279,10 +279,4 @@ object CoreUtils extends Logging {
     val listenerList = parseCsvList(listeners)
     listenerList.map(listener => EndPoint.createEndPoint(listener)).map(ep => ep.protocolType -> ep).toMap
   }
-
-  def wrapInProperties(key: String, value: String) = {
-    val props = new Properties()
-    props.put(key, value)
-    props
-  }
 }

@@ -14,10 +14,9 @@
   * See the License for the specific language governing permissions and
   * limitations under the License.
   */
-package unit.kafka.admin
+package kafka.admin
 
 import java.util.Properties
-import kafka.admin.AdminUtilities
 import kafka.utils.ZkUtils
 
 class TestAdminUtils extends AdminUtilities {

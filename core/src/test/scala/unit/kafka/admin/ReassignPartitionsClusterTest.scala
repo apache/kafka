@@ -118,7 +118,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //Given throttle set so replication will take at least 20 sec (we won't wait this long)
     val initialThrottle: Long = 1000 * 1000
-    addMessages(num = 200, size = 100 * 1000, topicName, servers)
+    produceMessages(servers, topicName,  numMessages = 200, acks = 0, valueBytes = 100 * 1000)
 
     //Start rebalance (use a separate thread as it'll be slow)
     val newAssignment = ReassignPartitionsCommand.generateAssignment(zkUtils, Array(101, 102), json(topicName), true)._1

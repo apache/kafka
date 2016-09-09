@@ -1031,8 +1031,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def close() {
-    quotas.produce.shutdown()
-    quotas.fetch.shutdown()
+    quotas.shutdown()
     info("Shutdown complete.")
   }
 

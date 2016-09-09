@@ -79,7 +79,7 @@ object ConfigCommand {
     entityType match {
       case ConfigType.Topic =>  utils.changeTopicConfig(zkUtils, entityName, configs)
       case ConfigType.Client =>  utils.changeClientIdConfig(zkUtils, entityName, configs)
-      case ConfigType.Broker => utils.changeBrokerConfig(zkUtils, parseBroker(entityName), configs)
+      case ConfigType.Broker => utils.changeBrokerConfig(zkUtils, Seq(parseBroker(entityName)), configs)
       case _ => throw new IllegalArgumentException(s"$entityType is not a known entityType. Should be one of ${ConfigType.Topic}, ${ConfigType.Client}, ${ConfigType.Broker}")
     }
     println(s"Updated config for EntityType:$entityType => EntityName:'$entityName'.")
@@ -97,12 +97,12 @@ object ConfigCommand {
     }
   }
 
-  private def parseBroker(broker: String): Seq[Int] = {
+  private def parseBroker(broker: String): Int = {
     try {
-      return Seq(broker.toInt)
+      broker.toInt
     }catch {
       case e: NumberFormatException =>
-        throw new IllegalArgumentException("The broker's Entity Name must be a single integer value")
+        throw new IllegalArgumentException(s"Error parsing broker $broker. The broker's Entity Name must be a single integer value")
     }
   }
 
@@ -199,9 +199,8 @@ object ConfigCommand {
         if(! isAddConfigPresent && ! isDeleteConfigPresent)
           throw new IllegalArgumentException("At least one of --add-config or --delete-config must be specified with --alter")
       }
-      val entityTypeVal = options.valueOf(entityType)
-      if(! entityTypeVal.equals(ConfigType.Topic) && ! entityTypeVal.equals(ConfigType.Client) && ! entityTypeVal.equals(ConfigType.Broker)) {
-        throw new IllegalArgumentException("--entity-type must be '%s' or '%s' or '%s'".format(ConfigType.Topic, ConfigType.Client, ConfigType.Broker))
+      if(ConfigType.all.contains(options.valueOf(entityType))) {
+        throw new IllegalArgumentException(s"--entity-type must be one of ${ConfigType.all}")
       }
     }
   }

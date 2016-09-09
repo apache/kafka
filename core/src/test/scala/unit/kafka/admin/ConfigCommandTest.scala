@@ -23,7 +23,6 @@ import org.junit.Assert._
 import org.junit.Test
 import kafka.utils.{ZkUtils, Logging}
 import kafka.zk.ZooKeeperTestHarness
-import unit.kafka.admin.TestAdminUtils
 
 class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   @Test

@@ -35,7 +35,12 @@ object QuotaFactory {
     override def isQuotaExceeded(): Boolean = false
   }
 
-  case class QuotaManagers(fetch: ClientQuotaManager, produce: ClientQuotaManager, leader: ReplicationQuotaManager, follower: ReplicationQuotaManager)
+  case class QuotaManagers(fetch: ClientQuotaManager, produce: ClientQuotaManager, leader: ReplicationQuotaManager, follower: ReplicationQuotaManager) {
+    def shutdown() = {
+      fetch.shutdown
+      produce.shutdown
+    }
+  }
 
   def instantiate(cfg: KafkaConfig, metrics: Metrics, time: Time): QuotaManagers = {
     QuotaManagers(

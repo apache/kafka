@@ -31,7 +31,7 @@ import kafka.common.TopicAndPartition
 import kafka.server.{ConfigType, KafkaConfig, KafkaServer}
 import java.io.File
 
-import TestUtils._
+import kafka.utils.TestUtils._
 
 import scala.collection.{Map, immutable}
 import unit.kafka.admin.ReplicationQuotaUtils._
@@ -558,7 +558,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     try {
       //Given throttle set so replication will take at least 1 sec for 1MB of data
       val expectedThrottleRate: Long = 1024 * 1024
-      addMessages(num = 1024, size = 1024, topic, servers)
+      produceMessages(servers, topic,  numMessages = 1024, acks = 1, valueBytes = 1024)
 
       //When we intialise the command
       val command = new ReassignPartitionsCommand(zkUtils, Map(topicAndPartition -> newReplicas), expectedThrottleRate)
@@ -594,7 +594,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     // Given 4 brokers, a single partition, with replicas on the first 3 brokers only
     val expectedReplicaAssignment = Map(0 -> List(0, 1, 2))
     val topic = "test"
-    val servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+    val servers = createBrokerConfigs(4, zkConnect, false).map(b => createServer(KafkaConfig.fromProps(b)))
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, expectedReplicaAssignment)
 
     // Given we plan to move replica 1 -> 3
@@ -605,7 +605,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     try {
       //Given throttle set so replication will take at least 1 sec for 1MB of data
       val expectedThrottleRate: Long = 1024 * 1024
-      addMessages(num = 1024, size = 1024, topic, servers)
+      produceMessages(servers, topic,  numMessages = 1024, acks = 1, valueBytes = 1024)
 
       //When we intialise the command
       val command = new ReassignPartitionsCommand(zkUtils, Map(topicAndPartition -> newReplicas), expectedThrottleRate)
@@ -625,7 +625,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
       //Then command should have taken more than 1 second to complete as it is throttled
       val took = System.currentTimeMillis() - start
-      assertTrue(s"Expected replication to be > 800ms but was $took", took > 950)
+      assertTrue(s"Expected replication to be > 950ms but was $took", took > 950)
       assertTrue(s"Expected replication to be < 20s but was $took", took < 20 * 1000)
 
       //Also throttle should have been removed

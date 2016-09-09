@@ -17,6 +17,7 @@
 package kafka.admin
 
 import java.text.NumberFormat._
+import java.util.Properties
 import joptsimple.OptionParser
 import kafka.log.LogConfig
 import kafka.server.KafkaConfig
@@ -283,25 +284,25 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: collection.Map[Top
   private def addThrottle(throttle: Long): Unit = {
     //Apply the throttle limit to all brokers in the cluster
     val brokerIds = zkUtils.getAllBrokersInCluster().map(_.id)
-    AdminUtils.changeBrokerConfig(zkUtils, brokerIds, CoreUtils.wrapInProperties(KafkaConfig.ThrottledReplicationRateLimitProp, throttle.toString))
+    AdminUtils.changeBrokerConfig(zkUtils, brokerIds, new Properties {put(KafkaConfig.ThrottledReplicationRateLimitProp, throttle.toString)})
 
     //Apply the list of throttled replicas to all topics with partitions being moved
     //TODO - change to move destination replicas only
     val topics = partitions.keySet.map(tp => tp.topic).toSeq.distinct
     for (topic <- topics)
-      AdminUtils.changeTopicConfig(zkUtils, topic, CoreUtils.wrapInProperties(LogConfig.ThrottledReplicasListProp, "*"))
+      AdminUtils.changeTopicConfig(zkUtils, topic, new Properties {put(LogConfig.ThrottledReplicasListProp, "*")})
   }
 
   private def removeThrottle(): Unit = {
     //Remove the throttle limit from all brokers in the cluster
     val brokerIds = zkUtils.getAllBrokersInCluster().map(_.id)
     for (brokerId <- brokerIds)
-      AdminUtils.changeBrokerConfig(zkUtils, brokerIds, CoreUtils.wrapInProperties(KafkaConfig.ThrottledReplicationRateLimitProp, Long.MaxValue.toString))
+      AdminUtils.changeBrokerConfig(zkUtils, brokerIds, new Properties {put(KafkaConfig.ThrottledReplicationRateLimitProp, Long.MaxValue.toString)})
 
     //Remove the list of throttled replicas from all topics with partitions being moved
     val topics = partitions.keySet.map(tp => tp.topic).toSeq.distinct
     for (topic <- topics)
-      AdminUtils.changeTopicConfig(zkUtils, topic, CoreUtils.wrapInProperties(LogConfig.ThrottledReplicasListProp, ""))
+      AdminUtils.changeTopicConfig(zkUtils, topic, new Properties {put(LogConfig.ThrottledReplicasListProp, "")})
   }
 
   def reassignPartitions(): Boolean = {

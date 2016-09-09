@@ -80,17 +80,14 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
   def parseThrottledPartitions(topicConfig: Properties, brokerId: Int): Seq[Int] = {
     val configValue = topicConfig.get(LogConfig.ThrottledReplicasListProp).toString.trim
     ThrottledReplicaValidator.ensureValid(LogConfig.ThrottledReplicasListProp, configValue)
-    if (configValue.trim == "*")
-      allReplicas
-    else if (configValue.trim == "")
-      Seq()
-    else {
-      configValue.trim
+    configValue.trim match {
+      case "" => Seq()
+      case "*" => allReplicas
+      case _ => configValue.trim
         .split(":")
         .map(_.split("-"))
-        .filter(_(1).toInt == brokerId //Filter this replica
-        )
-        .map(_(0).toInt).toSeq //convert to list of partition ids
+        .filter(_ (1).toInt == brokerId) //Filter this replica
+        .map(_ (0).toInt).toSeq //convert to list of partition ids
     }
   }
 }
@@ -141,7 +138,7 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig, private val quo
 object ThrottledReplicaValidator extends Validator {
   override def ensureValid(name: String, value: scala.Any): Unit = {
     value match {
-      case s:String => if (!isValid(value))
+      case s: String => if (!isValid(value))
         throw new ConfigException(name, value, s"$name  must match for format [number]-[number]:[number]-[number]:[number]-[number] etc")
       case _ => throw new ConfigException(name, value, s"$name  must be a string")
     }
