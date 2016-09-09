@@ -176,7 +176,6 @@ object ConfigCommand {
             .withValuesSeparatedBy(',')
     val helpOpt = parser.accepts("help", "Print usage information.")
     val forceOpt = parser.accepts("force", "Suppress console prompts")
-    val jsonOpt = parser.accepts("json", "Configurations can be specified as JSON. This allows the comma separated lists to be passed as values.")
     val options = parser.parse(args : _*)
 
     val allOpts: Set[OptionSpec[_]] = Set(alterOpt, describeOpt, entityType, entityName, addConfig, deleteConfig, helpOpt)
