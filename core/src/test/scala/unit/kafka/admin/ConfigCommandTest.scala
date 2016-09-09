@@ -144,20 +144,53 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     ConfigCommand.alterConfig(null, createOpts, configChange)
   }
 
+  @Test
+  def shouldSupportCommaSeparatedValues(): Unit = {
+    val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+      "--entity-name", "1",
+      "--entity-type", "brokers",
+      "--alter",
+      "--add-config", "a=b,c=[d,e ,f],g=[h,i]"))
+
+    val configChange = new TestAdminUtils {
+      override def changeBrokerConfig(zkUtils: ZkUtils, brokerIds: Seq[Int], configChange: Properties): Unit = {
+        assertEquals(Seq(1), brokerIds)
+        assertEquals("b", configChange.get("a"))
+        assertEquals("d,e ,f", configChange.get("c"))
+        assertEquals("h,i", configChange.get("g"))
+      }
+    }
+    ConfigCommand.alterConfig(null, createOpts, configChange)
+  }
+
   @Test (expected = classOf[IllegalArgumentException])
-  def shouldNotUpdateBrokerConfigIfMalformed(): Unit = {
+  def shouldNotUpdateBrokerConfigIfMalformedEntityName(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "1,2,3", //Don't support multiple brokers currently
       "--entity-type", "brokers",
       "--alter",
       "--add-config", "a=b"))
+    ConfigCommand.alterConfig(null, createOpts, new TestAdminUtils)
+  }
 
-    val configChange = new TestAdminUtils {
-      override def changeBrokerConfig(zkUtils: ZkUtils, brokerIds: Seq[Int], configChange: Properties): Unit = {
-        assertEquals(Seq(1), brokerIds)
-      }
-    }
-    ConfigCommand.alterConfig(null, createOpts, configChange)
+  @Test (expected = classOf[IllegalArgumentException])
+  def shouldNotUpdateBrokerConfigIfMalformedConfig(): Unit = {
+    val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+      "--entity-name", "1",
+      "--entity-type", "brokers",
+      "--alter",
+      "--add-config", "a="))
+    ConfigCommand.alterConfig(null, createOpts, new TestAdminUtils)
+  }
+
+  @Test (expected = classOf[IllegalArgumentException])
+  def shouldNotUpdateBrokerConfigIfMalformedBracketConfig(): Unit = {
+    val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+      "--entity-name", "1",
+      "--entity-type", "brokers",
+      "--alter",
+      "--add-config", "a=[b,c,d=e"))
+    ConfigCommand.alterConfig(null, createOpts, new TestAdminUtils)
   }
 
   @Test

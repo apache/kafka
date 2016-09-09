@@ -23,7 +23,7 @@ import joptsimple._
 import kafka.admin.TopicCommand._
 import kafka.log.{Defaults, LogConfig}
 import kafka.server.{KafkaConfig, ClientConfigOverride, ConfigType}
-import kafka.utils.{CommandLineUtils, ZkUtils}
+import kafka.utils.{Json, CommandLineUtils, ZkUtils}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Utils
 
@@ -122,14 +122,19 @@ object ConfigCommand {
   }
 
   private[admin] def parseConfigsToBeAdded(opts: ConfigCommandOptions): Properties = {
-    val configsToBeAdded = opts.options.valuesOf(opts.addConfig).map(_.split("""\s*=\s*"""))
-    require(configsToBeAdded.forall(config => config.length == 2),
-      "Invalid entity config: all configs to be added must be in the format \"key=val\".")
     val props = new Properties
-    configsToBeAdded.foreach(pair => props.setProperty(pair(0).trim, pair(1).trim))
-    if (props.containsKey(LogConfig.MessageFormatVersionProp)) {
-      println(s"WARNING: The configuration ${LogConfig.MessageFormatVersionProp}=${props.getProperty(LogConfig.MessageFormatVersionProp)} is specified. " +
-        s"This configuration will be ignored if the version is newer than the inter.broker.protocol.version specified in the broker.")
+    if(opts.options.has(opts.addConfig)) {
+      //split by commas, but avoid those in [], then into KV pairs
+      val configsToBeAdded = opts.options.valueOf(opts.addConfig)
+        .split(",(?=[^\\]]*(?:\\[|$))")
+        .map(_.split("""\s*=\s*"""))
+      require(configsToBeAdded.forall(config => config.length == 2), "Invalid entity config: all configs to be added must be in the format \"key=val\".")
+      //Create properties, parsing square brackets from values if necessary
+      configsToBeAdded.foreach(pair => props.setProperty(pair(0).trim, pair(1).replaceAll("\\[?\\]?", "").trim))
+      if (props.containsKey(LogConfig.MessageFormatVersionProp)) {
+        println(s"WARNING: The configuration ${LogConfig.MessageFormatVersionProp}=${props.getProperty(LogConfig.MessageFormatVersionProp)} is specified. " +
+          s"This configuration will be ignored if the version is newer than the inter.broker.protocol.version specified in the broker.")
+      }
     }
     props
   }
@@ -162,20 +167,20 @@ object ConfigCommand {
             .ofType(classOf[String])
 
     val nl = System.getProperty("line.separator")
-    val addConfig = parser.accepts("add-config", "Key Value pairs configs to add 'k1=v1,k2=v2'. The following is a list of valid configurations: " +
+    val addConfig = parser.accepts("add-config", "Key Value pairs of configs to add. Square brackets can be used to group values which contain commas: 'k1=v1,k2=[v1,v2,v2],k3=v3'. The following is a list of valid configurations: " +
             "For entity_type '" + ConfigType.Topic + "': " + nl + LogConfig.configNames.map("\t" + _).mkString(nl) + nl +
             "For entity_type '" + ConfigType.Broker + "': " + nl + KafkaConfig.mutableConfigs.map("\t" + _).mkString(nl) + nl +
             "For entity_type '" + ConfigType.Client + "': " + nl + "\t" + ClientConfigOverride.ProducerOverride
                                                             + nl + "\t" + ClientConfigOverride.ConsumerOverride)
             .withRequiredArg
             .ofType(classOf[String])
-            .withValuesSeparatedBy(',')
     val deleteConfig = parser.accepts("delete-config", "config keys to remove 'k1,k2'")
             .withRequiredArg
             .ofType(classOf[String])
             .withValuesSeparatedBy(',')
     val helpOpt = parser.accepts("help", "Print usage information.")
     val forceOpt = parser.accepts("force", "Suppress console prompts")
+    val jsonOpt = parser.accepts("json", "Configurations can be specified as JSON. This allows the comma separated lists to be passed as values.")
     val options = parser.parse(args : _*)
 
     val allOpts: Set[OptionSpec[_]] = Set(alterOpt, describeOpt, entityType, entityName, addConfig, deleteConfig, helpOpt)
@@ -198,7 +203,7 @@ object ConfigCommand {
         if(! isAddConfigPresent && ! isDeleteConfigPresent)
           throw new IllegalArgumentException("At least one of --add-config or --delete-config must be specified with --alter")
       }
-      require(ConfigType.all.contains(options.valueOf(entityType), s"--entity-type must be one of ${ConfigType.all}"))
+      require(ConfigType.all.contains(options.valueOf(entityType)), s"--entity-type must be one of ${ConfigType.all}")
     }
   }
 }
