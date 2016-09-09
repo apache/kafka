@@ -147,8 +147,8 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   @Test
   def shouldSupportCommaSeparatedValues(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
-      "--entity-name", "1",
-      "--entity-type", "brokers",
+      "--entity-name", "my-topic",
+      "--entity-type", "topics",
       "--alter",
       "--add-config", "a=b,c=[d,e ,f],g=[h,i]"))
 

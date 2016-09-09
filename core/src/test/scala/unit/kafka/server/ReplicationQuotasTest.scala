@@ -110,9 +110,9 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
       changeBrokerConfig(zkUtils, Seq(brokerId), property(KafkaConfig.ThrottledReplicationRateLimitProp, throttle.toString))
     }
     if (leaderThrottle)
-      changeTopicConfig(zkUtils, topic, property(ThrottledReplicasListProp, "0-100:1-101:2-102:3-103:4-104:5-105")) //partition-broker:... throttle the 6 leaders
+      changeTopicConfig(zkUtils, topic, property(ThrottledReplicasListProp, "0,100:1,101:2,102:3,103:4,104:5,105")) //partition-broker:... throttle the 6 leaders
     else
-      changeTopicConfig(zkUtils, topic, property(ThrottledReplicasListProp, "0-106:1-106:2-106:3-107:4-107:5-107")) //partition-broker:... throttle the two followers
+      changeTopicConfig(zkUtils, topic, property(ThrottledReplicasListProp, "0,106:1,106:2,106:3,107:4,107:5,107")) //partition-broker:... throttle the two followers
 
     //Add data equally to each partition
     producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(brokers), retries = 5, acks = 0)

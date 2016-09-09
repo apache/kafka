@@ -70,17 +70,17 @@ class LogConfigTest {
     assertTrue(isValid("* "))
     assertTrue(isValid(""))
     assertTrue(isValid(" "))
-    assertTrue(isValid("100-10"))
-    assertTrue(isValid("100-10:12-10"))
-    assertTrue(isValid("100-10:12-10:15-1"))
-    assertTrue(isValid("100-10:12-10:15-1  "))
+    assertTrue(isValid("100,10"))
+    assertTrue(isValid("100,10:12,10"))
+    assertTrue(isValid("100,10:12,10:15,1"))
+    assertTrue(isValid("100,10:12,10:15,1  "))
 
     assertFalse(isValid("100"))
-    assertFalse(isValid("100-"))
-    assertFalse(isValid("100-0:"))
-    assertFalse(isValid("100-0:10"))
-    assertFalse(isValid("100-0:10-"))
-    assertFalse(isValid("100-0:10-   "))
+    assertFalse(isValid("100,"))
+    assertFalse(isValid("100,0:"))
+    assertFalse(isValid("100,0:10"))
+    assertFalse(isValid("100,0:10,"))
+    assertFalse(isValid("100,0:10,   "))
   }
 
   def isValid(configValue: String): Boolean = {
