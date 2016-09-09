@@ -138,14 +138,13 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig, private val quo
 object ThrottledReplicaValidator extends Validator {
   override def ensureValid(name: String, value: scala.Any): Unit = {
     value match {
-      case s: String => if (!isValid(value))
+      case s: String => if (!isValid(s))
         throw new ConfigException(name, value, s"$name  must match for format [number]-[number]:[number]-[number]:[number]-[number] etc")
       case _ => throw new ConfigException(name, value, s"$name  must be a string")
     }
   }
 
-  private def isValid(value: scala.Any): Boolean = {
-    val proposed = value.toString.trim
-    proposed.equals("*") || proposed.matches("([0-9]+-[0-9]+)?(:[0-9]+-[0-9]+)*")
+  private def isValid(proposed: String): Boolean = {
+    proposed.trim.equals("*") || proposed.trim.matches("([0-9]+-[0-9]+)?(:[0-9]+-[0-9]+)*")
   }
 }
