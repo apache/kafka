@@ -20,7 +20,7 @@ import java.text.NumberFormat._
 import java.util.Properties
 import joptsimple.OptionParser
 import kafka.log.LogConfig
-import kafka.server.KafkaConfig
+import kafka.server.{ConfigType, KafkaConfig}
 import kafka.utils._
 import collection._
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
@@ -29,6 +29,8 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.security.JaasUtils
 
 object ReassignPartitionsCommand extends Logging {
+
+  //TODO Note to reviewer - this class needs a little more work (which I'll complete on Monday, or we could just revert this, but including here as an outline of what is intended)
 
   def main(args: Array[String]): Unit = {
 
@@ -65,9 +67,12 @@ object ReassignPartitionsCommand extends Logging {
       CommandLineUtils.printUsageAndDie(opts.parser, "If --verify option is used, command must include --reassignment-json-file that was used during the --execute option")
     val jsonFile = opts.options.valueOf(opts.reassignmentJsonFileOpt)
     val jsonString = Utils.readFileAsString(jsonFile)
-    val partitionsToBeReassigned = ZkUtils.parsePartitionReassignmentData(jsonString)
+    verifyAssignment(zkUtils, jsonString)
+  }
 
+  def verifyAssignment(zkUtils: ZkUtils, jsonString: String): Unit = {
     println("Status of partition reassignment:")
+    val partitionsToBeReassigned = ZkUtils.parsePartitionReassignmentData(jsonString)
     val reassignedPartitionsStatus = checkIfReassignmentSucceeded(zkUtils, partitionsToBeReassigned)
     reassignedPartitionsStatus.foreach { case (topicPartition, status) =>
       status match {
@@ -78,6 +83,32 @@ object ReassignPartitionsCommand extends Logging {
         case ReassignmentInProgress =>
           println("Reassignment of partition %s is still in progress".format(topicPartition))
       }
+    }
+
+    removeThrottle(zkUtils, partitionsToBeReassigned, reassignedPartitionsStatus)
+  }
+
+  def removeThrottle(zkUtils: ZkUtils, partitionsToBeReassigned: Map[TopicAndPartition, scala.Seq[Int]], reassignedPartitionsStatus: Map[TopicAndPartition, ReassignmentStatus]): Unit = {
+    //TODO Remove replicas from throttled replica list individually, as they complete
+    //TODO below should be limited to just those brokers in the assignment (for both cases)
+
+    //If all partitions have completed remove the throttle
+    if (reassignedPartitionsStatus.forall { case (topicPartition, status) => status == ReassignmentCompleted }) {
+      //Remove the throttle limit from all brokers in the cluster
+      for (brokerId <- zkUtils.getAllBrokersInCluster().map(_.id)) {
+        val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Broker, brokerId.toString)
+        if (configs.remove(KafkaConfig.ThrottledReplicationRateLimitProp) != null)
+          AdminUtils.changeBrokerConfig(zkUtils, Seq(brokerId), configs)
+      }
+
+      //Remove the list of throttled replicas from all topics with partitions being moved
+      val topics = partitionsToBeReassigned.keySet.map(tp => tp.topic).toSeq.distinct
+      for (topic <- topics) {
+        val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
+        if (configs.remove(LogConfig.ThrottledReplicasListProp) != null)
+          AdminUtils.changeTopicConfig(zkUtils, topic, configs)
+      }
+      println("Throttle was removed.")
     }
   }
 
@@ -124,38 +155,27 @@ object ReassignPartitionsCommand extends Logging {
       CommandLineUtils.printUsageAndDie(opts.parser, "If --execute option is used, command must include --reassignment-json-file that was output " + "during the --generate option")
     val reassignmentJsonFile =  opts.options.valueOf(opts.reassignmentJsonFileOpt)
     val reassignmentJsonString = Utils.readFileAsString(reassignmentJsonFile)
-    val throttle = if (opts.options.has(opts.throttleOpt)) opts.options.valueOf(opts.throttleOpt) else Long.MaxValue
-    val force = opts.options.has(opts.forceOpt)
-    if(throttle < Long.MaxValue && force)
-      CommandLineUtils.printUsageAndDie(opts.parser, "The --force option cannot be used if a throttle is specified.")
-    executeAssignment(zkUtils, reassignmentJsonString, throttle, !force)
+    val throttle = if (opts.options.has(opts.throttleOpt)) opts.options.valueOf(opts.throttleOpt) else -1
+    executeAssignment(zkUtils, reassignmentJsonString, throttle)
   }
 
-  def executeAssignment(zkUtils: ZkUtils, reassignmentJsonString: String, throttle: Long = Long.MaxValue, awaitCompletion: Boolean = true) {
+  def executeAssignment(zkUtils: ZkUtils, reassignmentJsonString: String, throttle: Long = -1) {
     val partitionsToBeReassigned = parseAndValidate(reassignmentJsonString)
-    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkUtils, partitionsToBeReassigned.toMap, throttle)
-    try {
-      if (throttle != Long.MaxValue)
-        println(String.format("Replication will be throttled at %s B/s\nWarning: not running this command to completion could result in the throttle remaining engaged post rebalance. If this script is stopped for any reason, restart it to ensure the throttle is removed on completion", getIntegerInstance.format(throttle)))
+    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkUtils, partitionsToBeReassigned.toMap)
 
-      // Check if there an existing reassignment running
-      if (zkUtils.pathExists(ZkUtils.ReassignPartitionsPath) && awaitCompletion) {
-        println("Warning: there is an existing assignment running, which must be allowed to complete. Waiting for this to complete.")
-        val existing = zkUtils.getPartitionsBeingReassigned().mapValues(_.newReplicas)
-        new ReassignPartitionsCommand(zkUtils, existing.toMap, -1).awaitCompletion()
-      }
-      else {
-        printCurrentAssignment(zkUtils, partitionsToBeReassigned)
-        if (reassignPartitionsCommand.reassignPartitions()) {
-          println("Successfully started reassignment of partitions.")
-          if (awaitCompletion)
-            reassignPartitionsCommand.awaitCompletion()
-        } else println("Failed to reassign partitions %s".format(partitionsToBeReassigned))
-      }
-    } finally {
-      reassignPartitionsCommand.removeThrottle()
-      if (throttle != Long.MaxValue)
-        println("Throttle was released")
+    // If there is an existing rebalance running, attempt to change its throttle
+    if (zkUtils.pathExists(ZkUtils.ReassignPartitionsPath)) {
+      println("There is an existing assignment running.")
+      reassignPartitionsCommand.addThrottleLimit(throttle)
+    }
+    else {
+      printCurrentAssignment(zkUtils, partitionsToBeReassigned)
+      if (throttle >= 0)
+        println(String.format("Replication will be throttled at %s B/s\nWarning: not running this command to completion could result in the throttle remaining engaged post rebalance. Run Verify periodically until the reassignment completes to ensure the throttle is removed.", getIntegerInstance.format(throttle)))
+      if (reassignPartitionsCommand.reassignPartitions(throttle)) {
+        println("Successfully started reassignment of partitions.")
+      } else
+        println("Failed to reassign partitions %s".format(partitionsToBeReassigned))
     }
   }
 
@@ -174,7 +194,7 @@ object ReassignPartitionsCommand extends Logging {
     if (duplicateReassignedPartitions.nonEmpty)
       throw new AdminCommandFailedException("Partition reassignment contains duplicate topic partitions: %s".format(duplicateReassignedPartitions.mkString(",")))
     val duplicateEntries = partitionsToBeReassigned
-      .map { case (tp, replicas) => (tp, CoreUtils.duplicates(replicas)) }
+      .map { case (tp, replicas) => (tp, CoreUtils.duplicates(replicas))}
       .filter { case (tp, duplicatedReplicas) => duplicatedReplicas.nonEmpty }
     if (duplicateEntries.nonEmpty) {
       val duplicatesMsg = duplicateEntries
@@ -224,7 +244,7 @@ object ReassignPartitionsCommand extends Logging {
     val generateOpt = parser.accepts("generate", "Generate a candidate partition reassignment configuration." +
       " Note that this only generates a candidate assignment, it does not execute it.")
     val executeOpt = parser.accepts("execute", "Kick off the reassignment as specified by the --reassignment-json-file option. If a reassignment is already running, the script will await completion then exit.")
-    val verifyOpt = parser.accepts("verify", "Verify if the reassignment completed as specified by the --reassignment-json-file option.")
+    val verifyOpt = parser.accepts("verify", "Verify if the reassignment completed as specified by the --reassignment-json-file option. If there is a throttle engaged for the replicas specified, and the rebalance has completed, the throttle will be removed")
     val reassignmentJsonFileOpt = parser.accepts("reassignment-json-file", "The JSON file with the partition reassignment configuration" +
                       "The format to use is - \n" +
                       "{\"partitions\":\n\t[{\"topic\": \"foo\",\n\t  \"partition\": 1,\n\t  \"replicas\": [1,2,3] }],\n\"version\":1\n}")
@@ -243,13 +263,11 @@ object ReassignPartitionsCommand extends Logging {
                       .describedAs("brokerlist")
                       .ofType(classOf[String])
     val disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment")
-    val throttleOpt = parser.accepts("throttle", "The movement of partitions will be throttled to this value (B/s). Rerunning with this option, whilst a rebalance is in progress, will alter the throttle value. Rerunning in the absence of the throttle option, or letting the script complete, will remove the throttle.")
+    val throttleOpt = parser.accepts("throttle", "The movement of partitions will be throttled to this value (B/s). Rerunning with this option, whilst a rebalance is in progress, will alter the throttle value.")
                       .withRequiredArg()
                       .describedAs("throttle")
+                      .defaultsTo("-1")
                       .ofType(classOf[Long])
-    val forceOpt = parser.accepts("force", "Do not block execution using --execute. This option is provided for backwards compatibility. It cannot be used if a throttle is specified when executing.")
-
-
     if(args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "This command moves topic partitions between replicas.")
 
@@ -257,55 +275,36 @@ object ReassignPartitionsCommand extends Logging {
   }
 }
 
-class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: collection.Map[TopicAndPartition, collection.Seq[Int]], throttle: Long = -1)
+class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: collection.Map[TopicAndPartition, collection.Seq[Int]])
   extends Logging {
 
-  if (throttle > 0) addThrottle(throttle)
-
-  def awaitCompletion(refreshRate: Int = 500) = {
-    try {
-      def progressByPartition() = ReassignPartitionsCommand.checkIfReassignmentSucceeded(zkUtils, partitions.toMap)
-      var ticker = 0
-      while (!progressByPartition.forall(_._2 == ReassignmentCompleted)) {
-        Thread.sleep(refreshRate)
-        val progress: Map[ReassignmentStatus, Int] = progressByPartition.values.groupBy(x => x).mapValues(_.size)
-        printf(s"\rReassignment of ${progress.values.sum} partitions is executing. " +
-          s"(InProgress:${progress.getOrElse(ReassignmentInProgress, 0)} " +
-          s"Completed:${progress.getOrElse(ReassignmentCompleted, 0)} " +
-          s"Failed:${progress.getOrElse(ReassignmentFailed, 0)})" + "." * (ticker % 5) + " " * (4 - ticker % 5))
-        ticker += 1
-      }
-      printf("\n")
-    } finally {
-      removeThrottle()
+  private def addThrottle(throttle: Long): Unit = {
+    if (throttle >= 0) {
+      addThrottleLimit(throttle)
+      addThrottledReplicaList()
     }
   }
 
-  private def addThrottle(throttle: Long): Unit = {
-    //Apply the throttle limit to all brokers in the cluster
-    val brokerIds = zkUtils.getAllBrokersInCluster().map(_.id)
-    AdminUtils.changeBrokerConfig(zkUtils, brokerIds, new Properties {put(KafkaConfig.ThrottledReplicationRateLimitProp, throttle.toString)})
+  def addThrottleLimit(throttle: Long) = {
+    if (throttle >= 0) {
+      val brokerIds = zkUtils.getAllBrokersInCluster().map(_.id)
+      for (id <- brokerIds) {
+        val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Broker, id.toString)
+        configs.put(KafkaConfig.ThrottledReplicationRateLimitProp, throttle.toString)
+        AdminUtils.changeBrokerConfig(zkUtils, Seq(id), configs)
+      }
+    }
+  }
 
-    //Apply the list of throttled replicas to all topics with partitions being moved
-    //TODO - change to move destination replicas only
+  def addThrottledReplicaList(): Unit = {
+    //TODO - should only add limit to existing replicas ...val existing = zkUtils.getPartitionsBeingReassigned().mapValues(_.newReplicas)
     val topics = partitions.keySet.map(tp => tp.topic).toSeq.distinct
     for (topic <- topics)
       AdminUtils.changeTopicConfig(zkUtils, topic, new Properties {put(LogConfig.ThrottledReplicasListProp, "*")})
   }
 
-  private def removeThrottle(): Unit = {
-    //Remove the throttle limit from all brokers in the cluster
-    val brokerIds = zkUtils.getAllBrokersInCluster().map(_.id)
-    for (brokerId <- brokerIds)
-      AdminUtils.changeBrokerConfig(zkUtils, brokerIds, new Properties {put(KafkaConfig.ThrottledReplicationRateLimitProp, Long.MaxValue.toString)})
-
-    //Remove the list of throttled replicas from all topics with partitions being moved
-    val topics = partitions.keySet.map(tp => tp.topic).toSeq.distinct
-    for (topic <- topics)
-      AdminUtils.changeTopicConfig(zkUtils, topic, new Properties {put(LogConfig.ThrottledReplicasListProp, "")})
-  }
-
-  def reassignPartitions(): Boolean = {
+  def reassignPartitions(throttle: Long = -1): Boolean = {
+    addThrottle(throttle)
     try {
       val validPartitions = partitions.filter(p => validatePartition(zkUtils, p._1.topic, p._1.partition))
       if (validPartitions.isEmpty) false

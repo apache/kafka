@@ -25,10 +25,10 @@ object ReplicationQuotaUtils {
     TestUtils.waitUntilTrue(() => {
       val brokerReset = servers.forall { server =>
         val brokerConfig = AdminUtils.fetchEntityConfig(server.zkUtils, ConfigType.Broker, server.config.brokerId.toString)
-        Long.MaxValue.toString == brokerConfig.getProperty(KafkaConfig.ThrottledReplicationRateLimitProp)
+        !brokerConfig.contains(KafkaConfig.ThrottledReplicationRateLimitProp)
       }
       val topicConfig = AdminUtils.fetchEntityConfig(servers(0).zkUtils, ConfigType.Topic, topic)
-      val topicReset = ("" == topicConfig.getProperty(LogConfig.ThrottledReplicasListProp))
+      val topicReset = !topicConfig.contains(LogConfig.ThrottledReplicasListProp)
       brokerReset && topicReset
     }, "Throttle limit/replicas was not unset")
   }
@@ -41,7 +41,7 @@ object ReplicationQuotaUtils {
         val zkThrottleRate = configInZk.getProperty(KafkaConfig.ThrottledReplicationRateLimitProp)
         zkThrottleRate != null && expectedThrottleRate == zkThrottleRate.toLong
       }
-      //Check replcias assigned
+      //Check replicas assigned
       val topicConfig = AdminUtils.fetchEntityConfig(servers(0).zkUtils, ConfigType.Topic, topic)
       val topicConfigAvailable = topicConfig.getProperty(LogConfig.ThrottledReplicasListProp) == "*"
       brokerConfigAvailable && topicConfigAvailable

@@ -139,7 +139,7 @@ object ThrottledReplicaValidator extends Validator {
   override def ensureValid(name: String, value: scala.Any): Unit = {
     value match {
       case s: String => if (!isValid(s))
-        throw new ConfigException(name, value, s"$name  must match for format [number]-[number]:[number]-[number]:[number]-[number] etc")
+        throw new ConfigException(name, value, s"$name  must match for format [partitionId],[brokerId]:[partitionId],[brokerId]:[partitionId],[brokerId] etc")
       case _ => throw new ConfigException(name, value, s"$name  must be a string")
     }
   }

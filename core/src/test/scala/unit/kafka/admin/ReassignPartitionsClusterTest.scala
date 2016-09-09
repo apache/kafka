@@ -10,22 +10,17 @@
   * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
   * specific language governing permissions and limitations under the License.
   */
-package unit.kafka.admin
+package kafka.admin
 
-import kafka.admin.ReassignPartitionsCommand
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils._
 import kafka.utils.ZkUtils._
 import kafka.utils.{CoreUtils, Logging, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.common.utils.Utils
-import org.junit.Assert.assertEquals
+import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Before, Test}
 import unit.kafka.admin.ReplicationQuotaUtils._
-
 import scala.collection.Seq
-import scala.concurrent.ExecutionContext.Implicits._
-import scala.concurrent.Future
 
 
 class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
@@ -58,7 +53,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     createTopic(zkUtils, topicName, Map(partition -> Seq(100)), servers = servers)
 
     //When we move the replica on 100 to broker 101
-    ReassignPartitionsCommand.executeAssignment(zkUtils, s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[101]}]}""", awaitCompletion = true)
+    ReassignPartitionsCommand.executeAssignment(zkUtils, s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[101]}]}""")
     waitForReassignmentToComplete()
 
     //Then the replica should be on 101
@@ -108,7 +103,46 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldChangeThrottleOnRerun() {
+  def shouldExecuteThrottledReassignment() {
+    //Given partitions on 3 of 3 brokers
+    val brokers = Array(100, 101, 102)
+    startBrokers(brokers)
+    createTopic(zkUtils, topicName, Map(
+      0 -> Seq(100, 101)
+    ), servers = servers)
+
+    //Given throttle set so replication will take at least 10 sec (we won't wait this long)
+    val initialThrottle: Long = 1000 * 1000
+    val expectedDurationSecs = 5
+    val numMessages: Int = 50
+    val msgSize: Int = 100 * 1000
+    produceMessages(servers, topicName, numMessages, acks = 0, msgSize)
+    assertEquals(expectedDurationSecs, numMessages * msgSize / initialThrottle)
+
+    //Start rebalance (use a separate thread as it'll be slow)
+    val newAssignment = ReassignPartitionsCommand.generateAssignment(zkUtils, Array(101, 102), json(topicName), true)._1
+
+    val start = System.currentTimeMillis()
+    ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), initialThrottle)
+
+    //Check throttle config
+    checkThrottleConfigAddedToZK(initialThrottle, servers, topicName)
+
+    //Await completion
+    waitForReassignmentToComplete()
+    val took = System.currentTimeMillis() - start
+
+    //Check move occurred
+    val actual = zkUtils.getPartitionAssignmentForTopics(Seq(topicName))(topicName)
+    assertEquals(actual.values.flatten.toSeq.distinct.sorted, Seq(101, 102))
+
+    //Then command should have taken more than 1 second to complete as it is throttled
+    assertTrue(s"Expected replication to be > 800ms but was $took", took > expectedDurationSecs * 0.9 * 1000)
+    assertTrue(s"Expected replication to be < 20s but was $took", took < expectedDurationSecs * 2 * 1000)
+  }
+
+  @Test
+  def shouldChangeThrottleOnRerunAndRemoveOnVerify() {
     //Given partitions on 3 of 3 brokers
     val brokers = Array(100, 101, 102)
     startBrokers(brokers)
@@ -118,14 +152,12 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //Given throttle set so replication will take at least 20 sec (we won't wait this long)
     val initialThrottle: Long = 1000 * 1000
-    produceMessages(servers, topicName,  numMessages = 200, acks = 0, valueBytes = 100 * 1000)
+    produceMessages(servers, topicName, numMessages = 200, acks = 0, valueBytes = 100 * 1000)
 
     //Start rebalance (use a separate thread as it'll be slow)
     val newAssignment = ReassignPartitionsCommand.generateAssignment(zkUtils, Array(101, 102), json(topicName), true)._1
 
-    Future {
-      ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), initialThrottle)
-    }
+    ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), initialThrottle)
 
     //Check throttle config
     checkThrottleConfigAddedToZK(initialThrottle, servers, topicName)
@@ -133,15 +165,16 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     //Now re-run the same assignment with a larger throttle, which should only act to increase the throttle and make progress (again use a thread so we can check ZK whilst it runs)
     val newThrottle = initialThrottle * 1000
 
-    Future {
-      ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), newThrottle)
-    }
+    ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), newThrottle)
 
     //Check throttle was changed
     checkThrottleConfigAddedToZK(newThrottle, servers, topicName)
 
     //Await completion
     waitForReassignmentToComplete()
+
+    //Verify should remove the throttle
+    ReassignPartitionsCommand.verifyAssignment(zkUtils,  ZkUtils.formatAsReassignmentJson(newAssignment))
 
     //Check removed
     checkThrottleConfigRemovedFromZK(topicName, servers)
