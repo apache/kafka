@@ -84,7 +84,6 @@ object ReassignPartitionsCommand extends Logging {
           println("Reassignment of partition %s is still in progress".format(topicPartition))
       }
     }
-
     removeThrottle(zkUtils, partitionsToBeReassigned, reassignedPartitionsStatus)
   }
 
@@ -146,7 +145,6 @@ object ReassignPartitionsCommand extends Logging {
         TopicAndPartition(topic, partition) -> replicas
       }
     }
-
     (partitionsToBeReassigned, currentAssignment)
   }
 
