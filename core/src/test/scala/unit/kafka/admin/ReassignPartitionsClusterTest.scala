@@ -158,8 +158,4 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   def json(topic: String): String = {
     s"""{"topics": [{"topic": "$topic"}],"version":1}"""
   }
-
-  def inThread()(fun: => Unit) = {
-    Utils.newThread("ReplicationTestHelperThread", CoreUtils.runnable(fun), false).start
-  }
 }
