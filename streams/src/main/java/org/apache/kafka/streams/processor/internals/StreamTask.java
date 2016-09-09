@@ -172,8 +172,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
             log.debug("Start processing one record [{}]", currRecord);
             final ProcessorRecordContext recordContext = createRecordContext();
-            processorContext.setRecordContext(recordContext);
-            processorContext.setCurrentNode(currNode);
+            updateProcessorContext(recordContext, currNode);
             this.currNode.process(currRecord.key(), currRecord.value());
 
             log.debug("task [{}] Completed processing one record [{}]", id(), currRecord);
@@ -193,13 +192,17 @@ public class StreamTask extends AbstractTask implements Punctuator {
                 requiresPoll = true;
             }
         } finally {
-            processorContext.setRecordContext(null);
-            processorContext.setCurrentNode(null);
+            updateProcessorContext(null, null);
             this.currRecord = null;
             this.currNode = null;
         }
 
         return partitionGroup.numBuffered();
+    }
+
+    private void updateProcessorContext(final ProcessorRecordContext recordContext, final ProcessorNode currNode) {
+        processorContext.setRecordContext(recordContext);
+        processorContext.setCurrentNode(currNode);
     }
 
     public boolean requiresPoll() {
@@ -232,13 +235,11 @@ public class StreamTask extends AbstractTask implements Punctuator {
         currNode = node;
         currRecord = new StampedRecord(DUMMY_RECORD, timestamp);
         // what to do here? Punctuate on this record doesn't mean we've seen it.
-        processorContext.setRecordContext(createRecordContext());
-        processorContext.setCurrentNode(node);
+        updateProcessorContext(createRecordContext(), node);
         try {
             node.processor().punctuate(timestamp);
         } finally {
-            processorContext.setRecordContext(null);
-            processorContext.setCurrentNode(null);
+            updateProcessorContext(null, null);
             currNode = null;
             currRecord = null;
         }

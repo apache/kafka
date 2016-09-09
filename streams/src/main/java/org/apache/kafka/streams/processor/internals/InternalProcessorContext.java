@@ -21,8 +21,8 @@ import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 /**
- * For internal use so we can update the {@link ProcessorRecordContext}
- * when we are forwarding items that have been evicted or flushed from
+ * For internal use so we can update the {@link RecordContext} and current
+ * {@link ProcessorNode} when we are forwarding items that have been evicted or flushed from
  * {@link ThreadCache}
  */
 public interface InternalProcessorContext extends ProcessorContext {
