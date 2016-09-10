@@ -176,6 +176,14 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         standbyTasks.removeAll(prevTasks);
         SubscriptionInfo data = new SubscriptionInfo(streamThread.processId, prevTasks, standbyTasks, this.userEndPointConfig);
 
+        if (streamThread.builder.sourceTopicPattern() != null) {
+            SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
+            log.debug("have {} topics matching regex", topics);
+            // update the topic groups with the returned subscription set for regex pattern subscriptions
+            subscriptionUpdates.updateTopics(topics);
+            streamThread.builder.updateSubscriptions(subscriptionUpdates);
+        }
+
         return new Subscription(new ArrayList<>(topics), data.encode());
     }
 
@@ -262,10 +270,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             String consumerId = entry.getKey();
             Subscription subscription = entry.getValue();
 
-            if (streamThread.builder.sourceTopicPattern() != null) {
-               // update the topic groups with the returned subscription list for regex pattern subscriptions
-                subscriptionUpdates.updateTopics(subscription.topics());
-            }
 
             SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
             if (info.userEndPoint != null) {
@@ -291,7 +295,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             state.capacity = state.capacity + 1d;
         }
 
-        streamThread.builder.updateSubscriptions(subscriptionUpdates);
+
         this.topicGroups = streamThread.builder.topicGroups();
 
         // ensure the co-partitioning topics within the group have the same number of partitions,
