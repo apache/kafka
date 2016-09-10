@@ -263,7 +263,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // 2. within each client, tasks are assigned to consumer clients in round-robin manner.
         Map<UUID, Set<String>> consumersByClient = new HashMap<>();
         Map<UUID, ClientState<TaskId>> states = new HashMap<>();
-        SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
         Map<UUID, HostInfo> consumerEndPointMap = new HashMap<>();
         // decode subscription info
         for (Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
