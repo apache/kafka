@@ -90,7 +90,6 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CanSendO
                                           CachingKeyValueStore.this.context);
                 }
                 underlying.putAll(keyValues);
-                underlying.flush();
             }
         });
 
@@ -99,6 +98,7 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CanSendO
     @Override
     public synchronized void flush() {
         cache.flush(name);
+        underlying.flush();
     }
 
     private Change<V> change(final byte[] newValue, final byte[] oldValue) {
