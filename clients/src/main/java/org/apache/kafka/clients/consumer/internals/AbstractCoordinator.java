@@ -275,6 +275,11 @@ public abstract class AbstractCoordinator implements Closeable {
             heartbeatThread.start();
         }
 
+        doJoinGroup();
+    }
+
+    // visible for testing. Joins the group without starting the heartbeat thread.
+    synchronized void doJoinGroup() {
         while (needRejoin()) {
             ensureCoordinatorReady();
 
@@ -311,7 +316,9 @@ public abstract class AbstractCoordinator implements Closeable {
                             joinFuture = null;
                             state = MemberState.STABLE;
                             needsJoinPrepare = true;
-                            heartbeatThread.enable();
+
+                            if (heartbeatThread != null)
+                                heartbeatThread.enable();
                         }
 
                         onJoinComplete(generation.generationId, generation.memberId, generation.protocol, value);
@@ -818,7 +825,6 @@ public abstract class AbstractCoordinator implements Closeable {
         @Override
         public void run() {
             try {
-
                 while (true) {
                     synchronized (AbstractCoordinator.this) {
                         if (closed)
