@@ -21,6 +21,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopologyBuilder;
@@ -105,10 +106,12 @@ public class StreamsMetadataState {
         Objects.requireNonNull(storeName, "storeName can't be null");
         Objects.requireNonNull(key, "key can't be null");
 
+
         final SourceTopicsInfo sourceTopicsInfo = getSourceTopicsInfo(storeName);
         if (sourceTopicsInfo == null) {
             return null;
         }
+
         return getStreamsMetadataForKey(storeName,
                                         key,
                                         new DefaultStreamPartitioner<>(keySerializer,
@@ -224,6 +227,9 @@ public class StreamsMetadataState {
         private String topicWithMostPartitions;
 
         private SourceTopicsInfo(final Set<String> sourceTopics) {
+            if (clusterMetadata.topics().isEmpty()) {
+                throw new StreamsException("StreamsMetadata is currently not available as the stream thread has not (re-)initialized yet");
+            }
             this.sourceTopics = sourceTopics;
             for (String topic : sourceTopics) {
                 final List<PartitionInfo> partitions = clusterMetadata.partitionsForTopic(topic);

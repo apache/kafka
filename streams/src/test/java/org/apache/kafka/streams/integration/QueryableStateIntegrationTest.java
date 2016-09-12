@@ -235,15 +235,15 @@ public class QueryableStateIntegrationTest {
             TestUtils.waitForCondition(new TestCondition() {
                 @Override
                 public boolean conditionMet() {
-                    final StreamsMetadata metadata = streams.metadataForKey(storeName, key, new StringSerializer());
-                    if (metadata == null) {
-                        return false;
-                    }
-                    final int index = metadata.hostInfo().port();
-                    final KafkaStreams streamsWithKey = streamRunnables[index].getStream();
-                    final ReadOnlyKeyValueStore<String, Long> store;
                     try {
-                        store = streamsWithKey.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+                        final StreamsMetadata metadata = streams.metadataForKey(storeName, key, new StringSerializer());
+                        if (metadata == null) {
+                            return false;
+                        }
+                        final int index = metadata.hostInfo().port();
+                        final KafkaStreams streamsWithKey = streamRunnables[index].getStream();
+                        final ReadOnlyKeyValueStore<String, Long> store = streamsWithKey.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+                        return store != null && store.get(key) != null;
                     } catch (final IllegalStateException e) {
                         // Kafka Streams instance may have closed but rebalance hasn't happened
                         return false;
@@ -252,7 +252,6 @@ public class QueryableStateIntegrationTest {
                         return false;
                     }
 
-                    return store != null && store.get(key) != null;
                 }
             }, 30000, "waiting for metadata, store and value to be non null");
         }
@@ -266,15 +265,15 @@ public class QueryableStateIntegrationTest {
             TestUtils.waitForCondition(new TestCondition() {
                 @Override
                 public boolean conditionMet() {
-                    final StreamsMetadata metadata = streams.metadataForKey(storeName, key, new StringSerializer());
-                    if (metadata == null) {
-                        return false;
-                    }
-                    final int index = metadata.hostInfo().port();
-                    final KafkaStreams streamsWithKey = streamRunnables[index].getStream();
-                    final ReadOnlyWindowStore<String, Long> store;
                     try {
-                        store = streamsWithKey.store(storeName, QueryableStoreTypes.<String, Long>windowStore());
+                        final StreamsMetadata metadata = streams.metadataForKey(storeName, key, new StringSerializer());
+                        if (metadata == null) {
+                            return false;
+                        }
+                        final int index = metadata.hostInfo().port();
+                        final KafkaStreams streamsWithKey = streamRunnables[index].getStream();
+                        final ReadOnlyWindowStore<String, Long> store = streamsWithKey.store(storeName, QueryableStoreTypes.<String, Long>windowStore());
+                        return store != null && store.fetch(key, from, to) != null;
                     } catch (final IllegalStateException e) {
                         // Kafka Streams instance may have closed but rebalance hasn't happened
                         return false;
@@ -282,7 +281,7 @@ public class QueryableStateIntegrationTest {
                         // rebalance
                         return false;
                     }
-                    return store != null && store.fetch(key, from, to) != null;
+
                 }
             }, 30000, "waiting for metadata, store and value to be non null");
         }
