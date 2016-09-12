@@ -105,7 +105,7 @@ public class ThreadCache {
         if (cache == null) {
             return new MemoryLRUCacheBytesIterator(Collections.<Bytes>emptyIterator(), new NamedCache(namespace));
         }
-        return new MemoryLRUCacheBytesIterator(cache.range(cacheKey(from), cacheKey(to)), cache);
+        return new MemoryLRUCacheBytesIterator(cache.keyRange(cacheKey(from), cacheKey(to)), cache);
     }
 
     public MemoryLRUCacheBytesIterator all(final String namespace) {
@@ -113,7 +113,7 @@ public class ThreadCache {
         if (cache == null) {
             return new MemoryLRUCacheBytesIterator(Collections.<Bytes>emptyIterator(), new NamedCache(namespace));
         }
-        return new MemoryLRUCacheBytesIterator(cache.all(), cache);
+        return new MemoryLRUCacheBytesIterator(cache.allKeys(), cache);
     }
 
 

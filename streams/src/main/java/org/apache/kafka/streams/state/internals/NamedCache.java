@@ -181,7 +181,7 @@ class NamedCache {
         return cache.size();
     }
 
-    synchronized Iterator<Bytes> range(final Bytes from, final Bytes to) {
+    synchronized Iterator<Bytes> keyRange(final Bytes from, final Bytes to) {
         return keySetIterator(cache.navigableKeySet().subSet(from, true, to, true));
     }
 
@@ -192,7 +192,7 @@ class NamedCache {
     }
     
 
-    synchronized Iterator<Bytes> all() {
+    synchronized Iterator<Bytes> allKeys() {
         return keySetIterator(cache.navigableKeySet());
     }
 
@@ -217,7 +217,7 @@ class NamedCache {
     /**
      * A simple wrapper class to implement a doubly-linked list around MemoryLRUCacheBytesEntry
      */
-    class LRUNode {
+    private class LRUNode {
         private final Bytes key;
         private LRUCacheEntry entry;
         private LRUNode previous;
