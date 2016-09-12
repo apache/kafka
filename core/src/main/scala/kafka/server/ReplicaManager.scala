@@ -550,7 +550,7 @@ class ReplicaManager(val config: KafkaConfig,
               var fetch = log.read(offset, adjustedFetchSize, maxOffsetOpt)
 
               //If the partition is marked as throttled, and we are over-quota then exclude it
-              if (quota.isThrottled(TopicAndPartition(topic, partition)) && quota.isQuotaExceeded) //TODO - could also check ISR inclusion??
+              if (quota.isThrottled(TopicAndPartition(topic, partition)) && quota.isQuotaExceeded)
                 fetch = FetchDataInfo(fetch.fetchOffsetMetadata, MessageSet.Empty)
               fetch
             case None =>
