@@ -29,9 +29,9 @@ class FetchRequest(correlationId: Int,
                    requestInfo: java.util.Map[TopicAndPartition, PartitionFetchInfo]) {
 
   val underlying = {
-    val scalaMap: Map[TopicAndPartition, PartitionFetchInfo] = {
+    val scalaMap: Seq[(TopicAndPartition, PartitionFetchInfo)] = {
       import scala.collection.JavaConversions._
-      (requestInfo: mutable.Map[TopicAndPartition, PartitionFetchInfo]).toMap
+      (requestInfo: mutable.Map[TopicAndPartition, PartitionFetchInfo]).toSeq
     }
     kafka.api.FetchRequest(
       correlationId = correlationId,
@@ -39,7 +39,7 @@ class FetchRequest(correlationId: Int,
       replicaId = Request.OrdinaryConsumerId,
       maxWait = maxWait,
       minBytes = minBytes,
-      requestInfo = scalaMap
+      requestInfo = scalaMap.toVector
     )
   }
 

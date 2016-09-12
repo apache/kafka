@@ -434,8 +434,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       case (topicAndPartition, _) => authorize(request.session, Read, new Resource(auth.Topic, topicAndPartition.topic))
     }
 
-    val unauthorizedPartitionData = unauthorizedRequestInfo.mapValues { _ =>
-      FetchResponsePartitionData(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1, MessageSet.Empty)
+    val unauthorizedPartitionData = unauthorizedRequestInfo.map { case (tp, _) =>
+      (tp, FetchResponsePartitionData(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1, MessageSet.Empty))
     }
 
     // the callback for sending a fetch response
@@ -478,7 +478,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       def fetchResponseCallback(delayTimeMs: Int) {
         trace(s"Sending fetch response to client ${fetchRequest.clientId} of " +
           s"${convertedPartitionData.values.map(_.messages.sizeInBytes).sum} bytes")
-        val response = FetchResponse(fetchRequest.correlationId, mergedPartitionData, fetchRequest.versionId, delayTimeMs)
+        val response = FetchResponse(fetchRequest.correlationId, mergedPartitionData.toVector, fetchRequest.versionId, delayTimeMs)
         requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(request.connectionId, response)))
       }
 
@@ -491,7 +491,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         fetchResponseCallback(0)
       } else {
         quotaManagers(ApiKeys.FETCH.id).recordAndMaybeThrottle(fetchRequest.clientId,
-                                                               FetchResponse.responseSize(mergedPartitionData.groupBy(_._1.topic),
+                                                               FetchResponse.responseSize(FetchResponse.groupByTopicOrdered(mergedPartitionData.toSeq),
                                                                                           fetchRequest.versionId),
                                                                fetchResponseCallback)
       }
@@ -506,7 +506,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         fetchRequest.replicaId,
         fetchRequest.minBytes,
         fetchRequest.maxBytes,
-        authorizedRequestInfo,
+        authorizedRequestInfo.toMap,
         sendResponseCallback)
     }
   }

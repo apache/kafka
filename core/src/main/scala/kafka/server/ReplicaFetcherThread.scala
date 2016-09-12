@@ -269,7 +269,7 @@ class ReplicaFetcherThread(name: String,
     }
   }
 
-  protected def buildFetchRequest(partitionMap: Map[TopicAndPartition, PartitionFetchState]): FetchRequest = {
+  protected def buildFetchRequest(partitionMap: Seq[(TopicAndPartition, PartitionFetchState)]): FetchRequest = {
     val requestMap = mutable.Map.empty[TopicPartition, JFetchRequest.PartitionData]
 
     partitionMap.foreach { case ((TopicAndPartition(topic, partition), partitionFetchState)) =>

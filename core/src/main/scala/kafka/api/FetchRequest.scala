@@ -58,7 +58,7 @@ object FetchRequest {
         (TopicAndPartition(topic, partitionId), PartitionFetchInfo(offset, fetchSize))
       })
     })
-    FetchRequest(versionId, correlationId, clientId, replicaId, maxWait, minBytes, maxBytes, ListMap(pairs:_*))
+    FetchRequest(versionId, correlationId, clientId, replicaId, maxWait, minBytes, maxBytes, Vector(pairs:_*))
   }
 }
 
@@ -69,9 +69,10 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
                         maxWait: Int = FetchRequest.DefaultMaxWait,
                         minBytes: Int = FetchRequest.DefaultMinBytes,
                         maxBytes: Int = FetchRequest.DefaultMaxBytes,
-                        requestInfo: Map[TopicAndPartition, PartitionFetchInfo])
+                        requestInfo: Vector[(TopicAndPartition, PartitionFetchInfo)])
         extends RequestOrResponse(Some(ApiKeys.FETCH.id)) {
 
+  lazy val requestInfoMapByTopic = requestInfo.toMap
   /**
     * Partitions the request info into a list of lists (one for each topic) while preserving request info ordering
     */
@@ -97,7 +98,7 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
            maxWait: Int,
            minBytes: Int,
            maxBytes: Int,
-           requestInfo: Map[TopicAndPartition, PartitionFetchInfo]) {
+           requestInfo: Seq[(TopicAndPartition, PartitionFetchInfo)]) {
     this(versionId = FetchRequest.CurrentVersion,
          correlationId = correlationId,
          clientId = clientId,
@@ -105,7 +106,7 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
          maxWait = maxWait,
          minBytes = minBytes,
          maxBytes = maxBytes,
-         requestInfo = requestInfo)
+         requestInfo = requestInfo.toVector)
   }
 
   def writeTo(buffer: ByteBuffer) {
@@ -201,10 +202,10 @@ class FetchRequestBuilder() {
   private var maxWait = FetchRequest.DefaultMaxWait
   private var minBytes = FetchRequest.DefaultMinBytes
   private var maxBytes = FetchRequest.DefaultMaxBytes
-  private val requestMap = new collection.mutable.LinkedHashMap[TopicAndPartition, PartitionFetchInfo]
+  private val requestMap = new collection.mutable.ArrayBuffer[(TopicAndPartition, PartitionFetchInfo)]
 
   def addFetch(topic: String, partition: Int, offset: Long, fetchSize: Int) = {
-    requestMap.put(TopicAndPartition(topic, partition), PartitionFetchInfo(offset, fetchSize))
+    requestMap.append((TopicAndPartition(topic, partition), PartitionFetchInfo(offset, fetchSize)))
     this
   }
 
@@ -242,7 +243,7 @@ class FetchRequestBuilder() {
   }
 
   def build() = {
-    val fetchRequest = FetchRequest(versionId, correlationId.getAndIncrement, clientId, replicaId, maxWait, minBytes, maxBytes, requestMap.toMap)
+    val fetchRequest = FetchRequest(versionId, correlationId.getAndIncrement, clientId, replicaId, maxWait, minBytes, maxBytes, requestMap.toVector)
     requestMap.clear()
     fetchRequest
   }

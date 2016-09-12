@@ -94,7 +94,7 @@ class ConsumerFetcherThread(name: String,
     consumerFetcherManager.addPartitionsWithError(partitions)
   }
 
-  protected def buildFetchRequest(partitionMap: collection.Map[TopicAndPartition, PartitionFetchState]): FetchRequest = {
+  protected def buildFetchRequest(partitionMap: collection.Seq[(TopicAndPartition, PartitionFetchState)]): FetchRequest = {
     partitionMap.foreach { case ((topicAndPartition, partitionFetchState)) =>
       if (partitionFetchState.isActive)
         fetchRequestBuilder.addFetch(topicAndPartition.topic, topicAndPartition.partition, partitionFetchState.offset,
@@ -105,7 +105,7 @@ class ConsumerFetcherThread(name: String,
   }
 
   protected def fetch(fetchRequest: FetchRequest): collection.Map[TopicAndPartition, PartitionData] =
-    simpleConsumer.fetch(fetchRequest.underlying).data.map { case (key, value) =>
+    simpleConsumer.fetch(fetchRequest.underlying).dataByTopicAndPartition.map { case (key, value) =>
       key -> new PartitionData(value)
     }
 
@@ -115,7 +115,7 @@ object ConsumerFetcherThread {
 
   class FetchRequest(val underlying: kafka.api.FetchRequest) extends AbstractFetcherThread.FetchRequest {
     def isEmpty: Boolean = underlying.requestInfo.isEmpty
-    def offset(topicAndPartition: TopicAndPartition): Long = underlying.requestInfo(topicAndPartition).offset
+    def offset(topicAndPartition: TopicAndPartition): Long = underlying.requestInfoMapByTopic(topicAndPartition).offset
   }
 
   class PartitionData(val underlying: FetchResponsePartitionData) extends AbstractFetcherThread.PartitionData {

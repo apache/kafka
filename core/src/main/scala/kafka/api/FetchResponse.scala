@@ -100,7 +100,7 @@ object TopicData {
       val partitionData = FetchResponsePartitionData.readFrom(buffer)
       (partitionId, partitionData)
     })
-    TopicData(topic, Map(topicPartitionDataPairs:_*))
+    TopicData(topic, Vector(topicPartitionDataPairs:_*))
   }
 
   def headerSize(topic: String) =
@@ -108,9 +108,11 @@ object TopicData {
     4 /* partition count */
 }
 
-case class TopicData(topic: String, partitionData: Map[Int, FetchResponsePartitionData]) {
+case class TopicData(topic: String, partitionData: Vector[(Int, FetchResponsePartitionData)]) {
   val sizeInBytes =
-    TopicData.headerSize(topic) + partitionData.values.foldLeft(0)(_ + _.sizeInBytes + 4)
+    TopicData.headerSize(topic) + partitionData.foldLeft(0)((folded, data) => {
+      folded + data._2.sizeInBytes + 4
+    }                                  /*_ + _.sizeInBytes + 4*/)
 
   val headerSize = TopicData.headerSize(topic)
 }
@@ -173,7 +175,22 @@ object FetchResponse {
           (TopicAndPartition(topicData.topic, partitionId), partitionData)
       }
     })
-    FetchResponse(correlationId, Map(pairs:_*), requestVersion, throttleTime)
+    FetchResponse(correlationId, Vector(pairs:_*), requestVersion, throttleTime)
+  }
+
+  type FetchResponseEntry = (TopicAndPartition, FetchResponsePartitionData)
+
+  def groupByTopicOrdered(data: Seq[(TopicAndPartition, FetchResponsePartitionData)]): Vector[(String, Vector[FetchResponseEntry])] = {
+    data.foldLeft(Vector.empty[(String, Vector[FetchResponseEntry])])((folded, currFetchResponse) => {
+      val (topicPartition, fetchResponsePartitionData) = currFetchResponse
+      val TopicAndPartition(topic, partition) = topicPartition
+      if (folded.isEmpty || folded.last._1 != topic) {
+        folded :+ (topic, Vector((topicPartition, fetchResponsePartitionData)))
+      } else {
+        val updatedTail = (folded.last._1, folded.last._2 :+ (topicPartition, fetchResponsePartitionData))
+        folded.dropRight(1) :+ updatedTail
+      }
+    })
   }
 
   // Returns the size of the response header
@@ -185,7 +202,7 @@ object FetchResponse {
   }
 
   // Returns the size of entire fetch response in bytes (including the header size)
-  def responseSize(dataGroupedByTopic: Map[String, Map[TopicAndPartition, FetchResponsePartitionData]],
+  def responseSize(dataGroupedByTopic: Vector[(String, Vector[FetchResponseEntry])],
                    requestVersion: Int): Int = {
     headerSize(requestVersion) +
     dataGroupedByTopic.foldLeft(0) { case (folded, (topic, partitionDataMap)) =>
@@ -198,7 +215,7 @@ object FetchResponse {
 }
 
 case class FetchResponse(correlationId: Int,
-                         data: Map[TopicAndPartition, FetchResponsePartitionData],
+                         data: Vector[(TopicAndPartition, FetchResponsePartitionData)],
                          requestVersion: Int = 0,
                          throttleTimeMs: Int = 0)
   extends RequestOrResponse() {
@@ -206,7 +223,8 @@ case class FetchResponse(correlationId: Int,
   /**
    * Partitions the data into a map of maps (one for each topic).
    */
-  lazy val dataGroupedByTopic = data.groupBy{ case (topicAndPartition, fetchData) => topicAndPartition.topic }
+  lazy val dataByTopicAndPartition = data.toMap
+  lazy val dataGroupedByTopic = FetchResponse.groupByTopicOrdered(data)
   val headerSizeInBytes = FetchResponse.headerSize(requestVersion)
   lazy val sizeInBytes = FetchResponse.responseSize(dataGroupedByTopic, requestVersion)
 
@@ -234,7 +252,7 @@ case class FetchResponse(correlationId: Int,
 
   private def partitionDataFor(topic: String, partition: Int): FetchResponsePartitionData = {
     val topicAndPartition = TopicAndPartition(topic, partition)
-    data.get(topicAndPartition) match {
+    dataByTopicAndPartition.get(topicAndPartition) match {
       case Some(partitionData) => partitionData
       case _ =>
         throw new IllegalArgumentException(
@@ -247,7 +265,7 @@ case class FetchResponse(correlationId: Int,
 
   def highWatermark(topic: String, partition: Int) = partitionDataFor(topic, partition).hw
 
-  def hasError = data.values.exists(_.error != Errors.NONE.code)
+  def hasError = dataByTopicAndPartition.values.exists(_.error != Errors.NONE.code)
 
   def errorCode(topic: String, partition: Int) = partitionDataFor(topic, partition).error
 }

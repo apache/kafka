@@ -119,8 +119,8 @@ class AbstractFetcherThreadTest {
       fetchRequest.offsets.mapValues(_ => new DummyPartitionData)
     }
 
-    override protected def buildFetchRequest(partitionMap: collection.Map[TopicAndPartition, PartitionFetchState]): DummyFetchRequest = {
-      new DummyFetchRequest(partitionMap.mapValues(_.offset))
+    override protected def buildFetchRequest(partitionMap: collection.Seq[(TopicAndPartition, PartitionFetchState)]): DummyFetchRequest = {
+      new DummyFetchRequest(partitionMap.map(kv => (kv._1, kv._2.offset)).toMap)
     }
   }
 
