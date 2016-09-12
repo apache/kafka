@@ -90,6 +90,8 @@ public class SmokeTestClient extends SmokeTestUtil {
         props.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 100);
         props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 2);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 60000);
+        props.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 10000);
 
         KStreamBuilder builder = new KStreamBuilder();
 
