@@ -132,6 +132,9 @@ class ClientQuotasTest extends KafkaServerTestHarness {
 
     // Consumer should read in a bursty manner and get throttled immediately
     consume(consumers.head, numRecords)
+    // The replica consumer should not be throttled also. Create a fetch request which will exceed the quota immediately
+    val request = new FetchRequestBuilder().addFetch(topic1, 0, 0, 1024*1024).replicaId(followerNode.config.brokerId).build()
+    replicaConsumers.head.fetch(request)
     val consumerMetricName = leaderNode.metrics.metricName("throttle-time",
                                                            ApiKeys.FETCH.name,
                                                            "Tracking throttle-time per client",
