@@ -31,7 +31,7 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.util.List;
 
-public class CachingWindowStore<K, V> implements WindowStore<K, V>, CachedStateStore {
+class CachingWindowStore<K, V> implements WindowStore<K, V>, CachedStateStore {
 
     private final WindowStore<Bytes, byte[]> underlying;
     private final Serde<K> keySerde;
@@ -44,11 +44,11 @@ public class CachingWindowStore<K, V> implements WindowStore<K, V>, CachedStateS
     private StateSerdes<K, V> serdes;
     private boolean sendOldValues;
 
-    public CachingWindowStore(final WindowStore<Bytes, byte[]> underlying,
-                              final Serde<K> keySerde,
-                              final Serde<V> valueSerde,
-                              final CacheFlushListener<Windowed<K>, V> flushListener,
-                              final long windowSize) {
+    CachingWindowStore(final WindowStore<Bytes, byte[]> underlying,
+                       final Serde<K> keySerde,
+                       final Serde<V> valueSerde,
+                       final CacheFlushListener<Windowed<K>, V> flushListener,
+                       final long windowSize) {
         this.underlying = underlying;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;

@@ -31,7 +31,7 @@ import org.apache.kafka.streams.state.StateSerdes;
 import java.util.ArrayList;
 import java.util.List;
 
-public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStore {
+class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStore {
 
     private final KeyValueStore<Bytes, byte[]> underlying;
     private final Serde<K> keySerde;
@@ -44,10 +44,10 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedSt
     private boolean sendOldValues;
     private Thread streamThread;
 
-    public CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying,
-                                final Serde<K> keySerde,
-                                final Serde<V> valueSerde,
-                                final CacheFlushListener<K, V> flushListener) {
+    CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying,
+                         final Serde<K> keySerde,
+                         final Serde<V> valueSerde,
+                         final CacheFlushListener<K, V> flushListener) {
         this.underlying = underlying;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;

@@ -139,7 +139,7 @@ class NamedCache {
         }
     }
 
-    void evict() {
+    synchronized void evict() {
         final LRUNode eldest = tail;
         currentSizeBytes -= eldest.size();
         if (eldest.entry.isDirty()) {
@@ -163,7 +163,7 @@ class NamedCache {
         }
     }
 
-    public LRUCacheEntry delete(final Bytes key) {
+    synchronized LRUCacheEntry delete(final Bytes key) {
         final LRUNode node = cache.remove(key);
 
         if (node == null) {
