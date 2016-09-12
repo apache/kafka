@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 /**
@@ -26,6 +25,13 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
  * {@link ThreadCache}
  */
 public interface InternalProcessorContext extends ProcessorContext {
+
+    /**
+     * Returns the current {@link RecordContext}
+     * @return the current {@link RecordContext}
+     */
+    RecordContext recordContext();
+
     /**
      * @param recordContext the {@link RecordContext} for the record about to be processes
      */

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.processor.RecordContext;
+import org.apache.kafka.streams.processor.internals.RecordContext;
 
 /**
  * A cache entry

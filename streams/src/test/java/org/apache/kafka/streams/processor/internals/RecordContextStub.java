@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.streams.processor.RecordContext;
-
 public class RecordContextStub implements RecordContext {
 
     private final long offset;

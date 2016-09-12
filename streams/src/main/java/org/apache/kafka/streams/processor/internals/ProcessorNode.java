@@ -32,7 +32,6 @@ public class ProcessorNode<K, V> {
     private final Processor<K, V> processor;
 
     public final Set<String> stateStores;
-    private boolean stateStoreCachingEnabled  = false;
 
     public ProcessorNode(String name) {
         this(name, null, null);
@@ -89,13 +88,5 @@ public class ProcessorNode<K, V> {
             sb.append("] ");
         }
         return sb.toString();
-    }
-
-    public void setStateStoreCachingEnabled(final boolean stateStoreCachingEnabled) {
-        this.stateStoreCachingEnabled = this.stateStoreCachingEnabled || stateStoreCachingEnabled;
-    }
-
-    public boolean stateStoreCachingEnabled() {
-        return stateStoreCachingEnabled;
     }
 }

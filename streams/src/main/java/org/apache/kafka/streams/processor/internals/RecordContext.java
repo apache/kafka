@@ -14,10 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.processor.internals;
+
+import org.apache.kafka.streams.processor.Processor;
 
 /**
- * An interface to mark DSL processor as Cache Enabled
+ * The context associated with the current record being processed by
+ * an {@link Processor}
  */
-public interface CacheEnabledProcessor {
+public interface RecordContext {
+    /**
+     * @return The offset of the original record received from Kafka
+     */
+    long offset();
+
+    /**
+     * @return The timestamp extracted from the record received from Kafka
+     */
+    long timestamp();
+
+    /**
+     * @return The topic the record was received on
+     */
+    String topic();
+
+    /**
+     * @return The partition the record was received on
+     */
+    int partition();
 }

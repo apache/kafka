@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.streams.processor.RecordContext;
-
 import java.util.Objects;
 
 public class ProcessorRecordContext implements RecordContext {
