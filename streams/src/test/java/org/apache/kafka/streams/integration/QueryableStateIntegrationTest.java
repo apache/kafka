@@ -280,10 +280,7 @@ public class QueryableStateIntegrationTest {
                     } catch (final IllegalStateException e) {
                         // Kafka Streams instance may have closed but rebalance hasn't happened
                         return false;
-                    } catch (final InvalidStateStoreException e) {
-                        // rebalance
-                        return false;
-                    }
+                    } 
 
                     return store != null && store.get(key) != null;
                 }
