@@ -21,12 +21,13 @@ import kafka.server.QuotaType._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 
-object QuotaType {
-  val Fetch = "Fetch"
-  val Produce = "Produce"
-  val LeaderReplication = "LeaderReplication"
-  val FollowerReplication = "FollowerReplication"
+object QuotaType  {
+  case object Fetch extends QuotaType
+  case object Produce extends QuotaType
+  case object LeaderReplication extends QuotaType
+  case object  FollowerReplication extends QuotaType
 }
+sealed trait QuotaType
 
 object QuotaFactory {
 

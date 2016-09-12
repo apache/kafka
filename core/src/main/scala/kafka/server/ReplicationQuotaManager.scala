@@ -68,13 +68,13 @@ object Constants {
   */
 class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
                               private val metrics: Metrics,
-                              private val replicationType: String,
+                              private val replicationType: QuotaType,
                               private val time: Time) extends Logging with ReplicaQuota {
   private val lock = new ReentrantReadWriteLock()
   private val throttledPartitions = new ConcurrentHashMap[String, Seq[Int]]()
   private var quota: Quota = null
   private val sensorAccess = new SensorAccess
-  private val rateMetricName = metrics.metricName("byte-rate", replicationType, s"Tracking byte-rate for $replicationType")
+  private val rateMetricName = metrics.metricName("byte-rate", replicationType.toString, s"Tracking byte-rate for ${replicationType}")
 
   /**
     * Update the quota
@@ -180,7 +180,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
 
   private def sensor(): Sensor = {
     sensorAccess.getOrCreate(
-      replicationType,
+      replicationType.toString,
       InactiveSensorExpirationTimeSeconds,
       lock,
       metrics,

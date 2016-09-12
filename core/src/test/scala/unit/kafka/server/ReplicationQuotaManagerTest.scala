@@ -20,7 +20,7 @@ import java.util.Collections
 
 import kafka.common.TopicAndPartition
 import kafka.server.QuotaType._
-import kafka.server.{ReplicationQuotaManager, ReplicationQuotaManagerConfig}
+import kafka.server.{QuotaType, ReplicationQuotaManager, ReplicationQuotaManagerConfig}
 import org.apache.kafka.common.metrics.stats.{Rate, SimpleRate}
 import org.apache.kafka.common.metrics.{Quota, MetricConfig, Metrics}
 import org.apache.kafka.common.utils.MockTime
@@ -33,7 +33,7 @@ class ReplicationQuotaManagerTest {
 
   @Test
   def shouldThrottleOnlyDefinedReplicas() {
-    val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(), newMetrics, "consumer", time)
+    val quota = new ReplicationQuotaManager(ReplicationQuotaManagerConfig(), newMetrics, QuotaType.Fetch, time)
     quota.markThrottled("topic1", Seq(1, 2, 3))
 
     assertTrue(quota.isThrottled(tp1(1)))
@@ -99,7 +99,7 @@ class ReplicationQuotaManagerTest {
   }
 
   def rate(metrics: Metrics): Double = {
-    val metricName = metrics.metricName("byte-rate", LeaderReplication, "Tracking byte-rate for " + LeaderReplication)
+    val metricName = metrics.metricName("byte-rate", LeaderReplication.toString, "Tracking byte-rate for " + LeaderReplication)
     val leaderThrottledRate = metrics.metrics.asScala(metricName).value()
     leaderThrottledRate
   }

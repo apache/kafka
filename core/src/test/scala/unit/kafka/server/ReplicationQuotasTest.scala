@@ -46,9 +46,7 @@ import scala.collection.JavaConverters._
   */
 
 class ReplicationQuotasTest extends ZooKeeperTestHarness {
-  def tenPercentError(value: Int): Int = Math.round(value * 0.1).toInt
-
-  def fifteenPercentError(value: Int): Int = Math.round(value * 0.15).toInt
+  def percentError(percent: Int, value: Int): Int = Math.round(value * percent / 100)
 
   val msg100KB = new Array[Byte](100000)
   var brokers: Seq[KafkaServer] = null
@@ -149,17 +147,17 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     //Check the recorded throttled rate is what we expect
     if (leaderThrottle) {
       (100 to 105).map(brokerFor(_)).foreach { broker =>
-        val metricName = broker.metrics.metricName("byte-rate", LeaderReplication, "Tracking byte-rate for" + LeaderReplication)
+        val metricName = broker.metrics.metricName("byte-rate", LeaderReplication.toString, "Tracking byte-rate for" + LeaderReplication)
         val measuredRate = broker.metrics.metrics.asScala(metricName).value()
         info(s"Broker:${broker.config.brokerId} Expected:$throttle, Recorded Rate was:$measuredRate")
-        assertEquals(throttle, measuredRate, fifteenPercentError(throttle))
+        assertEquals(throttle, measuredRate, percentError(25, throttle))
       }
     } else {
       (106 to 107).map(brokerFor(_)).foreach { broker =>
-        val metricName = broker.metrics.metricName("byte-rate", FollowerReplication, "Tracking byte-rate for" + FollowerReplication)
+        val metricName = broker.metrics.metricName("byte-rate", FollowerReplication.toString, "Tracking byte-rate for" + FollowerReplication)
         val measuredRate = broker.metrics.metrics.asScala(metricName).value()
         info(s"Broker:${broker.config.brokerId} Expected:$throttle, Recorded Rate was:$measuredRate")
-        assertEquals(throttle, measuredRate, fifteenPercentError(throttle))
+        assertEquals(throttle, measuredRate, percentError(25, throttle))
       }
     }
 

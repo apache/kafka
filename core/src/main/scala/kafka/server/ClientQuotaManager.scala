@@ -65,7 +65,7 @@ object ClientQuotaManagerConfig {
  */
 class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
                          private val metrics: Metrics,
-                         private val apiKey: String,
+                         private val apiKey: QuotaType,
                          private val time: Time) extends Logging {
   private val overriddenQuota = new ConcurrentHashMap[String, Quota]()
   private val defaultQuota = Quota.upperBound(config.quotaBytesPerSecondDefault)
@@ -77,7 +77,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
 
   private val delayQueueSensor = metrics.sensor(apiKey + "-delayQueue")
   delayQueueSensor.add(metrics.metricName("queue-size",
-                                      apiKey,
+                                      apiKey.toString,
                                       "Tracks the size of the delay queue"), new Total())
 
   /**
@@ -177,7 +177,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
         ClientQuotaManagerConfig.InactiveSensorExpirationTimeSeconds,
         lock,
         metrics,
-        () => metrics.metricName("throttle-time", apiKey, "Tracking average throttle-time per client", "client-id", clientId),
+        () => metrics.metricName("throttle-time", apiKey.toString, "Tracking average throttle-time per client", "client-id", clientId),
         () => null,
         () => new Avg()
       )
@@ -238,7 +238,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   }
 
   private def clientRateMetricName(clientId: String): MetricName = {
-    metrics.metricName("byte-rate", apiKey,
+    metrics.metricName("byte-rate", apiKey.toString,
                    "Tracking byte-rate per client",
                    "client-id", clientId)
   }
