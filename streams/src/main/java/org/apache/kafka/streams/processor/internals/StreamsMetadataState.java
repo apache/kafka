@@ -67,10 +67,11 @@ public class StreamsMetadataState {
      *
      * @param storeName the storeName to find metadata for
      * @return A collection of {@link StreamsMetadata} that have the provided storeName
+     * @throws StreamsException if streams is (re-)initializing
      */
     public synchronized Collection<StreamsMetadata> getAllMetadataForStore(final String storeName) {
+        validateInitialized();
         Objects.requireNonNull(storeName, "storeName cannot be null");
-
         final Set<String> sourceTopics = builder.stateStoreNameToSourceTopics().get(storeName);
         if (sourceTopics == null) {
             return Collections.emptyList();
@@ -98,6 +99,7 @@ public class StreamsMetadataState {
      * @param keySerializer Serializer for the key
      * @param <K>           key type
      * @return The {@link StreamsMetadata} for the storeName and key
+     * @throws StreamsException if streams is (re-)initializing
      */
     public synchronized <K> StreamsMetadata getMetadataWithKey(final String storeName,
                                                                final K key,
@@ -135,6 +137,7 @@ public class StreamsMetadataState {
      * @param partitioner partitioner to use to find correct partition for key
      * @param <K>         key type
      * @return The {@link StreamsMetadata} for the storeName and key
+     * @throws StreamsException if streams is (re-)initializing
      */
     public synchronized <K> StreamsMetadata getMetadataWithKey(final String storeName,
                                                                final K key,
@@ -221,15 +224,19 @@ public class StreamsMetadataState {
         return new SourceTopicsInfo(sourceTopics);
     }
 
+    private void validateInitialized() {
+        if (clusterMetadata.topics().isEmpty()) {
+            throw new StreamsException("StreamsMetadata is currently not available as the stream thread has not (re-)initialized yet");
+        }
+    }
+
     private class SourceTopicsInfo {
         private final Set<String> sourceTopics;
         private int maxPartitions;
         private String topicWithMostPartitions;
 
         private SourceTopicsInfo(final Set<String> sourceTopics) {
-            if (clusterMetadata.topics().isEmpty()) {
-                throw new StreamsException("StreamsMetadata is currently not available as the stream thread has not (re-)initialized yet");
-            }
+            validateInitialized();
             this.sourceTopics = sourceTopics;
             for (String topic : sourceTopics) {
                 final List<PartitionInfo> partitions = clusterMetadata.partitionsForTopic(topic);
