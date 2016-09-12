@@ -198,11 +198,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         info(s"Cluster ID = $clusterId")
 
         /* Send events to metric reporters who implement ClusterResourceListener */
-        // Add reporters for Codahale metrics framework who implement ClusterResourceListener
-        for(reporter <- reporters) {
-          clusterResourceListeners.add(reporter)
+        // Add reporters for Codahale metrics framework (KafkaMetricsReporter) who implement ClusterResourceListener
+        for(kafkaMetricsReporter <- kafkaMetricsReporters) {
+          clusterResourceListeners.add(kafkaMetricsReporter)
         }
-        // Add reporters for Kafka metrics framework who implement ClusterResourceListener 
+        // Add reporters for Kafka metrics framework (MetricsReporter) who implement ClusterResourceListener
         clusterResourceListeners.addAll(reporters)
         clusterResourceListeners.onUpdate(new ClusterResource(clusterId))
 
