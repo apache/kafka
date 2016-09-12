@@ -451,7 +451,7 @@ public class ConsumerCoordinatorTest {
             }
         }, syncGroupResponse(singletonList(tp), Errors.NONE.code()));
 
-        coordinator.poll(time.milliseconds());
+        coordinator.doJoinGroup();
 
         assertFalse(coordinator.needRejoin());
         assertEquals(singleton(tp), subscriptions.assignedPartitions());
@@ -471,7 +471,7 @@ public class ConsumerCoordinatorTest {
 
         client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE.code()));
         client.prepareResponse(syncGroupResponse(singletonList(tp), Errors.NONE.code()));
-        coordinator.poll(time.milliseconds());
+        coordinator.doJoinGroup();
 
         final AtomicBoolean received = new AtomicBoolean(false);
         client.prepareResponse(new MockClient.RequestMatcher() {
@@ -498,7 +498,7 @@ public class ConsumerCoordinatorTest {
 
         client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE.code()));
         client.prepareResponse(syncGroupResponse(singletonList(tp), Errors.NONE.code()));
-        coordinator.poll(time.milliseconds());
+        coordinator.doJoinGroup();
 
         final AtomicBoolean received = new AtomicBoolean(false);
         client.prepareResponse(new MockClient.RequestMatcher() {
@@ -529,7 +529,7 @@ public class ConsumerCoordinatorTest {
         // join initially, but let coordinator rebalance on sync
         client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE.code()));
         client.prepareResponse(syncGroupResponse(Collections.<TopicPartition>emptyList(), Errors.UNKNOWN.code()));
-        coordinator.poll(time.milliseconds());
+        coordinator.doJoinGroup();
     }
 
     @Test
@@ -555,7 +555,7 @@ public class ConsumerCoordinatorTest {
         }, joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE.code()));
         client.prepareResponse(syncGroupResponse(singletonList(tp), Errors.NONE.code()));
 
-        coordinator.poll(time.milliseconds());
+        coordinator.doJoinGroup();
 
         assertFalse(coordinator.needRejoin());
         assertEquals(singleton(tp), subscriptions.assignedPartitions());
@@ -578,7 +578,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE.code()));
         client.prepareResponse(syncGroupResponse(singletonList(tp), Errors.NONE.code()));
 
-        coordinator.poll(time.milliseconds());
+        coordinator.doJoinGroup();
 
         assertFalse(coordinator.needRejoin());
         assertEquals(singleton(tp), subscriptions.assignedPartitions());
@@ -607,7 +607,7 @@ public class ConsumerCoordinatorTest {
         }, joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE.code()));
         client.prepareResponse(syncGroupResponse(singletonList(tp), Errors.NONE.code()));
 
-        coordinator.poll(time.milliseconds());
+        coordinator.doJoinGroup();
 
         assertFalse(coordinator.needRejoin());
         assertEquals(singleton(tp), subscriptions.assignedPartitions());
@@ -728,7 +728,7 @@ public class ConsumerCoordinatorTest {
         // join the group once
         client.prepareResponse(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE.code()));
         client.prepareResponse(syncGroupResponse(singletonList(tp), Errors.NONE.code()));
-        coordinator.poll(time.milliseconds());
+        coordinator.doJoinGroup();
 
         assertEquals(1, rebalanceListener.revokedCount);
         assertTrue(rebalanceListener.revoked.isEmpty());
@@ -739,7 +739,7 @@ public class ConsumerCoordinatorTest {
         subscriptions.subscribe(new HashSet<>(Arrays.asList(topicName, otherTopic)), rebalanceListener);
         client.prepareResponse(joinGroupFollowerResponse(2, "consumer", "leader", Errors.NONE.code()));
         client.prepareResponse(syncGroupResponse(singletonList(tp), Errors.NONE.code()));
-        coordinator.poll(time.milliseconds());
+        coordinator.doJoinGroup();
 
         assertEquals(2, rebalanceListener.revokedCount);
         assertEquals(singleton(tp), rebalanceListener.revoked);
@@ -759,7 +759,8 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE.code()));
         client.prepareResponse(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE.code()));
         client.prepareResponse(syncGroupResponse(singletonList(tp), Errors.NONE.code()));
-        coordinator.poll(time.milliseconds());
+        coordinator.doJoinGroup();
+
         assertFalse(coordinator.needRejoin());
         assertEquals(singleton(tp), subscriptions.assignedPartitions());
         assertEquals(1, rebalanceListener.revokedCount);
@@ -776,7 +777,7 @@ public class ConsumerCoordinatorTest {
 
         // coordinator doesn't like the session timeout
         client.prepareResponse(joinGroupFollowerResponse(0, "consumer", "", Errors.INVALID_SESSION_TIMEOUT.code()));
-        coordinator.poll(time.milliseconds());
+        coordinator.doJoinGroup();
     }
 
     @Test
@@ -810,7 +811,7 @@ public class ConsumerCoordinatorTest {
 
         client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE.code()));
         client.prepareResponse(syncGroupResponse(singletonList(tp), Errors.NONE.code()));
-        coordinator.poll(time.milliseconds());
+        coordinator.doJoinGroup();
 
         subscriptions.seek(tp, 100);
 
@@ -839,7 +840,7 @@ public class ConsumerCoordinatorTest {
 
         client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE.code()));
         client.prepareResponse(syncGroupResponse(singletonList(tp), Errors.NONE.code()));
-        coordinator.poll(time.milliseconds());
+        coordinator.doJoinGroup();
 
         subscriptions.seek(tp, 100);
 
@@ -935,7 +936,7 @@ public class ConsumerCoordinatorTest {
 
         client.prepareResponse(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE.code()));
         client.prepareResponse(syncGroupResponse(singletonList(tp), Errors.NONE.code()));
-        coordinator.poll(time.milliseconds());
+        coordinator.doJoinGroup();
 
         // now switch to manual assignment
         client.prepareResponse(new LeaveGroupResponse(Errors.NONE.code()).toStruct());

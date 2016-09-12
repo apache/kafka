@@ -123,15 +123,23 @@ public class FetcherTest {
 
     @Test
     public void testFetchNormal() {
-        List<ConsumerRecord<byte[], byte[]>> records;
         subscriptions.assignFromUser(singleton(tp));
         subscriptions.seek(tp, 0);
 
         // normal fetch
         fetcher.sendFetches();
+        assertTrue(fetcher.hasInFlightFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
         client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NONE.code(), 100L, 0));
         consumerClient.poll(0);
-        records = fetcher.fetchedRecords().get(tp);
+        assertTrue(fetcher.hasCompletedFetches());
+        assertFalse(fetcher.hasInFlightFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetcher.fetchedRecords();
+        assertTrue(partitionRecords.containsKey(tp));
+
+        List<ConsumerRecord<byte[], byte[]>> records = partitionRecords.get(tp);
         assertEquals(3, records.size());
         assertEquals(4L, subscriptions.position(tp).longValue()); // this is the next fetching position
         long offset = 1;
@@ -139,6 +147,24 @@ public class FetcherTest {
             assertEquals(offset, record.offset());
             offset += 1;
         }
+    }
+
+    @Test
+    public void testFetchError() {
+        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.seek(tp, 0);
+
+        fetcher.sendFetches();
+        assertTrue(fetcher.hasInFlightFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NOT_LEADER_FOR_PARTITION.code(), 100L, 0));
+        consumerClient.poll(0);
+        assertTrue(fetcher.hasCompletedFetches());
+        assertFalse(fetcher.hasInFlightFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetcher.fetchedRecords();
+        assertFalse(partitionRecords.containsKey(tp));
     }
 
     private MockClient.RequestMatcher matchesOffset(final TopicPartition tp, final long offset) {
