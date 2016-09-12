@@ -280,7 +280,8 @@ public class QueryableStateIntegrationTest {
                     } catch (final IllegalStateException e) {
                         // Kafka Streams instance may have closed but rebalance hasn't happened
                         return false;
-                    }
+                    } 
+
                     return store != null && store.get(key) != null;
                 }
             }, 30000, "waiting for metadata, store and value to be non null");
@@ -306,6 +307,9 @@ public class QueryableStateIntegrationTest {
                         store = streamsWithKey.store(storeName, QueryableStoreTypes.<String, Long>windowStore());
                     } catch (final IllegalStateException e) {
                         // Kafka Streams instance may have closed but rebalance hasn't happened
+                        return false;
+                    } catch (InvalidStateStoreException e) {
+                        // rebalance
                         return false;
                     }
                     return store != null && store.fetch(key, from, to) != null;
