@@ -32,8 +32,9 @@ trait Logging {
     if(logIdent == null) msg else logIdent + msg
 
   def trace(msg: => String): Unit = {
-    if (logger.isTraceEnabled())
+    if (logger.isTraceEnabled()) {
       logger.trace(msgWithLogIdent(msg))
+    }
   }
   def trace(e: => Throwable): Any = {
     if (logger.isTraceEnabled())

@@ -80,7 +80,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     *
     * @param quota
     */
-  def updateQuota(quota: Quota) = {
+  def updateQuota(quota: Quota) {
     inWriteLock(lock) {
       this.quota = quota
       //The metric could be expired by another thread, so use a local variable and null check.
@@ -98,11 +98,11 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     */
   override def isQuotaExceeded(): Boolean = {
     try {
-      sensor.checkQuotas()
+      sensor().checkQuotas()
     } catch {
       case qve: QuotaViolationException =>
         if(logger.isTraceEnabled)
-          logger.trace("%s: Quota violated for sensor (%s), metric: (%s), metric-value: (%f), bound: (%f)".format(replicationType, sensor.name(), qve.metricName, qve.value, qve.bound))
+          logger.trace("%s: Quota violated for sensor (%s), metric: (%s), metric-value: (%f), bound: (%f)".format(replicationType, sensor().name(), qve.metricName, qve.value, qve.bound))
         return true
     }
     false
@@ -117,7 +117,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
   override def isThrottled(topicPartition: TopicAndPartition): Boolean = {
     val partitions = throttledPartitions.get(topicPartition.topic)
     if (partitions != null)
-      partitions.contains(topicPartition.partition) || partitions == AllReplicas
+      partitions.contains(topicPartition.partition) || (partitions eq AllReplicas)
     else false
   }
 
@@ -127,13 +127,12 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     *
     * @param value
     */
-  def record(value: Long) = {
+  def record(value: Long) {
     try {
-      sensor.record(value)
+      sensor().record(value)
     } catch {
       case qve: QuotaViolationException =>
-        if(logger.isTraceEnabled)
-          logger.trace("Record: Quota violated, but ignored, for sensor (%s), metric: (%s), metric-value: (%f), bound: (%f), recordedValue (%s)".format(sensor.name(), qve.metricName, qve.value, qve.bound, value))
+        trace(s"Record: Quota violated, but ignored, for sensor (${sensor.name}), metric: (${qve.metricName}), value : (${qve.value}), bound: (${qve.bound}), recordedValue ($value)")
     }
   }
 
@@ -145,7 +144,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     * @param partitions the set of throttled partitions
     * @return
     */
-  def markThrottled(topic: String, partitions: Seq[Int]): Unit = {
+  def markThrottled(topic: String, partitions: Seq[Int]) {
     throttledPartitions.put(topic, partitions)
   }
 
@@ -155,7 +154,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     * @param topic
     * @return
     */
-  def markThrottled(topic: String): Unit = {
+  def markThrottled(topic: String) {
     markThrottled(topic, AllReplicas)
   }
 

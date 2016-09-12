@@ -37,7 +37,7 @@ object QuotaFactory {
   }
 
   case class QuotaManagers(fetch: ClientQuotaManager, produce: ClientQuotaManager, leader: ReplicationQuotaManager, follower: ReplicationQuotaManager) {
-    def shutdown() = {
+    def shutdown() {
       fetch.shutdown
       produce.shutdown
     }
