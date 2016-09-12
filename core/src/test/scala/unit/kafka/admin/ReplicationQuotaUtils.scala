@@ -10,9 +10,8 @@
   * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
   * specific language governing permissions and limitations under the License.
   */
-package unit.kafka.admin
+package kafka.admin
 
-import kafka.admin.AdminUtils
 import kafka.log.LogConfig
 import kafka.server.{KafkaConfig, ConfigType, KafkaServer}
 import kafka.utils.TestUtils

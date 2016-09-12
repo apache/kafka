@@ -21,7 +21,6 @@ import java.util.Collections
 import kafka.common.TopicAndPartition
 import kafka.server.QuotaType._
 import kafka.server.{QuotaType, ReplicationQuotaManager, ReplicationQuotaManagerConfig}
-import org.apache.kafka.common.metrics.stats.{Rate, SimpleRate}
 import org.apache.kafka.common.metrics.{Quota, MetricConfig, Metrics}
 import org.apache.kafka.common.utils.MockTime
 import org.junit.Assert.{assertFalse, assertTrue, assertEquals}
@@ -116,9 +115,9 @@ class ReplicationQuotaManagerTest {
     assertFalse(quota.isThrottled(TopicAndPartition("MyOtherTopic", 0)))
   }
 
-  def tp1(id: Int): TopicAndPartition = new TopicAndPartition("topic1", id)
+  private def tp1(id: Int): TopicAndPartition = new TopicAndPartition("topic1", id)
 
-  def newMetrics(): Metrics = {
+  private def newMetrics(): Metrics = {
     new Metrics(new MetricConfig(), Collections.emptyList(), time)
   }
 }

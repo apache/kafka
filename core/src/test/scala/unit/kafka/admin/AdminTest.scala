@@ -34,7 +34,6 @@ import java.io.File
 import kafka.utils.TestUtils._
 
 import scala.collection.{Map, immutable}
-import unit.kafka.admin.ReplicationQuotaUtils._
 
 class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 

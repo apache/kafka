@@ -103,7 +103,7 @@ class ReplicaManagerQuotasTest {
     expect(log.logEndOffset).andReturn(20L).anyTimes()
     expect(log.logEndOffsetMetadata).andReturn(new LogOffsetMetadata(20L)).anyTimes()
 
-    //if we ask for len 100 return a message
+    //if we ask for len 1 return a message
     expect(log.read(anyObject(), geq(1), anyObject())).andReturn(
       new FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),

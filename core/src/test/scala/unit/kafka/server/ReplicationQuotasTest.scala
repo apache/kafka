@@ -77,8 +77,8 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
   def shouldMatchQuotaReplicatingThroughAnAsymmetricTopology(leaderThrottle: Boolean): Unit = {
     /**
-      * In short we have 8 brokers, 2 are not-started. We put replicas for all partitions on the
-      * not-started brokers, so when we start them we can monitor replication from the 6 to the 2.
+      * In short we have 8 brokers, 2 are not-started. We assign replicas for the two non-started
+      * brokers, so when we start them we can monitor replication from the 6 to the 2.
       *
       * We also have two non-throttled partitions on two of the 6 brokers, just to make sure
       * regular replication works as expected.

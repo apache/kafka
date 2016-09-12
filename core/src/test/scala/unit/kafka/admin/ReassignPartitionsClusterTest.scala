@@ -19,7 +19,7 @@ import kafka.utils.{CoreUtils, Logging, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Before, Test}
-import unit.kafka.admin.ReplicationQuotaUtils._
+import kafka.admin.ReplicationQuotaUtils._
 import scala.collection.Seq
 
 
@@ -111,7 +111,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       0 -> Seq(100, 101)
     ), servers = servers)
 
-    //Given throttle set so replication will take at least 10 sec (we won't wait this long)
+    //Given throttle set so replication will take a certain number of secs
     val initialThrottle: Long = 1000 * 1000
     val expectedDurationSecs = 5
     val numMessages: Int = 50
@@ -119,7 +119,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     produceMessages(servers, topicName, numMessages, acks = 0, msgSize)
     assertEquals(expectedDurationSecs, numMessages * msgSize / initialThrottle)
 
-    //Start rebalance (use a separate thread as it'll be slow)
+    //Start rebalance
     val newAssignment = ReassignPartitionsCommand.generateAssignment(zkUtils, Array(101, 102), json(topicName), true)._1
 
     val start = System.currentTimeMillis()
@@ -136,9 +136,9 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     val actual = zkUtils.getPartitionAssignmentForTopics(Seq(topicName))(topicName)
     assertEquals(actual.values.flatten.toSeq.distinct.sorted, Seq(101, 102))
 
-    //Then command should have taken more than 1 second to complete as it is throttled
+    //Then command should have take longer than the throttle rate
     assertTrue(s"Expected replication to be > ${expectedDurationSecs * 0.9 * 1000} but was $took", took > expectedDurationSecs * 0.9 * 1000)
-    assertTrue(s"Expected replication to be < 20s but was $took", took < expectedDurationSecs * 2 * 1000)
+    assertTrue(s"Expected replication to be < ${expectedDurationSecs * 2 * 1000} but was $took", took < expectedDurationSecs * 2 * 1000)
   }
 
   @Test
