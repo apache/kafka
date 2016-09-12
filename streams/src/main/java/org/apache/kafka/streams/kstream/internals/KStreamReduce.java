@@ -23,7 +23,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.CacheEnabledProcessor;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.internals.CanSendOldValues;
+import org.apache.kafka.streams.state.internals.CachedStateStore;
 
 public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V, V>, CacheEnabledProcessor {
 
@@ -58,7 +58,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
 
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
             if (sendOldValues) {
-                ((CanSendOldValues) store).enableSendingOldValues();
+                ((CachedStateStore) store).enableSendingOldValues();
             }
         }
 

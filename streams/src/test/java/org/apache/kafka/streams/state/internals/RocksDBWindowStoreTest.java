@@ -54,6 +54,7 @@ import java.util.Set;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class RocksDBWindowStoreTest {
 
@@ -69,9 +70,9 @@ public class RocksDBWindowStoreTest {
     private static final long DEFAULT_CACHE_SIZE_BYTES = 1 * 1024 * 1024L;
 
     @SuppressWarnings("unchecked")
-    protected <K, V> WindowStore<K, V> createWindowStore(ProcessorContext context, final boolean enableCaching) {
+    protected <K, V> WindowStore<K, V> createWindowStore(ProcessorContext context, final boolean enableCaching, final boolean retainDuplicates) {
 
-        RocksDBWindowStoreSupplier supplier = new RocksDBWindowStoreSupplier<>(windowName, retentionPeriod, numSegments, true, intSerde, stringSerde, windowSize, true, Collections.<String, String>emptyMap());
+        RocksDBWindowStoreSupplier supplier = new RocksDBWindowStoreSupplier<>(windowName, retentionPeriod, numSegments, retainDuplicates, intSerde, stringSerde, windowSize, true, Collections.<String, String>emptyMap());
         WindowStore<K, V> store;
         if (enableCaching) {
             store = (WindowStore<K, V>) supplier.get(new CacheFlushListener() {
@@ -102,7 +103,7 @@ public class RocksDBWindowStoreTest {
                 byteArraySerde, byteArraySerde,
                 recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
 
-        final WindowStore<Integer, String> windowStore = createWindowStore(context, false);
+        final WindowStore<Integer, String> windowStore = createWindowStore(context, false, true);
         long currentTime = 0;
         context.setRecordContext(createRecordContext(currentTime));
         windowStore.put(1, "one");
@@ -153,7 +154,7 @@ public class RocksDBWindowStoreTest {
                     byteArraySerde, byteArraySerde,
                     recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
 
-            WindowStore<Integer, String> store = createWindowStore(context, false);
+            WindowStore<Integer, String> store = createWindowStore(context, false, true);
             try {
                 long startTime = segmentSize - 4L;
 
@@ -227,7 +228,7 @@ public class RocksDBWindowStoreTest {
                     byteArraySerde, byteArraySerde,
                     recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
 
-            WindowStore<Integer, String> store = createWindowStore(context, false);
+            WindowStore<Integer, String> store = createWindowStore(context, false, true);
             try {
                 long startTime = segmentSize - 4L;
 
@@ -316,7 +317,7 @@ public class RocksDBWindowStoreTest {
                     byteArraySerde, byteArraySerde,
                     recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
 
-            WindowStore<Integer, String> store = createWindowStore(context, false);
+            WindowStore<Integer, String> store = createWindowStore(context, false, true);
             try {
                 long startTime = segmentSize - 4L;
 
@@ -403,7 +404,7 @@ public class RocksDBWindowStoreTest {
                     byteArraySerde, byteArraySerde,
                     recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
 
-            WindowStore<Integer, String> store = createWindowStore(context, false);
+            WindowStore<Integer, String> store = createWindowStore(context, false, true);
             try {
                 long startTime = segmentSize - 4L;
 
@@ -459,11 +460,8 @@ public class RocksDBWindowStoreTest {
                 byteArraySerde, byteArraySerde,
                 recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
 
-            WindowStore<Integer, String> store = createWindowStore(context, true);
-            RocksDBWindowStore<Integer, String> inner =
-                (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
-
-            assertEquals(inner.isCachingEnabled(), true);
+            WindowStore<Integer, String> store = createWindowStore(context, true, false);
+            assertTrue(store instanceof CachingWindowStore);
         } finally {
             Utils.delete(baseDir);
         }
@@ -490,7 +488,7 @@ public class RocksDBWindowStoreTest {
                     byteArraySerde, byteArraySerde,
                     recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
 
-            WindowStore<Integer, String> store = createWindowStore(context, false);
+            WindowStore<Integer, String> store = createWindowStore(context, false, true);
             RocksDBWindowStore<Integer, String> inner =
                     (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
             try {
@@ -605,7 +603,7 @@ public class RocksDBWindowStoreTest {
                     byteArraySerde, byteArraySerde,
                     recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
 
-            WindowStore<Integer, String> store = createWindowStore(context, false);
+            WindowStore<Integer, String> store = createWindowStore(context, false, true);
             try {
                 context.setRecordContext(createRecordContext(startTime));
                 store.put(0, "zero");
@@ -654,7 +652,7 @@ public class RocksDBWindowStoreTest {
                     byteArraySerde, byteArraySerde,
                     recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
 
-            WindowStore<Integer, String> store = createWindowStore(context, false);
+            WindowStore<Integer, String> store = createWindowStore(context, false, true);
             RocksDBWindowStore<Integer, String> inner =
                     (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
 
@@ -706,7 +704,7 @@ public class RocksDBWindowStoreTest {
                     byteArraySerde, byteArraySerde,
                     recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
 
-            WindowStore<Integer, String> store = createWindowStore(context, false);
+            WindowStore<Integer, String> store = createWindowStore(context, false, true);
             RocksDBWindowStore<Integer, String> inner =
                     (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
 
@@ -811,7 +809,7 @@ public class RocksDBWindowStoreTest {
 
             File storeDir = new File(baseDir, windowName);
 
-            WindowStore<Integer, String> store = createWindowStore(context, false);
+            WindowStore<Integer, String> store = createWindowStore(context, false, true);
             RocksDBWindowStore<Integer, String> inner =
                     (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
 
@@ -827,7 +825,7 @@ public class RocksDBWindowStoreTest {
                 store.close();
             }
 
-            store = createWindowStore(context, false);
+            store = createWindowStore(context, false, true);
             inner = (RocksDBWindowStore<Integer, String>) ((MeteredWindowStore<Integer, String>) store).inner();
 
             try {

@@ -44,22 +44,21 @@ import static org.junit.Assert.assertNull;
 public class CachingKeyValueStoreTest {
 
     private CachingKeyValueStore<String, String> store;
-    private MockProcessorContext context;
     private InMemoryKeyValueStore<Bytes, byte[]> underlyingStore;
     private ThreadCache cache;
     private int maxCacheSizeBytes;
-    private CacheFlushListenerStub cacheFlushListener;
+    private CacheFlushListenerStub<String> cacheFlushListener;
     private String topic;
 
     @Before
     public void setUp() throws Exception {
         final String storeName = "store";
         underlyingStore = new InMemoryKeyValueStore<>(storeName);
-        cacheFlushListener = new CacheFlushListenerStub();
+        cacheFlushListener = new CacheFlushListenerStub<>();
         store = new CachingKeyValueStore<>(underlyingStore, Serdes.String(), Serdes.String(), cacheFlushListener);
         maxCacheSizeBytes = 150;
         cache = new ThreadCache(maxCacheSizeBytes);
-        context = new MockProcessorContext(null, null, null, null, (RecordCollector) null, cache);
+        final MockProcessorContext context = new MockProcessorContext(null, null, null, null, (RecordCollector) null, cache);
         topic = "topic";
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, topic));
         store.init(context, null);
@@ -143,11 +142,11 @@ public class CachingKeyValueStoreTest {
         return i;
     }
 
-    private static class CacheFlushListenerStub implements CacheFlushListener<String, String> {
-        private Map<String, Change<String>> forwarded = new HashMap<>();
+    public static class CacheFlushListenerStub<K> implements CacheFlushListener<K, String> {
+        public final Map<K, Change<String>> forwarded = new HashMap<>();
 
         @Override
-        public void forward(final String key, final Change<String> value, final RecordContext recordContext, final InternalProcessorContext context) {
+        public void forward(final K key, final Change<String> value, final RecordContext recordContext, final InternalProcessorContext context) {
             forwarded.put(key, value);
         }
     }

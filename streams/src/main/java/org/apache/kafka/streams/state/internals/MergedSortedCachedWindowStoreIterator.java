@@ -16,12 +16,10 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 
-import java.util.Comparator;
 import java.util.NoSuchElementException;
 
 /**
@@ -30,15 +28,14 @@ import java.util.NoSuchElementException;
  * @param <K>
  * @param <V>
  */
-class MergedSortedCacheKeyValueStoreIterator<K, V> implements KeyValueIterator<K, V> {
+class MergedSortedCachedWindowStoreIterator<K, V> implements WindowStoreIterator<V> {
     private final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator;
-    private final PeekingKeyValueIterator<Bytes, byte[]> storeIterator;
+    private final PeekingWindowIterator<byte[]> storeIterator;
     private final StateSerdes<K, V> serdes;
-    private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
 
-    public MergedSortedCacheKeyValueStoreIterator(final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator,
-                                                  final PeekingKeyValueIterator<Bytes, byte[]> storeIterator,
-                                                  final StateSerdes<K, V> serdes) {
+    public MergedSortedCachedWindowStoreIterator(final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator,
+                                                 final PeekingWindowIterator<byte[]> storeIterator,
+                                                 final StateSerdes<K, V> serdes) {
         this.cacheIterator = cacheIterator;
         this.storeIterator = storeIterator;
         this.serdes = serdes;
@@ -51,51 +48,51 @@ class MergedSortedCacheKeyValueStoreIterator<K, V> implements KeyValueIterator<K
 
 
     @Override
-    public KeyValue<K, V> next() {
+    public KeyValue<Long, V> next() {
         if (!hasNext()) {
             throw new NoSuchElementException();
         }
 
-        byte[] nextCacheKey = null;
+        Long nextCacheTimestamp = null;
         if (cacheIterator.hasNext()) {
-            nextCacheKey = cacheIterator.peekNextKey();
+            nextCacheTimestamp = WindowStoreUtils.timestampFromBinaryKey(cacheIterator.peekNextKey());
         }
 
-        byte[] nextStoreKey = null;
+        Long nextStoreTimestamp = null;
         if (storeIterator.hasNext()) {
-            nextStoreKey = storeIterator.peekNextKey().get();
+            nextStoreTimestamp = storeIterator.peekNext().key;
         }
 
-        if (nextCacheKey == null) {
+        if (nextCacheTimestamp == null) {
             return nextStoreValue();
         }
 
-        if (nextStoreKey == null) {
-            return nextCacheValue();
+        if (nextStoreTimestamp == null) {
+            return nextCacheValue(nextCacheTimestamp);
         }
 
-        final int comparison = comparator.compare(nextCacheKey, nextStoreKey);
+        final int comparison = nextCacheTimestamp.compareTo(nextStoreTimestamp);
         // Use the cached item as it will be at least as new as the stored item
         if (comparison == 0) {
             storeIterator.next();
         }
 
         if (comparison <= 0) {
-            return nextCacheValue();
+            return nextCacheValue(nextCacheTimestamp);
         }
 
         return nextStoreValue();
 
     }
 
-    private KeyValue<K, V> nextCacheValue() {
+    private KeyValue<Long, V> nextCacheValue(final Long timestamp) {
         final KeyValue<byte[], LRUCacheEntry> next = cacheIterator.next();
-        return KeyValue.pair(serdes.keyFrom(next.key), serdes.valueFrom(next.value.value));
+        return KeyValue.pair(timestamp, serdes.valueFrom(next.value.value));
     }
 
-    private KeyValue<K, V> nextStoreValue() {
-        final KeyValue<Bytes, byte[]> next = storeIterator.next();
-        return KeyValue.pair(serdes.keyFrom(next.key.get()), serdes.valueFrom(next.value));
+    private KeyValue<Long, V> nextStoreValue() {
+        final KeyValue<Long, byte[]> next = storeIterator.next();
+        return KeyValue.pair(next.key, serdes.valueFrom(next.value));
     }
 
     @Override

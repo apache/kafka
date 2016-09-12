@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-public interface CanSendOldValues {
+public interface CachedStateStore {
     /**
      * This store should forward both the current and old value
      * when forwarding {@link org.apache.kafka.streams.kstream.internals.Change}s

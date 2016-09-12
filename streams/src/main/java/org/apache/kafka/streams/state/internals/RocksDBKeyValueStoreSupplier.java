@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.StateStore;
@@ -52,12 +53,16 @@ public class RocksDBKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K,
 
     @Override
     public StateStore get(final CacheFlushListener<K, V> listener) {
-        final KeyValueStore<K, V> store = new CachingKeyValueStore<>(new RocksDBStore<>(name, Serdes.Bytes(),
-                                                                                        Serdes.ByteArray()).enableLogging(),
+
+
+        final KeyValueStore<Bytes, byte[]> rocksDbStore = new RocksDBStore<>(name, Serdes.Bytes(),
+                                                                           Serdes.ByteArray()).enableLogging();
+        return new CachingKeyValueStore<>(new MeteredKeyValueStore<>(rocksDbStore,
+                                                                                                "rocksdb-state",
+                                                                                                time),
                                                                      keySerde,
                                                                      valueSerde, listener);
 
-        return new MeteredKeyValueStore<>(store, "rocksdb-state", time);
 
     }
 

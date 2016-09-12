@@ -40,10 +40,10 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
 
         final Bytes from = Bytes.wrap(new byte[]{2});
         final Bytes to = Bytes.wrap(new byte[]{9});
-        final PeekingKeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator(kv.range(from, to));
+        final PeekingKeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>(kv.range(from, to));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, from.get(), to.get());
 
-        final MergedSortedCacheKeyValueStoreIterator<byte[], byte[]> iterator = new MergedSortedCacheKeyValueStoreIterator<>(kv, cacheIterator, storeIterator, new StateSerdes<>("name", Serdes.ByteArray(), Serdes.ByteArray()));
+        final MergedSortedCacheKeyValueStoreIterator<byte[], byte[]> iterator = new MergedSortedCacheKeyValueStoreIterator<>(cacheIterator, storeIterator, new StateSerdes<>("name", Serdes.ByteArray(), Serdes.ByteArray()));
         byte[][] values = new byte[8][];
         int index = 0;
         int bytesIndex = 2;
@@ -52,13 +52,6 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
             values[index++] = value;
             assertArrayEquals(bytes[bytesIndex++], value);
         }
-    }
-
-    static byte[] cacheKey(byte[] keyBytes, byte[] nameBytes) {
-        byte[] merged = new byte[nameBytes.length + keyBytes.length];
-        System.arraycopy(nameBytes, 0, merged, 0, nameBytes.length);
-        System.arraycopy(keyBytes, 0, merged, nameBytes.length, keyBytes.length);
-        return merged;
     }
 
 }

@@ -18,7 +18,10 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.StateStore;
@@ -58,15 +61,18 @@ public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V
     }
 
     public StateStore get() {
-        RocksDBWindowStore<K, V> store = new RocksDBWindowStore<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, windowSize, null);
+        RocksDBWindowStore<K, V> store = new RocksDBWindowStore<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, windowSize);
         return new MeteredWindowStore<>(store.enableLogging(), "rocksdb-window", time);
     }
 
 
     @Override
     public StateStore get(final CacheFlushListener<Windowed<K>, V> listener) {
-        RocksDBWindowStore<K, V> store = new RocksDBWindowStore<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, windowSize, listener);
-        return new MeteredWindowStore<>(store.enableLogging(), "rocksdb-window", time);
+        if (retainDuplicates) {
+            throw new StreamsException("retainDuplicates=true is not supported when caching is enabled");
+        }
+        final RocksDBWindowStore<Bytes, byte[]> store = new RocksDBWindowStore<>(name, retentionPeriod, numSegments, false, Serdes.Bytes(), Serdes.ByteArray(), windowSize);
+        return new CachingWindowStore<>(new MeteredWindowStore<>(store.enableLogging(), "rocksdb-window", time), keySerde, valueSerde, listener, windowSize);
     }
 
     public long retentionPeriod() {

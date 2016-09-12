@@ -31,7 +31,7 @@ import org.apache.kafka.streams.state.StateSerdes;
 import java.util.ArrayList;
 import java.util.List;
 
-public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CanSendOldValues {
+public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStore {
 
     private final KeyValueStore<Bytes, byte[]> underlying;
     private final Serde<K> keySerde;
@@ -163,14 +163,14 @@ public class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CanSendO
         final byte[] origTo = serdes.rawKey(to);
         final PeekingKeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>(underlying.range(Bytes.wrap(origFrom), Bytes.wrap(origTo)));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, origFrom, origTo);
-        return new MergedSortedCacheKeyValueStoreIterator<>(underlying, cacheIterator, storeIterator, serdes);
+        return new MergedSortedCacheKeyValueStoreIterator<>(cacheIterator, storeIterator, serdes);
     }
 
     @Override
     public KeyValueIterator<K, V> all() {
         final PeekingKeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>(underlying.all());
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(name);
-        return new MergedSortedCacheKeyValueStoreIterator<>(underlying, cacheIterator, storeIterator, serdes);
+        return new MergedSortedCacheKeyValueStoreIterator<>(cacheIterator, storeIterator, serdes);
     }
 
     @Override
