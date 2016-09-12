@@ -59,7 +59,7 @@ class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
 
     // Make sure the cluster id is 48 characters long (base64 of UUID.randomUUID() )
     assertNotNull(MockKafkaMetricsReporter.CLUSTER_META)
-    assertEquals(48, MockKafkaMetricsReporter.CLUSTER_META.get().getClusterId().length())
+    assertEquals(48, MockKafkaMetricsReporter.CLUSTER_META.get().clusterId().length())
 
     server1.shutdown()
 

@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import java.net.{SocketTimeoutException}
+import java.net.SocketTimeoutException
 import java.util
 
 import kafka.admin._
@@ -26,21 +26,21 @@ import kafka.log.LogConfig
 import kafka.log.CleanerConfig
 import kafka.log.LogManager
 import java.util.concurrent._
-import atomic.{AtomicInteger, AtomicBoolean}
-import java.io.{IOException, File}
+import atomic.{AtomicBoolean, AtomicInteger}
+import java.io.{File, IOException}
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 import javax.xml.bind.DatatypeConverter
 
 import kafka.security.auth.Authorizer
 import kafka.utils._
-import org.apache.kafka.clients.{ManualMetadataUpdater, ClientRequest, NetworkClient}
+import org.apache.kafka.clients.{ClientRequest, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.{ClusterResource, ClusterResourceListeners, Node}
 import org.apache.kafka.common.metrics._
-import org.apache.kafka.common.network.{LoginType, Selectable, ChannelBuilders, NetworkReceive, Selector, Mode}
-import org.apache.kafka.common.protocol.{Errors, ApiKeys, SecurityProtocol}
+import org.apache.kafka.common.network.{ChannelBuilders, LoginType, Mode, NetworkReceive, Selectable, Selector}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
-import org.apache.kafka.common.requests.{ControlledShutdownResponse, ControlledShutdownRequest, RequestSend}
+import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledShutdownResponse, RequestSend}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.AppInfoParser
 
@@ -48,10 +48,10 @@ import scala.collection.mutable
 import scala.collection.JavaConverters._
 import org.I0Itec.zkclient.ZkClient
 import kafka.controller.{ControllerStats, KafkaController}
-import kafka.cluster.{EndPoint, Broker}
-import kafka.common.{InconsistentBrokerIdException, GenerateBrokerIdException}
+import kafka.cluster.{Broker, EndPoint}
+import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException}
 import kafka.network.{BlockingChannel, SocketServer}
-import kafka.metrics.KafkaMetricsGroup
+import kafka.metrics.{KafkaMetricsGroup, KafkaMetricsReporter}
 import com.yammer.metrics.core.Gauge
 import kafka.coordinator.GroupCoordinator
 
@@ -91,7 +91,7 @@ object KafkaServer {
  * Represents the lifecycle of a single Kafka broker. Handles all functionality required
  * to start up and shutdown a single Kafka node.
  */
-class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
+class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePrefix: Option[String] = None, kafkaMetricsReporters: List[KafkaMetricsReporter] = List()) extends Logging with KafkaMetricsGroup {
   private val startupComplete = new AtomicBoolean(false)
   private val isShuttingDown = new AtomicBoolean(false)
   private val isStartingUp = new AtomicBoolean(false)
@@ -197,6 +197,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         info(s"Cluster ID = $clusterId")
 
         /* Send events to metric reporters who implement ClusterResourceListener */
+        // Add reporters for Codahale metrics framework who implement ClusterResourceListener
+        for(reporter <- reporters) {
+          clusterResourceListeners.add(reporter)
+        }
+        // Add reporters for Kafka metrics framework who implement ClusterResourceListener 
         clusterResourceListeners.addAll(reporters)
         clusterResourceListeners.onUpdate(new ClusterResource(clusterId))
 

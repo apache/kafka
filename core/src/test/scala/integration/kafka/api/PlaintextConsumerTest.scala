@@ -688,7 +688,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // Send one record and make sure clusterId is set after send
     testProducer.send(new ProducerRecord(tp.topic(), tp.partition(), s"key 0", s"value 0"))
     assertNotNull(MockProducerInterceptor.CLUSTER_META)
-    assertEquals(48, MockProducerInterceptor.CLUSTER_META.get().getClusterId().length())
+    assertEquals(48, MockProducerInterceptor.CLUSTER_META.get().clusterId().length())
 
     (1 until numRecords).map { i =>
       testProducer.send(new ProducerRecord(tp.topic(), tp.partition(), s"key $i", s"value $i"))
@@ -724,7 +724,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // Check that cluster id is present after the first poll call.
     assertTrue(MockConsumerInterceptor.IS_CLUSTER_ID_PRESENT_BEFORE_ON_CONSUME.get())
     assertNotNull(MockConsumerInterceptor.CLUSTER_META)
-    assertEquals(48, MockConsumerInterceptor.CLUSTER_META.get().getClusterId().length())
+    assertEquals(48, MockConsumerInterceptor.CLUSTER_META.get().clusterId().length())
 
     // commit sync and verify onCommit is called
     val commitCountBefore = MockConsumerInterceptor.ON_COMMIT_COUNT.intValue()

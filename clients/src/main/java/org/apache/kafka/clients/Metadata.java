@@ -309,7 +309,7 @@ public final class Metadata {
         Set<String> internalTopics = Collections.emptySet();
         String clusterId = MetadataResponse.NO_CLUSTER_ID;
         if (cluster != null) {
-            clusterId = cluster.clusterResource().getClusterId();
+            clusterId = cluster.clusterResource().clusterId();
             internalTopics = cluster.internalTopics();
             unauthorizedTopics.addAll(cluster.unauthorizedTopics());
             unauthorizedTopics.retainAll(this.topics.keySet());

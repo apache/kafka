@@ -165,7 +165,7 @@ public class MetadataTest {
                 100);
 
         assertEquals("MockClusterResourceListener did not get cluster metadata correctly",
-                "dummy", mockClusterListener.clusterResource().getClusterId());
+                "dummy", mockClusterListener.clusterResource().clusterId());
     }
 
     @Test

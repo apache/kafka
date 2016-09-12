@@ -26,14 +26,12 @@ public class ClusterResource {
         this.clusterId = clusterId;
     }
 
-    public String getClusterId() {
+    public String clusterId() {
         return clusterId;
     }
 
     @Override
     public String toString() {
-        return "ClusterResource{" +
-                "clusterId='" + clusterId + '\'' +
-                '}';
+        return "ClusterResource(clusterId=" + clusterId + ")";
     }
 }

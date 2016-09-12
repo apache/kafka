@@ -30,12 +30,7 @@ object KafkaServerStartable {
 }
 
 class KafkaServerStartable(val serverConfig: KafkaConfig, reporters: List[KafkaMetricsReporter]) extends Logging {
-  private val server = new KafkaServer(serverConfig)
-
-  // Add Coda Hale metric reporters which implement ClusterResourceListener interface to ClusterResourceListeners.
-  for(reporter <- reporters) {
-    server.clusterResourceListeners.add(reporter)
-  }
+  private val server = new KafkaServer(serverConfig, kafkaMetricsReporters = reporters)
 
   def startup() {
     try {

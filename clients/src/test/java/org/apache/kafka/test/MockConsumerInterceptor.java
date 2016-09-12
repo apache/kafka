@@ -59,9 +59,7 @@ public class MockConsumerInterceptor implements ClusterResourceListener, Consume
 
     @Override
     public ConsumerRecords<String, String> onConsume(ConsumerRecords<String, String> records) {
-        if (CLUSTER_META.get() != null
-                && CLUSTER_META.get().getClusterId() != null
-                && CLUSTER_META.get().getClusterId().length() == 48)
+        if (CLUSTER_META.get() != null && CLUSTER_META.get().clusterId() != null && CLUSTER_META.get().clusterId().length() == 48)
             IS_CLUSTER_ID_PRESENT_BEFORE_ON_CONSUME.set(true);
 
         Map<TopicPartition, List<ConsumerRecord<String, String>>> recordMap = new HashMap<>();
