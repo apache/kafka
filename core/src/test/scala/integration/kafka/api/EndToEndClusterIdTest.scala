@@ -33,16 +33,17 @@ import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
 
-/** The test cases here verify the following:
-  * 1. The ProducerInterceptor receives the Cluster metadata after the onSend() method is called.
-  * 2. The Serializer receives the Cluster metadata before the serialize() method is called.
-  * 3. The producer MetricReporter receives the Cluster metadata metadata after send() method is called on KafkaProducer.
-  * 4. The ConsumerInterceptor receives the Cluster metadata before the onConsume() method.
-  * 5. The Deserializer receives the Cluster metadata before the deserialize() method is called.
-  * 6. The consumer MetricReporter receives the Cluster metadata metadata after poll() is called on KafkaConsumer.
-  * 7. The broker MetricReporter receives the Cluster metadata metadata after the broker startup is over.
-  * 8. The broker KafkaMetricReporter receives the Cluster metadata metadata after the broker startup is over.
-  * 9. All the components receive the same Cluster metadata.
+/** The test cases here verify the following conditions.
+  * (Note that the onUpdate(ClusterResource c) method can be called multiple times with cluster id=null)
+  * 1. The ProducerInterceptor receives the cluster id after the onSend() method is called.
+  * 2. The Serializer receives the cluster id before the serialize() method is called.
+  * 3. The producer MetricReporter receives the cluster id  after send() method is called on KafkaProducer.
+  * 4. The ConsumerInterceptor receives the cluster id before the onConsume() method.
+  * 5. The Deserializer receives the cluster id before the deserialize() method is called.
+  * 6. The consumer MetricReporter receives the cluster id  after poll() is called on KafkaConsumer.
+  * 7. The broker MetricReporter receives the cluster id  after the broker startup is over.
+  * 8. The broker KafkaMetricReporter receives the cluster id  after the broker startup is over.
+  * 9. All the components receive the same cluster id.
   */
 
 
