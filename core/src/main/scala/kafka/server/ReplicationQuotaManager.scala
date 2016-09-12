@@ -159,6 +159,16 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
   }
 
   /**
+    * Remove list of throttled replicas for a certain topic
+    *
+    * @param topic
+    * @return
+    */
+  def removeThrottle(topic: String) {
+    throttledPartitions.remove(topic)
+  }
+
+  /**
     * Returns the bound of the configured quota
     *
     * @return

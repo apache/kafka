@@ -134,6 +134,19 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     brokers = brokers :+ TestUtils.createServer(fromProps(createBrokerConfig(106, zkConnect)))
     brokers = brokers :+ TestUtils.createServer(fromProps(createBrokerConfig(107, zkConnect)))
 
+    //Check that throttled config correctly migrated to the new brokers
+    (106 to 107).foreach{brokerId =>
+      assertEquals(throttle, brokerFor(brokerId).quotaManagers.follower.upperBound())
+    }
+    if (!leaderThrottle) {
+      (0 to 2).foreach { partition =>
+        assertTrue(brokerFor(106).quotaManagers.follower.isThrottled(new TopicAndPartition(topic, partition)))
+      }
+      (3 to 5).foreach { partition =>
+        assertTrue(brokerFor(107).quotaManagers.follower.isThrottled(new TopicAndPartition(topic, partition)))
+      }
+    }
+
     //Wait for non-throttled partitions to replicate first
     (6 to 7).foreach { id => waitForOffsetsToMatch(msgCount, id, 100 + id) }
     val unthrottledTook = System.currentTimeMillis() - start

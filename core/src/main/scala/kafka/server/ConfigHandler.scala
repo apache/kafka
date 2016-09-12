@@ -73,7 +73,11 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
       val partitions = parseThrottledPartitions(topicConfig, brokerId)
       quotas.leader.markThrottled(topic, partitions)
       quotas.follower.markThrottled(topic, partitions)
-      logger.info(s"Setting throttled partitions on broker $brokerId to $partitions")
+      logger.info(s"Setting throttled partitions on broker $brokerId for topic: $topic and partitions $partitions")
+    } else {
+      quotas.leader.removeThrottle(topic)
+      quotas.follower.removeThrottle(topic)
+      logger.info(s"Removing throttled partitions from broker $brokerId for topic $topic")
     }
   }
 
