@@ -188,7 +188,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val result = configHandler.parseThrottledPartitions(props, 102)
 
     //Then
-    assertEquals(allReplicas, result)
+    assertEquals(AllReplicas, result)
   }
 
   @Test

@@ -118,7 +118,7 @@ class DelayedFetch(delayMs: Long,
 
     // Case D
     if (accumulatedSize >= fetchMetadata.fetchMinBytes
-      || (accumulatedThrottledSize >= fetchMetadata.fetchMinBytes && !quota.isQuotaExceeded()))
+      || ((accumulatedSize + accumulatedThrottledSize) >= fetchMetadata.fetchMinBytes && !quota.isQuotaExceeded()))
       forceComplete()
     else
       false

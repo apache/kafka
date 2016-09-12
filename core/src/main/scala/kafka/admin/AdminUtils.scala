@@ -45,7 +45,7 @@ trait AdminUtilities {
   def fetchEntityConfig(zkUtils: ZkUtils,entityType: String, entityName: String): Properties
 }
 
-object AdminUtils extends Logging with AdminUtilities{
+object AdminUtils extends Logging with AdminUtilities {
   val rand = new Random
   val AdminClientId = "__admin_client"
   val EntityConfigChangeZnodePrefix = "config_change_"

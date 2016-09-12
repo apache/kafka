@@ -165,9 +165,9 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     info(s"Unthrottled took: $unthrottledTook, Throttled took: $throttledTook")
     assertTrue(s"Unthrottled replication of ${unthrottledTook}ms should be < ${expectedDuration * 1000}ms",
       unthrottledTook < expectedDuration * 1000)
-    assertTrue((s"Unthrottled replication of ${throttledTook}ms should be < ${expectedDuration * 1000}ms"),
+    assertTrue((s"Throttled replication of ${throttledTook}ms should be > ${expectedDuration * 1000}ms"),
       throttledTook > expectedDuration * 1000)
-    assertTrue((s"Unthrottled replication of ${throttledTook}ms should be < ${expectedDuration * 1500}ms"),
+    assertTrue((s"Throttled replication of ${throttledTook}ms should be < ${expectedDuration * 1500}ms"),
       throttledTook < expectedDuration * 1000 * 1.5)
   }
 

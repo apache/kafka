@@ -467,11 +467,10 @@ public class MetricsTest {
         //Given
         MetricConfig config = new MetricConfig().timeWindow(1, TimeUnit.SECONDS).samples(10);
 
-        //When we record anything, if there is no time, rate will be infinite
+        //In the first window the rate is a fraction of the whole (1s) window
+        //So when we record 1000 at t0, the rate should be 1000 until the window completes, or more data is recorded.
         record(rate, config, 1000);
-        assertEquals(1000, measure(rate, config),0);
-
-        //In the first window the rate is a fraction of the whole 1s window
+        assertEquals(1000, measure(rate, config), 0);
         time.sleep(100);
         assertEquals(1000, measure(rate, config), 0); // 1000B / 0.1s
         time.sleep(100);
@@ -480,6 +479,7 @@ public class MetricsTest {
         assertEquals(1000, measure(rate, config), 0); // 1000B / 0.4s
 
         //In the second (and subsequent) window(s), the rate will be in proportion to the elapsed time
+        //So the rate will degrade over time, as the time between measurement and the initial recording grows.
         time.sleep(600);
         assertEquals(1000, measure(rate, config), 0); // 1000B / 1.0s
         time.sleep(200);

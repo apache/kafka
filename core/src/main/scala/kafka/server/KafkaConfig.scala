@@ -18,15 +18,13 @@
 package kafka.server
 
 import java.util.Properties
-import java.util.concurrent.locks.{Lock, ReentrantReadWriteLock}
-
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1}
 import kafka.cluster.EndPoint
 import kafka.consumer.ConsumerConfig
 import kafka.coordinator.OffsetConfig
 import kafka.log.LogConfig
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, Message, MessageSet}
-import kafka.utils.{Logging, CoreUtils}
+import kafka.utils.CoreUtils
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.config.ConfigDef.ValidList
 import org.apache.kafka.common.config.SaslConfigs
@@ -531,7 +529,7 @@ object KafkaConfig {
   val NumReplicationQuotaSamplesDoc = "The number of samples to retain in memory for replication quotas"
   val QuotaWindowSizeSecondsDoc = "The time span of each sample for client quotas"
   val ReplicationQuotaWindowSizeSecondsDoc = "The time span of each sample for replication quotas"
-  val ThrottledReplicationRateLimitDoc = "A long representing the upper bound on replication traffic for replicas enumerated in the " +
+  val ThrottledReplicationRateLimitDoc = "A long representing the upper bound (bytes/sec) on replication traffic for replicas enumerated in the " +
     s"property $ThrottledReplicationRateLimitProp. This property can be set dynamically."
 
   val DeleteTopicEnableDoc = "Enables delete topic. Delete topic through the admin tool will have no effect if this config is turned off"

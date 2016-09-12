@@ -23,7 +23,7 @@ import joptsimple._
 import kafka.admin.TopicCommand._
 import kafka.log.{Defaults, LogConfig}
 import kafka.server.{KafkaConfig, ClientConfigOverride, ConfigType}
-import kafka.utils.{Json, CommandLineUtils, ZkUtils}
+import kafka.utils.{CommandLineUtils, ZkUtils}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Utils
 
@@ -123,7 +123,7 @@ object ConfigCommand {
 
   private[admin] def parseConfigsToBeAdded(opts: ConfigCommandOptions): Properties = {
     val props = new Properties
-    if(opts.options.has(opts.addConfig)) {
+    if (opts.options.has(opts.addConfig)) {
       //split by commas, but avoid those in [], then into KV pairs
       val configsToBeAdded = opts.options.valueOf(opts.addConfig)
         .split(",(?=[^\\]]*(?:\\[|$))")
@@ -180,7 +180,6 @@ object ConfigCommand {
             .withValuesSeparatedBy(',')
     val helpOpt = parser.accepts("help", "Print usage information.")
     val forceOpt = parser.accepts("force", "Suppress console prompts")
-    val jsonOpt = parser.accepts("json", "Configurations can be specified as JSON. This allows the comma separated lists to be passed as values.")
     val options = parser.parse(args : _*)
 
     val allOpts: Set[OptionSpec[_]] = Set(alterOpt, describeOpt, entityType, entityName, addConfig, deleteConfig, helpOpt)

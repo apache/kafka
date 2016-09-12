@@ -41,7 +41,6 @@ import org.apache.kafka.common.requests.{ControlledShutdownResponse, ControlledS
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.AppInfoParser
 
-import scala.collection
 import scala.collection.{Map, mutable}
 import scala.collection.JavaConverters._
 import org.I0Itec.zkclient.ZkClient

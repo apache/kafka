@@ -82,7 +82,7 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
     ThrottledReplicaValidator.ensureValid(LogConfig.ThrottledReplicasListProp, configValue)
     configValue.trim match {
       case "" => Seq()
-      case "*" => allReplicas
+      case "*" => AllReplicas
       case _ => configValue.trim
         .split(",")
         .map(_.split(":"))

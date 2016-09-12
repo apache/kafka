@@ -164,7 +164,7 @@ object ReassignPartitionsCommand extends Logging {
     // If there is an existing rebalance running, attempt to change its throttle
     if (zkUtils.pathExists(ZkUtils.ReassignPartitionsPath)) {
       println("There is an existing assignment running.")
-      reassignPartitionsCommand.addThrottleLimit(throttle)
+      reassignPartitionsCommand.maybeLimit(throttle)
     }
     else {
       printCurrentAssignment(zkUtils, partitionsToBeReassigned)
@@ -241,7 +241,7 @@ object ReassignPartitionsCommand extends Logging {
                       .ofType(classOf[String])
     val generateOpt = parser.accepts("generate", "Generate a candidate partition reassignment configuration." +
       " Note that this only generates a candidate assignment, it does not execute it.")
-    val executeOpt = parser.accepts("execute", "Kick off the reassignment as specified by the --reassignment-json-file option. If a reassignment is already running, the script will await completion then exit.")
+    val executeOpt = parser.accepts("execute", "Kick off the reassignment as specified by the --reassignment-json-file option.")
     val verifyOpt = parser.accepts("verify", "Verify if the reassignment completed as specified by the --reassignment-json-file option. If there is a throttle engaged for the replicas specified, and the rebalance has completed, the throttle will be removed")
     val reassignmentJsonFileOpt = parser.accepts("reassignment-json-file", "The JSON file with the partition reassignment configuration" +
                       "The format to use is - \n" +
@@ -261,7 +261,7 @@ object ReassignPartitionsCommand extends Logging {
                       .describedAs("brokerlist")
                       .ofType(classOf[String])
     val disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment")
-    val throttleOpt = parser.accepts("throttle", "The movement of partitions will be throttled to this value (B/s). Rerunning with this option, whilst a rebalance is in progress, will alter the throttle value.")
+    val throttleOpt = parser.accepts("throttle", "The movement of partitions will be throttled to this value (bytes/sec). Rerunning with this option, whilst a rebalance is in progress, will alter the throttle value.")
                       .withRequiredArg()
                       .describedAs("throttle")
                       .defaultsTo("-1")
@@ -276,14 +276,14 @@ object ReassignPartitionsCommand extends Logging {
 class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: collection.Map[TopicAndPartition, collection.Seq[Int]])
   extends Logging {
 
-  private def addThrottle(throttle: Long): Unit = {
+  private def maybeThrottle(throttle: Long): Unit = {
     if (throttle >= 0) {
-      addThrottleLimit(throttle)
+      maybeLimit(throttle)
       addThrottledReplicaList()
     }
   }
 
-  def addThrottleLimit(throttle: Long) = {
+  def maybeLimit(throttle: Long) = {
     if (throttle >= 0) {
       val brokerIds = zkUtils.getAllBrokersInCluster().map(_.id)
       for (id <- brokerIds) {
@@ -302,7 +302,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: collection.Map[Top
   }
 
   def reassignPartitions(throttle: Long = -1): Boolean = {
-    addThrottle(throttle)
+    maybeThrottle(throttle)
     try {
       val validPartitions = partitions.filter(p => validatePartition(zkUtils, p._1.topic, p._1.partition))
       if (validPartitions.isEmpty) false

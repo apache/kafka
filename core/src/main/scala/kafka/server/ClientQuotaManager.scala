@@ -225,12 +225,12 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       else
         this.overriddenQuota.put(clientId, quota)
 
-      // Change the underlying metric config if the sensor has been created
-      val allMetrics = metrics.metrics()
-      val quotaMetricName = clientRateMetricName(clientId)
-      if (allMetrics.containsKey(quotaMetricName)) {
+      // Change the underlying metric config if the sensor has been created.
+      // Note the metric could be expired by another thread, so use a local variable and null check.
+      val metric = metrics.metrics.get(clientRateMetricName(clientId))
+      if (metric != null) {
         logger.info(s"Sensor for clientId $clientId already exists. Changing quota to ${quota.bound()} in MetricConfig")
-        allMetrics.get(quotaMetricName).config(getQuotaMetricConfig(quota))
+        metric.config(getQuotaMetricConfig(quota))
       }
     } finally {
       lock.writeLock().unlock()

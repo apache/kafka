@@ -22,7 +22,7 @@ import kafka.cluster.BrokerEndPoint
 import kafka.message.ByteBufferMessageSet
 import kafka.server.{PartitionFetchState, AbstractFetcherThread}
 import kafka.common.{ErrorMapping, TopicAndPartition}
-import scala.collection.{Map, JavaConverters}
+import scala.collection.Map
 import ConsumerFetcherThread._
 
 class ConsumerFetcherThread(name: String,

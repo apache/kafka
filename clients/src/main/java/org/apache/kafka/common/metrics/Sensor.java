@@ -109,7 +109,6 @@ public final class Sensor {
 
     /**
      * Check if we have violated our quota for any metric that has a configured quota
-     * @param timeMs
      */
     public void checkQuotas() {
         checkQuotas(time.milliseconds());

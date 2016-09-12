@@ -22,10 +22,9 @@ import kafka.server.Constants._
 import kafka.server.ReplicationQuotaManagerConfig._
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
-import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics._
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import org.apache.kafka.common.metrics.stats.{Rate, SimpleRate}
+import org.apache.kafka.common.metrics.stats.SimpleRate
 import org.apache.kafka.common.utils.Time
 
 /**
@@ -55,7 +54,7 @@ trait ReplicaQuota {
 }
 
 object Constants {
-  val allReplicas = Seq[Int](-1)
+  val AllReplicas = Seq[Int](-1)
 }
 
 /**
@@ -84,8 +83,11 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
   def updateQuota(quota: Quota) = {
     inWriteLock(lock) {
       this.quota = quota
-      if (metrics.metrics.containsKey(rateMetricName))
-        metrics.metrics.get(rateMetricName).config(getQuotaMetricConfig(quota))
+      //The metric could be expired by another thread, so use a local variable and null check.
+      val metric = metrics.metrics.get(rateMetricName)
+      if (metric != null) {
+        metric.config(getQuotaMetricConfig(quota))
+      }
     }
   }
 
@@ -115,7 +117,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
   override def isThrottled(topicPartition: TopicAndPartition): Boolean = {
     val partitions = throttledPartitions.get(topicPartition.topic)
     if (partitions != null)
-      partitions.contains(topicPartition.partition) || partitions == allReplicas
+      partitions.contains(topicPartition.partition) || partitions == AllReplicas
     else false
   }
 
@@ -154,7 +156,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     * @return
     */
   def markThrottled(topic: String): Unit = {
-    markThrottled(topic, allReplicas)
+    markThrottled(topic, AllReplicas)
   }
 
   /**

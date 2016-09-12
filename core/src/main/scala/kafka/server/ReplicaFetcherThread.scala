@@ -269,17 +269,13 @@ class ReplicaFetcherThread(name: String,
     }
   }
 
-  def withinQuota(partition: TopicAndPartition): Boolean = {
-    !(quota.isThrottled(partition) && quota.isQuotaExceeded)
-  }
-
   protected def buildFetchRequest(partitionMap: Map[TopicAndPartition, PartitionFetchState]): FetchRequest = {
     val requestMap = mutable.Map.empty[TopicPartition, JFetchRequest.PartitionData]
+    val quotaExceeded = quota.isQuotaExceeded
     partitionMap.foreach { case ((partition, partitionFetchState)) =>
-      if (partitionFetchState.isActive && withinQuota(partition))
+      if (partitionFetchState.isActive && !(quota.isThrottled(partition) && quotaExceeded))
         requestMap(new TopicPartition(partition.topic, partition.partition)) = new JFetchRequest.PartitionData(partitionFetchState.offset, fetchSize)
     }
-    trace("Created a fetch request for partitions " + partitionMap.keys.map(_.toString))
     new FetchRequest(new JFetchRequest(replicaId, maxWait, minBytes, requestMap.asJava))
   }
 }
