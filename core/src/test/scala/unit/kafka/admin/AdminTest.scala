@@ -394,7 +394,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
       props
     }
 
-    def checkConfig(messageSize: Int, retentionMs: Long, throttledReplicas: String, allThrottled: Boolean) {
+    def checkConfig(messageSize: Int, retentionMs: Long, throttledReplicas: String, quotaManagerIsThrottled: Boolean) {
       TestUtils.retry(10000) {
         for(part <- 0 until partitions) {
           val log = server.logManager.getLog(TopicAndPartition(topic, part))
@@ -402,7 +402,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
           assertEquals(retentionMs, log.get.config.retentionMs)
           assertEquals(messageSize, log.get.config.maxMessageSize)
           assertEquals(throttledReplicas, log.get.config.throttledReplicasList)
-          assertEquals(allThrottled, server.quotaManagers.leader.isThrottled(new TopicAndPartition(topic, part)))
+          assertEquals(quotaManagerIsThrottled, server.quotaManagers.leader.isThrottled(new TopicAndPartition(topic, part)))
         }
       }
     }
@@ -418,8 +418,8 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
       // now double the config values for the topic and check that it is applied
       val newConfig: Properties = makeConfig(2 * maxMessageSize, 2 * retentionMs, "*")
-      AdminUtils.changeTopicConfig(server.zkUtils, topic, makeConfig(2*maxMessageSize, 2 * retentionMs, "*"))
-      checkConfig(2 * maxMessageSize, 2 * retentionMs, "*", true)
+      AdminUtils.changeTopicConfig(server.zkUtils, topic, makeConfig(2 * maxMessageSize, 2 * retentionMs, "*"))
+      checkConfig(2 * maxMessageSize, 2 * retentionMs, "*", quotaManagerIsThrottled = true)
 
       // Verify that the same config can be read from ZK
       val configInZk = AdminUtils.fetchEntityConfig(server.zkUtils, ConfigType.Topic, topic)
@@ -427,7 +427,16 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
       //Now delete the config
       AdminUtils.changeTopicConfig(server.zkUtils, topic, new Properties)
-      checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, Defaults.ThrottledReplicasList,  false)
+      checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, Defaults.ThrottledReplicasList,  quotaManagerIsThrottled = false)
+
+      //Add config bakc
+      AdminUtils.changeTopicConfig(server.zkUtils, topic, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0"))
+      checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", quotaManagerIsThrottled = true)
+
+      //Now ensure updating to "" removes the throttled replica list
+      AdminUtils.changeTopicConfig(server.zkUtils, topic, new Properties(){put(LogConfig.ThrottledReplicasListProp, "")})
+      checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, Defaults.ThrottledReplicasList,  quotaManagerIsThrottled = false)
+
     } finally {
       server.shutdown()
       CoreUtils.delete(server.config.logDirs)
