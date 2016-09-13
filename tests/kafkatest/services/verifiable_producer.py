@@ -22,13 +22,15 @@ from ducktape.services.background_thread import BackgroundThreadService
 from ducktape.cluster.remoteaccount import RemoteCommandError
 from ducktape.utils.util import wait_until
 
-from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin, TOOLS_JAR_NAME, TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
+from kafkatest.services.verifiable_client import VerifiableClientMixin
 from kafkatest.utils import is_int, is_int_with_prefix
-from kafkatest.version import DEV_BRANCH, LATEST_0_8_2
+from kafkatest.version import DEV_BRANCH
 from kafkatest.utils.remote_account import line_count
 
 
-class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
+
+class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, BackgroundThreadService):
     PERSISTENT_ROOT = "/mnt/verifiable_producer"
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_producer.stdout")
     STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_producer.stderr")
@@ -182,22 +184,10 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
             return True
 
     def start_cmd(self, node, idx):
-        cmd = ""
-        if node.version <= LATEST_0_8_2:
-            # 0.8.2.X releases do not have VerifiableProducer.java, so cheat and add
-            # the tools jar from the development branch to the classpath
-            tools_jar = self.path.jar(TOOLS_JAR_NAME, DEV_BRANCH)
-            tools_dependant_libs_jar = self.path.jar(TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME, DEV_BRANCH)
-
-            cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_jar
-            cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_dependant_libs_jar
-            cmd += "export CLASSPATH; "
-
-        cmd += "export LOG_DIR=%s;" % VerifiableProducer.LOG_DIR
+        cmd  = "export LOG_DIR=%s;" % VerifiableProducer.LOG_DIR
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % VerifiableProducer.LOG4J_CONFIG
-        cmd += " " + self.path.script("kafka-run-class.sh", node)
-        cmd += " org.apache.kafka.tools.VerifiableProducer"
+        cmd += self.impl.exec_cmd(node)
         cmd += " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol))
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
@@ -221,12 +211,7 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
             node.account.signal(pid, sig, allow_fail)
 
     def pids(self, node):
-        try:
-            cmd = "jps | grep -i VerifiableProducer | awk '{print $1}'"
-            pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
-            return pid_arr
-        except (RemoteCommandError, ValueError) as e:
-            return []
+        return self.impl.pids(node)
 
     def alive(self, node):
         return len(self.pids(node)) > 0

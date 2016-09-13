@@ -18,10 +18,10 @@ import os
 import signal
 
 from ducktape.services.background_thread import BackgroundThreadService
-from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import TopicPartition
+from kafkatest.services.verifiable_client import VerifiableClientMixin
 from kafkatest.version import DEV_BRANCH
 
 
@@ -51,6 +51,10 @@ class ConsumerEventHandler(object):
     def handle_offsets_committed(self, event):
         if event["success"]:
             for offset_commit in event["offsets"]:
+                if offset_commit.get("error", "") != "":
+                    logger.debug("%s: Offset commit failed for: %s" % (str(node.account), offset_commit))
+                    continue
+
                 topic = offset_commit["topic"]
                 partition = offset_commit["partition"]
                 tp = TopicPartition(topic, partition)
@@ -120,7 +124,8 @@ class ConsumerEventHandler(object):
             return None
 
 
-class VerifiableConsumer(KafkaPathResolverMixin, BackgroundThreadService):
+
+class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, BackgroundThreadService):
     PERSISTENT_ROOT = "/mnt/verifiable_consumer"
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_consumer.stdout")
     STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_consumer.stderr")
@@ -238,9 +243,9 @@ class VerifiableConsumer(KafkaPathResolverMixin, BackgroundThreadService):
         cmd += "export LOG_DIR=%s;" % VerifiableConsumer.LOG_DIR
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % VerifiableConsumer.LOG4J_CONFIG
-        cmd += self.path.script("kafka-run-class.sh", node) + " org.apache.kafka.tools.VerifiableConsumer" \
-              " --group-id %s --topic %s --broker-list %s --session-timeout %s --assignment-strategy %s %s" % \
-                                            (self.group_id, self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol),
+        cmd += self.impl.exec_cmd(node)
+        cmd += " --group-id %s --topic %s --broker-list %s --session-timeout %s --assignment-strategy %s %s" % \
+               (self.group_id, self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol),
                self.session_timeout_sec*1000, self.assignment_strategy, "--enable-autocommit" if self.enable_autocommit else "")
                
         if self.max_messages > 0:
@@ -251,12 +256,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, BackgroundThreadService):
         return cmd
 
     def pids(self, node):
-        try:
-            cmd = "jps | grep -i VerifiableConsumer | awk '{print $1}'"
-            pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
-            return pid_arr
-        except (RemoteCommandError, ValueError) as e:
-            return []
+        return self.impl.pids(node)
 
     def try_parse_json(self, string):
         """Try to parse a string as json. Return None if not parseable."""
