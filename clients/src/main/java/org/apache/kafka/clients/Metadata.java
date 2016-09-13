@@ -229,7 +229,8 @@ public final class Metadata {
             this.cluster = cluster;
         }
 
-        if (cluster != null) {
+        // Only send events when cluster id is present.
+        if (cluster != null && cluster.clusterResource() != null && cluster.clusterResource().clusterId() != null) {
             clusterResourceListeners.onUpdate(cluster.clusterResource());
         }
 

@@ -34,7 +34,6 @@ import org.junit.{Before, Test}
 import scala.collection.JavaConverters._
 
 /** The test cases here verify the following conditions.
-  * (Note that the onUpdate(ClusterResource c) method can be called multiple times with cluster id=null)
   * 1. The ProducerInterceptor receives the cluster id after the onSend() method is called.
   * 2. The Serializer receives the cluster id before the serialize() method is called.
   * 3. The producer MetricReporter receives the cluster id  after send() method is called on KafkaProducer.

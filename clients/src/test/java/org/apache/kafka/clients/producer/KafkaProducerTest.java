@@ -105,7 +105,7 @@ public class KafkaProducerTest {
             Assert.assertEquals(0, MockProducerInterceptor.CLOSE_COUNT.get());
 
             // Cluster metadata will only be updated on calling onSend.
-            Assert.assertNull(MockProducerInterceptor.CLUSTER_META.get().clusterId());
+            Assert.assertNull(MockProducerInterceptor.CLUSTER_META.get());
 
             producer.close();
             Assert.assertEquals(1, MockProducerInterceptor.INIT_COUNT.get());
