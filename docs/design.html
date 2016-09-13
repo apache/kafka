@@ -354,15 +354,44 @@ Further cleaner configurations are described <a href="/documentation.html#broker
 
 <h3><a id="design_quotas" href="#design_quotas">4.9 Quotas</a></h3>
 <p>
-    Starting in 0.9, the Kafka cluster has the ability to enforce quotas on produce and fetch requests. Quotas are basically byte-rate thresholds defined per client-id. A client-id logically identifies an application making a request. Hence a single client-id can span multiple producer and consumer instances and the quota will apply for all of them as a single entity i.e. if client-id="test-client" has a produce quota of 10MB/sec, this is shared across all instances with that same id.
+    Starting in 0.9, the Kafka cluster has the ability to enforce quotas on produce and fetch requests. Quotas are basically byte-rate thresholds defined per group of clients sharing a quota.
+</p>
 
 <h4><a id="design_quotasnecessary" href="#design_quotasnecessary">Why are quotas necessary?</a></h4>
 <p>
 It is possible for producers and consumers to produce/consume very high volumes of data and thus monopolize broker resources, cause network saturation and generally DOS other clients and the brokers themselves. Having quotas protects against these issues and is all the more important in large multi-tenant clusters where a small set of badly behaved clients can degrade user experience for the well behaved ones. In fact, when running Kafka as a service this even makes it possible to enforce API limits according to an agreed upon contract.
 </p>
+<h4><a id="design_quotasgroups" href="#design_quotasgroups">Client groups</a></h4>
+    The identity of Kafka clients is the user principal which represents an authenticated user in a secure cluster. In a cluster that supports unauthenticated clients, user principal is a grouping of unauthenticated users
+    chosen by the broker using a configurable <code>PrincipalBuilder</code>. Client-id is a logical grouping of clients with a meaningful name chosen by the client application. The tuple (user, client-id) defines a secure logical group of clients that share both user principal and client-id.
+<p>
+    Quotas can be applied to (user, client-id), user or client-id groups. For a given connection, the most specific quota matching the connection is applied. All connections of a quota group share the quota configured for the group.
+    For example, if (user="test-user", client-id="test-client") has a produce quota of 10MB/sec, this is shared across all producer instances of user "test-user" with the client-id "test-client".
+</p>
+<h4><a id="design_quotasconfig" href="#design_quotasconfig">Quota Configuration</a></h4>
+<p>
+    Quota configuration may be defined for (user, client-id), user and client-id groups. It is possible to override the default quota at any of the quota levels that needs a higher (or even lower) quota. The mechanism is similar to the per-topic log config overrides.
+    User and (user, client-id) quota overrides are written to ZooKeeper under <i><b>/config/users</b></i> and client-id quota overrides are written under <i><b>/config/clients</b></i>. These overrides are read by all brokers and are effective immediately. This lets us change quotas without having to do a rolling restart of the entire cluster. See <a href="#quotas">here</a> for details.
+    Default quotas for each group may also be updated dynamically using the same mechanism.
+</p>
+<p>
+    The order of precedence for quota configuration is:
+    <ol>
+        <li>/config/users/&lt;user&gt;/clients/&lt;client-id&gt;</li>
+        <li>/config/users/&lt;user&gt;/clients/&lt;default&gt;</li>
+        <li>/config/users/&lt;user&gt;</li>
+        <li>/config/users/&lt;default&gt;/clients/&lt;client-id&gt;</li>
+        <li>/config/users/&lt;default&gt;/clients/&lt;default&gt;</li>
+        <li>/config/users/&lt;default&gt;</li>
+        <li>/config/clients/&lt;client-id&gt;</li>
+        <li>/config/clients/&lt;default&gt;</li>
+    </ol>
+
+    Broker properties (quota.producer.default, quota.consumer.default) can also be used to set defaults for client-id groups. These properties are being deprecated and will be removed in a later release. Default quotas for client-id can be set in Zookeeper similar to the other quota overrides and defaults.
+</p>
 <h4><a id="design_quotasenforcement" href="#design_quotasenforcement">Enforcement</a></h4>
 <p>
-    By default, each unique client-id receives a fixed quota in bytes/sec as configured by the cluster (quota.producer.default, quota.consumer.default).
+    By default, each unique client group receives a fixed quota in bytes/sec as configured by the cluster.
     This quota is defined on a per-broker basis. Each client can publish/fetch a maximum of X bytes/sec per broker before it gets throttled. We decided that defining these quotas per broker is much better than having a fixed cluster wide bandwidth per client because that would require a mechanism to share client quota usage among all the brokers. This can be harder to get right than the quota implementation itself!
 </p>
 <p>
@@ -370,10 +399,4 @@ It is possible for producers and consumers to produce/consume very high volumes 
 </p>
 <p>
 Client byte rate is measured over multiple small windows (e.g. 30 windows of 1 second each) in order to detect and correct quota violations quickly. Typically, having large measurement windows (for e.g. 10 windows of 30 seconds each) leads to large bursts of traffic followed by long delays which is not great in terms of user experience.
-</p>
-<h4><a id="design_quotasoverrides" href="#design_quotasoverrides">Quota overrides</a></h4>
-<p>
-    It is possible to override the default quota for client-ids that need a higher (or even lower) quota. The mechanism is similar to the per-topic log config overrides.
-    Client-id overrides are written to ZooKeeper under <i><b>/config/clients</b></i>. These overrides are read by all brokers and are effective immediately. This lets us change quotas without having to do a rolling restart of the entire cluster. See <a href="#quotas">here</a> for details.
-
 </p>
