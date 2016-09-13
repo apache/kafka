@@ -63,6 +63,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private static final Logger log = LoggerFactory.getLogger(ConsumerCoordinator.class);
 
+    private static final long CLOSE_TIMEOUT_MS = 5000;
+
     private final List<PartitionAssignor> assignors;
     private final Metadata metadata;
     private final ConsumerCoordinatorMetrics sensors;
@@ -405,12 +407,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         client.disableWakeups();
         try {
             maybeAutoCommitOffsetsSync();
+
+            Node coordinator;
+            long endTimeMs = System.currentTimeMillis() + CLOSE_TIMEOUT_MS;
+            while ((coordinator = coordinator()) != null && client.pendingRequestCount(coordinator) > 0) {
+                long remainingTimeMs = endTimeMs - System.currentTimeMillis();
+                if (remainingTimeMs > 0)
+                    client.poll(remainingTimeMs);
+                else
+                    break;
+            }
         } finally {
             super.close();
-        }
-        Node coordinator;
-        while ((coordinator = coordinator()) != null && client.pendingRequestCount(coordinator) > 0) {
-            client.poll(Long.MAX_VALUE);
         }
     }
 
