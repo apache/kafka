@@ -26,9 +26,10 @@ from kafkatest.version import DEV_BRANCH
 
 
 class ConsumerState:
-    Dead = 1
+    Started = 1
+    Dead = 2
     Rebalancing = 3
-    Joined = 2
+    Joined = 4
 
 
 class ConsumerEventHandler(object):
@@ -48,7 +49,9 @@ class ConsumerEventHandler(object):
         self.assignment = []
         self.position = {}
 
-    def handle_offsets_committed(self, event):
+    def handle_startup_complete(self):
+        self.state = ConsumerState.Started
+
         if event["success"]:
             for offset_commit in event["offsets"]:
                 if offset_commit.get("error", "") != "":
@@ -200,6 +203,8 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                     name = event["name"]
                     if name == "shutdown_complete":
                         handler.handle_shutdown_complete()
+                    elif name == "startup_complete":
+                        handler.handle_startup_complete()
                     if name == "offsets_committed":
                         handler.handle_offsets_committed(event)
                         self._update_global_committed(event)
@@ -340,3 +345,8 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         with self.lock:
             return [handler.node for handler in self.event_handlers.itervalues()
                     if handler.state == ConsumerState.Dead]
+
+    def alive_nodes(self):
+        with self.lock:
+            return [handler.node for handler in self.event_handlers.itervalues()
+                    if handler.state != ConsumerState.Dead]
