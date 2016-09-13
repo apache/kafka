@@ -272,7 +272,7 @@ public final class Metadata {
     /**
      * The max allowable age of metadata.
      */
-    public synchronized long getMetadataMaxAge() { 
+    public long maxAge() { 
         return this.metadataExpireMs; 
     }
 
