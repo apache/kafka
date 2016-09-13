@@ -20,6 +20,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.record.TimestampOffset;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -296,6 +297,35 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             subscriptions.resume(partition);
             paused.remove(partition);
         }
+    }
+
+    @Override
+    public Map<TopicPartition, TimestampOffset> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {
+        return null;
+    }
+
+    @Override
+    public Map<TopicPartition, Long> earliestOffsets(Set<TopicPartition> partitions) {
+        Map<TopicPartition, Long> result = new HashMap<>();
+        for (TopicPartition tp : partitions) {
+            Long beginningOffset = beginningOffsets.get(tp);
+            if (beginningOffset == null)
+                throw new IllegalStateException("The partition " + tp + " does not have a beginning offset.");
+            result.put(tp, beginningOffset);
+        }
+        return result;
+    }
+
+    @Override
+    public Map<TopicPartition, Long> latestOffsets(Set<TopicPartition> partitions) {
+        Map<TopicPartition, Long> result = new HashMap<>();
+        for (TopicPartition tp : partitions) {
+            Long endOffset = endOffsets.get(tp);
+            if (endOffset == null)
+                throw new IllegalStateException("The partition " + tp + " does not have an end offset.");
+            result.put(tp, endOffset);
+        }
+        return result;
     }
 
     @Override

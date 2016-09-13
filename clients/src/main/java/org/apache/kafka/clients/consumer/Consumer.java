@@ -16,6 +16,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.record.TimestampOffset;
 
 import java.io.Closeable;
 import java.util.Collection;
@@ -149,6 +150,21 @@ public interface Consumer<K, V> extends Closeable {
      * @see KafkaConsumer#resume(Collection)
      */
     public void resume(Collection<TopicPartition> partitions);
+
+    /**
+     * @see KafkaConsumer#offsetsForTimes(java.util.Map)
+     */
+    public Map<TopicPartition, TimestampOffset> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch);
+
+    /**
+     * @see KafkaConsumer#earliestOffsets(java.util.Set)
+     */
+    public Map<TopicPartition, Long> earliestOffsets(Set<TopicPartition> partitions);
+
+    /**
+     * @see KafkaConsumer#latestOffsets(java.util.Set)
+     */
+    public Map<TopicPartition, Long> latestOffsets(Set<TopicPartition> partitions);
 
     /**
      * @see KafkaConsumer#close()

@@ -491,7 +491,7 @@ public class FetcherTest {
         // with no commit position, we should reset using the default strategy defined above (EARLIEST)
 
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.EARLIEST_TIMESTAMP),
-                               listOffsetResponse(Errors.NONE, Arrays.asList(5L)));
+                               listOffsetResponse(Errors.NONE, 1L, 5L));
         fetcher.updateFetchPositions(singleton(tp));
         assertFalse(subscriptions.isOffsetResetNeeded(tp));
         assertTrue(subscriptions.isFetchable(tp));
@@ -504,7 +504,7 @@ public class FetcherTest {
         subscriptions.needOffsetReset(tp, OffsetResetStrategy.LATEST);
 
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
-                               listOffsetResponse(Errors.NONE, Arrays.asList(5L)));
+                               listOffsetResponse(Errors.NONE, 1L, 5L));
         fetcher.updateFetchPositions(singleton(tp));
         assertFalse(subscriptions.isOffsetResetNeeded(tp));
         assertTrue(subscriptions.isFetchable(tp));
@@ -517,7 +517,7 @@ public class FetcherTest {
         subscriptions.needOffsetReset(tp, OffsetResetStrategy.EARLIEST);
 
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.EARLIEST_TIMESTAMP),
-                               listOffsetResponse(Errors.NONE, Arrays.asList(5L)));
+                               listOffsetResponse(Errors.NONE, 1L, 5L));
         fetcher.updateFetchPositions(singleton(tp));
         assertFalse(subscriptions.isOffsetResetNeeded(tp));
         assertTrue(subscriptions.isFetchable(tp));
@@ -531,11 +531,11 @@ public class FetcherTest {
 
         // First request gets a disconnect
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
-                               listOffsetResponse(Errors.NONE, Arrays.asList(5L)), true);
+                               listOffsetResponse(Errors.NONE, 1L, 5L), true);
 
         // Next one succeeds
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
-                               listOffsetResponse(Errors.NONE, Arrays.asList(5L)));
+                               listOffsetResponse(Errors.NONE, 1L, 5L));
         fetcher.updateFetchPositions(singleton(tp));
         assertFalse(subscriptions.isOffsetResetNeeded(tp));
         assertTrue(subscriptions.isFetchable(tp));
@@ -641,17 +641,16 @@ public class FetcherTest {
             @Override
             public boolean matches(ClientRequest request) {
                 ListOffsetRequest req = new ListOffsetRequest(request.request().body());
-                ListOffsetRequest.PartitionData partitionData = req.offsetData().get(tp);
-                return partitionData != null && partitionData.timestamp == timestamp;
+                return timestamp == req.partitionTimestamps().get(tp);
             }
         };
     }
 
-    private Struct listOffsetResponse(Errors error, List<Long> offsets) {
-        ListOffsetResponse.PartitionData partitionData = new ListOffsetResponse.PartitionData(error.code(), offsets);
+    private Struct listOffsetResponse(Errors error, long timestamp, long offset) {
+        ListOffsetResponse.PartitionData partitionData = new ListOffsetResponse.PartitionData(error.code(), timestamp, offset);
         Map<TopicPartition, ListOffsetResponse.PartitionData> allPartitionData = new HashMap<>();
         allPartitionData.put(tp, partitionData);
-        ListOffsetResponse response = new ListOffsetResponse(allPartitionData);
+        ListOffsetResponse response = new ListOffsetResponse(allPartitionData, 1);
         return response.toStruct();
     }
 

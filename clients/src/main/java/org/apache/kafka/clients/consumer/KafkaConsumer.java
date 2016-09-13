@@ -37,6 +37,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
+import org.apache.kafka.common.record.TimestampOffset;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.AppInfoParser;
@@ -1391,6 +1392,52 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         } finally {
             release();
         }
+    }
+
+    /**
+     * Look up the offsets for the given partitions by timestamp. The returned offset for each partition is the
+     * earliest offset whose timestamp is greater than or equals to the given timestamp in the corresponding partition.
+     *
+     * This is a blocking call. The consumer does not have to be assigned the partitions.
+     * If the message format version in a partition is before 0.10.0, i.e. the messages do not have timestamps, null
+     * will be returned for that partition.
+     *
+     * @param timestampsToSearch the mapping from partition to the timestamp to look up.
+     * @return For each partition, returns the timestamp and offset of the first message with timestamp greater
+     *         than or equal to the target timestamp. {@code null} will be returned for the partition if there is no
+     *         such message.
+     */
+    @Override
+    public Map<TopicPartition, TimestampOffset> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {
+        for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
+            if (entry.getValue() < 0)
+                throw new IllegalArgumentException("The target time for partition " + entry.getKey() + " is " +
+                        entry.getValue() + ". The target time cannot be negative.");
+        }
+        return fetcher.getOffsetsByTimes(timestampsToSearch);
+    }
+
+    /**
+     * Get the earliest available offsets for the given partitions.
+     *
+     * @param partitions the partitions to get the earliest offsets.
+     * @return The earliest available offsets for the given partitions
+     */
+    @Override
+    public Map<TopicPartition, Long> earliestOffsets(Set<TopicPartition> partitions) {
+        return fetcher.earliestOffsets(partitions);
+    }
+
+    /**
+     * Get the latest offsets for the given partitions. The latest offset of a partition is the offset of the
+     * next coming message.
+     *
+     * @param partitions the partitions to get the latest offsets.
+     * @return The latest available offsets for the given partitions.
+     */
+    @Override
+    public Map<TopicPartition, Long> latestOffsets(Set<TopicPartition> partitions) {
+        return fetcher.latestOffsets(partitions);
     }
 
     /**

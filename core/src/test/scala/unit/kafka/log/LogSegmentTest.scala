@@ -199,17 +199,17 @@ class LogSegmentTest {
 
     assertEquals(490, seg.largestTimestamp)
     // Search for an indexed timestamp
-    assertEquals(42, seg.findOffsetByTimestamp(420).get)
-    assertEquals(43, seg.findOffsetByTimestamp(421).get)
+    assertEquals(42, seg.findOffsetByTimestamp(420).get.offset)
+    assertEquals(43, seg.findOffsetByTimestamp(421).get.offset)
     // Search for an un-indexed timestamp
-    assertEquals(43, seg.findOffsetByTimestamp(430).get)
-    assertEquals(44, seg.findOffsetByTimestamp(431).get)
+    assertEquals(43, seg.findOffsetByTimestamp(430).get.offset)
+    assertEquals(44, seg.findOffsetByTimestamp(431).get.offset)
     // Search beyond the last timestamp
-    assertEquals(50, seg.findOffsetByTimestamp(491).get)
+    assertEquals(None, seg.findOffsetByTimestamp(491))
     // Search before the first indexed timestamp
-    assertEquals(41, seg.findOffsetByTimestamp(401).get)
+    assertEquals(41, seg.findOffsetByTimestamp(401).get.offset)
     // Search before the first timestamp
-    assertEquals(40, seg.findOffsetByTimestamp(399).get)
+    assertEquals(40, seg.findOffsetByTimestamp(399).get.offset)
   }
 
   /**
@@ -251,7 +251,7 @@ class LogSegmentTest {
     TestUtils.writeNonsenseToFile(indexFile, 5, indexFile.length.toInt)
     seg.recover(64*1024)
     for(i <- 0 until 100)
-      assertEquals(i, seg.read(i, Some(i+1), 1024).messageSet.head.offset)
+      assertEquals(i, seg.read(i, Some(i + 1), 1024).messageSet.head.offset)
   }
 
   /**
@@ -267,8 +267,9 @@ class LogSegmentTest {
     TestUtils.writeNonsenseToFile(timeIndexFile, 5, timeIndexFile.length.toInt)
     seg.recover(64*1024)
     for(i <- 0 until 100) {
-      assertEquals(i, seg.findOffsetByTimestamp(i * 10).get)
-      assertEquals(i + 1, seg.findOffsetByTimestamp(i * 10 + 1).get)
+      assertEquals(i, seg.findOffsetByTimestamp(i * 10).get.offset)
+      if (i < 99)
+        assertEquals(i + 1, seg.findOffsetByTimestamp(i * 10 + 1).get.offset)
     }
   }
   

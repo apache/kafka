@@ -387,21 +387,15 @@ class LogSegment(val log: FileMessageSet,
    * the truncated log and maybe retry or even do the search on another log segment.
    *
    * @param timestamp The timestamp to search for.
-   * @return an offset which points to the first message whose timestamp is larger than or equals to the
-   *         target timestamp.
-   *         None maybe returned when the log is truncated.
+   * @return the timestamp and offset of the first message whose timestamp is larger than or equals to the
+   *         target timestamp. None will be returned if there is no such message.
    */
-  def findOffsetByTimestamp(timestamp: Long): Option[Long] = {
-    if (log.end == log.start) {
-      // The log segment is empty, just return base offset with no timestamp.
-      Some(baseOffset)
-    } else {
-      // Get the index entry with a timestamp less than or equal to the target timestamp
-      val timestampOffset = timeIndex.lookup(timestamp)
-      val position = index.lookup(timestampOffset.offset).position
-      // Search the timestamp
-      log.searchForTimestamp(timestamp, position)
-    }
+  def findOffsetByTimestamp(timestamp: Long): Option[TimestampOffset] = {
+    // Get the index entry with a timestamp less than or equal to the target timestamp
+    val timestampOffset = timeIndex.lookup(timestamp)
+    val position = index.lookup(timestampOffset.offset).position
+    // Search the timestamp
+    log.searchForTimestamp(timestamp, position)
   }
 
   /**

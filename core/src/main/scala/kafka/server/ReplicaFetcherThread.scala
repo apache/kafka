@@ -264,14 +264,14 @@ class ReplicaFetcherThread(name: String,
 
   private def earliestOrLatestOffset(topicPartition: TopicPartition, earliestOrLatest: Long, consumerId: Int): Long = {
     val partitions = Map(
-      topicPartition -> new ListOffsetRequest.PartitionData(earliestOrLatest, 1)
+      topicPartition -> earliestOrLatest
     )
-    val request = new ListOffsetRequest(consumerId, partitions.asJava)
+    val request = new ListOffsetRequest(consumerId, partitions.asJava, 1)
     val clientResponse = sendRequest(ApiKeys.LIST_OFFSETS, None, request)
     val response = new ListOffsetResponse(clientResponse.responseBody)
     val partitionData = response.responseData.get(topicPartition)
     Errors.forCode(partitionData.errorCode) match {
-      case Errors.NONE => partitionData.offsets.asScala.head
+      case Errors.NONE => partitionData.offset
       case errorCode => throw errorCode.exception
     }
   }

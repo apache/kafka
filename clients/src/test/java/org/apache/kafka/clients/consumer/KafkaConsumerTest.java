@@ -1034,9 +1034,9 @@ public class KafkaConsumerTest {
         Map<TopicPartition, ListOffsetResponse.PartitionData> partitionData = new HashMap<>();
         for (Map.Entry<TopicPartition, Long> partitionOffset : offsets.entrySet()) {
             partitionData.put(partitionOffset.getKey(), new ListOffsetResponse.PartitionData(error,
-                    singletonList(partitionOffset.getValue())));
+                    1L, partitionOffset.getValue()));
         }
-        return new ListOffsetResponse(partitionData).toStruct();
+        return new ListOffsetResponse(partitionData, 1).toStruct();
     }
 
     private Struct fetchResponse(Map<TopicPartition, FetchInfo> fetches) {

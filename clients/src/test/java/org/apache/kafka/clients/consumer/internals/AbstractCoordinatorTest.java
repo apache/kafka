@@ -125,7 +125,7 @@ public class AbstractCoordinatorTest {
             synchronized (coordinator) {
                 coordinator.notify();
             }
-            Thread.sleep(100);
+            Thread.sleep(1000);
 
             coordinator.pollHeartbeat(mockTime.milliseconds());
             fail("Expected pollHeartbeat to raise an error");
