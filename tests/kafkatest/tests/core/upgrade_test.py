@@ -116,11 +116,12 @@ class TestUpgrade(ProduceConsumeValidateTest):
                                                                                         to_message_format_version))
 
     @parametrize(from_kafka_version=str(LATEST_0_9))
+    @parametrize(from_kafka_version=str(LATEST_0_10))
     def test_upgrade_for_cluster_id(self, from_kafka_version):
-        self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk,
+        self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk,
                                   version=KafkaVersion(from_kafka_version),
-                                  topics={self.topic: {"partitions": 3, "replication-factor": 1,
-                                                       'configs': {"min.insync.replicas": 1}}})
+                                  topics={self.topic: {"partitions": 3, "replication-factor": 3,
+                                                       'configs': {"min.insync.replicas": 2}}})
         self.kafka.start()
         assert self.zk.query("/cluster/id") is None
 
