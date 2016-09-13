@@ -519,6 +519,8 @@ public class NetworkClient implements KafkaClient {
         /* the last timestamp when a new connection is created for sending metadata request */
         private long lastConnectAttemptForMetadataRequestMs;
 
+        private String lastConnectAttemptNodeId;
+
         DefaultMetadataUpdater(Metadata metadata) {
             this.metadata = metadata;
             this.metadataFetchInProgress = false;
@@ -615,6 +617,14 @@ public class NetworkClient implements KafkaClient {
             return new ClientRequest(now, true, send, null, true);
         }
 
+        private boolean isConnectionClosed(String nodeId) {
+            try {
+                return connectionStates.connectionState(nodeId) == ConnectionState.DISCONNECTED;
+            } catch (IllegalStateException ignored) {
+                return true;
+            }
+        }
+
         /**
          * Add a metadata request to the list of sends if we can make one
          */
@@ -635,7 +645,8 @@ public class NetworkClient implements KafkaClient {
                 ClientRequest clientRequest = request(now, nodeConnectionId, metadataRequest);
                 log.debug("Sending metadata request {} to node {}", metadataRequest, node.id());
                 doSend(clientRequest, now);
-            } else if (now - lastConnectAttemptForMetadataRequestMs > metadata.refreshBackoff() && /* TODO should use reconnect.backoff.ms instead? */
+            } else if ((lastConnectAttemptNodeId != null && isConnectionClosed(lastConnectAttemptNodeId) ||
+                        now - lastConnectAttemptForMetadataRequestMs > metadata.refreshBackoff()) && /* TODO should use reconnect.backoff.ms instead? */
                        connectionStates.canConnect(nodeConnectionId, now)) {
                 // we don't have a connection to this node right now, make one
                 log.debug("Initialize connection to node {} for sending metadata request", node.id());
@@ -644,6 +655,7 @@ public class NetworkClient implements KafkaClient {
                 // should allow immediately retrying in case there is another candidate node. If it
                 // is still connecting, the worst case is that we end up setting a longer timeout
                 // on the next round and then wait for the response.
+                this.lastConnectAttemptNodeId = nodeConnectionId;
                 this.lastConnectAttemptForMetadataRequestMs = now;
             }
             // connected, but can't send more OR connecting
