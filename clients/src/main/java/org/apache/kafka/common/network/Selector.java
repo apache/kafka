@@ -493,7 +493,9 @@ public class Selector implements Selectable {
         }
         Deque<NetworkReceive> deque = this.stagedReceives.remove(channel);
         if (deque != null) {
-            addToCompletedReceives(channel, deque, true);
+            while (!deque.isEmpty()) {
+                addToCompletedReceives(channel, deque);
+            }
             closedChannels.put(channel.id(), channel);
         }
         this.channels.remove(channel.id());
@@ -590,7 +592,7 @@ public class Selector implements Selectable {
                 KafkaChannel channel = entry.getKey();
                 if (!channel.isMute()) {
                     Deque<NetworkReceive> deque = entry.getValue();
-                    addToCompletedReceives(channel, deque, false);
+                    addToCompletedReceives(channel, deque);
                     if (deque.isEmpty())
                         iter.remove();
                 }
@@ -598,12 +600,10 @@ public class Selector implements Selectable {
         }
     }
 
-    private void addToCompletedReceives(KafkaChannel channel, Deque<NetworkReceive> stagedDeque, boolean addAll) {
-        do {
-            NetworkReceive networkReceive = stagedDeque.poll();
-            this.completedReceives.add(networkReceive);
-            this.sensors.recordBytesReceived(channel.id(), networkReceive.payload().limit());
-        } while (!stagedDeque.isEmpty() && addAll);
+    private void addToCompletedReceives(KafkaChannel channel, Deque<NetworkReceive> stagedDeque) {
+        NetworkReceive networkReceive = stagedDeque.poll();
+        this.completedReceives.add(networkReceive);
+        this.sensors.recordBytesReceived(channel.id(), networkReceive.payload().limit());
     }
 
     private class SelectorMetrics {
