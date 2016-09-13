@@ -42,8 +42,10 @@ trait KafkaMetricsGroup extends Logging {
     val klass = this.getClass
     val pkg = if (klass.getPackage == null) "" else klass.getPackage.getName
     val simpleName = klass.getSimpleName.replaceAll("\\$$", "")
+    // Tags may contain ipv6 address with ':', which is not valid in JMX ObjectName
+    val sanitizedTags = tags.map(kv => (kv._1, kv._2.replace(':', '_')))
 
-    explicitMetricName(pkg, simpleName, name, tags)
+    explicitMetricName(pkg, simpleName, name, sanitizedTags)
   }
 
 
