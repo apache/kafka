@@ -78,7 +78,7 @@ public class FetchRequest extends AbstractRequest {
                 String topic = topicEntry.getKey().topic();
                 int partition = topicEntry.getKey().partition();
                 PartitionData partitionData = topicEntry.getValue();
-                if (topics.isEmpty() || topics.get(topics.size() - 1).topic != topic)
+                if (topics.isEmpty() || !topics.get(topics.size() - 1).topic.equals(topic))
                     topics.add(new TopicAndPartitionData(topic));
                 topics.get(topics.size() - 1).partitions.put(partition, partitionData);
             }
@@ -192,6 +192,8 @@ public class FetchRequest extends AbstractRequest {
             case 0:
                 return new FetchResponse(responseData);
             case 1:
+            case 2:
+            case 3:
                 return new FetchResponse(responseData, 0);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
