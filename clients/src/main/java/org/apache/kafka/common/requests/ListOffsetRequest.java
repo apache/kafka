@@ -26,9 +26,12 @@ import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class ListOffsetRequest extends AbstractRequest {
 
@@ -54,6 +57,7 @@ public class ListOffsetRequest extends AbstractRequest {
     private final int replicaId;
     private final Map<TopicPartition, PartitionData> offsetData;
     private final Map<TopicPartition, Long> partitionTimestamps;
+    private final Set<TopicPartition> duplicatePartitions;
 
     /**
      * This class is only used by ListOffsetRequest v0 which has been deprecated.
@@ -130,10 +134,12 @@ public class ListOffsetRequest extends AbstractRequest {
         this.replicaId = replicaId;
         this.offsetData = version == 0 ? (Map<TopicPartition, PartitionData>) targetTimes : null;
         this.partitionTimestamps = version == 1 ? (Map<TopicPartition, Long>) targetTimes : null;
+        this.duplicatePartitions = Collections.emptySet();
     }
 
     public ListOffsetRequest(Struct struct) {
         super(struct);
+        Set<TopicPartition> duplicatePatitions = new HashSet<>();
         replicaId = struct.getInt(REPLICA_ID_KEY_NAME);
         offsetData = new HashMap<TopicPartition, PartitionData>();
         partitionTimestamps = new HashMap<TopicPartition, Long>();
@@ -150,10 +156,12 @@ public class ListOffsetRequest extends AbstractRequest {
                     PartitionData partitionData = new PartitionData(timestamp, maxNumOffsets);
                     offsetData.put(tp, partitionData);
                 } else {
-                    partitionTimestamps.put(tp, timestamp);
+                    if (partitionTimestamps.put(tp, timestamp) != null)
+                        duplicatePatitions.add(tp);
                 }
             }
         }
+        this.duplicatePartitions = duplicatePatitions;
     }
 
     @Override
@@ -193,6 +201,10 @@ public class ListOffsetRequest extends AbstractRequest {
 
     public Map<TopicPartition, Long> partitionTimestamps() {
         return partitionTimestamps;
+    }
+
+    public Set<TopicPartition> duplicatePartitions() {
+        return duplicatePartitions;
     }
 
     public static ListOffsetRequest parse(ByteBuffer buffer, int versionId) {
