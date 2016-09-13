@@ -15,6 +15,8 @@
 
 from ducktape.mark import parametrize
 
+import json
+
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.kafka import config_property
@@ -22,7 +24,7 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
-from kafkatest.version import LATEST_0_8_2, LATEST_0_9, TRUNK, KafkaVersion
+from kafkatest.version import LATEST_0_8_2, LATEST_0_9, LATEST_0_10, TRUNK, KafkaVersion
 
 
 class TestUpgrade(ProduceConsumeValidateTest):
@@ -112,3 +114,28 @@ class TestUpgrade(ProduceConsumeValidateTest):
 
         self.run_produce_consume_validate(core_test_action=lambda: self.perform_upgrade(from_kafka_version,
                                                                                         to_message_format_version))
+
+    @parametrize(from_kafka_version=str(LATEST_0_9))
+    def test_upgrade_for_cluster_id(self, from_kafka_version):
+        self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk,
+                                  version=KafkaVersion(from_kafka_version),
+                                  topics={self.topic: {"partitions": 3, "replication-factor": 1,
+                                                       'configs': {"min.insync.replicas": 1}}})
+        self.kafka.start()
+        assert self.zk.query("/cluster/id") is None
+
+        self.logger.info("Upgrading brokers")
+        for node in self.kafka.nodes:
+            self.kafka.stop_node(node)
+            node.version = TRUNK
+            self.kafka.start_node(node)
+
+        cluster_id_json = self.zk.query("/cluster/id")
+        assert cluster_id_json is not None
+        try:
+            cluster_id = json.loads(cluster_id_json)
+        except :
+            self.logger.debug("Data in /cluster/id znode could not be parsed. Data = %s" % cluster_id_json)
+
+        self.logger.debug("Cluster id [%s]", cluster_id)
+        assert len(cluster_id["id"]) == 48
