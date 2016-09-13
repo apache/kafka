@@ -35,7 +35,7 @@ public class ClusterResourceListeners {
         }
     }
 
-    public void addAll(List candidateList) {
+    public void addAll(List<?> candidateList) {
         for (Object candidate : candidateList) {
             if (candidate instanceof ClusterResourceListener)
                 clusterResourceListeners.add((ClusterResourceListener) candidate);
