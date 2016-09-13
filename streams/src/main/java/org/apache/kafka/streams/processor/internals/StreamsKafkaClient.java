@@ -17,16 +17,25 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.RequestCompletionHandler;
+import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.requests.MetadataRequest;
+import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.RequestSend;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
@@ -34,6 +43,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,9 +61,14 @@ public class StreamsKafkaClient {
     private Selector selector;
     private ChannelBuilder channelBuilder;
     private KafkaClient kafkaClient;
+    private StreamsConfig config;
+    private Node brokerNode;
+
+    private int maxIterations = 5;
 
     public StreamsKafkaClient(StreamsConfig config) {
 
+        this.config = config;
         Time time = new SystemTime();
 
         Map<String, String> metricTags = new LinkedHashMap<String, String>();
@@ -85,6 +100,8 @@ public class StreamsKafkaClient {
                 config.getInt(config.SEND_BUFFER_CONFIG),
                 config.getInt(config.RECEIVE_BUFFER_CONFIG),
                 config.getInt(config.REQUEST_TIMEOUT_MS_CONFIG), time);
+
+        brokerNode = kafkaClient.leastLoadedNode(new SystemTime().milliseconds());
     }
 
     public KafkaClient getKafkaClient() {
@@ -100,6 +117,89 @@ public class StreamsKafkaClient {
         log.debug("The StreamsKafkaClient has closed.");
         if (firstException.get() != null)
             throw new KafkaException("Failed to close kafka producer", firstException.get());
+    }
+
+    /**
+     * Send a requet to a node.
+     *
+     * @param request
+     * @param apiKeys
+     * @param callback
+     */
+    public void  sendRequest(Struct request, ApiKeys apiKeys, RequestCompletionHandler callback) {
+
+        String brokerId = Integer.toString(brokerNode.id());
+
+        RequestSend send = new RequestSend(brokerId,
+                kafkaClient.nextRequestHeader(apiKeys),
+                request);
+
+        ClientRequest clientRequest = new ClientRequest(new SystemTime().milliseconds(), true, send, callback);
+        SystemTime systemTime = new SystemTime();
+        int iterationCount = 0;
+        while (iterationCount < maxIterations) {
+            if (kafkaClient.ready(brokerNode, systemTime.milliseconds())) {
+                kafkaClient.send(clientRequest, systemTime.milliseconds());
+                break;
+            } else {
+                kafkaClient.poll(config.getLong(StreamsConfig.POLL_MS_CONFIG), systemTime.milliseconds());
+            }
+            iterationCount++;
+        }
+
+    }
+
+    /**
+     * Check if the topic exists.
+     *
+     * @param topic
+     * @return
+     */
+    public boolean topicExists(String topic) {
+
+        MetadataRequest metadataRequest = new MetadataRequest(Arrays.asList(topic));
+
+        String brokerId = Integer.toString(brokerNode.id());
+        RequestSend send = new RequestSend(brokerId,
+                kafkaClient.nextRequestHeader(ApiKeys.METADATA),
+                metadataRequest.toStruct());
+
+        RequestCompletionHandler callback = new RequestCompletionHandler() {
+            public void onComplete(ClientResponse response) {
+
+            }
+        };
+
+        // Send the async request to check the topic existance
+        ClientRequest clientRequest = new ClientRequest(new SystemTime().milliseconds(), true, send, callback);
+        SystemTime systemTime = new SystemTime();
+        int iterationCount = 0;
+        while (iterationCount < maxIterations) {
+            if (kafkaClient.ready(brokerNode, systemTime.milliseconds())) {
+                kafkaClient.send(clientRequest, systemTime.milliseconds());
+                break;
+            } else {
+                // If the client is not ready call poll to make the client ready
+                kafkaClient.poll(config.getLong(StreamsConfig.POLL_MS_CONFIG), new SystemTime().milliseconds());
+            }
+            iterationCount++;
+        }
+
+        // Process the response
+        iterationCount = 0;
+        while (iterationCount < maxIterations) {
+            List<ClientResponse> responseList = kafkaClient.poll(config.getLong(StreamsConfig.POLL_MS_CONFIG), new SystemTime().milliseconds());
+            for (ClientResponse clientResponse: responseList) {
+                if (clientResponse.request().request().body().equals(metadataRequest.toStruct())) {
+                    MetadataResponse metadataResponse = new MetadataResponse(clientResponse.responseBody());
+                    if (metadataResponse.errors().isEmpty()) {
+                        return true;
+                    }
+                }
+            }
+            iterationCount++;
+        }
+        return false;
     }
 
 }

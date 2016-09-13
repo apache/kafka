@@ -17,19 +17,12 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
-import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.RequestCompletionHandler;
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.protocol.ApiKeys;
 
-import org.apache.kafka.common.requests.MetadataRequest;
-import org.apache.kafka.common.requests.RequestSend;
-import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.DeleteTopicsRequest;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,40 +32,32 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.HashMap;
-import java.util.List;
-import java.util.Arrays;
-
 
 public class InternalTopicManager {
 
     private static final Logger log = LoggerFactory.getLogger(InternalTopicManager.class);
 
     private final int replicationFactor;
-    private final KafkaClient kafkaClient;
     private StreamsKafkaClient streamsKafkaClient;
     StreamsConfig config;
-
 
     private static final String CLEANUP_POLICY_PROP = "log.cleanup.policy";
     private static final String COMPACT = "compact";
 
     public InternalTopicManager() {
         this.config = null;
-        this.kafkaClient = null;
         this.replicationFactor = 0;
     }
 
     public InternalTopicManager(StreamsConfig config) {
         this.config = config;
-        this.streamsKafkaClient = new DefaultKafkaClientSupplier().getStreamKafkaClient(config);
-        this.kafkaClient = streamsKafkaClient.getKafkaClient();
+        this.streamsKafkaClient = new StreamsKafkaClient(config);
         this.replicationFactor = 0;
     }
 
     public InternalTopicManager(StreamsConfig config, int replicationFactor) {
         this.config = config;
-        this.streamsKafkaClient = new DefaultKafkaClientSupplier().getStreamKafkaClient(config);
-        this.kafkaClient = streamsKafkaClient.getKafkaClient();
+        this.streamsKafkaClient = new StreamsKafkaClient(config);
         this.replicationFactor = replicationFactor;
     }
 
@@ -82,16 +67,14 @@ public class InternalTopicManager {
     }
     public void makeReady(String topic, int numPartitions, boolean compactTopic) {
 
-        Node brokerNode = kafkaClient.leastLoadedNode(new SystemTime().milliseconds());
-
         // Delete the topic if it exists before.
-        boolean topicExists = topicExists(topic, brokerNode);
+        boolean topicExists = topicExists(topic);
         if (topicExists) {
-            deleteTopic(topic, brokerNode);
+            deleteTopic(topic);
             log.debug("Deleted: " + topic);
         }
         // Create a new topic
-        createTopic(topic, numPartitions, replicationFactor, compactTopic, brokerNode);
+        createTopic(topic, numPartitions, replicationFactor, compactTopic);
         log.debug("Created: " + topic);
     }
 
@@ -100,51 +83,10 @@ public class InternalTopicManager {
      * Check if the topic exists already
      *
      * @param topic
-     * @param brokerNode
      * @return
      */
-    private boolean topicExists(String topic, Node brokerNode) {
-        MetadataRequest metadataRequest = new MetadataRequest(Arrays.asList(topic));
-        String brokerId = Integer.toString(brokerNode.id());
-        RequestSend send = new RequestSend(brokerId,
-                kafkaClient.nextRequestHeader(ApiKeys.METADATA),
-                metadataRequest.toStruct());
-
-        RequestCompletionHandler callback = new RequestCompletionHandler() {
-            public void onComplete(ClientResponse response) {
-
-            }
-        };
-
-        // Send the async request to check the topic existance
-        ClientRequest clientRequest = new ClientRequest(new SystemTime().milliseconds(), true, send, callback);
-        SystemTime systemTime = new SystemTime();
-        int iterationCount = 0;
-        while (iterationCount < 5) { // TODO: Set this later
-            if (kafkaClient.ready(brokerNode, systemTime.milliseconds())) {
-                kafkaClient.send(clientRequest, systemTime.milliseconds());
-                break;
-            } else {
-                // If the client is not ready call poll to make the client ready
-                kafkaClient.poll(config.getLong(StreamsConfig.POLL_MS_CONFIG), new SystemTime().milliseconds());
-            }
-        }
-
-        // Process the response
-        iterationCount = 0;
-        while (iterationCount < 5) { // TODO: Set this later
-            List<ClientResponse> responseList = kafkaClient.poll(config.getLong(StreamsConfig.POLL_MS_CONFIG), new SystemTime().milliseconds());
-            for (ClientResponse clientResponse: responseList) {
-                if (clientResponse.request().request().body().equals(metadataRequest.toStruct())) {
-                    MetadataResponse metadataResponse = new MetadataResponse(clientResponse.responseBody());
-                    if (metadataResponse.errors().isEmpty()) {
-                        return true;
-                    }
-                }
-            }
-            iterationCount++;
-        }
-        return false;
+    private boolean topicExists(String topic) {
+        return streamsKafkaClient.topicExists(topic);
     }
 
 
@@ -155,9 +97,8 @@ public class InternalTopicManager {
      * @param numPartitions
      * @param replicationFactor
      * @param compactTopic
-     * @param brokerNode
      */
-    private void createTopic(String topic, int numPartitions, int replicationFactor, boolean compactTopic, Node brokerNode)  {
+    private void createTopic(String topic, int numPartitions, int replicationFactor, boolean compactTopic)  {
 
         CreateTopicsRequest.TopicDetails topicDetails;
         if (compactTopic) {
@@ -173,12 +114,12 @@ public class InternalTopicManager {
 
         CreateTopicsRequest createTopicsRequest = new CreateTopicsRequest(topics, config.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG));
 
-        String brokerId = Integer.toString(brokerNode.id());
-        RequestSend send = new RequestSend(brokerId,
-                kafkaClient.nextRequestHeader(ApiKeys.CREATE_TOPICS),
-                createTopicsRequest.toStruct());
-
-        sendRequest(send, brokerNode);
+        RequestCompletionHandler callback = new RequestCompletionHandler() {
+            public void onComplete(ClientResponse response) {
+                handleResponse(response);
+            }
+        };
+        streamsKafkaClient.sendRequest(createTopicsRequest.toStruct(), ApiKeys.CREATE_TOPICS, callback);
     }
 
 
@@ -186,56 +127,28 @@ public class InternalTopicManager {
      * Delere an existing topic
      *
      * @param topic
-     * @param brokerNode
      */
-    private void deleteTopic(String topic, Node brokerNode) {
+    private void deleteTopic(String topic) {
         log.debug("Deleting topic {} from ZK in partition assignor.", topic);
         Set<String> topics = new HashSet();
         topics.add(topic);
 
         DeleteTopicsRequest deleteTopicsRequest = new DeleteTopicsRequest(topics, config.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG));
 
-        String brokerId = Integer.toString(brokerNode.id());
-        RequestSend send = new RequestSend(brokerId,
-                kafkaClient.nextRequestHeader(ApiKeys.DELETE_TOPICS),
-                deleteTopicsRequest.toStruct());
-
-        sendRequest(send, brokerNode);
-    }
-
-    /**
-     * Send a requet to a node.
-     *
-     * @param send
-     * @param brokerNode
-     */
-    private void  sendRequest(RequestSend send, Node brokerNode) {
         RequestCompletionHandler callback = new RequestCompletionHandler() {
             public void onComplete(ClientResponse response) {
                 handleResponse(response);
             }
         };
-
-        ClientRequest clientRequest = new ClientRequest(new SystemTime().milliseconds(), true, send, callback);
-        SystemTime systemTime = new SystemTime();
-        int iterationCount = 0;
-        while (iterationCount < 5) { // TODO: Set this later
-            if (kafkaClient.ready(brokerNode, systemTime.milliseconds())) {
-                kafkaClient.send(clientRequest, systemTime.milliseconds());
-                break;
-            } else {
-                kafkaClient.poll(config.getLong(StreamsConfig.POLL_MS_CONFIG), systemTime.milliseconds());
-            }
-        }
+        streamsKafkaClient.sendRequest(deleteTopicsRequest.toStruct(), ApiKeys.CREATE_TOPICS, callback);
 
     }
-
 
     /**
      * Handle a produce response
      */
     private void handleResponse(ClientResponse response) {
-        // TODO: figure out what to do with the response!
+        // Do nothing!!!
     }
 
 }

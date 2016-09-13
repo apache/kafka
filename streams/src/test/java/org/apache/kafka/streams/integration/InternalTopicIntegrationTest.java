@@ -39,7 +39,6 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamsKafkaClient;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.TestUtils;
@@ -77,7 +76,7 @@ public class InternalTopicIntegrationTest {
      * @return
      */
     private boolean topicExists(String topic, StreamsConfig config) {
-        StreamsKafkaClient streamsKafkaClient = new DefaultKafkaClientSupplier().getStreamKafkaClient(config);
+        StreamsKafkaClient streamsKafkaClient = new StreamsKafkaClient(config);
         KafkaClient kafkaClient = streamsKafkaClient.getKafkaClient();
         Node brokerNode = kafkaClient.leastLoadedNode(new SystemTime().milliseconds());
         MetadataRequest metadataRequest = new MetadataRequest(Arrays.asList(topic));

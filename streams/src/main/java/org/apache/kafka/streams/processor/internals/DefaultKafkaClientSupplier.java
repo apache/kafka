@@ -24,7 +24,6 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.streams.KafkaClientSupplier;
-import org.apache.kafka.streams.StreamsConfig;
 
 import java.util.Map;
 
@@ -44,13 +43,4 @@ public class DefaultKafkaClientSupplier implements KafkaClientSupplier {
         return new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
     }
 
-    /**
-     * Creates a default StreamsKafkaClient. For now there is no need to expose this in the KafkaClientSupplier interface.
-     *
-     * @param config
-     * @return
-     */
-    public StreamsKafkaClient getStreamKafkaClient(StreamsConfig config) {
-        return new StreamsKafkaClient(config);
-    }
 }
