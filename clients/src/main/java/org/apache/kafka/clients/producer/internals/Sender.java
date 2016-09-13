@@ -124,13 +124,7 @@ public class Sender implements Runnable {
         this.sensors = new SenderMetrics(metrics);
         this.requestTimeout = requestTimeout;
         
-        /* metadata becomes "stale" for batch expiry purpose when the time since the last successful update exceeds
-         * the metadataStaleMs value. This value must be greater than the metadata.max.age and some delta to allow
-         * a few retries. A small number of retries (3) are chosen because metadata retries have no upper bound. 
-         * However, as retries are subject to both regular request timeout and the backoff, staleness determination
-         * is delayed by that factor.
-         */
-        this.metadataStaleMs = metadata.getMetadataMaxAge() + 3 * (requestTimeout + metadata.refreshBackoff());
+        this.metadataStaleMs = getMetadataStaleMs(metadata.maxAge(), requestTimeout, metadata.refreshBackoff());
     }
 
     /**
@@ -218,9 +212,9 @@ public class Sender implements Runnable {
                     this.accumulator.mutePartition(batch.topicPartition);
             }
         }
-        boolean isMetadataStale = (now - metadata.lastSuccessfulUpdate()) > this.metadataStaleMs;
-        if (isMetadataStale || !result.unknownLeaderTopics.isEmpty()) {
-            List<RecordBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, isMetadataStale, cluster, now);
+        boolean stale = isMetadataStale(now, metadata, this.metadataStaleMs);
+        if (stale || !result.unknownLeaderTopics.isEmpty()) {
+            List<RecordBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, stale, cluster, now);
             // update sensors
             for (RecordBatch expiredBatch : expiredBatches)
                 this.sensors.recordErrors(expiredBatch.topicPartition.topic(), expiredBatch.recordCount);
@@ -388,6 +382,19 @@ public class Sender implements Runnable {
         this.client.wakeup();
     }
 
+    /* metadata becomes "stale" for batch expiry purpose when the time since the last successful update exceeds
+     * the metadataStaleMs value. This value must be greater than the metadata.max.age and some delta to account
+     * for a few retries and transient network disconnections. A small number of retries (3) are chosen because 
+     * metadata retries have no upper bound. However, as retries are subject to both regular request timeout and 
+     * the backoff, staleness determination is delayed by that factor.
+     */
+    static long getMetadataStaleMs(long metadataMaxAge, int requestTimeout, long refreshBackoff) {
+        return metadataMaxAge + 3 * (requestTimeout + refreshBackoff);
+    }
+    
+    static boolean isMetadataStale(long now, Metadata metadata, long metadataStaleMs) {
+        return (now - metadata.lastSuccessfulUpdate()) > metadataStaleMs;
+    }
     /**
      * A collection of sensors for the sender
      */
