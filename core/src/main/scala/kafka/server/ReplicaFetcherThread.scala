@@ -277,7 +277,11 @@ class ReplicaFetcherThread(name: String,
         requestMap(new TopicPartition(topic, partition)) = new JFetchRequest.PartitionData(partitionFetchState.offset, fetchSize)
     }
 
-    new FetchRequest(new JFetchRequest(fetchRequestVersion, replicaId, maxWait, minBytes, requestMap.asJava, maxBytes))
+    val request =
+      if (fetchRequestVersion >= 3) JFetchRequest.fromReplica(replicaId, maxWait, minBytes, maxBytes, requestMap)
+      else JFetchRequest.fromReplica(replicaId, maxWait, minBytes, requestMap)
+
+    new FetchRequest(request)
   }
 
 }
