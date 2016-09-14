@@ -65,10 +65,9 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     props.put(ClientConfigOverride.ProducerOverride, "1000")
     props.put(ClientConfigOverride.ConsumerOverride, "2000")
     AdminUtils.changeClientIdConfig(zkUtils, clientId, props)
+    val quotaManagers: Map[Short, ClientQuotaManager] = servers.head.apis.quotaManagers
 
     TestUtils.retry(10000) {
-      val configHandler = this.servers.head.dynamicConfigHandlers(ConfigType.Client).asInstanceOf[ClientIdConfigHandler]
-      val quotaManagers: Map[Short, ClientQuotaManager] = servers.head.apis.quotaManagers
       val overrideProducerQuota = quotaManagers.get(ApiKeys.PRODUCE.id).get.quota(clientId)
       val overrideConsumerQuota = quotaManagers.get(ApiKeys.FETCH.id).get.quota(clientId)
 
@@ -76,6 +75,22 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
         Quota.upperBound(1000), overrideProducerQuota)
         assertEquals(s"ClientId $clientId must have overridden consumer quota of 2000",
         Quota.upperBound(2000), overrideConsumerQuota)
+    }
+
+    val defaultProducerQuota = servers.head.apis.config.producerQuotaBytesPerSecondDefault.doubleValue
+    val defaultConsumerQuota = servers.head.apis.config.consumerQuotaBytesPerSecondDefault.doubleValue
+    assertNotEquals("defaultProducerQuota should be different from 1000", 1000, defaultProducerQuota)
+    assertNotEquals("defaultConsumerQuota should be different from 2000", 2000, defaultConsumerQuota)
+    AdminUtils.changeClientIdConfig(zkUtils, clientId, new Properties())
+
+    TestUtils.retry(10000) {
+      val producerQuota = quotaManagers.get(ApiKeys.PRODUCE.id).get.quota(clientId)
+      val consumerQuota = quotaManagers.get(ApiKeys.FETCH.id).get.quota(clientId)
+
+      assertEquals(s"ClientId $clientId must have reset producer quota to " + defaultProducerQuota,
+        Quota.upperBound(defaultProducerQuota), producerQuota)
+      assertEquals(s"ClientId $clientId must have reset consumer quota to " + defaultConsumerQuota,
+        Quota.upperBound(defaultConsumerQuota), consumerQuota)
     }
   }
 
