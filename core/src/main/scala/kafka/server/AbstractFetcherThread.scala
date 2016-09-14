@@ -26,7 +26,7 @@ import kafka.utils.{Pool, ShutdownableThread, DelayedItem}
 import kafka.common.{KafkaException, ClientIdAndBroker, TopicAndPartition}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.inLock
-import org.apache.kafka.common.errors.CorruptRecordException
+import org.apache.kafka.common.errors.{FatalExitError, CorruptRecordException}
 import org.apache.kafka.common.protocol.Errors
 import AbstractFetcherThread._
 import scala.collection.{mutable, Set, Map}
@@ -159,6 +159,8 @@ abstract class AbstractFetcherThread(name: String,
                     error("Current offset %d for partition [%s,%d] out of range; reset offset to %d"
                       .format(currentPartitionFetchState.offset, topic, partitionId, newOffset))
                   } catch {
+                    case fee: FatalExitError =>
+                      throw fee
                     case e: Throwable =>
                       error("Error getting offset for partition [%s,%d] to broker %d".format(topic, partitionId, sourceBroker.id), e)
                       partitionsWithError += topicAndPartition
