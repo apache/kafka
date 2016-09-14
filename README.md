@@ -15,7 +15,7 @@ Java 7 should be used for building in order to support both Java 7 and Java 8 at
 Now everything else will work.
 
 ### Building a jar and running it ###
-    ./gradlew jar  
+    ./gradlew jar
 
 Follow instructions in http://kafka.apache.org/documentation.html#quickstart
 

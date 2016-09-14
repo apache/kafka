@@ -1027,7 +1027,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 rebalanceResolved = false;
             }
 
-            // Delete the statuses of all connectors removed prior to the start of this reblaance. This has to
+            // Delete the statuses of all connectors removed prior to the start of this rebalance. This has to
             // be done after the rebalance completes to avoid race conditions as the previous generation attempts
             // to change the state to UNASSIGNED after tasks have been stopped.
             if (isLeader())
