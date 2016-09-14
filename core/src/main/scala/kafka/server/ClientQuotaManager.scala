@@ -243,6 +243,14 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   }
 
   /**
+   * Reset quotas to the default value for the given clientId
+   * @param clientId client to override
+   */
+  def resetQuota(clientId: String) = {
+    updateQuota(clientId, defaultQuota)
+  }
+
+  /**
    * Overrides quotas per clientId
    * @param clientId client to override
    * @param quota custom quota to apply
