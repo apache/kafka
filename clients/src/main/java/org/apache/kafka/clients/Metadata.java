@@ -29,6 +29,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -73,10 +74,6 @@ public final class Metadata {
 
     public Metadata(long refreshBackoffMs, long metadataExpireMs) {
         this(refreshBackoffMs, metadataExpireMs, false, new ClusterResourceListeners());
-    }
-
-    public Metadata(long refreshBackoffMs, long metadataExpireMs, boolean topicExpiryEnabled) {
-        this(refreshBackoffMs, metadataExpireMs, topicExpiryEnabled, new ClusterResourceListeners());
     }
 
     /**
@@ -198,6 +195,8 @@ public final class Metadata {
      * is set for topics if required and expired topics are removed from the metadata.
      */
     public synchronized void update(Cluster cluster, long now) {
+        Objects.requireNonNull(cluster, "cluster should not be null");
+
         this.needUpdate = false;
         this.lastRefreshMs = now;
         this.lastSuccessfulRefreshMs = now;
@@ -220,6 +219,8 @@ public final class Metadata {
         for (Listener listener: listeners)
             listener.onMetadataUpdate(cluster);
 
+        String previousClusterId = cluster.clusterResource().clusterId();
+
         if (this.needMetadataForAllTopics) {
             // the listener may change the interested topics, which could cause another metadata refresh.
             // If we have already fetched all topics, however, another fetch should be unnecessary.
@@ -229,8 +230,11 @@ public final class Metadata {
             this.cluster = cluster;
         }
 
-        // Only send events when cluster id is present.
-        if (cluster != null && cluster.clusterResource() != null && cluster.clusterResource().clusterId() != null) {
+        // The bootstrap cluster is guaranteed not to have any useful information
+        if (!cluster.isBootstrapConfigured()) {
+            String clusterId = cluster.clusterResource().clusterId();
+            if (clusterId == null ? previousClusterId != null : !clusterId.equals(previousClusterId))
+                log.info("Cluster ID: {}", cluster.clusterResource().clusterId());
             clusterResourceListeners.onUpdate(cluster.clusterResource());
         }
 
