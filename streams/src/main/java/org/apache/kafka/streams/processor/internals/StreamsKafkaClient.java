@@ -64,7 +64,7 @@ public class StreamsKafkaClient {
     private StreamsConfig config;
     private Node brokerNode;
 
-    private int maxIterations = 5;
+    private int maxIterations = 10;
 
     public StreamsKafkaClient(StreamsConfig config) {
 
@@ -166,7 +166,7 @@ public class StreamsKafkaClient {
 
         RequestCompletionHandler callback = new RequestCompletionHandler() {
             public void onComplete(ClientResponse response) {
-
+                System.out.print("");
             }
         };
 

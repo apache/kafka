@@ -92,7 +92,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
   }
 
   @Test
-  def testCleansCombinedCompactAndDeleteTopic() {
+  def testCleansCombinedCompactAndDeleteTopic(): Unit = {
     val logProps  = new Properties()
     val retentionMs: Integer = 100000
     logProps.put(LogConfig.RetentionMsProp, retentionMs: Integer)
@@ -144,7 +144,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
   }
 
   @Test
-  def testCleanerWithMessageFormatV0() {
+  def testCleanerWithMessageFormatV0(): Unit = {
     val largeMessageKey = 20
     val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, Message.MagicValue_V0)
     val maxMessageSize = codec match {
@@ -232,7 +232,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
   }
     
   @After
-  def tearDown() {
+  def tearDown(): Unit = {
     cleaner.shutdown()
     time.scheduler.shutdown()
     Utils.delete(logDir)

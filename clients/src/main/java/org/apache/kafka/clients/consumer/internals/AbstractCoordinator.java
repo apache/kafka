@@ -207,8 +207,16 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     protected synchronized RequestFuture<Void> lookupCoordinator() {
-        if (findCoordinatorFuture == null)
-            findCoordinatorFuture = sendGroupCoordinatorRequest();
+        if (findCoordinatorFuture == null) {
+            // find a node to ask about the coordinator
+            Node node = this.client.leastLoadedNode();
+            if (node == null) {
+                // TODO: If there are no brokers left, perhaps we should use the bootstrap set
+                // from configuration?
+                return RequestFuture.noBrokersAvailable();
+            } else
+                findCoordinatorFuture = sendGroupCoordinatorRequest(node);
+        }
         return findCoordinatorFuture;
     }
 
@@ -267,6 +275,11 @@ public abstract class AbstractCoordinator implements Closeable {
             heartbeatThread.start();
         }
 
+        doJoinGroup();
+    }
+
+    // visible for testing. Joins the group without starting the heartbeat thread.
+    synchronized void doJoinGroup() {
         while (needRejoin()) {
             ensureCoordinatorReady();
 
@@ -303,7 +316,9 @@ public abstract class AbstractCoordinator implements Closeable {
                             joinFuture = null;
                             state = MemberState.STABLE;
                             needsJoinPrepare = true;
-                            heartbeatThread.enable();
+
+                            if (heartbeatThread != null)
+                                heartbeatThread.enable();
                         }
 
                         onJoinComplete(generation.generationId, generation.memberId, generation.protocol, value);
@@ -496,21 +511,12 @@ public abstract class AbstractCoordinator implements Closeable {
      * one of the brokers. The returned future should be polled to get the result of the request.
      * @return A request future which indicates the completion of the metadata request
      */
-    private RequestFuture<Void> sendGroupCoordinatorRequest() {
+    private RequestFuture<Void> sendGroupCoordinatorRequest(Node node) {
         // initiate the group metadata request
-        // find a node to ask about the coordinator
-        Node node = this.client.leastLoadedNode();
-        if (node == null) {
-            // TODO: If there are no brokers left, perhaps we should use the bootstrap set
-            // from configuration?
-            return RequestFuture.noBrokersAvailable();
-        } else {
-            // create a group  metadata request
-            log.debug("Sending coordinator request for group {} to broker {}", groupId, node);
-            GroupCoordinatorRequest metadataRequest = new GroupCoordinatorRequest(this.groupId);
-            return client.send(node, ApiKeys.GROUP_COORDINATOR, metadataRequest)
-                    .compose(new GroupCoordinatorResponseHandler());
-        }
+        log.debug("Sending coordinator request for group {} to broker {}", groupId, node);
+        GroupCoordinatorRequest metadataRequest = new GroupCoordinatorRequest(this.groupId);
+        return client.send(node, ApiKeys.GROUP_COORDINATOR, metadataRequest)
+                     .compose(new GroupCoordinatorResponseHandler());
     }
 
     private class GroupCoordinatorResponseHandler extends RequestFutureAdapter<ClientResponse, Void> {
@@ -819,7 +825,6 @@ public abstract class AbstractCoordinator implements Closeable {
         @Override
         public void run() {
             try {
-
                 while (true) {
                     synchronized (AbstractCoordinator.this) {
                         if (closed)

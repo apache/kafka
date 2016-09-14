@@ -52,6 +52,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 public class StreamPartitionAssignorTest {
 
@@ -691,6 +692,37 @@ public class StreamPartitionAssignorTest {
         assertEquals(hostState, partitionAssignor.getPartitionsByHostState());
     }
 
+    @Test
+    public void shouldSetClusterMetadataOnAssignment() throws Exception {
+        final StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
+
+        final List<TopicPartition> topic = Arrays.asList(new TopicPartition("topic", 0));
+        final Map<HostInfo, Set<TopicPartition>> hostState =
+                Collections.singletonMap(new HostInfo("localhost", 80),
+                                         Collections.singleton(new TopicPartition("topic", 0)));
+        final AssignmentInfo assignmentInfo = new AssignmentInfo(Collections.singletonList(new TaskId(0, 0)),
+                                                                 Collections.<TaskId, Set<TopicPartition>>emptyMap(),
+                                                                 hostState);
+
+
+        partitionAssignor.onAssignment(new PartitionAssignor.Assignment(topic, assignmentInfo.encode()));
+        final Cluster cluster = partitionAssignor.clusterMetadata();
+        final List<PartitionInfo> partitionInfos = cluster.partitionsForTopic("topic");
+        final PartitionInfo partitionInfo = partitionInfos.get(0);
+        assertEquals(1, partitionInfos.size());
+        assertEquals("topic", partitionInfo.topic());
+        assertEquals(0, partitionInfo.partition());
+    }
+
+    @Test
+    public void shouldReturnEmptyClusterMetadataIfItHasntBeenBuilt() throws Exception {
+        final StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
+        final Cluster cluster = partitionAssignor.clusterMetadata();
+        assertNotNull(cluster);
+
+    }
+
+
     private class MockInternalTopicManager extends InternalTopicManager {
 
         public Map<String, Integer> readyTopics = new HashMap<>();
@@ -702,16 +734,16 @@ public class StreamPartitionAssignorTest {
             this.restoreConsumer = restoreConsumer;
         }
 
-        @Override
-        public void makeReady(String topic, int numPartitions, boolean compactTopic) {
-            readyTopics.put(topic, numPartitions);
+//        @Override
+        public void makeReady(InternalTopicConfig topic, int numPartitions) {
+            readyTopics.put(topic.name(), numPartitions);
 
             List<PartitionInfo> partitions = new ArrayList<>();
             for (int i = 0; i < numPartitions; i++) {
-                partitions.add(new PartitionInfo(topic, i, null, null, null));
+                partitions.add(new PartitionInfo(topic.name(), i, null, null, null));
             }
 
-            restoreConsumer.updatePartitions(topic, partitions);
+            restoreConsumer.updatePartitions(topic.name(), partitions);
         }
     }
 }

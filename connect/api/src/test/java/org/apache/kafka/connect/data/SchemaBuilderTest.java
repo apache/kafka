@@ -283,7 +283,16 @@ public class SchemaBuilderTest {
                 .defaultValue(defMap).build();
     }
 
+    @Test
+    public void testEmptyStruct() {
+        final SchemaBuilder emptyStructSchemaBuilder = SchemaBuilder.struct();
+        assertEquals(0, emptyStructSchemaBuilder.fields().size());
+        new Struct(emptyStructSchemaBuilder);
 
+        final Schema emptyStructSchema = emptyStructSchemaBuilder.build();
+        assertEquals(0, emptyStructSchema.fields().size());
+        new Struct(emptyStructSchema);
+    }
 
     private void assertTypeAndDefault(Schema schema, Schema.Type type, boolean optional, Object defaultValue) {
         assertEquals(type, schema.type());

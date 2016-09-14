@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Configurable;
@@ -112,6 +113,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible
      * since the former needs later's cached metadata while sending subscriptions,
      * and the latter needs former's returned assignment when adding tasks.
+     *
      * @throws KafkaException if the stream thread is not specified
      */
     @Override
@@ -181,9 +183,10 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
     /**
      * Internal helper function that creates a Kafka topic
-     * @param topicToTaskIds Map that contains the topic names to be created
-     * @param compactTopic If true, the topic should be a compacted topic. This is used for
-     *                     change log topics usually.
+     *
+     * @param topicToTaskIds     Map that contains the topic names to be created
+     * @param compactTopic       If true, the topic should be a compacted topic. This is used for
+     *                           change log topics usually.
      * @param postPartitionPhase If true, the computation for calculating the number of partitions
      *                           is slightly different. Set to true after the initial topic-to-partition
      *                           assignment.
@@ -306,7 +309,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         Map<Integer, Set<String>> internalSourceTopicGroups = new HashMap<>();
         for (Map.Entry<Integer, TopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
             sourceTopicGroups.put(entry.getKey(), entry.getValue().sourceTopics);
-            internalSourceTopicGroups.put(entry.getKey(), entry.getValue().interSourceTopics);
+            internalSourceTopicGroups.put(entry.getKey(), entry.getValue().interSourceTopics.keySet());
         }
 
 
@@ -315,7 +318,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         Map<TopicPartition, PartitionInfo> internalPartitionInfos = new HashMap<>();
         Set<String> allInternalTopicNames = new HashSet<>();
         for (Map.Entry<Integer, TopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
-            Set<String> internalTopics = entry.getValue().interSourceTopics;
+            Set<String> internalTopics = entry.getValue().interSourceTopics.keySet();
             allInternalTopicNames.addAll(internalTopics);
             for (String internalTopic : internalTopics) {
                 Set<TaskId> tasks = internalSourceTopicToTaskIds.get(internalTopic);
@@ -375,7 +378,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // add tasks to state change log topic subscribers
         stateChangelogTopicToTaskIds = new HashMap<>();
         for (TaskId task : partitionsForTask.keySet()) {
-            for (String topicName : topicGroups.get(task.topicGroupId).stateChangelogTopics) {
+            for (String topicName : topicGroups.get(task.topicGroupId).stateChangelogTopics.keySet()) {
                 Set<TaskId> tasks = stateChangelogTopicToTaskIds.get(topicName);
                 if (tasks == null) {
                     tasks = new HashSet<>();
@@ -385,7 +388,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 tasks.add(task);
             }
 
-            for (String topicName : topicGroups.get(task.topicGroupId).interSourceTopics) {
+            for (String topicName : topicGroups.get(task.topicGroupId).interSourceTopics.keySet()) {
                 Set<TaskId> tasks = internalSourceTopicToTaskIds.get(topicName);
                 if (tasks == null) {
                     tasks = new HashSet<>();
@@ -397,7 +400,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
 
         // assign tasks to clients
-        states = TaskAssignor.assign(states, partitionsForTask.keySet(), numStandbyReplicas);
+        states = TaskAssignor.assign(states, partitionsForTask.keySet(), numStandbyReplicas, streamThread.clientId);
 
         final List<AssignmentSupplier> assignmentSuppliers = new ArrayList<>();
 
@@ -623,12 +626,12 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
      * Used to capture subscribed topic via Patterns discovered during the
      * partition assignment process.
      */
-    public static  class SubscriptionUpdates {
+    public static class SubscriptionUpdates {
 
         private final Set<String> updatedTopicSubscriptions = new HashSet<>();
 
 
-        private  void updateTopics(Collection<String> topicNames) {
+        private void updateTopics(Collection<String> topicNames) {
             updatedTopicSubscriptions.clear();
             updatedTopicSubscriptions.addAll(topicNames);
         }
@@ -642,5 +645,4 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
 
     }
-
 }

@@ -78,6 +78,9 @@ public class SchemaBuilder implements Schema {
 
     private SchemaBuilder(Type type) {
         this.type = type;
+        if (type == Type.STRUCT) {
+            fields = new ArrayList<>();
+        }
     }
 
     // Common/metadata fields
@@ -317,8 +320,6 @@ public class SchemaBuilder implements Schema {
     public SchemaBuilder field(String fieldName, Schema fieldSchema) {
         if (type != Type.STRUCT)
             throw new SchemaBuilderException("Cannot create fields on type " + type);
-        if (fields == null)
-            fields = new ArrayList<>();
         int fieldIndex = fields.size();
         fields.add(new Field(fieldName, fieldIndex, fieldSchema));
         return this;

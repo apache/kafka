@@ -23,7 +23,9 @@ import org.apache.kafka.common.protocol.ApiKeys;
 
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.DeleteTopicsRequest;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,8 +34,15 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.concurrent.TimeUnit;
+
 
 public class InternalTopicManager {
+
+    public static final String CLEANUP_POLICY_PROP = "cleanup.policy";
+    private static final Set<String> CLEANUP_POLICIES = Utils.mkSet("compact", "delete");
+    public static final String RETENTION_MS = "retention.ms";
+    public static final Long WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
 
     private static final Logger log = LoggerFactory.getLogger(InternalTopicManager.class);
 
@@ -41,7 +50,6 @@ public class InternalTopicManager {
     private StreamsKafkaClient streamsKafkaClient;
     StreamsConfig config;
 
-    private static final String CLEANUP_POLICY_PROP = "log.cleanup.policy";
     private static final String COMPACT = "compact";
 
     public InternalTopicManager() {
@@ -64,6 +72,10 @@ public class InternalTopicManager {
 
     public void shutDown() throws IOException {
         this.streamsKafkaClient.shutdown();
+    }
+
+    public void makeReady(String topic, int numPartitions) {
+        makeReady(topic, numPartitions, false);
     }
     public void makeReady(String topic, int numPartitions, boolean compactTopic) {
 
@@ -140,7 +152,7 @@ public class InternalTopicManager {
                 handleResponse(response);
             }
         };
-        streamsKafkaClient.sendRequest(deleteTopicsRequest.toStruct(), ApiKeys.CREATE_TOPICS, callback);
+        streamsKafkaClient.sendRequest(deleteTopicsRequest.toStruct(), ApiKeys.DELETE_TOPICS, callback);
 
     }
 

@@ -29,12 +29,18 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.MockProcessorContext;
 
+import java.util.Collections;
+
 @SuppressWarnings("unchecked")
 public class StateStoreTestUtils {
 
     public static <K, V> KeyValueStore<K, V> newKeyValueStore(String name, Class<K> keyType, Class<V> valueType) {
         final InMemoryKeyValueStoreSupplier<K, V> supplier = new InMemoryKeyValueStoreSupplier<>(name,
-                null, null, new MockTime());
+                                                                                                 null,
+                                                                                                 null,
+                                                                                                 new MockTime(),
+                                                                                                 false,
+                                                                                                 Collections.<String, String>emptyMap());
 
         final StateStore stateStore = supplier.get();
         stateStore.init(new MockProcessorContext(StateSerdes.withBuiltinTypes(name, keyType, valueType),
@@ -45,7 +51,7 @@ public class StateStoreTestUtils {
 
     static class NoOpRecordCollector extends RecordCollector {
         public NoOpRecordCollector() {
-            super(null);
+            super(null, "StateStoreTestUtils");
         }
 
         @Override
