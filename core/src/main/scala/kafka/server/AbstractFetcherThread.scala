@@ -21,20 +21,23 @@ import java.util.concurrent.locks.ReentrantLock
 
 import kafka.cluster.BrokerEndPoint
 import kafka.consumer.PartitionTopicInfo
-import kafka.message.{MessageAndOffset, ByteBufferMessageSet}
-import kafka.utils.{Pool, ShutdownableThread, DelayedItem}
-import kafka.common.{KafkaException, ClientIdAndBroker, TopicAndPartition}
+import kafka.message.{ByteBufferMessageSet}
+import kafka.utils.{DelayedItem, Pool, ShutdownableThread}
+import kafka.common.{ClientIdAndBroker, KafkaException}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.inLock
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.protocol.Errors
 import AbstractFetcherThread._
-import scala.collection.{mutable, Set, Map}
+
+import scala.collection.{Map, Set, mutable}
+import scala.collection.JavaConverters._
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
 import com.yammer.metrics.core.Gauge
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.internals.FetchBuilder
 
 /**
  *  Abstract class for fetching data from multiple partitions from the same broker.
@@ -49,7 +52,7 @@ abstract class AbstractFetcherThread(name: String,
   type REQ <: FetchRequest
   type PD <: PartitionData
 
-  private val partitionMap = new mutable.HashMap[TopicPartition, PartitionFetchState] // a (topic, partition) -> partitionFetchState map
+  private val partitionMap = new FetchBuilder[PartitionFetchState]
   private val partitionMapLock = new ReentrantLock
   private val partitionMapCond = partitionMapLock.newCondition()
 
@@ -87,7 +90,9 @@ abstract class AbstractFetcherThread(name: String,
   override def doWork() {
 
     val fetchRequest = inLock(partitionMapLock) {
-      val fetchRequest = buildFetchRequest(partitionMap.toSeq)
+      val fetchRequest = buildFetchRequest(partitionMap.partitionStates.asScala.map { state =>
+        state.topicPartition -> state.value
+      })
       if (fetchRequest.isEmpty) {
         trace("There are no active partitions. Back off for %d ms before sending a fetch request".format(fetchBackOffMs))
         partitionMapCond.await(fetchBackOffMs, TimeUnit.MILLISECONDS)
@@ -100,7 +105,13 @@ abstract class AbstractFetcherThread(name: String,
   }
 
   private def processFetchRequest(fetchRequest: REQ) {
-    val partitionsWithError = new mutable.HashSet[TopicPartition]
+    val partitionsWithError = mutable.Set[TopicPartition]()
+
+    def updatePartitionsWithError(partition: TopicPartition): Unit = {
+      partitionsWithError += partition
+      partitionMap.moveToEnd(partition)
+    }
+
     var responseData: Map[TopicPartition, PD] = Map.empty
 
     try {
@@ -111,8 +122,10 @@ abstract class AbstractFetcherThread(name: String,
         if (isRunning.get) {
           warn(s"Error in fetch $fetchRequest", t)
           inLock(partitionMapLock) {
-            partitionsWithError ++= partitionMap.keys
+            partitionMap.partitionSet.asScala.foreach(updatePartitionsWithError)
             // there is an error occurred while fetching partitions, sleep a while
+            // note that `ReplicaFetcherThread.handlePartitionsWithError` will also introduce the same delay for every
+            // partition with error effectively doubling the delay. It would be good to improve this.
             partitionMapCond.await(fetchBackOffMs, TimeUnit.MILLISECONDS)
           }
         }
@@ -126,21 +139,23 @@ abstract class AbstractFetcherThread(name: String,
         responseData.foreach { case (topicPartition, partitionData) =>
           val topic = topicPartition.topic
           val partitionId = topicPartition.partition
-          partitionMap.get(topicPartition).foreach(currentPartitionFetchState =>
+          Option(partitionMap.stateValue(topicPartition)).foreach(currentPartitionFetchState =>
             // we append to the log if the current offset is defined and it is the same as the offset requested during fetch
             if (fetchRequest.offset(topicPartition) == currentPartitionFetchState.offset) {
               Errors.forCode(partitionData.errorCode) match {
                 case Errors.NONE =>
                   try {
                     val messages = partitionData.toByteBufferMessageSet
-                    val validBytes = messages.validBytes
                     val newOffset = messages.shallowIterator.toSeq.lastOption match {
-                      case Some(m: MessageAndOffset) => m.nextOffset
-                      case None => currentPartitionFetchState.offset
+                      case Some(m) =>
+                        partitionMap.updateAndMoveToEnd(topicPartition, new PartitionFetchState(m.nextOffset))
+                        fetcherStats.byteRate.mark(messages.validBytes)
+                        m.nextOffset
+                      case None =>
+                        currentPartitionFetchState.offset
                     }
-                    partitionMap.put(topicPartition, new PartitionFetchState(newOffset))
+
                     fetcherLagStats.getAndMaybePut(topic, partitionId).lag = Math.max(0L, partitionData.highWatermark - newOffset)
-                    fetcherStats.byteRate.mark(validBytes)
                     // Once we hand off the partition data to the subclass, we can't mess with it any more in this thread
                     processPartitionData(topicPartition, currentPartitionFetchState.offset, partitionData)
                   } catch {
@@ -157,19 +172,19 @@ abstract class AbstractFetcherThread(name: String,
                 case Errors.OFFSET_OUT_OF_RANGE =>
                   try {
                     val newOffset = handleOffsetOutOfRange(topicPartition)
-                    partitionMap.put(topicPartition, new PartitionFetchState(newOffset))
+                    partitionMap.updateAndMoveToEnd(topicPartition, new PartitionFetchState(newOffset))
                     error("Current offset %d for partition [%s,%d] out of range; reset offset to %d"
                       .format(currentPartitionFetchState.offset, topic, partitionId, newOffset))
                   } catch {
                     case e: Throwable =>
                       error("Error getting offset for partition [%s,%d] to broker %d".format(topic, partitionId, sourceBroker.id), e)
-                      partitionsWithError += topicPartition
+                      updatePartitionsWithError(topicPartition)
                   }
                 case _ =>
                   if (isRunning.get) {
                     error("Error for partition [%s,%d] to broker %d:%s".format(topic, partitionId, sourceBroker.id,
                       partitionData.exception.get))
-                    partitionsWithError += topicPartition
+                    updatePartitionsWithError(topicPartition)
                   }
               }
             })
@@ -186,14 +201,19 @@ abstract class AbstractFetcherThread(name: String,
   def addPartitions(partitionAndOffsets: Map[TopicPartition, Long]) {
     partitionMapLock.lockInterruptibly()
     try {
-      for ((topicPartition, offset) <- partitionAndOffsets) {
-        // If the partitionMap already has the topic/partition, then do not update the map with the old offset
-        if (!partitionMap.contains(topicPartition))
-          partitionMap.put(
-            topicPartition,
-            if (PartitionTopicInfo.isOffsetInvalid(offset)) new PartitionFetchState(handleOffsetOutOfRange(topicPartition))
-            else new PartitionFetchState(offset)
-          )}
+      // If the partitionMap already has the topic/partition, then do not update the map with the old offset
+      val newPartitionToState = partitionAndOffsets.filter { case (tp, _) =>
+        !partitionMap.contains(tp)
+      }.map { case (tp, offset) =>
+        val fetchState =
+          if (PartitionTopicInfo.isOffsetInvalid(offset)) new PartitionFetchState(handleOffsetOutOfRange(tp))
+          else new PartitionFetchState(offset)
+        tp -> fetchState
+      }
+      val existingPartitionToState = partitionMap.partitionStates.asScala.map { state =>
+        state.topicPartition -> state.value
+      }.toMap
+      partitionMap.set((existingPartitionToState ++ newPartitionToState).asJava)
       partitionMapCond.signalAll()
     } finally partitionMapLock.unlock()
   }
@@ -202,9 +222,9 @@ abstract class AbstractFetcherThread(name: String,
     partitionMapLock.lockInterruptibly()
     try {
       for (partition <- partitions) {
-        partitionMap.get(partition).foreach (currentPartitionFetchState =>
+        Option(partitionMap.stateValue(partition)).foreach (currentPartitionFetchState =>
           if (currentPartitionFetchState.isActive)
-            partitionMap.put(partition, new PartitionFetchState(currentPartitionFetchState.offset, new DelayedItem(delay)))
+            partitionMap.updateAndMoveToEnd(partition, new PartitionFetchState(currentPartitionFetchState.offset, new DelayedItem(delay)))
         )
       }
       partitionMapCond.signalAll()
@@ -318,13 +338,13 @@ case class ClientIdTopicPartition(clientId: String, topic: String, partitionId: 
 }
 
 /**
-  * case class to keep partition offset and its state(active , inactive)
+  * case class to keep partition offset and its state(active, inactive)
   */
 case class PartitionFetchState(offset: Long, delay: DelayedItem) {
 
   def this(offset: Long) = this(offset, new DelayedItem(0))
 
-  def isActive: Boolean = { delay.getDelay(TimeUnit.MILLISECONDS) == 0 }
+  def isActive: Boolean = delay.getDelay(TimeUnit.MILLISECONDS) == 0
 
   override def toString = "%d-%b".format(offset, isActive)
 }

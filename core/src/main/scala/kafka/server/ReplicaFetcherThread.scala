@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.net.SocketTimeoutException
+import java.util
 
 import kafka.admin.AdminUtils
 import kafka.cluster.BrokerEndPoint
@@ -270,16 +271,16 @@ class ReplicaFetcherThread(name: String,
   }
 
   protected def buildFetchRequest(partitionMap: Seq[(TopicPartition, PartitionFetchState)]): FetchRequest = {
-    val requestMap = mutable.Map.empty[TopicPartition, JFetchRequest.PartitionData]
+    val requestMap = new util.LinkedHashMap[TopicPartition, JFetchRequest.PartitionData]
 
     partitionMap.foreach { case (topicPartition, partitionFetchState) =>
       if (partitionFetchState.isActive)
-        requestMap(topicPartition) = new JFetchRequest.PartitionData(partitionFetchState.offset, fetchSize)
+        requestMap.put(topicPartition, new JFetchRequest.PartitionData(partitionFetchState.offset, fetchSize))
     }
 
     val request =
-      if (fetchRequestVersion >= 3) JFetchRequest.fromReplica(replicaId, maxWait, minBytes, maxBytes, requestMap.asJava)
-      else JFetchRequest.fromReplica(replicaId, maxWait, minBytes, requestMap.asJava)
+      if (fetchRequestVersion >= 3) JFetchRequest.fromReplica(replicaId, maxWait, minBytes, maxBytes, requestMap)
+      else JFetchRequest.fromReplica(replicaId, maxWait, minBytes, requestMap)
 
     new FetchRequest(request)
   }

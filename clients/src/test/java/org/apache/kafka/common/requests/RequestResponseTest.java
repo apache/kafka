@@ -217,11 +217,13 @@ public class RequestResponseTest {
         return new GroupCoordinatorResponse(Errors.NONE.code(), new Node(10, "host1", 2014));
     }
 
+    //TODO Add fetch tests for various versions including for error response
+    @SuppressWarnings("deprecation")
     private AbstractRequest createFetchRequest() {
         Map<TopicPartition, FetchRequest.PartitionData> fetchData = new HashMap<>();
         fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, 1000000));
         fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, 1000000));
-        return new FetchRequest(-1, 100, 100000, fetchData);
+        return new FetchRequest(100, 100000, fetchData);
     }
 
     private AbstractRequestResponse createFetchResponse() {

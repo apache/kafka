@@ -98,7 +98,7 @@ public class FetchRequest extends AbstractRequest {
     /**
      * Create a non-replica fetch request for the current version.
      */
-    public FetchRequest(int maxWait, int minBytes, int maxBytes, Map<TopicPartition, PartitionData> fetchData) {
+    public FetchRequest(int maxWait, int minBytes, int maxBytes, LinkedHashMap<TopicPartition, PartitionData> fetchData) {
         this(ProtoUtils.latestVersion(ApiKeys.FETCH.id), CONSUMER_REPLICA_ID, maxWait, minBytes, maxBytes, fetchData);
     }
 
@@ -116,7 +116,7 @@ public class FetchRequest extends AbstractRequest {
      * Create a replica fetch request for the current version.
      */
     public static FetchRequest fromReplica(int replicaId, int maxWait, int minBytes, int maxBytes,
-                                           Map<TopicPartition, PartitionData> fetchData) {
+                                           LinkedHashMap<TopicPartition, PartitionData> fetchData) {
         return new FetchRequest(ProtoUtils.latestVersion(ApiKeys.FETCH.id), replicaId, maxWait, minBytes, maxBytes, fetchData);
     }
 
