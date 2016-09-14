@@ -20,7 +20,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.record.TimestampOffset;
+import org.apache.kafka.common.record.OffsetAndTimestamp;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -300,7 +300,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public Map<TopicPartition, TimestampOffset> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {
+    public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {
         return null;
     }
 

@@ -41,8 +41,8 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.LogEntry;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.OffsetAndTimestamp;
 import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.record.TimestampOffset;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
@@ -359,9 +359,9 @@ public class Fetcher<K, V> {
             this.subscriptions.seek(partition, offset);
     }
 
-    public Map<TopicPartition, TimestampOffset> getOffsetsByTimes(Map<TopicPartition, Long> timestampsToSearch) {
+    public Map<TopicPartition, OffsetAndTimestamp> getOffsetsByTimes(Map<TopicPartition, Long> timestampsToSearch) {
         while (true) {
-            RequestFuture<Map<TopicPartition, TimestampOffset>> future = sendListOffsetRequests(timestampsToSearch);
+            RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> future = sendListOffsetRequests(timestampsToSearch);
             client.poll(future);
 
             if (future.succeeded())
@@ -390,7 +390,7 @@ public class Fetcher<K, V> {
         for (TopicPartition tp : partitions)
             timestampsToSearch.put(tp, timestamp);
         Map<TopicPartition, Long> result = new HashMap<>();
-        for (Map.Entry<TopicPartition, TimestampOffset> entry : getOffsetsByTimes(timestampsToSearch).entrySet())
+        for (Map.Entry<TopicPartition, OffsetAndTimestamp> entry : getOffsetsByTimes(timestampsToSearch).entrySet())
             result.put(entry.getKey(), entry.getValue().offset());
 
         return result;
@@ -470,12 +470,12 @@ public class Fetcher<K, V> {
     }
 
     /**
-     * Search the offsets by target time for the specified partitions.
+     * Search the offsets by target times for the specified partitions.
      *
      * @param timestampsToSearch the mapping between partitions and target time
      * @return A response which can be polled to obtain the corresponding timestamps and offsets.
      */
-    private RequestFuture<Map<TopicPartition, TimestampOffset>> sendListOffsetRequests(final Map<TopicPartition, Long> timestampsToSearch) {
+    private RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> sendListOffsetRequests(final Map<TopicPartition, Long> timestampsToSearch) {
         for (TopicPartition topicPartition : timestampsToSearch.keySet()) {
             PartitionInfo info = metadata.fetch().partition(topicPartition);
             if (info == null) {
@@ -500,13 +500,13 @@ public class Fetcher<K, V> {
             topicData.put(entry.getKey(), entry.getValue());
         }
 
-        final RequestFuture<Map<TopicPartition, TimestampOffset>> listOffsetRequestsFuture = new RequestFuture<>();
-        final Map<TopicPartition, TimestampOffset> timestampOffsets = new HashMap<>();
+        final RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> listOffsetRequestsFuture = new RequestFuture<>();
+        final Map<TopicPartition, OffsetAndTimestamp> timestampOffsets = new HashMap<>();
         for (Map.Entry<Node, Map<TopicPartition, Long>> entry : timestampsToSearchByNode.entrySet()) {
             sendListOffsetRequest(entry.getKey(), entry.getValue())
-                    .addListener(new RequestFutureListener<Map<TopicPartition, TimestampOffset>>() {
+                    .addListener(new RequestFutureListener<Map<TopicPartition, OffsetAndTimestamp>>() {
                         @Override
-                        public void onSuccess(Map<TopicPartition, TimestampOffset> value) {
+                        public void onSuccess(Map<TopicPartition, OffsetAndTimestamp> value) {
                             timestampOffsets.putAll(value);
                             if (timestampOffsets.size() == timestampsToSearch.size() && !listOffsetRequestsFuture.isDone())
                                 listOffsetRequestsFuture.complete(timestampOffsets);
@@ -530,13 +530,13 @@ public class Fetcher<K, V> {
      * @param timestampsToSearch The mapping from partitions to the targe timestamps.
      * @return A response which can be polled to obtain the corresponding timestamps and offsets.
      */
-    private RequestFuture<Map<TopicPartition, TimestampOffset>> sendListOffsetRequest(Node node,
+    private RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> sendListOffsetRequest(Node node,
                                                                                       final Map<TopicPartition, Long> timestampsToSearch) {
         ListOffsetRequest request = new ListOffsetRequest(timestampsToSearch, 1);
         return client.send(node, ApiKeys.LIST_OFFSETS, request)
-                .compose(new RequestFutureAdapter<ClientResponse, Map<TopicPartition, TimestampOffset>>() {
+                .compose(new RequestFutureAdapter<ClientResponse, Map<TopicPartition, OffsetAndTimestamp>>() {
                     @Override
-                    public void onSuccess(ClientResponse response, RequestFuture<Map<TopicPartition, TimestampOffset>> future) {
+                    public void onSuccess(ClientResponse response, RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> future) {
                         handleListOffsetResponse(timestampsToSearch, response, future);
                     }
                 });
@@ -549,19 +549,19 @@ public class Fetcher<K, V> {
      */
     private void handleListOffsetResponse(Map<TopicPartition, Long> timestampsToSearch,
                                           ClientResponse clientResponse,
-                                          RequestFuture<Map<TopicPartition, TimestampOffset>> future) {
+                                          RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> future) {
         ListOffsetResponse lor = new ListOffsetResponse(clientResponse.responseBody());
-        Map<TopicPartition, TimestampOffset> timestampOffsetMap = new HashMap<>();
+        Map<TopicPartition, OffsetAndTimestamp> timestampOffsetMap = new HashMap<>();
         for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
             TopicPartition topicPartition = entry.getKey();
             ListOffsetResponse.PartitionData partitionData = lor.responseData().get(topicPartition);
             short errorCode = partitionData.errorCode;
             if (errorCode == Errors.NONE.code()) {
-                TimestampOffset timestampOffset = null;
+                OffsetAndTimestamp offsetAndTimestamp = null;
                 if (partitionData.offset != ListOffsetResponse.UNKNOWN_OFFSET)
-                    timestampOffset = new TimestampOffset(partitionData.timestamp, partitionData.offset);
-                log.debug("Fetched {} for partition {}", timestampOffset, topicPartition);
-                timestampOffsetMap.put(topicPartition, timestampOffset);
+                    offsetAndTimestamp = new OffsetAndTimestamp(partitionData.offset, partitionData.timestamp);
+                log.debug("Fetched {} for partition {}", offsetAndTimestamp, topicPartition);
+                timestampOffsetMap.put(topicPartition, offsetAndTimestamp);
             } else if (errorCode == Errors.INVALID_REQUEST.code()) {
                 // The message format on the broker side is before 0.10.0, we simply put null in the response.
                 log.debug("Cannot search by timestamp for partition {} because the message format version " +

@@ -17,15 +17,15 @@
 package org.apache.kafka.common.record;
 
 /**
- * A container class for timestamp and offset.
+ * A container class for offset and timestamp.
  */
-public final class TimestampOffset {
+public final class OffsetAndTimestamp {
     private final long timestamp;
     private final long offset;
 
-    public TimestampOffset(long timestamp, long offset) {
-        this.timestamp = timestamp;
+    public OffsetAndTimestamp(long offset, long timestamp) {
         this.offset = offset;
+        this.timestamp = timestamp;
     }
 
     public long timestamp() {

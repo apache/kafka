@@ -37,7 +37,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
-import org.apache.kafka.common.record.TimestampOffset;
+import org.apache.kafka.common.record.OffsetAndTimestamp;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.AppInfoParser;
@@ -1408,7 +1408,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *         such message.
      */
     @Override
-    public Map<TopicPartition, TimestampOffset> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {
+    public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {
         for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
             if (entry.getValue() < 0)
                 throw new IllegalArgumentException("The target time for partition " + entry.getKey() + " is " +
