@@ -63,17 +63,17 @@ public class ThreadCache {
     public ThreadCache(long maxCacheSizeBytes) {
         this(null, maxCacheSizeBytes, null);
     }
+
     public ThreadCache(final String name, long maxCacheSizeBytes, final ThreadCacheMetrics metrics) {
         this.name = name;
         this.maxCacheSizeBytes = maxCacheSizeBytes;
-        this.metrics = metrics;
+        this.metrics = metrics != null ? metrics : new NullThreadCacheMetrics();
 
-        if (metrics != null) {
-            this.puts = this.metrics.addCountSensor(name, "put");
-            this.gets = this.metrics.addCountSensor(name, "get");
-            this.evicts = this.metrics.addCountSensor(name, "evicts");
-            this.flushes = this.metrics.addCountSensor(name, "flushes");
-        }
+        this.puts = this.metrics.addCountSensor(name, "put");
+        this.gets = this.metrics.addCountSensor(name, "get");
+        this.evicts = this.metrics.addCountSensor(name, "evicts");
+        this.flushes = this.metrics.addCountSensor(name, "flushes");
+
     }
 
     public long puts() {
@@ -104,9 +104,7 @@ public class ThreadCache {
     }
 
     public void flush(final String namespace) {
-        if (flushes != null) {
-            flushes.record();
-        }
+        metrics.recordCount(flushes, 1);
         numFlushes++;
 
         final NamedCache cache = getCache(namespace);
@@ -120,9 +118,7 @@ public class ThreadCache {
     }
 
     public LRUCacheEntry get(final String namespace, byte[] key) {
-        if (gets != null) {
-            gets.record();
-        }
+        metrics.recordCount(gets, 1);
         numGets++;
 
         final NamedCache cache = getCache(namespace);
@@ -133,9 +129,7 @@ public class ThreadCache {
     }
 
     public void put(final String namespace, byte[] key, LRUCacheEntry value) {
-        if (puts != null) {
-            puts.record();
-        }
+        metrics.recordCount(puts, 1);
         numPuts++;
 
         final NamedCache cache = getOrCreateCache(namespace);
@@ -210,9 +204,8 @@ public class ThreadCache {
         while (sizeBytes() > maxCacheSizeBytes) {
             final NamedCache cache = getOrCreateCache(namespace);
             cache.evict();
-            if (evicts != null) {
-                evicts.record();
-            }
+
+            metrics.recordCount(evicts, 1);
             numEvicts++;
         }
     }
@@ -326,4 +319,16 @@ public class ThreadCache {
         }
     }
 
+    public static class NullThreadCacheMetrics implements ThreadCacheMetrics {
+        @Override
+        public Sensor addCountSensor(String entityName, String operationName, String... tags) {
+            return null;
+        }
+
+        @Override
+        public void recordCount(Sensor sensor, long count) {
+            // do nothing
+        }
+
+    }
 }

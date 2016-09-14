@@ -59,14 +59,12 @@ class NamedCache {
 
     NamedCache(final String name, final ThreadCacheMetrics metrics) {
         this.name = name;
-        this.metrics = metrics;
+        this.metrics = metrics != null ? metrics : new ThreadCache.NullThreadCacheMetrics();
 
-        if (metrics != null) {
-            this.hits = this.metrics.addCountSensor(name, "hits");
-            this.misses = this.metrics.addCountSensor(name, "misses");
-            this.overwrites = this.metrics.addCountSensor(name, "overwrites");
-            this.flushes = this.metrics.addCountSensor(name, "flushes");
-        }
+        this.hits = this.metrics.addCountSensor(name, "hits");
+        this.misses = this.metrics.addCountSensor(name, "misses");
+        this.overwrites = this.metrics.addCountSensor(name, "overwrites");
+        this.flushes = this.metrics.addCountSensor(name, "flushes");
     }
 
     synchronized long hits() {
@@ -99,10 +97,9 @@ class NamedCache {
     }
 
     synchronized void flush() {
-        if (flushes != null) {
-            flushes.record();
-        }
+        metrics.recordCount(flushes, 1);
         numFlushes++;
+
         log.debug("Named cache {} stats on flush: #hits={}, #misses={}, #overwrites={}, #flushes={}",
             name, hits(), misses(), overwrites(), flushes());
 
@@ -131,9 +128,7 @@ class NamedCache {
     synchronized void put(final Bytes key, final LRUCacheEntry value) {
         LRUNode node = cache.get(key);
         if (node != null) {
-            if (overwrites != null) {
-                overwrites.record();
-            }
+            metrics.recordCount(overwrites, 1);
             numOverwrites++;
 
             currentSizeBytes -= node.size();
@@ -160,15 +155,12 @@ class NamedCache {
     private LRUNode getInternal(final Bytes key) {
         final LRUNode node = cache.get(key);
         if (node == null) {
-            if (misses != null) {
-                misses.record();
-            }
+            metrics.recordCount(misses, 1);
             numReadMisses++;
+
             return null;
         } else {
-            if (hits != null) {
-                hits.record();
-            }
+            metrics.recordCount(hits, 1);
             numReadHits++;
         }
         return node;
