@@ -46,7 +46,7 @@ public class QueryableStoreProvider {
             allStores.addAll(storeProvider.stores(storeName, queryableStoreType));
         }
         if (allStores.isEmpty()) {
-            throw new InvalidStateStoreException("Store: " + storeName + " is currently not available");
+            throw new InvalidStateStoreException("the state store, " + storeName + ", may have migrated to another instance.");
         }
         return queryableStoreType.create(
                 new WrappingStoreProvider(storeProviders),

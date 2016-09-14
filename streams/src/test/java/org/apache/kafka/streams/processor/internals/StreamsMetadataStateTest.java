@@ -23,7 +23,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.Predicate;
@@ -210,10 +209,11 @@ public class StreamsMetadataStateTest {
         assertEquals(expected, actual);
     }
 
-    @Test(expected = StreamsException.class)
-    public void shouldThrowStreamsExceptionWhenClusterIsEmpty() throws Exception {
+    @Test
+    public void shouldReturnNotAvailableWhenClusterIsEmpty() throws Exception {
         discovery.onChange(Collections.<HostInfo, Set<TopicPartition>>emptyMap(), Cluster.empty());
-        discovery.getMetadataWithKey("table-one", "a", Serdes.String().serializer());
+        final StreamsMetadata result = discovery.getMetadataWithKey("table-one", "a", Serdes.String().serializer());
+        assertEquals(StreamsMetadata.NOT_AVAILABLE, result);
     }
 
     @Test

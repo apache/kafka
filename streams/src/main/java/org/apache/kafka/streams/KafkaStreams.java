@@ -25,7 +25,6 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.StateStore;
@@ -309,7 +308,6 @@ public class KafkaStreams {
      * Note: this is a point in time view and it may change due to partition reassignment.
      * @param storeName the storeName to find metadata for
      * @return  A collection containing instances of {@link StreamsMetadata} that have the provided storeName
-     * @throws StreamsException if streams is (re-)initializing
      */
     public Collection<StreamsMetadata> allMetadataForStore(final String storeName) {
         validateIsRunning();
@@ -331,8 +329,8 @@ public class KafkaStreams {
      * @param key               Key to use to for partition
      * @param keySerializer     Serializer for the key
      * @param <K>               key type
-     * @return  The {@link StreamsMetadata} for the storeName and key
-     * @throws StreamsException if streams is (re-)initializing
+     * @return  The {@link StreamsMetadata} for the storeName and key or {@link StreamsMetadata#NOT_AVAILABLE}
+     * if streams is (re-)initializing
      */
     public <K> StreamsMetadata metadataForKey(final String storeName,
                                               final K key,
@@ -353,8 +351,8 @@ public class KafkaStreams {
      * @param key               Key to use to for partition
      * @param partitioner       Partitioner for the store
      * @param <K>               key type
-     * @return  The {@link StreamsMetadata} for the storeName and key
-     * @throws StreamsException if streams is (re-)initializing
+     * @return  The {@link StreamsMetadata} for the storeName and key or {@link StreamsMetadata#NOT_AVAILABLE}
+     * if streams is (re-)initializing
      */
     public <K> StreamsMetadata metadataForKey(final String storeName,
                                               final K key,
@@ -372,6 +370,7 @@ public class KafkaStreams {
      * @param queryableStoreType    accept only stores that are accepted by {@link QueryableStoreType#accepts(StateStore)}
      * @param <T>                   return type
      * @return  A facade wrapping the {@link org.apache.kafka.streams.processor.StateStore} instances
+     * @throws org.apache.kafka.streams.errors.InvalidStateStoreException if the streams are (re-)initializing
      */
     public <T> T store(final String storeName, final QueryableStoreType<T> queryableStoreType) {
         validateIsRunning();
