@@ -44,7 +44,7 @@ public final class Cluster {
      * Create a new cluster with the given nodes and partitions
      * @param nodes The nodes in the cluster
      * @param partitions Information about a subset of the topic-partitions this cluster hosts
-     * @deprecated Use the Cluster constructor with 4 parameters
+     * @deprecated Use the Cluster constructor with 5 parameters
      */
     @Deprecated
     public Cluster(Collection<Node> nodes,
@@ -53,18 +53,12 @@ public final class Cluster {
         this(null, false, nodes, partitions, unauthorizedTopics, Collections.<String>emptySet());
     }
 
+
     /**
-     * Create a new cluster with the given nodes and partitions
+     * Create a new cluster with the given id, nodes and partitions
      * @param nodes The nodes in the cluster
      * @param partitions Information about a subset of the topic-partitions this cluster hosts
      */
-    public Cluster(Collection<Node> nodes,
-                   Collection<PartitionInfo> partitions,
-                   Set<String> unauthorizedTopics,
-                   Set<String> internalTopics) {
-        this(null, false, nodes, partitions, unauthorizedTopics, internalTopics);
-    }
-
     public Cluster(String clusterId,
                    Collection<Node> nodes,
                    Collection<PartitionInfo> partitions,
@@ -161,8 +155,8 @@ public final class Cluster {
     public Cluster withPartitions(Map<TopicPartition, PartitionInfo> partitions) {
         Map<TopicPartition, PartitionInfo> combinedPartitions = new HashMap<>(this.partitionsByTopicPartition);
         combinedPartitions.putAll(partitions);
-        return new Cluster(this.nodes, combinedPartitions.values(), new HashSet<>(this.unauthorizedTopics),
-                new HashSet<>(this.internalTopics));
+        return new Cluster(clusterResource.clusterId(), this.nodes, combinedPartitions.values(),
+                new HashSet<>(this.unauthorizedTopics), new HashSet<>(this.internalTopics));
     }
 
     /**
@@ -263,6 +257,7 @@ public final class Cluster {
     public ClusterResource clusterResource() {
         return clusterResource;
     }
+
     @Override
     public String toString() {
         return "Cluster(id = " + clusterResource.clusterId() + ", nodes = " + this.nodes + ", partitions = " + this.partitionsByTopicPartition.values() + ")";

@@ -155,7 +155,7 @@ public class KafkaProducerTest {
         String topic = "topic";
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
         Collection<Node> nodes = Collections.singletonList(new Node(0, "host1", 1000));
-        final Cluster emptyCluster = new Cluster(nodes,
+        final Cluster emptyCluster = new Cluster(null, nodes,
                 Collections.<PartitionInfo>emptySet(),
                 Collections.<String>emptySet(),
                 Collections.<String>emptySet());
