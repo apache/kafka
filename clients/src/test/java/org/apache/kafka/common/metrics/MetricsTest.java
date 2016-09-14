@@ -483,9 +483,9 @@ public class MetricsTest {
         time.sleep(600);
         assertEquals(1000, measure(rate, config), 0); // 1000B / 1.0s
         time.sleep(200);
-        assertEquals(1000/1.2, measure(rate, config), 0); // 1000B / 1.2s
+        assertEquals(1000 / 1.2, measure(rate, config), 0); // 1000B / 1.2s
         time.sleep(200);
-        assertEquals(1000/1.4, measure(rate, config), 0); // 1000B / 1.4s
+        assertEquals(1000 / 1.4, measure(rate, config), 0); // 1000B / 1.4s
 
         //Adding another value, inside the same window should double the rate
         record(rate, config, 1000);
