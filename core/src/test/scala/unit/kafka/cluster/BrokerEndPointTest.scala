@@ -128,6 +128,7 @@ class BrokerEndPointTest extends Logging {
     assert(endpoint.connectionString == "PLAINTEXT://localhost:9092")
     // KAFKA-3719
     connectionString = "PLAINTEXT://local_host:9092"
+    endpoint = EndPoint.createEndPoint(connectionString)
     assert(endpoint.host == "local_host")
     assert(endpoint.port == 9092)
     assert(endpoint.connectionString == "PLAINTEXT://local_host:9092")
