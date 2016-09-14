@@ -166,7 +166,7 @@ public class StreamsKafkaClient {
 
         RequestCompletionHandler callback = new RequestCompletionHandler() {
             public void onComplete(ClientResponse response) {
-                System.out.print("");
+                // Do nothing!
             }
         };
 

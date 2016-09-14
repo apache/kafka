@@ -145,9 +145,7 @@ public class InternalTopicIntegrationTest {
 
         String topicName = "testTopic" + mockTime.milliseconds();
         createTopic(topicName, streamsConfig, 1, (short) 1, true, streamsKafkaClient);
-        Thread.sleep(5000);
         deleteTopic(topicName, streamsConfig, streamsKafkaClient);
-        Thread.sleep(5000);
         boolean topicExists = topicExists(topicName, streamsKafkaClient);
         assertTrue(!topicExists);
     }
