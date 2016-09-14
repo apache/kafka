@@ -59,6 +59,10 @@ public class ThreadCacheTest {
             assertEquals(entry.isDirty, true);
             assertEquals(new String(entry.value), toInsert.get(i).value);
         }
+        assertEquals(cache.gets(), 5);
+        assertEquals(cache.puts(), 5);
+        assertEquals(cache.evicts(), 0);
+        assertEquals(cache.flushes(), 0);
     }
 
     private void checkOverheads(double entryFactor, double systemFactor, long desiredCacheSize, int keySizeBytes,
@@ -170,6 +174,7 @@ public class ThreadCacheTest {
             KeyValue<String, String> actualRecord = received.get(i);
             assertEquals(expectedRecord, actualRecord);
         }
+        assertEquals(cache.evicts(), 4);
     }
 
     @Test
@@ -200,6 +205,7 @@ public class ThreadCacheTest {
         // flushing should have no further effect
         cache.flush(namespace);
         assertEquals(0, received.size());
+        assertEquals(cache.flushes(), 1);
     }
 
     @Test

@@ -58,6 +58,10 @@ public class NamedCacheTest {
             LRUCacheEntry tail = cache.last();
             assertEquals(new String(head.value), toInsert.get(i).value);
             assertEquals(new String(tail.value), toInsert.get(0).value);
+            assertEquals(cache.flushes(), 0);
+            assertEquals(cache.hits(), 0);
+            assertEquals(cache.misses(), 0);
+            assertEquals(cache.overwrites(), 0);
         }
     }
 
@@ -81,6 +85,7 @@ public class NamedCacheTest {
         assertArrayEquals(new byte[] {10}, cache.get(Bytes.wrap(new byte[] {0})).value);
         assertArrayEquals(new byte[] {11}, cache.get(Bytes.wrap(new byte[] {1})).value);
         assertArrayEquals(new byte[] {12}, cache.get(Bytes.wrap(new byte[] {2})).value);
+        assertEquals(cache.hits(), 3);
     }
 
     @Test
@@ -110,6 +115,16 @@ public class NamedCacheTest {
         assertArrayEquals(new byte[]{0}, cache.get(Bytes.wrap(new byte[]{0})).value);
         assertArrayEquals(new byte[]{1}, cache.get(Bytes.wrap(new byte[]{1})).value);
         assertArrayEquals(new byte[]{2}, cache.get(Bytes.wrap(new byte[]{2})).value);
+    }
+
+    @Test
+    public void shouldOverwriteAll() throws Exception {
+        cache.putAll(Arrays.asList(KeyValue.pair(new byte[] {0}, new LRUCacheEntry(new byte[]{0})),
+            KeyValue.pair(new byte[] {0}, new LRUCacheEntry(new byte[]{1})),
+            KeyValue.pair(new byte[] {0}, new LRUCacheEntry(new byte[]{2}))));
+
+        assertArrayEquals(new byte[]{2}, cache.get(Bytes.wrap(new byte[]{0})).value);
+        assertEquals(cache.overwrites(), 2);
     }
 
     @Test
@@ -144,6 +159,7 @@ public class NamedCacheTest {
         assertArrayEquals(new byte[] {10}, flushed.get(0).newValue());
         assertEquals(Bytes.wrap(new byte[] {2}), flushed.get(1).key());
         assertArrayEquals(new byte[] {30}, flushed.get(1).newValue());
+        assertEquals(cache.flushes(), 1);
     }
 
     @Test

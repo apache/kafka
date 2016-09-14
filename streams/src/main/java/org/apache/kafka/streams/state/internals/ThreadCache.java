@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.RecordContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -36,16 +39,57 @@ import java.util.TreeSet;
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
 public class ThreadCache {
+    private static final Logger log = LoggerFactory.getLogger(ThreadCache.class);
+    private final String name;
     private final long maxCacheSizeBytes;
     private final Map<String, NamedCache> caches = new HashMap<>();
+    private final ThreadCacheMetrics metrics;
 
+    // JMX stats
+    private Sensor puts = null;
+    private Sensor gets = null;
+    private Sensor evicts = null;
+    private Sensor flushes = null;
+    // internal stats
+    private long numPuts = 0;
+    private long numGets = 0;
+    private long numEvicts = 0;
+    private long numFlushes = 0;
 
     public interface DirtyEntryFlushListener {
         void apply(final List<DirtyEntry> dirty);
     }
 
     public ThreadCache(long maxCacheSizeBytes) {
+        this(null, maxCacheSizeBytes, null);
+    }
+    public ThreadCache(final String name, long maxCacheSizeBytes, final ThreadCacheMetrics metrics) {
+        this.name = name;
         this.maxCacheSizeBytes = maxCacheSizeBytes;
+        this.metrics = metrics;
+
+        if (metrics != null) {
+            this.puts = this.metrics.addCountSensor(name, "put");
+            this.gets = this.metrics.addCountSensor(name, "get");
+            this.evicts = this.metrics.addCountSensor(name, "evicts");
+            this.flushes = this.metrics.addCountSensor(name, "flushes");
+        }
+    }
+
+    public long puts() {
+        return numPuts;
+    }
+
+    public long gets() {
+        return numGets;
+    }
+
+    public long evicts() {
+        return numEvicts;
+    }
+
+    public long flushes() {
+        return numFlushes;
     }
 
     /**
@@ -60,14 +104,27 @@ public class ThreadCache {
     }
 
     public void flush(final String namespace) {
+        if (flushes != null) {
+            flushes.record();
+        }
+        numFlushes++;
+
         final NamedCache cache = getCache(namespace);
         if (cache == null) {
             return;
         }
         cache.flush();
+
+        log.debug("Thread {} cache stats on flush: #puts={}, #gets={}, #evicts={}, #flushes={}",
+            name, puts(), gets(), evicts(), flushes());
     }
 
     public LRUCacheEntry get(final String namespace, byte[] key) {
+        if (gets != null) {
+            gets.record();
+        }
+        numGets++;
+
         final NamedCache cache = getCache(namespace);
         if (cache == null) {
             return null;
@@ -76,6 +133,11 @@ public class ThreadCache {
     }
 
     public void put(final String namespace, byte[] key, LRUCacheEntry value) {
+        if (puts != null) {
+            puts.record();
+        }
+        numPuts++;
+
         final NamedCache cache = getOrCreateCache(namespace);
         cache.put(Bytes.wrap(key), value);
         maybeEvict(namespace);
@@ -148,6 +210,10 @@ public class ThreadCache {
         while (sizeBytes() > maxCacheSizeBytes) {
             final NamedCache cache = getOrCreateCache(namespace);
             cache.evict();
+            if (evicts != null) {
+                evicts.record();
+            }
+            numEvicts++;
         }
     }
 
@@ -158,7 +224,7 @@ public class ThreadCache {
     private synchronized NamedCache getOrCreateCache(final String name) {
         NamedCache cache = caches.get(name);
         if (cache == null) {
-            cache = new NamedCache(name);
+            cache = new NamedCache(name, this.metrics);
             caches.put(name, cache);
         }
         return cache;

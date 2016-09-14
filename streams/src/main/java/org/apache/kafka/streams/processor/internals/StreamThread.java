@@ -44,6 +44,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ThreadCacheMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -170,15 +171,17 @@ public class StreamThread extends Thread {
         this.processId = processId;
         this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
         this.streamsMetadataState = streamsMetadataState;
+        threadClientId = clientId + "-" + threadName;
+        this.sensors = new StreamsMetricsImpl(metrics);
         if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) < 0) {
             log.warn("Negative cache size passed in thread [{}]. Reverting to cache size of 0 bytes.", threadName);
         }
         this.cacheSizeBytes = Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
             config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG));
-        this.cache = new ThreadCache(cacheSizeBytes);
+        this.cache = new ThreadCache(threadClientId, cacheSizeBytes, this.sensors);
         // set the producer and consumer clients
 
-        threadClientId = clientId + "-" + threadName;
+
         log.info("stream-thread [{}] Creating producer client", threadName);
         this.producer = clientSupplier.getProducer(config.getProducerConfigs(threadClientId));
         log.info("stream-thread [{}] Creating consumer client", threadName);
@@ -209,8 +212,6 @@ public class StreamThread extends Thread {
         this.timerStartedMs = time.milliseconds();
         this.lastCleanMs = Long.MAX_VALUE; // the cleaning cycle won't start until partition assignment
         this.lastCommitMs = timerStartedMs;
-
-        this.sensors = new StreamsMetricsImpl(metrics);
 
 
         this.running = new AtomicBoolean(true);
@@ -728,7 +729,7 @@ public class StreamThread extends Thread {
         }
     }
 
-    private class StreamsMetricsImpl implements StreamsMetrics {
+    private class StreamsMetricsImpl implements StreamsMetrics, ThreadCacheMetrics {
         final Metrics metrics;
         final String metricGrpName;
         final String sensorNamePrefix;
@@ -779,6 +780,11 @@ public class StreamThread extends Thread {
             sensor.record(endNs - startNs, timerStartedMs);
         }
 
+        @Override
+        public void recordCount(Sensor sensor, long count) {
+            sensor.record(count);
+        }
+
         /**
          * @throws IllegalArgumentException if tags is not constructed in key-value pairs
          */
@@ -803,6 +809,29 @@ public class StreamThread extends Thread {
             addLatencyMetrics(metricGroupName, sensor, entityName, operationName, tagMap);
 
             return sensor;
+        }
+
+        @Override
+        public Sensor addCountSensor(String entityName, String operationName, String... tags) {
+            // extract the additional tags if there are any
+            Map<String, String> tagMap = new HashMap<>(this.metricTags);
+            if ((tags.length % 2) != 0)
+                throw new IllegalArgumentException("Tags needs to be specified in key-value pairs");
+
+            for (int i = 0; i < tags.length; i += 2)
+                tagMap.put(tags[i], tags[i + 1]);
+
+            String metricGroupName = "stream-thread-cache-metrics";
+
+            Sensor sensor = metrics.sensor(sensorNamePrefix + "-" + entityName + "-" + operationName);
+            addCountMetrics(metricGroupName, sensor, entityName, operationName, tagMap);
+            return sensor;
+
+        }
+
+        private void addCountMetrics(String metricGrpName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
+            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-count", metricGrpName,
+                "The current count of " + entityName + " " + opName + " operation.", tags), new Count());
         }
 
         private void addLatencyMetrics(String metricGrpName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {

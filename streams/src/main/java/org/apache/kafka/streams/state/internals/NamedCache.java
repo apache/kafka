@@ -16,8 +16,11 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -28,6 +31,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 class NamedCache {
+    private static final Logger log = LoggerFactory.getLogger(NamedCache.class);
     private final String name;
     private final TreeMap<Bytes, LRUNode> cache = new TreeMap<>();
     private final Set<Bytes> dirtyKeys = new LinkedHashSet<>();
@@ -35,9 +39,50 @@ class NamedCache {
     private LRUNode tail;
     private LRUNode head;
     private long currentSizeBytes;
+    private ThreadCacheMetrics metrics;
+
+    // JMX stats
+    private Sensor hits = null;
+    private Sensor misses = null;
+    private Sensor overwrites = null;
+    private Sensor flushes = null;
+
+    // internal stats
+    private long numReadHits = 0;
+    private long numReadMisses = 0;
+    private long numOverwrites = 0;
+    private long numFlushes = 0;
 
     NamedCache(final String name) {
+        this(name, null);
+    }
+
+    NamedCache(final String name, final ThreadCacheMetrics metrics) {
         this.name = name;
+        this.metrics = metrics;
+
+        if (metrics != null) {
+            this.hits = this.metrics.addCountSensor(name, "hits");
+            this.misses = this.metrics.addCountSensor(name, "misses");
+            this.overwrites = this.metrics.addCountSensor(name, "overwrites");
+            this.flushes = this.metrics.addCountSensor(name, "flushes");
+        }
+    }
+
+    synchronized long hits() {
+        return numReadHits;
+    }
+
+    synchronized long misses() {
+        return numReadMisses;
+    }
+
+    synchronized long overwrites() {
+        return numOverwrites;
+    }
+
+    synchronized long flushes() {
+        return numFlushes;
     }
 
     synchronized LRUCacheEntry get(final Bytes key) {
@@ -54,6 +99,13 @@ class NamedCache {
     }
 
     synchronized void flush() {
+        if (flushes != null) {
+            flushes.record();
+        }
+        numFlushes++;
+        log.debug("Named cache {} stats on flush: #hits={}, #misses={}, #overwrites={}, #flushes={}",
+            name, hits(), misses(), overwrites(), flushes());
+
         if (listener == null) {
             throw new IllegalArgumentException("No listener for namespace " + name + " registered with cache");
         }
@@ -79,6 +131,11 @@ class NamedCache {
     synchronized void put(final Bytes key, final LRUCacheEntry value) {
         LRUNode node = cache.get(key);
         if (node != null) {
+            if (overwrites != null) {
+                overwrites.record();
+            }
+            numOverwrites++;
+
             currentSizeBytes -= node.size();
             node.update(value);
             updateLRU(node);
@@ -103,7 +160,16 @@ class NamedCache {
     private LRUNode getInternal(final Bytes key) {
         final LRUNode node = cache.get(key);
         if (node == null) {
+            if (misses != null) {
+                misses.record();
+            }
+            numReadMisses++;
             return null;
+        } else {
+            if (hits != null) {
+                hits.record();
+            }
+            numReadHits++;
         }
         return node;
     }
