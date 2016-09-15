@@ -22,8 +22,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
-import org.apache.kafka.streams.processor.internals.RecordContext;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.test.MockProcessorContext;
@@ -55,7 +53,8 @@ public class CachingKeyValueStoreTest {
         final String storeName = "store";
         underlyingStore = new InMemoryKeyValueStore<>(storeName);
         cacheFlushListener = new CacheFlushListenerStub<>();
-        store = new CachingKeyValueStore<>(underlyingStore, Serdes.String(), Serdes.String(), cacheFlushListener);
+        store = new CachingKeyValueStore<>(underlyingStore, Serdes.String(), Serdes.String());
+        store.setFlushListener(cacheFlushListener);
         maxCacheSizeBytes = 150;
         cache = new ThreadCache(maxCacheSizeBytes);
         final MockProcessorContext context = new MockProcessorContext(null, null, null, null, (RecordCollector) null, cache);
@@ -100,7 +99,6 @@ public class CachingKeyValueStoreTest {
 
     @Test
     public void shouldForwardOldValuesWhenEnabled() throws Exception {
-        store.enableSendingOldValues();
         store.put("1", "a");
         store.flush();
         store.put("1", "b");
@@ -146,8 +144,8 @@ public class CachingKeyValueStoreTest {
         public final Map<K, Change<String>> forwarded = new HashMap<>();
 
         @Override
-        public void forward(final K key, final Change<String> value, final RecordContext recordContext, final InternalProcessorContext context) {
-            forwarded.put(key, value);
+        public void forward(final K key, final String newValue, final String oldValue) {
+            forwarded.put(key, new Change<>(newValue, oldValue));
         }
     }
 }

@@ -21,11 +21,10 @@ import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.internals.CacheEnabledProcessor;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.CachedStateStore;
 
-public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V, V>, CacheEnabledProcessor {
+public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V, V> {
 
     private final String storeName;
     private final Reducer<V> reducer;
@@ -57,9 +56,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
             super.init(context);
 
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
-            if (sendOldValues) {
-                ((CachedStateStore) store).enableSendingOldValues();
-            }
+            ((CachedStateStore) store).setFlushListener(new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
         }
 
 

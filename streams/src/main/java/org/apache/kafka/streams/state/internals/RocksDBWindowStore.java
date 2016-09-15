@@ -53,7 +53,6 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     public static final long MIN_SEGMENT_INTERVAL = 60 * 1000; // one minute
 
     private volatile boolean open = false;
-    private boolean sendOldValues = false;
 
     // use the Bytes wrapper for underlying rocksDB keys since they are used for hashing data structures
     private static class Segment extends RocksDBStore<Bytes, byte[]> {
@@ -155,7 +154,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     private boolean loggingEnabled = false;
     private StoreChangeLogger<Bytes, byte[]> changeLogger = null;
 
-    public RocksDBWindowStore(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde, final long windowSize) {
+    public RocksDBWindowStore(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde) {
         this.name = name;
         this.numSegments = numSegments;
 

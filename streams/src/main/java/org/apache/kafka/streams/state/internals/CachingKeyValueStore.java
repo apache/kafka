@@ -20,10 +20,10 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
-import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.RecordContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -31,27 +31,24 @@ import org.apache.kafka.streams.state.StateSerdes;
 import java.util.ArrayList;
 import java.util.List;
 
-class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStore {
+class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStore<K, V> {
 
     private final KeyValueStore<Bytes, byte[]> underlying;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
-    private final CacheFlushListener<K, V> flushListener;
+    private CacheFlushListener<K, V> flushListener;
     private String name;
     private ThreadCache cache;
     private InternalProcessorContext context;
     private StateSerdes<K, V> serdes;
-    private boolean sendOldValues;
     private Thread streamThread;
 
     CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying,
                          final Serde<K> keySerde,
-                         final Serde<V> valueSerde,
-                         final CacheFlushListener<K, V> flushListener) {
+                         final Serde<V> valueSerde) {
         this.underlying = underlying;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
-        this.flushListener = flushListener;
     }
 
     @Override
@@ -84,10 +81,7 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
                 final List<KeyValue<Bytes, byte[]>> keyValues = new ArrayList<>();
                 for (ThreadCache.DirtyEntry entry : entries) {
                     keyValues.add(KeyValue.pair(entry.key(), entry.newValue()));
-                    flushListener.forward(serdes.keyFrom(entry.key().get()),
-                                          change(entry.newValue(), underlying.get(entry.key())),
-                                          entry.recordContext(),
-                                          CachingKeyValueStore.this.context);
+                    maybeForward(entry, (InternalProcessorContext) context);
                 }
                 underlying.putAll(keyValues);
             }
@@ -95,17 +89,27 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
 
     }
 
+    private void maybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
+        if (flushListener != null) {
+            final RecordContext current = context.recordContext();
+            context.setRecordContext(entry.recordContext());
+            try {
+                flushListener.forward(serdes.keyFrom(entry.key().get()),
+                                      serdes.valueFrom(entry.newValue()), serdes.valueFrom(underlying.get(entry.key())));
+            } finally {
+                context.setRecordContext(current);
+            }
+        }
+    }
+
+    public void setFlushListener(final CacheFlushListener<K, V> flushListener) {
+        this.flushListener = flushListener;
+    }
+
     @Override
     public synchronized void flush() {
         cache.flush(name);
         underlying.flush();
-    }
-
-    private Change<V> change(final byte[] newValue, final byte[] oldValue) {
-        if (sendOldValues) {
-            return new Change<>(serdes.valueFrom(newValue), serdes.valueFrom(oldValue));
-        }
-        return new Change<>(serdes.valueFrom(newValue), null);
     }
 
     @Override
@@ -122,11 +126,6 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
     @Override
     public boolean isOpen() {
         return underlying.isOpen();
-    }
-
-    @Override
-    public void enableSendingOldValues() {
-        this.sendOldValues = true;
     }
 
     @Override

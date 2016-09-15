@@ -22,11 +22,10 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.processor.internals.CacheEnabledProcessor;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.CachedStateStore;
 
-public class KTableSource<K, V> implements ProcessorSupplier<K, V>, CacheEnabledProcessor {
+public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
 
     public final String storeName;
 
@@ -74,9 +73,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V>, CacheEnabled
         public void init(ProcessorContext context) {
             super.init(context);
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
-            if (sendOldValues) {
-                ((CachedStateStore) store).enableSendingOldValues();
-            }
+            ((CachedStateStore) store).setFlushListener(new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
         }
 
         @Override

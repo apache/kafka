@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-public interface CachedStateStore {
+import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
+
+public interface CachedStateStore<K, V> {
     /**
-     * This store should forward both the current and old value
-     * when forwarding {@link org.apache.kafka.streams.kstream.internals.Change}s
+     * Set the {@link CacheFlushListener} to be notified when entries are flushed from the
+     * cache to the underlying {@link org.apache.kafka.streams.processor.StateStore}
+     * @param listener
      */
-    void enableSendingOldValues();
+    void setFlushListener(final CacheFlushListener<K, V> listener);
 }

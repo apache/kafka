@@ -29,8 +29,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Set;
-import java.util.TreeSet;
 
 /**
  * An in-memory LRU cache store similar to {@link MemoryLRUCache} but byte-based, not
@@ -177,11 +175,19 @@ public class ThreadCache {
         long size = 0;
         for (NamedCache cache : caches.values()) {
             size += cache.size();
-            if (size < 0) {
+            if (isOverflowing(size)) {
                 return Long.MAX_VALUE;
             }
         }
+
+        if (isOverflowing(size)) {
+            return Long.MAX_VALUE;
+        }
         return size;
+    }
+
+    private boolean isOverflowing(final long size) {
+        return size < 0;
     }
 
     long dirtySize(final String name) {
@@ -221,12 +227,6 @@ public class ThreadCache {
             caches.put(name, cache);
         }
         return cache;
-    }
-
-    private Iterator<Bytes> keySetIterator(final Set<Bytes> keySet) {
-        final TreeSet<Bytes> copy = new TreeSet<>();
-        copy.addAll(keySet);
-        return copy.iterator();
     }
 
     private Bytes cacheKey(final byte[] keyBytes) {

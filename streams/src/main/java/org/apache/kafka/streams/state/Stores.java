@@ -94,6 +94,7 @@ public class Stores {
                             @Override
                             public PersistentKeyValueFactory<K, V> persistent() {
                                 return new PersistentKeyValueFactory<K, V>() {
+                                    public boolean cachingEnabled;
                                     private long windowSize;
                                     private final Map<String, String> logConfig = new HashMap<>();
                                     private int numSegments = 0;
@@ -126,11 +127,17 @@ public class Stores {
                                     }
 
                                     @Override
+                                    public PersistentKeyValueFactory<K, V> enableCaching() {
+                                        cachingEnabled = true;
+                                        return this;
+                                    }
+
+                                    @Override
                                     public StateStoreSupplier build() {
                                         if (numSegments > 0) {
-                                            return new RocksDBWindowStoreSupplier<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, windowSize, logged, logConfig);
+                                            return new RocksDBWindowStoreSupplier<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, windowSize, logged, logConfig, cachingEnabled);
                                         }
-                                        return new RocksDBKeyValueStoreSupplier<>(name, keySerde, valueSerde, logged, logConfig);
+                                        return new RocksDBKeyValueStoreSupplier<>(name, keySerde, valueSerde, logged, logConfig, cachingEnabled);
                                     }
 
                                 };
@@ -392,6 +399,7 @@ public class Stores {
          */
         PersistentKeyValueFactory<K, V> disableLogging();
 
+        PersistentKeyValueFactory<K, V> enableCaching();
         /**
          * Return the instance of StateStoreSupplier of new key-value store.
          * @return the key-value store; never null

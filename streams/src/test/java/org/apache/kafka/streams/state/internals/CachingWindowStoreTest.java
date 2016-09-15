@@ -52,13 +52,13 @@ public class CachingWindowStoreTest {
 
     @Before
     public void setUp() throws Exception {
-        underlying = new RocksDBWindowStore<>("test", 30000, 3, false, Serdes.Bytes(), Serdes.ByteArray(), WINDOW_SIZE);
+        underlying = new RocksDBWindowStore<>("test", 30000, 3, false, Serdes.Bytes(), Serdes.ByteArray());
         cacheListener = new CachingKeyValueStoreTest.CacheFlushListenerStub<>();
         cachingStore = new CachingWindowStore<>(underlying,
                                                 Serdes.String(),
                                                 Serdes.String(),
-                                                cacheListener,
                                                 WINDOW_SIZE);
+        cachingStore.setFlushListener(cacheListener);
         cache = new ThreadCache(MAX_CACHE_SIZE_BYTES);
         topic = "topic";
         final MockProcessorContext context = new MockProcessorContext(null, TestUtils.tempDirectory(), null, null, (RecordCollector) null, cache);
@@ -104,7 +104,6 @@ public class CachingWindowStoreTest {
     @Test
     public void shouldForwardOldValuesWhenEnabled() throws Exception {
         final Windowed<String> windowedKey = new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
-        cachingStore.enableSendingOldValues();
         cachingStore.put("1", "a");
         cachingStore.flush();
         cachingStore.put("1", "b");
@@ -121,7 +120,6 @@ public class CachingWindowStoreTest {
 
     @Test
     public void shouldTakeValueFromCacheIfSameTimestampFlushedToRocks() throws Exception {
-        cachingStore.enableSendingOldValues();
         cachingStore.put("1", "a", DEFAULT_TIMESTAMP);
         cachingStore.flush();
         cachingStore.put("1", "b", DEFAULT_TIMESTAMP);

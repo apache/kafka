@@ -151,17 +151,18 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
                                                                    final Windows<W> windows,
                                                                    final String storeName) {
         return storeFactory(aggValSerde, storeName)
-            .windowed(windows.size(), windows.maintainMs(), windows.segments, false)
-            .build();
+                .windowed(windows.size(), windows.maintainMs(), windows.segments, false)
+                .build();
 
     }
 
     private <T> Stores.PersistentKeyValueFactory<K, T> storeFactory(final Serde<T> aggValueSerde,
                                                                     final String storeName) {
         return Stores.create(storeName)
-            .withKeys(keySerde)
-            .withValues(aggValueSerde)
-            .persistent();
+                .withKeys(keySerde)
+                .withValues(aggValueSerde)
+                .persistent()
+                .enableCaching();
     }
 
     private <T> KTable<K, T> doAggregate(

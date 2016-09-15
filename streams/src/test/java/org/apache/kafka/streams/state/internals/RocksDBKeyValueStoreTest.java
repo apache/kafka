@@ -17,12 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
-import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.internals.RecordContext;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
@@ -53,35 +48,27 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @SuppressWarnings("unchecked")
     private <K, V> KeyValueStore<K, V> createStore(final ProcessorContext context, final Class<K> keyClass, final Class<V> valueClass, final boolean useContextSerdes, final boolean enableCaching) {
-        StateStoreSupplier supplier;
+
+        Stores.PersistentKeyValueFactory<?, ?> factory = null;
         if (useContextSerdes) {
-            final Stores.PersistentKeyValueFactory<?, ?> factory = Stores
+            factory = Stores
                     .create("my-store")
                     .withKeys(context.keySerde())
                     .withValues(context.valueSerde())
                     .persistent();
-            supplier = factory.build();
+
         } else {
-            final Stores.PersistentKeyValueFactory<K, V> factory = Stores
+            factory = Stores
                     .create("my-store")
                     .withKeys(keyClass)
                     .withValues(valueClass)
                     .persistent();
-            supplier = factory.build();
         }
 
-        KeyValueStore<K, V> store;
         if (enableCaching) {
-            store = (KeyValueStore<K, V>) ((ForwardingStateStoreSupplier) supplier).get(new CacheFlushListener() {
-                @Override
-                public void forward(final Object key, final Change value, final RecordContext recordContext, final InternalProcessorContext context) {
-
-                }
-            });
-        } else {
-            store = (KeyValueStore<K, V>) supplier.get();
+            factory.enableCaching();
         }
-
+        KeyValueStore<K, V> store = (KeyValueStore<K, V>) factory.build().get();
         store.init(context, store);
         return store;
     }

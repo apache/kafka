@@ -58,13 +58,10 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
-
             store = (KeyValueStore<K, T>) context.getStateStore(storeName);
-            if (sendOldValues) {
-                ((CachedStateStore) store).enableSendingOldValues();
-            }
+            ((CachedStateStore) store).setFlushListener(new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
         }
 
         /**
@@ -96,6 +93,7 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
             // update the store with the new value
             store.put(key, newAgg);
         }
+
     }
 
     @Override
@@ -126,4 +124,5 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
         }
 
     }
+
 }

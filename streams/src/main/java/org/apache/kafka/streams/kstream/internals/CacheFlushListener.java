@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.internals.RecordContext;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 /**
@@ -32,10 +30,8 @@ public interface CacheFlushListener<K, V> {
      * Forward records flushed from the {@link ThreadCache} to
      * any downstream Processors
      * @param key               key of the entry
-     * @param value             current value
-     * @param recordContext     {@link RecordContext}
-     * @param context           context that should be updated with a {@link org.apache.kafka.streams.processor.ProcessorRecordContext}
-     *                          before forwarding
+     * @param newValue             current value
+     * @param oldValue
      */
-    void forward(final K key, final Change<V> value, final RecordContext recordContext, final InternalProcessorContext context);
+    void forward(final K key, final V newValue, final V oldValue);
 }

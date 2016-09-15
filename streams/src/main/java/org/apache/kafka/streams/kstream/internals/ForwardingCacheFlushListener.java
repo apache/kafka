@@ -14,25 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
-import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.processor.ProcessorContext;
 
-/**
- * A {@link StateStoreSupplier} that supports forwarding of values that have been
- * buffered in an {@link ThreadCache}
- * @param <K>
- * @param <V>
- */
-public interface ForwardingStateStoreSupplier<K, V> extends StateStoreSupplier {
+class ForwardingCacheFlushListener<K, V> implements CacheFlushListener<K, V> {
+    private final ProcessorContext context;
+    private final boolean sendOldValues;
 
-    /**
-     * Return a new {@link StateStore} instance that uses the passed in {@link CacheFlushListener}
-     * when caching is enabled & the {@link ThreadCache} is flushed
-     * @param listener
-     */
-    StateStore get(final CacheFlushListener<K, V> listener);
+    ForwardingCacheFlushListener(final ProcessorContext context, final boolean sendOldValues) {
+        this.context = context;
+        this.sendOldValues = sendOldValues;
+    }
 
+    @Override
+    public void forward(final K key, final V newValue, final V oldValue) {
+        if (sendOldValues) {
+            context.forward(key, new Change<>(newValue, oldValue));
+        } else {
+            context.forward(key, new Change<>(newValue, null));
+        }
+    }
 }

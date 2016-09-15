@@ -26,14 +26,13 @@ import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.internals.CacheEnabledProcessor;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.CachedStateStore;
 
 import java.util.Map;
 
-public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, T>, CacheEnabledProcessor {
+public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, T> {
 
     private final String storeName;
     private final Windows<W> windows;
@@ -69,9 +68,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
             super.init(context);
 
             windowStore = (WindowStore<K, T>) context.getStateStore(storeName);
-            if (sendOldValues) {
-                ((CachedStateStore) windowStore).enableSendingOldValues();
-            }
+            ((CachedStateStore) windowStore).setFlushListener(new ForwardingCacheFlushListener<Windowed<K>, V>(context, sendOldValues));
         }
 
         @Override

@@ -302,19 +302,6 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     }
 
-    // this function is only called in flushCache()
-    private void putAllInternal(List<KeyValue<byte[], byte[]>> entries) {
-        try (WriteBatch batch = new WriteBatch()) {
-            for (KeyValue<byte[], byte[]> entry : entries) {
-                batch.put(entry.key, entry.value);
-            }
-
-            db.write(wOptions, batch);
-        } catch (RocksDBException e) {
-            throw new ProcessorStateException("Error while batch writing to store " + this.name, e);
-        }
-    }
-
     @Override
     public synchronized V delete(K key) {
         V value = get(key);

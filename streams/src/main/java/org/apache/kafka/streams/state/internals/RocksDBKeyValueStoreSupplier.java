@@ -21,9 +21,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Map;
 
@@ -36,34 +34,30 @@ import java.util.Map;
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
 
-public class RocksDBKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K, V> implements ForwardingStateStoreSupplier<K, V> {
+public class RocksDBKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K, V>  {
 
-    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, boolean logged, Map<String, String> logConfig) {
-        this(name, keySerde, valueSerde, null, logged, logConfig);
+    private final boolean enableCaching;
+
+    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, boolean logged, Map<String, String> logConfig, boolean enableCaching) {
+        this(name, keySerde, valueSerde, null, logged, logConfig, enableCaching);
     }
 
-    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, Time time, boolean logged, Map<String, String> logConfig) {
+    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, Time time, boolean logged, Map<String, String> logConfig, boolean enableCaching) {
         super(name, keySerde, valueSerde, time, logged, logConfig);
+        this.enableCaching = enableCaching;
     }
 
     public StateStore get() {
-        KeyValueStore<K, V> store = new RocksDBStore<>(name, keySerde, valueSerde).enableLogging();
-        return new MeteredKeyValueStore<>(store, "rocksdb-state", time);
+        if (!enableCaching) {
+            RocksDBStore<K, V> store = new RocksDBStore<>(name, keySerde, valueSerde);
+            return new MeteredKeyValueStore<>(logged ? store.enableLogging() : store, "rocksdb-state", time);
+        }
+
+        final RocksDBStore<Bytes, byte[]> store = new RocksDBStore<>(name, Serdes.Bytes(), Serdes.ByteArray());
+        return new CachingKeyValueStore<>(new MeteredKeyValueStore<>(logged ? store.enableLogging() : store,
+                                                                     "rocksdb-state",
+                                                                     time),
+                                          keySerde,
+                                          valueSerde);
     }
-
-    @Override
-    public StateStore get(final CacheFlushListener<K, V> listener) {
-
-
-        final KeyValueStore<Bytes, byte[]> rocksDbStore = new RocksDBStore<>(name, Serdes.Bytes(),
-                                                                           Serdes.ByteArray()).enableLogging();
-        return new CachingKeyValueStore<>(new MeteredKeyValueStore<>(rocksDbStore,
-                                                                                                "rocksdb-state",
-                                                                                                time),
-                                                                     keySerde,
-                                                                     valueSerde, listener);
-
-
-    }
-
 }

@@ -41,7 +41,7 @@ public class DelegatingPeekingWindowIteratorTest {
 
     @Before
     public void setUp() throws Exception {
-        store = new RocksDBWindowStore<>("test", 30000, 3, false, Serdes.String(), Serdes.String(), 10000);
+        store = new RocksDBWindowStore<>("test", 30000, 3, false, Serdes.String(), Serdes.String());
         final MockProcessorContext context = new MockProcessorContext(null, TestUtils.tempDirectory(), null, null, (RecordCollector) null, null);
         context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, "topic"));
         store.init(context, store);
