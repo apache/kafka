@@ -52,4 +52,10 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
     val (optionalData, _) = zkUtils.readDataMaybeNull(path)
     assertTrue("Node should still be there", optionalData.isDefined)
   }
+
+  @Test
+  def testClusterIdentifierJsonParsing() {
+    val clusterId = "test"
+    assertEquals(zkUtils.ClusterIdentifier.fromJson(zkUtils.ClusterIdentifier.toJson(clusterId)), clusterId)
+  }
 }

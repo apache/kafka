@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.test;
 
-
 import org.apache.kafka.clients.consumer.ConsumerInterceptor;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -33,7 +32,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -41,9 +39,9 @@ public class MockConsumerInterceptor implements ClusterResourceListener, Consume
     public static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
     public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
     public static final AtomicInteger ON_COMMIT_COUNT = new AtomicInteger(0);
-    public static final AtomicBoolean IS_CLUSTER_ID_PRESENT_BEFORE_ON_CONSUME = new AtomicBoolean();
     public static final AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
-
+    public static final ClusterResource NO_CLUSTER_ID = new ClusterResource("foo");
+    public static final AtomicReference<ClusterResource> CLUSTER_ID_BEFORE_ON_CONSUME = new AtomicReference<>(NO_CLUSTER_ID);
 
     public MockConsumerInterceptor() {
         INIT_COUNT.incrementAndGet();
@@ -59,8 +57,10 @@ public class MockConsumerInterceptor implements ClusterResourceListener, Consume
 
     @Override
     public ConsumerRecords<String, String> onConsume(ConsumerRecords<String, String> records) {
-        if (CLUSTER_META.get() != null && CLUSTER_META.get().clusterId() != null && CLUSTER_META.get().clusterId().length() == 48)
-            IS_CLUSTER_ID_PRESENT_BEFORE_ON_CONSUME.set(true);
+
+        // This will ensure that we get the cluster metadata when onConsume is called for the first time
+        // as subsequent compareAndSet operations will fail.
+        CLUSTER_ID_BEFORE_ON_CONSUME.compareAndSet(NO_CLUSTER_ID, CLUSTER_META.get());
 
         Map<TopicPartition, List<ConsumerRecord<String, String>>> recordMap = new HashMap<>();
         for (TopicPartition tp : records.partitions()) {
@@ -92,7 +92,7 @@ public class MockConsumerInterceptor implements ClusterResourceListener, Consume
         CLOSE_COUNT.set(0);
         ON_COMMIT_COUNT.set(0);
         CLUSTER_META.set(null);
-        IS_CLUSTER_ID_PRESENT_BEFORE_ON_CONSUME.set(false);
+        CLUSTER_ID_BEFORE_ON_CONSUME.set(NO_CLUSTER_ID);
     }
 
     @Override

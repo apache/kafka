@@ -113,7 +113,9 @@ public class RequestResponseTest {
             checkSerialization(req, null);
 
         createMetadataResponse(0);
+        createMetadataResponse(1);
         createMetadataRequest(Arrays.asList("topic1")).getErrorResponse(0, new UnknownServerException());
+        createMetadataRequest(Arrays.asList("topic1")).getErrorResponse(1, new UnknownServerException());
         checkSerialization(createFetchRequest().getErrorResponse(0, new UnknownServerException()), 0);
         checkSerialization(createOffsetCommitRequest(0), 0);
         checkSerialization(createOffsetCommitRequest(0).getErrorResponse(0, new UnknownServerException()), 0);
@@ -315,7 +317,7 @@ public class RequestResponseTest {
         allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, "topic2", false,
                 Collections.<MetadataResponse.PartitionMetadata>emptyList()));
 
-        return new MetadataResponse(Arrays.asList(node), MetadataResponse.NO_CLUSTER_ID, MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata, version);
+        return new MetadataResponse(Arrays.asList(node), null, MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata, version);
     }
 
     private AbstractRequest createOffsetCommitRequest(int version) {

@@ -21,7 +21,6 @@ import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -29,9 +28,8 @@ public class MockSerializer implements ClusterResourceListener, Serializer<byte[
     public static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
     public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
     public static final AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
-    public static final AtomicBoolean IS_CLUSTER_ID_PRESENT_BEFORE_SERIALIZE = new AtomicBoolean();
-
-
+    public static final Object NO_CLUSTER_ID = new Object();
+    public static final AtomicReference<Object> CLUSTER_ID_BEFORE_SERIALIZE = new AtomicReference<>(NO_CLUSTER_ID);
 
     public MockSerializer() {
         INIT_COUNT.incrementAndGet();
@@ -43,8 +41,9 @@ public class MockSerializer implements ClusterResourceListener, Serializer<byte[
 
     @Override
     public byte[] serialize(String topic, byte[] data) {
-        if (CLUSTER_META.get() != null && CLUSTER_META.get().clusterId() != null && CLUSTER_META.get().clusterId().length() == 48)
-            IS_CLUSTER_ID_PRESENT_BEFORE_SERIALIZE.set(true);
+        // This will ensure that we get the cluster metadata when serialize is called for the first time
+        // as subsequent compareAndSet operations will fail.
+        CLUSTER_ID_BEFORE_SERIALIZE.compareAndSet(NO_CLUSTER_ID, CLUSTER_META.get());
         return data;
     }
 

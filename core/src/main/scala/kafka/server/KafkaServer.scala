@@ -35,7 +35,7 @@ import javax.xml.bind.DatatypeConverter
 import kafka.security.auth.Authorizer
 import kafka.utils._
 import org.apache.kafka.clients.{ClientRequest, ManualMetadataUpdater, NetworkClient}
-import org.apache.kafka.common.{ClusterResource, ClusterResourceListeners, Node}
+import org.apache.kafka.common.{ClusterResource, Node}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.network.{ChannelBuilders, LoginType, Mode, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
@@ -54,6 +54,8 @@ import kafka.network.{BlockingChannel, SocketServer}
 import kafka.metrics.{KafkaMetricsGroup, KafkaMetricsReporter}
 import com.yammer.metrics.core.Gauge
 import kafka.coordinator.GroupCoordinator
+import org.apache.kafka.common.internals.ClusterResourceListeners
+import collection.JavaConverters._
 
 object KafkaServer {
   // Copy the subset of properties that are relevant to Logs
@@ -142,7 +144,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
   val brokerMetaPropsFile = "meta.properties"
   val brokerMetadataCheckpoints = config.logDirs.map(logDir => (logDir, new BrokerMetadataCheckpoint(new File(logDir + File.separator +brokerMetaPropsFile)))).toMap
   var clusterId: String = null
-  val clusterResourceListeners  = new ClusterResourceListeners()
 
   newGauge(
     "BrokerState",
@@ -198,13 +199,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         info(s"Cluster ID = $clusterId")
 
         /* Send events to metric reporters who implement ClusterResourceListener */
-        // Add reporters for Codahale metrics framework (KafkaMetricsReporter) who implement ClusterResourceListener
-        for(kafkaMetricsReporter <- kafkaMetricsReporters) {
-          clusterResourceListeners.add(kafkaMetricsReporter)
-        }
-        // Add reporters for Kafka metrics framework (MetricsReporter) who implement ClusterResourceListener
-        clusterResourceListeners.addAll(reporters)
-        clusterResourceListeners.onUpdate(new ClusterResource(clusterId))
+        notifyClusterListeners(kafkaMetricsReporters ++ reporters.asScala.toList)
 
         /* start log manager */
         logManager = createLogManager(zkUtils.zkClient, brokerState)
@@ -296,6 +291,14 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
     }
   }
 
+  def notifyClusterListeners(clusterListeners: List[Any]): Unit = {
+    val clusterResourceListeners = new ClusterResourceListeners()
+    for (clusterListener <- clusterListeners) {
+      clusterResourceListeners.maybeAdd(clusterListener)
+    }
+    clusterResourceListeners.onUpdate(new ClusterResource(clusterId))
+  }
+
   private def initZk(): ZkUtils = {
     info(s"Connecting to zookeeper on ${config.zkConnect}")
 
@@ -331,16 +334,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
   }
 
   def getOrGenerateClusterId(zkUtils: ZkUtils): String = {
-
-    val clusterId = zkUtils.getClusterId match {
-      case Some(id) => id
-      case None => {
-        val uuid = UUID.randomUUID()
-        val base64EncodedUUID = DatatypeConverter.printBase64Binary(uuid.toString().getBytes(StandardCharsets.UTF_8))
-        zkUtils.createOrGetClusterId(base64EncodedUUID)
-      }
+    zkUtils.getClusterId.getOrElse {
+      val uuid = UUID.randomUUID()
+      val base64EncodedUUID = DatatypeConverter.printBase64Binary(uuid.toString().getBytes(StandardCharsets.UTF_8))
+      zkUtils.createOrGetClusterId(base64EncodedUUID)
     }
-    clusterId
   }
 
   /**

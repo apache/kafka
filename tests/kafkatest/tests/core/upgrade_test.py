@@ -62,6 +62,7 @@ class TestUpgrade(ProduceConsumeValidateTest):
             self.kafka.start_node(node)
 
 
+    @parametrize(from_kafka_version=str(LATEST_0_10), to_message_format_version=None, compression_types=["none"])
     @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["none"])
     @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["none"], new_consumer=True, security_protocol="SASL_SSL")
     @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["snappy"], new_consumer=True)
@@ -107,6 +108,8 @@ class TestUpgrade(ProduceConsumeValidateTest):
                                            compression_types=compression_types,
                                            version=KafkaVersion(from_kafka_version))
 
+        assert self.zk.query("/cluster/id") is None
+
         # TODO - reduce the timeout
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka,
                                         self.topic, consumer_timeout_ms=30000, new_consumer=new_consumer,
@@ -114,22 +117,6 @@ class TestUpgrade(ProduceConsumeValidateTest):
 
         self.run_produce_consume_validate(core_test_action=lambda: self.perform_upgrade(from_kafka_version,
                                                                                         to_message_format_version))
-
-    @parametrize(from_kafka_version=str(LATEST_0_9))
-    @parametrize(from_kafka_version=str(LATEST_0_10))
-    def test_upgrade_for_cluster_id(self, from_kafka_version):
-        self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk,
-                                  version=KafkaVersion(from_kafka_version),
-                                  topics={self.topic: {"partitions": 3, "replication-factor": 3,
-                                                       'configs': {"min.insync.replicas": 2}}})
-        self.kafka.start()
-        assert self.zk.query("/cluster/id") is None
-
-        self.logger.info("Upgrading brokers")
-        for node in self.kafka.nodes:
-            self.kafka.stop_node(node)
-            node.version = TRUNK
-            self.kafka.start_node(node)
 
         cluster_id_json = self.zk.query("/cluster/id")
         assert cluster_id_json is not None

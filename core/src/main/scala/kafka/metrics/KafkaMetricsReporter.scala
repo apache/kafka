@@ -23,6 +23,8 @@ package kafka.metrics
 import kafka.utils.{CoreUtils, VerifiableProperties}
 import java.util.concurrent.atomic.AtomicBoolean
 
+import scala.collection.mutable.ArrayBuffer
+
 
 /**
  * Base trait for reporter MBeans. If a client wants to expose these JMX
@@ -42,24 +44,27 @@ trait KafkaMetricsReporterMBean {
   def getMBeanName: String
 }
 
-
+/**
+  * If you need access to cluster metadata, you will need to implement {@link org.apache.kafka.common.ClusterResourceListener} interface
+  */
 trait KafkaMetricsReporter {
   def init(props: VerifiableProperties)
 }
 
 object KafkaMetricsReporter {
   val ReporterStarted: AtomicBoolean = new AtomicBoolean(false)
+  var reporters: ArrayBuffer[KafkaMetricsReporter] = null
 
-  def startReporters (verifiableProps: VerifiableProperties):List[KafkaMetricsReporter] = {
-    var reporters = List[KafkaMetricsReporter]()
+  def startReporters (verifiableProps: VerifiableProperties): List[KafkaMetricsReporter] = {
     ReporterStarted synchronized {
       if (!ReporterStarted.get()) {
+        reporters = ArrayBuffer[KafkaMetricsReporter]()
         val metricsConfig = new KafkaMetricsConfig(verifiableProps)
         if(metricsConfig.reporters.nonEmpty) {
           metricsConfig.reporters.foreach(reporterType => {
             val reporter = CoreUtils.createObject[KafkaMetricsReporter](reporterType)
             reporter.init(verifiableProps)
-            reporters ++= List(reporter)
+            reporters.append(reporter)
             reporter match {
               case bean: KafkaMetricsReporterMBean => CoreUtils.registerMBean(reporter, bean.getMBeanName)
               case _ =>
@@ -69,7 +74,7 @@ object KafkaMetricsReporter {
         }
       }
     }
-    reporters
+    reporters.toList
   }
 }
 

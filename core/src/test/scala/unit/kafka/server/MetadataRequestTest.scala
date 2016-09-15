@@ -17,9 +17,7 @@
 
 package kafka.server
 
-import java.nio.charset.StandardCharsets
-import java.util.{Properties, UUID}
-import javax.xml.bind.DatatypeConverter
+import java.util.{Properties}
 
 import kafka.common.Topic
 import kafka.utils.TestUtils
@@ -27,7 +25,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
 import org.junit.Assert._
 import org.junit.Test
-
+import org.apache.kafka.test.TestUtils.isValidClusterId
 import scala.collection.JavaConverters._
 
 class MetadataRequestTest extends BaseRequestTest {
@@ -37,41 +35,24 @@ class MetadataRequestTest extends BaseRequestTest {
   }
 
   @Test
-  def testClusterIdWithAllTopics() {
-    val v2MetadataResponse = sendMetadataRequest(MetadataRequest.allTopics(), 2)
-    val v2ClusterId = v2MetadataResponse.clusterId()
-    assertNotNull("clusterId should not be null", v2ClusterId)
-
-    val v1MetadataResponse = sendMetadataRequest(MetadataRequest.allTopics(), 1)
-    val v1ClusterId = v1MetadataResponse.clusterId()
-    assertEquals(s"v1 clusterId should be ${MetadataResponse.NO_CLUSTER_ID}", v1ClusterId, MetadataResponse.NO_CLUSTER_ID)
-  }
-
-  @Test
-  def testClusterIdWithNoTopics() {
+  def testClusterIdWithRequestVersion2() {
     val v2MetadataResponse = sendMetadataRequest(new MetadataRequest(List[String]().asJava), 2)
     val v2ClusterId = v2MetadataResponse.clusterId()
     assertNotNull("clusterId should not be null", v2ClusterId)
-
-    val v1MetadataResponse = sendMetadataRequest(MetadataRequest.allTopics(), 1)
-    val v1ClusterId = v1MetadataResponse.clusterId()
-    assertEquals(s"v1 clusterId should be ${MetadataResponse.NO_CLUSTER_ID}", v1ClusterId, MetadataResponse.NO_CLUSTER_ID)
   }
 
   @Test
-  def testClusterIdIsValidUuid() {
-    val metadataResponse = sendMetadataRequest(MetadataRequest.allTopics(), 2)
-    val clusterId = metadataResponse.clusterId()
-    val decodedUuid = DatatypeConverter.parseBase64Binary(clusterId)
-
-    try {
-      UUID.fromString(new String(decodedUuid, StandardCharsets.UTF_8))
-    } catch {
-      case e: IllegalArgumentException =>
-        fail("UUID is invalid.", e)
-    }
+  def testClusterIdWithRequestVersion1() {
+    val v1MetadataResponse = sendMetadataRequest(MetadataRequest.allTopics(), 1)
+    val v1ClusterId = v1MetadataResponse.clusterId()
+    assertNull(s"v1 clusterId should be null", v1ClusterId)
   }
 
+  @Test
+  def testClusterIdIsValid() {
+    val metadataResponse = sendMetadataRequest(MetadataRequest.allTopics(), 2)
+    isValidClusterId(metadataResponse.clusterId())
+  }
 
   @Test
   def testControllerId() {

@@ -17,6 +17,7 @@
 
 package kafka.api
 
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.atomic.AtomicReference
 import java.util.{ArrayList, Properties}
 
@@ -32,53 +33,55 @@ import org.junit.Assert._
 import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
+import org.apache.kafka.test.TestUtils.isValidClusterId
 
 /** The test cases here verify the following conditions.
-  * 1. The ProducerInterceptor receives the cluster id after the onSend() method is called.
+  * 1. The ProducerInterceptor receives the cluster id after the onSend() method is called and before onAcknowledgement() method is called.
   * 2. The Serializer receives the cluster id before the serialize() method is called.
-  * 3. The producer MetricReporter receives the cluster id  after send() method is called on KafkaProducer.
+  * 3. The producer MetricReporter receives the cluster id after send() method is called on KafkaProducer.
   * 4. The ConsumerInterceptor receives the cluster id before the onConsume() method.
   * 5. The Deserializer receives the cluster id before the deserialize() method is called.
-  * 6. The consumer MetricReporter receives the cluster id  after poll() is called on KafkaConsumer.
-  * 7. The broker MetricReporter receives the cluster id  after the broker startup is over.
-  * 8. The broker KafkaMetricReporter receives the cluster id  after the broker startup is over.
+  * 6. The consumer MetricReporter receives the cluster id after poll() is called on KafkaConsumer.
+  * 7. The broker MetricReporter receives the cluster id after the broker startup is over.
+  * 8. The broker KafkaMetricReporter receives the cluster id after the broker startup is over.
   * 9. All the components receive the same cluster id.
   */
 
+object EndToEndClusterIdTest {
 
-object MockConsumerMetricsReporter {
-  val CLUSTER_META: AtomicReference[ClusterResource] = new AtomicReference[ClusterResource]
-}
+  object MockConsumerMetricsReporter {
+    val CLUSTER_META: AtomicReference[ClusterResource] = new AtomicReference[ClusterResource]
+  }
 
-class MockConsumerMetricsReporter extends MockMetricsReporter with ClusterResourceListener {
+  class MockConsumerMetricsReporter extends MockMetricsReporter with ClusterResourceListener {
 
-  override def onUpdate(clusterMetadata: ClusterResource) {
-    MockConsumerMetricsReporter.CLUSTER_META.set(clusterMetadata)
+    override def onUpdate(clusterMetadata: ClusterResource) {
+      MockConsumerMetricsReporter.CLUSTER_META.set(clusterMetadata)
+    }
+  }
+
+  object MockProducerMetricsReporter {
+    val CLUSTER_META: AtomicReference[ClusterResource] = new AtomicReference[ClusterResource]
+  }
+
+  class MockProducerMetricsReporter extends MockMetricsReporter with ClusterResourceListener {
+
+    override def onUpdate(clusterMetadata: ClusterResource) {
+      MockProducerMetricsReporter.CLUSTER_META.set(clusterMetadata)
+    }
+  }
+
+  object MockBrokerMetricsReporter {
+    val CLUSTER_META: AtomicReference[ClusterResource] = new AtomicReference[ClusterResource]
+  }
+
+  class MockBrokerMetricsReporter extends MockMetricsReporter with ClusterResourceListener {
+
+    override def onUpdate(clusterMetadata: ClusterResource) {
+      MockBrokerMetricsReporter.CLUSTER_META.set(clusterMetadata)
+    }
   }
 }
-
-object MockProducerMetricsReporter {
-  val CLUSTER_META: AtomicReference[ClusterResource] = new AtomicReference[ClusterResource]
-}
-
-class MockProducerMetricsReporter extends MockMetricsReporter with ClusterResourceListener {
-
-  override def onUpdate(clusterMetadata: ClusterResource) {
-    MockProducerMetricsReporter.CLUSTER_META.set(clusterMetadata)
-  }
-}
-
-object MockBrokerMetricsReporter {
-  val CLUSTER_META: AtomicReference[ClusterResource] = new AtomicReference[ClusterResource]
-}
-
-class MockBrokerMetricsReporter extends MockMetricsReporter with ClusterResourceListener {
-
-  override def onUpdate(clusterMetadata: ClusterResource) {
-    MockBrokerMetricsReporter.CLUSTER_META.set(clusterMetadata)
-  }
-}
-
 
 class EndToEndClusterIdTest extends KafkaServerTestHarness {
 
@@ -93,8 +96,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
   val part = 0
   val tp = new TopicPartition(topic, part)
   val topicAndPartition = new TopicAndPartition(topic, part)
-  this.serverConfig.setProperty(KafkaConfig.MetricReporterClassesProp, "kafka.api.MockBrokerMetricsReporter")
-
+  this.serverConfig.setProperty(KafkaConfig.MetricReporterClassesProp, "kafka.api.EndToEndClusterIdTest$MockBrokerMetricsReporter")
 
   override def generateConfigs() = {
     val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
@@ -108,41 +110,39 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     super.setUp
     // create the consumer offset topic
     TestUtils.createTopic(this.zkUtils, topic, 2, serverCount, this.servers)
-
   }
 
   @Test
   def testEndToEnd() {
     val appendStr = "mock"
 
-    assertNotNull(MockBrokerMetricsReporter.CLUSTER_META)
-    assertEquals(48, MockBrokerMetricsReporter.CLUSTER_META.get().clusterId().length())
-
-
+    assertNotNull(EndToEndClusterIdTest.MockBrokerMetricsReporter.CLUSTER_META)
+    assertTrue(isValidClusterId(EndToEndClusterIdTest.MockBrokerMetricsReporter.CLUSTER_META.get().clusterId()))
 
     val producerProps = new Properties()
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerProps.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockProducerInterceptor")
     producerProps.put("mock.interceptor.append", appendStr)
-    producerProps.put(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, "kafka.api.MockProducerMetricsReporter")
+    producerProps.put(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, "kafka.api.EndToEndClusterIdTest$MockProducerMetricsReporter")
     val testProducer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps, new MockSerializer, new MockSerializer)
 
-    // Send one record and make sure clusterId is set after send
-    testProducer.send(new ProducerRecord(tp.topic(), tp.partition(), s"42".getBytes, s"42".getBytes))
-
+    // Send one record and make sure clusterId is set after send and before onAcknowledgement
+    sendRecords(testProducer,1,tp)
+    assertNotEquals(MockProducerInterceptor.CLUSTER_ID_BEFORE_ON_ACKNOWLEDGEMENT, MockProducerInterceptor.NO_CLUSTER_ID)
     assertNotNull(MockProducerInterceptor.CLUSTER_META)
-    assertEquals(48, MockProducerInterceptor.CLUSTER_META.get().clusterId().length())
+    assertTrue(isValidClusterId(MockProducerInterceptor.CLUSTER_META.get().clusterId()))
 
+    // Make sure that serializer gets the cluster id before serialize method.
+    assertNotEquals(MockSerializer.CLUSTER_ID_BEFORE_SERIALIZE, MockSerializer.NO_CLUSTER_ID)
     assertNotNull(MockSerializer.CLUSTER_META)
-    assertEquals(48, MockProducerInterceptor.CLUSTER_META.get().clusterId().length())
-    assertTrue(MockSerializer.IS_CLUSTER_ID_PRESENT_BEFORE_SERIALIZE.get())
+    assertTrue(isValidClusterId(MockSerializer.CLUSTER_META.get().clusterId()))
 
-    assertNotNull(MockProducerMetricsReporter.CLUSTER_META)
-    assertEquals(48, MockProducerMetricsReporter.CLUSTER_META.get().clusterId().length())
+    assertNotNull(EndToEndClusterIdTest.MockProducerMetricsReporter.CLUSTER_META)
+    assertTrue(isValidClusterId(EndToEndClusterIdTest.MockProducerMetricsReporter.CLUSTER_META.get().clusterId()))
 
     this.consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     this.consumerConfig.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockConsumerInterceptor")
-    this.consumerConfig.put(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, "kafka.api.MockConsumerMetricsReporter")
+    this.consumerConfig.put(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, "kafka.api.EndToEndClusterIdTest$MockConsumerMetricsReporter")
     val testConsumer = new KafkaConsumer[Array[Byte], Array[Byte]](this.consumerConfig, new MockDeserializer(), new MockDeserializer())
     testConsumer.assign(List(tp).asJava)
     testConsumer.seek(tp, 0)
@@ -151,29 +151,41 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     consumeRecords(testConsumer, numRecords)
 
     // Check that cluster id is present after the first poll call.
-    assertTrue(MockConsumerInterceptor.IS_CLUSTER_ID_PRESENT_BEFORE_ON_CONSUME.get())
+    assertNotEquals(MockConsumerInterceptor.CLUSTER_ID_BEFORE_ON_CONSUME, MockConsumerInterceptor.NO_CLUSTER_ID)
     assertNotNull(MockConsumerInterceptor.CLUSTER_META)
-    assertEquals(48, MockConsumerInterceptor.CLUSTER_META.get().clusterId().length())
+    assertTrue(isValidClusterId(MockConsumerInterceptor.CLUSTER_META.get().clusterId()))
 
-    assertTrue(MockDeserializer.IS_CLUSTER_ID_PRESENT_BEFORE_DESERIALIZE.get())
+    assertNotEquals(MockDeserializer.CLUSTER_ID_BEFORE_DESERIALIZE, MockDeserializer.NO_CLUSTER_ID)
     assertNotNull(MockDeserializer.CLUSTER_META)
-    assertEquals(48, MockDeserializer.CLUSTER_META.get().clusterId().length())
+    assertTrue(isValidClusterId(MockDeserializer.CLUSTER_META.get().clusterId()))
 
-    assertNotNull(MockConsumerMetricsReporter.CLUSTER_META)
-    assertEquals(48, MockConsumerMetricsReporter.CLUSTER_META.get().clusterId().length())
+    assertNotNull(EndToEndClusterIdTest.MockConsumerMetricsReporter.CLUSTER_META)
+    assertTrue(isValidClusterId(EndToEndClusterIdTest.MockConsumerMetricsReporter.CLUSTER_META.get().clusterId()))
 
     // Make sure everyone receives the same cluster id.
     assertEquals(MockProducerInterceptor.CLUSTER_META.get().clusterId(), MockSerializer.CLUSTER_META.get().clusterId())
-    assertEquals(MockProducerInterceptor.CLUSTER_META.get().clusterId(), MockProducerMetricsReporter.CLUSTER_META.get().clusterId())
+    assertEquals(MockProducerInterceptor.CLUSTER_META.get().clusterId(), EndToEndClusterIdTest.MockProducerMetricsReporter.CLUSTER_META.get().clusterId())
     assertEquals(MockProducerInterceptor.CLUSTER_META.get().clusterId(), MockConsumerInterceptor.CLUSTER_META.get().clusterId())
     assertEquals(MockProducerInterceptor.CLUSTER_META.get().clusterId(), MockDeserializer.CLUSTER_META.get().clusterId())
-    assertEquals(MockProducerInterceptor.CLUSTER_META.get().clusterId(), MockConsumerMetricsReporter.CLUSTER_META.get().clusterId())
-    assertEquals(MockProducerInterceptor.CLUSTER_META.get().clusterId(), MockBrokerMetricsReporter.CLUSTER_META.get().clusterId())
+    assertEquals(MockProducerInterceptor.CLUSTER_META.get().clusterId(), EndToEndClusterIdTest.MockConsumerMetricsReporter.CLUSTER_META.get().clusterId())
+    assertEquals(MockProducerInterceptor.CLUSTER_META.get().clusterId(), EndToEndClusterIdTest.MockBrokerMetricsReporter.CLUSTER_META.get().clusterId())
 
     testConsumer.close()
     testProducer.close()
   }
 
+  private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int, tp: TopicPartition) {
+    val futures = (0 until numRecords).map { i =>
+      val record = new ProducerRecord(tp.topic(), tp.partition(), s"$i".getBytes, s"$i".getBytes)
+      debug(s"Sending this record: $record")
+      producer.send(record)
+    }
+    try {
+      futures.foreach(_.get)
+    } catch {
+      case e: ExecutionException => throw e.getCause
+    }
+  }
 
   private def consumeRecords(consumer: Consumer[Array[Byte], Array[Byte]],
                              numRecords: Int = 1,
@@ -200,5 +212,3 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     }
   }
 }
-
-

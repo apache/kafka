@@ -32,6 +32,8 @@ import java.util.Map;
  * just log the errors.
  * <p>
  * ConsumerInterceptor callbacks are called from the same thread that invokes {@link org.apache.kafka.clients.consumer.KafkaConsumer#poll(long)}.
+ * <p>
+ * If you need access to cluster metadata, you will need to implement {@link org.apache.kafka.common.ClusterResourceListener} interface.
  */
 public interface ConsumerInterceptor<K, V> extends Configurable {
 

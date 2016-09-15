@@ -18,6 +18,8 @@ import org.apache.kafka.common.Configurable;
 
 /**
  * A plugin interface to allow things to listen as new metrics are created so they can be reported.
+ * <p>
+ * If you need access to cluster metadata, you will need to implement {@link org.apache.kafka.common.ClusterResourceListener} interface.
  */
 public interface MetricsReporter extends Configurable {
 

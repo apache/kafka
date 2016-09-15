@@ -16,49 +16,45 @@
   */
 package kafka.server
 
-import java.util.Properties
+import scala.concurrent._
+import ExecutionContext.Implicits._
+import scala.concurrent.duration._
 
-import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{CoreUtils, TestUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.Assert._
 import org.junit.{Before, Test}
+import org.apache.kafka.test.TestUtils.isValidClusterId
 
 class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
-  var props1: Properties = null
   var config1: KafkaConfig = null
-  var props2: Properties = null
   var config2: KafkaConfig = null
-  var props3: Properties = null
   var config3: KafkaConfig = null
 
   @Before
   override def setUp() {
     super.setUp()
-    props1 = TestUtils.createBrokerConfig(1, zkConnect)
-    config1 = KafkaConfig.fromProps(props1)
-    props2 = TestUtils.createBrokerConfig(2, zkConnect)
-    config2 = KafkaConfig.fromProps(props2)
-    props3 = TestUtils.createBrokerConfig(3, zkConnect)
-    config3 = KafkaConfig.fromProps(props3)
+    config1 = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, zkConnect))
+    config2 = KafkaConfig.fromProps(TestUtils.createBrokerConfig(2, zkConnect))
+    config3 = KafkaConfig.fromProps(TestUtils.createBrokerConfig(3, zkConnect))
   }
 
   @Test
   def testAutoGenerateClusterId() {
     //Make sure that the cluster id doesn't exist yet.
     assertFalse(zkUtils.pathExists(ZkUtils.ClusterIdPath))
-    var server1 = new KafkaServer(config1, threadNamePrefix = Option(this.getClass.getName))
-    server1.startup()
+
+    var server1 = TestUtils.createServer(config1)
 
     // Make sure the cluster id is 48 characters long (base64 of UUID.randomUUID() )
     val clusterIdOnFirstBoot = server1.clusterId
-    assertEquals(clusterIdOnFirstBoot.length, 48)
+    assertTrue(isValidClusterId(clusterIdOnFirstBoot))
 
     server1.shutdown()
 
     //Make sure that the cluster id is persistent.
     assertTrue(zkUtils.pathExists(ZkUtils.ClusterIdPath))
-    assertEquals(zkUtils.getClusterId().get, clusterIdOnFirstBoot)
+    assertEquals(zkUtils.getClusterId(), Some(clusterIdOnFirstBoot))
 
     // restart the server check to confirm that it uses the clusterId generated previously
     server1 = new KafkaServer(config1)
@@ -71,26 +67,61 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
 
     //Make sure that the cluster id is persistent after multiple reboots.
     assertTrue(zkUtils.pathExists(ZkUtils.ClusterIdPath))
-    assertEquals(zkUtils.getClusterId().get, clusterIdOnFirstBoot)
+    assertEquals(zkUtils.getClusterId(), Some(clusterIdOnFirstBoot))
 
     CoreUtils.delete(server1.config.logDirs)
     TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
   }
 
   @Test
-  def testAutoGenerateClusterIdForKafkaCluster() {
-    val server1 = new KafkaServer(config1, threadNamePrefix = Option(this.getClass.getName))
-    val server2 = new KafkaServer(config2, threadNamePrefix = Option(this.getClass.getName))
-    val server3 = new KafkaServer(config3, threadNamePrefix = Option(this.getClass.getName))
-    server1.startup()
+  def testAutoGenerateClusterIdForKafkaClusterSequential() {
+    val server1 = TestUtils.createServer(config1)
     val clusterIdFromServer1 = server1.clusterId
-    server2.startup()
+
+    val server2 = TestUtils.createServer(config2)
     val clusterIdFromServer2 = server2.clusterId
-    server3.startup()
+
+    val server3 = TestUtils.createServer(config3)
     val clusterIdFromServer3 = server3.clusterId
+
     server1.shutdown()
     server2.shutdown()
     server3.shutdown()
+
+    assertTrue(isValidClusterId(clusterIdFromServer1))
+    assertEquals(clusterIdFromServer1, clusterIdFromServer2, clusterIdFromServer3)
+
+    // Check again after reboot
+    server1.startup()
+    assertEquals(clusterIdFromServer1, server1.clusterId)
+    server2.startup()
+    assertEquals(clusterIdFromServer2, server2.clusterId)
+    server3.startup()
+    assertEquals(clusterIdFromServer3, server3.clusterId)
+    server1.shutdown()
+    server2.shutdown()
+    server3.shutdown()
+
+    CoreUtils.delete(server1.config.logDirs)
+    CoreUtils.delete(server2.config.logDirs)
+    CoreUtils.delete(server3.config.logDirs)
+    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
+  }
+
+  @Test
+  def testAutoGenerateClusterIdForKafkaClusterParallel() {
+
+    val firstBoot = Future.traverse(Seq(config1, config2, config3))(config => Future(TestUtils.createServer(config)))
+    val Seq(server1, server2, server3) = Await.result(firstBoot, 100 second)
+
+    val clusterIdFromServer1 = server1.clusterId
+    val clusterIdFromServer2 = server2.clusterId
+    val clusterIdFromServer3 = server3.clusterId
+
+    server1.shutdown()
+    server2.shutdown()
+    server3.shutdown()
+    assertTrue(isValidClusterId(clusterIdFromServer1))
     assertEquals(clusterIdFromServer1, clusterIdFromServer2, clusterIdFromServer3)
 
     // Check again after reboot

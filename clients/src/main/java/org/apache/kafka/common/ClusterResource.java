@@ -17,6 +17,10 @@
 
 package org.apache.kafka.common;
 
+
+/**
+ * The <code>ClusterResource</code> class encapsulates metadata for a Kafka cluster.
+ */
 public class ClusterResource {
 
     private final String clusterId;

@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.clients;
 
+import java.net.InetSocketAddress;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -20,7 +21,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.ClusterResourceListeners;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -151,9 +152,15 @@ public class MetadataTest {
         long time = 0;
         MockClusterResourceListener mockClusterListener = new MockClusterResourceListener();
         ClusterResourceListeners listeners = new ClusterResourceListeners();
-        listeners.add(mockClusterListener);
+        listeners.maybeAdd(mockClusterListener);
         metadata = new Metadata(refreshBackoffMs, metadataExpireMs, false, listeners);
-        metadata.update(Cluster.empty(), time);
+
+        String hostName = "www.example.com";
+        Cluster cluster = Cluster.bootstrap(Arrays.asList(new InetSocketAddress(hostName, 9002)));
+        metadata.update(cluster, time);
+        assertFalse("MockClusterResourceListener should not called when cluster id is bootstrap enabled.",
+                MockClusterResourceListener.IS_ON_UPDATE_CALLED.get());
+
         metadata.update(new Cluster(
                         "dummy",
                         Arrays.asList(new Node(0, "host1", 1000)),

@@ -16,54 +16,78 @@
   */
 package kafka.server
 
-import java.util.Properties
 import java.util.concurrent.atomic.AtomicReference
 
 import kafka.metrics.KafkaMetricsReporter
 import kafka.utils.{CoreUtils, TestUtils, VerifiableProperties}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.{ClusterResource, ClusterResourceListener}
+import org.apache.kafka.test.MockMetricsReporter
 import org.junit.Assert._
-import org.junit.{Before, Test}
+import org.junit.{After, Before, Test}
+import org.apache.kafka.test.TestUtils.isValidClusterId
 
-class MockKafkaMetricsReporter extends KafkaMetricsReporter with ClusterResourceListener {
+object KafkaMetricReporterClusterIdTest {
 
-  override def onUpdate(clusterMetadata: ClusterResource): Unit = {
-    MockKafkaMetricsReporter.CLUSTER_META.set(clusterMetadata)
+  class MockKafkaMetricsReporter extends KafkaMetricsReporter with ClusterResourceListener {
+
+    override def onUpdate(clusterMetadata: ClusterResource): Unit = {
+      MockKafkaMetricsReporter.CLUSTER_META.set(clusterMetadata)
+    }
+
+    override def init(props: VerifiableProperties): Unit = {
+    }
   }
 
-  override def init(props: VerifiableProperties): Unit = {
+  object MockKafkaMetricsReporter {
+    val CLUSTER_META = new AtomicReference[ClusterResource]
   }
-}
 
-object MockKafkaMetricsReporter {
-  val CLUSTER_META: AtomicReference[ClusterResource] = new AtomicReference[ClusterResource]
+  object MockBrokerMetricsReporter {
+    val CLUSTER_META: AtomicReference[ClusterResource] = new AtomicReference[ClusterResource]
+  }
+
+  class MockBrokerMetricsReporter extends MockMetricsReporter with ClusterResourceListener {
+
+    override def onUpdate(clusterMetadata: ClusterResource) {
+      MockBrokerMetricsReporter.CLUSTER_META.set(clusterMetadata)
+    }
+  }
+
 }
 
 class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
-  var props1: Properties = null
-  var config1: KafkaConfig = null
+  var server: KafkaServerStartable = null
+  var config: KafkaConfig = null
 
   @Before
   override def setUp() {
     super.setUp()
-    props1 = TestUtils.createBrokerConfig(1, zkConnect)
-    props1.setProperty("kafka.metrics.reporters", "kafka.server.MockKafkaMetricsReporter")
-    config1 = KafkaConfig.fromProps(props1)
+    val props = TestUtils.createBrokerConfig(1, zkConnect)
+    props.setProperty("kafka.metrics.reporters", "kafka.server.KafkaMetricReporterClusterIdTest$MockKafkaMetricsReporter")
+    props.setProperty(KafkaConfig.MetricReporterClassesProp, "kafka.server.KafkaMetricReporterClusterIdTest$MockBrokerMetricsReporter")
+    config = KafkaConfig.fromProps(props)
+    server = KafkaServerStartable.fromProps(props)
+    server.startup()
   }
 
   @Test
   def testClusterIdPresent() {
-    val server1 = KafkaServerStartable.fromProps(props1)
-    server1.startup()
+    assertNotNull(KafkaMetricReporterClusterIdTest.MockKafkaMetricsReporter.CLUSTER_META)
+    assertTrue(isValidClusterId(KafkaMetricReporterClusterIdTest.MockKafkaMetricsReporter.CLUSTER_META.get().clusterId()))
 
-    // Make sure the cluster id is 48 characters long (base64 of UUID.randomUUID() )
-    assertNotNull(MockKafkaMetricsReporter.CLUSTER_META)
-    assertEquals(48, MockKafkaMetricsReporter.CLUSTER_META.get().clusterId().length())
+    assertNotNull(KafkaMetricReporterClusterIdTest.MockBrokerMetricsReporter.CLUSTER_META)
+    assertTrue(isValidClusterId(KafkaMetricReporterClusterIdTest.MockBrokerMetricsReporter.CLUSTER_META.get().clusterId()))
 
-    server1.shutdown()
+    assertEquals(KafkaMetricReporterClusterIdTest.MockKafkaMetricsReporter.CLUSTER_META.get().clusterId(),
+      KafkaMetricReporterClusterIdTest.MockBrokerMetricsReporter.CLUSTER_META.get().clusterId())
+  }
 
-    CoreUtils.delete(config1.logDirs)
+  @After
+  override def tearDown() {
+    server.shutdown()
+    CoreUtils.delete(config.logDirs)
     TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
+    super.tearDown()
   }
 }

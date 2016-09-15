@@ -210,39 +210,33 @@ class ZkUtils(val zkClient: ZkClient,
     }
   }
 
+  /* Represents a cluster identifier. Stored in Zookeeper in JSON format: {"version" -> "1", "id" -> id } */
+  object ClusterIdentifier {
 
-  def getClusterId(): Option[String] = {
-    def parseClusterId(clusterIdString: String): String = {
-
-      Json.parseFull(clusterIdString) match {
-        case Some(m) =>
-          val clusterIdMap = m.asInstanceOf[Map[String, Any]]
-          clusterIdMap.get("id").get.asInstanceOf[String]
-        case None => throw new KafkaException("Failed to parse the cluster id json [%s].".format(clusterIdString))
-      }
+    def toJson(id: String) = {
+      val jsonMap = Map("version" -> "1", "id" -> id)
+      Json.encode(jsonMap)
     }
 
-    readDataMaybeNull(ClusterIdPath)._1 match {
-      case Some(clusterId) => Some(parseClusterId(clusterId))
-      case None => None
+    def fromJson(clusterIdJson: String): String = {
+      Json.parseFull(clusterIdJson).map { m =>
+        val clusterIdMap = m.asInstanceOf[Map[String, Any]]
+        clusterIdMap.get("id").get.asInstanceOf[String]
+      }.getOrElse(throw new KafkaException(s"Failed to parse the cluster id json $clusterIdJson"))
     }
   }
 
-  def createOrGetClusterId(proposedClusterId: String): String = {
-    val jsonMap = Map("version" -> "1",
-      "id" -> proposedClusterId
-    )
-    val data = Json.encode(jsonMap)
+  def getClusterId(): Option[String] = {
+    readDataMaybeNull(ClusterIdPath)._1.map(ClusterIdentifier.fromJson(_))
+  }
 
+  def createOrGetClusterId(proposedClusterId: String): String = {
     try {
-      createPersistentPath(ClusterIdPath, data)
+      createPersistentPath(ClusterIdPath, ClusterIdentifier.toJson(proposedClusterId))
       proposedClusterId
     } catch {
       case e: ZkNodeExistsException =>
-        getClusterId match {
-          case Some(clusterId) => clusterId
-          case None => throw new KafkaException("Failed to get cluster id from Zookeeper. This can only happen if /cluster/id is deleted from Zookeeper.")
-        }
+        getClusterId.getOrElse(throw new KafkaException("Failed to get cluster id from Zookeeper. This can only happen if /cluster/id is deleted from Zookeeper."))
     }
   }
 

@@ -30,6 +30,7 @@ import org.apache.kafka.common.utils.Utils;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -40,6 +41,10 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import javax.xml.bind.DatatypeConverter;
 
 import static java.util.Arrays.asList;
 
@@ -269,4 +274,29 @@ public class TestUtils {
         }
     }
 
+    /**
+     * Checks if a cluster id is valid.
+     * @param clusterId
+     * @return true if valid, false otherwise.
+     */
+    public static boolean isValidClusterId(String clusterId) {
+        if (clusterId == null)
+            return false;
+
+        if (clusterId.length() != 48)
+            return false;
+
+        Pattern clusterIdPattern = Pattern.compile("[a-zA-Z0-9_\\-]+");
+        Matcher matcher = clusterIdPattern.matcher(clusterId);
+        if (!matcher.matches())
+            return false;
+
+        try {
+            byte[] decodedUuid = DatatypeConverter.parseBase64Binary(clusterId);
+            UUID.fromString(new String(decodedUuid, StandardCharsets.UTF_8));
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+        return true;
+    }
 }

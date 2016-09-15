@@ -20,12 +20,16 @@ package org.apache.kafka.test;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.ClusterResource;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 public class MockClusterResourceListener implements ClusterResourceListener {
 
     private ClusterResource clusterResource;
+    public static final AtomicBoolean IS_ON_UPDATE_CALLED = new AtomicBoolean();
 
     @Override
     public void onUpdate(ClusterResource clusterResource) {
+        IS_ON_UPDATE_CALLED.set(true);
         this.clusterResource = clusterResource;
     }
 

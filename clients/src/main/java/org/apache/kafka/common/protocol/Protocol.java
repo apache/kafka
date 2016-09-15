@@ -60,6 +60,7 @@ public class Protocol {
                                                                           ArrayOf.nullable(STRING),
                                                                           "An array of topics to fetch metadata for. If the topics array is null fetch metadata for all topics."));
 
+    /* The v2 metadata request is the same as v1. An additional field for cluster id has been added to the v2 metadata response */
     public static final Schema METADATA_REQUEST_V2 = METADATA_REQUEST_V1;
 
     public static final Schema METADATA_BROKER_V0 = new Schema(new Field("node_id", INT32, "The broker id."),

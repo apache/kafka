@@ -15,7 +15,10 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common;
+package org.apache.kafka.common.internals;
+
+import org.apache.kafka.common.ClusterResource;
+import org.apache.kafka.common.ClusterResourceListener;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,24 +31,33 @@ public class ClusterResourceListeners {
         this.clusterResourceListeners = new ArrayList<>();
     }
 
-
-    public void add(Object candidate) {
+    /**
+     * Add only if the candidate implements {@link ClusterResourceListener}.
+     * @param candidate Object which might implement {@link ClusterResourceListener}
+     */
+    public void maybeAdd(Object candidate) {
         if (candidate instanceof ClusterResourceListener) {
             clusterResourceListeners.add((ClusterResourceListener) candidate);
         }
     }
 
-    public void addAll(List<?> candidateList) {
+    /**
+     * Add all items who implement {@link ClusterResourceListener} from the list.
+     * @param candidateList List of objects which might implement {@link ClusterResourceListener}
+     */
+    public void maybeAddAll(List<?> candidateList) {
         for (Object candidate : candidateList) {
-            if (candidate instanceof ClusterResourceListener)
-                clusterResourceListeners.add((ClusterResourceListener) candidate);
+            this.maybeAdd(candidate);
         }
     }
 
+    /**
+     * Send the updated cluster metadata to all {@link ClusterResourceListener}.
+     * @param cluster Cluster metadata
+     */
     public void onUpdate(ClusterResource cluster) {
         for (ClusterResourceListener clusterResourceListener : clusterResourceListeners) {
             clusterResourceListener.onUpdate(cluster);
         }
     }
-
 }

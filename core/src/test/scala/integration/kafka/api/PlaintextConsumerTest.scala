@@ -15,6 +15,7 @@ package kafka.api
 
 import java.util
 import java.util.Properties
+
 import java.util.regex.Pattern
 
 import kafka.log.LogConfig
@@ -22,8 +23,8 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.KafkaProducer
-import org.apache.kafka.common.serialization.{ByteArraySerializer, StringDeserializer, StringSerializer}
-import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
+import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer, ByteArraySerializer}
+import org.apache.kafka.test.{MockProducerInterceptor, MockConsumerInterceptor}
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{InvalidTopicException, RecordTooLargeException}
@@ -35,8 +36,6 @@ import org.junit.Test
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
 import java.util.Locale
-
-import org.apache.kafka.test
 
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {
@@ -685,12 +684,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // produce records
     val numRecords = 10
-    // Send one record and make sure clusterId is set after send
-    testProducer.send(new ProducerRecord(tp.topic(), tp.partition(), s"key 0", s"value 0"))
-    assertNotNull(MockProducerInterceptor.CLUSTER_META)
-    assertEquals(48, MockProducerInterceptor.CLUSTER_META.get().clusterId().length())
-
-    (1 until numRecords).map { i =>
+    (0 until numRecords).map { i =>
       testProducer.send(new ProducerRecord(tp.topic(), tp.partition(), s"key $i", s"value $i"))
     }.foreach(_.get)
     assertEquals(numRecords, MockProducerInterceptor.ONSEND_COUNT.intValue())
@@ -712,7 +706,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     testConsumer.assign(List(tp).asJava)
     testConsumer.seek(tp, 0)
 
-
     // consume and verify that values are modified by interceptors
     val records = consumeRecords(testConsumer, numRecords)
     for (i <- 0 until numRecords) {
@@ -720,11 +713,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       assertEquals(s"key $i", new String(record.key()))
       assertEquals(s"value $i$appendStr".toUpperCase(Locale.ROOT), new String(record.value()))
     }
-
-    // Check that cluster id is present after the first poll call.
-    assertTrue(MockConsumerInterceptor.IS_CLUSTER_ID_PRESENT_BEFORE_ON_CONSUME.get())
-    assertNotNull(MockConsumerInterceptor.CLUSTER_META)
-    assertEquals(48, MockConsumerInterceptor.CLUSTER_META.get().clusterId().length())
 
     // commit sync and verify onCommit is called
     val commitCountBefore = MockConsumerInterceptor.ON_COMMIT_COUNT.intValue()

@@ -21,17 +21,15 @@ import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-
 
 public class MockDeserializer implements ClusterResourceListener, Deserializer<byte[]> {
     public static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
     public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
     public static final AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
-    public static final AtomicBoolean IS_CLUSTER_ID_PRESENT_BEFORE_DESERIALIZE = new AtomicBoolean();
-
+    public static final Object NO_CLUSTER_ID = new Object();
+    public static final AtomicReference<Object> CLUSTER_ID_BEFORE_DESERIALIZE = new AtomicReference<>(NO_CLUSTER_ID);
 
     public MockDeserializer() {
         INIT_COUNT.incrementAndGet();
@@ -43,8 +41,9 @@ public class MockDeserializer implements ClusterResourceListener, Deserializer<b
 
     @Override
     public byte[] deserialize(String topic, byte[] data) {
-        if (CLUSTER_META.get() != null && CLUSTER_META.get().clusterId() != null && CLUSTER_META.get().clusterId().length() == 48)
-            IS_CLUSTER_ID_PRESENT_BEFORE_DESERIALIZE.set(true);
+        // This will ensure that we get the cluster metadata when deserialize is called for the first time
+        // as subsequent compareAndSet operations will fail.
+        CLUSTER_ID_BEFORE_DESERIALIZE.compareAndSet(NO_CLUSTER_ID, CLUSTER_META.get());
         return data;
     }
 

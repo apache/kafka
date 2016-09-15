@@ -45,7 +45,6 @@ public class MetadataResponse extends AbstractRequestResponse {
     public static final int NO_CONTROLLER_ID = -1;
 
     private static final String CLUSTER_ID_KEY_NAME = "cluster_id";
-    public static final String NO_CLUSTER_ID = null;
 
     // topic level field names
     private static final String TOPIC_ERROR_CODE_KEY_NAME = "topic_error_code";
@@ -81,7 +80,7 @@ public class MetadataResponse extends AbstractRequestResponse {
     private final Collection<Node> brokers;
     private final Node controller;
     private final List<TopicMetadata> topicMetadata;
-
+    private String clusterId = null;
 
     /**
      * Constructor for the latest version
@@ -98,6 +97,7 @@ public class MetadataResponse extends AbstractRequestResponse {
         this.brokers = brokers;
         this.controller = getControllerNode(controllerId, brokers);
         this.topicMetadata = topicMetadata;
+        this.clusterId = clusterId;
 
         List<Struct> brokerArray = new ArrayList<>();
         for (Node node : brokers) {
@@ -173,6 +173,10 @@ public class MetadataResponse extends AbstractRequestResponse {
         int controllerId = NO_CONTROLLER_ID;
         if (struct.hasField(CONTROLLER_ID_KEY_NAME))
             controllerId = struct.getInt(CONTROLLER_ID_KEY_NAME);
+
+        // This field only exists in v2+
+        if (struct.hasField(CLUSTER_ID_KEY_NAME))
+            clusterId = struct.getString(CLUSTER_ID_KEY_NAME);
 
         List<TopicMetadata> topicMetadata = new ArrayList<>();
         Object[] topicInfos = (Object[]) struct.get(TOPIC_METADATA_KEY_NAME);
@@ -302,12 +306,12 @@ public class MetadataResponse extends AbstractRequestResponse {
         return controller;
     }
 
+    /**
+     * The cluster identifier returned in the metadata response.
+     * @return cluster identifier if it is present in the response, null otherwise.
+     */
     public String clusterId() {
-        if (struct.hasField(CLUSTER_ID_KEY_NAME)) {
-            return (String) struct.get(CLUSTER_ID_KEY_NAME);
-        } else {
-            return NO_CLUSTER_ID;
-        }
+        return this.clusterId;
     }
 
     public static MetadataResponse parse(ByteBuffer buffer) {
