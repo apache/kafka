@@ -93,7 +93,7 @@ class ConsumerFetcherThread(name: String,
   // any logic for partitions whose leader has changed
   def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]) {
     removePartitions(partitions.toSet)
-    consumerFetcherManager.addPartitionsWithError(partitions.map(tp => new TopicAndPartition(tp.topic, tp.partition)))
+    consumerFetcherManager.addPartitionsWithError(partitions)
   }
 
   protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): FetchRequest = {
