@@ -23,11 +23,20 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
-//TODO Better name?
+/**
+ * This builder is a useful building block for doing fetch requests where topic partitions have to be rotated via
+ * round-robin to ensure fairness and some level of determinism given the existence of a limit on the fetch response
+ * size. Because the serialization of fetch requests is more efficient if all partitions for the same topic are grouped
+ * together, we do such grouping in the method `set`.
+ *
+ * As partitions are moved to the end, the same topic may be repeated more than once.
+ */
 public class FetchBuilder<S> {
 
     private final List<PartitionState<S>> list = new ArrayList<>();
@@ -72,6 +81,9 @@ public class FetchBuilder<S> {
         }
     }
 
+    /**
+     * Returns the partitions in random order.
+     */
     public Set<TopicPartition> partitionSet() {
         return map.keySet();
     }
@@ -85,10 +97,16 @@ public class FetchBuilder<S> {
         return map.containsKey(topicPartition);
     }
 
+    /**
+     * Returns the partition states in order.
+     */
     public List<PartitionState<S>> partitionStates() {
         return Collections.unmodifiableList(list);
     }
 
+    /**
+     * Returns the partition state values in order.
+     */
     public List<S> partitionStateValues() {
         List<S> result = new ArrayList<>(list.size());
         for (PartitionState<S> state : list)
@@ -104,6 +122,12 @@ public class FetchBuilder<S> {
         return map.size();
     }
 
+    /**
+     * Update the builder to have the received map as its state (i.e. the previous state is cleared). The builder will
+     * "batch by topic", so if we have a, b and c, each with two partitions, we may end up with something like the
+     * following (the order of topics and partitions within topics is dependent on the iteration order of the received
+     * map): a0, a1, b1, b0, c0, c1.
+     */
     public void set(Map<TopicPartition, S> partitionToState) {
         map.clear();
         list.clear();
@@ -111,7 +135,7 @@ public class FetchBuilder<S> {
     }
 
     private void update(Map<TopicPartition, S> partitionToState) {
-        Map<String, List<TopicPartition>> topicToPartitions = new HashMap<>();
+        Map<String, List<TopicPartition>> topicToPartitions = new LinkedHashMap<>();
         for (TopicPartition tp : partitionToState.keySet()) {
             List<TopicPartition> partitions = topicToPartitions.get(tp.topic());
             if (partitions == null) {
@@ -134,16 +158,40 @@ public class FetchBuilder<S> {
         private final S value;
 
         public PartitionState(TopicPartition topicPartition, S state) {
-            this.topicPartition = topicPartition;
-            this.value = state;
+            this.topicPartition = Objects.requireNonNull(topicPartition);
+            this.value = Objects.requireNonNull(state);
         }
 
         public S value() {
             return value;
         }
 
+        @Override
+        public boolean equals(Object o) {
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
+
+            PartitionState<?> that = (PartitionState<?>) o;
+
+            return topicPartition.equals(that.topicPartition) && value.equals(that.value);
+        }
+
+        @Override
+        public int hashCode() {
+            int result = topicPartition.hashCode();
+            result = 31 * result + value.hashCode();
+            return result;
+        }
+
         public TopicPartition topicPartition() {
             return topicPartition;
+        }
+
+        @Override
+        public String toString() {
+            return "PartitionState(" + topicPartition + "=" + value + ')';
         }
     }
 
