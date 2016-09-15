@@ -92,7 +92,7 @@ public class FetchRequest extends AbstractRequest {
      */
     @Deprecated
     public FetchRequest(int maxWait, int minBytes, Map<TopicPartition, PartitionData> fetchData) {
-        // Any of 0, 1 or 2 would do here
+        // Any of 0, 1 or 2 would do here since the schemas for these versions are identical
         this(2, CONSUMER_REPLICA_ID, maxWait, minBytes, DEFAULT_RESPONSE_MAX_BYTES, new LinkedHashMap<>(fetchData));
     }
 
@@ -109,7 +109,7 @@ public class FetchRequest extends AbstractRequest {
     @Deprecated
     public static FetchRequest fromReplica(int replicaId, int maxWait, int minBytes,
                                            Map<TopicPartition, PartitionData> fetchData) {
-        // Any of 0, 1 or 2 would do here
+        // Any of 0, 1 or 2 would do here since the schemas for these versions are identical
         return new FetchRequest(2, replicaId, maxWait, minBytes, DEFAULT_RESPONSE_MAX_BYTES, new LinkedHashMap<>(fetchData));
     }
 
@@ -152,7 +152,7 @@ public class FetchRequest extends AbstractRequest {
         this.maxWait = maxWait;
         this.minBytes = minBytes;
         this.maxBytes = maxBytes;
-        this.fetchData = new LinkedHashMap<>(fetchData);
+        this.fetchData = fetchData;
     }
 
     public FetchRequest(Struct struct) {
@@ -181,7 +181,7 @@ public class FetchRequest extends AbstractRequest {
 
     @Override
     public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
-        Map<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<TopicPartition, FetchResponse.PartitionData>();
+        Map<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<>();
 
         for (Map.Entry<TopicPartition, PartitionData> entry: fetchData.entrySet()) {
             FetchResponse.PartitionData partitionResponse = new FetchResponse.PartitionData(Errors.forException(e).code(),
