@@ -25,7 +25,7 @@ object QuotaType  {
   case object Fetch extends QuotaType
   case object Produce extends QuotaType
   case object LeaderReplication extends QuotaType
-  case object  FollowerReplication extends QuotaType
+  case object FollowerReplication extends QuotaType
 }
 sealed trait QuotaType
 
