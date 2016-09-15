@@ -132,7 +132,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                 return new KeyValue(mapper.apply(key, value), value);
             }
         }), this.name);
-        return new KStreamImpl<>(topology, name, sourceNodes);
+        return new KStreamImpl<>(topology, name, null);
     }
 
     @Override
