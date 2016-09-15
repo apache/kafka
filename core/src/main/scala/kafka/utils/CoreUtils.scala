@@ -282,11 +282,15 @@ object CoreUtils extends Logging {
 
   def generateUuidAsBase64(): String = {
     val uuid = UUID.randomUUID()
+    urlSafeBase64EncodeNoPadding(getBytesFromUuid(uuid))
+  }
+
+  def getBytesFromUuid(uuid: UUID): Array[Byte] = {
     // Extract bytes for uuid which is 128 bits (or 16 bytes) long.
     val uuidBytes = ByteBuffer.wrap(new Array[Byte](16))
     uuidBytes.putLong(uuid.getMostSignificantBits)
     uuidBytes.putLong(uuid.getLeastSignificantBits)
-    urlSafeBase64EncodeNoPadding(uuidBytes.array)
+    uuidBytes.array
   }
 
   def urlSafeBase64EncodeNoPadding(data: Array[Byte]): String = {
