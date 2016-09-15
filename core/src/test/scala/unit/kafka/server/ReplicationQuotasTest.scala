@@ -32,7 +32,6 @@ import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-
 import scala.collection.JavaConverters._
 
 /**
@@ -102,7 +101,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     val msg = msg100KB
     val msgCount: Int = 1000
     val expectedDuration = 10 //Keep the test to N seconds
-    var throttle:Long = msgCount * msg.length / expectedDuration
+    var throttle: Long = msgCount * msg.length / expectedDuration
     if (!leaderThrottle) throttle = throttle * 3 //Follower throttle needs to replicate 3x as fast to get the same duration as there are three replicas to replicate for each of the two follower brokers
 
     //Set the throttle limit on all 8 brokers, but only assign throttled replicas to the six leaders, or two followers
@@ -135,7 +134,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     brokers = brokers :+ TestUtils.createServer(fromProps(createBrokerConfig(107, zkConnect)))
 
     //Check that throttled config correctly migrated to the new brokers
-    (106 to 107).foreach{brokerId =>
+    (106 to 107).foreach { brokerId =>
       assertEquals(throttle, brokerFor(brokerId).quotaManagers.follower.upperBound())
     }
     if (!leaderThrottle) {
@@ -182,6 +181,51 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
       throttledTook > expectedDuration * 1000)
     assertTrue((s"Throttled replication of ${throttledTook}ms should be < ${expectedDuration * 1500}ms"),
       throttledTook < expectedDuration * 1000 * 1.5)
+  }
+
+  @Test
+  def shouldThrottleOldSegments(): Unit = {
+    /**
+      * Simple test which ensures throttled replication works when the dataset spans many segments
+      */
+
+    //2 brokers with 1MB Segment Size & 1 partition
+    val config: Properties = createBrokerConfig(100, zkConnect)
+    config.put("log.segment.bytes", (1024 * 1024).toString)
+    brokers = Seq(TestUtils.createServer(fromProps(config)))
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, Map(0 -> Seq(100, 101)))
+
+    //Write 20MBs and throttle at 5MB/s
+    val msg = msg100KB
+    val msgCount: Int = 200
+    val expectedDuration = 4
+    val throttle: Long = msg.length * msgCount / expectedDuration
+
+    //Set the throttle limit leader
+    changeBrokerConfig(zkUtils, Seq(100), property(KafkaConfig.ThrottledReplicationRateLimitProp, throttle.toString))
+    changeTopicConfig(zkUtils, topic, property(ThrottledReplicasListProp, "0:100"))
+
+    //Add data
+    addData(msgCount, msg)
+
+    val start = System.currentTimeMillis()
+
+    //Start the new broker (and hence start replicating)
+    brokers = brokers :+ TestUtils.createServer(fromProps(createBrokerConfig(101, zkConnect)))
+    waitForOffsetsToMatch(msgCount, 0, 101)
+
+    val throttledTook = System.currentTimeMillis() - start
+
+    assertTrue((s"Throttled replication of ${throttledTook}ms should be > ${expectedDuration * 1000 * 0.9}ms"),
+      throttledTook > expectedDuration * 1000 * 0.9)
+    assertTrue((s"Throttled replication of ${throttledTook}ms should be < ${expectedDuration * 1500}ms"),
+      throttledTook < expectedDuration * 1000 * 1.5)
+  }
+
+  def addData(msgCount: Int, msg: Array[Byte]): Boolean = {
+    producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(brokers), retries = 5, acks = 0)
+    (0 until msgCount).foreach { x => producer.send(new ProducerRecord(topic, msg)).get }
+    waitForOffsetsToMatch(msgCount, 0, 100)
   }
 
   private def waitForOffsetsToMatch(offset: Int, partitionId: Int, brokerId: Int): Boolean = {
