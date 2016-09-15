@@ -482,7 +482,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
       //Now delete the config
       AdminUtils.changeBrokerConfig(servers(0).zkUtils, brokerIds, new Properties)
-      checkConfig(kafka.server.Defaults.ThrottledReplicationLimit)
+      checkConfig(kafka.server.Defaults.ThrottledReplicationRateLimit)
 
     } finally {
       servers.foreach(_.shutdown())

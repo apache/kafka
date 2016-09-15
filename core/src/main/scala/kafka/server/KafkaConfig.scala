@@ -530,7 +530,7 @@ object KafkaConfig {
   val QuotaWindowSizeSecondsDoc = "The time span of each sample for client quotas"
   val ReplicationQuotaWindowSizeSecondsDoc = "The time span of each sample for replication quotas"
   val ThrottledReplicationRateLimitDoc = "A long representing the upper bound (bytes/sec) on replication traffic for replicas enumerated in the " +
-    s"property $ThrottledReplicationRateLimitProp. This property can be set dynamically."
+    s"property $ThrottledReplicationRateLimitProp. This property can be only set dynamically via the config command."
 
   val DeleteTopicEnableDoc = "Enables delete topic. Delete topic through the admin tool will have no effect if this config is turned off"
   val CompressionTypeDoc = "Specify the final compression type for a given topic. This configuration accepts the standard compression codecs " +
@@ -571,7 +571,7 @@ object KafkaConfig {
   val SaslKerberosMinTimeBeforeReloginDoc = SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_DOC
   val SaslKerberosPrincipalToLocalRulesDoc = SaslConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_DOC
 
-  def mutableConfigs = Seq(KafkaConfig.ThrottledReplicationRateLimitProp)
+  def dynamicBrokerConfigs = Seq(KafkaConfig.ThrottledReplicationRateLimitProp)
 
   private val configDef = {
     import ConfigDef.Importance._
@@ -719,7 +719,7 @@ object KafkaConfig {
       .define(NumReplicationQuotaSamplesProp, INT, Defaults.NumReplicationQuotaSamples, atLeast(1), LOW, NumReplicationQuotaSamplesDoc)
       .define(QuotaWindowSizeSecondsProp, INT, Defaults.QuotaWindowSizeSeconds, atLeast(1), LOW, QuotaWindowSizeSecondsDoc)
       .define(ReplicationQuotaWindowSizeSecondsProp, INT, Defaults.ReplicationQuotaWindowSizeSeconds, atLeast(1), LOW, ReplicationQuotaWindowSizeSecondsDoc)
-      .define(ThrottledReplicationRateLimitProp, LONG, Defaults.ThrottledReplicationLimit, atLeast(0), MEDIUM, ThrottledReplicationRateLimitDoc)
+      .define(ThrottledReplicationRateLimitProp, LONG, Defaults.ThrottledReplicationRateLimit, atLeast(0), MEDIUM, ThrottledReplicationRateLimitDoc)
 
       /** ********* SSL Configuration ****************/
       .define(PrincipalBuilderClassProp, CLASS, Defaults.PrincipalBuilderClass, MEDIUM, PrincipalBuilderClassDoc)
