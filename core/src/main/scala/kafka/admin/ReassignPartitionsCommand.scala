@@ -166,7 +166,7 @@ object ReassignPartitionsCommand extends Logging {
     else {
       printCurrentAssignment(zkUtils, partitionsToBeReassigned)
       if (throttle >= 0)
-        println(String.format("Replication will be throttled at %s B/s\nWarning: not running this command to completion could result in the throttle remaining engaged post rebalance. Run Verify periodically until the reassignment completes to ensure the throttle is removed.", getIntegerInstance.format(throttle)))
+        println(String.format("Warning: You must run Verify periodically, until the reassignment completes, to ensure the throttle is removed. You can also alter the throttle by rerunning the Execute command passing a new value."))
       if (reassignPartitionsCommand.reassignPartitions(throttle)) {
         println("Successfully started reassignment of partitions.")
       } else
@@ -284,13 +284,14 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: Map[TopicAndPartit
     if (throttle >= 0) {
       val existingBrokers = zkUtils.getReplicaAssignmentForTopics(partitions.map(_._1.topic).toSeq).flatMap(_._2).toSeq
       val proposedBrokers = partitions.flatMap(_._2).toSeq
-      val allBrokers = (existingBrokers ++ proposedBrokers).distinct
+      val brokers = (existingBrokers ++ proposedBrokers).distinct
 
-      for (id <- allBrokers) {
+      for (id <- brokers) {
         val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Broker, id.toString)
         configs.put(KafkaConfig.ThrottledReplicationRateLimitProp, throttle.toString)
         AdminUtils.changeBrokerConfig(zkUtils, Seq(id), configs)
       }
+      println(f"The throttle limit was set to $throttle%,d B/s")
     }
   }
 
@@ -302,6 +303,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: Map[TopicAndPartit
       AdminUtils.changeTopicConfig(zkUtils, topic, new Properties {
         put(LogConfig.ThrottledReplicasListProp, moves.get(topic).get )
       })
+    println(s"Throttles were added to the following replicas: $moves")
   }
 
   def replicaMoves(existing: Map[TopicAndPartition, Seq[Int]], proposed: Map[TopicAndPartition, Seq[Int]]): Map[String, String] = {
