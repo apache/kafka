@@ -20,9 +20,6 @@ package org.apache.kafka.common.internals;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,46 +36,23 @@ import java.util.Set;
  */
 public class FetchBuilder<S> {
 
-    private final List<PartitionState<S>> list = new ArrayList<>();
-    private final Map<TopicPartition, S> map = new HashMap<>();
+    private final LinkedHashMap<TopicPartition, S> map = new LinkedHashMap<>();
 
     public FetchBuilder() {}
 
     public void moveToEnd(TopicPartition topicPartition) {
-        for (int i = 0; i < list.size(); ++i) {
-            PartitionState<S> state = list.get(i);
-            if (state.topicPartition.equals(topicPartition)) {
-                list.remove(i);
-                list.add(state);
-                break;
-            }
-        }
+        S state = map.remove(topicPartition);
+        if (state != null)
+            map.put(topicPartition, state);
     }
 
     public void updateAndMoveToEnd(TopicPartition topicPartition, S state) {
-        PartitionState<S> partitionState = new PartitionState<>(topicPartition, state);
-        S prev = map.put(topicPartition, state);
-        if (prev != null) {
-            for (int i = 0; i < list.size(); ++i) {
-                if (list.get(i).topicPartition.equals(topicPartition)) {
-                    list.remove(i);
-                    list.add(partitionState);
-                    break;
-                }
-            }
-        } else
-            list.add(partitionState);
+        map.remove(topicPartition);
+        map.put(topicPartition, state);
     }
 
     public void remove(TopicPartition topicPartition) {
         map.remove(topicPartition);
-        for (Iterator<PartitionState<S>> it = list.iterator(); it.hasNext(); ) {
-            PartitionState<S> state = it.next();
-            if (state.topicPartition.equals(topicPartition)) {
-                it.remove();
-                break;
-            }
-        }
     }
 
     /**
@@ -90,7 +64,6 @@ public class FetchBuilder<S> {
 
     public void clear() {
         map.clear();
-        list.clear();
     }
 
     public boolean contains(TopicPartition topicPartition) {
@@ -101,17 +74,18 @@ public class FetchBuilder<S> {
      * Returns the partition states in order.
      */
     public List<PartitionState<S>> partitionStates() {
-        return Collections.unmodifiableList(list);
+        List<PartitionState<S>> result = new ArrayList<>();
+        for (Map.Entry<TopicPartition, S> entry : map.entrySet()) {
+            result.add(new PartitionState<S>(entry.getKey(), entry.getValue()));
+        }
+        return result;
     }
 
     /**
      * Returns the partition state values in order.
      */
     public List<S> partitionStateValues() {
-        List<S> result = new ArrayList<>(list.size());
-        for (PartitionState<S> state : list)
-            result.add(state.value);
-        return result;
+        return new ArrayList<>(map.values());
     }
 
     public S stateValue(TopicPartition topicPartition) {
@@ -130,12 +104,11 @@ public class FetchBuilder<S> {
      */
     public void set(Map<TopicPartition, S> partitionToState) {
         map.clear();
-        list.clear();
         update(partitionToState);
     }
 
     private void update(Map<TopicPartition, S> partitionToState) {
-        Map<String, List<TopicPartition>> topicToPartitions = new LinkedHashMap<>();
+        LinkedHashMap<String, List<TopicPartition>> topicToPartitions = new LinkedHashMap<>();
         for (TopicPartition tp : partitionToState.keySet()) {
             List<TopicPartition> partitions = topicToPartitions.get(tp.topic());
             if (partitions == null) {
@@ -148,7 +121,6 @@ public class FetchBuilder<S> {
             for (TopicPartition tp : entry.getValue()) {
                 S state = partitionToState.get(tp);
                 map.put(tp, state);
-                list.add(new PartitionState<>(tp, state));
             }
         }
     }
