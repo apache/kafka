@@ -927,7 +927,8 @@ public class ConfigDef {
         StringBuilder b = new StringBuilder();
 
         for (ConfigKey def : configs) {
-            b.append(getConfigKeyDetails(def));
+            b.append(getConfigKeyRst(def,b));
+            b.append("\n");
         }
         return b.toString();
     }
@@ -956,7 +957,7 @@ public class ConfigDef {
                 lastKeyGroupName = def.group;
             }
 
-            b.append(getConfigKeyDetails(def));
+            b.append(getConfigKeyRst(def, b));
 
             if (def.dependents != null && def.dependents.size() > 0) {
                 int j = 0;
@@ -979,8 +980,7 @@ public class ConfigDef {
     /**
      * Shared content on Rst and Enriched Rst.
      */
-    private StringBuilder getConfigKeyDetails(ConfigKey def) {
-        StringBuilder b = new StringBuilder();
+    private StringBuilder getConfigKeyRst(ConfigKey def, StringBuilder b) {
 
         b.append("``");
         b.append(def.name);
@@ -1009,7 +1009,7 @@ public class ConfigDef {
         }
         b.append("  * Importance: ");
         b.append(def.importance.toString().toLowerCase(Locale.ROOT));
-        b.append("\n\n");
+        b.append("\n");
 
         return b;
     }
