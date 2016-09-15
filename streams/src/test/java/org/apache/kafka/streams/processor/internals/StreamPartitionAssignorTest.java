@@ -52,6 +52,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 
 public class StreamPartitionAssignorTest {
@@ -385,6 +386,8 @@ public class StreamPartitionAssignorTest {
         allActiveTasks.addAll(info11.activeTasks);
         allStandbyTasks.addAll(info11.standbyTasks.keySet());
 
+        assertNotEquals("same processId has same set of standby tasks", info11.standbyTasks.keySet(), info10.standbyTasks.keySet());
+
         // check active tasks assigned to the first client
         assertEquals(Utils.mkSet(task0, task1), new HashSet<>(allActiveTasks));
         assertEquals(Utils.mkSet(task2), new HashSet<>(allStandbyTasks));
@@ -649,6 +652,11 @@ public class StreamPartitionAssignorTest {
         } catch (ConfigException e) {
             // pass
         }
+    }
+
+    @Test
+    public void should() throws Exception {
+
     }
 
     @Test
