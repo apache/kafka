@@ -44,7 +44,7 @@ public class FetchRequest extends AbstractRequest {
     private static final String FETCH_OFFSET_KEY_NAME = "fetch_offset";
     private static final String MAX_BYTES_KEY_NAME = "max_bytes";
 
-    // default values for current version
+    // default values for older versions where a request level limit did not exist
     public static final int DEFAULT_RESPONSE_MAX_BYTES = Integer.MAX_VALUE;
 
     private final int replicaId;
