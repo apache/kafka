@@ -26,12 +26,11 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.{MockTime => JMockTime}
 import org.junit.{Test, After, Before}
 
-import java.util.{Properties, Collections}
+import java.util.{Properties}
 import java.util.concurrent.atomic.AtomicBoolean
 import collection.JavaConversions._
 
 import org.easymock.EasyMock
-import org.I0Itec.zkclient.ZkClient
 import org.junit.Assert._
 
 class SimpleFetchTest {
@@ -62,7 +61,7 @@ class SimpleFetchTest {
   val partitionId = 0
   val topicAndPartition = TopicAndPartition(topic, partitionId)
 
-  val fetchInfo = Collections.singletonMap(topicAndPartition, PartitionFetchInfo(0, fetchSize)).toMap
+  val fetchInfo = Seq(topicAndPartition -> PartitionFetchInfo(0, fetchSize))
 
   var replicaManager: ReplicaManager = null
 
@@ -80,12 +79,12 @@ class SimpleFetchTest {
     val log = EasyMock.createMock(classOf[Log])
     EasyMock.expect(log.logEndOffset).andReturn(leaderLEO).anyTimes()
     EasyMock.expect(log.logEndOffsetMetadata).andReturn(new LogOffsetMetadata(leaderLEO)).anyTimes()
-    EasyMock.expect(log.read(0, fetchSize, Some(partitionHW))).andReturn(
+    EasyMock.expect(log.read(0, fetchSize, Some(partitionHW), true)).andReturn(
       new FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),
         new ByteBufferMessageSet(messagesToHW)
       )).anyTimes()
-    EasyMock.expect(log.read(0, fetchSize, None)).andReturn(
+    EasyMock.expect(log.read(0, fetchSize, None, true)).andReturn(
       new FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),
         new ByteBufferMessageSet(messagesToLEO)
@@ -148,9 +147,9 @@ class SimpleFetchTest {
     val initialAllTopicsCount = BrokerTopicStats.getBrokerAllTopicsStats().totalFetchRequestRate.count()
 
     assertEquals("Reading committed data should return messages only up to high watermark", messagesToHW,
-      replicaManager.readFromLocalLog(true, true, Int.MaxValue, fetchInfo).get(topicAndPartition).get.info.messageSet.head.message)
+      replicaManager.readFromLocalLog(true, true, Int.MaxValue, fetchInfo).find(_._1 == topicAndPartition).get._2.info.messageSet.head.message)
     assertEquals("Reading any data can return messages up to the end of the log", messagesToLEO,
-      replicaManager.readFromLocalLog(true, false, Int.MaxValue, fetchInfo).get(topicAndPartition).get.info.messageSet.head.message)
+      replicaManager.readFromLocalLog(true, false, Int.MaxValue, fetchInfo).find(_._1 == topicAndPartition).get._2.info.messageSet.head.message)
 
     assertEquals("Counts should increment after fetch", initialTopicCount+2, BrokerTopicStats.getBrokerTopicStats(topic).totalFetchRequestRate.count())
     assertEquals("Counts should increment after fetch", initialAllTopicsCount+2, BrokerTopicStats.getBrokerAllTopicsStats().totalFetchRequestRate.count())
