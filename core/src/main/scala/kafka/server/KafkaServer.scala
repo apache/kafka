@@ -334,11 +334,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
   }
 
   def getOrGenerateClusterId(zkUtils: ZkUtils): String = {
-    zkUtils.getClusterId.getOrElse {
-      val uuid = UUID.randomUUID()
-      val base64EncodedUUID = DatatypeConverter.printBase64Binary(uuid.toString().getBytes(StandardCharsets.UTF_8))
-      zkUtils.createOrGetClusterId(base64EncodedUUID)
-    }
+    zkUtils.getClusterId.getOrElse(zkUtils.createOrGetClusterId(CoreUtils.generateUuidAsBase64))
   }
 
   /**

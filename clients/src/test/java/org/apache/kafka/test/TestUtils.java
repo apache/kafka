@@ -283,20 +283,31 @@ public class TestUtils {
         if (clusterId == null)
             return false;
 
-        if (clusterId.length() != 48)
+        // Base 64 encoded value is 24 characters (22 characters for data and 2 for "==" padding).
+        if (clusterId.length() != 24)
             return false;
 
-        Pattern clusterIdPattern = Pattern.compile("[a-zA-Z0-9_\\-]+");
+        Pattern clusterIdPattern = Pattern.compile("[a-zA-Z0-9_\\-=]+");
         Matcher matcher = clusterIdPattern.matcher(clusterId);
         if (!matcher.matches())
             return false;
 
+        // Convert into normal variant.
+        String originalClusterId = clusterId.replace("_", "/").replace("-", "+");
+        byte[] decodedUuid = DatatypeConverter.parseBase64Binary(originalClusterId);
+
+        // We expect 16 bytes, same as the input UUID.
+        if(decodedUuid.length != 16)
+            return false;
+
+        //Check if it can be converted back to a UUID.
         try {
-            byte[] decodedUuid = DatatypeConverter.parseBase64Binary(clusterId);
-            UUID.fromString(new String(decodedUuid, StandardCharsets.UTF_8));
-        } catch (IllegalArgumentException e) {
+            ByteBuffer uuidBuffer = ByteBuffer.wrap(decodedUuid);
+            UUID.fromString(new UUID(uuidBuffer.getLong(), uuidBuffer.getLong()).toString());
+        } catch (IllegalArgumentException e){
             return false;
         }
+
         return true;
     }
 }

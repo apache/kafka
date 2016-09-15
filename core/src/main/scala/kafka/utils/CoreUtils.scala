@@ -20,9 +20,11 @@ package kafka.utils
 import java.io._
 import java.nio._
 import java.nio.channels._
-import java.util.concurrent.locks.{ReadWriteLock, Lock}
+import java.util.concurrent.locks.{Lock, ReadWriteLock}
 import java.lang.management._
+import java.util.UUID
 import javax.management._
+import javax.xml.bind.DatatypeConverter
 
 import org.apache.kafka.common.protocol.SecurityProtocol
 
@@ -276,5 +278,16 @@ object CoreUtils extends Logging {
   def listenerListToEndPoints(listeners: String): immutable.Map[SecurityProtocol, EndPoint] = {
     val listenerList = parseCsvList(listeners)
     listenerList.map(listener => EndPoint.createEndPoint(listener)).map(ep => ep.protocolType -> ep).toMap
+  }
+
+  def generateUuidAsBase64():String = {
+    val uuid = UUID.randomUUID()
+    // Extract bytes for uuid which is 128 bits (or 16 bytes) long.
+    val uuidBytes: ByteBuffer = ByteBuffer.wrap(new Array[Byte](16))
+    uuidBytes.putLong(uuid.getMostSignificantBits)
+    uuidBytes.putLong(uuid.getLeastSignificantBits)
+    val base64EncodedUUID = DatatypeConverter.printBase64Binary(uuidBytes.array())
+    //Convert to URL safe variant by replacing + and / with - and _ respectively.
+    base64EncodedUUID.replace("+", "-").replace("/", "-")
   }
 }
