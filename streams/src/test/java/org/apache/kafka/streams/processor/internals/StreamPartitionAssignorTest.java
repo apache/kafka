@@ -653,12 +653,7 @@ public class StreamPartitionAssignorTest {
             // pass
         }
     }
-
-    @Test
-    public void should() throws Exception {
-
-    }
-
+    
     @Test
     public void shouldThrowExceptionIfApplicationServerConfigPortIsNotAnInteger() throws Exception {
         final Properties properties = configProps();
