@@ -46,7 +46,7 @@ import scala.collection.JavaConverters._
   */
 
 class ReplicationQuotasTest extends ZooKeeperTestHarness {
-  def percentError(percent: Int, value: Int): Int = Math.round(value * percent / 100)
+  def percentError(percent: Int, value: Long): Long = Math.round(value * percent / 100)
 
   val msg100KB = new Array[Byte](100000)
   var brokers: Seq[KafkaServer] = null
