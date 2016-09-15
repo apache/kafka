@@ -128,7 +128,9 @@ class FileMessageSet private[kafka](@volatile var file: File,
 
   /**
    * Search forward for the file position of the last offset that is greater than or equal to the target offset
-   * and return its physical position and the size of the message. If no such offsets are found, return null.
+   * and return its physical position and the size of the message (including log overhead) at the returned offset. If
+   * no such offsets are found, return null.
+   *
    * @param targetOffset The offset to search for.
    * @param startingPosition The starting position in the file to begin searching from.
    */
