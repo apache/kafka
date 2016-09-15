@@ -575,7 +575,6 @@ public class Fetcher<K, V> {
         int bytes = 0;
         int recordsCount = 0;
         PartitionRecords<K, V> parsedRecords = null;
-        boolean emptyResponse = false;
 
         try {
             if (!subscriptions.isFetchable(tp)) {
@@ -605,9 +604,6 @@ public class Fetcher<K, V> {
                         skippedRecords = true;
                     }
                 }
-
-                if (!skippedRecords && bytes == 0)
-                    emptyResponse = true;
 
                 recordsCount = parsed.size();
                 this.sensors.recordTopicFetchMetrics(tp.topic(), bytes, recordsCount);
@@ -656,7 +652,9 @@ public class Fetcher<K, V> {
             completedFetch.metricAggregator.record(tp, bytes, recordsCount);
         }
 
-        if (!emptyResponse)
+        // we move the partition to the end if we received some bytes or if there was an error. This way, it's more
+        // likely that partitions for the same topic can remain together (allowing for more efficient serialization).
+        if (bytes > 0 || partition.errorCode != Errors.NONE.code())
             subscriptions.movePartitionToEnd(tp);
 
         return parsedRecords;
