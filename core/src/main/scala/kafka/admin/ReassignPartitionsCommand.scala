@@ -189,6 +189,7 @@ object ReassignPartitionsCommand extends Logging {
                       .withRequiredArg
                       .describedAs("urls")
                       .ofType(classOf[String])
+                      .defaultsTo("localhost:2181")
     val generateOpt = parser.accepts("generate", "Generate a candidate partition reassignment configuration." +
       " Note that this only generates a candidate assignment, it does not execute it.")
     val executeOpt = parser.accepts("execute", "Kick off the reassignment as specified by the --reassignment-json-file option.")

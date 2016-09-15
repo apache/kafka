@@ -69,7 +69,7 @@ object ReplayLogProducer extends Logging {
       .withRequiredArg
       .describedAs("zookeeper url")
       .ofType(classOf[String])
-      .defaultsTo("127.0.0.1:2181")
+      .defaultsTo("localhost:2181")
     val brokerListOpt = parser.accepts("broker-list", "REQUIRED: the broker list must be specified.")
       .withRequiredArg
       .describedAs("hostname:port")
