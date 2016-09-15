@@ -73,7 +73,7 @@ public class FetchRequest extends AbstractRequest {
             this.partitions = new LinkedHashMap<>();
         }
 
-        public static final List<TopicAndPartitionData> batchByTopic(LinkedHashMap<TopicPartition, PartitionData> fetchData) {
+        public static List<TopicAndPartitionData> batchByTopic(LinkedHashMap<TopicPartition, PartitionData> fetchData) {
             List<TopicAndPartitionData> topics = new ArrayList<>();
             for (Map.Entry<TopicPartition, PartitionData> topicEntry : fetchData.entrySet()) {
                 String topic = topicEntry.getKey().topic();
