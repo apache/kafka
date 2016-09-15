@@ -53,7 +53,7 @@ trait KafkaMetricsReporter {
 
 object KafkaMetricsReporter {
   val ReporterStarted: AtomicBoolean = new AtomicBoolean(false)
-  var reporters: ArrayBuffer[KafkaMetricsReporter] = null
+  private var reporters: ArrayBuffer[KafkaMetricsReporter] = null
 
   def startReporters (verifiableProps: VerifiableProperties): Seq[KafkaMetricsReporter] = {
     ReporterStarted synchronized {

@@ -143,7 +143,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
   val correlationId: AtomicInteger = new AtomicInteger(0)
   val brokerMetaPropsFile = "meta.properties"
   val brokerMetadataCheckpoints = config.logDirs.map(logDir => (logDir, new BrokerMetadataCheckpoint(new File(logDir + File.separator +brokerMetaPropsFile)))).toMap
-  var clusterId: String = null
+
+  private var _clusterId: String = null
+
+  def clusterId: String = _clusterId
 
   newGauge(
     "BrokerState",
@@ -195,7 +198,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         zkUtils = initZk()
 
         /* Get or create cluster_id */
-        clusterId = getOrGenerateClusterId(zkUtils)
+        _clusterId = getOrGenerateClusterId(zkUtils)
         info(s"Cluster ID = $clusterId")
 
         notifyClusterListeners(kafkaMetricsReporters.toList ++ reporters.asScala.toList)

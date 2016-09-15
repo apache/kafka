@@ -281,17 +281,18 @@ object CoreUtils extends Logging {
   }
 
   def generateUuidAsBase64(): String = {
-    urlSafeBase64EncodeUUID(UUID.randomUUID())
-  }
-
-  def urlSafeBase64EncodeUUID(uuid: UUID): String = {
+    val uuid = UUID.randomUUID()
     // Extract bytes for uuid which is 128 bits (or 16 bytes) long.
-    val uuidBytes: ByteBuffer = ByteBuffer.wrap(new Array[Byte](16))
+    val uuidBytes = ByteBuffer.wrap(new Array[Byte](16))
     uuidBytes.putLong(uuid.getMostSignificantBits)
     uuidBytes.putLong(uuid.getLeastSignificantBits)
-    val base64EncodedUUID = DatatypeConverter.printBase64Binary(uuidBytes.array())
+    urlSafeBase64EncodeNoPadding(uuidBytes.array)
+  }
+
+  def urlSafeBase64EncodeNoPadding(data: Array[Byte]): String = {
+    val base64EncodedUUID = DatatypeConverter.printBase64Binary(data)
     //Convert to URL safe variant by replacing + and / with - and _ respectively.
-    val urlSafeBase64EncodedUUID = base64EncodedUUID.replace("+", "-").replace("/", "-")
+    val urlSafeBase64EncodedUUID = base64EncodedUUID.replace("+", "-").replace("/", "_")
     // Remove the "==" padding at the end.
     urlSafeBase64EncodedUUID.substring(0, urlSafeBase64EncodedUUID.length - 2)
   }
