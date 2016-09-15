@@ -32,8 +32,10 @@ public class FetchRequest extends AbstractRequest {
     private static final String REPLICA_ID_KEY_NAME = "replica_id";
     private static final String MAX_WAIT_KEY_NAME = "max_wait_time";
     private static final String MIN_BYTES_KEY_NAME = "min_bytes";
-    private static final String RESPONSE_MAX_BYTES_KEY_NAME = "max_bytes";
     private static final String TOPICS_KEY_NAME = "topics";
+
+    // request and partition level name
+    private static final String MAX_BYTES_KEY_NAME = "max_bytes";
 
     // topic level field names
     private static final String TOPIC_KEY_NAME = "topic";
@@ -42,7 +44,6 @@ public class FetchRequest extends AbstractRequest {
     // partition level field names
     private static final String PARTITION_KEY_NAME = "partition";
     private static final String FETCH_OFFSET_KEY_NAME = "fetch_offset";
-    private static final String MAX_BYTES_KEY_NAME = "max_bytes";
 
     // default values for older versions where a request level limit did not exist
     public static final int DEFAULT_RESPONSE_MAX_BYTES = Integer.MAX_VALUE;
@@ -129,7 +130,7 @@ public class FetchRequest extends AbstractRequest {
         struct.set(MAX_WAIT_KEY_NAME, maxWait);
         struct.set(MIN_BYTES_KEY_NAME, minBytes);
         if (version >= 3)
-            struct.set(RESPONSE_MAX_BYTES_KEY_NAME, maxBytes);
+            struct.set(MAX_BYTES_KEY_NAME, maxBytes);
         List<Struct> topicArray = new ArrayList<Struct>();
         for (TopicAndPartitionData topicEntry : topicsData) {
             Struct topicData = struct.instance(TOPICS_KEY_NAME);
@@ -159,8 +160,8 @@ public class FetchRequest extends AbstractRequest {
         replicaId = struct.getInt(REPLICA_ID_KEY_NAME);
         maxWait = struct.getInt(MAX_WAIT_KEY_NAME);
         minBytes = struct.getInt(MIN_BYTES_KEY_NAME);
-        if (struct.hasField(RESPONSE_MAX_BYTES_KEY_NAME))
-            maxBytes = struct.getInt(RESPONSE_MAX_BYTES_KEY_NAME);
+        if (struct.hasField(MAX_BYTES_KEY_NAME))
+            maxBytes = struct.getInt(MAX_BYTES_KEY_NAME);
         else
             maxBytes = DEFAULT_RESPONSE_MAX_BYTES;
         fetchData = new LinkedHashMap<>();
