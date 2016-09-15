@@ -793,6 +793,10 @@ public abstract class AbstractCoordinator implements Closeable {
         private boolean closed = false;
         private AtomicReference<RuntimeException> failed = new AtomicReference<>(null);
 
+        HeartbeatThread() {
+            super("kafka-coordinator-heartbeat-thread" + (groupId.isEmpty() ? "" : " | " + groupId));
+        }
+
         public void enable() {
             synchronized (AbstractCoordinator.this) {
                 this.enabled = true;

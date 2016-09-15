@@ -28,6 +28,7 @@ import org.apache.kafka.common.network.{Send, MultiSend}
 import org.apache.kafka.common.protocol.Errors
 
 import scala.collection._
+import JavaConverters._
 
 object FetchResponsePartitionData {
   def readFrom(buffer: ByteBuffer): FetchResponsePartitionData = {
@@ -100,7 +101,7 @@ object TopicData {
       val partitionData = FetchResponsePartitionData.readFrom(buffer)
       (partitionId, partitionData)
     })
-    TopicData(topic, Vector(topicPartitionDataPairs:_*))
+    TopicData(topic, Seq(topicPartitionDataPairs:_*))
   }
 
   def headerSize(topic: String) =
@@ -108,7 +109,7 @@ object TopicData {
     4 /* partition count */
 }
 
-case class TopicData(topic: String, partitionData: Vector[(Int, FetchResponsePartitionData)]) {
+case class TopicData(topic: String, partitionData: Seq[(Int, FetchResponsePartitionData)]) {
   val sizeInBytes =
     TopicData.headerSize(topic) + partitionData.foldLeft(0)((folded, data) => {
       folded + data._2.sizeInBytes + 4
@@ -170,28 +171,17 @@ object FetchResponse {
     val topicCount = buffer.getInt
     val pairs = (1 to topicCount).flatMap(_ => {
       val topicData = TopicData.readFrom(buffer)
-      topicData.partitionData.map {
-        case (partitionId, partitionData) =>
-          (TopicAndPartition(topicData.topic, partitionId), partitionData)
+      topicData.partitionData.map { case (partitionId, partitionData) =>
+        (TopicAndPartition(topicData.topic, partitionId), partitionData)
       }
     })
     FetchResponse(correlationId, Vector(pairs:_*), requestVersion, throttleTime)
   }
 
-  type FetchResponseEntry = (TopicAndPartition, FetchResponsePartitionData)
+  type FetchResponseEntry = (Int, FetchResponsePartitionData)
 
-  def groupByTopicOrdered(data: Seq[(TopicAndPartition, FetchResponsePartitionData)]): Vector[(String, Vector[FetchResponseEntry])] = {
-    data.foldLeft(Vector.empty[(String, Vector[FetchResponseEntry])])((folded, currFetchResponse) => {
-      val (topicPartition, fetchResponsePartitionData) = currFetchResponse
-      val TopicAndPartition(topic, partition) = topicPartition
-      if (folded.isEmpty || folded.last._1 != topic) {
-        folded :+ (topic, Vector((topicPartition, fetchResponsePartitionData)))
-      } else {
-        val updatedTail = (folded.last._1, folded.last._2 :+ (topicPartition, fetchResponsePartitionData))
-        folded.dropRight(1) :+ updatedTail
-      }
-    })
-  }
+  def batchByTopic(data: Seq[(TopicAndPartition, FetchResponsePartitionData)]): Seq[(String, Seq[FetchResponseEntry])] =
+    FetchRequest.batchByTopic(data)
 
   // Returns the size of the response header
   def headerSize(requestVersion: Int): Int = {
@@ -202,12 +192,12 @@ object FetchResponse {
   }
 
   // Returns the size of entire fetch response in bytes (including the header size)
-  def responseSize(dataGroupedByTopic: Vector[(String, Vector[FetchResponseEntry])],
+  def responseSize(dataGroupedByTopic: Seq[(String, Seq[FetchResponseEntry])],
                    requestVersion: Int): Int = {
     headerSize(requestVersion) +
     dataGroupedByTopic.foldLeft(0) { case (folded, (topic, partitionDataMap)) =>
       val topicData = TopicData(topic, partitionDataMap.map {
-        case (topicAndPartition, partitionData) => (topicAndPartition.partition, partitionData)
+        case (partitionId, partitionData) => (partitionId, partitionData)
       })
       folded + topicData.sizeInBytes
     }
@@ -215,7 +205,7 @@ object FetchResponse {
 }
 
 case class FetchResponse(correlationId: Int,
-                         data: Vector[(TopicAndPartition, FetchResponsePartitionData)],
+                         data: Seq[(TopicAndPartition, FetchResponsePartitionData)],
                          requestVersion: Int = 0,
                          throttleTimeMs: Int = 0)
   extends RequestOrResponse() {
@@ -223,8 +213,8 @@ case class FetchResponse(correlationId: Int,
   /**
    * Partitions the data into a map of maps (one for each topic).
    */
-  lazy val dataByTopicAndPartition = data.toMap
-  lazy val dataGroupedByTopic = FetchResponse.groupByTopicOrdered(data)
+  private lazy val dataByTopicAndPartition = data.toMap
+  lazy val dataGroupedByTopic = FetchResponse.batchByTopic(data)
   val headerSizeInBytes = FetchResponse.headerSize(requestVersion)
   lazy val sizeInBytes = FetchResponse.responseSize(dataGroupedByTopic, requestVersion)
 
@@ -292,10 +282,9 @@ class FetchResponseSend(val dest: String, val fetchResponse: FetchResponse) exte
   fetchResponse.writeHeaderTo(buffer)
   buffer.rewind()
 
-  private val sends = new MultiSend(dest, JavaConversions.seqAsJavaList(fetchResponse.dataGroupedByTopic.toList.map {
-    case(topic, data) => new TopicDataSend(dest, TopicData(topic,
-                                                     data.map{case(topicAndPartition, message) => (topicAndPartition.partition, message)}))
-    }))
+  private val sends = new MultiSend(dest, fetchResponse.dataGroupedByTopic.map {
+    case (topic, data) => new TopicDataSend(dest, TopicData(topic, data)): Send
+  }.asJava)
 
   override def writeTo(channel: GatheringByteChannel): Long = {
     if (completed)

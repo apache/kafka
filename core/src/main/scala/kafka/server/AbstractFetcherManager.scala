@@ -25,6 +25,7 @@ import kafka.cluster.BrokerEndPoint
 import kafka.metrics.KafkaMetricsGroup
 import kafka.common.TopicAndPartition
 import com.yammer.metrics.core.Gauge
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 
 abstract class AbstractFetcherManager(protected val name: String, clientId: String, numFetchers: Int = 1)
@@ -85,8 +86,9 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
             fetcherThread.start
         }
 
-        fetcherThreadMap(brokerAndFetcherId).addPartitions(partitionAndOffsets.map { case (topicAndPartition, brokerAndInitOffset) =>
-          topicAndPartition -> brokerAndInitOffset.initOffset
+        fetcherThreadMap(brokerAndFetcherId).addPartitions(partitionAndOffsets.map {
+          case (TopicAndPartition(t, p), brokerAndInitOffset) =>
+            new TopicPartition(t, p) -> brokerAndInitOffset.initOffset
         })
       }
     }
@@ -98,7 +100,7 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
   def removeFetcherForPartitions(partitions: Set[TopicAndPartition]) {
     mapLock synchronized {
       for ((key, fetcher) <- fetcherThreadMap) {
-        fetcher.removePartitions(partitions)
+        fetcher.removePartitions(partitions.map { case TopicAndPartition(t, p) => new TopicPartition(t, p) })
       }
     }
     info("Removed fetcher for partitions %s".format(partitions.mkString(",")))

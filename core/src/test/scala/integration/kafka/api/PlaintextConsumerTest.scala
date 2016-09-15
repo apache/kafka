@@ -539,26 +539,38 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @Test
-  def testFetchRecordTooLarge() {
+  def testFetchRecordLargerThanFetchMaxBytes() {
     val maxFetchBytes = 10 * 1024
-    this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, maxFetchBytes.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, maxFetchBytes.toString)
+    checkLargeRecord(maxFetchBytes + 1)
+  }
+
+  private def checkLargeRecord(producerRecordSize: Int): Unit = {
     val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
     consumers += consumer0
 
     // produce a record that is larger than the configured fetch size
-    val record = new ProducerRecord[Array[Byte], Array[Byte]](tp.topic(), tp.partition(), "key".getBytes, new Array[Byte](maxFetchBytes + 1))
+    val record = new ProducerRecord[Array[Byte], Array[Byte]](tp.topic(), tp.partition(), "key".getBytes,
+      new Array[Byte](producerRecordSize))
     this.producers.head.send(record)
 
-    // consuming a too-large record should fail
+    // consuming a record that is too large should succeed since KIP-74
     consumer0.assign(List(tp).asJava)
-    val e = intercept[RecordTooLargeException] {
-      consumer0.poll(20000)
-    }
-    val oversizedPartitions = e.recordTooLargePartitions()
-    assertNotNull(oversizedPartitions)
-    assertEquals(1, oversizedPartitions.size)
-    // the oversized message is at offset 0
-    assertEquals(0L, oversizedPartitions.get(tp))
+    val records = consumer0.poll(20000)
+    assertEquals(1, records.count)
+    val consumerRecord = records.iterator().next()
+    assertEquals(0L, consumerRecord.offset)
+    assertEquals(tp.topic(), consumerRecord.topic())
+    assertEquals(tp.partition(), consumerRecord.partition())
+    assertArrayEquals(record.key(), consumerRecord.key())
+    assertArrayEquals(record.value(), consumerRecord.value())
+  }
+
+  @Test
+  def testFetchRecordLargerThanMaxPartitionFetchBytes() {
+    val maxPartitionFetchBytes = 10 * 1024
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, maxPartitionFetchBytes.toString)
+    checkLargeRecord(maxPartitionFetchBytes + 1)
   }
 
   @Test

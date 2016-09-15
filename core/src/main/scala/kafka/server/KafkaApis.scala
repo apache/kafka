@@ -439,7 +439,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     // the callback for sending a fetch response
-    def sendResponseCallback(responsePartitionData: Map[TopicAndPartition, FetchResponsePartitionData]) {
+    def sendResponseCallback(responsePartitionData: Seq[(TopicAndPartition, FetchResponsePartitionData)]) {
 
       val convertedPartitionData =
         // Need to down-convert message when consumer only takes magic value 0.
@@ -477,8 +477,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       def fetchResponseCallback(delayTimeMs: Int) {
         trace(s"Sending fetch response to client ${fetchRequest.clientId} of " +
-          s"${convertedPartitionData.values.map(_.messages.sizeInBytes).sum} bytes")
-        val response = FetchResponse(fetchRequest.correlationId, mergedPartitionData.toVector, fetchRequest.versionId, delayTimeMs)
+          s"${convertedPartitionData.map { case (_, v) => v.messages.sizeInBytes }.sum} bytes")
+        val response = FetchResponse(fetchRequest.correlationId, mergedPartitionData.toSeq, fetchRequest.versionId, delayTimeMs)
         requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(request.connectionId, response)))
       }
 
@@ -490,15 +490,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (fetchRequest.isFromFollower) {
         fetchResponseCallback(0)
       } else {
-        quotaManagers(ApiKeys.FETCH.id).recordAndMaybeThrottle(fetchRequest.clientId,
-                                                               FetchResponse.responseSize(FetchResponse.groupByTopicOrdered(mergedPartitionData.toSeq),
-                                                                                          fetchRequest.versionId),
-                                                               fetchResponseCallback)
+        val responseSize = FetchResponse.responseSize(FetchResponse.batchByTopic(mergedPartitionData.toSeq),
+          fetchRequest.versionId)
+        quotaManagers(ApiKeys.FETCH.id).recordAndMaybeThrottle(fetchRequest.clientId, responseSize, fetchResponseCallback)
       }
     }
 
     if (authorizedRequestInfo.isEmpty)
-      sendResponseCallback(Map.empty)
+      sendResponseCallback(Seq.empty)
     else {
       // call the replica manager to fetch messages from the local replica
       replicaManager.fetchMessages(
@@ -506,7 +505,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         fetchRequest.replicaId,
         fetchRequest.minBytes,
         fetchRequest.maxBytes,
-        authorizedRequestInfo.toMap,
+        authorizedRequestInfo,
         sendResponseCallback)
     }
   }

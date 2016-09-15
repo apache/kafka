@@ -32,6 +32,8 @@ import kafka.common.TopicAndPartition
 import kafka.client.ClientUtils
 import java.util.concurrent.atomic.AtomicInteger
 
+import org.apache.kafka.common.TopicPartition
+
 /**
  *  Usage:
  *  Once ConsumerFetcherManager is created, startConnections() and stopAllConnections() can be called repeatedly
@@ -115,9 +117,12 @@ class ConsumerFetcherManager(private val consumerIdString: String,
   }
 
   override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
+    val topicPartitionMap = partitionMap.map { case (TopicAndPartition(topic, partition), topicInfo) =>
+      new TopicPartition(topic, partition) -> topicInfo
+    }
     new ConsumerFetcherThread(
       "ConsumerFetcherThread-%s-%d-%d".format(consumerIdString, fetcherId, sourceBroker.id),
-      config, sourceBroker, partitionMap, this)
+      config, sourceBroker, topicPartitionMap, this)
   }
 
   def startConnections(topicInfos: Iterable[PartitionTopicInfo], cluster: Cluster) {

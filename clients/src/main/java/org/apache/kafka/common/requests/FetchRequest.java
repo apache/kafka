@@ -32,8 +32,10 @@ public class FetchRequest extends AbstractRequest {
     private static final String REPLICA_ID_KEY_NAME = "replica_id";
     private static final String MAX_WAIT_KEY_NAME = "max_wait_time";
     private static final String MIN_BYTES_KEY_NAME = "min_bytes";
-    private static final String RESPONSE_MAX_BYTES_KEY_NAME = "max_bytes";
     private static final String TOPICS_KEY_NAME = "topics";
+
+    // request and partition level name
+    private static final String MAX_BYTES_KEY_NAME = "max_bytes";
 
     // topic level field names
     private static final String TOPIC_KEY_NAME = "topic";
@@ -42,9 +44,8 @@ public class FetchRequest extends AbstractRequest {
     // partition level field names
     private static final String PARTITION_KEY_NAME = "partition";
     private static final String FETCH_OFFSET_KEY_NAME = "fetch_offset";
-    private static final String MAX_BYTES_KEY_NAME = "max_bytes";
 
-    // default values for current version
+    // default values for older versions where a request level limit did not exist
     public static final int DEFAULT_RESPONSE_MAX_BYTES = Integer.MAX_VALUE;
 
     private final int replicaId;
@@ -63,22 +64,22 @@ public class FetchRequest extends AbstractRequest {
         }
     }
 
-    private static final class TopicAndPartitionData {
+    static final class TopicAndPartitionData<T> {
         public final String topic;
-        public final LinkedHashMap<Integer, PartitionData> partitions;
+        public final LinkedHashMap<Integer, T> partitions;
 
         public TopicAndPartitionData(String topic) {
             this.topic = topic;
             this.partitions = new LinkedHashMap<>();
         }
 
-        public static final List<TopicAndPartitionData> groupByTopicOrdered(Map<TopicPartition, PartitionData> fetchData) {
-            List<TopicAndPartitionData> topics = new ArrayList<>();
-            for (Map.Entry<TopicPartition, PartitionData> topicEntry : fetchData.entrySet()) {
+        public static <T> List<TopicAndPartitionData<T>> batchByTopic(LinkedHashMap<TopicPartition, T> data) {
+            List<TopicAndPartitionData<T>> topics = new ArrayList<>();
+            for (Map.Entry<TopicPartition, T> topicEntry : data.entrySet()) {
                 String topic = topicEntry.getKey().topic();
                 int partition = topicEntry.getKey().partition();
-                PartitionData partitionData = topicEntry.getValue();
-                if (topics.isEmpty() || topics.get(topics.size() - 1).topic != topic)
+                T partitionData = topicEntry.getValue();
+                if (topics.isEmpty() || !topics.get(topics.size() - 1).topic.equals(topic))
                     topics.add(new TopicAndPartitionData(topic));
                 topics.get(topics.size() - 1).partitions.put(partition, partitionData);
             }
@@ -87,38 +88,51 @@ public class FetchRequest extends AbstractRequest {
     }
 
     /**
-     * Create a non-replica fetch request
+     * Create a non-replica fetch request for versions 0, 1 or 2 (the version is set via the RequestHeader).
      */
+    @Deprecated
     public FetchRequest(int maxWait, int minBytes, Map<TopicPartition, PartitionData> fetchData) {
-        this(ProtoUtils.latestVersion(ApiKeys.FETCH.id), CONSUMER_REPLICA_ID, maxWait, minBytes, fetchData, DEFAULT_RESPONSE_MAX_BYTES);
+        // Any of 0, 1 or 2 would do here
+        this(2, CONSUMER_REPLICA_ID, maxWait, minBytes, DEFAULT_RESPONSE_MAX_BYTES, new LinkedHashMap<>(fetchData));
     }
-    public FetchRequest(int maxWait, int minBytes, Map<TopicPartition, PartitionData> fetchData, int maxBytes) {
-        this(ProtoUtils.latestVersion(ApiKeys.FETCH.id), CONSUMER_REPLICA_ID, maxWait, minBytes, fetchData, maxBytes);
-    }
-
 
     /**
-     * Create a replica fetch request
+     * Create a non-replica fetch request for the current version.
      */
-    public FetchRequest(int replicaId, int maxWait, int minBytes, Map<TopicPartition, PartitionData> fetchData) {
-        this(ProtoUtils.latestVersion(ApiKeys.FETCH.id), replicaId, maxWait, minBytes, fetchData, DEFAULT_RESPONSE_MAX_BYTES);
+    public FetchRequest(int maxWait, int minBytes, int maxBytes, LinkedHashMap<TopicPartition, PartitionData> fetchData) {
+        this(ProtoUtils.latestVersion(ApiKeys.FETCH.id), CONSUMER_REPLICA_ID, maxWait, minBytes, maxBytes, fetchData);
     }
 
-    public FetchRequest(int replicaId, int maxWait, int minBytes, Map<TopicPartition, PartitionData> fetchData, int maxBytes) {
-        this(ProtoUtils.latestVersion(ApiKeys.FETCH.id), replicaId, maxWait, minBytes, fetchData, maxBytes);
+    /**
+     * Create a replica fetch request for versions 0, 1 or 2 (the actual version is determined by the RequestHeader).
+     */
+    @Deprecated
+    public static FetchRequest fromReplica(int replicaId, int maxWait, int minBytes,
+                                           Map<TopicPartition, PartitionData> fetchData) {
+        // Any of 0, 1 or 2 would do here
+        return new FetchRequest(2, replicaId, maxWait, minBytes, DEFAULT_RESPONSE_MAX_BYTES, new LinkedHashMap<>(fetchData));
     }
 
-    public FetchRequest(int version, int replicaId, int maxWait, int minBytes, Map<TopicPartition, PartitionData> fetchData, int maxBytes) {
+    /**
+     * Create a replica fetch request for the current version.
+     */
+    public static FetchRequest fromReplica(int replicaId, int maxWait, int minBytes, int maxBytes,
+                                           LinkedHashMap<TopicPartition, PartitionData> fetchData) {
+        return new FetchRequest(ProtoUtils.latestVersion(ApiKeys.FETCH.id), replicaId, maxWait, minBytes, maxBytes, fetchData);
+    }
+
+    private FetchRequest(int version, int replicaId, int maxWait, int minBytes, int maxBytes,
+                         LinkedHashMap<TopicPartition, PartitionData> fetchData) {
         super(new Struct(ProtoUtils.requestSchema(ApiKeys.FETCH.id, version)));
-        List<TopicAndPartitionData> topicsData = TopicAndPartitionData.groupByTopicOrdered(fetchData);
+        List<TopicAndPartitionData<PartitionData>> topicsData = TopicAndPartitionData.batchByTopic(fetchData);
 
         struct.set(REPLICA_ID_KEY_NAME, replicaId);
         struct.set(MAX_WAIT_KEY_NAME, maxWait);
         struct.set(MIN_BYTES_KEY_NAME, minBytes);
         if (version >= 3)
-            struct.set(RESPONSE_MAX_BYTES_KEY_NAME, maxBytes);
+            struct.set(MAX_BYTES_KEY_NAME, maxBytes);
         List<Struct> topicArray = new ArrayList<Struct>();
-        for (TopicAndPartitionData topicEntry : topicsData) {
+        for (TopicAndPartitionData<PartitionData> topicEntry : topicsData) {
             Struct topicData = struct.instance(TOPICS_KEY_NAME);
             topicData.set(TOPIC_KEY_NAME, topicEntry.topic);
             List<Struct> partitionArray = new ArrayList<Struct>();
@@ -138,7 +152,7 @@ public class FetchRequest extends AbstractRequest {
         this.maxWait = maxWait;
         this.minBytes = minBytes;
         this.maxBytes = maxBytes;
-        this.fetchData = new LinkedHashMap<TopicPartition, PartitionData>(fetchData);
+        this.fetchData = new LinkedHashMap<>(fetchData);
     }
 
     public FetchRequest(Struct struct) {
@@ -146,11 +160,11 @@ public class FetchRequest extends AbstractRequest {
         replicaId = struct.getInt(REPLICA_ID_KEY_NAME);
         maxWait = struct.getInt(MAX_WAIT_KEY_NAME);
         minBytes = struct.getInt(MIN_BYTES_KEY_NAME);
-        if (struct.hasField(RESPONSE_MAX_BYTES_KEY_NAME))
-            maxBytes = struct.getInt(RESPONSE_MAX_BYTES_KEY_NAME);
+        if (struct.hasField(MAX_BYTES_KEY_NAME))
+            maxBytes = struct.getInt(MAX_BYTES_KEY_NAME);
         else
             maxBytes = DEFAULT_RESPONSE_MAX_BYTES;
-        fetchData = new LinkedHashMap<TopicPartition, PartitionData>();
+        fetchData = new LinkedHashMap<>();
         for (Object topicResponseObj : struct.getArray(TOPICS_KEY_NAME)) {
             Struct topicResponse = (Struct) topicResponseObj;
             String topic = topicResponse.getString(TOPIC_KEY_NAME);
@@ -180,6 +194,8 @@ public class FetchRequest extends AbstractRequest {
             case 0:
                 return new FetchResponse(responseData);
             case 1:
+            case 2:
+            case 3:
                 return new FetchResponse(responseData, 0);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",

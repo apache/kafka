@@ -128,11 +128,11 @@ class FileMessageSet private[kafka](@volatile var file: File,
 
   /**
    * Search forward for the file position of the last offset that is greater than or equal to the target offset
-   * and return its physical position. If no such offsets are found, return null.
+   * and return its physical position and the size of the message. If no such offsets are found, return null.
    * @param targetOffset The offset to search for.
    * @param startingPosition The starting position in the file to begin searching from.
    */
-  def searchForOffset(targetOffset: Long, startingPosition: Int): OffsetPosition = {
+  def searchForOffsetWithSize(targetOffset: Long, startingPosition: Int): (OffsetPosition, Int) = {
     var position = startingPosition
     val buffer = ByteBuffer.allocate(MessageSet.LogOverhead)
     val size = sizeInBytes()
@@ -144,11 +144,11 @@ class FileMessageSet private[kafka](@volatile var file: File,
           .format(targetOffset, startingPosition, file.getAbsolutePath))
       buffer.rewind()
       val offset = buffer.getLong()
-      if(offset >= targetOffset)
-        return OffsetPosition(offset, position)
       val messageSize = buffer.getInt()
-      if(messageSize < Message.MinMessageOverhead)
+      if (messageSize < Message.MinMessageOverhead)
         throw new IllegalStateException("Invalid message size: " + messageSize)
+      if (offset >= targetOffset)
+        return (OffsetPosition(offset, position), messageSize + MessageSet.LogOverhead)
       position += MessageSet.LogOverhead + messageSize
     }
     null

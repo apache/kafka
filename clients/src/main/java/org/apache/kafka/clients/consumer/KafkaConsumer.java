@@ -508,7 +508,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final Metadata metadata;
     private final long retryBackoffMs;
     private final long requestTimeoutMs;
-    private boolean closed = false;
+    private volatile boolean closed = false;
 
     // currentThread holds the threadId of the current thread accessing KafkaConsumer
     // and is used to prevent multi-threaded access
@@ -1398,7 +1398,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void close() {
         acquire();
         try {
-            if (closed) return;
             close(false);
         } finally {
             release();
