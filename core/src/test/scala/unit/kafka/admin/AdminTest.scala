@@ -428,11 +428,11 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
       AdminUtils.changeTopicConfig(server.zkUtils, topic, new Properties)
       checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, Defaults.ThrottledReplicasList,  quotaManagerIsThrottled = false)
 
-      //Add config bakc
+      //Add config back
       AdminUtils.changeTopicConfig(server.zkUtils, topic, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0"))
       checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", quotaManagerIsThrottled = true)
 
-      //Now ensure updating to "" removes the throttled replica list
+      //Now ensure updating to "" removes the throttled replica list also
       AdminUtils.changeTopicConfig(server.zkUtils, topic, new Properties(){put(LogConfig.ThrottledReplicasListProp, "")})
       checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, Defaults.ThrottledReplicasList,  quotaManagerIsThrottled = false)
 
@@ -463,7 +463,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     }
 
     try {
-      val limit = 42
+      val limit: Long = 42
 
       // Set the limit & check it is applied to the log
       AdminUtils.changeBrokerConfig(servers(0).zkUtils, brokerIds, wrap(limit))

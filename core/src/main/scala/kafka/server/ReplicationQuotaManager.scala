@@ -101,8 +101,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
       sensor().checkQuotas()
     } catch {
       case qve: QuotaViolationException =>
-        if(logger.isTraceEnabled)
-          logger.trace("%s: Quota violated for sensor (%s), metric: (%s), metric-value: (%f), bound: (%f)".format(replicationType, sensor().name(), qve.metricName, qve.value, qve.bound))
+        trace("%s: Quota violated for sensor (%s), metric: (%s), metric-value: (%f), bound: (%f)".format(replicationType, sensor().name(), qve.metricName, qve.value, qve.bound))
         return true
     }
     false

@@ -102,7 +102,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     val msg = msg100KB
     val msgCount: Int = 1000
     val expectedDuration = 10 //Keep the test to N seconds
-    var throttle: Int = msgCount * msg.length / expectedDuration
+    var throttle:Long = msgCount * msg.length / expectedDuration
     if (!leaderThrottle) throttle = throttle * 3 //Follower throttle needs to replicate 3x as fast to get the same duration as there are three replicas to replicate for each of the two follower brokers
 
     //Set the throttle limit on all 8 brokers, but only assign throttled replicas to the six leaders, or two followers

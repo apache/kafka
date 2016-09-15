@@ -83,7 +83,7 @@ class LogConfigTest {
     assertFalse(isValid("100:0,10:   "))
   }
 
-  def isValid(configValue: String): Boolean = {
+  private def isValid(configValue: String): Boolean = {
     try {
       ThrottledReplicaValidator.ensureValid("", configValue)
     } catch {

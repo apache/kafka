@@ -137,7 +137,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     val actual = zkUtils.getPartitionAssignmentForTopics(Seq(topicName))(topicName)
     assertEquals(actual.values.flatten.toSeq.distinct.sorted, Seq(101, 102))
 
-    //Then command should have take longer than the throttle rate
+    //Then command should have taken longer than the throttle rate
     assertTrue(s"Expected replication to be > ${expectedDurationSecs * 0.9 * 1000} but was $took", took > expectedDurationSecs * 0.9 * 1000)
     assertTrue(s"Expected replication to be < ${expectedDurationSecs * 2 * 1000} but was $took", took < expectedDurationSecs * 2 * 1000)
   }
@@ -194,7 +194,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     val initialThrottle: Long = 1000 * 1000
     produceMessages(servers, topicName, numMessages = 200, acks = 0, valueBytes = 100 * 1000)
 
-    //Start rebalance (use a separate thread as it'll be slow)
+    //Start rebalance
     val newAssignment = ReassignPartitionsCommand.generateAssignment(zkUtils, Array(101, 102), json(topicName), true)._1
 
     ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), initialThrottle)
@@ -208,7 +208,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     //Check throttle config again
     checkThrottleConfigAddedToZK(initialThrottle, servers, topicName, "0:100,0:102")
 
-    //Now re-run the same assignment with a larger throttle, which should only act to increase the throttle and make progress (again use a thread so we can check ZK whilst it runs)
+    //Now re-run the same assignment with a larger throttle, which should only act to increase the throttle and make progress
     val newThrottle = initialThrottle * 1000
 
     ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), newThrottle)
