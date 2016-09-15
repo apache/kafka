@@ -72,7 +72,7 @@ public class FetchRequest extends AbstractRequest {
             this.partitions = new LinkedHashMap<>();
         }
 
-        public static final List<TopicAndPartitionData> groupByTopicOrdered(LinkedHashMap<TopicPartition, PartitionData> fetchData) {
+        public static final List<TopicAndPartitionData> batchByTopic(LinkedHashMap<TopicPartition, PartitionData> fetchData) {
             List<TopicAndPartitionData> topics = new ArrayList<>();
             for (Map.Entry<TopicPartition, PartitionData> topicEntry : fetchData.entrySet()) {
                 String topic = topicEntry.getKey().topic();
@@ -123,7 +123,7 @@ public class FetchRequest extends AbstractRequest {
     private FetchRequest(int version, int replicaId, int maxWait, int minBytes, int maxBytes,
                          LinkedHashMap<TopicPartition, PartitionData> fetchData) {
         super(new Struct(ProtoUtils.requestSchema(ApiKeys.FETCH.id, version)));
-        List<TopicAndPartitionData> topicsData = TopicAndPartitionData.groupByTopicOrdered(fetchData);
+        List<TopicAndPartitionData> topicsData = TopicAndPartitionData.batchByTopic(fetchData);
 
         struct.set(REPLICA_ID_KEY_NAME, replicaId);
         struct.set(MAX_WAIT_KEY_NAME, maxWait);
