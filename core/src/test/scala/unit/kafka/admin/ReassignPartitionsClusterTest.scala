@@ -12,6 +12,7 @@
   */
 package kafka.admin
 
+import kafka.common.TopicAndPartition
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils._
 import kafka.utils.ZkUtils._
@@ -40,8 +41,8 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
   @After
   override def tearDown() {
-    servers.foreach(_.shutdown())
-    servers.foreach(server => CoreUtils.delete(server.config.logDirs))
+    servers.par.foreach(_.shutdown())
+    servers.par.foreach(server => CoreUtils.delete(server.config.logDirs))
     super.tearDown()
   }
 
@@ -119,14 +120,14 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     produceMessages(servers, topicName, numMessages, acks = 0, msgSize)
     assertEquals(expectedDurationSecs, numMessages * msgSize / initialThrottle)
 
-    //Start rebalance
+    //Start rebalance which will move replica on 100 -> replica on 102
     val newAssignment = ReassignPartitionsCommand.generateAssignment(zkUtils, Array(101, 102), json(topicName), true)._1
 
     val start = System.currentTimeMillis()
     ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), initialThrottle)
 
-    //Check throttle config
-    checkThrottleConfigAddedToZK(initialThrottle, servers, topicName)
+    //Check throttle config. Should be throttling replica 0 on 100 and 102 only.
+    checkThrottleConfigAddedToZK(initialThrottle, servers, topicName, "0:100,0:102")
 
     //Await completion
     waitForReassignmentToComplete()
@@ -139,6 +140,45 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     //Then command should have take longer than the throttle rate
     assertTrue(s"Expected replication to be > ${expectedDurationSecs * 0.9 * 1000} but was $took", took > expectedDurationSecs * 0.9 * 1000)
     assertTrue(s"Expected replication to be < ${expectedDurationSecs * 2 * 1000} but was $took", took < expectedDurationSecs * 2 * 1000)
+  }
+
+
+  @Test
+  def shouldOnlyThrottleMovingReplicas() {
+    //Given 6 brokers, two topics
+    val brokers = Array(100, 101, 102, 103, 104, 105)
+    startBrokers(brokers)
+    createTopic(zkUtils, "topic1", Map(
+      0 -> Seq(100, 101),
+      1 -> Seq(100, 101),
+      2 -> Seq(103, 104) //will leave in place
+    ), servers = servers)
+
+    createTopic(zkUtils, "topic2", Map(
+      0 -> Seq(104, 105),
+      1 -> Seq(104, 105),
+      2 -> Seq(103, 104)//will leave in place
+    ), servers = servers)
+
+    //Given throttle set so replication will take a while
+    val throttle: Long = 100 * 1000
+    produceMessages(servers, "topic1", 10, acks = 0, 100 * 1000)
+    produceMessages(servers, "topic2", 10, acks = 0, 100 * 1000)
+
+    //Start rebalance
+    val newAssignment = Map(
+      TopicAndPartition("topic1", 0) -> Seq(100, 102),//moved 101=>102
+      TopicAndPartition("topic1", 1) -> Seq(100, 102),//moved 101=>102
+      TopicAndPartition("topic2", 0) -> Seq(103, 105),//moved 104=>103
+      TopicAndPartition("topic2", 1) -> Seq(103, 105),//moved 104=>103
+      TopicAndPartition("topic1", 2) -> Seq(103, 104), //didn't move
+      TopicAndPartition("topic2", 2) -> Seq(103, 104)  //didn't move
+    )
+    ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), throttle)
+
+    //Check throttle config. Should be throttling specific replicas for each topic.
+    checkThrottleConfigAddedToZK(throttle, servers, "topic1", "1:101,1:102,0:101,0:102")
+    checkThrottleConfigAddedToZK(throttle, servers, "topic2", "1:103,1:104,0:103,0:104")
   }
 
   @Test
@@ -160,7 +200,13 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), initialThrottle)
 
     //Check throttle config
-    checkThrottleConfigAddedToZK(initialThrottle, servers, topicName)
+    checkThrottleConfigAddedToZK(initialThrottle, servers, topicName, "0:100,0:102")
+
+    //Ensure that running Verify, whilst the command is executing, should have no effect
+    ReassignPartitionsCommand.verifyAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment))
+
+    //Check throttle config again
+    checkThrottleConfigAddedToZK(initialThrottle, servers, topicName, "0:100,0:102")
 
     //Now re-run the same assignment with a larger throttle, which should only act to increase the throttle and make progress (again use a thread so we can check ZK whilst it runs)
     val newThrottle = initialThrottle * 1000
@@ -168,13 +214,13 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), newThrottle)
 
     //Check throttle was changed
-    checkThrottleConfigAddedToZK(newThrottle, servers, topicName)
+    checkThrottleConfigAddedToZK(newThrottle, servers, topicName, "0:100,0:102")
 
     //Await completion
     waitForReassignmentToComplete()
 
     //Verify should remove the throttle
-    ReassignPartitionsCommand.verifyAssignment(zkUtils,  ZkUtils.formatAsReassignmentJson(newAssignment))
+    ReassignPartitionsCommand.verifyAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment))
 
     //Check removed
     checkThrottleConfigRemovedFromZK(topicName, servers)
@@ -188,7 +234,8 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     waitUntilTrue(() => !zkUtils.pathExists(ReassignPartitionsPath), s"Znode ${ZkUtils.ReassignPartitionsPath} wasn't deleted")
   }
 
-  def json(topic: String): String = {
-    s"""{"topics": [{"topic": "$topic"}],"version":1}"""
+  def json(topic: String*): String = {
+    val topicStr = topic.map { t => "{\"topic\": \"" + t + "\"}" }.mkString(",")
+    s"""{"topics": [$topicStr],"version":1}"""
   }
 }

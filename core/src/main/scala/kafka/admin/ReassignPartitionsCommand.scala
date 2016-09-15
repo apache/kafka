@@ -22,7 +22,7 @@ import joptsimple.OptionParser
 import kafka.log.LogConfig
 import kafka.server.{ConfigType, KafkaConfig}
 import kafka.utils._
-import collection._
+import scala.collection._
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import kafka.common.{TopicAndPartition, AdminCommandFailedException}
 import org.apache.kafka.common.utils.Utils
@@ -88,9 +88,6 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   def removeThrottle(zkUtils: ZkUtils, partitionsToBeReassigned: Map[TopicAndPartition, scala.Seq[Int]], reassignedPartitionsStatus: Map[TopicAndPartition, ReassignmentStatus]): Unit = {
-    //TODO Remove replicas from throttled replica list individually, as they complete
-    //TODO below should be limited to just those brokers in the assignment (for both cases)
-
     //If all partitions have completed remove the throttle
     if (reassignedPartitionsStatus.forall { case (topicPartition, status) => status == ReassignmentCompleted }) {
       //Remove the throttle limit from all brokers in the cluster
@@ -273,7 +270,7 @@ object ReassignPartitionsCommand extends Logging {
   }
 }
 
-class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: collection.Map[TopicAndPartition, collection.Seq[Int]])
+class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: Map[TopicAndPartition, Seq[Int]])
   extends Logging {
 
   private def maybeThrottle(throttle: Long): Unit = {
@@ -285,8 +282,11 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: collection.Map[Top
 
   def maybeLimit(throttle: Long) {
     if (throttle >= 0) {
-      val brokerIds = zkUtils.getAllBrokersInCluster().map(_.id)
-      for (id <- brokerIds) {
+      val existingBrokers = zkUtils.getReplicaAssignmentForTopics(partitions.map(_._1.topic).toSeq).flatMap(_._2).toSeq
+      val proposedBrokers = partitions.flatMap(_._2).toSeq
+      val allBrokers = (existingBrokers ++ proposedBrokers).distinct
+
+      for (id <- allBrokers) {
         val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Broker, id.toString)
         configs.put(KafkaConfig.ThrottledReplicationRateLimitProp, throttle.toString)
         AdminUtils.changeBrokerConfig(zkUtils, Seq(id), configs)
@@ -295,10 +295,29 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: collection.Map[Top
   }
 
   def addThrottledReplicaList(): Unit = {
-    //TODO - should only add limit to existing replicas ...val existing = zkUtils.getPartitionsBeingReassigned().mapValues(_.newReplicas)
-    val topics = partitions.keySet.map(tp => tp.topic).toSeq.distinct
-    for (topic <- topics)
-      AdminUtils.changeTopicConfig(zkUtils, topic, new Properties {put(LogConfig.ThrottledReplicasListProp, "*")})
+    //apply the throttle to all move destinations and all move sources
+    val existing = zkUtils.getReplicaAssignmentForTopics(partitions.map(_._1.topic).toSeq)
+    val moves = replicaMoves(existing, proposed = partitions)
+    for (topic <- partitions.keySet.map(tp => tp.topic).toSeq.distinct)
+      AdminUtils.changeTopicConfig(zkUtils, topic, new Properties {
+        put(LogConfig.ThrottledReplicasListProp, moves.get(topic).get )
+      })
+  }
+
+  def replicaMoves(existing: Map[TopicAndPartition, Seq[Int]], proposed: Map[TopicAndPartition, Seq[Int]]): Map[String, String] = {
+    //Find the replicas that have moved
+    val movesByPartition = existing.map { case (topicAndPartition, existingReplicas) =>
+      val before = existingReplicas.toSet
+      val after = proposed.get(topicAndPartition).get.toSet
+      val moving = (after.filterNot(before) ++ before.filterNot(after)).toSeq.distinct.sorted
+      val formatted = moving.map { brokerId => s"${topicAndPartition.partition}:$brokerId" }
+      (topicAndPartition, formatted)
+    }
+    //Group by topic
+    val movesByTopic = movesByPartition.groupBy(_._1.topic)
+      .map { case (topic, reps) => (topic, reps.values.flatMap(rep => rep)) }
+
+    movesByTopic.map { case (topic, moves) => topic -> moves.mkString(",") }
   }
 
   def reassignPartitions(throttle: Long = -1): Boolean = {
