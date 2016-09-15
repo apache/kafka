@@ -517,11 +517,12 @@ class Log(val dir: File,
    * @param startOffset The offset to begin reading at
    * @param maxLength The maximum number of bytes to read
    * @param maxOffset The offset to read up to, exclusive. (i.e. this offset NOT included in the resulting message set)
+   * @param minOneMessage If this is true, the first message will be returned even if it exceeds `maxLength` (if one exists)
    *
    * @throws OffsetOutOfRangeException If startOffset is beyond the log end offset or before the base offset of the first segment.
    * @return The fetch data information including fetch starting offset metadata and messages read.
    */
-  def read(startOffset: Long, maxLength: Int, maxOffset: Option[Long] = None): FetchDataInfo = {
+  def read(startOffset: Long, maxLength: Int, maxOffset: Option[Long] = None, minOneMessage: Boolean = false): FetchDataInfo = {
     trace("Reading %d bytes from offset %d in log %s of length %d bytes".format(maxLength, startOffset, name, size))
 
     // Because we don't use lock for reading, the synchronization is a little bit tricky.
@@ -558,7 +559,7 @@ class Log(val dir: File,
           entry.getValue.size
         }
       }
-      val fetchInfo = entry.getValue.read(startOffset, maxOffset, maxLength, maxPosition)
+      val fetchInfo = entry.getValue.read(startOffset, maxOffset, maxLength, maxPosition, minOneMessage)
       if(fetchInfo == null) {
         entry = segments.higherEntry(entry.getKey)
       } else {
