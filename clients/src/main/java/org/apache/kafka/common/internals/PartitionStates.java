@@ -27,18 +27,18 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * This builder is a useful building block for doing fetch requests where topic partitions have to be rotated via
+ * This class is a useful building block for doing fetch requests where topic partitions have to be rotated via
  * round-robin to ensure fairness and some level of determinism given the existence of a limit on the fetch response
  * size. Because the serialization of fetch requests is more efficient if all partitions for the same topic are grouped
  * together, we do such grouping in the method `set`.
  *
  * As partitions are moved to the end, the same topic may be repeated more than once.
  */
-public class FetchBuilder<S> {
+public class PartitionStates<S> {
 
     private final LinkedHashMap<TopicPartition, S> map = new LinkedHashMap<>();
 
-    public FetchBuilder() {}
+    public PartitionStates() {}
 
     public void moveToEnd(TopicPartition topicPartition) {
         S state = map.remove(topicPartition);
@@ -76,7 +76,7 @@ public class FetchBuilder<S> {
     public List<PartitionState<S>> partitionStates() {
         List<PartitionState<S>> result = new ArrayList<>();
         for (Map.Entry<TopicPartition, S> entry : map.entrySet()) {
-            result.add(new PartitionState<S>(entry.getKey(), entry.getValue()));
+            result.add(new PartitionState<>(entry.getKey(), entry.getValue()));
         }
         return result;
     }
