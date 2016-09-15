@@ -280,7 +280,6 @@ public class TestUtils {
     /**
      * Checks if a cluster id is valid.
      * @param clusterId
-     * @return true if valid, false otherwise.
      */
     public static void isValidClusterId(String clusterId) {
         assertNotNull(clusterId);
@@ -302,8 +301,8 @@ public class TestUtils {
         //Check if it can be converted back to a UUID.
         try {
             ByteBuffer uuidBuffer = ByteBuffer.wrap(decodedUuid);
-            UUID.fromString(new UUID(uuidBuffer.getLong(), uuidBuffer.getLong()).toString());
-        } catch (IllegalArgumentException e) {
+            new UUID(uuidBuffer.getLong(), uuidBuffer.getLong()).toString();
+        } catch (Exception e) {
             fail(clusterId + " cannot be converted back to UUID.");
         }
     }

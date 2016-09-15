@@ -280,8 +280,11 @@ object CoreUtils extends Logging {
     listenerList.map(listener => EndPoint.createEndPoint(listener)).map(ep => ep.protocolType -> ep).toMap
   }
 
-  def generateUuidAsBase64():String = {
-    val uuid = UUID.randomUUID()
+  def generateUuidAsBase64(): String = {
+    urlSafeBase64EncodeUUID(UUID.randomUUID())
+  }
+
+  def urlSafeBase64EncodeUUID(uuid: UUID): String = {
     // Extract bytes for uuid which is 128 bits (or 16 bytes) long.
     val uuidBytes: ByteBuffer = ByteBuffer.wrap(new Array[Byte](16))
     uuidBytes.putLong(uuid.getMostSignificantBits)
@@ -291,6 +294,5 @@ object CoreUtils extends Logging {
     val urlSafeBase64EncodedUUID = base64EncodedUUID.replace("+", "-").replace("/", "-")
     // Remove the "==" padding at the end.
     urlSafeBase64EncodedUUID.substring(0, urlSafeBase64EncodedUUID.length - 2)
-
   }
 }
