@@ -165,8 +165,11 @@ public class Fetcher<K, V> {
 
                             FetchResponse response = new FetchResponse(resp.responseBody());
                             if (!matchesRequestedPartitions(request, response)) {
-                                log.error("Unexpected partitions {} in response for fetch request for partitions {}",
-                                        response.responseData().keySet(), request.fetchData().keySet());
+                                // obviously we expect the broker to always send us valid responses, so this check
+                                // is mainly for test cases where mock fetch responses must be manually crafted.
+                                log.warn("Ignoring fetch response containing partitions {} since it does not match " +
+                                        "the requested partitions{}", response.responseData().keySet(),
+                                        request.fetchData().keySet());
                                 return;
                             }
 
