@@ -37,6 +37,7 @@ public class StandbyContextImpl implements InternalProcessorContext, RecordColle
     private final StreamsConfig config;
     private final Serde<?> keySerde;
     private final Serde<?> valSerde;
+    private final ThreadCache zeroSizedCache = new ThreadCache(0);
 
     private boolean initialized;
 
@@ -121,7 +122,7 @@ public class StandbyContextImpl implements InternalProcessorContext, RecordColle
 
     @Override
     public ThreadCache getCache() {
-        throw new UnsupportedOperationException("this should not happen: getCache() not supported in standby tasks.");
+        return zeroSizedCache;
     }
 
     /**
@@ -219,6 +220,6 @@ public class StandbyContextImpl implements InternalProcessorContext, RecordColle
 
     @Override
     public void setCurrentNode(final ProcessorNode currentNode) {
-        throw new UnsupportedOperationException("this should not happen: setCurrentNode not supported in standby tasks.");
+        // no-op. can't throw as this is called on commit when the StateStores get flushed.
     }
 }
