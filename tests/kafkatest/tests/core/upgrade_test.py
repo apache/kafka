@@ -126,4 +126,4 @@ class TestUpgrade(ProduceConsumeValidateTest):
             self.logger.debug("Data in /cluster/id znode could not be parsed. Data = %s" % cluster_id_json)
 
         self.logger.debug("Cluster id [%s]", cluster_id)
-        assert len(cluster_id["id"]) == 48
+        assert len(cluster_id["id"]) == 22
