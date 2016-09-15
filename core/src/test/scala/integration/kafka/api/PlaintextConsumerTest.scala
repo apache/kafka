@@ -566,6 +566,45 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertArrayEquals(record.value(), consumerRecord.value())
   }
 
+  /** We should only return a large record if it's the first record in the first partition of the fetch request */
+  @Test
+  def testFetchHonoursFetchSizeIfLargeRecordNotFirst(): Unit = {
+    val maxFetchBytes = 10 * 1024
+    this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, maxFetchBytes.toString)
+    checkFetchHonoursSizeIfLargeRecordNotFirst(maxFetchBytes)
+  }
+
+  private def checkFetchHonoursSizeIfLargeRecordNotFirst(largeProducerRecordSize: Int): Unit = {
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
+
+    val smallRecord = new ProducerRecord[Array[Byte], Array[Byte]](tp.topic(), tp.partition(), "small".getBytes,
+      "value".getBytes)
+    val largeRecord = new ProducerRecord[Array[Byte], Array[Byte]](tp.topic(), tp.partition(), "large".getBytes,
+      new Array[Byte](largeProducerRecordSize))
+    this.producers.head.send(smallRecord)
+    this.producers.head.send(largeRecord)
+
+    // consuming a record that is too large should succeed since KIP-74
+    consumer0.assign(List(tp).asJava)
+    val records = consumer0.poll(20000)
+    assertEquals(1, records.count)
+    val consumerRecord = records.iterator().next()
+    assertEquals(0L, consumerRecord.offset)
+    assertEquals(tp.topic(), consumerRecord.topic())
+    assertEquals(tp.partition(), consumerRecord.partition())
+    assertArrayEquals(smallRecord.key(), consumerRecord.key())
+    assertArrayEquals(smallRecord.value(), consumerRecord.value())
+  }
+
+  /** We should only return a large record if it's the first record in the first partition of the fetch request */
+  @Test
+  def testFetchHonoursMaxPartitionFetchBytesIfLargeRecordNotFirst(): Unit = {
+    val maxPartitionFetchBytes = 10 * 1024
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, maxPartitionFetchBytes.toString)
+    checkFetchHonoursSizeIfLargeRecordNotFirst(maxPartitionFetchBytes)
+  }
+
   @Test
   def testFetchRecordLargerThanMaxPartitionFetchBytes() {
     val maxPartitionFetchBytes = 10 * 1024
