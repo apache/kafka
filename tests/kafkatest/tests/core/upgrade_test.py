@@ -62,7 +62,7 @@ class TestUpgrade(ProduceConsumeValidateTest):
             self.kafka.start_node(node)
 
 
-    @parametrize(from_kafka_version=str(LATEST_0_10), to_message_format_version=None, compression_types=["none"])
+    @parametrize(from_kafka_version=str(LATEST_0_10_0), to_message_format_version=None, compression_types=["none"])
     @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["none"])
     @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["none"], new_consumer=True, security_protocol="SASL_SSL")
     @parametrize(from_kafka_version=str(LATEST_0_9), to_message_format_version=None, compression_types=["snappy"], new_consumer=True)
@@ -76,9 +76,9 @@ class TestUpgrade(ProduceConsumeValidateTest):
     @parametrize(from_kafka_version=str(LATEST_0_8_2), to_message_format_version=None, compression_types=["snappy"])
     def test_upgrade(self, from_kafka_version, to_message_format_version, compression_types,
                      new_consumer=False, security_protocol="PLAINTEXT"):
-        """Test upgrade of Kafka broker cluster from 0.8.2 or 0.9.0 to 0.10
+        """Test upgrade of Kafka broker cluster from 0.8.2 or 0.9.0 or 0.10.0 to 0.10.1
 
-        from_kafka_version is a Kafka version to upgrade from: either 0.8.2.X or 0.9
+        from_kafka_version is a Kafka version to upgrade from: either 0.8.2.X or 0.9 or 0.10.0
 
         If to_message_format_version is None, it means that we will upgrade to default (latest)
         message format version. It is possible to upgrade to 0.10 brokers but still use message

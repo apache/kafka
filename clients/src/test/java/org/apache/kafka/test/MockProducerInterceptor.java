@@ -36,8 +36,8 @@ public class MockProducerInterceptor implements ClusterResourceListener, Produce
     public static final AtomicInteger ON_ERROR_COUNT = new AtomicInteger(0);
     public static final AtomicInteger ON_ERROR_WITH_METADATA_COUNT = new AtomicInteger(0);
     public static final AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
-    public static final Object NO_CLUSTER_ID = new Object();
-    public static final AtomicReference<Object> CLUSTER_ID_BEFORE_ON_ACKNOWLEDGEMENT = new AtomicReference<>(NO_CLUSTER_ID);
+    public static final ClusterResource NO_CLUSTER_ID = new ClusterResource("no_cluster_id");
+    public static final AtomicReference<ClusterResource> CLUSTER_ID_BEFORE_ON_ACKNOWLEDGEMENT = new AtomicReference<>(NO_CLUSTER_ID);
     public static final String APPEND_STRING_PROP = "mock.interceptor.append";
     private String appendStr;
 

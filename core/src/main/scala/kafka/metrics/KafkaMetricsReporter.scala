@@ -45,7 +45,7 @@ trait KafkaMetricsReporterMBean {
 }
 
 /**
-  * If you need access to cluster metadata, you will need to implement {@link org.apache.kafka.common.ClusterResourceListener} interface
+  * Implement {@link org.apache.kafka.common.ClusterResourceListener} to receive cluster metadata once it's available. Please see the class documentation for ClusterResourceListener for more information.
   */
 trait KafkaMetricsReporter {
   def init(props: VerifiableProperties)
@@ -55,7 +55,7 @@ object KafkaMetricsReporter {
   val ReporterStarted: AtomicBoolean = new AtomicBoolean(false)
   var reporters: ArrayBuffer[KafkaMetricsReporter] = null
 
-  def startReporters (verifiableProps: VerifiableProperties): List[KafkaMetricsReporter] = {
+  def startReporters (verifiableProps: VerifiableProperties): Seq[KafkaMetricsReporter] = {
     ReporterStarted synchronized {
       if (!ReporterStarted.get()) {
         reporters = ArrayBuffer[KafkaMetricsReporter]()
@@ -74,7 +74,7 @@ object KafkaMetricsReporter {
         }
       }
     }
-    reporters.toList
+    reporters
   }
 }
 

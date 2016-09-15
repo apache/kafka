@@ -326,8 +326,6 @@ public final class Metadata {
             }
             nodes = cluster.nodes();
         }
-
-
         return new Cluster(clusterId, nodes, partitionInfos, unauthorizedTopics, internalTopics);
     }
 }

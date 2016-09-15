@@ -28,8 +28,8 @@ public class MockSerializer implements ClusterResourceListener, Serializer<byte[
     public static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
     public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
     public static final AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
-    public static final Object NO_CLUSTER_ID = new Object();
-    public static final AtomicReference<Object> CLUSTER_ID_BEFORE_SERIALIZE = new AtomicReference<>(NO_CLUSTER_ID);
+    public static final ClusterResource NO_CLUSTER_ID = new ClusterResource("no_cluster_id");
+    public static final AtomicReference<ClusterResource> CLUSTER_ID_BEFORE_SERIALIZE = new AtomicReference<>(NO_CLUSTER_ID);
 
     public MockSerializer() {
         INIT_COUNT.incrementAndGet();

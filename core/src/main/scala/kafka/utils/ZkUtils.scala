@@ -211,7 +211,7 @@ class ZkUtils(val zkClient: ZkClient,
   }
 
   /* Represents a cluster identifier. Stored in Zookeeper in JSON format: {"version" -> "1", "id" -> id } */
-  object ClusterIdentifier {
+  object ClusterId {
 
     def toJson(id: String) = {
       val jsonMap = Map("version" -> "1", "id" -> id)
@@ -227,12 +227,12 @@ class ZkUtils(val zkClient: ZkClient,
   }
 
   def getClusterId(): Option[String] = {
-    readDataMaybeNull(ClusterIdPath)._1.map(ClusterIdentifier.fromJson(_))
+    readDataMaybeNull(ClusterIdPath)._1.map(ClusterId.fromJson(_))
   }
 
   def createOrGetClusterId(proposedClusterId: String): String = {
     try {
-      createPersistentPath(ClusterIdPath, ClusterIdentifier.toJson(proposedClusterId))
+      createPersistentPath(ClusterIdPath, ClusterId.toJson(proposedClusterId))
       proposedClusterId
     } catch {
       case e: ZkNodeExistsException =>

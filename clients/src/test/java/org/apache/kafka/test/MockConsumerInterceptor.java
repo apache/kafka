@@ -40,7 +40,7 @@ public class MockConsumerInterceptor implements ClusterResourceListener, Consume
     public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
     public static final AtomicInteger ON_COMMIT_COUNT = new AtomicInteger(0);
     public static final AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
-    public static final ClusterResource NO_CLUSTER_ID = new ClusterResource("foo");
+    public static final ClusterResource NO_CLUSTER_ID = new ClusterResource("no_cluster_id");
     public static final AtomicReference<ClusterResource> CLUSTER_ID_BEFORE_ON_CONSUME = new AtomicReference<>(NO_CLUSTER_ID);
 
     public MockConsumerInterceptor() {

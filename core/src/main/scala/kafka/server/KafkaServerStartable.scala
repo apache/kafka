@@ -29,7 +29,7 @@ object KafkaServerStartable {
   }
 }
 
-class KafkaServerStartable(val serverConfig: KafkaConfig, reporters: List[KafkaMetricsReporter]) extends Logging {
+class KafkaServerStartable(val serverConfig: KafkaConfig, reporters: Seq[KafkaMetricsReporter]) extends Logging {
   private val server = new KafkaServer(serverConfig, kafkaMetricsReporters = reporters)
 
   def startup() {

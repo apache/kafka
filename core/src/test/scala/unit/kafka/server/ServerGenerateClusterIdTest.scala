@@ -19,7 +19,6 @@ package kafka.server
 import scala.concurrent._
 import ExecutionContext.Implicits._
 import scala.concurrent.duration._
-
 import kafka.utils.{CoreUtils, TestUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.Assert._
@@ -48,7 +47,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
 
     // Make sure the cluster id is 48 characters long (base64 of UUID.randomUUID() )
     val clusterIdOnFirstBoot = server1.clusterId
-    assertTrue(isValidClusterId(clusterIdOnFirstBoot))
+    isValidClusterId(clusterIdOnFirstBoot)
 
     server1.shutdown()
 
@@ -88,7 +87,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     server2.shutdown()
     server3.shutdown()
 
-    assertTrue(isValidClusterId(clusterIdFromServer1))
+    isValidClusterId(clusterIdFromServer1)
     assertEquals(clusterIdFromServer1, clusterIdFromServer2, clusterIdFromServer3)
 
     // Check again after reboot
@@ -121,20 +120,18 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
     server1.shutdown()
     server2.shutdown()
     server3.shutdown()
-    assertTrue(isValidClusterId(clusterIdFromServer1))
+    isValidClusterId(clusterIdFromServer1)
     assertEquals(clusterIdFromServer1, clusterIdFromServer2, clusterIdFromServer3)
 
     // Check again after reboot
-    server1.startup()
-    assertEquals(clusterIdFromServer1, server1.clusterId)
-    server2.startup()
-    assertEquals(clusterIdFromServer2, server2.clusterId)
-    server3.startup()
-    assertEquals(clusterIdFromServer3, server3.clusterId)
-    server1.shutdown()
-    server2.shutdown()
-    server3.shutdown()
+    val secondBoot = Future.traverse(Seq(server1, server2, server3))(server => Future {
+      server.startup()
+      server
+    })
+    val servers = Await.result(secondBoot, 100 second)
+    servers.foreach(server => assertEquals(clusterIdFromServer1, server.clusterId))
 
+    servers.foreach(_.shutdown())
     CoreUtils.delete(server1.config.logDirs)
     CoreUtils.delete(server2.config.logDirs)
     CoreUtils.delete(server3.config.logDirs)

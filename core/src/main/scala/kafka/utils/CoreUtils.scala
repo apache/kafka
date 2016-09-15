@@ -288,6 +288,9 @@ object CoreUtils extends Logging {
     uuidBytes.putLong(uuid.getLeastSignificantBits)
     val base64EncodedUUID = DatatypeConverter.printBase64Binary(uuidBytes.array())
     //Convert to URL safe variant by replacing + and / with - and _ respectively.
-    base64EncodedUUID.replace("+", "-").replace("/", "-")
+    val urlSafeBase64EncodedUUID = base64EncodedUUID.replace("+", "-").replace("/", "-")
+    // Remove the "==" padding at the end.
+    urlSafeBase64EncodedUUID.substring(0, urlSafeBase64EncodedUUID.length - 2)
+
   }
 }

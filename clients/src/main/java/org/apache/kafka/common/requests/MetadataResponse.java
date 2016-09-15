@@ -80,7 +80,7 @@ public class MetadataResponse extends AbstractRequestResponse {
     private final Collection<Node> brokers;
     private final Node controller;
     private final List<TopicMetadata> topicMetadata;
-    private String clusterId = null;
+    private final String clusterId;
 
     /**
      * Constructor for the latest version
@@ -175,8 +175,11 @@ public class MetadataResponse extends AbstractRequestResponse {
             controllerId = struct.getInt(CONTROLLER_ID_KEY_NAME);
 
         // This field only exists in v2+
-        if (struct.hasField(CLUSTER_ID_KEY_NAME))
-            clusterId = struct.getString(CLUSTER_ID_KEY_NAME);
+        if (struct.hasField(CLUSTER_ID_KEY_NAME)) {
+            this.clusterId = struct.getString(CLUSTER_ID_KEY_NAME);
+        } else {
+            this.clusterId = null;
+        }
 
         List<TopicMetadata> topicMetadata = new ArrayList<>();
         Object[] topicInfos = (Object[]) struct.get(TOPIC_METADATA_KEY_NAME);
@@ -279,7 +282,7 @@ public class MetadataResponse extends AbstractRequestResponse {
             }
         }
 
-        return new Cluster(this.clusterId(), this.brokers, partitions, topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED), internalTopics);
+        return new Cluster(this.clusterId, this.brokers, partitions, topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED), internalTopics);
     }
 
     /**

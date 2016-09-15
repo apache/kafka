@@ -56,6 +56,6 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
   @Test
   def testClusterIdentifierJsonParsing() {
     val clusterId = "test"
-    assertEquals(zkUtils.ClusterIdentifier.fromJson(zkUtils.ClusterIdentifier.toJson(clusterId)), clusterId)
+    assertEquals(zkUtils.ClusterId.fromJson(zkUtils.ClusterId.toJson(clusterId)), clusterId)
   }
 }

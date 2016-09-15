@@ -22,7 +22,7 @@ import java.util.Map;
  *
  * A class that implements this interface is expected to have a constructor with no parameter.
  * <p>
- * If you need access to cluster metadata, you will need to implement {@link org.apache.kafka.common.ClusterResourceListener} interface.
+ * Implement {@link org.apache.kafka.common.ClusterResourceListener} to receive cluster metadata once it's available. Please see the class documentation for ClusterResourceListener for more information.
  */
 public interface Deserializer<T> extends Closeable {
 

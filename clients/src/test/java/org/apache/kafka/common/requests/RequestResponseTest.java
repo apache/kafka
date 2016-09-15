@@ -112,10 +112,10 @@ public class RequestResponseTest {
         for (AbstractRequestResponse req : requestResponseList)
             checkSerialization(req, null);
 
-        createMetadataResponse(0);
-        createMetadataResponse(1);
-        createMetadataRequest(Arrays.asList("topic1")).getErrorResponse(0, new UnknownServerException());
-        createMetadataRequest(Arrays.asList("topic1")).getErrorResponse(1, new UnknownServerException());
+        checkSerialization(createMetadataResponse(0), 0);
+        checkSerialization(createMetadataResponse(1), 1);
+        checkSerialization(createMetadataRequest(Arrays.asList("topic1")).getErrorResponse(0, new UnknownServerException()), 0);
+        checkSerialization(createMetadataRequest(Arrays.asList("topic1")).getErrorResponse(1, new UnknownServerException()), 1);
         checkSerialization(createFetchRequest().getErrorResponse(0, new UnknownServerException()), 0);
         checkSerialization(createOffsetCommitRequest(0), 0);
         checkSerialization(createOffsetCommitRequest(0).getErrorResponse(0, new UnknownServerException()), 0);

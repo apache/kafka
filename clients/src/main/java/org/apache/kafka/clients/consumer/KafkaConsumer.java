@@ -1418,9 +1418,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private ClusterResourceListeners configureClusterResourceListeners(Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer, List<?>... candidateLists) {
         ClusterResourceListeners clusterResourceListeners = new ClusterResourceListeners();
-        for (List<?> candidateList: candidateLists) {
+        for (List<?> candidateList: candidateLists)
             clusterResourceListeners.maybeAddAll(candidateList);
-        }
+
         clusterResourceListeners.maybeAdd(keyDeserializer);
         clusterResourceListeners.maybeAdd(valueDeserializer);
         return clusterResourceListeners;

@@ -32,7 +32,7 @@ import org.apache.kafka.common.Configurable;
  * <p>
  * ProducerInterceptor callbacks may be called from multiple threads. Interceptor implementation must ensure thread-safety, if needed.
  * <p>
- * If you need access to cluster metadata, you will need to implement {@link org.apache.kafka.common.ClusterResourceListener} interface.
+ * Implement {@link org.apache.kafka.common.ClusterResourceListener} to receive cluster metadata once it's available. Please see the class documentation for ClusterResourceListener for more information.
  */
 public interface ProducerInterceptor<K, V> extends Configurable {
     /**

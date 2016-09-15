@@ -298,7 +298,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     metrics,
                     time);
 
-
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
             this.metadata.update(Cluster.bootstrap(addresses), time.milliseconds());
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config.values());
@@ -719,9 +718,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     private ClusterResourceListeners configureClusterResourceListeners(Serializer<K> keySerializer, Serializer<V> valueSerializer, List<?>... candidateLists) {
         ClusterResourceListeners clusterResourceListeners = new ClusterResourceListeners();
-        for (List<?> candidateList: candidateLists) {
+        for (List<?> candidateList: candidateLists)
             clusterResourceListeners.maybeAddAll(candidateList);
-        }
+
         clusterResourceListeners.maybeAdd(keySerializer);
         clusterResourceListeners.maybeAdd(valueSerializer);
         return clusterResourceListeners;

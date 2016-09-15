@@ -94,7 +94,7 @@ object KafkaServer {
  * Represents the lifecycle of a single Kafka broker. Handles all functionality required
  * to start up and shutdown a single Kafka node.
  */
-class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePrefix: Option[String] = None, kafkaMetricsReporters: List[KafkaMetricsReporter] = List()) extends Logging with KafkaMetricsGroup {
+class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePrefix: Option[String] = None, kafkaMetricsReporters: Seq[KafkaMetricsReporter] = List()) extends Logging with KafkaMetricsGroup {
   private val startupComplete = new AtomicBoolean(false)
   private val isShuttingDown = new AtomicBoolean(false)
   private val isStartingUp = new AtomicBoolean(false)
@@ -198,8 +198,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         clusterId = getOrGenerateClusterId(zkUtils)
         info(s"Cluster ID = $clusterId")
 
-        /* Send events to metric reporters who implement ClusterResourceListener */
-        notifyClusterListeners(kafkaMetricsReporters ++ reporters.asScala.toList)
+        notifyClusterListeners(kafkaMetricsReporters.toList ++ reporters.asScala.toList)
 
         /* start log manager */
         logManager = createLogManager(zkUtils.zkClient, brokerState)
@@ -293,9 +292,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
 
   def notifyClusterListeners(clusterListeners: List[Any]): Unit = {
     val clusterResourceListeners = new ClusterResourceListeners()
-    for (clusterListener <- clusterListeners) {
+    for (clusterListener <- clusterListeners)
       clusterResourceListeners.maybeAdd(clusterListener)
-    }
+
     clusterResourceListeners.onUpdate(new ClusterResource(clusterId))
   }
 
