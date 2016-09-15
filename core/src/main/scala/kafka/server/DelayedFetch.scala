@@ -95,7 +95,8 @@ class DelayedFetch(delayMs: Long,
                 // Case C, this can happen when the fetch operation is falling behind the current segment
                 // or the partition has just rolled a new segment
                 debug("Satisfying fetch %s immediately since it is fetching older segments.".format(fetchMetadata))
-                return forceComplete()
+                if (!(quota.isThrottled(topicAndPartition) && quota.isQuotaExceeded()))
+                  return forceComplete()
               } else if (fetchOffset.messageOffset < endOffset.messageOffset) {
                 // we take the partition fetch size as upper bound when accumulating the bytes (skip if a throttled partition)
                 val bytesAvailable = math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.fetchSize)
