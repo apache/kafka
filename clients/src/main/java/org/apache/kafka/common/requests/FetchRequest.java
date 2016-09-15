@@ -72,7 +72,7 @@ public class FetchRequest extends AbstractRequest {
             this.partitions = new LinkedHashMap<>();
         }
 
-        public static final List<TopicAndPartitionData> groupByTopicOrdered(Map<TopicPartition, PartitionData> fetchData) {
+        public static final List<TopicAndPartitionData> groupByTopicOrdered(LinkedHashMap<TopicPartition, PartitionData> fetchData) {
             List<TopicAndPartitionData> topics = new ArrayList<>();
             for (Map.Entry<TopicPartition, PartitionData> topicEntry : fetchData.entrySet()) {
                 String topic = topicEntry.getKey().topic();
@@ -92,7 +92,7 @@ public class FetchRequest extends AbstractRequest {
     @Deprecated
     public FetchRequest(int maxWait, int minBytes, Map<TopicPartition, PartitionData> fetchData) {
         // Any of 0, 1 or 2 would do here
-        this(2, CONSUMER_REPLICA_ID, maxWait, minBytes, DEFAULT_RESPONSE_MAX_BYTES, fetchData);
+        this(2, CONSUMER_REPLICA_ID, maxWait, minBytes, DEFAULT_RESPONSE_MAX_BYTES, new LinkedHashMap<>(fetchData));
     }
 
     /**
@@ -109,7 +109,7 @@ public class FetchRequest extends AbstractRequest {
     public static FetchRequest fromReplica(int replicaId, int maxWait, int minBytes,
                                            Map<TopicPartition, PartitionData> fetchData) {
         // Any of 0, 1 or 2 would do here
-        return new FetchRequest(2, replicaId, maxWait, minBytes, DEFAULT_RESPONSE_MAX_BYTES, fetchData);
+        return new FetchRequest(2, replicaId, maxWait, minBytes, DEFAULT_RESPONSE_MAX_BYTES, new LinkedHashMap<>(fetchData));
     }
 
     /**
@@ -120,7 +120,8 @@ public class FetchRequest extends AbstractRequest {
         return new FetchRequest(ProtoUtils.latestVersion(ApiKeys.FETCH.id), replicaId, maxWait, minBytes, maxBytes, fetchData);
     }
 
-    private FetchRequest(int version, int replicaId, int maxWait, int minBytes, int maxBytes, Map<TopicPartition, PartitionData> fetchData) {
+    private FetchRequest(int version, int replicaId, int maxWait, int minBytes, int maxBytes,
+                         LinkedHashMap<TopicPartition, PartitionData> fetchData) {
         super(new Struct(ProtoUtils.requestSchema(ApiKeys.FETCH.id, version)));
         List<TopicAndPartitionData> topicsData = TopicAndPartitionData.groupByTopicOrdered(fetchData);
 

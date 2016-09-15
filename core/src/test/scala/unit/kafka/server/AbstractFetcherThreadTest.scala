@@ -115,13 +115,11 @@ class AbstractFetcherThreadTest {
 
     override def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]): Unit = {}
 
-    override protected def fetch(fetchRequest: DummyFetchRequest): collection.Map[TopicPartition, DummyPartitionData] = {
-      fetchRequest.offsets.mapValues(_ => new DummyPartitionData)
-    }
+    override protected def fetch(fetchRequest: DummyFetchRequest): Seq[(TopicPartition, DummyPartitionData)] =
+      fetchRequest.offsets.mapValues(_ => new DummyPartitionData).toSeq
 
-    override protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): DummyFetchRequest = {
+    override protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): DummyFetchRequest =
       new DummyFetchRequest(partitionMap.map { case (k, v) => (k, v.offset) }.toMap)
-    }
   }
 
 }

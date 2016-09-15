@@ -229,9 +229,9 @@ class ReplicaFetcherThread(name: String,
     delayPartitions(partitions, brokerConfig.replicaFetchBackoffMs.toLong)
   }
 
-  protected def fetch(fetchRequest: FetchRequest): Map[TopicPartition, PartitionData] = {
+  protected def fetch(fetchRequest: FetchRequest): Seq[(TopicPartition, PartitionData)] = {
     val clientResponse = sendRequest(ApiKeys.FETCH, Some(fetchRequestVersion), fetchRequest.underlying)
-    new FetchResponse(clientResponse.responseBody).responseData.asScala.map { case (key, value) =>
+    new FetchResponse(clientResponse.responseBody).responseData.asScala.toSeq.map { case (key, value) =>
       key -> new PartitionData(value)
     }
   }

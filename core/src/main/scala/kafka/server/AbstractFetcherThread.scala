@@ -73,7 +73,7 @@ abstract class AbstractFetcherThread(name: String,
 
   protected def buildFetchRequest(partitionMap: Seq[(TopicPartition, PartitionFetchState)]): REQ
 
-  protected def fetch(fetchRequest: REQ): Map[TopicPartition, PD]
+  protected def fetch(fetchRequest: REQ): Seq[(TopicPartition, PD)]
 
   override def shutdown(){
     initiateShutdown()
@@ -112,7 +112,7 @@ abstract class AbstractFetcherThread(name: String,
       partitionMap.moveToEnd(partition)
     }
 
-    var responseData: Map[TopicPartition, PD] = Map.empty
+    var responseData: Seq[(TopicPartition, PD)] = Seq.empty
 
     try {
       trace("Issuing to broker %d of fetch request %s".format(sourceBroker.id, fetchRequest))

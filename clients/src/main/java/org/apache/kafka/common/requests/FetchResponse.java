@@ -85,52 +85,38 @@ public class FetchResponse extends AbstractRequestResponse {
      * @param responseData fetched data grouped by topic-partition
      */
     public FetchResponse(Map<TopicPartition, PartitionData> responseData) {
-        super(new Struct(ProtoUtils.responseSchema(ApiKeys.FETCH.id, 0)));
-        initCommonFields(responseData);
-        this.responseData = new LinkedHashMap<TopicPartition, PartitionData>(responseData);
-        this.throttleTime = DEFAULT_THROTTLE_TIME;
+        this(0, new LinkedHashMap<>(responseData), DEFAULT_THROTTLE_TIME);
     }
 
-  /**
-   * Constructor for Version 1
-   * @param responseData fetched data grouped by topic-partition
-   * @param throttleTime Time in milliseconds the response was throttled
-   */
+    /**
+     * Constructor for Version 1 and 2
+     * @param responseData fetched data grouped by topic-partition
+     * @param throttleTime Time in milliseconds the response was throttled
+     */
     public FetchResponse(Map<TopicPartition, PartitionData> responseData, int throttleTime) {
-        super(new Struct(CURRENT_SCHEMA));
-        initCommonFields(responseData);
-        struct.set(THROTTLE_TIME_KEY_NAME, throttleTime);
-        this.responseData = new LinkedHashMap<TopicPartition, PartitionData>(responseData);
-        this.throttleTime = throttleTime;
+        // the schema for versions 1 and 2 is the same, so we pick 2 here
+        this(2, new LinkedHashMap<>(responseData), throttleTime);
     }
 
-    public FetchResponse(Struct struct) {
-        super(struct);
-        responseData = new LinkedHashMap<TopicPartition, PartitionData>();
-        for (Object topicResponseObj : struct.getArray(RESPONSES_KEY_NAME)) {
-            Struct topicResponse = (Struct) topicResponseObj;
-            String topic = topicResponse.getString(TOPIC_KEY_NAME);
-            for (Object partitionResponseObj : topicResponse.getArray(PARTITIONS_KEY_NAME)) {
-                Struct partitionResponse = (Struct) partitionResponseObj;
-                int partition = partitionResponse.getInt(PARTITION_KEY_NAME);
-                short errorCode = partitionResponse.getShort(ERROR_CODE_KEY_NAME);
-                long highWatermark = partitionResponse.getLong(HIGH_WATERMARK_KEY_NAME);
-                ByteBuffer recordSet = partitionResponse.getBytes(RECORD_SET_KEY_NAME);
-                PartitionData partitionData = new PartitionData(errorCode, highWatermark, recordSet);
-                responseData.put(new TopicPartition(topic, partition), partitionData);
-            }
-        }
-        this.throttleTime = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME) : DEFAULT_THROTTLE_TIME;
+    /**
+     * Constructor for Version 3
+     * @param responseData fetched data grouped by topic-partition
+     * @param throttleTime Time in milliseconds the response was throttled
+     */
+    public FetchResponse(LinkedHashMap<TopicPartition, PartitionData> responseData, int throttleTime) {
+        this(3, responseData, throttleTime);
     }
 
-    private void initCommonFields(Map<TopicPartition, PartitionData> responseData) {
+    private FetchResponse(int version, LinkedHashMap<TopicPartition, PartitionData> responseData, int throttleTime) {
+        super(new Struct(ProtoUtils.responseSchema(ApiKeys.FETCH.id, version)));
+
+        //FIXME Need to fix this to maintain ordering
         Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupDataByTopic(responseData);
-
-        List<Struct> topicArray = new ArrayList<Struct>();
+        List<Struct> topicArray = new ArrayList<>();
         for (Map.Entry<String, Map<Integer, PartitionData>> topicEntry: topicsData.entrySet()) {
             Struct topicData = struct.instance(RESPONSES_KEY_NAME);
             topicData.set(TOPIC_KEY_NAME, topicEntry.getKey());
-            List<Struct> partitionArray = new ArrayList<Struct>();
+            List<Struct> partitionArray = new ArrayList<>();
             for (Map.Entry<Integer, PartitionData> partitionEntry : topicEntry.getValue().entrySet()) {
                 PartitionData fetchPartitionData = partitionEntry.getValue();
                 Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
@@ -144,10 +130,35 @@ public class FetchResponse extends AbstractRequestResponse {
             topicArray.add(topicData);
         }
         struct.set(RESPONSES_KEY_NAME, topicArray.toArray());
+
+        if (version >= 1)
+            struct.set(THROTTLE_TIME_KEY_NAME, throttleTime);
+
+        this.responseData = responseData;
+        this.throttleTime = throttleTime;
     }
 
+    public FetchResponse(Struct struct) {
+        super(struct);
+        LinkedHashMap<TopicPartition, PartitionData> responseData = new LinkedHashMap<>();
+        for (Object topicResponseObj : struct.getArray(RESPONSES_KEY_NAME)) {
+            Struct topicResponse = (Struct) topicResponseObj;
+            String topic = topicResponse.getString(TOPIC_KEY_NAME);
+            for (Object partitionResponseObj : topicResponse.getArray(PARTITIONS_KEY_NAME)) {
+                Struct partitionResponse = (Struct) partitionResponseObj;
+                int partition = partitionResponse.getInt(PARTITION_KEY_NAME);
+                short errorCode = partitionResponse.getShort(ERROR_CODE_KEY_NAME);
+                long highWatermark = partitionResponse.getLong(HIGH_WATERMARK_KEY_NAME);
+                ByteBuffer recordSet = partitionResponse.getBytes(RECORD_SET_KEY_NAME);
+                PartitionData partitionData = new PartitionData(errorCode, highWatermark, recordSet);
+                responseData.put(new TopicPartition(topic, partition), partitionData);
+            }
+        }
+        this.responseData = responseData;
+        this.throttleTime = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME) : DEFAULT_THROTTLE_TIME;
+    }
 
-    public Map<TopicPartition, PartitionData> responseData() {
+    public LinkedHashMap<TopicPartition, PartitionData> responseData() {
         return responseData;
     }
 

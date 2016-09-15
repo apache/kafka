@@ -106,8 +106,8 @@ class ConsumerFetcherThread(name: String,
     new FetchRequest(fetchRequestBuilder.build())
   }
 
-  protected def fetch(fetchRequest: FetchRequest): collection.Map[TopicPartition, PartitionData] =
-    simpleConsumer.fetch(fetchRequest.underlying).dataByTopicAndPartition.map { case (TopicAndPartition(t, p), value) =>
+  protected def fetch(fetchRequest: FetchRequest): Seq[(TopicPartition, PartitionData)] =
+    simpleConsumer.fetch(fetchRequest.underlying).data.map { case (TopicAndPartition(t, p), value) =>
       new TopicPartition(t, p) -> new PartitionData(value)
     }
 
@@ -116,10 +116,11 @@ class ConsumerFetcherThread(name: String,
 object ConsumerFetcherThread {
 
   class FetchRequest(val underlying: kafka.api.FetchRequest) extends AbstractFetcherThread.FetchRequest {
+    private lazy val tpToOffset: Map[TopicPartition, Long] = underlying.requestInfo.map { case (tp, fetchInfo) =>
+      new TopicPartition(tp.topic, tp.partition) -> fetchInfo.offset
+    }.toMap
     def isEmpty: Boolean = underlying.requestInfo.isEmpty
-    def offset(topicPartition: TopicPartition): Long = {
-      underlying.requestInfoMapByTopic(new TopicAndPartition(topicPartition.topic, topicPartition.partition)).offset
-    }
+    def offset(topicPartition: TopicPartition): Long = tpToOffset(topicPartition)
   }
 
   class PartitionData(val underlying: FetchResponsePartitionData) extends AbstractFetcherThread.PartitionData {
