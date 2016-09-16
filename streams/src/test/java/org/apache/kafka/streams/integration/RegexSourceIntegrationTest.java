@@ -80,6 +80,8 @@ public class RegexSourceIntegrationTest {
     private static final String TOPIC_Z = "topic-Z";
     private static final String FA_TOPIC = "fa";
     private static final String FOO_TOPIC = "foo";
+    private static final String PARTITIONED_TOPIC_1 = "partitioned-1";
+    private static final String PARTITIONED_TOPIC_2 = "partitioned-2";
 
     private static final String DEFAULT_OUTPUT_TOPIC = "outputTopic";
     private static final String STRING_SERDE_CLASSNAME = Serdes.String().getClass().getName();
@@ -97,6 +99,8 @@ public class RegexSourceIntegrationTest {
         CLUSTER.createTopic(TOPIC_Z);
         CLUSTER.createTopic(FA_TOPIC);
         CLUSTER.createTopic(FOO_TOPIC);
+        CLUSTER.createTopic(PARTITIONED_TOPIC_1, 2, 1);
+        CLUSTER.createTopic(PARTITIONED_TOPIC_2, 2, 1);
 
     }
 
@@ -273,6 +277,78 @@ public class RegexSourceIntegrationTest {
         Collections.sort(actualValues);
         Collections.sort(expectedReceivedValues);
         assertThat(actualValues, equalTo(expectedReceivedValues));
+    }
+
+    @Test
+    public void testMultipleConsumersCanReadFromPartitionedTopic() throws Exception {
+
+        final Serde<String> stringSerde = Serdes.String();
+        final KStreamBuilder builderLeader = new KStreamBuilder();
+        final KStreamBuilder builderFollower = new KStreamBuilder();
+        final List<String> expectedAssignment = Arrays.asList(PARTITIONED_TOPIC_1,  PARTITIONED_TOPIC_2);
+
+        final KStream<String, String> partitionedStreamLeader = builderLeader.stream(Pattern.compile("partitioned-\\d"));
+        final KStream<String, String> partitionedStreamFollower = builderFollower.stream(Pattern.compile("partitioned-\\d"));
+
+
+        partitionedStreamLeader.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
+        partitionedStreamFollower.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
+
+        final KafkaStreams partitionedStreamsLeader  = new KafkaStreams(builderLeader, streamsConfiguration);
+        final KafkaStreams partitionedStreamsFollower  = new KafkaStreams(builderFollower, streamsConfiguration);
+
+        final StreamsConfig streamsConfig = new StreamsConfig(streamsConfiguration);
+
+
+        final Field leaderStreamThreadsField = partitionedStreamsLeader.getClass().getDeclaredField("threads");
+        leaderStreamThreadsField.setAccessible(true);
+        final StreamThread[] leaderStreamThreads = (StreamThread[]) leaderStreamThreadsField.get(partitionedStreamsLeader);
+        final StreamThread originalLeaderThread = leaderStreamThreads[0];
+
+        final TestStreamThread leaderTestStreamThread = new TestStreamThread(builderLeader, streamsConfig,
+                new DefaultKafkaClientSupplier(),
+                originalLeaderThread.applicationId, originalLeaderThread.clientId, originalLeaderThread.processId, new Metrics(), new SystemTime());
+
+        leaderStreamThreads[0] = leaderTestStreamThread;
+
+        final TestCondition bothTopicsAddedToLeader = new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return leaderTestStreamThread.assignedTopicPartitions.equals(expectedAssignment);
+            }
+        };
+
+
+
+        final Field followerStreamThreadsField = partitionedStreamsFollower.getClass().getDeclaredField("threads");
+        followerStreamThreadsField.setAccessible(true);
+        final StreamThread[] followerStreamThreads = (StreamThread[]) followerStreamThreadsField.get(partitionedStreamsFollower);
+        final StreamThread originalFollowerThread = followerStreamThreads[0];
+
+        final TestStreamThread followerTestStreamThread = new TestStreamThread(builderFollower, streamsConfig,
+                new DefaultKafkaClientSupplier(),
+                originalFollowerThread.applicationId, originalFollowerThread.clientId, originalFollowerThread.processId, new Metrics(), new SystemTime());
+
+        followerStreamThreads[0] = followerTestStreamThread;
+
+
+        final TestCondition bothTopicsAddedToFollower = new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return followerTestStreamThread.assignedTopicPartitions.equals(expectedAssignment);
+            }
+        };
+
+        partitionedStreamsLeader.start();
+        TestUtils.waitForCondition(bothTopicsAddedToLeader, "Topics never assigned to leader stream");
+
+
+        partitionedStreamsFollower.start();
+        TestUtils.waitForCondition(bothTopicsAddedToFollower, "Topics never assigned to follower stream");
+
+        partitionedStreamsLeader.close();
+        partitionedStreamsFollower.close();
+
     }
 
     // TODO should be updated to expected = TopologyBuilderException after KAFKA-3708

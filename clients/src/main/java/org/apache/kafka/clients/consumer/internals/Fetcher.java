@@ -141,6 +141,12 @@ public class Fetcher<K, V> {
         return numInFlightFetches.get() > 0;
     }
 
+    private boolean matchesRequestedPartitions(FetchRequest request, FetchResponse response) {
+        Set<TopicPartition> requestedPartitions = request.fetchData().keySet();
+        Set<TopicPartition> fetchedPartitions = response.responseData().keySet();
+        return fetchedPartitions.equals(requestedPartitions);
+    }
+
     /**
      * Set-up a fetch request for any node that we have assigned partitions for which doesn't already have
      * an in-flight fetch or pending fetch data.
@@ -158,6 +164,15 @@ public class Fetcher<K, V> {
                             numInFlightFetches.decrementAndGet();
 
                             FetchResponse response = new FetchResponse(resp.responseBody());
+                            if (!matchesRequestedPartitions(request, response)) {
+                                // obviously we expect the broker to always send us valid responses, so this check
+                                // is mainly for test cases where mock fetch responses must be manually crafted.
+                                log.warn("Ignoring fetch response containing partitions {} since it does not match " +
+                                        "the requested partitions {}", response.responseData().keySet(),
+                                        request.fetchData().keySet());
+                                return;
+                            }
+
                             Set<TopicPartition> partitions = new HashSet<>(response.responseData().keySet());
                             FetchResponseMetricAggregator metricAggregator = new FetchResponseMetricAggregator(sensors, partitions);
 
