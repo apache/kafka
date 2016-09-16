@@ -58,61 +58,46 @@ public class JsonConverter implements Converter {
 
     private static final HashMap<Schema.Type, JsonToConnectTypeConverter> TO_CONNECT_CONVERTERS = new HashMap<>();
 
-    private static Object checkOptionalAndDefault(Schema schema) {
-        if (schema.defaultValue() != null)
-            return schema.defaultValue();
-        if (schema.isOptional())
-            return null;
-        throw new DataException("Invalid null value for required field");
-    }
-
     static {
         TO_CONNECT_CONVERTERS.put(Schema.Type.BOOLEAN, new JsonToConnectTypeConverter() {
             @Override
             public Object convert(Schema schema, JsonNode value) {
-                if (value.isNull()) return checkOptionalAndDefault(schema);
                 return value.booleanValue();
             }
         });
         TO_CONNECT_CONVERTERS.put(Schema.Type.INT8, new JsonToConnectTypeConverter() {
             @Override
             public Object convert(Schema schema, JsonNode value) {
-                if (value.isNull()) return checkOptionalAndDefault(schema);
                 return (byte) value.intValue();
             }
         });
         TO_CONNECT_CONVERTERS.put(Schema.Type.INT16, new JsonToConnectTypeConverter() {
             @Override
             public Object convert(Schema schema, JsonNode value) {
-                if (value.isNull()) return checkOptionalAndDefault(schema);
                 return (short) value.intValue();
             }
         });
         TO_CONNECT_CONVERTERS.put(Schema.Type.INT32, new JsonToConnectTypeConverter() {
             @Override
             public Object convert(Schema schema, JsonNode value) {
-                if (value.isNull()) return checkOptionalAndDefault(schema);
                 return value.intValue();
             }
         });
         TO_CONNECT_CONVERTERS.put(Schema.Type.INT64, new JsonToConnectTypeConverter() {
             @Override
             public Object convert(Schema schema, JsonNode value) {
-                if (value.isNull()) return checkOptionalAndDefault(schema);
                 return value.longValue();
             }
         });
         TO_CONNECT_CONVERTERS.put(Schema.Type.FLOAT32, new JsonToConnectTypeConverter() {
             @Override
             public Object convert(Schema schema, JsonNode value) {
-                if (value.isNull()) return checkOptionalAndDefault(schema);
                 return value.floatValue();
             }
         });
         TO_CONNECT_CONVERTERS.put(Schema.Type.FLOAT64, new JsonToConnectTypeConverter() {
             @Override
             public Object convert(Schema schema, JsonNode value) {
-                if (value.isNull()) return checkOptionalAndDefault(schema);
                 return value.doubleValue();
             }
         });
@@ -120,7 +105,6 @@ public class JsonConverter implements Converter {
             @Override
             public Object convert(Schema schema, JsonNode value) {
                 try {
-                    if (value.isNull()) return checkOptionalAndDefault(schema);
                     return value.binaryValue();
                 } catch (IOException e) {
                     throw new DataException("Invalid bytes field", e);
@@ -130,15 +114,12 @@ public class JsonConverter implements Converter {
         TO_CONNECT_CONVERTERS.put(Schema.Type.STRING, new JsonToConnectTypeConverter() {
             @Override
             public Object convert(Schema schema, JsonNode value) {
-                if (value.isNull()) return checkOptionalAndDefault(schema);
                 return value.textValue();
             }
         });
         TO_CONNECT_CONVERTERS.put(Schema.Type.ARRAY, new JsonToConnectTypeConverter() {
             @Override
             public Object convert(Schema schema, JsonNode value) {
-                if (value.isNull()) return checkOptionalAndDefault(schema);
-
                 Schema elemSchema = schema == null ? null : schema.valueSchema();
                 ArrayList<Object> result = new ArrayList<>();
                 for (JsonNode elem : value) {
@@ -150,8 +131,6 @@ public class JsonConverter implements Converter {
         TO_CONNECT_CONVERTERS.put(Schema.Type.MAP, new JsonToConnectTypeConverter() {
             @Override
             public Object convert(Schema schema, JsonNode value) {
-                if (value.isNull()) return checkOptionalAndDefault(schema);
-
                 Schema keySchema = schema == null ? null : schema.keySchema();
                 Schema valueSchema = schema == null ? null : schema.valueSchema();
 
@@ -185,8 +164,6 @@ public class JsonConverter implements Converter {
         TO_CONNECT_CONVERTERS.put(Schema.Type.STRUCT, new JsonToConnectTypeConverter() {
             @Override
             public Object convert(Schema schema, JsonNode value) {
-                if (value.isNull()) return checkOptionalAndDefault(schema);
-
                 if (!value.isObject())
                     throw new DataException("Structs should be encoded as JSON objects, but found " + value.getNodeType());
 
@@ -211,7 +188,6 @@ public class JsonConverter implements Converter {
         TO_CONNECT_LOGICAL_CONVERTERS.put(Decimal.LOGICAL_NAME, new LogicalTypeConverter() {
             @Override
             public Object convert(Schema schema, Object value) {
-                if (value == null) return checkOptionalAndDefault(schema);
                 if (!(value instanceof byte[]))
                     throw new DataException("Invalid type for Decimal, underlying representation should be bytes but was " + value.getClass());
                 return Decimal.toLogical(schema, (byte[]) value);
@@ -221,7 +197,6 @@ public class JsonConverter implements Converter {
         TO_CONNECT_LOGICAL_CONVERTERS.put(Date.LOGICAL_NAME, new LogicalTypeConverter() {
             @Override
             public Object convert(Schema schema, Object value) {
-                if (value == null) return checkOptionalAndDefault(schema);
                 if (!(value instanceof Integer))
                     throw new DataException("Invalid type for Date, underlying representation should be int32 but was " + value.getClass());
                 return Date.toLogical(schema, (int) value);
@@ -231,7 +206,6 @@ public class JsonConverter implements Converter {
         TO_CONNECT_LOGICAL_CONVERTERS.put(Time.LOGICAL_NAME, new LogicalTypeConverter() {
             @Override
             public Object convert(Schema schema, Object value) {
-                if (value == null) return checkOptionalAndDefault(schema);
                 if (!(value instanceof Integer))
                     throw new DataException("Invalid type for Time, underlying representation should be int32 but was " + value.getClass());
                 return Time.toLogical(schema, (int) value);
@@ -241,7 +215,6 @@ public class JsonConverter implements Converter {
         TO_CONNECT_LOGICAL_CONVERTERS.put(Timestamp.LOGICAL_NAME, new LogicalTypeConverter() {
             @Override
             public Object convert(Schema schema, Object value) {
-                if (value == null) return checkOptionalAndDefault(schema);
                 if (!(value instanceof Long))
                     throw new DataException("Invalid type for Timestamp, underlying representation should be int64 but was " + value.getClass());
                 return Timestamp.toLogical(schema, (long) value);
@@ -688,10 +661,16 @@ public class JsonConverter implements Converter {
 
 
     private static Object convertToConnect(Schema schema, JsonNode jsonValue) {
-        JsonToConnectTypeConverter typeConverter;
         final Schema.Type schemaType;
         if (schema != null) {
             schemaType = schema.type();
+            if (jsonValue.isNull()) {
+                if (schema.defaultValue() != null)
+                    return schema.defaultValue(); // any logical type conversions should already have been applied
+                if (schema.isOptional())
+                    return null;
+                throw new DataException("Invalid null value for required " + schemaType +  " field");
+            }
         } else {
             switch (jsonValue.getNodeType()) {
                 case NULL:
@@ -724,9 +703,10 @@ public class JsonConverter implements Converter {
                     break;
             }
         }
-        typeConverter = TO_CONNECT_CONVERTERS.get(schemaType);
+
+        final JsonToConnectTypeConverter typeConverter = TO_CONNECT_CONVERTERS.get(schemaType);
         if (typeConverter == null)
-            throw new DataException("Unknown schema type: " + schema.type());
+            throw new DataException("Unknown schema type: " + String.valueOf(schemaType));
 
         Object converted = typeConverter.convert(schema, jsonValue);
         if (schema != null && schema.name() != null) {
@@ -736,7 +716,6 @@ public class JsonConverter implements Converter {
         }
         return converted;
     }
-
 
     private interface JsonToConnectTypeConverter {
         Object convert(Schema schema, JsonNode value);
