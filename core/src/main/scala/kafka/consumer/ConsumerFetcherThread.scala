@@ -22,8 +22,7 @@ import kafka.cluster.BrokerEndPoint
 import kafka.message.ByteBufferMessageSet
 import kafka.server.{PartitionFetchState, AbstractFetcherThread}
 import kafka.common.{ErrorMapping, TopicAndPartition}
-import scala.collection.JavaConverters
-import JavaConverters._
+import scala.collection.Map
 import ConsumerFetcherThread._
 import org.apache.kafka.common.TopicPartition
 
@@ -110,7 +109,6 @@ class ConsumerFetcherThread(name: String,
     simpleConsumer.fetch(fetchRequest.underlying).data.map { case (TopicAndPartition(t, p), value) =>
       new TopicPartition(t, p) -> new PartitionData(value)
     }
-
 }
 
 object ConsumerFetcherThread {

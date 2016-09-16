@@ -24,6 +24,7 @@ import java.util.Properties
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api._
 import kafka.cluster.Partition
+import kafka.server.QuotaFactory.{UnboundedQuota, QuotaManagers}
 import kafka.common
 import kafka.common._
 import kafka.controller.KafkaController
@@ -34,8 +35,9 @@ import kafka.network._
 import kafka.network.RequestChannel.{Response, Session}
 import kafka.security.auth
 import kafka.security.auth.{Authorizer, ClusterAction, Create, Describe, Group, Operation, Read, Resource, Write, Delete}
+import kafka.server.QuotaType._
 import kafka.utils.{Logging, SystemTime, ZKGroupTopicDirs, ZkUtils}
-import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidTopicException, NotLeaderForPartitionException, UnknownTopicOrPartitionException, TopicExistsException}
+import org.apache.kafka.common.errors.{ClusterAuthorizationException, NotLeaderForPartitionException, UnknownTopicOrPartitionException, TopicExistsException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, Protocol, SecurityProtocol}
 import org.apache.kafka.common.requests.{ApiVersionsResponse, DescribeGroupsRequest, DescribeGroupsResponse, GroupCoordinatorRequest, GroupCoordinatorResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsResponse, ListOffsetRequest, ListOffsetResponse, MetadataRequest, MetadataResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetFetchRequest, OffsetFetchResponse, ProduceRequest, ProduceResponse, ResponseHeader, ResponseSend, StopReplicaRequest, StopReplicaResponse, SyncGroupRequest, SyncGroupResponse, UpdateMetadataRequest, UpdateMetadataResponse, CreateTopicsRequest, CreateTopicsResponse, DeleteTopicsRequest, DeleteTopicsResponse}
@@ -60,11 +62,10 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val config: KafkaConfig,
                 val metadataCache: MetadataCache,
                 val metrics: Metrics,
-                val authorizer: Option[Authorizer]) extends Logging {
+                val authorizer: Option[Authorizer],
+                val quotas: QuotaManagers) extends Logging {
 
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
-  // Store all the quota managers for each type of request
-  val quotaManagers: Map[Short, ClientQuotaManager] = instantiateQuotaManagers(config)
 
   /**
    * Top-level method that handles all requests and multiplexes to the right api
@@ -393,7 +394,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // When this callback is triggered, the remote API call has completed
       request.apiRemoteCompleteTimeMs = SystemTime.milliseconds
 
-      quotaManagers(ApiKeys.PRODUCE.id).recordAndMaybeThrottle(
+      quotas.produce.recordAndMaybeThrottle(
         request.header.clientId,
         numBytesAppended,
         produceResponseCallback)
@@ -482,17 +483,18 @@ class KafkaApis(val requestChannel: RequestChannel,
         requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(request.connectionId, response)))
       }
 
-
       // When this callback is triggered, the remote API call has completed
       request.apiRemoteCompleteTimeMs = SystemTime.milliseconds
 
-      // Do not throttle replication traffic
       if (fetchRequest.isFromFollower) {
+        //We've already evaluated against the quota and are good to go. Just need to record it now.
+        val responseSize = sizeOfThrottledPartitions(fetchRequest, mergedPartitionData, quotas.leader)
+        quotas.leader.record(responseSize)
         fetchResponseCallback(0)
       } else {
         val responseSize = FetchResponse.responseSize(FetchResponse.batchByTopic(mergedPartitionData.toSeq),
           fetchRequest.versionId)
-        quotaManagers(ApiKeys.FETCH.id).recordAndMaybeThrottle(fetchRequest.clientId, responseSize, fetchResponseCallback)
+        quotas.fetch.recordAndMaybeThrottle(fetchRequest.clientId, responseSize, fetchResponseCallback)
       }
     }
 
@@ -506,9 +508,20 @@ class KafkaApis(val requestChannel: RequestChannel,
         fetchRequest.minBytes,
         fetchRequest.maxBytes,
         authorizedRequestInfo,
+        replicationQuota(fetchRequest),
         sendResponseCallback)
     }
   }
+
+  private def sizeOfThrottledPartitions(fetchRequest: FetchRequest,
+                                        mergedPartitionData: Seq[(TopicAndPartition, FetchResponsePartitionData)],
+                                        quota: ReplicationQuotaManager): Int = {
+    val throttledPartitions = mergedPartitionData.filter { case (partition, _) => quota.isThrottled(partition) }
+    FetchResponse.responseSize(FetchRequest.batchByTopic(throttledPartitions), fetchRequest.versionId)
+  }
+
+  def replicationQuota(fetchRequest: FetchRequest): ReplicaQuota =
+    if (fetchRequest.isFromFollower) quotas.leader else UnboundedQuota
 
   /**
    * Handle an offset request
@@ -976,31 +989,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  /*
-   * Returns a Map of all quota managers configured. The request Api key is the key for the Map
-   */
-  private def instantiateQuotaManagers(cfg: KafkaConfig): Map[Short, ClientQuotaManager] = {
-    val producerQuotaManagerCfg = ClientQuotaManagerConfig(
-      quotaBytesPerSecondDefault = cfg.producerQuotaBytesPerSecondDefault,
-      numQuotaSamples = cfg.numQuotaSamples,
-      quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
-    )
-
-    val consumerQuotaManagerCfg = ClientQuotaManagerConfig(
-      quotaBytesPerSecondDefault = cfg.consumerQuotaBytesPerSecondDefault,
-      numQuotaSamples = cfg.numQuotaSamples,
-      quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
-    )
-
-    val quotaManagers = Map[Short, ClientQuotaManager](
-      ApiKeys.PRODUCE.id ->
-              new ClientQuotaManager(producerQuotaManagerCfg, metrics, ApiKeys.PRODUCE.name, new org.apache.kafka.common.utils.SystemTime),
-      ApiKeys.FETCH.id ->
-              new ClientQuotaManager(consumerQuotaManagerCfg, metrics, ApiKeys.FETCH.name, new org.apache.kafka.common.utils.SystemTime)
-    )
-    quotaManagers
-  }
-
   def handleLeaveGroupRequest(request: RequestChannel.Request) {
     val leaveGroupRequest = request.body.asInstanceOf[LeaveGroupRequest]
     val respHeader = new ResponseHeader(request.header.correlationId)
@@ -1047,9 +1035,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def close() {
-    quotaManagers.foreach { case (apiKey, quotaManager) =>
-      quotaManager.shutdown()
-    }
+    quotas.shutdown()
     info("Shutdown complete.")
   }
 

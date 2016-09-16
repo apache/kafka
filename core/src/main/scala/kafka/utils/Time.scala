@@ -40,7 +40,7 @@ object Time {
 /**
  * A mockable interface for time functions
  */
-trait Time {
+trait Time extends org.apache.kafka.common.utils.Time {
   
   def milliseconds: Long
 

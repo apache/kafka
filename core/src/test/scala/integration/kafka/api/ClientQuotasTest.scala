@@ -19,7 +19,7 @@ import java.util.Properties
 import kafka.admin.AdminUtils
 import kafka.consumer.SimpleConsumer
 import kafka.integration.KafkaServerTestHarness
-import kafka.server.{ClientQuotaManager, ClientConfigOverride, KafkaConfig, KafkaServer}
+import kafka.server._
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
@@ -36,7 +36,7 @@ import scala.collection.JavaConverters._
 import scala.collection.Map
 import scala.collection.mutable
 
-class QuotasTest extends KafkaServerTestHarness {
+class ClientQuotasTest extends KafkaServerTestHarness {
   private val producerBufferSize = 300000
   private val producerId1 = "QuotasTestProducer-1"
   private val producerId2 = "QuotasTestProducer-2"
@@ -153,9 +153,8 @@ class QuotasTest extends KafkaServerTestHarness {
     AdminUtils.changeClientIdConfig(zkUtils, consumerId2, props)
 
     TestUtils.retry(10000) {
-      val quotaManagers: Map[Short, ClientQuotaManager] = leaderNode.apis.quotaManagers
-      val overrideProducerQuota = quotaManagers.get(ApiKeys.PRODUCE.id).get.quota(producerId2)
-      val overrideConsumerQuota = quotaManagers.get(ApiKeys.FETCH.id).get.quota(consumerId2)
+      val overrideProducerQuota = leaderNode.apis.quotas.produce.quota(producerId2)
+      val overrideConsumerQuota = leaderNode.apis.quotas.fetch.quota(consumerId2)
 
       assertEquals(s"ClientId $producerId2 must have unlimited producer quota", Quota.upperBound(Long.MaxValue), overrideProducerQuota)
       assertEquals(s"ClientId $consumerId2 must have unlimited consumer quota", Quota.upperBound(Long.MaxValue), overrideConsumerQuota)

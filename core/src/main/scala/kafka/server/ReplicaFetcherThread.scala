@@ -27,6 +27,7 @@ import kafka.message.ByteBufferMessageSet
 import kafka.api.{KAFKA_0_9_0, KAFKA_0_10_0_IV0, KAFKA_0_10_1_IV1}
 import kafka.common.{KafkaStorageException, TopicAndPartition}
 import ReplicaFetcherThread._
+
 import org.apache.kafka.clients.{ManualMetadataUpdater, NetworkClient, ClientRequest, ClientResponse}
 import org.apache.kafka.common.network.{LoginType, Selectable, ChannelBuilders, NetworkReceive, Selector, Mode}
 import org.apache.kafka.common.requests.{ListOffsetResponse, FetchResponse, RequestSend, AbstractRequest, ListOffsetRequest}
@@ -36,7 +37,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{Errors, ApiKeys}
 import org.apache.kafka.common.utils.Time
 
-import scala.collection.{JavaConverters, Map, mutable}
+import scala.collection.{JavaConverters, Map}
 import JavaConverters._
 
 class ReplicaFetcherThread(name: String,
@@ -45,7 +46,8 @@ class ReplicaFetcherThread(name: String,
                            brokerConfig: KafkaConfig,
                            replicaMgr: ReplicaManager,
                            metrics: Metrics,
-                           time: Time)
+                           time: Time,
+                           quota: ReplicationQuotaManager)
   extends AbstractFetcherThread(name = name,
                                 clientId = name,
                                 sourceBroker = sourceBroker,
@@ -137,6 +139,8 @@ class ReplicaFetcherThread(name: String,
       if (logger.isTraceEnabled)
         trace("Follower %d set replica high watermark for partition [%s,%d] to %s"
           .format(replica.brokerId, topic, partitionId, followerHighWatermark))
+      if (quota.isThrottled(new TopicAndPartition(topic, partitionId)))
+        quota.record(messageSet.sizeInBytes)
     } catch {
       case e: KafkaStorageException =>
         fatal(s"Disk error while replicating data for $topicPartition", e)
@@ -273,8 +277,10 @@ class ReplicaFetcherThread(name: String,
   protected def buildFetchRequest(partitionMap: Seq[(TopicPartition, PartitionFetchState)]): FetchRequest = {
     val requestMap = new util.LinkedHashMap[TopicPartition, JFetchRequest.PartitionData]
 
+    val quotaExceeded = quota.isQuotaExceeded
     partitionMap.foreach { case (topicPartition, partitionFetchState) =>
-      if (partitionFetchState.isActive)
+      val topicAndPartition = new TopicAndPartition(topicPartition.topic, topicPartition.partition)
+      if (partitionFetchState.isActive && !(quota.isThrottled(topicAndPartition) && quotaExceeded))
         requestMap.put(topicPartition, new JFetchRequest.PartitionData(partitionFetchState.offset, fetchSize))
     }
 

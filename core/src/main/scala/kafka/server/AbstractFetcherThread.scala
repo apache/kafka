@@ -99,7 +99,6 @@ abstract class AbstractFetcherThread(name: String,
       }
       fetchRequest
     }
-
     if (!fetchRequest.isEmpty)
       processFetchRequest(fetchRequest)
   }

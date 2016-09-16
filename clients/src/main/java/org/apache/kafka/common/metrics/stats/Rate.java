@@ -28,8 +28,8 @@ import org.apache.kafka.common.metrics.MetricConfig;
  */
 public class Rate implements MeasurableStat {
 
-    private final TimeUnit unit;
-    private final SampledStat stat;
+    protected final TimeUnit unit;
+    protected final SampledStat stat;
 
     public Rate() {
         this(TimeUnit.SECONDS);
