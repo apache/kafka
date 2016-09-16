@@ -593,10 +593,13 @@ class ReplicaManager(val config: KafkaConfig,
 
     var limitBytes = fetchMaxBytes
     val result = new mutable.ArrayBuffer[(TopicAndPartition, LogReadResult)]
+    var minOneMessage = true
     readPartitionInfo.foreach { case (tp, fetchInfo) =>
-      val minOneMessage = tp == readPartitionInfo.head._1
       val readResult = read(tp, fetchInfo, limitBytes, minOneMessage)
-      limitBytes = math.max(0, limitBytes - readResult.info.messageSet.sizeInBytes)
+      val messageSetSize = readResult.info.messageSet.sizeInBytes
+      if (messageSetSize > 0)
+        minOneMessage = false
+      limitBytes = math.max(0, limitBytes - messageSetSize)
       result += (tp -> readResult)
     }
     result
