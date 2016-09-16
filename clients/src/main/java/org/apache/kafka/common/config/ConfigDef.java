@@ -927,7 +927,7 @@ public class ConfigDef {
         StringBuilder b = new StringBuilder();
 
         for (ConfigKey def : configs) {
-            b.append(getConfigKeyRst(def,b));
+            b.append(getConfigKeyRst(def, b));
             b.append("\n");
         }
         return b.toString();
