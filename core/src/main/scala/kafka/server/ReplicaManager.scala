@@ -28,6 +28,7 @@ import kafka.controller.KafkaController
 import kafka.log.{LogAppendInfo, LogManager}
 import kafka.message.{ByteBufferMessageSet, InvalidMessageException, Message, MessageSet}
 import kafka.metrics.KafkaMetricsGroup
+import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.utils._
 import org.apache.kafka.common.errors.{ControllerMovedException, CorruptRecordException, InvalidTimestampException,
                                         InvalidTopicException, NotLeaderForPartitionException, OffsetOutOfRangeException,
@@ -108,7 +109,9 @@ class ReplicaManager(val config: KafkaConfig,
                      scheduler: Scheduler,
                      val logManager: LogManager,
                      val isShuttingDown: AtomicBoolean,
-                     threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
+                     quotaManager: ReplicationQuotaManager,
+                     threadNamePrefix: Option[String] = None
+                    ) extends Logging with KafkaMetricsGroup {
   /* epoch of the controller that last changed the leader */
   @volatile var controllerEpoch: Int = KafkaController.InitialControllerEpoch - 1
   private val localBrokerId = config.brokerId
@@ -116,7 +119,7 @@ class ReplicaManager(val config: KafkaConfig,
     new Partition(t, p, time, this)
   })
   private val replicaStateChangeLock = new Object
-  val replicaFetcherManager = new ReplicaFetcherManager(config, this, metrics, jTime, threadNamePrefix)
+  val replicaFetcherManager = new ReplicaFetcherManager(config, this, metrics, jTime, threadNamePrefix, quotaManager)
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
   val highWatermarkCheckpoints = config.logDirs.map(dir => (new File(dir).getAbsolutePath, new OffsetCheckpoint(new File(dir, ReplicaManager.HighWatermarkFilename)))).toMap
   private var hwThreadInitialized = false
@@ -458,13 +461,14 @@ class ReplicaManager(val config: KafkaConfig,
                     replicaId: Int,
                     fetchMinBytes: Int,
                     fetchInfo: immutable.Map[TopicAndPartition, PartitionFetchInfo],
+                    quota: ReplicaQuota = UnboundedQuota,
                     responseCallback: Map[TopicAndPartition, FetchResponsePartitionData] => Unit) {
     val isFromFollower = replicaId >= 0
     val fetchOnlyFromLeader: Boolean = replicaId != Request.DebuggingConsumerId
     val fetchOnlyCommitted: Boolean = ! Request.isValidBrokerId(replicaId)
 
     // read from local logs
-    val logReadResults = readFromLocalLog(fetchOnlyFromLeader, fetchOnlyCommitted, fetchInfo)
+    val logReadResults = readFromLocalLog(fetchOnlyFromLeader, fetchOnlyCommitted, fetchInfo, quota)
 
     // if the fetch comes from the follower,
     // update its corresponding log end offset
@@ -489,8 +493,9 @@ class ReplicaManager(val config: KafkaConfig,
       val fetchPartitionStatus = logReadResults.map { case (topicAndPartition, result) =>
         (topicAndPartition, FetchPartitionStatus(result.info.fetchOffsetMetadata, fetchInfo.get(topicAndPartition).get))
       }
+
       val fetchMetadata = FetchMetadata(fetchMinBytes, fetchOnlyFromLeader, fetchOnlyCommitted, isFromFollower, fetchPartitionStatus)
-      val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, responseCallback)
+      val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, quota ,responseCallback)
 
       // create a list of (topic, partition) pairs to use as keys for this delayed fetch operation
       val delayedFetchKeys = fetchPartitionStatus.keys.map(new TopicPartitionOperationKey(_)).toSeq
@@ -507,8 +512,8 @@ class ReplicaManager(val config: KafkaConfig,
    */
   def readFromLocalLog(fetchOnlyFromLeader: Boolean,
                        readOnlyCommitted: Boolean,
-                       readPartitionInfo: Map[TopicAndPartition, PartitionFetchInfo]): Map[TopicAndPartition, LogReadResult] = {
-
+                       readPartitionInfo: Map[TopicAndPartition, PartitionFetchInfo],
+                       quota: ReplicaQuota): Map[TopicAndPartition, LogReadResult] = {
     readPartitionInfo.map { case (TopicAndPartition(topic, partition), PartitionFetchInfo(offset, fetchSize)) =>
       BrokerTopicStats.getBrokerTopicStats(topic).totalFetchRequestRate.mark()
       BrokerTopicStats.getBrokerAllTopicsStats().totalFetchRequestRate.mark()
@@ -536,10 +541,18 @@ class ReplicaManager(val config: KafkaConfig,
            * This can cause a replica to always be out of sync.
            */
           val initialLogEndOffset = localReplica.logEndOffset
+
           val logReadInfo = localReplica.log match {
             case Some(log) =>
               val adjustedFetchSize = if (Topic.isInternal(topic) && !readOnlyCommitted) Math.max(fetchSize, log.config.maxMessageSize) else fetchSize
-              log.read(offset, adjustedFetchSize, maxOffsetOpt)
+
+              //Try the read first, this tells us whether we need all of adjustedFetchSize for this partition
+              var fetch = log.read(offset, adjustedFetchSize, maxOffsetOpt)
+
+              //If the partition is marked as throttled, and we are over-quota then exclude it
+              if (quota.isThrottled(TopicAndPartition(topic, partition)) && quota.isQuotaExceeded)
+                fetch = FetchDataInfo(fetch.fetchOffsetMetadata, MessageSet.Empty)
+              fetch
             case None =>
               error("Leader for partition [%s,%d] does not have a local log".format(topic, partition))
               FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MessageSet.Empty)
