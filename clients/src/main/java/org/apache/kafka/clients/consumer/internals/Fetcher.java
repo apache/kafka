@@ -26,7 +26,6 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.InvalidTopicException;
-import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -594,14 +593,11 @@ public class Fetcher<K, V> {
                 ByteBuffer buffer = partition.recordSet;
                 MemoryRecords records = MemoryRecords.readableRecords(buffer);
                 List<ConsumerRecord<K, V>> parsed = new ArrayList<>();
-                boolean skippedRecords = false;
                 for (LogEntry logEntry : records) {
                     // Skip the messages earlier than current position.
                     if (logEntry.offset() >= position) {
                         parsed.add(parseRecord(tp, logEntry));
                         bytes += logEntry.size();
-                    } else {
-                        skippedRecords = true;
                     }
                 }
 
@@ -613,19 +609,6 @@ public class Fetcher<K, V> {
                     parsedRecords = new PartitionRecords<>(fetchOffset, tp, parsed);
                     ConsumerRecord<K, V> record = parsed.get(parsed.size() - 1);
                     this.sensors.recordsFetchLag.record(partition.highWatermark - record.offset());
-                } else if (buffer.limit() > 0 && !skippedRecords) {
-                    // we did not read a single message from a non-empty buffer
-                    // because that message's size is larger than fetch size, in this case
-                    // record this exception
-                    Map<TopicPartition, Long> recordTooLargePartitions = Collections.singletonMap(tp, fetchOffset);
-                    throw new RecordTooLargeException("There are some messages at [Partition=Offset]: "
-                            + recordTooLargePartitions
-                            + " whose size is larger than the fetch size "
-                            + this.fetchSize
-                            + " and hence cannot be ever returned."
-                            + " Increase the fetch size on the client (using max.partition.fetch.bytes),"
-                            + " or decrease the maximum message size the broker will allow (using message.max.bytes).",
-                            recordTooLargePartitions);
                 }
             } else if (partition.errorCode == Errors.NOT_LEADER_FOR_PARTITION.code()
                     || partition.errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code()) {
