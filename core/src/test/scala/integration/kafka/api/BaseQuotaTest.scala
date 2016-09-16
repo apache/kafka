@@ -16,7 +16,7 @@ package kafka.api
 
 import java.util.Properties
 
-import kafka.server.{QuotaConfigOverride, KafkaConfig, KafkaServer, QuotaId}
+import kafka.server.{DynamicConfig, KafkaConfig, KafkaServer, QuotaId}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
@@ -105,8 +105,8 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   def testProducerConsumerOverrideUnthrottled() {
     // Give effectively unlimited quota for producer and consumer
     val props = new Properties()
-    props.put(QuotaConfigOverride.ProducerOverride, Long.MaxValue.toString)
-    props.put(QuotaConfigOverride.ConsumerOverride, Long.MaxValue.toString)
+    props.put(DynamicConfig.Client.ProducerByteRateOverrideProp, Long.MaxValue.toString)
+    props.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, Long.MaxValue.toString)
 
     overrideQuotas(Long.MaxValue, Long.MaxValue)
     waitForQuotaUpdate(Long.MaxValue, Long.MaxValue)
@@ -188,8 +188,8 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
 
   def quotaProperties(producerQuota: Long, consumerQuota: Long): Properties = {
     val props = new Properties()
-    props.put(QuotaConfigOverride.ProducerOverride, producerQuota.toString)
-    props.put(QuotaConfigOverride.ConsumerOverride, consumerQuota.toString)
+    props.put(DynamicConfig.Client.ProducerByteRateOverrideProp, producerQuota.toString)
+    props.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, consumerQuota.toString)
     props
   }
 }

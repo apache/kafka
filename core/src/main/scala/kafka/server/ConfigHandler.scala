@@ -19,10 +19,10 @@ package kafka.server
 
 import java.util.Properties
 
+import DynamicConfig.Broker._
 import kafka.api.ApiVersion
 import kafka.log.{LogConfig, LogManager}
 import kafka.server.Constants._
-import kafka.server.KafkaConfig._
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.common.config.ConfigDef.Validator
@@ -30,7 +30,6 @@ import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
 import scala.collection.JavaConverters._
-
 /**
   * The ConfigHandler is used to process config change notifications received by the DynamicConfigManager
   */
@@ -96,10 +95,6 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
   }
 }
 
-object QuotaConfigOverride {
-  val ProducerOverride = "producer_byte_rate"
-  val ConsumerOverride = "consumer_byte_rate"
-}
 
 /**
  * Handles <client-id>, <user> or <user, client-id> quota config updates in ZK.
@@ -109,14 +104,14 @@ class QuotaConfigHandler(private val quotaManagers: QuotaManagers) {
 
   def updateQuotaConfig(sanitizedUser: Option[String], clientId: Option[String], config: Properties) {
     val producerQuota =
-      if (config.containsKey(QuotaConfigOverride.ProducerOverride))
-        Some(new Quota(config.getProperty(QuotaConfigOverride.ProducerOverride).toLong, true))
+      if (config.containsKey(DynamicConfig.Client.ProducerByteRateOverrideProp))
+        Some(new Quota(config.getProperty(DynamicConfig.Client.ProducerByteRateOverrideProp).toLong, true))
       else
         None
     quotaManagers.produce.updateQuota(sanitizedUser, clientId, producerQuota)
     val consumerQuota =
-      if (config.containsKey(QuotaConfigOverride.ConsumerOverride))
-        Some(new Quota(config.getProperty(QuotaConfigOverride.ConsumerOverride).toLong, true))
+      if (config.containsKey(DynamicConfig.Client.ConsumerByteRateOverrideProp))
+        Some(new Quota(config.getProperty(DynamicConfig.Client.ConsumerByteRateOverrideProp).toLong, true))
       else
         None
     quotaManagers.fetch.updateQuota(sanitizedUser, clientId, consumerQuota)
@@ -160,7 +155,7 @@ class UserConfigHandler(private val quotaManagers: QuotaManagers) extends QuotaC
 class BrokerConfigHandler(private val brokerConfig: KafkaConfig, private val quotaManagers: QuotaManagers) extends ConfigHandler with Logging {
   def processConfigChanges(brokerId: String, properties: Properties) {
     if (brokerConfig.brokerId == brokerId.trim.toInt) {
-      val limit = if (properties.containsKey(ThrottledReplicationRateLimitProp)) properties.getProperty(ThrottledReplicationRateLimitProp).toLong else Defaults.ThrottledReplicationRateLimit
+      val limit = if (properties.containsKey(ThrottledReplicationRateLimitProp)) properties.getProperty(ThrottledReplicationRateLimitProp).toLong else DefaultThrottledReplicationRateLimit
       quotaManagers.leader.updateQuota(upperBound(limit))
       quotaManagers.follower.updateQuota(upperBound(limit))
     }
