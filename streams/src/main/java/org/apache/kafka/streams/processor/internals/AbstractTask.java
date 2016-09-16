@@ -23,8 +23,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -40,8 +40,8 @@ public abstract class AbstractTask {
     protected final Consumer consumer;
     protected final ProcessorStateManager stateMgr;
     protected final Set<TopicPartition> partitions;
-    protected ProcessorContext processorContext;
-
+    protected InternalProcessorContext processorContext;
+    protected final ThreadCache cache;
     /**
      * @throws ProcessorStateException if the state manager cannot be created
      */
@@ -52,16 +52,18 @@ public abstract class AbstractTask {
                            Consumer<byte[], byte[]> consumer,
                            Consumer<byte[], byte[]> restoreConsumer,
                            boolean isStandby,
-                           StateDirectory stateDirectory) {
+                           StateDirectory stateDirectory,
+                           final ThreadCache cache) {
         this.id = id;
         this.applicationId = applicationId;
         this.partitions = new HashSet<>(partitions);
         this.topology = topology;
         this.consumer = consumer;
+        this.cache = cache;
 
         // create the processor state manager
         try {
-            this.stateMgr = new ProcessorStateManager(applicationId, id, partitions, restoreConsumer, isStandby, stateDirectory, topology.sourceStoreToSourceTopic());
+            this.stateMgr = new ProcessorStateManager(applicationId, id, partitions, restoreConsumer, isStandby, stateDirectory, topology.sourceStoreToSourceTopic(), topology.storeToProcessorNodeMap());
 
         } catch (IOException e) {
             throw new ProcessorStateException("Error while creating the state manager", e);
@@ -72,8 +74,7 @@ public abstract class AbstractTask {
         // set initial offset limits
         initializeOffsetLimits();
 
-        for (StateStoreSupplier stateStoreSupplier : this.topology.stateStoreSuppliers()) {
-            StateStore store = stateStoreSupplier.get();
+        for (StateStore store : this.topology.stateStores()) {
             store.init(this.processorContext, store);
         }
     }
@@ -96,6 +97,10 @@ public abstract class AbstractTask {
 
     public final ProcessorContext context() {
         return processorContext;
+    }
+
+    public final ThreadCache cache() {
+        return cache;
     }
 
     public abstract void commit();

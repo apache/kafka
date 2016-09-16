@@ -767,12 +767,13 @@ public class TopologyBuilder {
         Map<String, ProcessorNode> processorMap = new HashMap<>();
         Map<String, SourceNode> topicSourceMap = new HashMap<>();
         Map<String, SinkNode> topicSinkMap = new HashMap<>();
-        Map<String, StateStoreSupplier> stateStoreMap = new HashMap<>();
+        Map<String, StateStore> stateStoreMap = new LinkedHashMap<>();
+        Map<StateStore, ProcessorNode> storeToProcessorNodeMap = new HashMap<>();
 
         // create processor nodes in a topological order ("nodeFactories" is already topologically sorted)
         for (NodeFactory factory : nodeFactories.values()) {
             if (nodeGroup == null || nodeGroup.contains(factory.name)) {
-                ProcessorNode node = factory.build();
+                final ProcessorNode node = factory.build();
                 processorNodes.add(node);
                 processorMap.put(node.name(), node);
 
@@ -782,7 +783,10 @@ public class TopologyBuilder {
                     }
                     for (String stateStoreName : ((ProcessorNodeFactory) factory).stateStoreNames) {
                         if (!stateStoreMap.containsKey(stateStoreName)) {
-                            stateStoreMap.put(stateStoreName, stateFactories.get(stateStoreName).supplier);
+                            final StateStoreSupplier supplier = stateFactories.get(stateStoreName).supplier;
+                            final StateStore stateStore = supplier.get();
+                            stateStoreMap.put(stateStoreName, stateStore);
+                            storeToProcessorNodeMap.put(stateStore, node);
                         }
                     }
                 } else if (factory instanceof SourceNodeFactory) {
@@ -815,9 +819,9 @@ public class TopologyBuilder {
             }
         }
 
-        return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap, new ArrayList<>(stateStoreMap.values()), sourceStoreToSourceTopic);
+        return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap, new ArrayList<>(stateStoreMap.values()), sourceStoreToSourceTopic, storeToProcessorNodeMap);
     }
-
+    
     /**
      * Returns the map of topic groups keyed by the group id.
      * A topic group is a group of topics in the same task.

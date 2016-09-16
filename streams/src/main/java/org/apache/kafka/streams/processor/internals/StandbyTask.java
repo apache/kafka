@@ -59,7 +59,7 @@ public class StandbyTask extends AbstractTask {
                        Consumer<byte[], byte[]> restoreConsumer,
                        StreamsConfig config,
                        StreamsMetrics metrics, final StateDirectory stateDirectory) {
-        super(id, applicationId, partitions, topology, consumer, restoreConsumer, true, stateDirectory);
+        super(id, applicationId, partitions, topology, consumer, restoreConsumer, true, stateDirectory, null);
 
         log.info("task [{}] Creating processorContext", id());
 
@@ -92,7 +92,7 @@ public class StandbyTask extends AbstractTask {
 
     public void commit() {
         log.debug("task [{}] flushing", id());
-        stateMgr.flush();
+        stateMgr.flush(processorContext);
 
         // reinitialize offset limits
         initializeOffsetLimits();

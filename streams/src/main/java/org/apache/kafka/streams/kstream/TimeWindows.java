@@ -110,6 +110,11 @@ public class TimeWindows extends Windows<TimeWindow> {
     }
 
     @Override
+    public long size() {
+        return size;
+    }
+
+    @Override
     public final boolean equals(Object o) {
         if (o == this) {
             return true;

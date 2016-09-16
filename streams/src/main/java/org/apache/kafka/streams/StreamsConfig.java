@@ -136,6 +136,9 @@ public class StreamsConfig extends AbstractConfig {
     public static final String WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG = "windowstore.changelog.additional.retention.ms";
     public static final String WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC = "Added to a windows maintainMs to ensure data is not deleted from the log prematurely. Allows for clock drift. Default is 1 day";
 
+    /** <code>cache.max.bytes.buffering</code> */
+    public static final String CACHE_MAX_BYTES_BUFFERING_CONFIG = "cache.max.bytes.buffering";
+    public static final String CACHE_MAX_BYTES_BUFFERING_DOC = "Maximum number of memory bytes to be used for buffering across all threads";
 
     static {
         CONFIG = new ConfigDef().define(APPLICATION_ID_CONFIG,      // required with no default value
@@ -247,7 +250,13 @@ public class StreamsConfig extends AbstractConfig {
                                         Type.LONG,
                                         24 * 60 * 60 * 1000,
                                         Importance.MEDIUM,
-                                        WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC);
+                                        WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC)
+                                .define(CACHE_MAX_BYTES_BUFFERING_CONFIG,
+                                        Type.LONG,
+                                        10 * 1024 * 1024L,
+                                        atLeast(0),
+                                        Importance.LOW,
+                                        CACHE_MAX_BYTES_BUFFERING_DOC);
     }
 
     // this is the list of configs for underlying clients
