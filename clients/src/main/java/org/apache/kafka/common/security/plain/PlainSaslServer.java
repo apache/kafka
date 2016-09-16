@@ -18,7 +18,6 @@
 
 package org.apache.kafka.common.security.plain;
 
-import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.Arrays;
 import java.util.Map;
@@ -29,8 +28,7 @@ import javax.security.sasl.SaslException;
 import javax.security.sasl.SaslServer;
 import javax.security.sasl.SaslServerFactory;
 
-import org.apache.kafka.common.network.LoginType;
-import org.apache.kafka.common.security.JaasUtils;
+import org.apache.kafka.common.security.auth.SaslPasswordVerifier;
 
 /**
  * Simple SaslServer implementation for SASL/PLAIN. In order to make this implementation
@@ -48,12 +46,13 @@ import org.apache.kafka.common.security.JaasUtils;
 public class PlainSaslServer implements SaslServer {
 
     public static final String PLAIN_MECHANISM = "PLAIN";
-    private static final String JAAS_USER_PREFIX = "user_";
 
     private boolean complete;
     private String authorizationID;
+    private SaslPasswordVerifier passwordVerifier;
 
-    public PlainSaslServer(CallbackHandler callbackHandler) {
+    public PlainSaslServer(CallbackHandler callbackHandler, SaslPasswordVerifier pw) {
+        passwordVerifier = pw;
     }
 
     @Override
@@ -92,13 +91,8 @@ public class PlainSaslServer implements SaslServer {
         if (authorizationID.isEmpty())
             authorizationID = username;
 
-        try {
-            String expectedPassword = JaasUtils.jaasConfig(LoginType.SERVER.contextName(), JAAS_USER_PREFIX + username);
-            if (!password.equals(expectedPassword)) {
-                throw new SaslException("Authentication failed: Invalid username or password");
-            }
-        } catch (IOException e) {
-            throw new SaslException("Authentication failed: Invalid JAAS configuration", e);
+        if (!passwordVerifier.verifyPassword(username, password)) {
+            throw new SaslException("Authentication failed: Invalid username or password");
         }
         complete = true;
         return new byte[0];
@@ -155,7 +149,7 @@ public class PlainSaslServer implements SaslServer {
             if (!PLAIN_MECHANISM.equals(mechanism)) {
                 throw new SaslException(String.format("Mechanism \'%s\' is not supported. Only PLAIN is supported.", mechanism));
             }
-            return new PlainSaslServer(cbh);
+            return new PlainSaslServer(cbh, new JaasPlainPasswordVerifier());
         }
 
         @Override
