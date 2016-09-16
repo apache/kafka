@@ -20,6 +20,7 @@ package org.apache.kafka.common.internals;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,7 +60,7 @@ public class PartitionStates<S> {
      * Returns the partitions in random order.
      */
     public Set<TopicPartition> partitionSet() {
-        return map.keySet();
+        return new HashSet<>(map.keySet());
     }
 
     public void clear() {
