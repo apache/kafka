@@ -529,7 +529,9 @@ class ReplicaManager(val config: KafkaConfig,
       BrokerTopicStats.getBrokerAllTopicsStats().totalFetchRequestRate.mark()
 
       try {
-        trace("Fetching log segment for topic %s, partition %d, offset %d, partition fetch size %d, remaining response limit %d".format(topic, partition, offset, fetchSize, limitBytes))
+        trace(s"Fetching log segment for partition $tp, offset ${offset}, partition fetch size ${fetchSize}, " +
+          s"remaining response limit ${limitBytes}" +
+          (if (minOneMessage) s", ignoring size limits for first message" else ""))
 
         // decide whether to only fetch from leader
         val localReplica = if (fetchOnlyFromLeader)
@@ -558,12 +560,12 @@ class ReplicaManager(val config: KafkaConfig,
             val fetch = log.read(offset, adjustedFetchSize, maxOffsetOpt, minOneMessage)
 
             // If the partition is marked as throttled, and we are over-quota then exclude it
-            if (quota.isThrottled(TopicAndPartition(topic, partition)) && quota.isQuotaExceeded)
+            if (quota.isThrottled(tp) && quota.isQuotaExceeded)
               FetchDataInfo(fetch.fetchOffsetMetadata, MessageSet.Empty)
             else fetch
 
           case None =>
-            error("Leader for partition [%s,%d] does not have a local log".format(topic, partition))
+            error(s"Leader for partition $tp does not have a local log")
             FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MessageSet.Empty)
         }
 
@@ -584,7 +586,7 @@ class ReplicaManager(val config: KafkaConfig,
         case e: Throwable =>
           BrokerTopicStats.getBrokerTopicStats(topic).failedFetchRequestRate.mark()
           BrokerTopicStats.getBrokerAllTopicsStats().failedFetchRequestRate.mark()
-          error("Error processing fetch operation on partition [%s,%d] offset %d".format(topic, partition, offset), e)
+          error(s"Error processing fetch operation on partition ${tp}, offset $offset", e)
           LogReadResult(FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MessageSet.Empty), -1L, fetchSize, false, Some(e))
       }
     }
