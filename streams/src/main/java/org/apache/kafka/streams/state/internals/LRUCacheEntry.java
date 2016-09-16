@@ -30,7 +30,6 @@ class LRUCacheEntry implements RecordContext {
     boolean isDirty;
     private final int partition;
     private long sizeBytes = 0;
-    private final byte version = 1;
 
 
     LRUCacheEntry(final byte[] value) {
@@ -51,7 +50,6 @@ class LRUCacheEntry implements RecordContext {
                 8 + // timestamp
                 8 + // offset
                 4 + // partition
-                1 + // version
                 topic.length();
 
     }
