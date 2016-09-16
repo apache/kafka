@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.StateStoreSupplier;
 
 import java.util.Map;
 
+
 public abstract class AbstractStoreSupplier<K, V> implements StateStoreSupplier {
     protected final String name;
     protected final Serde<K> keySerde;

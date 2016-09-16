@@ -35,6 +35,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -64,21 +65,24 @@ public class ProcessorStateManager {
     private final Map<String, String> sourceStoreToSourceTopic;
     private final TaskId taskId;
     private final StateDirectory stateDirectory;
+    private final Map<StateStore, ProcessorNode> stateStoreProcessorNodeMap;
 
     /**
      * @throws IOException if any error happens while creating or locking the state directory
      */
     public ProcessorStateManager(String applicationId, TaskId taskId, Collection<TopicPartition> sources, Consumer<byte[], byte[]> restoreConsumer, boolean isStandby,
-        StateDirectory stateDirectory, final Map<String, String> sourceStoreToSourceTopic) throws IOException {
+                                 StateDirectory stateDirectory, final Map<String, String> sourceStoreToSourceTopic,
+                                 final Map<StateStore, ProcessorNode> stateStoreProcessorNodeMap) throws IOException {
         this.applicationId = applicationId;
         this.defaultPartition = taskId.partition;
         this.taskId = taskId;
         this.stateDirectory = stateDirectory;
+        this.stateStoreProcessorNodeMap = stateStoreProcessorNodeMap;
         this.partitionForTopic = new HashMap<>();
         for (TopicPartition source : sources) {
             this.partitionForTopic.put(source.topic(), source);
         }
-        this.stores = new HashMap<>();
+        this.stores = new LinkedHashMap<>();
         this.loggingEnabled = new HashSet<>();
         this.restoreConsumer = restoreConsumer;
         this.restoredOffsets = new HashMap<>();
@@ -288,11 +292,16 @@ public class ProcessorStateManager {
         return stores.get(name);
     }
 
-    public void flush() {
+    public void flush(final InternalProcessorContext context) {
         if (!this.stores.isEmpty()) {
             log.debug("task [{}] Flushing stores.", taskId);
-            for (StateStore store : this.stores.values())
+            for (StateStore store : this.stores.values()) {
+                final ProcessorNode processorNode = stateStoreProcessorNodeMap.get(store);
+                if (processorNode != null) {
+                    context.setCurrentNode(processorNode);
+                }
                 store.flush();
+            }
         }
     }
 
