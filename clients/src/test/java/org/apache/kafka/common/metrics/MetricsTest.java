@@ -35,6 +35,7 @@ import org.apache.kafka.common.metrics.stats.Percentiles;
 import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Total;
+import org.apache.kafka.common.metrics.stats.SimpleRate;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.After;
 import org.junit.Before;
@@ -459,4 +460,62 @@ public class MetricsTest {
 
     }
 
+    @Test
+    public void testSimpleRate() {
+        SimpleRate rate = new SimpleRate();
+
+        //Given
+        MetricConfig config = new MetricConfig().timeWindow(1, TimeUnit.SECONDS).samples(10);
+
+        //In the first window the rate is a fraction of the whole (1s) window
+        //So when we record 1000 at t0, the rate should be 1000 until the window completes, or more data is recorded.
+        record(rate, config, 1000);
+        assertEquals(1000, measure(rate, config), 0);
+        time.sleep(100);
+        assertEquals(1000, measure(rate, config), 0); // 1000B / 0.1s
+        time.sleep(100);
+        assertEquals(1000, measure(rate, config), 0); // 1000B / 0.2s
+        time.sleep(200);
+        assertEquals(1000, measure(rate, config), 0); // 1000B / 0.4s
+
+        //In the second (and subsequent) window(s), the rate will be in proportion to the elapsed time
+        //So the rate will degrade over time, as the time between measurement and the initial recording grows.
+        time.sleep(600);
+        assertEquals(1000, measure(rate, config), 0); // 1000B / 1.0s
+        time.sleep(200);
+        assertEquals(1000 / 1.2, measure(rate, config), 0); // 1000B / 1.2s
+        time.sleep(200);
+        assertEquals(1000 / 1.4, measure(rate, config), 0); // 1000B / 1.4s
+
+        //Adding another value, inside the same window should double the rate
+        record(rate, config, 1000);
+        assertEquals(2000 / 1.4, measure(rate, config), 0); // 2000B / 1.4s
+
+        //Going over the next window, should not change behaviour
+        time.sleep(1100);
+        assertEquals(2000 / 2.5, measure(rate, config), 0); // 2000B / 2.5s
+        record(rate, config, 1000);
+        assertEquals(3000 / 2.5, measure(rate, config), 0); // 3000B / 2.5s
+
+        //Sleeping for another 6.5 windows also should be the same
+        time.sleep(6500);
+        assertEquals(3000 / 9, measure(rate, config), 1); // 3000B / 9s
+        record(rate, config, 1000);
+        assertEquals(4000 / 9, measure(rate, config), 1); // 4000B / 9s
+
+        //Going over the 10 window boundary should cause the first window's values (1000) will be purged.
+        //So the rate is calculated based on the oldest reading, which is inside the second window, at 1.4s
+        time.sleep(1500);
+        assertEquals((4000 - 1000) / (10.5 - 1.4), measure(rate, config), 1);
+        record(rate, config, 1000);
+        assertEquals((5000 - 1000) / (10.5 - 1.4), measure(rate, config), 1);
+    }
+
+    private void record(Rate rate, MetricConfig config, int value) {
+        rate.record(config, value, time.milliseconds());
+    }
+
+    private Double measure(Measurable rate, MetricConfig config) {
+        return rate.measure(config, time.milliseconds());
+    }
 }
