@@ -16,7 +16,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.internals.FetchBuilder;
+import org.apache.kafka.common.internals.PartitionStates;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -72,7 +72,7 @@ public class SubscriptionState {
     private final Set<String> groupSubscription;
 
     /* the partitions that are currently assigned, note that the order of partition matters (see FetchBuilder for more details) */
-    private final FetchBuilder<TopicPartitionState> assignment;
+    private final PartitionStates<TopicPartitionState> assignment;
 
     /* do we need to request the latest committed offsets from the coordinator? */
     private boolean needsFetchCommittedOffsets;
@@ -87,7 +87,7 @@ public class SubscriptionState {
         this.defaultResetStrategy = defaultResetStrategy;
         this.subscription = Collections.emptySet();
         this.userAssignment = Collections.emptySet();
-        this.assignment = new FetchBuilder<>();
+        this.assignment = new PartitionStates<>();
         this.groupSubscription = new HashSet<>();
         this.needsFetchCommittedOffsets = true; // initialize to true for the consumers to fetch offset upon starting up
         this.subscribedPattern = null;
@@ -230,7 +230,7 @@ public class SubscriptionState {
 
     public Set<TopicPartition> pausedPartitions() {
         HashSet<TopicPartition> paused = new HashSet<>();
-        for (FetchBuilder.PartitionState<TopicPartitionState> state : assignment.partitionStates()) {
+        for (PartitionStates.PartitionState<TopicPartitionState> state : assignment.partitionStates()) {
             if (state.value().paused) {
                 paused.add(state.topicPartition());
             }
@@ -289,7 +289,7 @@ public class SubscriptionState {
 
     public List<TopicPartition> fetchablePartitions() {
         List<TopicPartition> fetchable = new ArrayList<>();
-        for (FetchBuilder.PartitionState<TopicPartitionState> state : assignment.partitionStates()) {
+        for (PartitionStates.PartitionState<TopicPartitionState> state : assignment.partitionStates()) {
             if (state.value().isFetchable())
                 fetchable.add(state.topicPartition());
         }
@@ -310,7 +310,7 @@ public class SubscriptionState {
 
     public Map<TopicPartition, OffsetAndMetadata> allConsumed() {
         Map<TopicPartition, OffsetAndMetadata> allConsumed = new HashMap<>();
-        for (FetchBuilder.PartitionState<TopicPartitionState> state : assignment.partitionStates()) {
+        for (PartitionStates.PartitionState<TopicPartitionState> state : assignment.partitionStates()) {
             if (state.value().hasValidPosition())
                 allConsumed.put(state.topicPartition(), new OffsetAndMetadata(state.value().position));
         }
@@ -346,7 +346,7 @@ public class SubscriptionState {
 
     public Set<TopicPartition> missingFetchPositions() {
         Set<TopicPartition> missing = new HashSet<>();
-        for (FetchBuilder.PartitionState<TopicPartitionState> state : assignment.partitionStates()) {
+        for (PartitionStates.PartitionState<TopicPartitionState> state : assignment.partitionStates()) {
             if (!state.value().hasValidPosition())
                 missing.add(state.topicPartition());
         }

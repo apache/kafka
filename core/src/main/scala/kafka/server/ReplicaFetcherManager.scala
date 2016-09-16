@@ -21,9 +21,9 @@ import kafka.cluster.BrokerEndPoint
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 
-class ReplicaFetcherManager(brokerConfig: KafkaConfig, replicaMgr: ReplicaManager, metrics: Metrics, time: Time, threadNamePrefix: Option[String] = None)
-        extends AbstractFetcherManager("ReplicaFetcherManager on broker " + brokerConfig.brokerId,
-                                       "Replica", brokerConfig.numReplicaFetchers) {
+class ReplicaFetcherManager(brokerConfig: KafkaConfig, replicaMgr: ReplicaManager, metrics: Metrics, time: Time, threadNamePrefix: Option[String] = None, quotaManager: ReplicationQuotaManager)
+      extends AbstractFetcherManager("ReplicaFetcherManager on broker " + brokerConfig.brokerId,
+        "Replica", brokerConfig.numReplicaFetchers) {
 
   override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
     val threadName = threadNamePrefix match {
@@ -33,12 +33,12 @@ class ReplicaFetcherManager(brokerConfig: KafkaConfig, replicaMgr: ReplicaManage
         "%s:ReplicaFetcherThread-%d-%d".format(p, fetcherId, sourceBroker.id)
     }
     new ReplicaFetcherThread(threadName, fetcherId, sourceBroker, brokerConfig,
-      replicaMgr, metrics, time)
+      replicaMgr, metrics, time, quotaManager)
   }
 
   def shutdown() {
     info("shutting down")
     closeAllFetchers()
     info("shutdown completed")
-  }  
+  }
 }

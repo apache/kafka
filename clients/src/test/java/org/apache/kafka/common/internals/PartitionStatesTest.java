@@ -28,13 +28,13 @@ import java.util.Map;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-public class FetchBuilderTest {
+public class PartitionStatesTest {
 
     @Test
     public void testSet() {
-        FetchBuilder<String> builder = new FetchBuilder<>();
+        PartitionStates<String> states = new PartitionStates<>();
         LinkedHashMap<TopicPartition, String> map = createMap();
-        builder.set(map);
+        states.set(map);
         LinkedHashMap<TopicPartition, String> expected = new LinkedHashMap<>();
         expected.put(new TopicPartition("foo", 2), "foo 2");
         expected.put(new TopicPartition("foo", 0), "foo 0");
@@ -42,10 +42,10 @@ public class FetchBuilderTest {
         expected.put(new TopicPartition("blah", 1), "blah 1");
         expected.put(new TopicPartition("baz", 2), "baz 2");
         expected.put(new TopicPartition("baz", 3), "baz 3");
-        checkState(builder, expected);
+        checkState(states, expected);
 
-        builder.set(new LinkedHashMap<TopicPartition, String>());
-        checkState(builder, new LinkedHashMap<TopicPartition, String>());
+        states.set(new LinkedHashMap<TopicPartition, String>());
+        checkState(states, new LinkedHashMap<TopicPartition, String>());
     }
 
     private LinkedHashMap<TopicPartition, String> createMap() {
@@ -59,24 +59,24 @@ public class FetchBuilderTest {
         return map;
     }
 
-    private void checkState(FetchBuilder<String> builder, LinkedHashMap<TopicPartition, String> expected) {
-        assertEquals(expected.keySet(), builder.partitionSet());
-        assertEquals(expected.size(), builder.size());
-        List<FetchBuilder.PartitionState<String>> states = new ArrayList<>();
+    private void checkState(PartitionStates<String> states, LinkedHashMap<TopicPartition, String> expected) {
+        assertEquals(expected.keySet(), states.partitionSet());
+        assertEquals(expected.size(), states.size());
+        List<PartitionStates.PartitionState<String>> statesList = new ArrayList<>();
         for (Map.Entry<TopicPartition, String> entry : expected.entrySet()) {
-            states.add(new FetchBuilder.PartitionState<>(entry.getKey(), entry.getValue()));
-            assertTrue(builder.contains(entry.getKey()));
+            statesList.add(new PartitionStates.PartitionState<>(entry.getKey(), entry.getValue()));
+            assertTrue(states.contains(entry.getKey()));
         }
-        assertEquals(states, builder.partitionStates());
+        assertEquals(statesList, states.partitionStates());
     }
 
     @Test
     public void testMoveToEnd() {
-        FetchBuilder<String> builder = new FetchBuilder<>();
+        PartitionStates<String> states = new PartitionStates<>();
         LinkedHashMap<TopicPartition, String> map = createMap();
-        builder.set(map);
+        states.set(map);
 
-        builder.moveToEnd(new TopicPartition("baz", 2));
+        states.moveToEnd(new TopicPartition("baz", 2));
         LinkedHashMap<TopicPartition, String> expected = new LinkedHashMap<>();
         expected.put(new TopicPartition("foo", 2), "foo 2");
         expected.put(new TopicPartition("foo", 0), "foo 0");
@@ -84,9 +84,9 @@ public class FetchBuilderTest {
         expected.put(new TopicPartition("blah", 1), "blah 1");
         expected.put(new TopicPartition("baz", 3), "baz 3");
         expected.put(new TopicPartition("baz", 2), "baz 2");
-        checkState(builder, expected);
+        checkState(states, expected);
 
-        builder.moveToEnd(new TopicPartition("foo", 2));
+        states.moveToEnd(new TopicPartition("foo", 2));
         expected = new LinkedHashMap<>();
         expected.put(new TopicPartition("foo", 0), "foo 0");
         expected.put(new TopicPartition("blah", 2), "blah 2");
@@ -94,28 +94,28 @@ public class FetchBuilderTest {
         expected.put(new TopicPartition("baz", 3), "baz 3");
         expected.put(new TopicPartition("baz", 2), "baz 2");
         expected.put(new TopicPartition("foo", 2), "foo 2");
-        checkState(builder, expected);
+        checkState(states, expected);
 
         // no-op
-        builder.moveToEnd(new TopicPartition("foo", 2));
-        checkState(builder, expected);
+        states.moveToEnd(new TopicPartition("foo", 2));
+        checkState(states, expected);
 
         // partition doesn't exist
-        builder.moveToEnd(new TopicPartition("baz", 5));
-        checkState(builder, expected);
+        states.moveToEnd(new TopicPartition("baz", 5));
+        checkState(states, expected);
 
         // topic doesn't exist
-        builder.moveToEnd(new TopicPartition("aaa", 2));
-        checkState(builder, expected);
+        states.moveToEnd(new TopicPartition("aaa", 2));
+        checkState(states, expected);
     }
 
     @Test
     public void testUpdateAndMoveToEnd() {
-        FetchBuilder<String> builder = new FetchBuilder<>();
+        PartitionStates<String> states = new PartitionStates<>();
         LinkedHashMap<TopicPartition, String> map = createMap();
-        builder.set(map);
+        states.set(map);
 
-        builder.updateAndMoveToEnd(new TopicPartition("foo", 0), "foo 0 updated");
+        states.updateAndMoveToEnd(new TopicPartition("foo", 0), "foo 0 updated");
         LinkedHashMap<TopicPartition, String> expected = new LinkedHashMap<>();
         expected.put(new TopicPartition("foo", 2), "foo 2");
         expected.put(new TopicPartition("blah", 2), "blah 2");
@@ -123,9 +123,9 @@ public class FetchBuilderTest {
         expected.put(new TopicPartition("baz", 2), "baz 2");
         expected.put(new TopicPartition("baz", 3), "baz 3");
         expected.put(new TopicPartition("foo", 0), "foo 0 updated");
-        checkState(builder, expected);
+        checkState(states, expected);
 
-        builder.updateAndMoveToEnd(new TopicPartition("baz", 2), "baz 2 updated");
+        states.updateAndMoveToEnd(new TopicPartition("baz", 2), "baz 2 updated");
         expected = new LinkedHashMap<>();
         expected.put(new TopicPartition("foo", 2), "foo 2");
         expected.put(new TopicPartition("blah", 2), "blah 2");
@@ -133,10 +133,10 @@ public class FetchBuilderTest {
         expected.put(new TopicPartition("baz", 3), "baz 3");
         expected.put(new TopicPartition("foo", 0), "foo 0 updated");
         expected.put(new TopicPartition("baz", 2), "baz 2 updated");
-        checkState(builder, expected);
+        checkState(states, expected);
 
         // partition doesn't exist
-        builder.updateAndMoveToEnd(new TopicPartition("baz", 5), "baz 5 new");
+        states.updateAndMoveToEnd(new TopicPartition("baz", 5), "baz 5 new");
         expected = new LinkedHashMap<>();
         expected.put(new TopicPartition("foo", 2), "foo 2");
         expected.put(new TopicPartition("blah", 2), "blah 2");
@@ -145,10 +145,10 @@ public class FetchBuilderTest {
         expected.put(new TopicPartition("foo", 0), "foo 0 updated");
         expected.put(new TopicPartition("baz", 2), "baz 2 updated");
         expected.put(new TopicPartition("baz", 5), "baz 5 new");
-        checkState(builder, expected);
+        checkState(states, expected);
 
         // topic doesn't exist
-        builder.updateAndMoveToEnd(new TopicPartition("aaa", 2), "aaa 2 new");
+        states.updateAndMoveToEnd(new TopicPartition("aaa", 2), "aaa 2 new");
         expected = new LinkedHashMap<>();
         expected.put(new TopicPartition("foo", 2), "foo 2");
         expected.put(new TopicPartition("blah", 2), "blah 2");
@@ -158,14 +158,14 @@ public class FetchBuilderTest {
         expected.put(new TopicPartition("baz", 2), "baz 2 updated");
         expected.put(new TopicPartition("baz", 5), "baz 5 new");
         expected.put(new TopicPartition("aaa", 2), "aaa 2 new");
-        checkState(builder, expected);
+        checkState(states, expected);
     }
 
     @Test
     public void testPartitionValues() {
-        FetchBuilder<String> builder = new FetchBuilder<>();
+        PartitionStates<String> states = new PartitionStates<>();
         LinkedHashMap<TopicPartition, String> map = createMap();
-        builder.set(map);
+        states.set(map);
         List<String> expected = new ArrayList<>();
         expected.add("foo 2");
         expected.add("foo 0");
@@ -173,47 +173,47 @@ public class FetchBuilderTest {
         expected.add("blah 1");
         expected.add("baz 2");
         expected.add("baz 3");
-        assertEquals(expected, builder.partitionStateValues());
+        assertEquals(expected, states.partitionStateValues());
     }
 
     @Test
     public void testClear() {
-        FetchBuilder<String> builder = new FetchBuilder<>();
+        PartitionStates<String> states = new PartitionStates<>();
         LinkedHashMap<TopicPartition, String> map = createMap();
-        builder.set(map);
-        builder.clear();
-        checkState(builder, new LinkedHashMap<TopicPartition, String>());
+        states.set(map);
+        states.clear();
+        checkState(states, new LinkedHashMap<TopicPartition, String>());
     }
 
     @Test
     public void testRemove() {
-        FetchBuilder<String> builder = new FetchBuilder<>();
+        PartitionStates<String> states = new PartitionStates<>();
         LinkedHashMap<TopicPartition, String> map = createMap();
-        builder.set(map);
+        states.set(map);
 
-        builder.remove(new TopicPartition("foo", 2));
+        states.remove(new TopicPartition("foo", 2));
         LinkedHashMap<TopicPartition, String> expected = new LinkedHashMap<>();
         expected.put(new TopicPartition("foo", 0), "foo 0");
         expected.put(new TopicPartition("blah", 2), "blah 2");
         expected.put(new TopicPartition("blah", 1), "blah 1");
         expected.put(new TopicPartition("baz", 2), "baz 2");
         expected.put(new TopicPartition("baz", 3), "baz 3");
-        checkState(builder, expected);
+        checkState(states, expected);
 
-        builder.remove(new TopicPartition("blah", 1));
+        states.remove(new TopicPartition("blah", 1));
         expected = new LinkedHashMap<>();
         expected.put(new TopicPartition("foo", 0), "foo 0");
         expected.put(new TopicPartition("blah", 2), "blah 2");
         expected.put(new TopicPartition("baz", 2), "baz 2");
         expected.put(new TopicPartition("baz", 3), "baz 3");
-        checkState(builder, expected);
+        checkState(states, expected);
 
-        builder.remove(new TopicPartition("baz", 3));
+        states.remove(new TopicPartition("baz", 3));
         expected = new LinkedHashMap<>();
         expected.put(new TopicPartition("foo", 0), "foo 0");
         expected.put(new TopicPartition("blah", 2), "blah 2");
         expected.put(new TopicPartition("baz", 2), "baz 2");
-        checkState(builder, expected);
+        checkState(states, expected);
     }
 
 }

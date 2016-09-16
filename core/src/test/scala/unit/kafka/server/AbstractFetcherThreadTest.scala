@@ -28,6 +28,7 @@ import org.junit.Assert.{assertFalse, assertTrue}
 import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
+import scala.collection.Map
 
 class AbstractFetcherThreadTest {
 

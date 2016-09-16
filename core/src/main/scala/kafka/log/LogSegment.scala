@@ -154,22 +154,22 @@ class LogSegment(val log: FileMessageSet,
     if (startOffsetAndSize == null)
       return null
 
-    val (startPosition, messageSize) = startOffsetAndSize
+    val (startPosition, messageSetSize) = startOffsetAndSize
     val offsetMetadata = new LogOffsetMetadata(startOffset, this.baseOffset, startPosition.position)
 
-    // if the size is zero, still return a log segment but with zero size
-    if (maxSize == 0 && !minOneMessage)
+    // return a log segment but with zero size in the case below
+    if (!minOneMessage && maxSize < messageSetSize)
       return FetchDataInfo(offsetMetadata, MessageSet.Empty)
 
-    val maxLength =
-      if (minOneMessage) math.max(maxSize, messageSize)
+    val adjustedMaxSize =
+      if (minOneMessage) math.max(maxSize, messageSetSize)
       else maxSize
 
     // calculate the length of the message set to read based on whether or not they gave us a maxOffset
     val length = maxOffset match {
       case None =>
         // no max offset, just read until the max position
-        min((maxPosition - startPosition.position).toInt, maxLength)
+        min((maxPosition - startPosition.position).toInt, adjustedMaxSize)
       case Some(offset) =>
         // there is a max offset, translate it to a file position and use that to calculate the max read size;
         // when the leader of a partition changes, it's possible for the new leader's high watermark to be less than the
@@ -183,7 +183,7 @@ class LogSegment(val log: FileMessageSet,
             logSize // the max offset is off the end of the log, use the end of the file
           else
             mapping._1.position
-        min(min(maxPosition, endPosition) - startPosition.position, maxLength).toInt
+        min(min(maxPosition, endPosition) - startPosition.position, adjustedMaxSize).toInt
     }
 
     FetchDataInfo(offsetMetadata, log.read(startPosition.position, length))
