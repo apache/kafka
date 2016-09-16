@@ -72,17 +72,14 @@ class MergedSortedCachedWindowStoreIterator<K, V> implements WindowStoreIterator
         }
 
         final int comparison = nextCacheTimestamp.compareTo(nextStoreTimestamp);
-        // Use the cached item as it will be at least as new as the stored item
-        if (comparison == 0) {
+        if (comparison > 0) {
+            return nextStoreValue();
+        } else if (comparison < 0) {
+            return nextCacheValue(nextCacheTimestamp);
+        } else {
             storeIterator.next();
-        }
-
-        if (comparison <= 0) {
             return nextCacheValue(nextCacheTimestamp);
         }
-
-        return nextStoreValue();
-
     }
 
     private KeyValue<Long, V> nextCacheValue(final Long timestamp) {

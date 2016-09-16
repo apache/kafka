@@ -176,14 +176,6 @@ public class ThreadCache {
         return size < 0;
     }
 
-    long dirtySize(final String name) {
-        final NamedCache cache = getCache(name);
-        if (cache == null) {
-            return 0;
-        }
-        return cache.dirtySize();
-    }
-
     long sizeBytes() {
         long sizeInBytes = 0;
         for (final NamedCache namedCache : caches.values()) {
