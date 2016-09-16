@@ -211,6 +211,7 @@ public class JsonConverter implements Converter {
         TO_CONNECT_LOGICAL_CONVERTERS.put(Decimal.LOGICAL_NAME, new LogicalTypeConverter() {
             @Override
             public Object convert(Schema schema, Object value) {
+                if (value == null) return checkOptionalAndDefault(schema);
                 if (!(value instanceof byte[]))
                     throw new DataException("Invalid type for Decimal, underlying representation should be bytes but was " + value.getClass());
                 return Decimal.toLogical(schema, (byte[]) value);
@@ -220,6 +221,7 @@ public class JsonConverter implements Converter {
         TO_CONNECT_LOGICAL_CONVERTERS.put(Date.LOGICAL_NAME, new LogicalTypeConverter() {
             @Override
             public Object convert(Schema schema, Object value) {
+                if (value == null) return checkOptionalAndDefault(schema);
                 if (!(value instanceof Integer))
                     throw new DataException("Invalid type for Date, underlying representation should be int32 but was " + value.getClass());
                 return Date.toLogical(schema, (int) value);
@@ -229,6 +231,7 @@ public class JsonConverter implements Converter {
         TO_CONNECT_LOGICAL_CONVERTERS.put(Time.LOGICAL_NAME, new LogicalTypeConverter() {
             @Override
             public Object convert(Schema schema, Object value) {
+                if (value == null) return checkOptionalAndDefault(schema);
                 if (!(value instanceof Integer))
                     throw new DataException("Invalid type for Time, underlying representation should be int32 but was " + value.getClass());
                 return Time.toLogical(schema, (int) value);
@@ -238,6 +241,7 @@ public class JsonConverter implements Converter {
         TO_CONNECT_LOGICAL_CONVERTERS.put(Timestamp.LOGICAL_NAME, new LogicalTypeConverter() {
             @Override
             public Object convert(Schema schema, Object value) {
+                if (value == null) return checkOptionalAndDefault(schema);
                 if (!(value instanceof Long))
                     throw new DataException("Invalid type for Timestamp, underlying representation should be int64 but was " + value.getClass());
                 return Timestamp.toLogical(schema, (long) value);
