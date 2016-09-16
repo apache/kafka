@@ -21,8 +21,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
-import org.apache.kafka.streams.kstream.Aggregator;
-import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
@@ -66,8 +64,6 @@ public class KStreamAggregationDedupIntegrationTest {
     private String outputTopic;
     private KGroupedStream<String, String> groupedStream;
     private Reducer<String> reducer;
-    private Initializer<Integer> initializer;
-    private Aggregator<String, String, Integer> aggregator;
     private KStream<Integer, String> stream;
 
 
@@ -100,18 +96,6 @@ public class KStreamAggregationDedupIntegrationTest {
             @Override
             public String apply(String value1, String value2) {
                 return value1 + ":" + value2;
-            }
-        };
-        initializer = new Initializer<Integer>() {
-            @Override
-            public Integer apply() {
-                return 0;
-            }
-        };
-        aggregator = new Aggregator<String, String, Integer>() {
-            @Override
-            public Integer apply(String aggKey, String value, Integer aggregate) {
-                return aggregate + value.length();
             }
         };
     }

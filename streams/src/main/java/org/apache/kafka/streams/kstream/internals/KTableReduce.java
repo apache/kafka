@@ -23,6 +23,7 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.CachedStateStore;
 
 public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
 
@@ -58,6 +59,7 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
             super.init(context);
 
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
+            ((CachedStateStore) store).setFlushListener(new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
         }
 
         /**
