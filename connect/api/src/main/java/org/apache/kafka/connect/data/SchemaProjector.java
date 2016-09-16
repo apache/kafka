@@ -109,16 +109,12 @@ public class SchemaProjector {
                     Object targetFieldValue = project(sourceField.schema(), sourceFieldValue, targetField.schema());
                     targetStruct.put(fieldName, targetFieldValue);
                 } catch (SchemaProjectorException e) {
-                    throw new SchemaProjectorException("Error projecting " + sourceField.name(), e);
+                    throw new SchemaProjectorException("Error projecting " + fieldName, e);
                 }
-            } else {
-                Object targetDefault;
-                if (targetField.schema().defaultValue() != null) {
-                    targetDefault = targetField.schema().defaultValue();
-                } else {
-                    throw new SchemaProjectorException("Cannot project " + source.schema() + " to " + target.schema());
-                }
-                targetStruct.put(fieldName, targetDefault);
+            } else if (targetField.schema().defaultValue() != null) {
+                targetStruct.put(fieldName, targetField.schema().defaultValue());
+            } else if (!targetField.schema().isOptional()) {
+                throw new SchemaProjectorException("Required field `" +  fieldName + "` is missing from source schema: " + source);
             }
         }
         return targetStruct;
