@@ -49,7 +49,6 @@ public class WrappingStoreProvider implements StateStoreProvider {
         }
         if (allStores.isEmpty()) {
             throw new InvalidStateStoreException("the state store, " + storeName + ", may have migrated to another instance.");
-
         }
         return allStores;
     }

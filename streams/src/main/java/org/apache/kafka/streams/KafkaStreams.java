@@ -370,7 +370,8 @@ public class KafkaStreams {
      * @param queryableStoreType    accept only stores that are accepted by {@link QueryableStoreType#accepts(StateStore)}
      * @param <T>                   return type
      * @return  A facade wrapping the {@link org.apache.kafka.streams.processor.StateStore} instances
-     * @throws org.apache.kafka.streams.errors.InvalidStateStoreException if the streams are (re-)initializing
+     * @throws org.apache.kafka.streams.errors.InvalidStateStoreException if the streams are (re-)initializing or
+     * a store with storeName and queryableStoreType doesnt' exist.
      */
     public <T> T store(final String storeName, final QueryableStoreType<T> queryableStoreType) {
         validateIsRunning();
