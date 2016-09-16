@@ -60,6 +60,7 @@ object CoreUtils extends Logging {
 
   /**
     * Create a thread
+    *
     * @param name The name of the thread
     * @param daemon Whether the thread should block JVM shutdown
     * @param fun The function to execute in the thread

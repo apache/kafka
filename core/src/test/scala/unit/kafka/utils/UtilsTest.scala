@@ -141,7 +141,7 @@ class UtilsTest extends JUnitSuite {
       assertTrue(m._2.equals("value"))
     }
   }
-  
+
   @Test
   def testInLock() {
     val lock = new ReentrantLock()

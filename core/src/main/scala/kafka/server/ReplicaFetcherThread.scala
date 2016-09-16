@@ -26,11 +26,10 @@ import kafka.message.ByteBufferMessageSet
 import kafka.api.{KAFKA_0_10_0_IV0, KAFKA_0_9_0}
 import kafka.common.{KafkaStorageException, TopicAndPartition}
 import ReplicaFetcherThread._
+
 import org.apache.kafka.clients.{ManualMetadataUpdater, NetworkClient, ClientRequest, ClientResponse}
 import org.apache.kafka.common.network.{LoginType, Selectable, ChannelBuilders, NetworkReceive, Selector, Mode}
-import org.apache.kafka.common.requests.{ListOffsetResponse, FetchResponse, RequestSend, AbstractRequest, ListOffsetRequest}
-import org.apache.kafka.common.requests.{FetchRequest => JFetchRequest}
-import org.apache.kafka.common.security.ssl.SslFactory
+import org.apache.kafka.common.requests.{FetchRequest => JFetchRequest, _}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{Errors, ApiKeys}
@@ -45,7 +44,9 @@ class ReplicaFetcherThread(name: String,
                            brokerConfig: KafkaConfig,
                            replicaMgr: ReplicaManager,
                            metrics: Metrics,
-                           time: Time)
+                           time: Time,
+                           quota: ReplicationQuotaManager
+                          )
   extends AbstractFetcherThread(name = name,
                                 clientId = name,
                                 sourceBroker = sourceBroker,
@@ -134,6 +135,8 @@ class ReplicaFetcherThread(name: String,
       if (logger.isTraceEnabled)
         trace("Follower %d set replica high watermark for partition [%s,%d] to %s"
           .format(replica.brokerId, topic, partitionId, followerHighWatermark))
+      if (quota.isThrottled(topicAndPartition))
+        quota.record(messageSet.sizeInBytes)
     } catch {
       case e: KafkaStorageException =>
         fatal(s"Disk error while replicating data for $topicAndPartition", e)
@@ -249,7 +252,6 @@ class ReplicaFetcherThread(name: String,
         networkClient.close(sourceBroker.id.toString)
         throw e
     }
-
   }
 
   private def earliestOrLatestOffset(topicAndPartition: TopicAndPartition, earliestOrLatest: Long, consumerId: Int): Long = {
@@ -269,15 +271,13 @@ class ReplicaFetcherThread(name: String,
 
   protected def buildFetchRequest(partitionMap: Map[TopicAndPartition, PartitionFetchState]): FetchRequest = {
     val requestMap = mutable.Map.empty[TopicPartition, JFetchRequest.PartitionData]
-
-    partitionMap.foreach { case ((TopicAndPartition(topic, partition), partitionFetchState)) =>
-      if (partitionFetchState.isActive)
-        requestMap(new TopicPartition(topic, partition)) = new JFetchRequest.PartitionData(partitionFetchState.offset, fetchSize)
+    val quotaExceeded = quota.isQuotaExceeded
+    partitionMap.foreach { case ((partition, partitionFetchState)) =>
+      if (partitionFetchState.isActive && !(quota.isThrottled(partition) && quotaExceeded))
+        requestMap(new TopicPartition(partition.topic, partition.partition)) = new JFetchRequest.PartitionData(partitionFetchState.offset, fetchSize)
     }
-
     new FetchRequest(new JFetchRequest(replicaId, maxWait, minBytes, requestMap.asJava))
   }
-
 }
 
 object ReplicaFetcherThread {

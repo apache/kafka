@@ -109,9 +109,12 @@ public final class Sensor {
 
     /**
      * Check if we have violated our quota for any metric that has a configured quota
-     * @param timeMs
      */
-    private void checkQuotas(long timeMs) {
+    public void checkQuotas() {
+        checkQuotas(time.milliseconds());
+    }
+
+    public void checkQuotas(long timeMs) {
         for (int i = 0; i < this.metrics.size(); i++) {
             KafkaMetric metric = this.metrics.get(i);
             MetricConfig config = metric.config();
@@ -120,11 +123,10 @@ public final class Sensor {
                 if (quota != null) {
                     double value = metric.value(timeMs);
                     if (!quota.acceptable(value)) {
-                        throw new QuotaViolationException(String.format(
-                            "'%s' violated quota. Actual: %f, Threshold: %f",
+                        throw new QuotaViolationException(
                             metric.metricName(),
                             value,
-                            quota.bound()));
+                            quota.bound());
                     }
                 }
             }
