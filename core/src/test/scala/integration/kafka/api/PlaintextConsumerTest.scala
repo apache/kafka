@@ -565,7 +565,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertArrayEquals(record.value(), consumerRecord.value())
   }
 
-  /** We should only return a large record if it's the first record in the first partition of the fetch request */
+  /** We should only return a large record if it's the first record in the first non-empty partition of the fetch request */
   @Test
   def testFetchHonoursFetchSizeIfLargeRecordNotFirst(): Unit = {
     val maxFetchBytes = 10 * 1024
