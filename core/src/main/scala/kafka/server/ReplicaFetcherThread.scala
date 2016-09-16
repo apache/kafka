@@ -120,7 +120,6 @@ class ReplicaFetcherThread(name: String,
       val partitionId = topicPartition.partition
       val replica = replicaMgr.getReplica(topic, partitionId).get
       val messageSet = partitionData.toByteBufferMessageSet
-      warnIfMessageOversized(messageSet, topicPartition)
 
       if (fetchOffset != replica.logEndOffset.messageOffset)
         throw new RuntimeException("Offset mismatch for partition %s: fetched offset = %d, log end offset = %d.".format(topicPartition, fetchOffset, replica.logEndOffset.messageOffset))
@@ -146,14 +145,6 @@ class ReplicaFetcherThread(name: String,
         fatal(s"Disk error while replicating data for $topicPartition", e)
         Runtime.getRuntime.halt(1)
     }
-  }
-
-  def warnIfMessageOversized(messageSet: ByteBufferMessageSet, topicPartition: TopicPartition): Unit = {
-    if (messageSet.sizeInBytes > 0 && messageSet.validBytes <= 0)
-      error(s"Replication is failing due to a message that is greater than replica.fetch.max.bytes for partition $topicPartition. " +
-        "This generally occurs when the max.message.bytes has been overridden to exceed this value and a suitably large " +
-        "message has also been sent. To fix this problem increase replica.fetch.max.bytes in your broker config to be " +
-        "equal or larger than your settings for max.message.bytes, both at a broker and topic level.")
   }
 
   /**
