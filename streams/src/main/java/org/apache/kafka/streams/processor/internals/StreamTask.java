@@ -262,10 +262,10 @@ public class StreamTask extends AbstractTask implements Punctuator {
      */
     public void commit() {
         log.debug("{} Committing its state", logPrefix);
-
         // 1) flush local state
         stateMgr.flush(processorContext);
 
+        log.trace("{} Start flushing its producer's sent records upon committing its state", logPrefix);
         // 2) flush produced records in the downstream and change logs of local states
         recordCollector.flush();
 
