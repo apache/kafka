@@ -1,32 +1,32 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+  * Licensed to the Apache Software Foundation (ASF) under one or more
+  * contributor license agreements.  See the NOTICE file distributed with
+  * this work for additional information regarding copyright ownership.
+  * The ASF licenses this file to You under the Apache License, Version 2.0
+  * (the "License"); you may not use this file except in compliance with
+  * the License.  You may obtain a copy of the License at
+  *
+  *    http://www.apache.org/licenses/LICENSE-2.0
+  *
+  * Unless required by applicable law or agreed to in writing, software
+  * distributed under the License is distributed on an "AS IS" BASIS,
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
 package kafka.server
 
 import java.util.Properties
 
-import org.apache.kafka.common.protocol.ApiKeys
+import kafka.log.LogConfig._
+import kafka.server.Constants._
 import org.junit.Assert._
 import org.apache.kafka.common.metrics.Quota
-import org.easymock.{Capture, EasyMock}
+import org.easymock.EasyMock
 import org.junit.Test
 import kafka.integration.KafkaServerTestHarness
 import kafka.utils._
 import kafka.common._
-import kafka.log.LogConfig
 import kafka.admin.{AdminOperationException, AdminUtils}
 
 import scala.collection.Map
@@ -37,19 +37,19 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   @Test
   def testConfigChange() {
     assertTrue("Should contain a ConfigHandler for topics",
-               this.servers.head.dynamicConfigHandlers.contains(ConfigType.Topic))
+      this.servers.head.dynamicConfigHandlers.contains(ConfigType.Topic))
     val oldVal: java.lang.Long = 100000L
     val newVal: java.lang.Long = 200000L
     val tp = TopicAndPartition("test", 0)
     val logProps = new Properties()
-    logProps.put(LogConfig.FlushMessagesProp, oldVal.toString)
+    logProps.put(FlushMessagesProp, oldVal.toString)
     AdminUtils.createTopic(zkUtils, tp.topic, 1, 1, logProps)
     TestUtils.retry(10000) {
       val logOpt = this.servers.head.logManager.getLog(tp)
       assertTrue(logOpt.isDefined)
       assertEquals(oldVal, logOpt.get.config.flushInterval)
     }
-    logProps.put(LogConfig.FlushMessagesProp, newVal.toString)
+    logProps.put(FlushMessagesProp, newVal.toString)
     AdminUtils.changeTopicConfig(zkUtils, tp.topic, logProps)
     TestUtils.retry(10000) {
       assertEquals(newVal, this.servers.head.logManager.getLog(tp).get.config.flushInterval)
@@ -59,23 +59,38 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   @Test
   def testClientQuotaConfigChange() {
     assertTrue("Should contain a ConfigHandler for topics",
-               this.servers.head.dynamicConfigHandlers.contains(ConfigType.Client))
+      this.servers.head.dynamicConfigHandlers.contains(ConfigType.Client))
     val clientId = "testClient"
     val props = new Properties()
     props.put(ClientConfigOverride.ProducerOverride, "1000")
     props.put(ClientConfigOverride.ConsumerOverride, "2000")
     AdminUtils.changeClientIdConfig(zkUtils, clientId, props)
+    val quotaManagers = servers.head.apis.quotas
 
     TestUtils.retry(10000) {
-      val configHandler = this.servers.head.dynamicConfigHandlers(ConfigType.Client).asInstanceOf[ClientIdConfigHandler]
-      val quotaManagers: Map[Short, ClientQuotaManager] = servers.head.apis.quotaManagers
-      val overrideProducerQuota = quotaManagers.get(ApiKeys.PRODUCE.id).get.quota(clientId)
-      val overrideConsumerQuota = quotaManagers.get(ApiKeys.FETCH.id).get.quota(clientId)
+      val overrideProducerQuota = quotaManagers.produce.quota(clientId)
+      val overrideConsumerQuota = quotaManagers.fetch.quota(clientId)
 
       assertEquals(s"ClientId $clientId must have overridden producer quota of 1000",
         Quota.upperBound(1000), overrideProducerQuota)
-        assertEquals(s"ClientId $clientId must have overridden consumer quota of 2000",
+      assertEquals(s"ClientId $clientId must have overridden consumer quota of 2000",
         Quota.upperBound(2000), overrideConsumerQuota)
+    }
+
+    val defaultProducerQuota = servers.head.apis.config.producerQuotaBytesPerSecondDefault.doubleValue
+    val defaultConsumerQuota = servers.head.apis.config.consumerQuotaBytesPerSecondDefault.doubleValue
+    assertNotEquals("defaultProducerQuota should be different from 1000", 1000, defaultProducerQuota)
+    assertNotEquals("defaultConsumerQuota should be different from 2000", 2000, defaultConsumerQuota)
+    AdminUtils.changeClientIdConfig(zkUtils, clientId, new Properties())
+
+    TestUtils.retry(10000) {
+      val producerQuota = quotaManagers.produce.quota(clientId)
+      val consumerQuota = quotaManagers.fetch.quota(clientId)
+
+      assertEquals(s"ClientId $clientId must have reset producer quota to " + defaultProducerQuota,
+        Quota.upperBound(defaultProducerQuota), producerQuota)
+      assertEquals(s"ClientId $clientId must have reset consumer quota to " + defaultConsumerQuota,
+        Quota.upperBound(defaultConsumerQuota), consumerQuota)
     }
   }
 
@@ -84,7 +99,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val topic = TestUtils.tempTopic
     try {
       val logProps = new Properties()
-      logProps.put(LogConfig.FlushMessagesProp, 10000: java.lang.Integer)
+      logProps.put(FlushMessagesProp, 10000: java.lang.Integer)
       AdminUtils.changeTopicConfig(zkUtils, topic, logProps)
       fail("Should fail with AdminOperationException for topic doesn't exist")
     } catch {
@@ -146,5 +161,48 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 
     // Verify that processConfigChanges was only called once
     EasyMock.verify(handler)
+  }
+
+  @Test
+  def shouldParseReplicationQuotaProperties {
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
+    val props: Properties = new Properties()
+
+    //Given
+    props.put(ThrottledReplicasListProp, "0:101,0:102,1:101,1:102")
+
+    //When/Then
+    assertEquals(Seq(0,1), configHandler.parseThrottledPartitions(props, 102))
+    assertEquals(Seq(), configHandler.parseThrottledPartitions(props, 103))
+  }
+
+  @Test
+  def shouldParseWildcardReplicationQuotaProperties {
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
+    val props: Properties = new Properties()
+
+    //Given
+    props.put(ThrottledReplicasListProp, "*")
+
+    //When
+    val result = configHandler.parseThrottledPartitions(props, 102)
+
+    //Then
+    assertEquals(AllReplicas, result)
+  }
+
+  @Test
+  def shouldParseReplicationQuotaReset {
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
+    val props: Properties = new Properties()
+
+    //Given
+    props.put(ThrottledReplicasListProp, "")
+
+    //When
+    val result = configHandler.parseThrottledPartitions(props, 102)
+
+    //Then
+    assertEquals(Seq(), result)
   }
 }

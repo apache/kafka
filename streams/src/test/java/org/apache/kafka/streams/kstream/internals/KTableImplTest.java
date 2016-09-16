@@ -113,9 +113,14 @@ public class KTableImplTest {
         driver = new KStreamTestDriver(builder, stateDir);
 
         driver.process(topic1, "A", "01");
+        driver.flushState();
         driver.process(topic1, "B", "02");
+        driver.flushState();
         driver.process(topic1, "C", "03");
+        driver.flushState();
         driver.process(topic1, "D", "04");
+        driver.flushState();
+        driver.flushState();
 
         assertEquals(Utils.mkList("A:01", "B:02", "C:03", "D:04"), proc1.processed);
         assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4"), proc2.processed);
@@ -173,6 +178,7 @@ public class KTableImplTest {
         driver.process(topic1, "A", "01");
         driver.process(topic1, "B", "01");
         driver.process(topic1, "C", "01");
+        driver.flushState();
 
         assertEquals("01", getter1.get("A"));
         assertEquals("01", getter1.get("B"));
@@ -192,6 +198,7 @@ public class KTableImplTest {
 
         driver.process(topic1, "A", "02");
         driver.process(topic1, "B", "02");
+        driver.flushState();
 
         assertEquals("02", getter1.get("A"));
         assertEquals("02", getter1.get("B"));
@@ -210,6 +217,7 @@ public class KTableImplTest {
         assertEquals("01", getter4.get("C"));
 
         driver.process(topic1, "A", "03");
+        driver.flushState();
 
         assertEquals("03", getter1.get("A"));
         assertEquals("02", getter1.get("B"));
@@ -228,10 +236,12 @@ public class KTableImplTest {
         assertEquals("01", getter4.get("C"));
 
         driver.process(topic1, "A", null);
+        driver.flushState();
 
         assertNull(getter1.get("A"));
         assertEquals("02", getter1.get("B"));
         assertEquals("01", getter1.get("C"));
+
 
         assertNull(getter2.get("A"));
         assertEquals(new Integer(2), getter2.get("B"));

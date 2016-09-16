@@ -90,5 +90,4 @@ class FetcherTest extends KafkaServerTestHarness {
         return
     }
   }
-
 }

@@ -21,25 +21,28 @@ import java.util.Properties
 
 import kafka.api.ApiVersion
 import kafka.log.{LogConfig, LogManager}
+import kafka.server.Constants._
+import kafka.server.KafkaConfig._
+import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
+import org.apache.kafka.common.config.ConfigDef.Validator
+import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.metrics.Quota
-import org.apache.kafka.common.protocol.ApiKeys
-
-import scala.collection.Map
+import org.apache.kafka.common.metrics.Quota._
 import scala.collection.JavaConverters._
 
 /**
- * The ConfigHandler is used to process config change notifications received by the DynamicConfigManager
- */
+  * The ConfigHandler is used to process config change notifications received by the DynamicConfigManager
+  */
 trait ConfigHandler {
   def processConfigChanges(entityName: String, value: Properties)
 }
 
 /**
- * The TopicConfigHandler will process topic config changes in ZK.
- * The callback provides the topic name and the full properties set read from ZK
- */
-class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig) extends ConfigHandler with Logging {
+  * The TopicConfigHandler will process topic config changes in ZK.
+  * The callback provides the topic name and the full properties set read from ZK
+  */
+class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig, val quotas: QuotaManagers) extends ConfigHandler with Logging  {
 
   def processConfigChanges(topic: String, topicConfig: Properties) {
     // Validate the compatibility of message format version.
@@ -63,6 +66,33 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
       val logConfig = LogConfig(props)
       logs.foreach(_.config = logConfig)
     }
+
+    val brokerId = kafkaConfig.brokerId
+
+    if (topicConfig.containsKey(LogConfig.ThrottledReplicasListProp) && topicConfig.getProperty(LogConfig.ThrottledReplicasListProp).length > 0) {
+      val partitions = parseThrottledPartitions(topicConfig, brokerId)
+      quotas.leader.markThrottled(topic, partitions)
+      quotas.follower.markThrottled(topic, partitions)
+      logger.debug(s"Setting throttled partitions on broker $brokerId for topic: $topic and partitions $partitions")
+    } else {
+      quotas.leader.removeThrottle(topic)
+      quotas.follower.removeThrottle(topic)
+      logger.debug(s"Removing throttled partitions from broker $brokerId for topic $topic")
+    }
+  }
+
+  def parseThrottledPartitions(topicConfig: Properties, brokerId: Int): Seq[Int] = {
+    val configValue = topicConfig.get(LogConfig.ThrottledReplicasListProp).toString.trim
+    ThrottledReplicaValidator.ensureValid(LogConfig.ThrottledReplicasListProp, configValue)
+    configValue.trim match {
+      case "" => Seq()
+      case "*" => AllReplicas
+      case _ => configValue.trim
+        .split(",")
+        .map(_.split(":"))
+        .filter(_ (1).toInt == brokerId) //Filter this replica
+        .map(_ (0).toInt).toSeq //convert to list of partition ids
+    }
   }
 }
 
@@ -72,21 +102,53 @@ object ClientConfigOverride {
 }
 
 /**
- * The ClientIdConfigHandler will process clientId config changes in ZK.
- * The callback provides the clientId and the full properties set read from ZK.
- * This implementation reports the overrides to the respective ClientQuotaManager objects
- */
-class ClientIdConfigHandler(private val quotaManagers: Map[Short, ClientQuotaManager]) extends ConfigHandler {
-
-  def processConfigChanges(clientId: String, clientConfig: Properties) = {
+  * The ClientIdConfigHandler will process clientId config changes in ZK.
+  * The callback provides the clientId and the full properties set read from ZK.
+  * This implementation reports the overrides to the respective ClientQuotaManager objects
+  */
+class ClientIdConfigHandler(private val quotaManagers: QuotaManagers) extends ConfigHandler {
+  def processConfigChanges(clientId: String, clientConfig: Properties) {
     if (clientConfig.containsKey(ClientConfigOverride.ProducerOverride)) {
-      quotaManagers(ApiKeys.PRODUCE.id).updateQuota(clientId,
+      quotaManagers.produce.updateQuota(clientId,
         new Quota(clientConfig.getProperty(ClientConfigOverride.ProducerOverride).toLong, true))
+    } else {
+      quotaManagers.fetch.resetQuota(clientId)
     }
 
     if (clientConfig.containsKey(ClientConfigOverride.ConsumerOverride)) {
-      quotaManagers(ApiKeys.FETCH.id).updateQuota(clientId,
+      quotaManagers.fetch.updateQuota(clientId,
         new Quota(clientConfig.getProperty(ClientConfigOverride.ConsumerOverride).toLong, true))
+    } else {
+      quotaManagers.produce.resetQuota(clientId)
     }
+  }
+}
+
+/**
+  * The BrokerConfigHandler will process individual broker config changes in ZK.
+  * The callback provides the brokerId and the full properties set read from ZK.
+  * This implementation reports the overrides to the respective ReplicationQuotaManager objects
+  */
+class BrokerConfigHandler(private val brokerConfig: KafkaConfig, private val quotaManagers: QuotaManagers) extends ConfigHandler with Logging {
+  def processConfigChanges(brokerId: String, properties: Properties) {
+    if (brokerConfig.brokerId == brokerId.trim.toInt) {
+      val limit = if (properties.containsKey(ThrottledReplicationRateLimitProp)) properties.getProperty(ThrottledReplicationRateLimitProp).toLong else Defaults.ThrottledReplicationRateLimit
+      quotaManagers.leader.updateQuota(upperBound(limit))
+      quotaManagers.follower.updateQuota(upperBound(limit))
+    }
+  }
+}
+
+object ThrottledReplicaValidator extends Validator {
+  override def ensureValid(name: String, value: scala.Any): Unit = {
+    value match {
+      case s: String => if (!isValid(s))
+        throw new ConfigException(name, value, s"$name  must match for format [partitionId],[brokerId]:[partitionId],[brokerId]:[partitionId],[brokerId] etc")
+      case _ => throw new ConfigException(name, value, s"$name  must be a string")
+    }
+  }
+
+  private def isValid(proposed: String): Boolean = {
+    proposed.trim.equals("*") || proposed.trim.matches("([0-9]+:[0-9]+)?(,[0-9]+:[0-9]+)*")
   }
 }

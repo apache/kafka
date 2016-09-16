@@ -35,6 +35,10 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -64,6 +68,7 @@ import static org.junit.Assert.assertThat;
  * }
  * </pre>
  */
+@RunWith(Parameterized.class)
 public class FanoutIntegrationTest {
     private static final int NUM_BROKERS = 1;
     @ClassRule
@@ -78,6 +83,16 @@ public class FanoutIntegrationTest {
         CLUSTER.createTopic(INPUT_TOPIC_A);
         CLUSTER.createTopic(OUTPUT_TOPIC_B);
         CLUSTER.createTopic(OUTPUT_TOPIC_C);
+    }
+
+
+    @Parameter
+    public long cacheSizeBytes;
+
+    //Single parameter, use Object[]
+    @Parameters
+    public static Object[] data() {
+        return new Object[] {0, 10 * 1024 * 1024L};
     }
 
     @Test
@@ -101,6 +116,7 @@ public class FanoutIntegrationTest {
         streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
         streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
 
         final KStream<byte[], String> stream1 = builder.stream(INPUT_TOPIC_A);
         final KStream<byte[], String> stream2 = stream1.mapValues(

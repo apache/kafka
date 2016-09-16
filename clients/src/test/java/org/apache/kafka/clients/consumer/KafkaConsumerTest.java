@@ -73,6 +73,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
 import static java.util.Collections.singleton;
+import static java.util.Collections.singletonList;
+import static java.util.Collections.singletonMap;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -139,7 +141,7 @@ public class KafkaConsumerTest {
     public void testSubscription() {
         KafkaConsumer<byte[], byte[]> consumer = newConsumer();
 
-        consumer.subscribe(Collections.singletonList(topic));
+        consumer.subscribe(singletonList(topic));
         assertEquals(singleton(topic), consumer.subscription());
         assertTrue(consumer.assignment().isEmpty());
 
@@ -147,7 +149,7 @@ public class KafkaConsumerTest {
         assertTrue(consumer.subscription().isEmpty());
         assertTrue(consumer.assignment().isEmpty());
 
-        consumer.assign(Collections.singletonList(tp0));
+        consumer.assign(singletonList(tp0));
         assertTrue(consumer.subscription().isEmpty());
         assertEquals(singleton(tp0), consumer.assignment());
 
@@ -175,7 +177,7 @@ public class KafkaConsumerTest {
         String nullTopic = null;
 
         try {
-            consumer.subscribe(Collections.singletonList(nullTopic));
+            consumer.subscribe(singletonList(nullTopic));
         } finally {
             consumer.close();
         }
@@ -187,7 +189,7 @@ public class KafkaConsumerTest {
         String emptyTopic = "  ";
 
         try {
-            consumer.subscribe(Collections.singletonList(emptyTopic));
+            consumer.subscribe(singletonList(emptyTopic));
         } finally {
             consumer.close();
         }
@@ -299,7 +301,7 @@ public class KafkaConsumerTest {
     public void testPause() {
         KafkaConsumer<byte[], byte[]> consumer = newConsumer();
 
-        consumer.assign(Collections.singletonList(tp0));
+        consumer.assign(singletonList(tp0));
         assertEquals(singleton(tp0), consumer.assignment());
         assertTrue(consumer.paused().isEmpty());
 
@@ -569,6 +571,41 @@ public class KafkaConsumerTest {
         assertEquals(5, records.count());
     }
 
+    @Test
+    public void fetchResponseWithUnexpectedPartitionIsIgnored() {
+        int rebalanceTimeoutMs = 60000;
+        int sessionTimeoutMs = 30000;
+        int heartbeatIntervalMs = 3000;
+
+        // adjust auto commit interval lower than heartbeat so we don't need to deal with
+        // a concurrent heartbeat request
+        int autoCommitIntervalMs = 1000;
+
+        Time time = new MockTime();
+        MockClient client = new MockClient(time);
+        Cluster cluster = TestUtils.singletonCluster(singletonMap(topic, 1));
+        Node node = cluster.nodes().get(0);
+        client.setNode(node);
+        Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+        metadata.update(cluster, time.milliseconds());
+        PartitionAssignor assignor = new RangeAssignor();
+
+        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
+                rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, true, autoCommitIntervalMs);
+
+        consumer.subscribe(singletonList(topic), getConsumerRebalanceListener(consumer));
+
+        prepareRebalance(client, node, assignor, singletonList(tp0), null);
+
+        Map<TopicPartition, FetchInfo> fetches1 = new HashMap<>();
+        fetches1.put(tp0, new FetchInfo(0, 1));
+        fetches1.put(t2p0, new FetchInfo(0, 10)); // not assigned and not fetched
+        client.prepareResponseFrom(fetchResponse(fetches1), node);
+
+        ConsumerRecords<String, String> records = consumer.poll(0);
+        assertEquals(0, records.count());
+    }
+
     /**
      * Verify that when a consumer changes its topic subscription its assigned partitions
      * do not immediately change, and the latest consumed offsets of its to-be-revoked
@@ -631,11 +668,16 @@ public class KafkaConsumerTest {
 
         ConsumerRecords<String, String> records = consumer.poll(0);
 
+        // clear out the prefetch so it doesn't interfere with the rest of the test
+        fetches1.put(tp0, new FetchInfo(1, 0));
+        fetches1.put(t2p0, new FetchInfo(10, 0));
+        client.respondFrom(fetchResponse(fetches1), node);
+        client.poll(0, time.milliseconds());
+
         // verify that the fetch occurred as expected
         assertEquals(11, records.count());
         assertEquals(1L, consumer.position(tp0));
         assertEquals(10L, consumer.position(t2p0));
-
 
         // subscription change
         consumer.subscribe(Arrays.asList(topic, topic3), getConsumerRebalanceListener(consumer));
@@ -655,12 +697,10 @@ public class KafkaConsumerTest {
         // mock rebalance responses
         prepareRebalance(client, node, assignor, Arrays.asList(tp0, t3p0), coordinator);
 
-        // mock a response to the outstanding fetch so that we have data available on the next poll
+        // mock a response to the next fetch from the new assignment
         Map<TopicPartition, FetchInfo> fetches2 = new HashMap<>();
         fetches2.put(tp0, new FetchInfo(1, 1));
         fetches2.put(t3p0, new FetchInfo(0, 100));
-        client.respondFrom(fetchResponse(fetches2), node);
-        client.poll(0, time.milliseconds());
         client.prepareResponse(fetchResponse(fetches2));
 
         records = consumer.poll(0);
@@ -679,14 +719,12 @@ public class KafkaConsumerTest {
         assertTrue(consumer.assignment().size() == 2);
         assertTrue(consumer.assignment().contains(tp0) && consumer.assignment().contains(t3p0));
 
-
         // mock the offset commit response for to be revoked partitions
         Map<TopicPartition, Long> partitionOffsets2 = new HashMap<>();
         partitionOffsets2.put(tp0, 2L);
         partitionOffsets2.put(t3p0, 100L);
         commitReceived = prepareOffsetCommitResponse(client, coordinator, partitionOffsets2);
 
-        // unsubscribe
         consumer.unsubscribe();
 
         // verify that subscription and assignment are both cleared
@@ -993,7 +1031,7 @@ public class KafkaConsumerTest {
         Map<TopicPartition, ListOffsetResponse.PartitionData> partitionData = new HashMap<>();
         for (Map.Entry<TopicPartition, Long> partitionOffset : offsets.entrySet()) {
             partitionData.put(partitionOffset.getKey(), new ListOffsetResponse.PartitionData(error,
-                    Collections.singletonList(partitionOffset.getValue())));
+                    singletonList(partitionOffset.getValue())));
         }
         return new ListOffsetResponse(partitionData).toStruct();
     }

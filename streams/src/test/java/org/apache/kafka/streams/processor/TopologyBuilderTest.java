@@ -237,13 +237,13 @@ public class TopologyBuilderTest {
         builder.addStateStore(supplier);
         builder.setApplicationId("X");
 
-        assertEquals(0, builder.build(null).stateStoreSuppliers().size());
+        assertEquals(0, builder.build(null).stateStores().size());
 
         builder.addSource("source-1", "topic-1");
         builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
         builder.connectProcessorAndStateStores("processor-1", "store-1");
 
-        List<StateStoreSupplier> suppliers = builder.build(null).stateStoreSuppliers();
+        List<StateStore> suppliers = builder.build(null).stateStores();
         assertEquals(1, suppliers.size());
         assertEquals(supplier.name(), suppliers.get(0).name());
     }
@@ -471,7 +471,7 @@ public class TopologyBuilderTest {
         builder.setApplicationId("appId");
         builder.addSource("source", "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
-        builder.addStateStore(new RocksDBWindowStoreSupplier("store", 30000, 3, false, null, null, true, Collections.<String, String>emptyMap()), "processor");
+        builder.addStateStore(new RocksDBWindowStoreSupplier("store", 30000, 3, false, null, null, 10000, true, Collections.<String, String>emptyMap(), false), "processor");
         final Map<Integer, TopicsInfo> topicGroups = builder.topicGroups();
         final TopicsInfo topicsInfo = topicGroups.values().iterator().next();
         final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-store-changelog");

@@ -78,7 +78,7 @@ public class StreamThreadStateStoreProviderTest {
                                   .withStringKeys()
                                   .withStringValues()
                                   .persistent()
-                                  .windowed(10, 2, false).build(), "the-processor");
+                                  .windowed(10, 10, 2, false).build(), "the-processor");
 
         final Properties properties = new Properties();
         final String applicationId = "applicationId";
@@ -187,7 +187,7 @@ public class StreamThreadStateStoreProviderTest {
                               clientSupplier.consumer,
                               clientSupplier.producer,
                               clientSupplier.restoreConsumer,
-                              streamsConfig, new TheStreamMetrics(), stateDirectory) {
+                              streamsConfig, new TheStreamMetrics(), stateDirectory, null) {
             @Override
             protected void initializeOffsetLimits() {
 

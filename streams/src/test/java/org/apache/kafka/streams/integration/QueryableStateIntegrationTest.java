@@ -44,11 +44,18 @@ import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+import static org.junit.Assert.fail;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
+
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -66,48 +73,65 @@ import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
+@RunWith(Parameterized.class)
 public class QueryableStateIntegrationTest {
-    private static final int NUM_BROKERS = 2;
+    private static final int NUM_BROKERS = 1;
     @ClassRule
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+    public static final EmbeddedKafkaCluster CLUSTER =
+        new EmbeddedKafkaCluster(NUM_BROKERS);
     private final MockTime mockTime = CLUSTER.time;
-    private static final String STREAM_ONE = "stream-one";
-    private static final String STREAM_TWO = "stream-two";
-    private static final String STREAM_CONCURRENT = "stream-concurrent";
-    private static final String OUTPUT_TOPIC = "output";
-    private static final String OUTPUT_TOPIC_CONCURRENT = "output-concurrent";
-    private static final String STREAM_THREE = "stream-three";
-    private static final int NUM_PARTITIONS = NUM_BROKERS;
-    private static final int NUM_REPLICAS = NUM_BROKERS;
+    private String streamOne = "stream-one";
+    private String streamTwo = "stream-two";
+    private String streamThree = "stream-three";
+    private String streamConcurrent = "stream-concurrent";
+    private String outputTopic = "output";
+    private String outputTopicConcurrent = "output-concurrent";
+    private String outputTopicThree = "output-three";
     // sufficiently large window size such that everything falls into 1 window
     private static final long WINDOW_SIZE = TimeUnit.MILLISECONDS.convert(2, TimeUnit.DAYS);
-    private static final String OUTPUT_TOPIC_THREE = "output-three";
+    private static final int NUM_PARTITIONS = 2;
+    private static final int NUM_REPLICAS = NUM_BROKERS;
     private Properties streamsConfiguration;
     private List<String> inputValues;
     private Set<String> inputValuesKeys;
     private KafkaStreams kafkaStreams;
     private Comparator<KeyValue<String, String>> stringComparator;
     private Comparator<KeyValue<String, Long>> stringLongComparator;
+    private static int testNo = 0;
 
-    @BeforeClass
-    public static void createTopics() {
-        CLUSTER.createTopic(STREAM_ONE);
-        CLUSTER.createTopic(STREAM_CONCURRENT);
-        CLUSTER.createTopic(STREAM_TWO, NUM_PARTITIONS, NUM_REPLICAS);
-        CLUSTER.createTopic(STREAM_THREE, 4, 1);
-        CLUSTER.createTopic(OUTPUT_TOPIC);
-        CLUSTER.createTopic(OUTPUT_TOPIC_CONCURRENT);
-        CLUSTER.createTopic(OUTPUT_TOPIC_THREE);
+    public void createTopics() {
+        streamOne = streamOne + "-" + testNo;
+        streamConcurrent = streamConcurrent + "-" + testNo;
+        streamThree = streamThree + "-" + testNo;
+        outputTopic = outputTopic + "-" + testNo;
+        outputTopicConcurrent = outputTopicConcurrent + "-" + testNo;
+        outputTopicThree = outputTopicThree + "-" + testNo;
+        streamTwo = streamTwo + "-" + testNo;
+        CLUSTER.createTopic(streamOne);
+        CLUSTER.createTopic(streamConcurrent);
+        CLUSTER.createTopic(streamTwo, NUM_PARTITIONS, NUM_REPLICAS);
+        CLUSTER.createTopic(streamThree, 4, 1);
+        CLUSTER.createTopic(outputTopic);
+        CLUSTER.createTopic(outputTopicConcurrent);
+        CLUSTER.createTopic(outputTopicThree);
+    }
+
+    @Parameter
+    public long cacheSizeBytes;
+
+    //Single parameter, use Object[]
+    @Parameters
+    public static Object[] data() {
+        return new Object[]{0, 10 * 1024 * 1024L};
     }
 
     @Before
     public void before() throws IOException {
+        testNo++;
+        createTopics();
         streamsConfiguration = new Properties();
-        final String applicationId = "queryable-state";
+        final String applicationId = "queryable-state-" + testNo;
 
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration
@@ -116,7 +140,11 @@ public class QueryableStateIntegrationTest {
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("qs-test").getPath());
         streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration
+            .put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1);
+        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
+
 
         stringComparator = new Comparator<KeyValue<String, String>>() {
 
@@ -296,25 +324,25 @@ public class QueryableStateIntegrationTest {
         final int numIterations = 500000;
 
         // create concurrent producer
-        final ProducerRunnable producerRunnable = new ProducerRunnable(STREAM_TWO, inputValues, numIterations);
+        final ProducerRunnable producerRunnable = new ProducerRunnable(streamThree, inputValues, numIterations);
         final Thread producerThread = new Thread(producerRunnable);
 
         // create three stream threads
         for (int i = 0; i < numThreads; i++) {
-            streamRunnables[i] = new StreamRunnable(STREAM_TWO, OUTPUT_TOPIC_THREE, i);
+            streamRunnables[i] = new StreamRunnable(streamThree, outputTopicThree, i);
             streamThreads[i] = new Thread(streamRunnables[i]);
             streamThreads[i].start();
         }
         producerThread.start();
 
         try {
-            waitUntilAtLeastNumRecordProcessed(OUTPUT_TOPIC_THREE, 1);
+            waitUntilAtLeastNumRecordProcessed(outputTopicThree, 1);
 
             for (int i = 0; i < numThreads; i++) {
                 verifyAllKVKeys(streamRunnables, streamRunnables[i].getStream(), inputValuesKeys,
-                    "word-count-store-" + STREAM_TWO);
+                    "word-count-store-" + streamThree);
                 verifyAllWindowedKeys(streamRunnables, streamRunnables[i].getStream(), inputValuesKeys,
-                    "windowed-word-count-store-" + STREAM_TWO, 0L, WINDOW_SIZE);
+                                      "windowed-word-count-store-" + streamThree, 0L, WINDOW_SIZE);
             }
 
             // kill N-1 threads
@@ -326,9 +354,9 @@ public class QueryableStateIntegrationTest {
 
             // query from the remaining thread
             verifyAllKVKeys(streamRunnables, streamRunnables[0].getStream(), inputValuesKeys,
-                "word-count-store-" + STREAM_TWO);
+                "word-count-store-" + streamThree);
             verifyAllWindowedKeys(streamRunnables, streamRunnables[0].getStream(), inputValuesKeys,
-                "windowed-word-count-store-" + STREAM_TWO, 0L, WINDOW_SIZE);
+                                  "windowed-word-count-store-" + streamThree, 0L, WINDOW_SIZE);
         } finally {
             for (int i = 0; i < numThreads; i++) {
                 if (!streamRunnables[i].isClosed()) {
@@ -348,20 +376,21 @@ public class QueryableStateIntegrationTest {
 
         final int numIterations = 500000;
 
-        final ProducerRunnable producerRunnable = new ProducerRunnable(STREAM_CONCURRENT, inputValues, numIterations);
+        final ProducerRunnable producerRunnable = new ProducerRunnable(streamConcurrent, inputValues, numIterations);
         final Thread producerThread = new Thread(producerRunnable);
-        kafkaStreams = createCountStream(STREAM_CONCURRENT, OUTPUT_TOPIC_CONCURRENT, streamsConfiguration);
+        kafkaStreams = createCountStream(streamConcurrent, outputTopicConcurrent, streamsConfiguration);
+
         kafkaStreams.start();
         producerThread.start();
 
         try {
-            waitUntilAtLeastNumRecordProcessed(OUTPUT_TOPIC_CONCURRENT, 1);
+            waitUntilAtLeastNumRecordProcessed(outputTopicConcurrent, 1);
 
             final ReadOnlyKeyValueStore<String, Long>
-                keyValueStore = kafkaStreams.store("word-count-store-" + STREAM_CONCURRENT, QueryableStoreTypes.<String, Long>keyValueStore());
+                keyValueStore = kafkaStreams.store("word-count-store-" + streamConcurrent, QueryableStoreTypes.<String, Long>keyValueStore());
 
             final ReadOnlyWindowStore<String, Long> windowStore =
-                kafkaStreams.store("windowed-word-count-store-" + STREAM_CONCURRENT, QueryableStoreTypes.<String, Long>windowStore());
+                kafkaStreams.store("windowed-word-count-store-" + streamConcurrent, QueryableStoreTypes.<String, Long>windowStore());
 
 
             final Map<String, Long> expectedWindowState = new HashMap<>();
@@ -400,7 +429,7 @@ public class QueryableStateIntegrationTest {
         }
 
         IntegrationTestUtils.produceKeyValuesSynchronously(
-            STREAM_ONE,
+                streamOne,
             batch1,
             TestUtils.producerConfig(
                 CLUSTER.bootstrapServers(),
@@ -409,16 +438,16 @@ public class QueryableStateIntegrationTest {
                 new Properties()),
             mockTime);
 
-        final KStream<String, String> s1 = builder.stream(STREAM_ONE);
+        final KStream<String, String> s1 = builder.stream(streamOne);
 
         // Non Windowed
-        s1.groupByKey().count("my-count").to(Serdes.String(), Serdes.Long(), OUTPUT_TOPIC);
+        s1.groupByKey().count("my-count").to(Serdes.String(), Serdes.Long(), outputTopic);
 
         s1.groupByKey().count(TimeWindows.of(WINDOW_SIZE), "windowed-count");
         kafkaStreams = new KafkaStreams(builder, streamsConfiguration);
         kafkaStreams.start();
 
-        waitUntilAtLeastNumRecordProcessed(OUTPUT_TOPIC, 1);
+        waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
 
         final ReadOnlyKeyValueStore<String, Long>
             myCount = kafkaStreams.store("my-count", QueryableStoreTypes.<String, Long>keyValueStore());
@@ -438,7 +467,7 @@ public class QueryableStateIntegrationTest {
     @Test
     public void shouldNotMakeStoreAvailableUntilAllStoresAvailable() throws Exception {
         final KStreamBuilder builder = new KStreamBuilder();
-        final KStream<String, String> stream = builder.stream(STREAM_THREE);
+        final KStream<String, String> stream = builder.stream(streamThree);
 
         final String storeName = "count-by-key";
         stream.groupByKey().count(storeName);
@@ -447,7 +476,7 @@ public class QueryableStateIntegrationTest {
 
         final KeyValue<String, String> hello = KeyValue.pair("hello", "hello");
         IntegrationTestUtils.produceKeyValuesSynchronously(
-                STREAM_THREE,
+                streamThree,
                 Arrays.asList(hello, hello, hello, hello, hello, hello, hello, hello),
                 TestUtils.producerConfig(
                         CLUSTER.bootstrapServers(),

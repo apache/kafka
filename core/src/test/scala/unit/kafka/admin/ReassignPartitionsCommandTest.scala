@@ -16,9 +16,11 @@
  */
 package kafka.admin
 
+import kafka.common.TopicAndPartition
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.Test
+import org.junit.Assert.assertEquals
 
 class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
@@ -48,4 +50,90 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
     checkReplicaDistribution(assignment, rackInfo, rackInfo.size, numPartitions, replicationFactor)
   }
 
+  @Test
+  def shouldFindMovingReplicas() {
+    val assigner = new ReassignPartitionsCommand(null, null)
+
+    //Given partition 0 moves from broker 100 -> 102
+    val existing = Map(TopicAndPartition("topic1",0) -> Seq(100, 101))
+    val proposed = Map(TopicAndPartition("topic1",0) -> Seq(101, 102))
+
+      //When
+    val moves = assigner.replicaMoves(existing, proposed)
+
+    //Then moving replicas should be throttled
+    assertEquals("0:100,0:102", moves.get("topic1").get)
+  }
+
+  @Test
+  def shouldFindMovingReplicasMultiplePartitions() {
+    val assigner = new ReassignPartitionsCommand(null, null)
+
+    //Given partitions 0 & 1 moves from broker 100 -> 102
+    val existing = Map(TopicAndPartition("topic1",0) -> Seq(100, 101), TopicAndPartition("topic1",1) -> Seq(100, 101))
+    val proposed = Map(TopicAndPartition("topic1",0) -> Seq(101, 102), TopicAndPartition("topic1",1) -> Seq(101, 102))
+
+      //When
+    val moves = assigner.replicaMoves(existing, proposed)
+
+    //Then moving replicas should be throttled
+    assertEquals("0:100,0:102,1:100,1:102", moves.get("topic1").get)
+  }
+
+  @Test
+  def shouldFindMovingReplicasMultipleTopics() {
+    val assigner = new ReassignPartitionsCommand(null, null)
+
+    //Given partition 0 on topics 1 & 2 move from broker 100 -> 102
+    val existing = Map(TopicAndPartition("topic1",0) -> Seq(100, 101), TopicAndPartition("topic2",0) -> Seq(100, 101))
+    val proposed = Map(TopicAndPartition("topic1",0) -> Seq(101, 102), TopicAndPartition("topic2",0) -> Seq(101, 102))
+
+    //When
+    val moves = assigner.replicaMoves(existing, proposed)
+
+    //Then moving replicas should be throttled
+    assertEquals("0:100,0:102", moves.get("topic1").get)
+    assertEquals("0:100,0:102", moves.get("topic2").get)
+  }
+
+  @Test
+  def shouldFindMovingReplicasMultipleTopicsAndPartitions() {
+    val assigner = new ReassignPartitionsCommand(null, null)
+
+    //Given
+    val existing = Map(
+      TopicAndPartition("topic1",0) -> Seq(100, 101),
+      TopicAndPartition("topic1",1) -> Seq(100, 101),
+      TopicAndPartition("topic2",0) -> Seq(100, 101),
+      TopicAndPartition("topic2",1) -> Seq(100, 101)
+    )
+    val proposed = Map(
+      TopicAndPartition("topic1",0) -> Seq(101, 102),
+      TopicAndPartition("topic1",1) -> Seq(101, 102),
+      TopicAndPartition("topic2",0) -> Seq(101, 102),
+      TopicAndPartition("topic2",1) -> Seq(101, 102)
+    )
+
+    //When
+    val moves = assigner.replicaMoves(existing, proposed)
+
+    //Then moving replicas should be throttled
+    assertEquals("0:100,0:102,1:100,1:102", moves.get("topic1").get)
+    assertEquals("0:100,0:102,1:100,1:102", moves.get("topic2").get)
+  }
+
+  @Test
+  def shouldFindTwoMovingReplicasInSamePartition() {
+    val assigner = new ReassignPartitionsCommand(null, null)
+
+    //Given partition 0 has 2 moves from broker 102 -> 104 & 103 -> 105
+    val existing = Map(TopicAndPartition("topic1",0) -> Seq(100, 101, 102, 103))
+    val proposed = Map(TopicAndPartition("topic1",0) -> Seq(100, 101, 104, 105))
+
+    //When
+    val moves = assigner.replicaMoves(existing, proposed)
+
+    //Then moving replicas should be throttled
+    assertEquals( "0:102,0:103,0:104,0:105", moves.get("topic1").get)
+  }
 }
