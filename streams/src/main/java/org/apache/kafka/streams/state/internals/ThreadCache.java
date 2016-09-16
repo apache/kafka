@@ -43,11 +43,6 @@ public class ThreadCache {
     private final Map<String, NamedCache> caches = new HashMap<>();
     private final ThreadCacheMetrics metrics;
 
-    // JMX stats
-    private Sensor puts = null;
-    private Sensor gets = null;
-    private Sensor evicts = null;
-    private Sensor flushes = null;
     // internal stats
     private long numPuts = 0;
     private long numGets = 0;
@@ -66,12 +61,6 @@ public class ThreadCache {
         this.name = name;
         this.maxCacheSizeBytes = maxCacheSizeBytes;
         this.metrics = metrics != null ? metrics : new NullThreadCacheMetrics();
-
-        this.puts = this.metrics.addCountSensor(name, "put");
-        this.gets = this.metrics.addCountSensor(name, "get");
-        this.evicts = this.metrics.addCountSensor(name, "evicts");
-        this.flushes = this.metrics.addCountSensor(name, "flushes");
-
     }
 
     public long puts() {
@@ -102,7 +91,6 @@ public class ThreadCache {
     }
 
     public void flush(final String namespace) {
-        metrics.recordCount(flushes, 1);
         numFlushes++;
 
         final NamedCache cache = getCache(namespace);
@@ -116,7 +104,6 @@ public class ThreadCache {
     }
 
     public LRUCacheEntry get(final String namespace, byte[] key) {
-        metrics.recordCount(gets, 1);
         numGets++;
 
         final NamedCache cache = getCache(namespace);
@@ -127,7 +114,6 @@ public class ThreadCache {
     }
 
     public void put(final String namespace, byte[] key, LRUCacheEntry value) {
-        metrics.recordCount(puts, 1);
         numPuts++;
 
         final NamedCache cache = getOrCreateCache(namespace);
@@ -211,7 +197,6 @@ public class ThreadCache {
             final NamedCache cache = getOrCreateCache(namespace);
             cache.evict();
 
-            metrics.recordCount(evicts, 1);
             numEvicts++;
         }
     }
@@ -321,12 +306,12 @@ public class ThreadCache {
 
     public static class NullThreadCacheMetrics implements ThreadCacheMetrics {
         @Override
-        public Sensor addCountSensor(String entityName, String operationName, String... tags) {
+        public Sensor addCacheSensor(String entityName, String operationName, String... tags) {
             return null;
         }
 
         @Override
-        public void recordCount(Sensor sensor, long count) {
+        public void recordCacheSensor(Sensor sensor, double value) {
             // do nothing
         }
 

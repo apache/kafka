@@ -32,6 +32,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.metrics.stats.Min;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
@@ -781,7 +782,7 @@ public class StreamThread extends Thread {
         }
 
         @Override
-        public void recordCount(Sensor sensor, long count) {
+        public void recordCacheSensor(Sensor sensor, double count) {
             sensor.record(count);
         }
 
@@ -812,7 +813,7 @@ public class StreamThread extends Thread {
         }
 
         @Override
-        public Sensor addCountSensor(String entityName, String operationName, String... tags) {
+        public Sensor addCacheSensor(String entityName, String operationName, String... tags) {
             // extract the additional tags if there are any
             Map<String, String> tagMap = new HashMap<>(this.metricTags);
             if ((tags.length % 2) != 0)
@@ -824,14 +825,18 @@ public class StreamThread extends Thread {
             String metricGroupName = "stream-thread-cache-metrics";
 
             Sensor sensor = metrics.sensor(sensorNamePrefix + "-" + entityName + "-" + operationName);
-            addCountMetrics(metricGroupName, sensor, entityName, operationName, tagMap);
+            addCacheMetrics(metricGroupName, sensor, entityName, operationName, tagMap);
             return sensor;
 
         }
 
-        private void addCountMetrics(String metricGrpName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
-            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-count", metricGrpName,
-                "The current count of " + entityName + " " + opName + " operation.", tags), new Count());
+        private void addCacheMetrics(String metricGrpName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
+            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-avg", metricGrpName,
+                "The current count of " + entityName + " " + opName + " operation.", tags), new Avg());
+            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-min", metricGrpName,
+                "The current count of " + entityName + " " + opName + " operation.", tags), new Min());
+            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-max", metricGrpName,
+                "The current count of " + entityName + " " + opName + " operation.", tags), new Max());
         }
 
         private void addLatencyMetrics(String metricGrpName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
