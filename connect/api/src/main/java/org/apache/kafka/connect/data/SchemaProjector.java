@@ -109,7 +109,7 @@ public class SchemaProjector {
                     Object targetFieldValue = project(sourceField.schema(), sourceFieldValue, targetField.schema());
                     targetStruct.put(fieldName, targetFieldValue);
                 } catch (SchemaProjectorException e) {
-                    throw new SchemaProjectorException("Error projecting " + fieldName, e);
+                    throw new SchemaProjectorException("Error projecting " + sourceField.name(), e);
                 }
             } else if (targetField.schema().isOptional()) {
                 // Ignore missing field
