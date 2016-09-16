@@ -40,7 +40,7 @@ class ClientQuotaManagerTest {
 
   @Test
   def testQuotaParsing() {
-    val clientMetrics = new ClientQuotaManager(config, newMetrics, "producer", time)
+    val clientMetrics = new ClientQuotaManager(config, newMetrics, QuotaType.Produce, time)
 
     // Case 1: Update the quota. Assert that the new quota value is returned
     clientMetrics.updateQuota("p1", new Quota(2000, true))
@@ -77,8 +77,8 @@ class ClientQuotaManagerTest {
   @Test
   def testQuotaViolation() {
     val metrics = newMetrics
-    val clientMetrics = new ClientQuotaManager(config, metrics, "producer", time)
-    val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", "producer", ""))
+    val clientMetrics = new ClientQuotaManager(config, metrics, QuotaType.Produce, time)
+    val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", "Produce", ""))
     try {
       /* We have 10 second windows. Make sure that there is no quota violation
        * if we produce under the quota
@@ -125,16 +125,16 @@ class ClientQuotaManagerTest {
   @Test
   def testExpireThrottleTimeSensor() {
     val metrics = newMetrics
-    val clientMetrics = new ClientQuotaManager(config, metrics, "producer", time)
+    val clientMetrics = new ClientQuotaManager(config, metrics, QuotaType.Produce, time)
     try {
       clientMetrics.recordAndMaybeThrottle("client1", 100, callback)
       // remove the throttle time sensor
-      metrics.removeSensor("producerThrottleTime-client1")
+      metrics.removeSensor("ProduceThrottleTime-client1")
       // should not throw an exception even if the throttle time sensor does not exist.
       val throttleTime = clientMetrics.recordAndMaybeThrottle("client1", 10000, callback)
       assertTrue("Should be throttled", throttleTime > 0)
       // the sensor should get recreated
-      val throttleTimeSensor = metrics.getSensor("producerThrottleTime-client1")
+      val throttleTimeSensor = metrics.getSensor("ProduceThrottleTime-client1")
       assertTrue("Throttle time sensor should exist", throttleTimeSensor != null)
     } finally {
       clientMetrics.shutdown()
@@ -144,21 +144,21 @@ class ClientQuotaManagerTest {
   @Test
   def testExpireQuotaSensors() {
     val metrics = newMetrics
-    val clientMetrics = new ClientQuotaManager(config, metrics, "producer", time)
+    val clientMetrics = new ClientQuotaManager(config, metrics, QuotaType.Produce, time)
     try {
       clientMetrics.recordAndMaybeThrottle("client1", 100, callback)
       // remove all the sensors
-      metrics.removeSensor("producerThrottleTime-client1")
-      metrics.removeSensor("producer-client1")
+      metrics.removeSensor("ProduceThrottleTime-client1")
+      metrics.removeSensor("Produce-client1")
       // should not throw an exception
       val throttleTime = clientMetrics.recordAndMaybeThrottle("client1", 10000, callback)
       assertTrue("Should be throttled", throttleTime > 0)
 
       // all the sensors should get recreated
-      val throttleTimeSensor = metrics.getSensor("producerThrottleTime-client1")
+      val throttleTimeSensor = metrics.getSensor("ProduceThrottleTime-client1")
       assertTrue("Throttle time sensor should exist", throttleTimeSensor != null)
 
-      val byteRateSensor = metrics.getSensor("producer-client1")
+      val byteRateSensor = metrics.getSensor("Produce-client1")
       assertTrue("Byte rate sensor should exist", byteRateSensor != null)
     } finally {
       clientMetrics.shutdown()

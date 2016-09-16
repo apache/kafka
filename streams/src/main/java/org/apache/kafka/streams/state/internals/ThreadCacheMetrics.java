@@ -25,16 +25,16 @@ import org.apache.kafka.common.metrics.Sensor;
 public interface ThreadCacheMetrics {
 
     /**
-     * Add the count sensor.
+     * Add the hit ratio sensor.
      * @param entityName Name of the entity, could be the name of the cache instance, etc.
-     * @param operationName Name of the operation, could be get / put / delete / etc.
+     * @param operationName Name of the operation, could be "hit ratio".
      * @param tags Additional tags of the sensor.
      * @return The added sensor.
      */
-    Sensor addCountSensor(String entityName, String operationName, String... tags);
+    Sensor addCacheSensor(String entityName, String operationName, String... tags);
 
     /**
-     * Record the given count value of the sensor.
+     * Record the given value of the sensor.
      */
-    void recordCount(Sensor sensor, long count);
+    void recordCacheSensor(Sensor sensor, double value);
 }

@@ -42,10 +42,8 @@ class NamedCache {
     private ThreadCacheMetrics metrics;
 
     // JMX stats
-    private Sensor hits = null;
-    private Sensor misses = null;
-    private Sensor overwrites = null;
-    private Sensor flushes = null;
+    private Sensor hitRatio = null;
+
 
     // internal stats
     private long numReadHits = 0;
@@ -61,10 +59,7 @@ class NamedCache {
         this.name = name;
         this.metrics = metrics != null ? metrics : new ThreadCache.NullThreadCacheMetrics();
 
-        this.hits = this.metrics.addCountSensor(name, "hits");
-        this.misses = this.metrics.addCountSensor(name, "misses");
-        this.overwrites = this.metrics.addCountSensor(name, "overwrites");
-        this.flushes = this.metrics.addCountSensor(name, "flushes");
+        this.hitRatio = this.metrics.addCacheSensor(name, "hitRatio");
     }
 
     synchronized long hits() {
@@ -97,7 +92,6 @@ class NamedCache {
     }
 
     synchronized void flush() {
-        metrics.recordCount(flushes, 1);
         numFlushes++;
 
         log.debug("Named cache {} stats on flush: #hits={}, #misses={}, #overwrites={}, #flushes={}",
@@ -128,7 +122,6 @@ class NamedCache {
     synchronized void put(final Bytes key, final LRUCacheEntry value) {
         LRUNode node = cache.get(key);
         if (node != null) {
-            metrics.recordCount(overwrites, 1);
             numOverwrites++;
 
             currentSizeBytes -= node.size();
@@ -155,13 +148,12 @@ class NamedCache {
     private LRUNode getInternal(final Bytes key) {
         final LRUNode node = cache.get(key);
         if (node == null) {
-            metrics.recordCount(misses, 1);
             numReadMisses++;
 
             return null;
         } else {
-            metrics.recordCount(hits, 1);
             numReadHits++;
+            metrics.recordCacheSensor(hitRatio, (double) numReadHits / (double) (numReadHits + numReadMisses));
         }
         return node;
     }
