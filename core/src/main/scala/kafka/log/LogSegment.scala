@@ -157,8 +157,8 @@ class LogSegment(val log: FileMessageSet,
     val (startPosition, messageSetSize) = startOffsetAndSize
     val offsetMetadata = new LogOffsetMetadata(startOffset, this.baseOffset, startPosition.position)
 
-    // if the size is zero, still return a log segment but with zero size
-    if (maxSize == 0 && !minOneMessage)
+    // return a log segment but with zero size in the case below
+    if (!minOneMessage && maxSize < messageSetSize)
       return FetchDataInfo(offsetMetadata, MessageSet.Empty)
 
     val adjustedMaxSize =

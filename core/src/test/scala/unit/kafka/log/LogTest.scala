@@ -276,6 +276,30 @@ class LogTest extends JUnitSuite {
 
   }
 
+  @Test
+  def testReadWithTooSmallMaxLength() {
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 71: java.lang.Integer)
+    val log = new Log(logDir,  LogConfig(logProps), recoveryPoint = 0L, time.scheduler, time = time)
+    val messageIds = ((0 until 50) ++ (50 until 200 by 7)).toArray
+    val messages = messageIds.map(id => new Message(id.toString.getBytes))
+
+    // now test the case that we give the offsets and use non-sequential offsets
+    for (i <- 0 until messages.length)
+      log.append(new ByteBufferMessageSet(NoCompressionCodec, new LongRef(messageIds(i)), messages = messages(i)),
+        assignOffsets = false)
+
+    for (i <- 50 until messageIds.max) {
+      val messageSets = Seq(
+        log.read(i, 1),
+        log.read(i, 0)
+      ).map(_.messageSet)
+      messageSets.foreach { messageSet =>
+        assertEquals(MessageSet.Empty, messageSet)
+      }
+    }
+  }
+
   /**
    * Test reading at the boundary of the log, specifically
    * - reading from the logEndOffset should give an empty message set
