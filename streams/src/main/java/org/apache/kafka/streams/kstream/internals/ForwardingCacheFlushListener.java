@@ -28,7 +28,7 @@ class ForwardingCacheFlushListener<K, V> implements CacheFlushListener<K, V> {
     }
 
     @Override
-    public void forward(final K key, final V newValue, final V oldValue) {
+    public void apply(final K key, final V newValue, final V oldValue) {
         if (sendOldValues) {
             context.forward(key, new Change<>(newValue, oldValue));
         } else {

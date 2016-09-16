@@ -76,17 +76,17 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
     private static class RocksDBWindowStoreIterator<V> implements WindowStoreIterator<V> {
         private final StateSerdes<?, V> serdes;
-        private final Iterator<KeyValueStore<Bytes, byte[]>> segments;
+        private final Iterator<Segment> segments;
         private final Bytes from;
         private final Bytes to;
         private KeyValueIterator<Bytes, byte[]> currentIterator;
         private KeyValueStore<Bytes, byte[]> currentSegment;
 
         RocksDBWindowStoreIterator(StateSerdes<?, V> serdes) {
-            this(serdes, null, null, Collections.<KeyValueStore<Bytes, byte[]>>emptyIterator());
+            this(serdes, null, null, Collections.<Segment>emptyIterator());
         }
 
-        RocksDBWindowStoreIterator(StateSerdes<?, V> serdes, Bytes from, Bytes to, Iterator<KeyValueStore<Bytes, byte[]>> segments) {
+        RocksDBWindowStoreIterator(StateSerdes<?, V> serdes, Bytes from, Bytes to, Iterator<Segment> segments) {
             this.serdes = serdes;
             this.from = from;
             this.to = to;
@@ -330,7 +330,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         }
 
         // If the record is within the retention period, put it in the store.
-        Segment segment = underlyingSegment(getOrCreateSegment(segmentId));
+        Segment segment = getOrCreateSegment(segmentId);
         if (segment != null) {
             segment.writeToStore(Bytes.wrap(binaryKey), binaryValue);
         }
@@ -359,9 +359,9 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         byte[] binaryFrom = WindowStoreUtils.toBinaryKey(key, timeFrom, 0, serdes);
         byte[] binaryTo = WindowStoreUtils.toBinaryKey(key, timeTo, Integer.MAX_VALUE, serdes);
 
-        final List<KeyValueStore<Bytes, byte[]>> segments = new ArrayList<>();
+        final List<Segment> segments = new ArrayList<>();
         for (long segmentId = segFrom; segmentId <= segTo; segmentId++) {
-            KeyValueStore<Bytes, byte[]> segment = getSegment(segmentId);
+            Segment segment = getSegment(segmentId);
             if (segment != null && segment.isOpen()) {
                 try {
                     segments.add(segment);
@@ -378,26 +378,22 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         }
     }
 
-    private KeyValueStore<Bytes, byte[]> getSegment(long segmentId) {
-        final KeyValueStore<Bytes, byte[]> segment = segments.get(segmentId % numSegments);
+    private Segment getSegment(long segmentId) {
+        final Segment segment = segments.get(segmentId % numSegments);
         if (!isSegment(segment, segmentId)) {
             return null;
         }
         return segment;
     }
 
-    private boolean isSegment(final KeyValueStore<Bytes, byte[]> store, long segmentId) {
-        return store != null && underlyingSegment(store).id == segmentId;
+    private boolean isSegment(final Segment store, long segmentId) {
+        return store != null && store.id == segmentId;
     }
 
-    private Segment underlyingSegment(final KeyValueStore<Bytes, byte[]> store) {
-        return (Segment) store;
-    }
-
-    private KeyValueStore<Bytes, byte[]> getOrCreateSegment(long segmentId) {
+    private Segment getOrCreateSegment(long segmentId) {
         if (segmentId <= currentSegmentId && segmentId > currentSegmentId - numSegments) {
             final long key = segmentId % numSegments;
-            final KeyValueStore segment = segments.get(key);
+            final Segment segment = segments.get(key);
             if (!isSegment(segment, segmentId)) {
                 cleanup();
             }
@@ -446,9 +442,10 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     public Set<Long> segmentIds() {
         HashSet<Long> segmentIds = new HashSet<>();
 
-        for (KeyValueStore<Bytes, byte[]> segment : segments.values()) {
-            if (segment != null)
-                segmentIds.add(underlyingSegment(segment).id);
+        for (Segment segment : segments.values()) {
+            if (segment != null) {
+                segmentIds.add(segment.id);
+            }
         }
 
         return segmentIds;

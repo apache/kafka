@@ -45,10 +45,10 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     @Override
     public Processor<K, Change<V>> get() {
-        return new KTableAggregateProcessor();
+        return new KTableReduceProcessor();
     }
 
-    private class KTableAggregateProcessor extends AbstractProcessor<K, Change<V>> {
+    private class KTableReduceProcessor extends AbstractProcessor<K, Change<V>> {
 
         private KeyValueStore<K, V> store;
 

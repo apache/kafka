@@ -19,19 +19,17 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 /**
- * Listen to cache flush events so they can be forwarded to
- * downstream processors.
+ * Listen to cache flush events
  * @param <K>
  * @param <V>
  */
 public interface CacheFlushListener<K, V> {
 
     /**
-     * Forward records flushed from the {@link ThreadCache} to
-     * any downstream Processors
-     * @param key               key of the entry
-     * @param newValue             current value
-     * @param oldValue
+     * Called when records are flushed from the {@link ThreadCache}
+     * @param key         key of the entry
+     * @param newValue    current value
+     * @param oldValue    previous value
      */
-    void forward(final K key, final V newValue, final V oldValue);
+    void apply(final K key, final V newValue, final V oldValue);
 }

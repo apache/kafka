@@ -100,8 +100,8 @@ class CachingWindowStore<K, V> implements WindowStore<K, V>, CachedStateStore<Wi
             final RecordContext current = context.recordContext();
             context.setRecordContext(entry.recordContext());
             try {
-                flushListener.forward(windowedKey,
-                                      serdes.valueFrom(entry.newValue()), fetchPrevious(key, timestamp));
+                flushListener.apply(windowedKey,
+                                    serdes.valueFrom(entry.newValue()), fetchPrevious(key, timestamp));
             } finally {
                 context.setRecordContext(current);
             }

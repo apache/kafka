@@ -94,8 +94,8 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
             final RecordContext current = context.recordContext();
             context.setRecordContext(entry.recordContext());
             try {
-                flushListener.forward(serdes.keyFrom(entry.key().get()),
-                                      serdes.valueFrom(entry.newValue()), serdes.valueFrom(underlying.get(entry.key())));
+                flushListener.apply(serdes.keyFrom(entry.key().get()),
+                                    serdes.valueFrom(entry.newValue()), serdes.valueFrom(underlying.get(entry.key())));
             } finally {
                 context.setRecordContext(current);
             }
@@ -174,11 +174,7 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
 
     @Override
     public synchronized long approximateNumEntries() {
-        final long total = underlying.approximateNumEntries() + cache.dirtySize(name);
-        if (total < 0) {
-            return Long.MAX_VALUE;
-        }
-        return total;
+        return underlying.approximateNumEntries();
     }
 
     @Override

@@ -376,7 +376,7 @@ public class Stores {
         /**
          * Set the persistent store as a windowed key-value store
          *
-         * @param windowSize
+         * @param windowSize size of the windows
          * @param retentionPeriod the maximum period of time in milli-second to keep each window in this store
          * @param numSegments the maximum number of segments for rolling the windowed store
          * @param retainDuplicates whether or not to retain duplicate data within the window

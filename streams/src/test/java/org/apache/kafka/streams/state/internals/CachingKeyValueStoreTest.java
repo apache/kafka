@@ -144,7 +144,7 @@ public class CachingKeyValueStoreTest {
         public final Map<K, Change<String>> forwarded = new HashMap<>();
 
         @Override
-        public void forward(final K key, final String newValue, final String oldValue) {
+        public void apply(final K key, final String newValue, final String oldValue) {
             forwarded.put(key, new Change<>(newValue, oldValue));
         }
     }
