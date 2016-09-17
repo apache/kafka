@@ -21,6 +21,8 @@ import java.util.Map;
  * @param <T> Type to be serialized from.
  *
  * A class that implements this interface is expected to have a constructor with no parameter.
+ * <p>
+ * Implement {@link org.apache.kafka.common.ClusterResourceListener} to receive cluster metadata once it's available. Please see the class documentation for ClusterResourceListener for more information.
  */
 public interface Serializer<T> extends Closeable {
 
