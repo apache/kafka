@@ -172,6 +172,7 @@ class ReplicaManagerTest {
         replicaId = -1,
         fetchMinBytes = 100000,
         fetchMaxBytes = Int.MaxValue,
+        hardMaxBytesLimit = false,
         fetchInfos = Seq(new TopicAndPartition(topic, 0) -> new PartitionFetchInfo(0, 100000)),
         responseCallback = fetchCallback)
 
@@ -242,6 +243,7 @@ class ReplicaManagerTest {
         replicaId = 1,
         fetchMinBytes = 0,
         fetchMaxBytes = Int.MaxValue,
+        hardMaxBytesLimit = false,
         fetchInfos = Seq(new TopicAndPartition(topic, 0) -> new PartitionFetchInfo(1, 100000)),
         responseCallback = fetchCallback)
         
@@ -257,6 +259,7 @@ class ReplicaManagerTest {
         replicaId = -1,
         fetchMinBytes = 0,
         fetchMaxBytes = Int.MaxValue,
+        hardMaxBytesLimit = false,
         fetchInfos = Seq(new TopicAndPartition(topic, 0) -> new PartitionFetchInfo(1, 100000)),
         responseCallback = fetchCallback)
           

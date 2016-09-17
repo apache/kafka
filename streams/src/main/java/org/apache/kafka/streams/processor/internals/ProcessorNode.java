@@ -44,6 +44,7 @@ public class ProcessorNode<K, V> {
         this.stateStores = stateStores;
     }
 
+
     public final String name() {
         return name;
     }
@@ -64,12 +65,12 @@ public class ProcessorNode<K, V> {
         processor.init(context);
     }
 
-    public void process(K key, V value) {
-        processor.process(key, value);
-    }
-
     public void close() {
         processor.close();
+    }
+
+    public void process(final K key, final V value) {
+        processor.process(key, value);
     }
 
     /**

@@ -38,6 +38,7 @@ import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.Processor;
@@ -435,7 +436,7 @@ public class SimpleBenchmark {
         source.process(new ProcessorSupplier<Integer, byte[]>() {
             @Override
             public Processor<Integer, byte[]> get() {
-                return new Processor<Integer, byte[]>() {
+                return new AbstractProcessor<Integer, byte[]>() {
 
                     @Override
                     public void init(ProcessorContext context) {
@@ -479,8 +480,7 @@ public class SimpleBenchmark {
         source.process(new ProcessorSupplier<Integer, byte[]>() {
             @Override
             public Processor<Integer, byte[]> get() {
-                return new Processor<Integer, byte[]>() {
-
+                return new AbstractProcessor<Integer, byte[]>() {
                     @Override
                     public void init(ProcessorContext context) {
                     }
@@ -573,8 +573,7 @@ public class SimpleBenchmark {
         source.process(new ProcessorSupplier<Integer, byte[]>() {
             @Override
             public Processor<Integer, byte[]> get() {
-                return new Processor<Integer, byte[]>() {
-
+                return new AbstractProcessor<Integer, byte[]>() {
                     KeyValueStore<Integer, byte[]> store;
 
                     @SuppressWarnings("unchecked")

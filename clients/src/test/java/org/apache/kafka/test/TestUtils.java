@@ -40,8 +40,16 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import javax.xml.bind.DatatypeConverter;
 
 import static java.util.Arrays.asList;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
  * Helper functions for writing unit tests
@@ -81,7 +89,7 @@ public class TestUtils {
             for (int i = 0; i < partitions; i++)
                 parts.add(new PartitionInfo(topic, i, ns[i % ns.length], ns, ns));
         }
-        return new Cluster(asList(ns), parts, Collections.<String>emptySet(), INTERNAL_TOPICS);
+        return new Cluster("kafka-cluster", asList(ns), parts, Collections.<String>emptySet(), INTERNAL_TOPICS);
     }
 
     public static Cluster clusterWith(final int nodes, final String topic, final int partitions) {
@@ -269,4 +277,33 @@ public class TestUtils {
         }
     }
 
+    /**
+     * Checks if a cluster id is valid.
+     * @param clusterId
+     */
+    public static void isValidClusterId(String clusterId) {
+        assertNotNull(clusterId);
+
+        // Base 64 encoded value is 22 characters
+        assertEquals(clusterId.length(), 22);
+
+        Pattern clusterIdPattern = Pattern.compile("[a-zA-Z0-9_\\-]+");
+        Matcher matcher = clusterIdPattern.matcher(clusterId);
+        assertTrue(matcher.matches());
+
+        // Convert into normal variant and add padding at the end.
+        String originalClusterId = String.format("%s==", clusterId.replace("_", "/").replace("-", "+"));
+        byte[] decodedUuid = DatatypeConverter.parseBase64Binary(originalClusterId);
+
+        // We expect 16 bytes, same as the input UUID.
+        assertEquals(decodedUuid.length, 16);
+
+        //Check if it can be converted back to a UUID.
+        try {
+            ByteBuffer uuidBuffer = ByteBuffer.wrap(decodedUuid);
+            new UUID(uuidBuffer.getLong(), uuidBuffer.getLong()).toString();
+        } catch (Exception e) {
+            fail(clusterId + " cannot be converted back to UUID.");
+        }
+    }
 }

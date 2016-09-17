@@ -94,6 +94,8 @@ public class Stores {
                             @Override
                             public PersistentKeyValueFactory<K, V> persistent() {
                                 return new PersistentKeyValueFactory<K, V>() {
+                                    public boolean cachingEnabled;
+                                    private long windowSize;
                                     private final Map<String, String> logConfig = new HashMap<>();
                                     private int numSegments = 0;
                                     private long retentionPeriod = 0L;
@@ -101,7 +103,8 @@ public class Stores {
                                     private boolean logged = true;
 
                                     @Override
-                                    public PersistentKeyValueFactory<K, V> windowed(long retentionPeriod, int numSegments, boolean retainDuplicates) {
+                                    public PersistentKeyValueFactory<K, V> windowed(final long windowSize, long retentionPeriod, int numSegments, boolean retainDuplicates) {
+                                        this.windowSize = windowSize;
                                         this.numSegments = numSegments;
                                         this.retentionPeriod = retentionPeriod;
                                         this.retainDuplicates = retainDuplicates;
@@ -124,13 +127,19 @@ public class Stores {
                                     }
 
                                     @Override
+                                    public PersistentKeyValueFactory<K, V> enableCaching() {
+                                        cachingEnabled = true;
+                                        return this;
+                                    }
+
+                                    @Override
                                     public StateStoreSupplier build() {
                                         if (numSegments > 0) {
-                                            return new RocksDBWindowStoreSupplier<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, logged, logConfig);
+                                            return new RocksDBWindowStoreSupplier<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, windowSize, logged, logConfig, cachingEnabled);
                                         }
-
-                                        return new RocksDBKeyValueStoreSupplier<>(name, keySerde, valueSerde, logged, logConfig);
+                                        return new RocksDBKeyValueStoreSupplier<>(name, keySerde, valueSerde, logged, logConfig, cachingEnabled);
                                     }
+
                                 };
                             }
 
@@ -367,11 +376,12 @@ public class Stores {
         /**
          * Set the persistent store as a windowed key-value store
          *
+         * @param windowSize size of the windows
          * @param retentionPeriod the maximum period of time in milli-second to keep each window in this store
          * @param numSegments the maximum number of segments for rolling the windowed store
          * @param retainDuplicates whether or not to retain duplicate data within the window
          */
-        PersistentKeyValueFactory<K, V> windowed(long retentionPeriod, int numSegments, boolean retainDuplicates);
+        PersistentKeyValueFactory<K, V> windowed(final long windowSize, long retentionPeriod, int numSegments, boolean retainDuplicates);
 
         /**
          * Indicates that a changelog should be created for the store. The changelog will be created
@@ -389,10 +399,12 @@ public class Stores {
          */
         PersistentKeyValueFactory<K, V> disableLogging();
 
+        PersistentKeyValueFactory<K, V> enableCaching();
         /**
          * Return the instance of StateStoreSupplier of new key-value store.
          * @return the key-value store; never null
          */
         StateStoreSupplier build();
+
     }
 }

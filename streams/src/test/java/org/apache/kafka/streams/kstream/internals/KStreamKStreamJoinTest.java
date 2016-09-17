@@ -22,7 +22,9 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.TestUtils;
@@ -285,14 +287,14 @@ public class KStreamKStreamJoinTest {
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
         driver = new KStreamTestDriver(builder, stateDir);
-        driver.setTime(time);
+
 
         // push two items to the primary stream. the other window is empty. this should produce no items.
         // w1 = {}
         // w2 = {}
         // --> w1 = { 0:X1, 1:X1 }
         //     w2 = {}
-
+        setRecordContext(time, topic1);
         for (int i = 0; i < 2; i++) {
             driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
         }
@@ -305,6 +307,7 @@ public class KStreamKStreamJoinTest {
         // --> w1 = { 0:X1, 1:X1 }
         //     w2 = { 0:Y0, 1:Y1 }
 
+        setRecordContext(time, topic2);
         for (int i = 0; i < 2; i++) {
             driver.process(topic2, expectedKeys[i], "Y" + expectedKeys[i]);
         }
@@ -313,9 +316,9 @@ public class KStreamKStreamJoinTest {
 
         // clear logically
         time = 1000L;
-
+        setRecordContext(time, topic1);
         for (int i = 0; i < expectedKeys.length; i++) {
-            driver.setTime(time + i);
+            setRecordContext(time + i, topic1);
             driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
         }
         processor.checkAndClearProcessResult();
@@ -324,7 +327,7 @@ public class KStreamKStreamJoinTest {
         // w1 = { 0:X0, 1:X1, 2:X2, 3:X3 }
 
         time = 1000 + 100L;
-        driver.setTime(time);
+        setRecordContext(time, topic2);
 
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
@@ -332,28 +335,28 @@ public class KStreamKStreamJoinTest {
 
         processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
 
-        driver.setTime(++time);
+        setRecordContext(++time, topic2);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
         }
 
         processor.checkAndClearProcessResult("1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
 
-        driver.setTime(++time);
+        setRecordContext(++time, topic2);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
         }
 
         processor.checkAndClearProcessResult("2:X2+YY2", "3:X3+YY3");
 
-        driver.setTime(++time);
+        setRecordContext(++time, topic2);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
         }
 
         processor.checkAndClearProcessResult("3:X3+YY3");
 
-        driver.setTime(++time);
+        setRecordContext(++time, topic2);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
         }
@@ -363,35 +366,35 @@ public class KStreamKStreamJoinTest {
         // go back to the time before expiration
 
         time = 1000L - 100L - 1L;
-        driver.setTime(time);
+        setRecordContext(time, topic2);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
         }
 
         processor.checkAndClearProcessResult();
 
-        driver.setTime(++time);
+        setRecordContext(++time, topic2);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
         }
 
         processor.checkAndClearProcessResult("0:X0+YY0");
 
-        driver.setTime(++time);
+        setRecordContext(++time, topic2);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
         }
 
         processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1");
 
-        driver.setTime(++time);
+        setRecordContext(++time, topic2);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
         }
 
         processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2");
 
-        driver.setTime(++time);
+        setRecordContext(++time, topic2);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
         }
@@ -400,9 +403,8 @@ public class KStreamKStreamJoinTest {
 
         // clear (logically)
         time = 2000L;
-
         for (int i = 0; i < expectedKeys.length; i++) {
-            driver.setTime(time + i);
+            setRecordContext(time + i, topic2);
             driver.process(topic2, expectedKeys[i], "Y" + expectedKeys[i]);
         }
 
@@ -412,35 +414,35 @@ public class KStreamKStreamJoinTest {
         // w2 = { 0:Y0, 1:Y1, 2:Y2, 3:Y3 }
 
         time = 2000L + 100L;
-        driver.setTime(time);
+        setRecordContext(time, topic1);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
 
         processor.checkAndClearProcessResult("0:XX0+Y0", "1:XX1+Y1", "2:XX2+Y2", "3:XX3+Y3");
 
-        driver.setTime(++time);
+        setRecordContext(++time, topic1);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
 
         processor.checkAndClearProcessResult("1:XX1+Y1", "2:XX2+Y2", "3:XX3+Y3");
 
-        driver.setTime(++time);
+        setRecordContext(++time, topic1);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
 
         processor.checkAndClearProcessResult("2:XX2+Y2", "3:XX3+Y3");
 
-        driver.setTime(++time);
+        setRecordContext(++time, topic1);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
 
         processor.checkAndClearProcessResult("3:XX3+Y3");
 
-        driver.setTime(++time);
+        setRecordContext(++time, topic1);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
@@ -450,39 +452,43 @@ public class KStreamKStreamJoinTest {
         // go back to the time before expiration
 
         time = 2000L - 100L - 1L;
-        driver.setTime(time);
+        setRecordContext(time, topic1);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
 
         processor.checkAndClearProcessResult();
 
-        driver.setTime(++time);
+        setRecordContext(++time, topic1);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
 
         processor.checkAndClearProcessResult("0:XX0+Y0");
 
-        driver.setTime(++time);
+        setRecordContext(++time, topic1);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
 
         processor.checkAndClearProcessResult("0:XX0+Y0", "1:XX1+Y1");
 
-        driver.setTime(++time);
+        setRecordContext(++time, topic1);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
 
         processor.checkAndClearProcessResult("0:XX0+Y0", "1:XX1+Y1", "2:XX2+Y2");
 
-        driver.setTime(++time);
+        setRecordContext(++time, topic1);
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
 
         processor.checkAndClearProcessResult("0:XX0+Y0", "1:XX1+Y1", "2:XX2+Y2", "3:XX3+Y3");
+    }
+
+    private void setRecordContext(final long time, final String topic) {
+        ((MockProcessorContext) driver.context()).setRecordContext(new ProcessorRecordContext(time, 0, 0, topic));
     }
 }

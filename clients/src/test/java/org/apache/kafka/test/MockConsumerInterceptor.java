@@ -16,13 +16,14 @@
  */
 package org.apache.kafka.test;
 
-
 import org.apache.kafka.clients.consumer.ConsumerInterceptor;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.ClusterResourceListener;
+import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 
@@ -32,11 +33,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
-public class MockConsumerInterceptor implements ConsumerInterceptor<String, String> {
+public class MockConsumerInterceptor implements ClusterResourceListener, ConsumerInterceptor<String, String> {
     public static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
     public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
     public static final AtomicInteger ON_COMMIT_COUNT = new AtomicInteger(0);
+    public static final AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
+    public static final ClusterResource NO_CLUSTER_ID = new ClusterResource("no_cluster_id");
+    public static final AtomicReference<ClusterResource> CLUSTER_ID_BEFORE_ON_CONSUME = new AtomicReference<>(NO_CLUSTER_ID);
 
     public MockConsumerInterceptor() {
         INIT_COUNT.incrementAndGet();
@@ -52,6 +57,11 @@ public class MockConsumerInterceptor implements ConsumerInterceptor<String, Stri
 
     @Override
     public ConsumerRecords<String, String> onConsume(ConsumerRecords<String, String> records) {
+
+        // This will ensure that we get the cluster metadata when onConsume is called for the first time
+        // as subsequent compareAndSet operations will fail.
+        CLUSTER_ID_BEFORE_ON_CONSUME.compareAndSet(NO_CLUSTER_ID, CLUSTER_META.get());
+
         Map<TopicPartition, List<ConsumerRecord<String, String>>> recordMap = new HashMap<>();
         for (TopicPartition tp : records.partitions()) {
             List<ConsumerRecord<String, String>> lst = new ArrayList<>();
@@ -81,5 +91,12 @@ public class MockConsumerInterceptor implements ConsumerInterceptor<String, Stri
         INIT_COUNT.set(0);
         CLOSE_COUNT.set(0);
         ON_COMMIT_COUNT.set(0);
+        CLUSTER_META.set(null);
+        CLUSTER_ID_BEFORE_ON_CONSUME.set(NO_CLUSTER_ID);
+    }
+
+    @Override
+    public void onUpdate(ClusterResource clusterResource) {
+        CLUSTER_META.set(clusterResource);
     }
 }

@@ -28,7 +28,6 @@ public class MockMetricsReporter implements MetricsReporter {
     public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
 
     public MockMetricsReporter() {
-
     }
 
     @Override
@@ -49,6 +48,5 @@ public class MockMetricsReporter implements MetricsReporter {
 
     @Override
     public void configure(Map<String, ?> configs) {
-
     }
 }

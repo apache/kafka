@@ -18,8 +18,9 @@
 package kafka.metrics
 
 import java.util.Properties
+
 import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.MetricPredicate
+import com.yammer.metrics.core.{Metric, MetricName, MetricPredicate}
 import org.junit.{After, Test}
 import org.junit.Assert._
 import kafka.integration.KafkaServerTestHarness
@@ -28,6 +29,7 @@ import kafka.serializer._
 import kafka.utils._
 import kafka.admin.AdminUtils
 import kafka.utils.TestUtils._
+
 import scala.collection._
 import scala.collection.JavaConversions._
 import scala.util.matching.Regex
@@ -88,6 +90,13 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     AdminUtils.deleteTopic(zkUtils, topic)
     TestUtils.verifyTopicDeletion(zkUtils, topic, 1, servers)
     assertFalse("Topic metrics exists after deleteTopic", checkTopicMetricsExists(topic))
+  }
+
+  @Test
+  def testClusterIdMetric(): Unit ={
+    // Check if clusterId metric exists.
+    val metrics = Metrics.defaultRegistry().allMetrics
+    assertEquals(metrics.keySet.filter(_.getMBeanName().equals("kafka.server:type=KafkaServer,name=ClusterId")).size, 1)
   }
 
   @deprecated("This test has been deprecated and it will be removed in a future release", "0.10.0.0")

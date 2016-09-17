@@ -615,7 +615,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @Test
   def testLowMaxFetchSizeForRequestAndPartition(): Unit = {
     // one of the effects of this is that there will be some log reads where `0 > remaining limit bytes < message size`
-    // and we don't return the message because it's not the first message in the first partition of the fetch
+    // and we don't return the message because it's not the first message in the first non-empty partition of the fetch
     // this behaves a little different than when remaining limit bytes is 0 and it's important to test it
     this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, "500")
     this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, "100")
@@ -772,6 +772,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @Test
   def testInterceptors() {
     val appendStr = "mock"
+    MockConsumerInterceptor.resetCounters()
+    MockProducerInterceptor.resetCounters()
+
     // create producer with interceptor
     val producerProps = new Properties()
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)

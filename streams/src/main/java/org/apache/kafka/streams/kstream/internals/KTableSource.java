@@ -23,6 +23,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.CachedStateStore;
 
 public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
 
@@ -72,6 +73,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
         public void init(ProcessorContext context) {
             super.init(context);
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
+            ((CachedStateStore) store).setFlushListener(new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
         }
 
         @Override
@@ -80,10 +82,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
             if (key == null)
                 throw new StreamsException("Record key for the source KTable from store name " + storeName + " should not be null.");
 
-            V oldValue = sendOldValues ? store.get(key) : null;
             store.put(key, value);
-
-            context().forward(key, new Change<>(value, oldValue));
         }
     }
 }

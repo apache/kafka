@@ -422,7 +422,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                                                                       keySerde,
                                                                                       valSerde,
                                                                                       false,
-                                                                                      Collections.<String, String>emptyMap());
+                                                                                      Collections.<String, String>emptyMap(),
+                                                                                      true);
                 // mark this state as non internal hence it is read directly from a user topic
                 topology.addStateStore(storeSupplier, name);
                 source.materialize();
