@@ -79,4 +79,5 @@ public abstract class Windows<W extends Window> {
      */
     public abstract Map<Long, W> windowsFor(long timestamp);
 
+    public abstract long size();
 }

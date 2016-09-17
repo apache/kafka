@@ -40,6 +40,11 @@ import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
+
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
@@ -51,6 +56,7 @@ import java.util.concurrent.TimeUnit;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 
+@RunWith(Parameterized.class)
 public class KStreamRepartitionJoinTest {
     private static final int NUM_BROKERS = 1;
 
@@ -73,11 +79,21 @@ public class KStreamRepartitionJoinTest {
     private String streamOneInput;
     private String streamTwoInput;
     private String streamFourInput;
+    private static volatile int testNo = 0;
 
+    @Parameter
+    public long cacheSizeBytes;
+
+    //Single parameter, use Object[]
+    @Parameters
+    public static Object[] data() {
+        return new Object[] {0, 10 * 1024 * 1024L};
+    }
 
     @Before
     public void before() {
-        final String applicationId = "kstream-repartition-join-test";
+        testNo++;
+        String applicationId = "kstream-repartition-join-test-" + testNo;
         builder = new KStreamBuilder();
         createTopics();
         streamsConfiguration = new Properties();
@@ -87,6 +103,8 @@ public class KStreamRepartitionJoinTest {
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1);
+        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
 
         streamOne = builder.stream(Serdes.Long(), Serdes.Integer(), streamOneInput);
         streamTwo = builder.stream(Serdes.Integer(), Serdes.String(), streamTwoInput);
@@ -112,8 +130,8 @@ public class KStreamRepartitionJoinTest {
 
     @Test
     public void shouldCorrectlyRepartitionOnJoinOperations() throws Exception {
-        produceMessages();
 
+        produceMessages();
         final ExpectedOutputOnTopic mapOne = mapStreamOneAndJoin();
         final ExpectedOutputOnTopic mapBoth = mapBothStreamsAndJoin();
         final ExpectedOutputOnTopic mapMapJoin = mapMapJoin();
@@ -136,7 +154,7 @@ public class KStreamRepartitionJoinTest {
     }
 
     private ExpectedOutputOnTopic mapStreamOneAndJoin() {
-        final String mapOneStreamAndJoinOutput = "map-one-join-output";
+        String mapOneStreamAndJoinOutput = "map-one-join-output-" + testNo;
         doJoin(streamOne.map(keyMapper), streamTwo, mapOneStreamAndJoinOutput);
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, mapOneStreamAndJoinOutput);
     }
@@ -145,8 +163,8 @@ public class KStreamRepartitionJoinTest {
         final KStream<Integer, Integer> map1 = streamOne.map(keyMapper);
         final KStream<Integer, String> map2 = streamTwo.map(MockKeyValueMapper.<Integer, String>NoOpKeyValueMapper());
 
-        doJoin(map1, map2, "map-both-streams-and-join");
-        return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, "map-both-streams-and-join");
+        doJoin(map1, map2, "map-both-streams-and-join-" + testNo);
+        return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, "map-both-streams-and-join-" + testNo);
     }
 
 
@@ -162,7 +180,7 @@ public class KStreamRepartitionJoinTest {
                 }
             }).map(keyMapper);
 
-        final String outputTopic = "map-map-join";
+        final String outputTopic = "map-map-join-" + testNo;
         doJoin(mapMapStream, streamTwo, outputTopic);
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
     }
@@ -173,7 +191,7 @@ public class KStreamRepartitionJoinTest {
         final KStream<Integer, Integer> keySelected =
             streamOne.selectKey(MockKeyValueMapper.<Long, Integer>SelectValueMapper());
 
-        final String outputTopic = "select-key-join";
+        final String outputTopic = "select-key-join-" + testNo;
         doJoin(keySelected, streamTwo, outputTopic);
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
     }
@@ -188,7 +206,7 @@ public class KStreamRepartitionJoinTest {
                 }
             });
 
-        final String outputTopic = "flat-map-join";
+        final String outputTopic = "flat-map-join-" + testNo;
         doJoin(flatMapped, streamTwo, outputTopic);
 
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
@@ -202,7 +220,8 @@ public class KStreamRepartitionJoinTest {
                 return value1 + ":" + value2;
             }
         };
-        final String output = "join-rhs-stream-mapped";
+
+        final String output = "join-rhs-stream-mapped-" + testNo;
         streamTwo
             .join(streamOne.map(keyMapper),
                 joiner,
@@ -220,7 +239,8 @@ public class KStreamRepartitionJoinTest {
 
         final KStream<Integer, String> map2 = streamTwo.map(MockKeyValueMapper.<Integer, String>NoOpKeyValueMapper());
 
-        final String outputTopic = "left-join";
+
+        final String outputTopic = "left-join-" + testNo;
         map1.leftJoin(map2,
             valueJoiner,
             getJoinWindow(),
@@ -253,7 +273,8 @@ public class KStreamRepartitionJoinTest {
                 return value1 + ":" + value2;
             }
         };
-        final String topic = "map-join-join";
+
+        final String topic = "map-join-join-" + testNo;
         join.map(kvMapper)
             .join(streamFour.map(kvMapper),
                 joiner,
@@ -348,11 +369,11 @@ public class KStreamRepartitionJoinTest {
     }
 
     private void createTopics() {
-        streamOneInput = "stream-one";
-        streamTwoInput = "stream-two";
-        streamFourInput = "stream-four";
+        streamOneInput = "stream-one-" + testNo;
+        streamTwoInput = "stream-two-" + testNo;
+        streamFourInput = "stream-four-" + testNo;
         CLUSTER.createTopic(streamOneInput);
-        CLUSTER.createTopic(streamTwoInput, 2, 1);
+        CLUSTER.createTopic(streamTwoInput);
         CLUSTER.createTopic(streamFourInput);
     }
 

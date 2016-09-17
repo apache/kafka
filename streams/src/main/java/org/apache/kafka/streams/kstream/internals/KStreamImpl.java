@@ -633,7 +633,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             .withKeys(keySerde)
             .withValues(valueSerde)
             .persistent()
-            .windowed(windows.maintainMs(), windows.segments, true)
+            .windowed(windows.size(), windows.maintainMs(), windows.segments, true)
             .build();
     }
 
