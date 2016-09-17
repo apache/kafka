@@ -290,13 +290,17 @@ class LogTest extends JUnitSuite {
         assignOffsets = false)
 
     for (i <- 50 until messageIds.max) {
-      val messageSets = Seq(
-        log.read(i, 1),
-        log.read(i, 0)
-      ).map(_.messageSet)
-      messageSets.foreach { messageSet =>
-        assertEquals(MessageSet.Empty, messageSet)
-      }
+      assertEquals(MessageSet.Empty, log.read(i, 0).messageSet)
+
+      // we return an incomplete message instead of an empty one for the case below
+      // we use this mechanism to tell consumers of the fetch request version 2 and below that the message size is
+      // larger than the fetch size
+      // in fetch request version 3, we no longer need this as we return oversized messages from the first non-empty
+      // partition
+      val fetchInfo = log.read(i, 1)
+      assertTrue(fetchInfo.messageSetIncomplete)
+      assertTrue(fetchInfo.messageSet.isInstanceOf[FileMessageSet])
+      assertEquals(1, fetchInfo.messageSet.sizeInBytes)
     }
   }
 

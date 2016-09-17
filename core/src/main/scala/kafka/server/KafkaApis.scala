@@ -507,6 +507,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         fetchRequest.replicaId,
         fetchRequest.minBytes,
         fetchRequest.maxBytes,
+        fetchRequest.versionId <= 2,
         authorizedRequestInfo,
         replicationQuota(fetchRequest),
         sendResponseCallback)

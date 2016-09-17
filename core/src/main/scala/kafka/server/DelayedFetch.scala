@@ -38,6 +38,7 @@ case class FetchPartitionStatus(startOffsetMetadata: LogOffsetMetadata, fetchInf
  */
 case class FetchMetadata(fetchMinBytes: Int,
                          fetchMaxBytes: Int,
+                         hardMaxBytesLimit: Boolean,
                          fetchOnlyLeader: Boolean,
                          fetchOnlyCommitted: Boolean,
                          isFromFollower: Boolean,
@@ -141,6 +142,7 @@ class DelayedFetch(delayMs: Long,
       fetchMetadata.fetchOnlyLeader,
       fetchMetadata.fetchOnlyCommitted,
       fetchMetadata.fetchMaxBytes,
+      fetchMetadata.hardMaxBytesLimit,
       fetchMetadata.fetchPartitionStatus.map { case (tp, status) => tp -> status.fetchInfo },
       quota
     )

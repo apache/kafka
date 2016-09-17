@@ -144,7 +144,7 @@ class LogSegment(val log: FileMessageSet,
   @threadsafe
   def read(startOffset: Long, maxOffset: Option[Long], maxSize: Int, maxPosition: Long = size,
            minOneMessage: Boolean = false): FetchDataInfo = {
-    if(maxSize < 0)
+    if (maxSize < 0)
       throw new IllegalArgumentException("Invalid max size for log read (%d)".format(maxSize))
 
     val logSize = log.sizeInBytes // this may change, need to save a consistent copy
@@ -157,13 +157,13 @@ class LogSegment(val log: FileMessageSet,
     val (startPosition, messageSetSize) = startOffsetAndSize
     val offsetMetadata = new LogOffsetMetadata(startOffset, this.baseOffset, startPosition.position)
 
-    // return a log segment but with zero size in the case below
-    if (!minOneMessage && maxSize < messageSetSize)
-      return FetchDataInfo(offsetMetadata, MessageSet.Empty)
-
     val adjustedMaxSize =
       if (minOneMessage) math.max(maxSize, messageSetSize)
       else maxSize
+
+    // return a log segment but with zero size in the case below
+    if (adjustedMaxSize == 0)
+      return FetchDataInfo(offsetMetadata, MessageSet.Empty)
 
     // calculate the length of the message set to read based on whether or not they gave us a maxOffset
     val length = maxOffset match {
@@ -175,8 +175,8 @@ class LogSegment(val log: FileMessageSet,
         // when the leader of a partition changes, it's possible for the new leader's high watermark to be less than the
         // true high watermark in the previous leader for a short window. In this window, if a consumer fetches on an
         // offset between new leader's high watermark and the log end offset, we want to return an empty response.
-        if(offset < startOffset)
-          return FetchDataInfo(offsetMetadata, MessageSet.Empty)
+        if (offset < startOffset)
+          return FetchDataInfo(offsetMetadata, MessageSet.Empty, messageSetIncomplete = false)
         val mapping = translateOffset(offset, startPosition.position)
         val endPosition =
           if (mapping == null)
@@ -186,7 +186,8 @@ class LogSegment(val log: FileMessageSet,
         min(min(maxPosition, endPosition) - startPosition.position, adjustedMaxSize).toInt
     }
 
-    FetchDataInfo(offsetMetadata, log.read(startPosition.position, length))
+    FetchDataInfo(offsetMetadata, log.read(startPosition.position, length),
+      messageSetIncomplete = adjustedMaxSize < messageSetSize)
   }
 
   /**
