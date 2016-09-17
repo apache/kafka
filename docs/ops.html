@@ -377,7 +377,7 @@ Configure default quota for user:
 Updated config for entity: default user-principal.
 </pre>
 
-Configure custom quota for client-id:
+Configure default quota for client-id:
 <pre>
 > bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048' --entity-type clients --entity-default
 Updated config for entity: default client-id.
@@ -397,6 +397,18 @@ Describe quota for a given client-id:
 <pre>
 > bin/kafka-configs.sh  --zookeeper localhost:2181 --describe --entity-type clients --entity-name clientA
 Configs for client-id 'clientA' are producer_byte_rate=1024,consumer_byte_rate=2048
+</pre>
+If entity name is not specified, all entities of the specified type are described. For example, describe all users:
+<pre>
+> bin/kafka-configs.sh  --zookeeper localhost:2181 --describe --entity-type users
+Configs for user-principal 'user1' are producer_byte_rate=1024,consumer_byte_rate=2048
+Configs for default user-principal are producer_byte_rate=1024,consumer_byte_rate=2048
+</pre>
+Similarly for (user, client):
+<pre>
+> bin/kafka-configs.sh  --zookeeper localhost:2181 --describe --entity-type users --entity-type clients
+Configs for user-principal 'user1', default client-id are producer_byte_rate=1024,consumer_byte_rate=2048
+Configs for user-principal 'user1', client-id 'clientA' are producer_byte_rate=1024,consumer_byte_rate=2048
 </pre>
 <p>
 It is possible to set default quotas that apply to all client-ids by setting these configs on the brokers. These properties are applied only if quota overrides or defaults are not configured in Zookeeper. By default, each client-id receives an unlimited quota. The following sets the default quota per producer and consumer client-id to 10MB/sec.
