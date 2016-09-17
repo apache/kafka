@@ -396,6 +396,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       request.apiRemoteCompleteTimeMs = SystemTime.milliseconds
 
       quotas.produce.recordAndMaybeThrottle(
+        request.session.sanitizedUser,
         request.header.clientId,
         numBytesAppended,
         produceResponseCallback)
@@ -493,9 +494,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         quotas.leader.record(responseSize)
         fetchResponseCallback(0)
       } else {
-        val responseSize = FetchResponse.responseSize(FetchResponse.batchByTopic(mergedPartitionData.toSeq),
+        val responseSize = FetchResponse.responseSize(FetchResponse.batchByTopic(mergedPartitionData),
           fetchRequest.versionId)
-        quotas.fetch.recordAndMaybeThrottle(fetchRequest.clientId, responseSize, fetchResponseCallback)
+        quotas.fetch.recordAndMaybeThrottle(request.session.sanitizedUser, fetchRequest.clientId, responseSize, fetchResponseCallback)
       }
     }
 

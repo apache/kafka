@@ -56,42 +56,75 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
   }
 
-  @Test
-  def testClientQuotaConfigChange() {
-    assertTrue("Should contain a ConfigHandler for topics",
-      this.servers.head.dynamicConfigHandlers.contains(ConfigType.Client))
-    val clientId = "testClient"
+  private def testQuotaConfigChange(user: String, clientId: String, rootEntityType: String, configEntityName: String) {
+    assertTrue("Should contain a ConfigHandler for " + rootEntityType ,
+               this.servers.head.dynamicConfigHandlers.contains(rootEntityType))
     val props = new Properties()
-    props.put(ClientConfigOverride.ProducerOverride, "1000")
-    props.put(ClientConfigOverride.ConsumerOverride, "2000")
-    AdminUtils.changeClientIdConfig(zkUtils, clientId, props)
+    props.put(QuotaConfigOverride.ProducerOverride, "1000")
+    props.put(QuotaConfigOverride.ConsumerOverride, "2000")
     val quotaManagers = servers.head.apis.quotas
+    rootEntityType match {
+      case ConfigType.Client => AdminUtils.changeClientIdConfig(zkUtils, configEntityName, props)
+      case _ => AdminUtils.changeUserOrUserClientIdConfig(zkUtils, configEntityName, props)
+    }
 
     TestUtils.retry(10000) {
-      val overrideProducerQuota = quotaManagers.produce.quota(clientId)
-      val overrideConsumerQuota = quotaManagers.fetch.quota(clientId)
+      val overrideProducerQuota = quotaManagers.produce.quota(user, clientId)
+      val overrideConsumerQuota = quotaManagers.fetch.quota(user, clientId)
 
-      assertEquals(s"ClientId $clientId must have overridden producer quota of 1000",
+      assertEquals(s"User $user clientId $clientId must have overridden producer quota of 1000",
         Quota.upperBound(1000), overrideProducerQuota)
-      assertEquals(s"ClientId $clientId must have overridden consumer quota of 2000",
+      assertEquals(s"User $user clientId $clientId must have overridden consumer quota of 2000",
         Quota.upperBound(2000), overrideConsumerQuota)
     }
 
-    val defaultProducerQuota = servers.head.apis.config.producerQuotaBytesPerSecondDefault.doubleValue
-    val defaultConsumerQuota = servers.head.apis.config.consumerQuotaBytesPerSecondDefault.doubleValue
-    assertNotEquals("defaultProducerQuota should be different from 1000", 1000, defaultProducerQuota)
-    assertNotEquals("defaultConsumerQuota should be different from 2000", 2000, defaultConsumerQuota)
-    AdminUtils.changeClientIdConfig(zkUtils, clientId, new Properties())
+    val defaultProducerQuota = Long.MaxValue.asInstanceOf[Double]
+    val defaultConsumerQuota = Long.MaxValue.asInstanceOf[Double]
 
+    val emptyProps = new Properties()
+    rootEntityType match {
+      case ConfigType.Client => AdminUtils.changeClientIdConfig(zkUtils, configEntityName, emptyProps)
+      case _ => AdminUtils.changeUserOrUserClientIdConfig(zkUtils, configEntityName, emptyProps)
+    }
     TestUtils.retry(10000) {
-      val producerQuota = quotaManagers.produce.quota(clientId)
-      val consumerQuota = quotaManagers.fetch.quota(clientId)
+      val producerQuota = quotaManagers.produce.quota(user, clientId)
+      val consumerQuota = quotaManagers.fetch.quota(user, clientId)
 
-      assertEquals(s"ClientId $clientId must have reset producer quota to " + defaultProducerQuota,
+      assertEquals(s"User $user clientId $clientId must have reset producer quota to " + defaultProducerQuota,
         Quota.upperBound(defaultProducerQuota), producerQuota)
-      assertEquals(s"ClientId $clientId must have reset consumer quota to " + defaultConsumerQuota,
+      assertEquals(s"User $user clientId $clientId must have reset consumer quota to " + defaultConsumerQuota,
         Quota.upperBound(defaultConsumerQuota), consumerQuota)
     }
+  }
+
+  @Test
+  def testClientIdQuotaConfigChange() {
+    testQuotaConfigChange("ANONYMOUS", "testClient", ConfigType.Client, "testClient")
+  }
+
+  @Test
+  def testUserQuotaConfigChange() {
+    testQuotaConfigChange("ANONYMOUS", "testClient", ConfigType.User, "ANONYMOUS")
+  }
+
+  @Test
+  def testUserClientIdQuotaChange() {
+    testQuotaConfigChange("ANONYMOUS", "testClient", ConfigType.User, "ANONYMOUS/clients/testClient")
+  }
+
+  @Test
+  def testDefaultClientIdQuotaConfigChange() {
+    testQuotaConfigChange("ANONYMOUS", "testClient", ConfigType.Client, "<default>")
+  }
+
+  @Test
+  def testDefaultUserQuotaConfigChange() {
+    testQuotaConfigChange("ANONYMOUS", "testClient", ConfigType.User, "<default>")
+  }
+
+  @Test
+  def testDefaultUserClientIdQuotaConfigChange() {
+    testQuotaConfigChange("ANONYMOUS", "testClient", ConfigType.User, "<default>/clients/<default>")
   }
 
   @Test
