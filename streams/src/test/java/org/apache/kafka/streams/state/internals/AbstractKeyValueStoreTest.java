@@ -34,7 +34,6 @@ import org.junit.Test;
 public abstract class AbstractKeyValueStoreTest {
 
 
-
     protected abstract <K, V> KeyValueStore<K, V> createKeyValueStore(ProcessorContext context,
                                                                       Class<K> keyClass, Class<V> valueClass,
                                                                       boolean useContextSerdes);

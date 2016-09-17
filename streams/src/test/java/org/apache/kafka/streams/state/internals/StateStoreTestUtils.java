@@ -127,5 +127,6 @@ public class StateStoreTestUtils {
         public boolean isOpen() {
             return false;
         }
+
     }
 }

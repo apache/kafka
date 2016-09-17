@@ -37,7 +37,28 @@ public class MockReducer {
         }
     }
 
+
+    private static class IntegerAdd implements Reducer<Integer> {
+
+        @Override
+        public Integer apply(final Integer value1, final Integer value2) {
+            return value1 + value2;
+        }
+    }
+
+    private static class IntegerSubtract implements Reducer<Integer> {
+
+        @Override
+        public Integer apply(final Integer value1, final Integer value2) {
+            return value1 - value2;
+        }
+    }
+
     public final static Reducer<String> STRING_ADDER = new StringAdd();
 
     public final static Reducer<String> STRING_REMOVER = new StringRemove();
+
+    public final static Reducer<Integer> INTEGER_ADDER = new IntegerAdd();
+
+    public final static Reducer<Integer> INTEGER_SUBTRACTOR = new IntegerSubtract();
 }

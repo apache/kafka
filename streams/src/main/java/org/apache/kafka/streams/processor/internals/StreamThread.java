@@ -32,6 +32,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.metrics.stats.Min;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
@@ -43,6 +44,8 @@ import org.apache.kafka.streams.processor.PartitionGrouper;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.HostInfo;
+import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ThreadCacheMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -107,6 +110,9 @@ public class StreamThread extends Thread {
     private boolean processStandbyRecords = false;
     private AtomicBoolean initialized = new AtomicBoolean(false);
 
+    private final long cacheSizeBytes;
+    private ThreadCache cache;
+
     final ConsumerRebalanceListener rebalanceListener = new ConsumerRebalanceListener() {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> assignment) {
@@ -157,6 +163,7 @@ public class StreamThread extends Thread {
         super("StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement());
 
         this.applicationId = applicationId;
+        String threadName = getName();
         this.config = config;
         this.builder = builder;
         this.sourceTopics = builder.sourceTopics();
@@ -165,10 +172,17 @@ public class StreamThread extends Thread {
         this.processId = processId;
         this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
         this.streamsMetadataState = streamsMetadataState;
-
-        // set the producer and consumer clients
-        String threadName = getName();
         threadClientId = clientId + "-" + threadName;
+        this.sensors = new StreamsMetricsImpl(metrics);
+        if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) < 0) {
+            log.warn("Negative cache size passed in thread [{}]. Reverting to cache size of 0 bytes.", threadName);
+        }
+        this.cacheSizeBytes = Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
+            config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG));
+        this.cache = new ThreadCache(threadClientId, cacheSizeBytes, this.sensors);
+        // set the producer and consumer clients
+
+
         log.info("stream-thread [{}] Creating producer client", threadName);
         this.producer = clientSupplier.getProducer(config.getProducerConfigs(threadClientId));
         log.info("stream-thread [{}] Creating consumer client", threadName);
@@ -199,8 +213,6 @@ public class StreamThread extends Thread {
         this.timerStartedMs = time.milliseconds();
         this.lastCleanMs = Long.MAX_VALUE; // the cleaning cycle won't start until partition assignment
         this.lastCommitMs = timerStartedMs;
-
-        this.sensors = new StreamsMetricsImpl(metrics);
 
 
         this.running = new AtomicBoolean(true);
@@ -371,11 +383,11 @@ public class StreamThread extends Thread {
                     // even when no task is assigned, we must poll to get a task.
                     requiresPoll = true;
                 }
-                maybeCommit();
+
             } else {
                 requiresPoll = true;
             }
-
+            maybeCommit();
             maybeUpdateStandbyTasks();
 
             maybeClean();
@@ -551,7 +563,7 @@ public class StreamThread extends Thread {
 
         ProcessorTopology topology = builder.build(id.topicGroupId);
 
-        return new StreamTask(id, applicationId, partitions, topology, consumer, producer, restoreConsumer, config, sensors, stateDirectory);
+        return new StreamTask(id, applicationId, partitions, topology, consumer, producer, restoreConsumer, config, sensors, stateDirectory, cache);
     }
 
     private void addStreamTasks(Collection<TopicPartition> assignment) {
@@ -621,7 +633,7 @@ public class StreamThread extends Thread {
 
         ProcessorTopology topology = builder.build(id.topicGroupId);
 
-        if (!topology.stateStoreSuppliers().isEmpty()) {
+        if (!topology.stateStores().isEmpty()) {
             return new StandbyTask(id, applicationId, partitions, topology, consumer, restoreConsumer, config, sensors, stateDirectory);
         } else {
             return null;
@@ -718,7 +730,7 @@ public class StreamThread extends Thread {
         }
     }
 
-    private class StreamsMetricsImpl implements StreamsMetrics {
+    private class StreamsMetricsImpl implements StreamsMetrics, ThreadCacheMetrics {
         final Metrics metrics;
         final String metricGrpName;
         final String sensorNamePrefix;
@@ -769,6 +781,11 @@ public class StreamThread extends Thread {
             sensor.record(endNs - startNs, timerStartedMs);
         }
 
+        @Override
+        public void recordCacheSensor(Sensor sensor, double count) {
+            sensor.record(count);
+        }
+
         /**
          * @throws IllegalArgumentException if tags is not constructed in key-value pairs
          */
@@ -793,6 +810,33 @@ public class StreamThread extends Thread {
             addLatencyMetrics(metricGroupName, sensor, entityName, operationName, tagMap);
 
             return sensor;
+        }
+
+        @Override
+        public Sensor addCacheSensor(String entityName, String operationName, String... tags) {
+            // extract the additional tags if there are any
+            Map<String, String> tagMap = new HashMap<>(this.metricTags);
+            if ((tags.length % 2) != 0)
+                throw new IllegalArgumentException("Tags needs to be specified in key-value pairs");
+
+            for (int i = 0; i < tags.length; i += 2)
+                tagMap.put(tags[i], tags[i + 1]);
+
+            String metricGroupName = "stream-thread-cache-metrics";
+
+            Sensor sensor = metrics.sensor(sensorNamePrefix + "-" + entityName + "-" + operationName);
+            addCacheMetrics(metricGroupName, sensor, entityName, operationName, tagMap);
+            return sensor;
+
+        }
+
+        private void addCacheMetrics(String metricGrpName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
+            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-avg", metricGrpName,
+                "The current count of " + entityName + " " + opName + " operation.", tags), new Avg());
+            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-min", metricGrpName,
+                "The current count of " + entityName + " " + opName + " operation.", tags), new Min());
+            maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-max", metricGrpName,
+                "The current count of " + entityName + " " + opName + " operation.", tags), new Max());
         }
 
         private void addLatencyMetrics(String metricGrpName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {

@@ -291,6 +291,9 @@ public class KafkaConsumerTest {
             consumer.close();
             assertEquals(1, MockConsumerInterceptor.INIT_COUNT.get());
             assertEquals(1, MockConsumerInterceptor.CLOSE_COUNT.get());
+            // Cluster metadata will only be updated on calling poll.
+            Assert.assertNull(MockConsumerInterceptor.CLUSTER_META.get());
+
         } finally {
             // cleanup since we are using mutable static variables in MockConsumerInterceptor
             MockConsumerInterceptor.resetCounters();

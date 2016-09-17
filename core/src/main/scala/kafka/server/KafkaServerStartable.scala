@@ -24,13 +24,13 @@ import kafka.utils.{VerifiableProperties, Logging}
 
 object KafkaServerStartable {
   def fromProps(serverProps: Properties) = {
-    KafkaMetricsReporter.startReporters(new VerifiableProperties(serverProps))
-    new KafkaServerStartable(KafkaConfig.fromProps(serverProps))
+    val reporters = KafkaMetricsReporter.startReporters(new VerifiableProperties(serverProps))
+    new KafkaServerStartable(KafkaConfig.fromProps(serverProps), reporters)
   }
 }
 
-class KafkaServerStartable(val serverConfig: KafkaConfig) extends Logging {
-  private val server = new KafkaServer(serverConfig)
+class KafkaServerStartable(val serverConfig: KafkaConfig, reporters: Seq[KafkaMetricsReporter]) extends Logging {
+  private val server = new KafkaServer(serverConfig, kafkaMetricsReporters = reporters)
 
   def startup() {
     try {

@@ -210,6 +210,7 @@ public class ProcessorTopologyTest {
         assertNoOutputRecord(OUTPUT_TOPIC_1);
     }
 
+
     protected void assertNextOutputRecord(String topic, String key, String value) {
         ProducerRecord<String, String> record = driver.readOutput(topic, STRING_DESERIALIZER, STRING_DESERIALIZER);
         assertEquals(topic, record.topic());
@@ -268,6 +269,7 @@ public class ProcessorTopologyTest {
                                     )
                                     .addSink("counts", OUTPUT_TOPIC_1, "processor");
     }
+
 
     protected TopologyBuilder createSimpleMultiSourceTopology(int partition) {
         return new TopologyBuilder().addSource("source-1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)

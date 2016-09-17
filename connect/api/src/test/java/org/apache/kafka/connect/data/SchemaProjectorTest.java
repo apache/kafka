@@ -469,6 +469,27 @@ public class SchemaProjectorTest {
         }
     }
 
+    @Test
+    public void testProjectMissingDefaultValuedStructField() {
+        final Schema source = SchemaBuilder.struct().build();
+        final Schema target = SchemaBuilder.struct().field("id", SchemaBuilder.int64().defaultValue(42L).build()).build();
+        assertEquals(42L, (long) ((Struct) SchemaProjector.project(source, new Struct(source), target)).getInt64("id"));
+    }
+
+    @Test
+    public void testProjectMissingOptionalStructField() {
+        final Schema source = SchemaBuilder.struct().build();
+        final Schema target = SchemaBuilder.struct().field("id", SchemaBuilder.OPTIONAL_INT64_SCHEMA).build();
+        assertEquals(null, ((Struct) SchemaProjector.project(source, new Struct(source), target)).getInt64("id"));
+    }
+
+    @Test(expected = SchemaProjectorException.class)
+    public void testProjectMissingRequiredField() {
+        final Schema source = SchemaBuilder.struct().build();
+        final Schema target = SchemaBuilder.struct().field("id", SchemaBuilder.INT64_SCHEMA).build();
+        SchemaProjector.project(source, new Struct(source), target);
+    }
+
     private void verifyOptionalProjection(Schema source, Type targetType, Object value, Object defaultValue, Object expectedProjected, boolean optional) {
         Schema target;
         assert source.isOptional();
