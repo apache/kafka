@@ -101,7 +101,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
     val msg = msg100KB
     val msgCount = 100
-    val expectedDuration = 10 //Keep the test to N seconds
+    val expectedDuration = 5 //Keep the test to N seconds
     var throttle: Long = msgCount * msg.length / expectedDuration
     if (!leaderThrottle) throttle = throttle * 3 //Follower throttle needs to replicate 3x as fast to get the same duration as there are three replicas to replicate for each of the two follower brokers
 
@@ -111,7 +111,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     }
 
     //Either throttle the six leaders or the two follower
-    val throttledReplicas = if(leaderThrottle) "0:100,1:101,2:102,3:103,4:104,5:105" else "0:106,1:106,2:106,3:107,4:107,5:107"
+    val throttledReplicas = if (leaderThrottle) "0:100,1:101,2:102,3:103,4:104,5:105" else "0:106,1:106,2:106,3:107,4:107,5:107"
     changeTopicConfig(zkUtils, topic, property(ThrottledReplicasListProp, throttledReplicas))
 
     //Add data equally to each partition
@@ -138,8 +138,8 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
       assertEquals(throttle, brokerFor(brokerId).quotaManagers.follower.upperBound())
     }
     if (!leaderThrottle) {
-      (0 to 2).foreach { partition => assertTrue(brokerFor(106).quotaManagers.follower.isThrottled(new TopicAndPartition(topic, partition)))}
-      (3 to 5).foreach { partition => assertTrue(brokerFor(107).quotaManagers.follower.isThrottled(new TopicAndPartition(topic, partition)))}
+      (0 to 2).foreach { partition => assertTrue(brokerFor(106).quotaManagers.follower.isThrottled(new TopicAndPartition(topic, partition))) }
+      (3 to 5).foreach { partition => assertTrue(brokerFor(107).quotaManagers.follower.isThrottled(new TopicAndPartition(topic, partition))) }
     }
 
     //Wait for non-throttled partitions to replicate first
@@ -155,31 +155,17 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     //Check the times for throttled/unthrottled are each side of what we expect
     val throttledLowerBound = expectedDuration * 1000 * 0.9
     val throttledUpperBound = expectedDuration * 1000 * 1.5
-    assertTrue(s"Unthrottled replication of $unthrottledTook ms should be < $throttledLowerBound ms", unthrottledTook < throttledLowerBound)
-    assertTrue(s"Throttled replication of $throttledTook ms should be > $throttledLowerBound ms", throttledTook > throttledLowerBound)
-    assertTrue(s"Throttled replication of $throttledTook ms should be < $throttledUpperBound ms", throttledTook < throttledUpperBound)
+    assertTrue(s"Expected $unthrottledTook < $throttledLowerBound", unthrottledTook < throttledLowerBound)
+    assertTrue(s"Expected $throttledTook > $throttledLowerBound", throttledTook > throttledLowerBound)
+    assertTrue(s"Expected $throttledTook < $throttledUpperBound", throttledTook < throttledUpperBound)
 
     // Check the rate metric matches what we expect.
     // In a short test the brokers can be read unfairly, so assert against the average
-    if (leaderThrottle)
-      assertEquals(throttle, avMeasuredRate(LeaderReplication, 100 to 105), percentError(30, throttle))
-    else
-      assertEquals(throttle, avMeasuredRate(FollowerReplication, 106 to 107), percentError(30, throttle))
-  }
-
-  def createBrokers(brokerIds: Inclusive): Unit = {
-    brokerIds.foreach { id =>
-      brokers = brokers :+ TestUtils.createServer(fromProps(createBrokerConfig(id, zkConnect)))
-    }
-  }
-
-  private def avMeasuredRate(replicationType: QuotaType, brokers: Inclusive) : Double= {
-    brokers.map(brokerFor(_)).map(measuredRate(_, replicationType)).sum / brokers.length
-  }
-
-  private def measuredRate(broker: KafkaServer, replicationType: QuotaType): Double = {
-    val metricName = broker.metrics.metricName("byte-rate", replicationType.toString, s"Tracking byte-rate for ${replicationType}")
-    broker.metrics.metrics.asScala(metricName).value()
+    val rateUpperBound = throttle * 1.1
+    val rateLowerBound = throttle * 0.5
+    val avRate = if (leaderThrottle) avMeasuredRate(LeaderReplication, 100 to 105) else avMeasuredRate(FollowerReplication, 106 to 107)
+    assertTrue(s"Expected ${avRate} < $rateUpperBound", avRate < rateUpperBound)
+    assertTrue(s"Expected ${avRate} > $rateLowerBound", avRate > rateLowerBound)
   }
 
   @Test
@@ -234,8 +220,25 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
   }
 
   private def property(key: String, value: String) = {
-    new Properties() { put(key, value) }
+    new Properties() {
+      put(key, value)
+    }
   }
 
   private def brokerFor(id: Int): KafkaServer = brokers.filter(_.config.brokerId == id)(0)
+
+  def createBrokers(brokerIds: Inclusive): Unit = {
+    brokerIds.foreach { id =>
+      brokers = brokers :+ TestUtils.createServer(fromProps(createBrokerConfig(id, zkConnect)))
+    }
+  }
+
+  private def avMeasuredRate(replicationType: QuotaType, brokers: Inclusive): Double = {
+    brokers.map(brokerFor(_)).map(measuredRate(_, replicationType)).sum / brokers.length
+  }
+
+  private def measuredRate(broker: KafkaServer, replicationType: QuotaType): Double = {
+    val metricName = broker.metrics.metricName("byte-rate", replicationType.toString, s"Tracking byte-rate for ${replicationType}")
+    broker.metrics.metrics.asScala(metricName).value()
+  }
 }
