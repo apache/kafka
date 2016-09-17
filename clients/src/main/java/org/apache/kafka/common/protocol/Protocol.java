@@ -457,10 +457,12 @@ public class Protocol {
                                                                        "Minimum bytes to accumulate in the response."),
                                                              new Field("max_bytes",
                                                                        INT32,
-                                                                       "Maximum bytes to accumulate in the response."),
+                                                                       "Maximum bytes to accumulate in the response. Note that this is not an absolute maximum, " +
+                                                                       "if the first message in the first non-empty partition of the fetch is larger than this " +
+                                                                       "value, the message will still be returned to ensure that progress can be made."),
                                                              new Field("topics",
                                                                        new ArrayOf(FETCH_REQUEST_TOPIC_V0),
-                                                                       "Topics to fetch."));
+                                                                       "Topics to fetch in the order provided."));
 
     public static final Schema FETCH_RESPONSE_PARTITION_V0 = new Schema(new Field("partition",
                                                                                   INT32,
