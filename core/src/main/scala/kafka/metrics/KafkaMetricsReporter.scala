@@ -64,7 +64,7 @@ object KafkaMetricsReporter {
           metricsConfig.reporters.foreach(reporterType => {
             val reporter = CoreUtils.createObject[KafkaMetricsReporter](reporterType)
             reporter.init(verifiableProps)
-            reporters.append(reporter)
+            reporters += reporter
             reporter match {
               case bean: KafkaMetricsReporterMBean => CoreUtils.registerMBean(reporter, bean.getMBeanName)
               case _ =>

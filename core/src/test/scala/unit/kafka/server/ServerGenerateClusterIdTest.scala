@@ -40,22 +40,22 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
 
   @Test
   def testAutoGenerateClusterId() {
-    //Make sure that the cluster id doesn't exist yet.
+    // Make sure that the cluster id doesn't exist yet.
     assertFalse(zkUtils.pathExists(ZkUtils.ClusterIdPath))
 
     var server1 = TestUtils.createServer(config1)
 
-    // Make sure the cluster id is 48 characters long (base64 of UUID.randomUUID() )
+    // Validate the cluster id
     val clusterIdOnFirstBoot = server1.clusterId
     isValidClusterId(clusterIdOnFirstBoot)
 
     server1.shutdown()
 
-    //Make sure that the cluster id is persistent.
+    // Make sure that the cluster id is persistent.
     assertTrue(zkUtils.pathExists(ZkUtils.ClusterIdPath))
-    assertEquals(zkUtils.getClusterId(), Some(clusterIdOnFirstBoot))
+    assertEquals(zkUtils.getClusterId, Some(clusterIdOnFirstBoot))
 
-    // restart the server check to confirm that it uses the clusterId generated previously
+    // Restart the server check to confirm that it uses the clusterId generated previously
     server1 = new KafkaServer(config1)
     server1.startup()
 
@@ -64,9 +64,9 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
 
     server1.shutdown()
 
-    //Make sure that the cluster id is persistent after multiple reboots.
+    // Make sure that the cluster id is persistent after multiple reboots.
     assertTrue(zkUtils.pathExists(ZkUtils.ClusterIdPath))
-    assertEquals(zkUtils.getClusterId(), Some(clusterIdOnFirstBoot))
+    assertEquals(zkUtils.getClusterId, Some(clusterIdOnFirstBoot))
 
     CoreUtils.delete(server1.config.logDirs)
     TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
@@ -109,7 +109,6 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
 
   @Test
   def testAutoGenerateClusterIdForKafkaClusterParallel() {
-
     val firstBoot = Future.traverse(Seq(config1, config2, config3))(config => Future(TestUtils.createServer(config)))
     val Seq(server1, server2, server3) = Await.result(firstBoot, 100 second)
 

@@ -226,9 +226,8 @@ class ZkUtils(val zkClient: ZkClient,
     }
   }
 
-  def getClusterId(): Option[String] = {
-    readDataMaybeNull(ClusterIdPath)._1.map(ClusterId.fromJson(_))
-  }
+  def getClusterId: Option[String] =
+    readDataMaybeNull(ClusterIdPath)._1.map(ClusterId.fromJson)
 
   def createOrGetClusterId(proposedClusterId: String): String = {
     try {

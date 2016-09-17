@@ -36,15 +36,15 @@ class MetadataRequestTest extends BaseRequestTest {
 
   @Test
   def testClusterIdWithRequestVersion1() {
-    val v1MetadataResponse = sendMetadataRequest(MetadataRequest.allTopics(), 1)
-    val v1ClusterId = v1MetadataResponse.clusterId()
+    val v1MetadataResponse = sendMetadataRequest(MetadataRequest.allTopics, 1)
+    val v1ClusterId = v1MetadataResponse.clusterId
     assertNull(s"v1 clusterId should be null", v1ClusterId)
   }
 
   @Test
   def testClusterIdIsValid() {
-    val metadataResponse = sendMetadataRequest(MetadataRequest.allTopics(), 2)
-    isValidClusterId(metadataResponse.clusterId())
+    val metadataResponse = sendMetadataRequest(MetadataRequest.allTopics, 2)
+    isValidClusterId(metadataResponse.clusterId)
   }
 
   @Test
