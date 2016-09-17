@@ -96,31 +96,59 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
   }
 }
 
-object ClientConfigOverride {
+object QuotaConfigOverride {
   val ProducerOverride = "producer_byte_rate"
   val ConsumerOverride = "consumer_byte_rate"
 }
 
 /**
-  * The ClientIdConfigHandler will process clientId config changes in ZK.
-  * The callback provides the clientId and the full properties set read from ZK.
-  * This implementation reports the overrides to the respective ClientQuotaManager objects
-  */
-class ClientIdConfigHandler(private val quotaManagers: QuotaManagers) extends ConfigHandler {
-  def processConfigChanges(clientId: String, clientConfig: Properties) {
-    if (clientConfig.containsKey(ClientConfigOverride.ProducerOverride)) {
-      quotaManagers.produce.updateQuota(clientId,
-        new Quota(clientConfig.getProperty(ClientConfigOverride.ProducerOverride).toLong, true))
-    } else {
-      quotaManagers.fetch.resetQuota(clientId)
-    }
+ * Handles <client-id>, <user> or <user, client-id> quota config updates in ZK.
+ * This implementation reports the overrides to the respective ClientQuotaManager objects
+ */
+class QuotaConfigHandler(private val quotaManagers: QuotaManagers) {
 
-    if (clientConfig.containsKey(ClientConfigOverride.ConsumerOverride)) {
-      quotaManagers.fetch.updateQuota(clientId,
-        new Quota(clientConfig.getProperty(ClientConfigOverride.ConsumerOverride).toLong, true))
-    } else {
-      quotaManagers.produce.resetQuota(clientId)
-    }
+  def updateQuotaConfig(sanitizedUser: Option[String], clientId: Option[String], config: Properties) {
+    val producerQuota =
+      if (config.containsKey(QuotaConfigOverride.ProducerOverride))
+        Some(new Quota(config.getProperty(QuotaConfigOverride.ProducerOverride).toLong, true))
+      else
+        None
+    quotaManagers.produce.updateQuota(sanitizedUser, clientId, producerQuota)
+    val consumerQuota =
+      if (config.containsKey(QuotaConfigOverride.ConsumerOverride))
+        Some(new Quota(config.getProperty(QuotaConfigOverride.ConsumerOverride).toLong, true))
+      else
+        None
+    quotaManagers.fetch.updateQuota(sanitizedUser, clientId, consumerQuota)
+  }
+}
+
+/**
+ * The ClientIdConfigHandler will process clientId config changes in ZK.
+ * The callback provides the clientId and the full properties set read from ZK.
+ */
+class ClientIdConfigHandler(private val quotaManagers: QuotaManagers) extends QuotaConfigHandler(quotaManagers) with ConfigHandler {
+
+  def processConfigChanges(clientId: String, clientConfig: Properties) {
+    updateQuotaConfig(None, Some(clientId), clientConfig)
+  }
+}
+
+/**
+ * The UserConfigHandler will process <user> and <user, client-id> quota changes in ZK.
+ * The callback provides the node name containing sanitized user principal, client-id if this is
+ * a <user, client-id> update and the full properties set read from ZK.
+ */
+class UserConfigHandler(private val quotaManagers: QuotaManagers) extends QuotaConfigHandler(quotaManagers) with ConfigHandler {
+
+  def processConfigChanges(quotaEntityPath: String, config: Properties) {
+    // Entity path is <user> or <user>/clients/<client>
+    val entities = quotaEntityPath.split("/")
+    if (entities.length != 1 && entities.length != 3)
+      throw new IllegalArgumentException("Invalid quota entity path: " + quotaEntityPath);
+    val sanitizedUser = entities(0)
+    val clientId = if (entities.length == 3) Some(entities(2)) else None
+    updateQuotaConfig(Some(sanitizedUser), clientId, config)
   }
 }
 

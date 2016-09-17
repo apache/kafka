@@ -119,6 +119,9 @@ object ZkUtils {
   def getEntityConfigPath(entityType: String, entity: String): String =
     getEntityConfigRootPath(entityType) + "/" + entity
 
+  def getEntityConfigPath(entityPath: String): String =
+    ZkUtils.EntityConfigPath + "/" + entityPath
+
   def getDeleteTopicPath(topic: String): String =
     DeleteTopicsPath + "/" + topic
 

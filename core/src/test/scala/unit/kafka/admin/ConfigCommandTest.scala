@@ -19,10 +19,14 @@ package kafka.admin
 import java.util.Properties
 
 import kafka.admin.ConfigCommand.ConfigCommandOptions
+import kafka.common.InvalidConfigException
+import kafka.server.{ConfigEntityName, QuotaId}
+import kafka.utils.{Logging, ZkUtils}
+import kafka.zk.ZooKeeperTestHarness
+
+import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
-import kafka.utils.{ZkUtils, Logging}
-import kafka.zk.ZooKeeperTestHarness
 
 class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   @Test
@@ -216,5 +220,183 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       }
     }
     ConfigCommand.alterConfig(null, createOpts, configChange)
+  }
+
+  @Test
+  def testQuotaConfigEntity() {
+
+    def createOpts(entityType: String, entityName: Option[String], otherArgs: Array[String]) : ConfigCommandOptions = {
+      val optArray = Array("--zookeeper", zkConnect,
+                           "--entity-type", entityType)
+      val nameArray = entityName match {
+        case Some(name) => Array("--entity-name", name)
+        case None => Array[String]()
+      }
+      new ConfigCommandOptions(optArray ++ nameArray ++ otherArgs)
+    }
+
+    def checkEntity(entityType: String, entityName: Option[String], expectedEntityName: String, otherArgs: Array[String]) {
+      val opts = createOpts(entityType, entityName, otherArgs)
+      opts.checkArgs()
+      val entity = ConfigCommand.parseEntity(opts)
+      assertEquals(entityType, entity.root.entityType)
+      assertEquals(expectedEntityName, entity.fullSanitizedName)
+    }
+
+    def checkInvalidEntity(entityType: String, entityName: Option[String], otherArgs: Array[String]) {
+      val opts = createOpts(entityType, entityName, otherArgs)
+      try {
+        opts.checkArgs()
+        ConfigCommand.parseEntity(opts)
+        fail("Did not fail with invalid argument list")
+      } catch {
+        case e: IllegalArgumentException => // expected exception
+      }
+    }
+
+    val describeOpts = Array("--describe")
+    val alterOpts = Array("--alter", "--add-config", "a=b,c=d")
+
+    // <client-id> quota
+    val clientId = "client-1"
+    for (opts <- Seq(describeOpts, alterOpts)) {
+      checkEntity("clients", Some(clientId), clientId, opts)
+      checkEntity("clients", Some(""), ConfigEntityName.Default, opts)
+    }
+    checkEntity("clients", None, "", describeOpts)
+    checkInvalidEntity("clients", None, alterOpts)
+
+    // <user> quota
+    val principal = "CN=ConfigCommandTest,O=Apache,L=<default>"
+    val sanitizedPrincipal = QuotaId.sanitize(principal)
+    assertEquals(-1, sanitizedPrincipal.indexOf('='))
+    assertEquals(principal, QuotaId.desanitize(sanitizedPrincipal))
+    for (opts <- Seq(describeOpts, alterOpts)) {
+      checkEntity("users", Some(principal), sanitizedPrincipal, opts)
+      checkEntity("users", Some(""), ConfigEntityName.Default, opts)
+    }
+    checkEntity("users", None, "", describeOpts)
+    checkInvalidEntity("users", None, alterOpts)
+
+    // <user, client-id> quota
+    val userClient = sanitizedPrincipal + "/clients/" + clientId
+    def clientIdOpts(name: String) = Array("--entity-type", "clients", "--entity-name", name)
+    for (opts <- Seq(describeOpts, alterOpts)) {
+      checkEntity("users", Some(principal), userClient, opts ++ clientIdOpts(clientId))
+      checkEntity("users", Some(principal), sanitizedPrincipal + "/clients/" + ConfigEntityName.Default, opts ++ clientIdOpts(""))
+      checkEntity("users", Some(""), ConfigEntityName.Default + "/clients/" + clientId, describeOpts ++ clientIdOpts(clientId))
+      checkEntity("users", Some(""), ConfigEntityName.Default + "/clients/" + ConfigEntityName.Default, opts ++ clientIdOpts(""))
+    }
+    checkEntity("users", Some(principal), sanitizedPrincipal + "/clients", describeOpts ++ Array("--entity-type", "clients"))
+    // Both user and client-id must be provided for alter
+    checkInvalidEntity("users", Some(principal), alterOpts ++ Array("--entity-type", "clients"))
+    checkInvalidEntity("users", None, alterOpts ++ clientIdOpts(clientId))
+    checkInvalidEntity("users", None, alterOpts ++ Array("--entity-type", "clients"))
+  }
+
+  @Test
+  def testUserClientQuotaOpts() {
+    def checkEntity(expectedEntityType: String, expectedEntityName: String, args: String*) {
+      val opts = new ConfigCommandOptions(Array("--zookeeper", zkConnect) ++ args)
+      opts.checkArgs()
+      val entity = ConfigCommand.parseEntity(opts)
+      assertEquals(expectedEntityType, entity.root.entityType)
+      assertEquals(expectedEntityName, entity.fullSanitizedName)
+    }
+
+    // <default> is a valid user principal (can be handled with URL-encoding),
+    // but an invalid client-id (cannot be handled since client-ids are not encoded)
+    checkEntity("users", QuotaId.sanitize("<default>"),
+        "--entity-type", "users", "--entity-name", "<default>",
+        "--alter", "--add-config", "a=b,c=d")
+    try {
+      checkEntity("clients", QuotaId.sanitize("<default>"),
+          "--entity-type", "clients", "--entity-name", "<default>",
+          "--alter", "--add-config", "a=b,c=d")
+      fail("Did not fail with invalid client-id")
+    } catch {
+      case e: InvalidConfigException => // expected
+    }
+
+    checkEntity("users", QuotaId.sanitize("CN=user1") + "/clients/client1",
+        "--entity-type", "users", "--entity-name", "CN=user1", "--entity-type", "clients", "--entity-name", "client1",
+        "--alter", "--add-config", "a=b,c=d")
+    checkEntity("users", QuotaId.sanitize("CN=user1") + "/clients/client1",
+        "--entity-name", "CN=user1", "--entity-type", "users", "--entity-name", "client1", "--entity-type", "clients",
+        "--alter", "--add-config", "a=b,c=d")
+    checkEntity("users", QuotaId.sanitize("CN=user1") + "/clients/client1",
+        "--entity-type", "clients", "--entity-name", "client1", "--entity-type", "users", "--entity-name", "CN=user1",
+        "--alter", "--add-config", "a=b,c=d")
+    checkEntity("users", QuotaId.sanitize("CN=user1") + "/clients/client1",
+        "--entity-name", "client1", "--entity-type", "clients", "--entity-name", "CN=user1", "--entity-type", "users",
+        "--alter", "--add-config", "a=b,c=d")
+    checkEntity("users", QuotaId.sanitize("CN=user1") + "/clients",
+        "--entity-type", "clients", "--entity-name", "CN=user1", "--entity-type", "users",
+        "--describe")
+    checkEntity("users", "/clients",
+        "--entity-type", "clients", "--entity-type", "users",
+        "--describe")
+  }
+
+  @Test
+  def testQuotaDescribeEntities() {
+    val zkUtils = EasyMock.createNiceMock(classOf[ZkUtils])
+
+    def checkEntities(opts: Array[String], expectedFetches: Map[String, Seq[String]], expectedEntityNames: Seq[String]) {
+      val entity = ConfigCommand.parseEntity(new ConfigCommandOptions(opts :+ "--describe"))
+      expectedFetches.foreach {
+        case (name, values) => EasyMock.expect(zkUtils.getAllEntitiesWithConfig(name)).andReturn(values)
+      }
+      EasyMock.replay(zkUtils)
+      val entities = entity.getAllEntities(zkUtils)
+      assertEquals(expectedEntityNames, entities.map(e => e.fullSanitizedName))
+      EasyMock.reset(zkUtils)
+    }
+
+    val clientId = "a-client"
+    val principal = "CN=ConfigCommandTest.testQuotaDescribeEntities , O=Apache, L=<default>"
+    val sanitizedPrincipal = QuotaId.sanitize(principal)
+    val userClient = sanitizedPrincipal + "/clients/" + clientId
+
+    var opts = Array("--entity-type", "clients", "--entity-name", clientId)
+    checkEntities(opts, Map.empty, Seq(clientId))
+
+    opts = Array("--entity-type", "clients", "--entity-default")
+    checkEntities(opts, Map.empty, Seq("<default>"))
+
+    opts = Array("--entity-type", "clients")
+    checkEntities(opts, Map("clients" -> Seq(clientId)), Seq(clientId))
+
+    opts = Array("--entity-type", "users", "--entity-name", principal)
+    checkEntities(opts, Map.empty, Seq(sanitizedPrincipal))
+
+    opts = Array("--entity-type", "users", "--entity-default")
+    checkEntities(opts, Map.empty, Seq("<default>"))
+
+    opts = Array("--entity-type", "users")
+    checkEntities(opts, Map("users" -> Seq("<default>", sanitizedPrincipal)), Seq("<default>", sanitizedPrincipal))
+
+    opts = Array("--entity-type", "users", "--entity-name", principal, "--entity-type", "clients", "--entity-name", clientId)
+    checkEntities(opts, Map.empty, Seq(userClient))
+
+    opts = Array("--entity-type", "users", "--entity-name", principal, "--entity-type", "clients", "--entity-default")
+    checkEntities(opts, Map.empty, Seq(sanitizedPrincipal + "/clients/<default>"))
+
+    opts = Array("--entity-type", "users", "--entity-name", principal, "--entity-type", "clients")
+    checkEntities(opts,
+        Map("users/" + sanitizedPrincipal + "/clients" -> Seq("client-4")),
+        Seq(sanitizedPrincipal + "/clients/client-4"))
+
+    opts = Array("--entity-type", "users", "--entity-default", "--entity-type", "clients")
+    checkEntities(opts,
+        Map("users/<default>/clients" -> Seq("client-5")),
+        Seq("<default>/clients/client-5"))
+
+    opts = Array("--entity-type", "users", "--entity-type", "clients")
+    val userMap = Map("users/" + sanitizedPrincipal + "/clients" -> Seq("client-2"))
+    val defaultUserMap = Map("users/<default>/clients" -> Seq("client-3"))
+    checkEntities(opts,
+        Map("users" -> Seq("<default>", sanitizedPrincipal)) ++ defaultUserMap ++ userMap,
+        Seq("<default>/clients/client-3", sanitizedPrincipal + "/clients/client-2"))
   }
 }
