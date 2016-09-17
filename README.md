@@ -102,7 +102,7 @@ This is for `core`, `examples` and `clients`
 ### Publishing the jar for all version of Scala and for all projects to maven ###
     ./gradlew uploadArchivesAll
 
-Please note for this to work you should create/update `~/.gradle/gradle.properties` and assign the following variables
+Please note for this to work you should create/update `${GRADLE_USER_HOME}/gradle.properties` (typically, `~/.gradle/gradle.properties`) and assign the following variables
 
     mavenUrl=
     mavenUsername=
