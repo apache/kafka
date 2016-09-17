@@ -96,7 +96,7 @@ object ConfigCommand extends Config {
       case ConfigType.Broker => utils.changeBrokerConfig(zkUtils, Seq(parseBroker(entityName)), configs)
       case _ => throw new IllegalArgumentException(s"$entityType is not a known entityType. Should be one of ${ConfigType.Topic}, ${ConfigType.Client}, ${ConfigType.Broker}")
     }
-    println(s"Updated config for EntityType:$entityType => EntityName:'$entityName'.")
+    println(s"Updated config for entity: $entity.")
   }
 
   def warnOnMaxMessagesChange(configs: Properties, force: Boolean): Unit = {
