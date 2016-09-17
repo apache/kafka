@@ -164,10 +164,6 @@ class DynamicConfigManager(private val zkUtils: ZkUtils,
 
     // Apply all existing client/user configs to the ClientIdConfigHandler/UserConfigHandler to bootstrap the overrides
     configHandlers.foreach {
-      case (ConfigType.Client, handler) =>
-          AdminUtils.fetchAllEntityConfigs(zkUtils, ConfigType.Client).foreach {
-            case (clientId, properties) => handler.processConfigChanges(clientId, properties)
-          }
       case (ConfigType.User, handler) =>
           AdminUtils.fetchAllEntityConfigs(zkUtils, ConfigType.User).foreach {
             case (sanitizedUser, properties) => handler.processConfigChanges(sanitizedUser, properties)
@@ -175,15 +171,10 @@ class DynamicConfigManager(private val zkUtils: ZkUtils,
           AdminUtils.fetchAllChildEntityConfigs(zkUtils, ConfigType.User, ConfigType.Client).foreach {
             case (sanitizedUserClientId, properties) => handler.processConfigChanges(sanitizedUserClientId, properties)
           }
-      case (ConfigType.Broker, handler) =>
-          AdminUtils.fetchAllEntityConfigs(zkUtils, ConfigType.Broker).foreach {
-            case (broker, properties) => handler.processConfigChanges(broker, properties)
+      case (configType, handler) =>
+          AdminUtils.fetchAllEntityConfigs(zkUtils, configType).foreach {
+            case (entityName, properties) => handler.processConfigChanges(entityName, properties)
           }
-      case (ConfigType.Topic, handler) =>
-          AdminUtils.fetchAllEntityConfigs(zkUtils, ConfigType.Topic).foreach {
-            case (topic, properties) => handler.processConfigChanges(topic, properties)
-          }
-      case _ =>
     }
   }
 }

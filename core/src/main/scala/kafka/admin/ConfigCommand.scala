@@ -122,11 +122,15 @@ object ConfigCommand extends Config {
 
   private def describeConfig(zkUtils: ZkUtils, opts: ConfigCommandOptions) {
     val configEntity = parseEntity(opts)
+    val describeAllUsers = configEntity.root.entityType == ConfigType.User && !configEntity.root.sanitizedName.isDefined && !configEntity.child.isDefined
     val entities = configEntity.getAllEntities(zkUtils)
     for (entity <- entities) {
       val configs = AdminUtils.fetchEntityConfig(zkUtils, entity.root.entityType, entity.fullSanitizedName)
-      println("Configs for %s are %s"
-        .format(entity, configs.map(kv => kv._1 + "=" + kv._2).mkString(",")))
+      // When describing all users, don't include empty user nodes with only <user, client> quota overrides.
+      if (!configs.isEmpty || !describeAllUsers) {
+        println("Configs for %s are %s"
+          .format(entity, configs.map(kv => kv._1 + "=" + kv._2).mkString(",")))
+      }
     }
   }
 
