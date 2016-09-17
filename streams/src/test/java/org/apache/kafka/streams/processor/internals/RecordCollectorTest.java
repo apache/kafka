@@ -47,7 +47,7 @@ public class RecordCollectorTest {
             new PartitionInfo("topic1", 2, Node.noNode(), new Node[0], new Node[0])
     );
 
-    private Cluster cluster = new Cluster(Collections.singletonList(Node.noNode()), infos,
+    private Cluster cluster = new Cluster("cluster", Collections.singletonList(Node.noNode()), infos,
             Collections.<String>emptySet(), Collections.<String>emptySet());
 
 

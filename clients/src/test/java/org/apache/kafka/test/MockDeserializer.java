@@ -16,22 +16,22 @@
  */
 package org.apache.kafka.test;
 
-import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.ClusterResource;
-import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.ClusterResourceListener;
+import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class MockSerializer implements ClusterResourceListener, Serializer<byte[]> {
+public class MockDeserializer implements ClusterResourceListener, Deserializer<byte[]> {
     public static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
     public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
     public static final AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
     public static final ClusterResource NO_CLUSTER_ID = new ClusterResource("no_cluster_id");
-    public static final AtomicReference<ClusterResource> CLUSTER_ID_BEFORE_SERIALIZE = new AtomicReference<>(NO_CLUSTER_ID);
+    public static final AtomicReference<ClusterResource> CLUSTER_ID_BEFORE_DESERIALIZE = new AtomicReference<>(NO_CLUSTER_ID);
 
-    public MockSerializer() {
+    public MockDeserializer() {
         INIT_COUNT.incrementAndGet();
     }
 
@@ -40,10 +40,10 @@ public class MockSerializer implements ClusterResourceListener, Serializer<byte[
     }
 
     @Override
-    public byte[] serialize(String topic, byte[] data) {
-        // This will ensure that we get the cluster metadata when serialize is called for the first time
+    public byte[] deserialize(String topic, byte[] data) {
+        // This will ensure that we get the cluster metadata when deserialize is called for the first time
         // as subsequent compareAndSet operations will fail.
-        CLUSTER_ID_BEFORE_SERIALIZE.compareAndSet(NO_CLUSTER_ID, CLUSTER_META.get());
+        CLUSTER_ID_BEFORE_DESERIALIZE.compareAndSet(NO_CLUSTER_ID, CLUSTER_META.get());
         return data;
     }
 

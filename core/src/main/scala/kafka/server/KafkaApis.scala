@@ -63,7 +63,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val metadataCache: MetadataCache,
                 val metrics: Metrics,
                 val authorizer: Option[Authorizer],
-                val quotas: QuotaManagers) extends Logging {
+                val quotas: QuotaManagers,
+                val clusterId: String) extends Logging {
 
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
 
@@ -754,6 +755,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val responseBody = new MetadataResponse(
       brokers.map(_.getNode(request.securityProtocol)).asJava,
+      clusterId,
       metadataCache.getControllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
       completeTopicMetadata.asJava,
       requestVersion
