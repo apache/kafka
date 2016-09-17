@@ -87,7 +87,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     brokers = (100 to 105).map { id => TestUtils.createServer(fromProps(createBrokerConfig(id, zkConnect))) }
 
     //Given six partitions, lead on nodes 0,1,2,3,4,5 but will followers on node 6,7 (not started yet)
-    //And two extra partitions 6,7, which we don't intend on throttling
+    //And two extra partitions 6,7, which we don't intend on throttling.
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, Map(
       0 -> Seq(100, 106), //Throttled
       1 -> Seq(101, 106), //Throttled
