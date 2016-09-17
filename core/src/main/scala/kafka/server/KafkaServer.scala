@@ -203,7 +203,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         _clusterId = getOrGenerateClusterId(zkUtils)
         info(s"Cluster ID = $clusterId")
 
-        notifyClusterListeners(kafkaMetricsReporters.toList ++ reporters.asScala.toList)
+        notifyClusterListeners(kafkaMetricsReporters ++ reporters.asScala)
 
         /* start log manager */
         logManager = createLogManager(zkUtils.zkClient, brokerState)
@@ -297,11 +297,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
     }
   }
 
-  def notifyClusterListeners(clusterListeners: List[Any]): Unit = {
-    val clusterResourceListeners = new ClusterResourceListeners()
-    for (clusterListener <- clusterListeners)
-      clusterResourceListeners.maybeAdd(clusterListener)
-
+  def notifyClusterListeners(clusterListeners: Seq[AnyRef]): Unit = {
+    val clusterResourceListeners = new ClusterResourceListeners
+    clusterResourceListeners.maybeAddAll(clusterListeners.asJava)
     clusterResourceListeners.onUpdate(new ClusterResource(clusterId))
   }
 

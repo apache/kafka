@@ -158,7 +158,7 @@ public class MetadataTest {
         String hostName = "www.example.com";
         Cluster cluster = Cluster.bootstrap(Arrays.asList(new InetSocketAddress(hostName, 9002)));
         metadata.update(cluster, time);
-        assertFalse("MockClusterResourceListener should not called when cluster id is bootstrap enabled.",
+        assertFalse("ClusterResourceListener should not called when metadata is updated with bootstrap Cluster",
                 MockClusterResourceListener.IS_ON_UPDATE_CALLED.get());
 
         metadata.update(new Cluster(
@@ -173,6 +173,8 @@ public class MetadataTest {
 
         assertEquals("MockClusterResourceListener did not get cluster metadata correctly",
                 "dummy", mockClusterListener.clusterResource().clusterId());
+        assertTrue("MockClusterResourceListener should be called when metadata is updated with non-bootstrap Cluster",
+                MockClusterResourceListener.IS_ON_UPDATE_CALLED.get());
     }
 
     @Test
