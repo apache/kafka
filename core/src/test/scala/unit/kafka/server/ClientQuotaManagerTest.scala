@@ -315,7 +315,8 @@ class ClientQuotaManagerTest {
   def testQuotaUserSanitize() {
     val principal = "CN=Some characters !@#$%&*()_-+=';:,/~"
     val sanitizedPrincipal = QuotaId.sanitize(principal)
-    ConfigCommand.validateChars("sanitized-principal", sanitizedPrincipal)
+    // Apart from % used in percent-encoding all characters of sanitized principal must be characters allowed in client-id
+    ConfigCommand.validateChars("sanitized-principal", sanitizedPrincipal.replace('%', '_'))
     assertEquals(principal, QuotaId.desanitize(sanitizedPrincipal))
   }
 

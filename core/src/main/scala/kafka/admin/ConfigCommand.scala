@@ -186,16 +186,17 @@ object ConfigCommand extends Config {
 
     def getAllEntities(zkUtils: ZkUtils) : Seq[ConfigEntity] = {
       // Describe option examples:
-      //   Single entity name:
+      //   Describe entity with specified name:
       //     --entity-type topics --entity-name topic1 (topic1)
+      //   Describe all entities of a type (topics/brokers/users/clients):
+      //     --entity-type topics (all topics)
+      //   Describe <user, client> quotas:
       //     --entity-type users --entity-name user1 --entity-type clients --entity-name client2 (<user1, client2>)
+      //     --entity-type users --entity-name userA --entity-type clients (all clients of userA)
+      //     --entity-type users --entity-type clients (all <user, client>s))
+      //   Describe default quotas:
       //     --entity-type users --entity-default (Default user)
       //     --entity-type users --entity-default --entity-type clients --entity-default (Default <user, client>)
-      //   Describe all entities of a type (topics/users/clients):
-      //     --entity-type topics (all topics)
-      //   Describe user & <user, client> quotas:
-      //     --entity-type users --entity-name userA --entity-type clients (userA and all clients of userA)
-      //     --entity-type users --entity-type clients (all users and all <user, client>s))
       (root.sanitizedName, child) match {
         case (None, _) =>
           val rootEntities = zkUtils.getAllEntitiesWithConfig(root.entityType)
@@ -210,7 +211,6 @@ object ConfigCommand extends Config {
           childEntity.sanitizedName match {
             case Some(subName) => Seq(this)
             case None =>
-              ConfigEntity(root, None) +:
                 zkUtils.getAllEntitiesWithConfig(root.entityPath + "/" + childEntity.entityType)
                        .map(name => ConfigEntity(root, Some(Entity(childEntity.entityType, Some(name)))))
 
@@ -283,7 +283,7 @@ object ConfigCommand extends Config {
     val entityName = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id)")
             .withRequiredArg
             .ofType(classOf[String])
-    val entityDefault = parser.accepts("entity-default", "Default entity name (applies to corresponding entity type in command line)")
+    val entityDefault = parser.accepts("entity-default", "Default entity name for clients/users (applies to corresponding entity type in command line)")
 
     val nl = System.getProperty("line.separator")
     val addConfig = parser.accepts("add-config", "Key Value pairs of configs to add. Square brackets can be used to group values which contain commas: 'k1=v1,k2=[v1,v2,v2],k3=v3'. The following is a list of valid configurations: " +
@@ -316,16 +316,19 @@ object ConfigCommand extends Config {
       CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt, entityType)
       CommandLineUtils.checkInvalidArgs(parser, options, alterOpt, Set(describeOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, Set(alterOpt, addConfig, deleteConfig))
+      val entityTypeVals = options.valuesOf(entityType)
       if(options.has(alterOpt)) {
-        if(!options.has(entityName) && !options.has(entityDefault))
-          throw new IllegalArgumentException("--entity-name or --entity-default must be specified with --alter")
+        if (entityTypeVals.contains(ConfigType.User) || entityTypeVals.contains(ConfigType.Client)) {
+          if (!options.has(entityName) && !options.has(entityDefault))
+            throw new IllegalArgumentException("--entity-name or --entity-default must be specified with --alter of users/clients")
+        } else if (!options.has(entityName))
+            throw new IllegalArgumentException(s"--entity-name must be specified with --alter of ${entityTypeVals}")
 
         val isAddConfigPresent: Boolean = options.has(addConfig)
         val isDeleteConfigPresent: Boolean = options.has(deleteConfig)
         if(! isAddConfigPresent && ! isDeleteConfigPresent)
           throw new IllegalArgumentException("At least one of --add-config or --delete-config must be specified with --alter")
       }
-      val entityTypeVals = options.valuesOf(entityType)
       entityTypeVals.foreach(entityTypeVal =>
         if (!ConfigType.all.contains(entityTypeVal))
           throw new IllegalArgumentException(s"Invalid entity-type ${entityTypeVal}, --entity-type must be one of ${ConfigType.all}")

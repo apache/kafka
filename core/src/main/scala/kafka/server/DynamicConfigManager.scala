@@ -175,6 +175,14 @@ class DynamicConfigManager(private val zkUtils: ZkUtils,
           AdminUtils.fetchAllChildEntityConfigs(zkUtils, ConfigType.User, ConfigType.Client).foreach {
             case (sanitizedUserClientId, properties) => handler.processConfigChanges(sanitizedUserClientId, properties)
           }
+      case (ConfigType.Broker, handler) =>
+          AdminUtils.fetchAllEntityConfigs(zkUtils, ConfigType.Broker).foreach {
+            case (broker, properties) => handler.processConfigChanges(broker, properties)
+          }
+      case (ConfigType.Topic, handler) =>
+          AdminUtils.fetchAllEntityConfigs(zkUtils, ConfigType.Topic).foreach {
+            case (topic, properties) => handler.processConfigChanges(topic, properties)
+          }
       case _ =>
     }
   }

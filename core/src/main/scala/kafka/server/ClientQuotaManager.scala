@@ -85,18 +85,17 @@ object QuotaId {
       encoded.charAt(i) match {
         case '*' => builder.append("%2A") // Metric ObjectName treats * as pattern
         case '+' => builder.append("%20") // Space URL-encoded as +, replace with percent encoding
-        case '_' => builder.append("%5F") // Encode underscore and replace % with underscore since some metrics tools might not handle %
         case c => builder.append(c)
       }
     }
-    builder.toString.replace('%', '_')
+    builder.toString
   }
 
   /**
    * Decodes sanitized user principal
    */
   def desanitize(sanitizedUser: String): String = {
-    URLDecoder.decode(sanitizedUser.replace('_', '%'), StandardCharsets.UTF_8.name)
+    URLDecoder.decode(sanitizedUser, StandardCharsets.UTF_8.name)
   }
 }
 

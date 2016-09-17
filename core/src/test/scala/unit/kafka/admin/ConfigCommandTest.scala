@@ -385,18 +385,18 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     opts = Array("--entity-type", "users", "--entity-name", principal, "--entity-type", "clients")
     checkEntities(opts,
         Map("users/" + sanitizedPrincipal + "/clients" -> Seq("client-4")),
-        Seq(sanitizedPrincipal, sanitizedPrincipal + "/clients/client-4"))
+        Seq(sanitizedPrincipal + "/clients/client-4"))
 
     opts = Array("--entity-type", "users", "--entity-default", "--entity-type", "clients")
     checkEntities(opts,
         Map("users/<default>/clients" -> Seq("client-5")),
-        Seq("<default>", "<default>/clients/client-5"))
+        Seq("<default>/clients/client-5"))
 
     opts = Array("--entity-type", "users", "--entity-type", "clients")
     val userMap = Map("users/" + sanitizedPrincipal + "/clients" -> Seq("client-2"))
     val defaultUserMap = Map("users/<default>/clients" -> Seq("client-3"))
     checkEntities(opts,
         Map("users" -> Seq("<default>", sanitizedPrincipal)) ++ defaultUserMap ++ userMap,
-        Seq("<default>", "<default>/clients/client-3", sanitizedPrincipal, sanitizedPrincipal + "/clients/client-2"))
+        Seq("<default>/clients/client-3", sanitizedPrincipal + "/clients/client-2"))
   }
 }

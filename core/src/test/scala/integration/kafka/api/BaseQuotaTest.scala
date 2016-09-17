@@ -16,8 +16,7 @@ package kafka.api
 
 import java.util.Properties
 
-import kafka.consumer.SimpleConsumer
-import kafka.server.{ClientQuotaManager, QuotaConfigOverride, KafkaConfig, KafkaServer, QuotaId}
+import kafka.server.{QuotaConfigOverride, KafkaConfig, KafkaServer, QuotaId}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
