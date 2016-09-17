@@ -675,6 +675,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @Test
   def testInterceptors() {
     val appendStr = "mock"
+    MockConsumerInterceptor.resetCounters()
+    MockProducerInterceptor.resetCounters()
+
     // create producer with interceptor
     val producerProps = new Properties()
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)

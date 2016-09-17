@@ -119,6 +119,8 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
   @Test
   def testEndToEnd() {
     val appendStr = "mock"
+    MockConsumerInterceptor.resetCounters()
+    MockProducerInterceptor.resetCounters()
 
     assertNotNull(MockBrokerMetricsReporter.CLUSTER_META)
     isValidClusterId(MockBrokerMetricsReporter.CLUSTER_META.get.clusterId)
@@ -179,6 +181,8 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
 
     testConsumer.close()
     testProducer.close()
+    MockConsumerInterceptor.resetCounters()
+    MockProducerInterceptor.resetCounters()
   }
 
   private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int, tp: TopicPartition) {

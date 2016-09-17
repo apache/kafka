@@ -96,6 +96,7 @@ public class MockProducerInterceptor implements ClusterResourceListener, Produce
         ON_ERROR_COUNT.set(0);
         ON_ERROR_WITH_METADATA_COUNT.set(0);
         CLUSTER_META.set(null);
+        CLUSTER_ID_BEFORE_ON_ACKNOWLEDGEMENT.set(NO_CLUSTER_ID);
     }
 
     @Override
