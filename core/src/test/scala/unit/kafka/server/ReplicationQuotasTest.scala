@@ -33,6 +33,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import scala.collection.JavaConverters._
+import scala.collection.immutable.Range.Inclusive
 
 /**
   * This is the main test which ensure Replication Quotas work correctly.
@@ -99,7 +100,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     ))
 
     val msg = msg100KB
-    val msgCount: Int = 1000
+    val msgCount = 100
     val expectedDuration = 10 //Keep the test to N seconds
     var throttle: Long = msgCount * msg.length / expectedDuration
     if (!leaderThrottle) throttle = throttle * 3 //Follower throttle needs to replicate 3x as fast to get the same duration as there are three replicas to replicate for each of the two follower brokers
@@ -108,10 +109,10 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     (100 to 107).foreach { brokerId =>
       changeBrokerConfig(zkUtils, Seq(brokerId), property(KafkaConfig.ThrottledReplicationRateLimitProp, throttle.toString))
     }
-    if (leaderThrottle)
-      changeTopicConfig(zkUtils, topic, property(ThrottledReplicasListProp, "0:100,1:101,2:102,3:103,4:104,5:105")) //partition-broker:... throttle the 6 leaders
-    else
-      changeTopicConfig(zkUtils, topic, property(ThrottledReplicasListProp, "0:106,1:106,2:106,3:107,4:107,5:107")) //partition-broker:... throttle the two followers
+
+    //Either throttle the six leaders or the two follower
+    val throttledReplicas = if(leaderThrottle) "0:100,1:101,2:102,3:103,4:104,5:105" else "0:106,1:106,2:106,3:107,4:107,5:107"
+    changeTopicConfig(zkUtils, topic, property(ThrottledReplicasListProp, throttledReplicas))
 
     //Add data equally to each partition
     producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(brokers), retries = 5, acks = 0)
@@ -130,20 +131,15 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     val start = System.currentTimeMillis()
 
     //When we create the 2 new, empty brokers
-    brokers = brokers :+ TestUtils.createServer(fromProps(createBrokerConfig(106, zkConnect)))
-    brokers = brokers :+ TestUtils.createServer(fromProps(createBrokerConfig(107, zkConnect)))
+    createBrokers(106 to 107)
 
     //Check that throttled config correctly migrated to the new brokers
     (106 to 107).foreach { brokerId =>
       assertEquals(throttle, brokerFor(brokerId).quotaManagers.follower.upperBound())
     }
     if (!leaderThrottle) {
-      (0 to 2).foreach { partition =>
-        assertTrue(brokerFor(106).quotaManagers.follower.isThrottled(new TopicAndPartition(topic, partition)))
-      }
-      (3 to 5).foreach { partition =>
-        assertTrue(brokerFor(107).quotaManagers.follower.isThrottled(new TopicAndPartition(topic, partition)))
-      }
+      (0 to 2).foreach { partition => assertTrue(brokerFor(106).quotaManagers.follower.isThrottled(new TopicAndPartition(topic, partition)))}
+      (3 to 5).foreach { partition => assertTrue(brokerFor(107).quotaManagers.follower.isThrottled(new TopicAndPartition(topic, partition)))}
     }
 
     //Wait for non-throttled partitions to replicate first
@@ -156,31 +152,34 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
     val throttledTook = System.currentTimeMillis() - start
 
-    //Check the recorded throttled rate is what we expect
-    if (leaderThrottle) {
-      (100 to 105).map(brokerFor(_)).foreach { broker =>
-        val metricName = broker.metrics.metricName("byte-rate", LeaderReplication.toString, "Tracking byte-rate for" + LeaderReplication)
-        val measuredRate = broker.metrics.metrics.asScala(metricName).value()
-        info(s"Broker:${broker.config.brokerId} Expected:$throttle, Recorded Rate was:$measuredRate")
-        assertEquals(throttle, measuredRate, percentError(25, throttle))
-      }
-    } else {
-      (106 to 107).map(brokerFor(_)).foreach { broker =>
-        val metricName = broker.metrics.metricName("byte-rate", FollowerReplication.toString, "Tracking byte-rate for" + FollowerReplication)
-        val measuredRate = broker.metrics.metrics.asScala(metricName).value()
-        info(s"Broker:${broker.config.brokerId} Expected:$throttle, Recorded Rate was:$measuredRate")
-        assertEquals(throttle, measuredRate, percentError(25, throttle))
-      }
-    }
-
     //Check the times for throttled/unthrottled are each side of what we expect
-    info(s"Unthrottled took: $unthrottledTook, Throttled took: $throttledTook, for expeted $expectedDuration secs")
-    assertTrue(s"Unthrottled replication of ${unthrottledTook}ms should be < ${expectedDuration * 1000}ms",
-      unthrottledTook < expectedDuration * 1000)
-    assertTrue((s"Throttled replication of ${throttledTook}ms should be > ${expectedDuration * 1000}ms"),
-      throttledTook > expectedDuration * 1000)
-    assertTrue((s"Throttled replication of ${throttledTook}ms should be < ${expectedDuration * 1500}ms"),
-      throttledTook < expectedDuration * 1000 * 1.5)
+    val throttledLowerBound = expectedDuration * 1000 * 0.9
+    val throttledUpperBound = expectedDuration * 1000 * 1.5
+    assertTrue(s"Unthrottled replication of $unthrottledTook ms should be < $throttledLowerBound ms", unthrottledTook < throttledLowerBound)
+    assertTrue(s"Throttled replication of $throttledTook ms should be > $throttledLowerBound ms", throttledTook > throttledLowerBound)
+    assertTrue(s"Throttled replication of $throttledTook ms should be < $throttledUpperBound ms", throttledTook < throttledUpperBound)
+
+    // Check the rate metric matches what we expect.
+    // In a short test the brokers can be read unfairly, so assert against the average
+    if (leaderThrottle)
+      assertEquals(throttle, avMeasuredRate(LeaderReplication, 100 to 105), percentError(30, throttle))
+    else
+      assertEquals(throttle, avMeasuredRate(FollowerReplication, 106 to 107), percentError(30, throttle))
+  }
+
+  def createBrokers(brokerIds: Inclusive): Unit = {
+    brokerIds.foreach { id =>
+      brokers = brokers :+ TestUtils.createServer(fromProps(createBrokerConfig(id, zkConnect)))
+    }
+  }
+
+  private def avMeasuredRate(replicationType: QuotaType, brokers: Inclusive) : Double= {
+    brokers.map(brokerFor(_)).map(measuredRate(_, replicationType)).sum / brokers.length
+  }
+
+  private def measuredRate(broker: KafkaServer, replicationType: QuotaType): Double = {
+    val metricName = broker.metrics.metricName("byte-rate", replicationType.toString, s"Tracking byte-rate for ${replicationType}")
+    broker.metrics.metrics.asScala(metricName).value()
   }
 
   @Test
