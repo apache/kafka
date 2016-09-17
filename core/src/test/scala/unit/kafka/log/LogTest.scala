@@ -298,7 +298,7 @@ class LogTest extends JUnitSuite {
       // in fetch request version 3, we no longer need this as we return oversized messages from the first non-empty
       // partition
       val fetchInfo = log.read(i, 1)
-      assertTrue(fetchInfo.messageSetIncomplete)
+      assertTrue(fetchInfo.firstMessageSetIncomplete)
       assertTrue(fetchInfo.messageSet.isInstanceOf[FileMessageSet])
       assertEquals(1, fetchInfo.messageSet.sizeInBytes)
     }

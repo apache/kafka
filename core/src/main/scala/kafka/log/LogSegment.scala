@@ -176,7 +176,7 @@ class LogSegment(val log: FileMessageSet,
         // true high watermark in the previous leader for a short window. In this window, if a consumer fetches on an
         // offset between new leader's high watermark and the log end offset, we want to return an empty response.
         if (offset < startOffset)
-          return FetchDataInfo(offsetMetadata, MessageSet.Empty, messageSetIncomplete = false)
+          return FetchDataInfo(offsetMetadata, MessageSet.Empty, firstMessageSetIncomplete = false)
         val mapping = translateOffset(offset, startPosition.position)
         val endPosition =
           if (mapping == null)
@@ -187,7 +187,7 @@ class LogSegment(val log: FileMessageSet,
     }
 
     FetchDataInfo(offsetMetadata, log.read(startPosition.position, length),
-      messageSetIncomplete = adjustedMaxSize < messageSetSize)
+      firstMessageSetIncomplete = adjustedMaxSize < messageSetSize)
   }
 
   /**

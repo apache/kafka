@@ -20,4 +20,4 @@ package kafka.server
 import kafka.message.MessageSet
 
 case class FetchDataInfo(fetchOffsetMetadata: LogOffsetMetadata, messageSet: MessageSet,
-                         messageSetIncomplete: Boolean = false)
+                         firstMessageSetIncomplete: Boolean = false)

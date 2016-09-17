@@ -564,7 +564,7 @@ class ReplicaManager(val config: KafkaConfig,
               FetchDataInfo(fetch.fetchOffsetMetadata, MessageSet.Empty)
             // For FetchRequest version 3, we replace incomplete message sets with an empty one as consumers can make
             // progress in such cases and don't need to report a `RecordTooLargeException`
-            else if (!hardMaxBytesLimit && fetch.messageSetIncomplete)
+            else if (!hardMaxBytesLimit && fetch.firstMessageSetIncomplete)
               FetchDataInfo(fetch.fetchOffsetMetadata, MessageSet.Empty)
             else fetch
 
