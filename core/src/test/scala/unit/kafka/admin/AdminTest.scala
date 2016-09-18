@@ -513,8 +513,8 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     // Test that the existing clientId overrides are read
     val server = TestUtils.createServer(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
     try {
-      assertEquals(new Quota(1000, true), server.apis.quotas.produce.quota(clientId))
-      assertEquals(new Quota(2000, true), server.apis.quotas.fetch.quota(clientId))
+      assertEquals(new Quota(1000, true), server.apis.quotas.produce.quota("ANONYMOUS", clientId))
+      assertEquals(new Quota(2000, true), server.apis.quotas.fetch.quota("ANONYMOUS", clientId))
     } finally {
       server.shutdown()
       CoreUtils.delete(server.config.logDirs)
