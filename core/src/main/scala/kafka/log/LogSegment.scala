@@ -113,7 +113,7 @@ class LogSegment(val log: FileMessageSet,
   /**
    * Find the physical file position for the first message with offset >= the requested offset.
    *
-   * The lowerBound argument is an optimization that can be used if we already know a valid starting position
+   * The startingFilePosition argument is an optimization that can be used if we already know a valid starting position
    * in the file higher than the greatest-lower-bound from the index.
    *
    * @param offset The offset we want to translate
