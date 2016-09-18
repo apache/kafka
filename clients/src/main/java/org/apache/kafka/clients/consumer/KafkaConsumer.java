@@ -1402,6 +1402,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * If the message format version in a partition is before 0.10.0, i.e. the messages do not have timestamps, null
      * will be returned for that partition.
      *
+     * Notice that this method may block infinitely if the partition does not exist.
+     *
      * @param timestampsToSearch the mapping from partition to the timestamp to look up.
      * @return For each partition, returns the timestamp and offset of the first message with timestamp greater
      *         than or equal to the target timestamp. {@code null} will be returned for the partition if there is no
@@ -1421,6 +1423,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Get the earliest available offsets for the given partitions.
      *
+     * Notice that this method may block infinitely if the partition does not exist.
+     *
      * @param partitions the partitions to get the earliest offsets.
      * @return The earliest available offsets for the given partitions
      */
@@ -1432,6 +1436,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Get the latest offsets for the given partitions. The latest offset of a partition is the offset of the
      * next coming message.
+     *
+     * Notice that this method may block infinitely if the partition does not exist.
      *
      * @param partitions the partitions to get the latest offsets.
      * @return The latest available offsets for the given partitions.
