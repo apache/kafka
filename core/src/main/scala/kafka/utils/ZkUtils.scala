@@ -156,12 +156,13 @@ object ZkUtils {
           case Some(partitionsSeq) =>
             val mapPartitionSeq = partitionsSeq.asInstanceOf[Seq[Map[String, Any]]]
             mapPartitionSeq.foreach(p => {
-              val topic = p.get("topic").get.asInstanceOf[String]
+              val topic = p("topic").asInstanceOf[String]
               topics ++= List(topic)
             })
           case None =>
         }
       case None =>
+        throw new KafkaException("Can't parse json string: %s".format(jsonData))
     }
     topics
   }
