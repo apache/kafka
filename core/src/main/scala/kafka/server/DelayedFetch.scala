@@ -37,10 +37,12 @@ case class FetchPartitionStatus(startOffsetMetadata: LogOffsetMetadata, fetchInf
  * The fetch metadata maintained by the delayed fetch operation
  */
 case class FetchMetadata(fetchMinBytes: Int,
+                         fetchMaxBytes: Int,
+                         hardMaxBytesLimit: Boolean,
                          fetchOnlyLeader: Boolean,
                          fetchOnlyCommitted: Boolean,
                          isFromFollower: Boolean,
-                         fetchPartitionStatus: Map[TopicAndPartition, FetchPartitionStatus]) {
+                         fetchPartitionStatus: Seq[(TopicAndPartition, FetchPartitionStatus)]) {
 
   override def toString = "[minBytes: " + fetchMinBytes + ", " +
                           "onlyLeader:" + fetchOnlyLeader + ", "
@@ -55,7 +57,7 @@ class DelayedFetch(delayMs: Long,
                    fetchMetadata: FetchMetadata,
                    replicaManager: ReplicaManager,
                    quota: ReplicaQuota,
-                   responseCallback: Map[TopicAndPartition, FetchResponsePartitionData] => Unit)
+                   responseCallback: Seq[(TopicAndPartition, FetchResponsePartitionData)] => Unit)
   extends DelayedOperation(delayMs) {
 
   /**
@@ -136,12 +138,18 @@ class DelayedFetch(delayMs: Long,
    * Upon completion, read whatever data is available and pass to the complete callback
    */
   override def onComplete() {
-    val logReadResults = replicaManager.readFromLocalLog(fetchMetadata.fetchOnlyLeader,
+    val logReadResults = replicaManager.readFromLocalLog(
+      fetchMetadata.fetchOnlyLeader,
       fetchMetadata.fetchOnlyCommitted,
-      fetchMetadata.fetchPartitionStatus.mapValues(status => status.fetchInfo), quota)
+      fetchMetadata.fetchMaxBytes,
+      fetchMetadata.hardMaxBytesLimit,
+      fetchMetadata.fetchPartitionStatus.map { case (tp, status) => tp -> status.fetchInfo },
+      quota
+    )
 
-    val fetchPartitionData = logReadResults.mapValues(result =>
-      FetchResponsePartitionData(result.errorCode, result.hw, result.info.messageSet))
+    val fetchPartitionData = logReadResults.map { case (tp, result) =>
+      tp -> FetchResponsePartitionData(result.errorCode, result.hw, result.info.messageSet)
+    }
 
     responseCallback(fetchPartitionData)
   }

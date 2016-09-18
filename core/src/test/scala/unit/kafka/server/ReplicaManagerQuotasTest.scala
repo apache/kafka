@@ -42,7 +42,7 @@ class ReplicaManagerQuotasTest {
   val message = new Message("some-data-in-a-message".getBytes())
   val topicAndPartition1 = TopicAndPartition("test-topic", 1)
   val topicAndPartition2 = TopicAndPartition("test-topic", 2)
-  val fetchInfo = Map(topicAndPartition1 -> PartitionFetchInfo(0, 100), topicAndPartition2 -> PartitionFetchInfo(0, 100))
+  val fetchInfo = Seq(topicAndPartition1 -> PartitionFetchInfo(0, 100), topicAndPartition2 -> PartitionFetchInfo(0, 100))
   var replicaManager: ReplicaManager = null
 
   @Test
@@ -54,12 +54,12 @@ class ReplicaManagerQuotasTest {
     expect(quota.isQuotaExceeded()).andReturn(true).once()
     replay(quota)
 
-    val fetch = replicaManager.readFromLocalLog(true, true, fetchInfo, quota)
+    val fetch = replicaManager.readFromLocalLog(true, true, Int.MaxValue, false, fetchInfo, quota)
     assertEquals("Given two partitions, with only one throttled, we should get the first", 1,
-      fetch.get(topicAndPartition1).get.info.messageSet.size)
+      fetch.find(_._1 == topicAndPartition1).get._2.info.messageSet.size)
 
     assertEquals("But we shouldn't get the second", 0,
-      fetch.get(topicAndPartition2).get.info.messageSet.size)
+      fetch.find(_._1 == topicAndPartition2).get._2.info.messageSet.size)
   }
 
   @Test
@@ -71,11 +71,11 @@ class ReplicaManagerQuotasTest {
     expect(quota.isQuotaExceeded()).andReturn(true).once()
     replay(quota)
 
-    val fetch = replicaManager.readFromLocalLog(true, true, fetchInfo, quota)
+    val fetch = replicaManager.readFromLocalLog(true, true, Int.MaxValue, false, fetchInfo, quota)
     assertEquals("Given two partitions, with both throttled, we should get no messages", 0,
-      fetch.get(topicAndPartition1).get.info.messageSet.size)
+      fetch.find(_._1 == topicAndPartition1).get._2.info.messageSet.size)
     assertEquals("Given two partitions, with both throttled, we should get no messages", 0,
-      fetch.get(topicAndPartition2).get.info.messageSet.size)
+      fetch.find(_._1 == topicAndPartition2).get._2.info.messageSet.size)
   }
 
   @Test
@@ -87,14 +87,14 @@ class ReplicaManagerQuotasTest {
     expect(quota.isQuotaExceeded()).andReturn(false).once()
     replay(quota)
 
-    val fetch = replicaManager.readFromLocalLog(true, true, fetchInfo, quota)
+    val fetch = replicaManager.readFromLocalLog(true, true, Int.MaxValue, false, fetchInfo, quota)
     assertEquals("Given two partitions, with both non-throttled, we should get both messages", 1,
-      fetch.get(topicAndPartition1).get.info.messageSet.size)
+      fetch.find(_._1 == topicAndPartition1).get._2.info.messageSet.size)
     assertEquals("Given two partitions, with both non-throttled, we should get both messages", 1,
-      fetch.get(topicAndPartition2).get.info.messageSet.size)
+      fetch.find(_._1 == topicAndPartition2).get._2.info.messageSet.size)
   }
 
-  def setUpMocks(fetchInfo: Map[TopicAndPartition, PartitionFetchInfo], message: Message = this.message) {
+  def setUpMocks(fetchInfo: Seq[(TopicAndPartition, PartitionFetchInfo)], message: Message = this.message) {
     val zkUtils = createNiceMock(classOf[ZkUtils])
     val scheduler = createNiceMock(classOf[KafkaScheduler])
 
@@ -104,14 +104,14 @@ class ReplicaManagerQuotasTest {
     expect(log.logEndOffsetMetadata).andReturn(new LogOffsetMetadata(20L)).anyTimes()
 
     //if we ask for len 1 return a message
-    expect(log.read(anyObject(), geq(1), anyObject())).andReturn(
+    expect(log.read(anyObject(), geq(1), anyObject(), anyObject())).andReturn(
       new FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),
         new ByteBufferMessageSet(message)
       )).anyTimes()
 
     //if we ask for len = 0, return 0 messages
-    expect(log.read(anyObject(), EasyMock.eq(0), anyObject())).andReturn(
+    expect(log.read(anyObject(), EasyMock.eq(0), anyObject(), anyObject())).andReturn(
       new FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),
         new ByteBufferMessageSet()
@@ -129,7 +129,7 @@ class ReplicaManagerQuotasTest {
       new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time).follower)
 
     //create the two replicas
-    for (p <- fetchInfo.keySet) {
+    for ((p, _) <- fetchInfo) {
       val partition = replicaManager.getOrCreatePartition(p.topic, p.partition)
       val replica = new Replica(configs.head.brokerId, partition, time, 0, Some(log))
       replica.highWatermark = new LogOffsetMetadata(5)

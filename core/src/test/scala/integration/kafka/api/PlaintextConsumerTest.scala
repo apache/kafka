@@ -15,7 +15,6 @@ package kafka.api
 
 import java.util
 import java.util.Properties
-
 import java.util.regex.Pattern
 
 import kafka.log.LogConfig
@@ -23,11 +22,11 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.KafkaProducer
-import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer, ByteArraySerializer}
-import org.apache.kafka.test.{MockProducerInterceptor, MockConsumerInterceptor}
+import org.apache.kafka.common.serialization.{ByteArraySerializer, StringDeserializer, StringSerializer}
+import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{InvalidTopicException, RecordTooLargeException}
+import org.apache.kafka.common.errors.{InvalidTopicException}
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.junit.Assert._
@@ -539,26 +538,124 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @Test
-  def testFetchRecordTooLarge() {
+  def testFetchRecordLargerThanFetchMaxBytes() {
     val maxFetchBytes = 10 * 1024
-    this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, maxFetchBytes.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, maxFetchBytes.toString)
+    checkLargeRecord(maxFetchBytes + 1)
+  }
+
+  private def checkLargeRecord(producerRecordSize: Int): Unit = {
     val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
     consumers += consumer0
 
     // produce a record that is larger than the configured fetch size
-    val record = new ProducerRecord[Array[Byte], Array[Byte]](tp.topic(), tp.partition(), "key".getBytes, new Array[Byte](maxFetchBytes + 1))
+    val record = new ProducerRecord(tp.topic(), tp.partition(), "key".getBytes,
+      new Array[Byte](producerRecordSize))
     this.producers.head.send(record)
 
-    // consuming a too-large record should fail
+    // consuming a record that is too large should succeed since KIP-74
     consumer0.assign(List(tp).asJava)
-    val e = intercept[RecordTooLargeException] {
-      consumer0.poll(20000)
+    val records = consumer0.poll(20000)
+    assertEquals(1, records.count)
+    val consumerRecord = records.iterator().next()
+    assertEquals(0L, consumerRecord.offset)
+    assertEquals(tp.topic(), consumerRecord.topic())
+    assertEquals(tp.partition(), consumerRecord.partition())
+    assertArrayEquals(record.key(), consumerRecord.key())
+    assertArrayEquals(record.value(), consumerRecord.value())
+  }
+
+  /** We should only return a large record if it's the first record in the first non-empty partition of the fetch request */
+  @Test
+  def testFetchHonoursFetchSizeIfLargeRecordNotFirst(): Unit = {
+    val maxFetchBytes = 10 * 1024
+    this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, maxFetchBytes.toString)
+    checkFetchHonoursSizeIfLargeRecordNotFirst(maxFetchBytes)
+  }
+
+  private def checkFetchHonoursSizeIfLargeRecordNotFirst(largeProducerRecordSize: Int): Unit = {
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
+
+    val smallRecord = new ProducerRecord(tp.topic(), tp.partition(), "small".getBytes,
+      "value".getBytes)
+    val largeRecord = new ProducerRecord(tp.topic(), tp.partition(), "large".getBytes,
+      new Array[Byte](largeProducerRecordSize))
+    this.producers.head.send(smallRecord)
+    this.producers.head.send(largeRecord)
+
+    // we should only get the small record in the first `poll`
+    consumer0.assign(List(tp).asJava)
+    val records = consumer0.poll(20000)
+    assertEquals(1, records.count)
+    val consumerRecord = records.iterator().next()
+    assertEquals(0L, consumerRecord.offset)
+    assertEquals(tp.topic(), consumerRecord.topic())
+    assertEquals(tp.partition(), consumerRecord.partition())
+    assertArrayEquals(smallRecord.key(), consumerRecord.key())
+    assertArrayEquals(smallRecord.value(), consumerRecord.value())
+  }
+
+  /** We should only return a large record if it's the first record in the first partition of the fetch request */
+  @Test
+  def testFetchHonoursMaxPartitionFetchBytesIfLargeRecordNotFirst(): Unit = {
+    val maxPartitionFetchBytes = 10 * 1024
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, maxPartitionFetchBytes.toString)
+    checkFetchHonoursSizeIfLargeRecordNotFirst(maxPartitionFetchBytes)
+  }
+
+  @Test
+  def testFetchRecordLargerThanMaxPartitionFetchBytes() {
+    val maxPartitionFetchBytes = 10 * 1024
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, maxPartitionFetchBytes.toString)
+    checkLargeRecord(maxPartitionFetchBytes + 1)
+  }
+
+  /** Test that we consume all partitions if fetch max bytes and max.partition.fetch.bytes are low */
+  @Test
+  def testLowMaxFetchSizeForRequestAndPartition(): Unit = {
+    // one of the effects of this is that there will be some log reads where `0 > remaining limit bytes < message size`
+    // and we don't return the message because it's not the first message in the first non-empty partition of the fetch
+    // this behaves a little different than when remaining limit bytes is 0 and it's important to test it
+    this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, "500")
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, "100")
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
+
+    val topic1 = "topic1"
+    val topic2 = "topic2"
+    val topic3 = "topic3"
+    val partitionCount = 30
+    val topics = Seq(topic1, topic2, topic3)
+    topics.foreach { topicName =>
+      TestUtils.createTopic(zkUtils, topicName, partitionCount, serverCount, servers)
     }
-    val oversizedPartitions = e.recordTooLargePartitions()
-    assertNotNull(oversizedPartitions)
-    assertEquals(1, oversizedPartitions.size)
-    // the oversized message is at offset 0
-    assertEquals(0L, oversizedPartitions.get(tp))
+
+    val partitions = topics.flatMap { topic =>
+      (0 until partitionCount).map(new TopicPartition(topic, _))
+    }
+
+    assertEquals(0, consumer0.assignment().size)
+
+    consumer0.subscribe(List(topic1, topic2, topic3).asJava)
+
+    TestUtils.waitUntilTrue(() => {
+      consumer0.poll(50)
+      consumer0.assignment() == partitions.toSet.asJava
+    }, s"Expected partitions ${partitions.asJava} but actually got ${consumer0.assignment}")
+
+    val producerRecords = partitions.flatMap(sendRecords(partitionCount, _))
+    val consumerRecords = consumeRecords(consumer0, producerRecords.size)
+
+    val expected = producerRecords.map { record =>
+      (record.topic, record.partition, new String(record.key), new String(record.value), record.timestamp)
+    }.toSet
+
+    val actual = consumerRecords.map { record =>
+      (record.topic, record.partition, new String(record.key), new String(record.value), record.timestamp)
+    }.toSet
+
+    assertEquals(expected, actual)
   }
 
   @Test
@@ -712,7 +809,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // consume and verify that values are modified by interceptors
     val records = consumeRecords(testConsumer, numRecords)
     for (i <- 0 until numRecords) {
-      val record = records.get(i)
+      val record = records(i)
       assertEquals(s"key $i", new String(record.key()))
       assertEquals(s"value $i$appendStr".toUpperCase(Locale.ROOT), new String(record.value()))
     }
@@ -796,7 +893,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerProps.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockProducerInterceptor")
     producerProps.put("mock.interceptor.append", appendStr)
-    val testProducer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps, new ByteArraySerializer(), new ByteArraySerializer())
+    val testProducer = new KafkaProducer(producerProps, new ByteArraySerializer(), new ByteArraySerializer())
     producers += testProducer
 
     // producing records should succeed
@@ -812,7 +909,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // consume and verify that values are not modified by interceptors -- their exceptions are caught and logged, but not propagated
     val records = consumeRecords(testConsumer, 1)
-    val record = records.get(0)
+    val record = records.head
     assertEquals(s"value will not be modified", new String(record.value()))
   }
 

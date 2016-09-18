@@ -146,7 +146,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val responseHeader = new ResponseHeader(correlationId)
       val leaderAndIsrResponse =
         if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
-          val  result = replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest, metadataCache, onLeadershipChange)
+          val result = replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest, metadataCache, onLeadershipChange)
           new LeaderAndIsrResponse(result.errorCode, result.responseMap.mapValues(new JShort(_)).asJava)
         } else {
           val result = leaderAndIsrRequest.partitionStates.asScala.keys.map((_, new JShort(Errors.CLUSTER_AUTHORIZATION_FAILED.code))).toMap
@@ -437,12 +437,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       case (topicAndPartition, _) => authorize(request.session, Read, new Resource(auth.Topic, topicAndPartition.topic))
     }
 
-    val unauthorizedPartitionData = unauthorizedRequestInfo.mapValues { _ =>
-      FetchResponsePartitionData(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1, MessageSet.Empty)
+    val unauthorizedPartitionData = unauthorizedRequestInfo.map { case (tp, _) =>
+      (tp, FetchResponsePartitionData(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1, MessageSet.Empty))
     }
 
     // the callback for sending a fetch response
-    def sendResponseCallback(responsePartitionData: Map[TopicAndPartition, FetchResponsePartitionData]) {
+    def sendResponseCallback(responsePartitionData: Seq[(TopicAndPartition, FetchResponsePartitionData)]) {
 
       val convertedPartitionData =
         // Need to down-convert message when consumer only takes magic value 0.
@@ -480,8 +480,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       def fetchResponseCallback(delayTimeMs: Int) {
         trace(s"Sending fetch response to client ${fetchRequest.clientId} of " +
-          s"${convertedPartitionData.values.map(_.messages.sizeInBytes).sum} bytes")
-        val response = FetchResponse(fetchRequest.correlationId, mergedPartitionData, fetchRequest.versionId, delayTimeMs)
+          s"${convertedPartitionData.map { case (_, v) => v.messages.sizeInBytes }.sum} bytes")
+        val response = FetchResponse(fetchRequest.correlationId, mergedPartitionData.toSeq, fetchRequest.versionId, delayTimeMs)
         requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(request.connectionId, response)))
       }
 
@@ -490,32 +490,37 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       if (fetchRequest.isFromFollower) {
         //We've already evaluated against the quota and are good to go. Just need to record it now.
-        val size = sizeOfThrottledPartitions(fetchRequest, mergedPartitionData, quotas.leader)
-        quotas.leader.record(size)
+        val responseSize = sizeOfThrottledPartitions(fetchRequest, mergedPartitionData, quotas.leader)
+        quotas.leader.record(responseSize)
         fetchResponseCallback(0)
       } else {
-        val size = FetchResponse.responseSize(mergedPartitionData.groupBy(_._1.topic), fetchRequest.versionId)
-        quotas.fetch.recordAndMaybeThrottle(request.session.sanitizedUser, fetchRequest.clientId, size, fetchResponseCallback)
+        val responseSize = FetchResponse.responseSize(FetchResponse.batchByTopic(mergedPartitionData),
+          fetchRequest.versionId)
+        quotas.fetch.recordAndMaybeThrottle(request.session.sanitizedUser, fetchRequest.clientId, responseSize, fetchResponseCallback)
       }
     }
 
     if (authorizedRequestInfo.isEmpty)
-      sendResponseCallback(Map.empty)
+      sendResponseCallback(Seq.empty)
     else {
       // call the replica manager to fetch messages from the local replica
       replicaManager.fetchMessages(
         fetchRequest.maxWait.toLong,
         fetchRequest.replicaId,
         fetchRequest.minBytes,
+        fetchRequest.maxBytes,
+        fetchRequest.versionId <= 2,
         authorizedRequestInfo,
         replicationQuota(fetchRequest),
         sendResponseCallback)
     }
   }
 
-  private def sizeOfThrottledPartitions(fetchRequest: FetchRequest, mergedPartitionData: Map[TopicAndPartition, FetchResponsePartitionData], quota: ReplicationQuotaManager): Int = {
+  private def sizeOfThrottledPartitions(fetchRequest: FetchRequest,
+                                        mergedPartitionData: Seq[(TopicAndPartition, FetchResponsePartitionData)],
+                                        quota: ReplicationQuotaManager): Int = {
     val throttledPartitions = mergedPartitionData.filter { case (partition, _) => quota.isThrottled(partition) }
-    FetchResponse.responseSize(throttledPartitions.groupBy(_._1.topic), fetchRequest.versionId)
+    FetchResponse.responseSize(FetchRequest.batchByTopic(throttledPartitions), fetchRequest.versionId)
   }
 
   def replicationQuota(fetchRequest: FetchRequest): ReplicaQuota =
