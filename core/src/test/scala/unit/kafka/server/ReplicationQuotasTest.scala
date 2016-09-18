@@ -15,7 +15,7 @@
   * limitations under the License.
   */
 
-package unit.kafka.server
+package kafka.server
 
 import java.util.Properties
 
@@ -25,7 +25,6 @@ import kafka.common._
 import kafka.log.LogConfig._
 import kafka.server.KafkaConfig.fromProps
 import kafka.server.QuotaType._
-import kafka.server._
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
@@ -118,7 +117,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(brokers), retries = 5, acks = 0)
     (0 until msgCount).foreach { x =>
       (0 to 7).foreach { partition =>
-        producer.send(new ProducerRecord(topic, partition, null, msg)).get
+        producer.send(new ProducerRecord(topic, partition, null, msg))
       }
     }
 
@@ -138,8 +137,8 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
       assertEquals(throttle, brokerFor(brokerId).quotaManagers.follower.upperBound())
     }
     if (!leaderThrottle) {
-      (0 to 2).foreach { partition => assertTrue(brokerFor(106).quotaManagers.follower.isThrottled(new TopicAndPartition(topic, partition))) }
-      (3 to 5).foreach { partition => assertTrue(brokerFor(107).quotaManagers.follower.isThrottled(new TopicAndPartition(topic, partition))) }
+      (0 to 2).foreach { partition => assertTrue(brokerFor(106).quotaManagers.follower.isThrottled(tp(partition))) }
+      (3 to 5).foreach { partition => assertTrue(brokerFor(107).quotaManagers.follower.isThrottled(tp(partition))) }
     }
 
     //Wait for non-throttled partitions to replicate first
@@ -163,9 +162,13 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     // In a short test the brokers can be read unfairly, so assert against the average
     val rateUpperBound = throttle * 1.1
     val rateLowerBound = throttle * 0.5
-    val avRate = if (leaderThrottle) avMeasuredRate(LeaderReplication, 100 to 105) else avMeasuredRate(FollowerReplication, 106 to 107)
-    assertTrue(s"Expected ${avRate} < $rateUpperBound", avRate < rateUpperBound)
-    assertTrue(s"Expected ${avRate} > $rateLowerBound", avRate > rateLowerBound)
+    val rate = if (leaderThrottle) avRate(LeaderReplication, 100 to 105) else avRate(FollowerReplication, 106 to 107)
+    assertTrue(s"Expected ${rate} < $rateUpperBound", rate < rateUpperBound)
+    assertTrue(s"Expected ${rate} > $rateLowerBound", rate > rateLowerBound)
+  }
+
+  def tp(partition: Int): TopicAndPartition = {
+    new TopicAndPartition(topic, partition)
   }
 
   @Test
@@ -215,14 +218,15 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
   private def waitForOffsetsToMatch(offset: Int, partitionId: Int, brokerId: Int): Boolean = {
     waitUntilTrue(() => {
-      offset == brokerFor(brokerId).getLogManager.getLog(TopicAndPartition(topic, partitionId)).map(_.logEndOffset).getOrElse(0)
+      offset == brokerFor(brokerId).getLogManager.getLog(TopicAndPartition(topic, partitionId))
+        .map(_.logEndOffset).getOrElse(0)
     }, s"Offsets did not match for partition $partitionId on broker $brokerId", 60000)
   }
 
   private def property(key: String, value: String) = {
-    new Properties() {
-      put(key, value)
-    }
+    val props = new Properties()
+    props.put(key, value)
+    props
   }
 
   private def brokerFor(id: Int): KafkaServer = brokers.filter(_.config.brokerId == id)(0)
@@ -233,12 +237,12 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     }
   }
 
-  private def avMeasuredRate(replicationType: QuotaType, brokers: Inclusive): Double = {
+  private def avRate(replicationType: QuotaType, brokers: Inclusive): Double = {
     brokers.map(brokerFor(_)).map(measuredRate(_, replicationType)).sum / brokers.length
   }
 
-  private def measuredRate(broker: KafkaServer, replicationType: QuotaType): Double = {
-    val metricName = broker.metrics.metricName("byte-rate", replicationType.toString, s"Tracking byte-rate for ${replicationType}")
+  private def measuredRate(broker: KafkaServer, repType: QuotaType): Double = {
+    val metricName = broker.metrics.metricName("byte-rate", repType.toString, s"Tracking byte-rate for ${repType}")
     broker.metrics.metrics.asScala(metricName).value()
   }
 }
