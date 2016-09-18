@@ -82,7 +82,6 @@ object ConfigCommand extends Config {
     val entity = parseEntity(opts)
     val entityType = entity.root.entityType
     val entityName = entity.fullSanitizedName
-    warnOnMaxMessagesChange(configsToBeAdded, opts.options.has(opts.forceOpt))
 
     // compile the final set of configs
     val configs = utils.fetchEntityConfig(zkUtils, entityType, entityName)
@@ -99,22 +98,9 @@ object ConfigCommand extends Config {
     println(s"Updated config for entity: $entity.")
   }
 
-  def warnOnMaxMessagesChange(configs: Properties, force: Boolean): Unit = {
-    val maxMessageBytes = configs.get(LogConfig.MaxMessageBytesProp) match {
-      case n: String => n.toInt
-      case _ => -1
-    }
-    if (maxMessageBytes > Defaults.MaxMessageSize){
-      error(TopicCommand.longMessageSizeWarning(maxMessageBytes))
-      if (!force)
-        TopicCommand.askToProceed
-    }
-  }
-
   private def parseBroker(broker: String): Int = {
-    try {
-      broker.toInt
-    }catch {
+    try broker.toInt
+    catch {
       case e: NumberFormatException =>
         throw new IllegalArgumentException(s"Error parsing broker $broker. The broker's Entity Name must be a single integer value")
     }

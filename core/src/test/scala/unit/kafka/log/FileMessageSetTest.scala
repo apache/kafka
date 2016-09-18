@@ -108,24 +108,28 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
     // append a new message with a high offset
     val lastMessage = new Message("test".getBytes)
     messageSet.append(new ByteBufferMessageSet(NoCompressionCodec, new LongRef(50), lastMessage))
+    val messages = messageSet.toSeq
     var position = 0
-    assertEquals("Should be able to find the first message by its offset", 
-                 OffsetPosition(0L, position), 
-                 messageSet.searchForOffset(0, 0))
-    position += MessageSet.entrySize(messageSet.head.message)
+    val message1Size = MessageSet.entrySize(messages.head.message)
+    assertEquals("Should be able to find the first message by its offset",
+                 (OffsetPosition(0L, position), message1Size),
+                 messageSet.searchForOffsetWithSize(0, 0))
+    position += message1Size
+    val message2Size = MessageSet.entrySize(messages(1).message)
     assertEquals("Should be able to find second message when starting from 0", 
-                 OffsetPosition(1L, position), 
-                 messageSet.searchForOffset(1, 0))
+                 (OffsetPosition(1L, position), message2Size),
+                 messageSet.searchForOffsetWithSize(1, 0))
     assertEquals("Should be able to find second message starting from its offset", 
-                 OffsetPosition(1L, position), 
-                 messageSet.searchForOffset(1, position))
-    position += MessageSet.entrySize(messageSet.tail.head.message) + MessageSet.entrySize(messageSet.tail.tail.head.message)
+                 (OffsetPosition(1L, position), message2Size),
+                 messageSet.searchForOffsetWithSize(1, position))
+    position += message2Size + MessageSet.entrySize(messages(2).message)
+    val message4Size = MessageSet.entrySize(messages(3).message)
     assertEquals("Should be able to find fourth message from a non-existant offset", 
-                 OffsetPosition(50L, position), 
-                 messageSet.searchForOffset(3, position))
-    assertEquals("Should be able to find fourth message by correct offset", 
-                 OffsetPosition(50L, position), 
-                 messageSet.searchForOffset(50,  position))
+                 (OffsetPosition(50L, position), message4Size),
+                 messageSet.searchForOffsetWithSize(3, position))
+    assertEquals("Should be able to find fourth message by correct offset",
+                 (OffsetPosition(50L, position), message4Size),
+                 messageSet.searchForOffsetWithSize(50,  position))
   }
   
   /**
@@ -134,7 +138,7 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
   @Test
   def testIteratorWithLimits() {
     val message = messageSet.toList(1)
-    val start = messageSet.searchForOffset(1, 0).position
+    val start = messageSet.searchForOffsetWithSize(1, 0)._1.position
     val size = message.message.size + 12
     val slice = messageSet.read(start, size)
     assertEquals(List(message), slice.toList)
@@ -148,7 +152,7 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
   @Test
   def testTruncate() {
     val message = messageSet.toList.head
-    val end = messageSet.searchForOffset(1, 0).position
+    val end = messageSet.searchForOffsetWithSize(1, 0)._1.position
     messageSet.truncateTo(end)
     assertEquals(List(message), messageSet.toList)
     assertEquals(MessageSet.entrySize(message.message), messageSet.sizeInBytes)
@@ -272,7 +276,7 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
   @Test
   def testFormatConversionWithPartialMessage() {
     val message = messageSet.toList(1)
-    val start = messageSet.searchForOffset(1, 0).position
+    val start = messageSet.searchForOffsetWithSize(1, 0)._1.position
     val size = message.message.size + 12
     val slice = messageSet.read(start, size - 1)
     val messageV0 = slice.toMessageFormat(Message.MagicValue_V0)

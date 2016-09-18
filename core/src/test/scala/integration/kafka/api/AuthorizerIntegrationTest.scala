@@ -13,6 +13,7 @@
 package kafka.api
 
 import java.nio.ByteBuffer
+import java.util
 import java.util.concurrent.ExecutionException
 import java.util.{ArrayList, Collections, Properties}
 
@@ -176,7 +177,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createFetchRequest = {
-    new requests.FetchRequest(5000, 100, Map(tp -> new requests.FetchRequest.PartitionData(0, 100)).asJava)
+    val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
+    partitionMap.put(tp, new requests.FetchRequest.PartitionData(0, 100))
+    new requests.FetchRequest(5000, 100, Int.MaxValue, partitionMap)
   }
 
   private def createListOffsetsRequest = {

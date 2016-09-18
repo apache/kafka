@@ -246,6 +246,64 @@ class LogTest extends JUnitSuite {
     assertEquals("A read should now return the last message in the log", log.logEndOffset - 1, log.read(1, 200, None).messageSet.head.offset)
   }
 
+  @Test
+  def testReadWithMinMessage() {
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 71: java.lang.Integer)
+    val log = new Log(logDir,  LogConfig(logProps), recoveryPoint = 0L, time.scheduler, time = time)
+    val messageIds = ((0 until 50) ++ (50 until 200 by 7)).toArray
+    val messages = messageIds.map(id => new Message(id.toString.getBytes))
+
+    // now test the case that we give the offsets and use non-sequential offsets
+    for (i <- 0 until messages.length)
+      log.append(new ByteBufferMessageSet(NoCompressionCodec, new LongRef(messageIds(i)), messages = messages(i)),
+        assignOffsets = false)
+
+    for (i <- 50 until messageIds.max) {
+      val idx = messageIds.indexWhere(_ >= i)
+      val reads = Seq(
+        log.read(i, 1, minOneMessage = true),
+        log.read(i, 100, minOneMessage = true),
+        log.read(i, 100, Some(10000), minOneMessage = true)
+      ).map(_.messageSet.head)
+      reads.foreach { read =>
+        assertEquals("Offset read should match message id.", messageIds(idx), read.offset)
+        assertEquals("Message should match appended.", messages(idx), read.message)
+      }
+
+      assertEquals(Seq.empty, log.read(i, 1, Some(1), minOneMessage = true).messageSet.toIndexedSeq)
+    }
+
+  }
+
+  @Test
+  def testReadWithTooSmallMaxLength() {
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 71: java.lang.Integer)
+    val log = new Log(logDir,  LogConfig(logProps), recoveryPoint = 0L, time.scheduler, time = time)
+    val messageIds = ((0 until 50) ++ (50 until 200 by 7)).toArray
+    val messages = messageIds.map(id => new Message(id.toString.getBytes))
+
+    // now test the case that we give the offsets and use non-sequential offsets
+    for (i <- 0 until messages.length)
+      log.append(new ByteBufferMessageSet(NoCompressionCodec, new LongRef(messageIds(i)), messages = messages(i)),
+        assignOffsets = false)
+
+    for (i <- 50 until messageIds.max) {
+      assertEquals(MessageSet.Empty, log.read(i, 0).messageSet)
+
+      // we return an incomplete message instead of an empty one for the case below
+      // we use this mechanism to tell consumers of the fetch request version 2 and below that the message size is
+      // larger than the fetch size
+      // in fetch request version 3, we no longer need this as we return oversized messages from the first non-empty
+      // partition
+      val fetchInfo = log.read(i, 1)
+      assertTrue(fetchInfo.firstMessageSetIncomplete)
+      assertTrue(fetchInfo.messageSet.isInstanceOf[FileMessageSet])
+      assertEquals(1, fetchInfo.messageSet.sizeInBytes)
+    }
+  }
+
   /**
    * Test reading at the boundary of the log, specifically
    * - reading from the logEndOffset should give an empty message set
