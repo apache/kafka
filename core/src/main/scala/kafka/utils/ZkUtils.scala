@@ -132,16 +132,16 @@ object ZkUtils {
         m.asInstanceOf[Map[String, Any]].get("partitions") match {
           case Some(partitionsSeq) =>
             partitionsSeq.asInstanceOf[Seq[Map[String, Any]]].map(p => {
-              val topic = p.get("topic").get.asInstanceOf[String]
-              val partition = p.get("partition").get.asInstanceOf[Int]
-              val newReplicas = p.get("replicas").get.asInstanceOf[Seq[Int]]
+              val topic = p("topic").asInstanceOf[String]
+              val partition = p("partition").asInstanceOf[Int]
+              val newReplicas = p("replicas").asInstanceOf[Seq[Int]]
               TopicAndPartition(topic, partition) -> newReplicas
             })
           case None =>
             Seq.empty
         }
       case None =>
-        Seq.empty
+        throw new KafkaException("Can't parse json string: %s".format(jsonData))
     }
   }
 
