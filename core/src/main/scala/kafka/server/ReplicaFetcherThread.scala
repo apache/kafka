@@ -265,10 +265,10 @@ class ReplicaFetcherThread(name: String,
     val (request, apiVersion) =
       if (brokerConfig.interBrokerProtocolVersion.compare(KAFKA_0_10_1_IV2) >= 0) {
         val partitions = Map(topicPartition -> earliestOrLatest)
-        (new ListOffsetRequest(partitions.asJava, consumerId), 0)
+        (new ListOffsetRequest(partitions.asJava, consumerId), 1)
       } else {
         val partitions = Map(topicPartition -> new ListOffsetRequest.PartitionData(earliestOrLatest, 1))
-        (new ListOffsetRequest(consumerId, partitions.asJava), 1)
+        (new ListOffsetRequest(consumerId, partitions.asJava), 0)
       }
     val clientResponse = sendRequest(ApiKeys.LIST_OFFSETS, Some(apiVersion.toShort), request)
     val response = new ListOffsetResponse(clientResponse.responseBody)

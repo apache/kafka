@@ -17,7 +17,7 @@
 
 package kafka.log
 
-import kafka.api.{KAFKA_0_10_0_IV0, OffsetRequest}
+import kafka.api.KAFKA_0_10_0_IV0
 import kafka.utils._
 import kafka.message._
 import kafka.common._
@@ -604,10 +604,6 @@ class Log(val dir: File,
         return Some(TimestampOffset(Message.NoTimestamp, segsArray(0).baseOffset))
     else if (targetTimestamp == ListOffsetRequest.LATEST_TIMESTAMP)
         return Some(TimestampOffset(Message.NoTimestamp, logEndOffset))
-
-    // If the target time is greater than tha largest timestamp, return None immediately.
-    if (targetTimestamp > activeSegment.largestTimestamp)
-      return None
 
     val targetSeg = {
       // Get all the segments whose largest timestamp is smaller than target timestamp

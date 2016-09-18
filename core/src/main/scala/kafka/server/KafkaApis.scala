@@ -531,16 +531,14 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   def handleOffsetRequest(request: RequestChannel.Request) {
     val correlationId = request.header.correlationId
-    val clientId = request.header.clientId
     val version = request.header.apiVersion()
-    val offsetRequest = request.body.asInstanceOf[ListOffsetRequest]
 
     val mergedResponseMap =
-      if (version == 0) {
+      if (version == 0)
         handleOffsetRequestV0(request)
-      } else {
+      else
         handleOffsetRequestV1(request)
-      }
+
 
     val responseHeader = new ResponseHeader(correlationId)
     val response = new ListOffsetResponse(mergedResponseMap.asJava, version)
@@ -551,7 +549,6 @@ class KafkaApis(val requestChannel: RequestChannel,
   private def handleOffsetRequestV0(request : RequestChannel.Request) : Map[TopicPartition, ListOffsetResponse.PartitionData] = {
     val correlationId = request.header.correlationId
     val clientId = request.header.clientId
-    val version = request.header.apiVersion()
     val offsetRequest = request.body.asInstanceOf[ListOffsetRequest]
 
     val (authorizedRequestInfo, unauthorizedRequestInfo) = offsetRequest.offsetData.asScala.partition {
@@ -562,8 +559,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       new PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED.code, List[JLong]().asJava)
     )
 
-    val responseMap = authorizedRequestInfo.map(elem => {
-      val (topicPartition, partitionData) = elem
+    val responseMap = authorizedRequestInfo.map({case (topicPartition, partitionData) =>
       try {
         // ensure leader exists
         val localReplica = if (offsetRequest.replicaId != ListOffsetRequest.DEBUGGING_REPLICA_ID)
@@ -604,7 +600,6 @@ class KafkaApis(val requestChannel: RequestChannel,
   private def handleOffsetRequestV1(request : RequestChannel.Request): Map[TopicPartition, ListOffsetResponse.PartitionData] = {
     val correlationId = request.header.correlationId
     val clientId = request.header.clientId
-    val version = request.header.apiVersion()
     val offsetRequest = request.body.asInstanceOf[ListOffsetRequest]
 
     val (authorizedRequestInfo, unauthorizedRequestInfo) = offsetRequest.partitionTimestamps.asScala.partition {
@@ -617,8 +612,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         ListOffsetResponse.UNKNOWN_OFFSET)
     })
 
-    val responseMap = authorizedRequestInfo.map(elem => {
-      val (topicPartition, timestamp) = elem
+    val responseMap = authorizedRequestInfo.map({case (topicPartition, timestamp) =>
       if (offsetRequest.duplicatePartitions().contains(topicPartition)) {
         debug(s"OffsetRequest with correlation id $correlationId from client $clientId on partition $topicPartition " +
             s"failed because the partition is duplicated in the request.")
@@ -676,7 +670,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  def fetchOffsetForTimestamp(logManager: LogManager, topicPartition: TopicPartition, timestamp: Long) : Option[TimestampOffset] = {
+  private def fetchOffsetForTimestamp(logManager: LogManager, topicPartition: TopicPartition, timestamp: Long) : Option[TimestampOffset] = {
     logManager.getLog(TopicAndPartition(topicPartition.topic, topicPartition.partition)) match {
       case Some(log) =>
         log.fetchOffsetsByTimestamp(timestamp)

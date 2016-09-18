@@ -141,8 +141,8 @@ public class ListOffsetRequest extends AbstractRequest {
         super(struct);
         Set<TopicPartition> duplicatePatitions = new HashSet<>();
         replicaId = struct.getInt(REPLICA_ID_KEY_NAME);
-        offsetData = new HashMap<TopicPartition, PartitionData>();
-        partitionTimestamps = new HashMap<TopicPartition, Long>();
+        offsetData = new HashMap<>();
+        partitionTimestamps = new HashMap<>();
         for (Object topicResponseObj : struct.getArray(TOPICS_KEY_NAME)) {
             Struct topicResponse = (Struct) topicResponseObj;
             String topic = topicResponse.getString(TOPIC_KEY_NAME);
