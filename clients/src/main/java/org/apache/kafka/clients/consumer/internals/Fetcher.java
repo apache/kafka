@@ -476,22 +476,20 @@ public class Fetcher<K, V> {
      * @return A response which can be polled to obtain the corresponding timestamps and offsets.
      */
     private RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> sendListOffsetRequests(final Map<TopicPartition, Long> timestampsToSearch) {
-        for (TopicPartition topicPartition : timestampsToSearch.keySet()) {
-            PartitionInfo info = metadata.fetch().partition(topicPartition);
-            if (info == null) {
-                metadata.add(topicPartition.topic());
-                log.debug("Partition {} is unknown for fetching offset, wait for metadata refresh", topicPartition);
-                return RequestFuture.staleMetadata();
-            } else if (info.leader() == null) {
-                log.debug("Leader for partition {} unavailable for fetching offset, wait for metadata refresh", topicPartition);
-                return RequestFuture.leaderNotAvailable();
-            }
-        }
-
         // Group the partitions by node.
         final Map<Node, Map<TopicPartition, Long>> timestampsToSearchByNode = new HashMap<>();
         for (Map.Entry<TopicPartition, Long> entry: timestampsToSearch.entrySet()) {
-            Node node = metadata.fetch().leaderFor(entry.getKey());
+            TopicPartition tp  = entry.getKey();
+            PartitionInfo info = metadata.fetch().partition(tp);
+            if (info == null) {
+                metadata.add(tp.topic());
+                log.debug("Partition {} is unknown for fetching offset, wait for metadata refresh", tp);
+                return RequestFuture.staleMetadata();
+            } else if (info.leader() == null) {
+                log.debug("Leader for partition {} unavailable for fetching offset, wait for metadata refresh", tp);
+                return RequestFuture.leaderNotAvailable();
+            }
+            Node node = info.leader();
             Map<TopicPartition, Long> topicData = timestampsToSearchByNode.get(node);
             if (topicData == null) {
                 topicData = new HashMap<>();
@@ -501,22 +499,26 @@ public class Fetcher<K, V> {
         }
 
         final RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> listOffsetRequestsFuture = new RequestFuture<>();
-        final Map<TopicPartition, OffsetAndTimestamp> timestampOffsets = new HashMap<>();
+        final Map<TopicPartition, OffsetAndTimestamp> fetchedTimestampOffsets = new HashMap<>();
         for (Map.Entry<Node, Map<TopicPartition, Long>> entry : timestampsToSearchByNode.entrySet()) {
             sendListOffsetRequest(entry.getKey(), entry.getValue())
                     .addListener(new RequestFutureListener<Map<TopicPartition, OffsetAndTimestamp>>() {
                         @Override
                         public void onSuccess(Map<TopicPartition, OffsetAndTimestamp> value) {
-                            timestampOffsets.putAll(value);
-                            if (timestampOffsets.size() == timestampsToSearch.size() && !listOffsetRequestsFuture.isDone())
-                                listOffsetRequestsFuture.complete(timestampOffsets);
+                            synchronized (listOffsetRequestsFuture) {
+                                fetchedTimestampOffsets.putAll(value);
+                                if (fetchedTimestampOffsets.size() == timestampsToSearch.size() && !listOffsetRequestsFuture.isDone())
+                                    listOffsetRequestsFuture.complete(fetchedTimestampOffsets);
+                            }
                         }
 
                         @Override
                         public void onFailure(RuntimeException e) {
-                            // This may cause all the requests to be retried, but should be rare.
-                            if (!listOffsetRequestsFuture.isDone())
-                                listOffsetRequestsFuture.raise(e);
+                            synchronized (listOffsetRequestsFuture) {
+                                // This may cause all the requests to be retried, but should be rare.
+                                if (!listOffsetRequestsFuture.isDone())
+                                    listOffsetRequestsFuture.raise(e);
+                            }
                         }
                     });
         }
@@ -531,8 +533,8 @@ public class Fetcher<K, V> {
      * @return A response which can be polled to obtain the corresponding timestamps and offsets.
      */
     private RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> sendListOffsetRequest(Node node,
-                                                                                      final Map<TopicPartition, Long> timestampsToSearch) {
-        ListOffsetRequest request = new ListOffsetRequest(timestampsToSearch, 1);
+                                                                                         final Map<TopicPartition, Long> timestampsToSearch) {
+        ListOffsetRequest request = new ListOffsetRequest(timestampsToSearch, ListOffsetRequest.CONSUMER_REPLICA_ID);
         return client.send(node, ApiKeys.LIST_OFFSETS, request)
                 .compose(new RequestFutureAdapter<ClientResponse, Map<TopicPartition, OffsetAndTimestamp>>() {
                     @Override
@@ -544,8 +546,9 @@ public class Fetcher<K, V> {
 
     /**
      * Callback for the response of the list offset call above.
-     * @param timestampsToSearch The partitions that were fetched
+     * @param timestampsToSearch The mapping from partitions to target timestamps
      * @param clientResponse The response from the server.
+     * @param future The future to be completed by the response.
      */
     private void handleListOffsetResponse(Map<TopicPartition, Long> timestampsToSearch,
                                           ClientResponse clientResponse,
@@ -555,26 +558,26 @@ public class Fetcher<K, V> {
         for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
             TopicPartition topicPartition = entry.getKey();
             ListOffsetResponse.PartitionData partitionData = lor.responseData().get(topicPartition);
-            short errorCode = partitionData.errorCode;
-            if (errorCode == Errors.NONE.code()) {
+            Errors error = Errors.forCode(partitionData.errorCode);
+            if (error == Errors.NONE) {
                 OffsetAndTimestamp offsetAndTimestamp = null;
                 if (partitionData.offset != ListOffsetResponse.UNKNOWN_OFFSET)
                     offsetAndTimestamp = new OffsetAndTimestamp(partitionData.offset, partitionData.timestamp);
                 log.debug("Fetched {} for partition {}", offsetAndTimestamp, topicPartition);
                 timestampOffsetMap.put(topicPartition, offsetAndTimestamp);
-            } else if (errorCode == Errors.INVALID_REQUEST.code()) {
+            } else if (error == Errors.INVALID_REQUEST) {
                 // The message format on the broker side is before 0.10.0, we simply put null in the response.
                 log.debug("Cannot search by timestamp for partition {} because the message format version " +
                         "is before 0.10.0", topicPartition);
                 timestampOffsetMap.put(topicPartition, null);
-            } else if (errorCode == Errors.NOT_LEADER_FOR_PARTITION.code()
-                    || errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code()) {
+            } else if (error == Errors.NOT_LEADER_FOR_PARTITION
+                    || error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                 log.debug("Attempt to fetch offsets for partition {} failed due to obsolete leadership information, retrying.",
                         topicPartition);
-                future.raise(Errors.forCode(errorCode));
+                future.raise(error);
             } else {
                 log.warn("Attempt to fetch offsets for partition {} failed due to: {}",
-                        topicPartition, Errors.forCode(errorCode).message());
+                        topicPartition, error.message());
                 future.raise(new StaleMetadataException());
             }
         }

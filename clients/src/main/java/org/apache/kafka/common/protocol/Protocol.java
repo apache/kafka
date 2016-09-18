@@ -378,7 +378,9 @@ public class Protocol {
     public static final Schema LIST_OFFSET_REQUEST_PARTITION_V1 = new Schema(new Field("partition",
                                                                                        INT32,
                                                                                        "Topic partition id."),
-                                                                             new Field("timestamp", INT64, "Timestamp."));
+                                                                             new Field("timestamp",
+                                                                                       INT64,
+                                                                                       "The target timestamp for the partition."));
 
     public static final Schema LIST_OFFSET_REQUEST_TOPIC_V0 = new Schema(new Field("topic",
                                                                                    STRING,
@@ -416,9 +418,11 @@ public class Protocol {
 
     public static final Schema LIST_OFFSET_RESPONSE_PARTITION_V1 = new Schema(new Field("partition",
                                                                                         INT32,
-                                                                              "Topic partition id."),
+                                                                                        "Topic partition id."),
                                                                               new Field("error_code", INT16),
-                                                                              new Field("timestamp", INT64, "timestamp found"),
+                                                                              new Field("timestamp",
+                                                                                        INT64,
+                                                                                        "The timestamp associated with the returned offset"),
                                                                               new Field("offset",
                                                                                         INT64,
                                                                                         "offsets found"));

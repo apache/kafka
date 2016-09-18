@@ -90,17 +90,17 @@ public class ListOffsetRequest extends AbstractRequest {
     }
 
     /**
-     * Constructor with a specified version.
+     * Constructor for ListOffsetRequest v1.
      */
-    public ListOffsetRequest(Map<TopicPartition, ?> targetTimes, int version) {
-        this(CONSUMER_REPLICA_ID, targetTimes, version);
+    public ListOffsetRequest(Map<TopicPartition, ?> targetTimes, int replicaId) {
+        this(replicaId, targetTimes, 1);
     }
 
     /**
-     * Constructor with a specified version.
+     * Private constructor with a specified version.
      */
     @SuppressWarnings("unchecked")
-    public ListOffsetRequest(int replicaId, Map<TopicPartition, ?> targetTimes, int version) {
+    private ListOffsetRequest(int replicaId, Map<TopicPartition, ?> targetTimes, int version) {
         super(new Struct(ProtoUtils.requestSchema(ApiKeys.LIST_OFFSETS.id, version)));
         Map<String, Map<Integer, Object>> topicsData =
                 CollectionUtils.groupDataByTopic((Map<TopicPartition, Object>) targetTimes);

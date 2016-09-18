@@ -311,11 +311,11 @@ public class RequestResponseTest {
         if (version == 0) {
             Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = new HashMap<>();
             offsetData.put(new TopicPartition("test", 0), new ListOffsetRequest.PartitionData(1000000L, 10));
-            return new ListOffsetRequest(offsetData, 0);
+            return new ListOffsetRequest(offsetData);
         } else if (version == 1) {
             Map<TopicPartition, Long> offsetData = new HashMap<>();
             offsetData.put(new TopicPartition("test", 0), 1000000L);
-            return new ListOffsetRequest(offsetData, 1);
+            return new ListOffsetRequest(offsetData, ListOffsetRequest.CONSUMER_REPLICA_ID);
         } else {
             throw new IllegalArgumentException("Illegal ListOffsetRequest version " + version);
         }

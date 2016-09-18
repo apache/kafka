@@ -1406,6 +1406,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return For each partition, returns the timestamp and offset of the first message with timestamp greater
      *         than or equal to the target timestamp. {@code null} will be returned for the partition if there is no
      *         such message.
+     * @throws IllegalArgumentException if the target timestamp is negative.
      */
     @Override
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {

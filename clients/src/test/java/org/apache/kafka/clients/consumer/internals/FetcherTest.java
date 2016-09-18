@@ -41,6 +41,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.Compressor;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.OffsetAndTimestamp;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
@@ -633,6 +634,17 @@ public class FetcherTest {
         KafkaMetric maxMetric = allMetrics.get(metrics.metricName("fetch-throttle-time-max", metricGroup, ""));
         assertEquals(200, avgMetric.value(), EPSILON);
         assertEquals(300, maxMetric.value(), EPSILON);
+    }
+
+    @Test
+    public void testGetOffsetsByTimes() {
+        client.prepareResponseFrom(listOffsetResponse(Errors.NONE, 100L, 100L), cluster.leaderFor(tp));
+
+        Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap =
+                fetcher.getOffsetsByTimes(Collections.singletonMap(tp, 0L));
+        assertEquals(offsetAndTimestampMap.get(tp).timestamp(), 100L);
+        assertEquals(offsetAndTimestampMap.get(tp).offset(), 100L);
+
     }
 
     private MockClient.RequestMatcher listOffsetRequestMatcher(final long timestamp) {

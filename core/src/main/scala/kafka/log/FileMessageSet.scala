@@ -164,9 +164,8 @@ class FileMessageSet private[kafka](@volatile var file: File,
    * @return The timestamp and offset of the message found. None, if no message is found.
    */
   def searchForTimestamp(targetTimestamp: Long, startingPosition: Int): Option[TimestampOffset] = {
-    var maxTimestampChecked = Message.NoTimestamp
     var lastOffsetChecked = -1L
-    val messagesToSearch = read(startingPosition, sizeInBytes())
+    val messagesToSearch = read(startingPosition, sizeInBytes)
     for (messageAndOffset <- messagesToSearch) {
       val message = messageAndOffset.message
       lastOffsetChecked = messageAndOffset.offset
@@ -177,16 +176,15 @@ class FileMessageSet private[kafka](@volatile var file: File,
             return Some(TimestampOffset(messageAndOffset.message.timestamp, messageAndOffset.offset))
           case _ =>
             // Iterate over the inner messages to get the exact offset.
-            for (innerMessage <- ByteBufferMessageSet.deepIterator(messageAndOffset)) {
-              val timestamp = innerMessage.message.timestamp
+            for (innerMessageAndOffset <- ByteBufferMessageSet.deepIterator(messageAndOffset)) {
+              val timestamp = innerMessageAndOffset.message.timestamp
               if (timestamp >= targetTimestamp)
-                return Some(TimestampOffset(innerMessage.message.timestamp, innerMessage.offset))
+                return Some(TimestampOffset(innerMessageAndOffset.message.timestamp, innerMessageAndOffset.offset))
             }
             throw new IllegalStateException(s"The message set (max timestamp = ${message.timestamp}, max offset = ${messageAndOffset.offset}" +
                 s" should contain target timestamp $targetTimestamp but it does not.")
         }
-      } else
-        maxTimestampChecked = math.max(maxTimestampChecked, message.timestamp)
+      }
     }
     None
   }
