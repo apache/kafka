@@ -58,6 +58,7 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -377,15 +378,15 @@ public class Fetcher<K, V> {
         }
     }
 
-    public Map<TopicPartition, Long> earliestOffsets(Set<TopicPartition> partitions) {
+    public Map<TopicPartition, Long> earliestOffsets(Collection<TopicPartition> partitions) {
         return earliestOrLatestOffset(partitions, ListOffsetRequest.EARLIEST_TIMESTAMP);
     }
 
-    public Map<TopicPartition, Long> latestOffsets(Set<TopicPartition> partitions) {
+    public Map<TopicPartition, Long> latestOffsets(Collection<TopicPartition> partitions) {
         return earliestOrLatestOffset(partitions, ListOffsetRequest.LATEST_TIMESTAMP);
     }
 
-    private Map<TopicPartition, Long> earliestOrLatestOffset(Set<TopicPartition> partitions, long timestamp) {
+    private Map<TopicPartition, Long> earliestOrLatestOffset(Collection<TopicPartition> partitions, long timestamp) {
         Map<TopicPartition, Long> timestampsToSearch = new HashMap<>();
         for (TopicPartition tp : partitions)
             timestampsToSearch.put(tp, timestamp);

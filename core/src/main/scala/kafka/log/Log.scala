@@ -591,7 +591,7 @@ class Log(val dir: File,
   def fetchOffsetsByTimestamp(targetTimestamp: Long): Option[TimestampOffset] = {
     debug(s"Searching offset for timestamp $targetTimestamp")
 
-    if (config.messageFormatVersion.compare(KAFKA_0_10_0_IV0) < 0 &&
+    if (config.messageFormatVersion < KAFKA_0_10_0_IV0 &&
         targetTimestamp != ListOffsetRequest.EARLIEST_TIMESTAMP &&
         targetTimestamp != ListOffsetRequest.LATEST_TIMESTAMP)
       throw new InvalidRequestException(s"Cannot search offsets based on timestamp because message format version " +

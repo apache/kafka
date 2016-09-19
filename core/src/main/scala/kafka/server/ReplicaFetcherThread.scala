@@ -263,7 +263,7 @@ class ReplicaFetcherThread(name: String,
 
   private def earliestOrLatestOffset(topicPartition: TopicPartition, earliestOrLatest: Long, consumerId: Int): Long = {
     val (request, apiVersion) =
-      if (brokerConfig.interBrokerProtocolVersion.compare(KAFKA_0_10_1_IV2) >= 0) {
+      if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_1_IV2) {
         val partitions = Map(topicPartition -> earliestOrLatest)
         (new ListOffsetRequest(partitions.asJava, consumerId), 1)
       } else {
@@ -275,7 +275,7 @@ class ReplicaFetcherThread(name: String,
     val partitionData = response.responseData.get(topicPartition)
     Errors.forCode(partitionData.errorCode) match {
       case Errors.NONE =>
-        if (brokerConfig.interBrokerProtocolVersion.compare(KAFKA_0_10_1_IV1) >= 0)
+        if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_1_IV2)
           partitionData.offset
         else
           partitionData.offsets.get(0)

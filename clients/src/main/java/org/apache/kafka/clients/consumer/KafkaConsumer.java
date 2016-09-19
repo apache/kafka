@@ -1429,7 +1429,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The earliest available offsets for the given partitions
      */
     @Override
-    public Map<TopicPartition, Long> earliestOffsets(Set<TopicPartition> partitions) {
+    public Map<TopicPartition, Long> earliestOffsets(Collection<TopicPartition> partitions) {
         return fetcher.earliestOffsets(partitions);
     }
 
@@ -1443,7 +1443,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The latest available offsets for the given partitions.
      */
     @Override
-    public Map<TopicPartition, Long> latestOffsets(Set<TopicPartition> partitions) {
+    public Map<TopicPartition, Long> latestOffsets(Collection<TopicPartition> partitions) {
         return fetcher.latestOffsets(partitions);
     }
 

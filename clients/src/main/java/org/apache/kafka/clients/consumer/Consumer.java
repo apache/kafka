@@ -157,14 +157,14 @@ public interface Consumer<K, V> extends Closeable {
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch);
 
     /**
-     * @see KafkaConsumer#earliestOffsets(java.util.Set)
+     * @see KafkaConsumer#earliestOffsets(java.util.Collection)
      */
-    public Map<TopicPartition, Long> earliestOffsets(Set<TopicPartition> partitions);
+    public Map<TopicPartition, Long> earliestOffsets(Collection<TopicPartition> partitions);
 
     /**
-     * @see KafkaConsumer#latestOffsets(java.util.Set)
+     * @see KafkaConsumer#latestOffsets(java.util.Collection)
      */
-    public Map<TopicPartition, Long> latestOffsets(Set<TopicPartition> partitions);
+    public Map<TopicPartition, Long> latestOffsets(Collection<TopicPartition> partitions);
 
     /**
      * @see KafkaConsumer#close()
