@@ -489,14 +489,15 @@ public class Fetcher<K, V> {
             } else if (info.leader() == null) {
                 log.debug("Leader for partition {} unavailable for fetching offset, wait for metadata refresh", tp);
                 return RequestFuture.leaderNotAvailable();
+            } else {
+                Node node = info.leader();
+                Map<TopicPartition, Long> topicData = timestampsToSearchByNode.get(node);
+                if (topicData == null) {
+                    topicData = new HashMap<>();
+                    timestampsToSearchByNode.put(node, topicData);
+                }
+                topicData.put(entry.getKey(), entry.getValue());
             }
-            Node node = info.leader();
-            Map<TopicPartition, Long> topicData = timestampsToSearchByNode.get(node);
-            if (topicData == null) {
-                topicData = new HashMap<>();
-                timestampsToSearchByNode.put(node, topicData);
-            }
-            topicData.put(entry.getKey(), entry.getValue());
         }
 
         final RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> listOffsetRequestsFuture = new RequestFuture<>();
@@ -536,6 +537,7 @@ public class Fetcher<K, V> {
     private RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> sendListOffsetRequest(Node node,
                                                                                          final Map<TopicPartition, Long> timestampsToSearch) {
         ListOffsetRequest request = new ListOffsetRequest(timestampsToSearch, ListOffsetRequest.CONSUMER_REPLICA_ID);
+        log.trace("Sending ListOffsetRequest {} to broker {}", request, node);
         return client.send(node, ApiKeys.LIST_OFFSETS, request)
                 .compose(new RequestFutureAdapter<ClientResponse, Map<TopicPartition, OffsetAndTimestamp>>() {
                     @Override
@@ -619,7 +621,7 @@ public class Fetcher<K, V> {
                 fetch.put(partition, new FetchRequest.PartitionData(position, this.fetchSize));
                 log.trace("Added fetch request for partition {} at offset {}", partition, position);
             } else {
-                log.trace("Skipping fetch for partition {} because there is an inflight request to {}", partition, node);
+                log.trace("Skipping fetch for partition {} because there is an in-flight request to {}", partition, node);
             }
         }
 
