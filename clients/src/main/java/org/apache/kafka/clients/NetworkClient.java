@@ -652,10 +652,10 @@ public class NetworkClient implements KafkaClient {
 
             if (lastConnectAttemptNodeId != null &&
                 !connectionStates.isDisconnected(lastConnectAttemptNodeId)) {
-                long timeUntilNextConnectAttemptMs =
+                long timeToNextConnectAttemptMs =
                         lastConnectAttemptForMetadataRequestMs + reconnectBackoffMs - now;
-                if (timeUntilNextConnectAttemptMs > 0) {
-                    return timeUntilNextConnectAttemptMs;
+                if (timeToNextConnectAttemptMs > 0) {
+                    return timeToNextConnectAttemptMs;
                 }
             }
 
