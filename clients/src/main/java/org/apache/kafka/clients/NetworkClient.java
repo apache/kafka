@@ -631,14 +631,6 @@ public class NetworkClient implements KafkaClient {
             return new ClientRequest(now, true, send, null, true);
         }
 
-        private boolean isConnectionClosed(String nodeId) {
-            try {
-                return connectionStates.connectionState(nodeId) == ConnectionState.DISCONNECTED;
-            } catch (IllegalStateException ignored) {
-                return true;
-            }
-        }
-
         /**
          * Add a metadata request to the list of sends if we can make one
          */
@@ -658,7 +650,8 @@ public class NetworkClient implements KafkaClient {
                 return requestTimeoutMs;
             }
 
-            if (lastConnectAttemptNodeId != null && !isConnectionClosed(lastConnectAttemptNodeId)) {
+            if (lastConnectAttemptNodeId != null &&
+                !connectionStates.isDisconnected(lastConnectAttemptNodeId)) {
                 long timeUntilNextConnectAttemptMs =
                         lastConnectAttemptForMetadataRequestMs + reconnectBackoffMs - now;
                 if (timeUntilNextConnectAttemptMs > 0) {

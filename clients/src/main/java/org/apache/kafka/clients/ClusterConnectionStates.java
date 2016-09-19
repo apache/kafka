@@ -115,6 +115,15 @@ final class ClusterConnectionStates {
     }
 
     /**
+     * Return true if a we have no connection or connection attempt to the specific node id
+     * @param id The id of the connection to check
+     */
+    public boolean isDisconnected(String id) {
+        NodeConnectionState state = nodeState.get(id);
+        return state != null && state.state == ConnectionState.DISCONNECTED;
+    }
+
+    /**
      * Remove the given node from the tracked connection states. The main difference between this and `disconnected`
      * is the impact on `connectionDelay`: it will be 0 after this call whereas `reconnectBackoffMs` will be taken
      * into account after `disconnected` is called.
