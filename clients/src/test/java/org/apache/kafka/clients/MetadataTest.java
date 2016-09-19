@@ -115,6 +115,20 @@ public class MetadataTest {
         now += largerOfBackoffAndExpire;
         assertEquals(0, metadata.timeToNextUpdate(now));
         assertEquals(0, metadata.timeToNextUpdate(now + 1));
+    }
+
+    @Test
+    public void testTimeToNextUpdate() {
+        checkTimeToNextUpdate(100, 1000);
+        checkTimeToNextUpdate(1000, 100);
+        checkTimeToNextUpdate(0, 0);
+        checkTimeToNextUpdate(0, 100);
+        checkTimeToNextUpdate(100, 0);
+    }
+
+    @Test
+    public void testTimeToNextUpdate_RetryBackoff() {
+        long now = 10000;
 
         // lastRefreshMs updated to now.
         metadata.failedUpdate(now);
@@ -131,21 +145,23 @@ public class MetadataTest {
         // It should return 0 to let next try.
         assertEquals(0, metadata.timeToNextUpdate(now));
         assertEquals(0, metadata.timeToNextUpdate(now + 1));
+    }
 
-        metadata.update(Cluster.empty(), now);
+    @Test
+    public void testTimeToNextUpdate_OverwriteBackoff() {
+        long now = 10000;
 
         // New topic added to fetch set and update requested. It should allow immediate update.
+        metadata.update(Cluster.empty(), now);
         metadata.add("new-topic");
         metadata.requestUpdate();
         assertEquals(0, metadata.timeToNextUpdate(now));
 
-        metadata.update(Cluster.empty(), now);
-        assertEquals(largerOfBackoffAndExpire, metadata.timeToNextUpdate(now));
-
         // Even though setTopics called, immediate update isn't necessary if the new topic set isn't
         // containing a new topic,
+        metadata.update(Cluster.empty(), now);
         metadata.setTopics(metadata.topics());
-        assertEquals(largerOfBackoffAndExpire, metadata.timeToNextUpdate(now));
+        assertEquals(metadataExpireMs, metadata.timeToNextUpdate(now));
 
         // If the new set of topics containing a new topic then it should allow immediate update.
         metadata.setTopics(Collections.singletonList("another-new-topic"));
@@ -162,15 +178,6 @@ public class MetadataTest {
         metadata.needMetadataForAllTopics(true);
         metadata.requestUpdate();
         assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now));
-    }
-
-    @Test
-    public void testTimeToNextUpdate() {
-        checkTimeToNextUpdate(100, 1000);
-        checkTimeToNextUpdate(1000, 100);
-        checkTimeToNextUpdate(0, 0);
-        checkTimeToNextUpdate(0, 100);
-        checkTimeToNextUpdate(100, 0);
     }
 
     /**
