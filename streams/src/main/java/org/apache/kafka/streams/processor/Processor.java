@@ -38,7 +38,7 @@ public interface Processor<K, V> {
 
     /**
      * Process the record with the given key and value.
-     * 
+     *
      * @param key the key for the record
      * @param value the value for the record
      */

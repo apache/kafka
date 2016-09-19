@@ -514,20 +514,29 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 this.nextAutoCommitDeadline = now + retryBackoffMs;
             } else if (now >= nextAutoCommitDeadline) {
                 this.nextAutoCommitDeadline = now + autoCommitIntervalMs;
-                commitOffsetsAsync(subscriptions.allConsumed(), new OffsetCommitCallback() {
-                    @Override
-                    public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
-                        if (exception != null) {
-                            log.warn("Auto offset commit failed for group {}: {}", groupId, exception.getMessage());
-                            if (exception instanceof RetriableException)
-                                nextAutoCommitDeadline = Math.min(time.milliseconds() + retryBackoffMs, nextAutoCommitDeadline);
-                        } else {
-                            log.debug("Completed autocommit of offsets {} for group {}", offsets, groupId);
-                        }
-                    }
-                });
+                doAutoCommitOffsetsAsync();
             }
         }
+    }
+
+    public void maybeAutoCommitOffsetsNow() {
+        if (autoCommitEnabled && !coordinatorUnknown())
+            doAutoCommitOffsetsAsync();
+    }
+
+    private void doAutoCommitOffsetsAsync() {
+        commitOffsetsAsync(subscriptions.allConsumed(), new OffsetCommitCallback() {
+            @Override
+            public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+                if (exception != null) {
+                    log.warn("Auto offset commit failed for group {}: {}", groupId, exception.getMessage());
+                    if (exception instanceof RetriableException)
+                        nextAutoCommitDeadline = Math.min(time.milliseconds() + retryBackoffMs, nextAutoCommitDeadline);
+                } else {
+                    log.debug("Completed autocommit of offsets {} for group {}", offsets, groupId);
+                }
+            }
+        });
     }
 
     private void maybeAutoCommitOffsetsSync() {
@@ -807,7 +816,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         public void invoke() {
-            callback.onComplete(offsets, exception);
+            if (callback != null)
+                callback.onComplete(offsets, exception);
         }
     }
 

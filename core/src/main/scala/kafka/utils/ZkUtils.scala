@@ -41,6 +41,7 @@ import scala.collection._
 
 object ZkUtils {
   val ConsumersPath = "/consumers"
+  val ClusterIdPath = "/cluster/id"
   val BrokerIdsPath = "/brokers/ids"
   val BrokerTopicsPath = "/brokers/topics"
   val ControllerPath = "/controller"
@@ -117,6 +118,9 @@ object ZkUtils {
 
   def getEntityConfigPath(entityType: String, entity: String): String =
     getEntityConfigRootPath(entityType) + "/" + entity
+
+  def getEntityConfigPath(entityPath: String): String =
+    ZkUtils.EntityConfigPath + "/" + entityPath
 
   def getDeleteTopicPath(topic: String): String =
     DeleteTopicsPath + "/" + topic
@@ -206,6 +210,35 @@ class ZkUtils(val zkClient: ZkClient,
     readDataMaybeNull(ControllerPath)._1 match {
       case Some(controller) => KafkaController.parseControllerId(controller)
       case None => throw new KafkaException("Controller doesn't exist")
+    }
+  }
+
+  /* Represents a cluster identifier. Stored in Zookeeper in JSON format: {"version" -> "1", "id" -> id } */
+  object ClusterId {
+
+    def toJson(id: String) = {
+      val jsonMap = Map("version" -> "1", "id" -> id)
+      Json.encode(jsonMap)
+    }
+
+    def fromJson(clusterIdJson: String): String = {
+      Json.parseFull(clusterIdJson).map { m =>
+        val clusterIdMap = m.asInstanceOf[Map[String, Any]]
+        clusterIdMap.get("id").get.asInstanceOf[String]
+      }.getOrElse(throw new KafkaException(s"Failed to parse the cluster id json $clusterIdJson"))
+    }
+  }
+
+  def getClusterId: Option[String] =
+    readDataMaybeNull(ClusterIdPath)._1.map(ClusterId.fromJson)
+
+  def createOrGetClusterId(proposedClusterId: String): String = {
+    try {
+      createPersistentPath(ClusterIdPath, ClusterId.toJson(proposedClusterId))
+      proposedClusterId
+    } catch {
+      case e: ZkNodeExistsException =>
+        getClusterId.getOrElse(throw new KafkaException("Failed to get cluster id from Zookeeper. This can only happen if /cluster/id is deleted from Zookeeper."))
     }
   }
 

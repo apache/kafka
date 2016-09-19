@@ -17,9 +17,11 @@
 
 package kafka.utils
 
-import java.util.Arrays
+import java.util.{Arrays, UUID}
 import java.util.concurrent.locks.ReentrantLock
 import java.nio.ByteBuffer
+import java.util.regex.Pattern
+
 import org.apache.log4j.Logger
 import org.scalatest.junit.JUnitSuite
 import org.junit.Assert._
@@ -31,6 +33,7 @@ import org.apache.kafka.common.utils.Utils
 class UtilsTest extends JUnitSuite {
 
   private val logger = Logger.getLogger(classOf[UtilsTest])
+  val clusterIdPattern = Pattern.compile("[a-zA-Z0-9_\\-]+")
 
   @Test
   def testSwallow() {
@@ -139,7 +142,6 @@ class UtilsTest extends JUnitSuite {
     }
   }
 
-
   @Test
   def testInLock() {
     val lock = new ReentrantLock()
@@ -151,4 +153,26 @@ class UtilsTest extends JUnitSuite {
     assertFalse("Should be unlocked", lock.isLocked)
   }
 
+  @Test
+  def testUrlSafeBase64EncodeUUID() {
+
+    // Test a UUID that has no + or / characters in base64 encoding [a149b4a3-06e1-4b49-a8cb-8a9c4a59fa46 ->(base64)-> oUm0owbhS0moy4qcSln6Rg==]
+    val clusterId1 = CoreUtils.urlSafeBase64EncodeNoPadding(CoreUtils.getBytesFromUuid(UUID.fromString("a149b4a3-06e1-4b49-a8cb-8a9c4a59fa46")))
+    assertEquals(clusterId1, "oUm0owbhS0moy4qcSln6Rg")
+    assertEquals(clusterId1.length, 22)
+    assertTrue(clusterIdPattern.matcher(clusterId1).matches())
+
+    // Test a UUID that has + or / characters in base64 encoding [d418ec02-277e-4853-81e6-afe30259daec ->(base64)-> 1BjsAid+SFOB5q/jAlna7A==]
+    val clusterId2 = CoreUtils.urlSafeBase64EncodeNoPadding(CoreUtils.getBytesFromUuid(UUID.fromString("d418ec02-277e-4853-81e6-afe30259daec")))
+    assertEquals(clusterId2, "1BjsAid-SFOB5q_jAlna7A")
+    assertEquals(clusterId2.length, 22)
+    assertTrue(clusterIdPattern.matcher(clusterId2).matches())
+  }
+
+  @Test
+  def testGenerateUuidAsBase64() {
+    val clusterId = CoreUtils.generateUuidAsBase64()
+    assertEquals(clusterId.length, 22)
+    assertTrue(clusterIdPattern.matcher(clusterId).matches())
+  }
 }

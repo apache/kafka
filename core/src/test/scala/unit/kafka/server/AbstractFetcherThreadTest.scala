@@ -19,15 +19,16 @@ package kafka.server
 
 import com.yammer.metrics.Metrics
 import kafka.cluster.BrokerEndPoint
-import kafka.common.TopicAndPartition
 import kafka.message.ByteBufferMessageSet
 import kafka.server.AbstractFetcherThread.{FetchRequest, PartitionData}
 import kafka.utils.TestUtils
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.junit.Assert.{assertFalse, assertTrue}
 import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
+import scala.collection.Map
 
 class AbstractFetcherThreadTest {
 
@@ -39,7 +40,7 @@ class AbstractFetcherThreadTest {
 
   @Test
   def testMetricsRemovedOnShutdown() {
-    val partition = new TopicAndPartition("topic", 0)
+    val partition = new TopicPartition("topic", 0)
     val fetcherThread = new DummyFetcherThread("dummy", "client", new BrokerEndPoint(0, "localhost", 9092))
 
     fetcherThread.start()
@@ -60,7 +61,7 @@ class AbstractFetcherThreadTest {
 
   @Test
   def testConsumerLagRemovedWithPartition() {
-    val partition = new TopicAndPartition("topic", 0)
+    val partition = new TopicPartition("topic", 0)
     val fetcherThread = new DummyFetcherThread("dummy", "client", new BrokerEndPoint(0, "localhost", 9092))
 
     fetcherThread.start()
@@ -83,10 +84,10 @@ class AbstractFetcherThreadTest {
 
   private def allMetricsNames = Metrics.defaultRegistry().allMetrics().asScala.keySet.map(_.getName)
 
-  class DummyFetchRequest(val offsets: collection.Map[TopicAndPartition, Long]) extends FetchRequest {
+  class DummyFetchRequest(val offsets: collection.Map[TopicPartition, Long]) extends FetchRequest {
     override def isEmpty: Boolean = offsets.isEmpty
 
-    override def offset(topicAndPartition: TopicAndPartition): Long = offsets(topicAndPartition)
+    override def offset(topicAndPartition: TopicPartition): Long = offsets(topicAndPartition)
   }
 
   class DummyPartitionData extends PartitionData {
@@ -107,21 +108,19 @@ class AbstractFetcherThreadTest {
     type REQ = DummyFetchRequest
     type PD = PartitionData
 
-    override def processPartitionData(topicAndPartition: TopicAndPartition,
+    override def processPartitionData(topicAndPartition: TopicPartition,
                                       fetchOffset: Long,
                                       partitionData: PartitionData): Unit = {}
 
-    override def handleOffsetOutOfRange(topicAndPartition: TopicAndPartition): Long = 0L
+    override def handleOffsetOutOfRange(topicAndPartition: TopicPartition): Long = 0L
 
-    override def handlePartitionsWithErrors(partitions: Iterable[TopicAndPartition]): Unit = {}
+    override def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]): Unit = {}
 
-    override protected def fetch(fetchRequest: DummyFetchRequest): collection.Map[TopicAndPartition, DummyPartitionData] = {
-      fetchRequest.offsets.mapValues(_ => new DummyPartitionData)
-    }
+    override protected def fetch(fetchRequest: DummyFetchRequest): Seq[(TopicPartition, DummyPartitionData)] =
+      fetchRequest.offsets.mapValues(_ => new DummyPartitionData).toSeq
 
-    override protected def buildFetchRequest(partitionMap: collection.Map[TopicAndPartition, PartitionFetchState]): DummyFetchRequest = {
-      new DummyFetchRequest(partitionMap.mapValues(_.offset))
-    }
+    override protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): DummyFetchRequest =
+      new DummyFetchRequest(partitionMap.map { case (k, v) => (k, v.offset) }.toMap)
   }
 
 }

@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.junit.Test;
 
@@ -60,7 +60,7 @@ public class PunctuationQueueTest {
         assertEquals(2, processor.punctuatedAt.size());
     }
 
-    private static class TestProcessor implements Processor<String, String> {
+    private static class TestProcessor extends AbstractProcessor<String, String> {
 
         public final ArrayList<Long> punctuatedAt = new ArrayList<>();
 

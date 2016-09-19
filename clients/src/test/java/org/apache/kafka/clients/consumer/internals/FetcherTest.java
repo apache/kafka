@@ -31,7 +31,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidTopicException;
-import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -64,7 +63,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 
 import static java.util.Collections.singleton;
 import static org.junit.Assert.assertEquals;
@@ -80,6 +78,7 @@ public class FetcherTest {
     private final String metricGroup = "consumer" + groupId + "-fetch-manager-metrics";
     private TopicPartition tp = new TopicPartition(topicName, 0);
     private int minBytes = 1;
+    private int maxBytes = Integer.MAX_VALUE;
     private int maxWaitMs = 0;
     private int fetchSize = 1000;
     private long retryBackoffMs = 100;
@@ -123,15 +122,23 @@ public class FetcherTest {
 
     @Test
     public void testFetchNormal() {
-        List<ConsumerRecord<byte[], byte[]>> records;
         subscriptions.assignFromUser(singleton(tp));
         subscriptions.seek(tp, 0);
 
         // normal fetch
         fetcher.sendFetches();
+        assertTrue(fetcher.hasInFlightFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
         client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NONE.code(), 100L, 0));
         consumerClient.poll(0);
-        records = fetcher.fetchedRecords().get(tp);
+        assertTrue(fetcher.hasCompletedFetches());
+        assertFalse(fetcher.hasInFlightFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetcher.fetchedRecords();
+        assertTrue(partitionRecords.containsKey(tp));
+
+        List<ConsumerRecord<byte[], byte[]>> records = partitionRecords.get(tp);
         assertEquals(3, records.size());
         assertEquals(4L, subscriptions.position(tp).longValue()); // this is the next fetching position
         long offset = 1;
@@ -139,6 +146,24 @@ public class FetcherTest {
             assertEquals(offset, record.offset());
             offset += 1;
         }
+    }
+
+    @Test
+    public void testFetchError() {
+        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.seek(tp, 0);
+
+        fetcher.sendFetches();
+        assertTrue(fetcher.hasInFlightFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NOT_LEADER_FOR_PARTITION.code(), 100L, 0));
+        consumerClient.poll(0);
+        assertTrue(fetcher.hasCompletedFetches());
+        assertFalse(fetcher.hasInFlightFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetcher.fetchedRecords();
+        assertFalse(partitionRecords.containsKey(tp));
     }
 
     private MockClient.RequestMatcher matchesOffset(final TopicPartition tp, final long offset) {
@@ -287,25 +312,6 @@ public class FetcherTest {
         assertEquals(15L, consumerRecords.get(0).offset());
         assertEquals(20L, consumerRecords.get(1).offset());
         assertEquals(30L, consumerRecords.get(2).offset());
-    }
-
-    @Test(expected = RecordTooLargeException.class)
-    public void testFetchRecordTooLarge() {
-        subscriptions.assignFromUser(singleton(tp));
-        subscriptions.seek(tp, 0);
-
-        // prepare large record
-        MemoryRecords records = MemoryRecords.emptyRecords(ByteBuffer.allocate(1024), CompressionType.NONE);
-        byte[] bytes = new byte[this.fetchSize];
-        new Random().nextBytes(bytes);
-        records.append(1L, 0L, null, bytes);
-        records.close();
-
-        // resize the limit of the buffer to pretend it is only fetch-size large
-        fetcher.sendFetches();
-        client.prepareResponse(fetchResponse((ByteBuffer) records.buffer().limit(this.fetchSize), Errors.NONE.code(), 100L, 0));
-        consumerClient.poll(0);
-        fetcher.fetchedRecords();
     }
 
     @Test
@@ -668,7 +674,7 @@ public class FetcherTest {
         }
 
         MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(error, topic, false, partitionsMetadata);
-        return new MetadataResponse(cluster.nodes(), MetadataResponse.NO_CONTROLLER_ID, Arrays.asList(topicMetadata));
+        return new MetadataResponse(cluster.nodes(), null, MetadataResponse.NO_CONTROLLER_ID, Arrays.asList(topicMetadata));
     }
 
     private Fetcher<byte[], byte[]> createFetcher(SubscriptionState subscriptions,
@@ -695,6 +701,7 @@ public class FetcherTest {
                                                int maxPollRecords) {
         return new Fetcher<>(consumerClient,
                 minBytes,
+                maxBytes,
                 maxWaitMs,
                 fetchSize,
                 maxPollRecords,

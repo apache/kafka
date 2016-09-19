@@ -14,6 +14,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 
@@ -47,8 +48,7 @@ public class WrappingStoreProvider implements StateStoreProvider {
             allStores.addAll(stores);
         }
         if (allStores.isEmpty()) {
-            throw new InvalidStateStoreException("Store " + storeName + " is currently "
-                                                 + "unavailable");
+            throw new InvalidStateStoreException("the state store, " + storeName + ", may have migrated to another instance.");
         }
         return allStores;
     }

@@ -35,6 +35,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -64,21 +65,24 @@ public class ProcessorStateManager {
     private final Map<String, String> sourceStoreToSourceTopic;
     private final TaskId taskId;
     private final StateDirectory stateDirectory;
+    private final Map<StateStore, ProcessorNode> stateStoreProcessorNodeMap;
 
     /**
      * @throws IOException if any error happens while creating or locking the state directory
      */
     public ProcessorStateManager(String applicationId, TaskId taskId, Collection<TopicPartition> sources, Consumer<byte[], byte[]> restoreConsumer, boolean isStandby,
-        StateDirectory stateDirectory, final Map<String, String> sourceStoreToSourceTopic) throws IOException {
+                                 StateDirectory stateDirectory, final Map<String, String> sourceStoreToSourceTopic,
+                                 final Map<StateStore, ProcessorNode> stateStoreProcessorNodeMap) throws IOException {
         this.applicationId = applicationId;
         this.defaultPartition = taskId.partition;
         this.taskId = taskId;
         this.stateDirectory = stateDirectory;
+        this.stateStoreProcessorNodeMap = stateStoreProcessorNodeMap;
         this.partitionForTopic = new HashMap<>();
         for (TopicPartition source : sources) {
             this.partitionForTopic.put(source.topic(), source);
         }
-        this.stores = new HashMap<>();
+        this.stores = new LinkedHashMap<>();
         this.loggingEnabled = new HashSet<>();
         this.restoreConsumer = restoreConsumer;
         this.restoredOffsets = new HashMap<>();
@@ -89,7 +93,7 @@ public class ProcessorStateManager {
         this.sourceStoreToSourceTopic = sourceStoreToSourceTopic;
 
         if (!stateDirectory.lock(taskId, 5)) {
-            throw new IOException("Failed to lock the state directory: " + baseDir.getCanonicalPath());
+            throw new IOException(String.format("task [%s] Failed to lock the state directory: %s", taskId, baseDir.getCanonicalPath()));
         }
 
         // load the checkpoint information
@@ -117,11 +121,11 @@ public class ProcessorStateManager {
     public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
 
         if (store.name().equals(CHECKPOINT_FILE_NAME)) {
-            throw new IllegalArgumentException("Illegal store name: " + CHECKPOINT_FILE_NAME);
+            throw new IllegalArgumentException(String.format("task [%s]  Illegal store name: %s", taskId, CHECKPOINT_FILE_NAME));
         }
 
         if (this.stores.containsKey(store.name())) {
-            throw new IllegalArgumentException("Store " + store.name() + " has already been registered.");
+            throw new IllegalArgumentException(String.format("task [%s]  Store %s has already been registered.", taskId, store.name()));
         }
 
         if (loggingEnabled) {
@@ -135,7 +139,7 @@ public class ProcessorStateManager {
         } else if (sourceStoreToSourceTopic != null && sourceStoreToSourceTopic.containsKey(store.name())) {
             topic = sourceStoreToSourceTopic.get(store.name());
         } else {
-            throw new IllegalArgumentException("Store is neither built from source topic, nor has a changelog.");
+            throw new IllegalArgumentException(String.format("task [%s]  Store is neither built from source topic, nor has a changelog.", taskId));
         }
 
         // block until the partition is ready for this state changelog topic or time has elapsed
@@ -153,7 +157,7 @@ public class ProcessorStateManager {
 
             List<PartitionInfo> partitionInfos = restoreConsumer.partitionsFor(topic);
             if (partitionInfos == null) {
-                throw new StreamsException("Could not find partition info for topic: " + topic);
+                throw new StreamsException(String.format("task [%s]  Could not find partition info for topic: %s", taskId, topic));
             }
             for (PartitionInfo partitionInfo : partitionInfos) {
                 if (partitionInfo.partition() == partition) {
@@ -164,9 +168,7 @@ public class ProcessorStateManager {
         } while (partitionNotFound && System.currentTimeMillis() < startTime + waitTime);
 
         if (partitionNotFound)
-            throw new StreamsException("Store " + store.name() + "'s change log (" + topic + ") does not contain partition " + partition);
-
-        this.stores.put(store.name(), store);
+            throw new StreamsException(String.format("task [%s]  Store %s's change log (%s) does not contain partition %s", taskId, store.name(), topic, partition));
 
         if (isStandby) {
             if (store.persistent())
@@ -174,6 +176,8 @@ public class ProcessorStateManager {
         } else {
             restoreActiveState(topic, stateRestoreCallback);
         }
+
+        this.stores.put(store.name(), store);
     }
 
     private void restoreActiveState(String topicName, StateRestoreCallback stateRestoreCallback) {
@@ -181,7 +185,7 @@ public class ProcessorStateManager {
 
         // subscribe to the store's partition
         if (!restoreConsumer.subscription().isEmpty()) {
-            throw new IllegalStateException("Restore consumer should have not subscribed to any partitions beforehand");
+            throw new IllegalStateException(String.format("task [%s]  Restore consumer should have not subscribed to any partitions beforehand", taskId));
         }
         TopicPartition storePartition = new TopicPartition(topicName, getPartition(topicName));
         restoreConsumer.assign(Collections.singletonList(storePartition));
@@ -217,7 +221,7 @@ public class ProcessorStateManager {
                 } else if (restoreConsumer.position(storePartition) > endOffset) {
                     // For a logging enabled changelog (no offset limit),
                     // the log end offset should not change while restoring since it is only written by this thread.
-                    throw new IllegalStateException("Log end offset should not change while restoring");
+                    throw new IllegalStateException(String.format("task [%s] Log end offset should not change while restoring", taskId));
                 }
             }
 
@@ -288,11 +292,16 @@ public class ProcessorStateManager {
         return stores.get(name);
     }
 
-    public void flush() {
+    public void flush(final InternalProcessorContext context) {
         if (!this.stores.isEmpty()) {
-            log.debug("Flushing stores.");
-            for (StateStore store : this.stores.values())
+            log.debug("task [{}] Flushing stores.", taskId);
+            for (StateStore store : this.stores.values()) {
+                final ProcessorNode processorNode = stateStoreProcessorNodeMap.get(store);
+                if (processorNode != null) {
+                    context.setCurrentNode(processorNode);
+                }
                 store.flush();
+            }
         }
     }
 
@@ -304,9 +313,9 @@ public class ProcessorStateManager {
             // attempting to flush and close the stores, just in case they
             // are not closed by a ProcessorNode yet
             if (!stores.isEmpty()) {
-                log.debug("Closing stores.");
+                log.debug("task [{}] Closing stores.", taskId);
                 for (Map.Entry<String, StateStore> entry : stores.entrySet()) {
-                    log.debug("Closing storage engine {}", entry.getKey());
+                    log.debug("task [{}} Closing storage engine {}", taskId, entry.getKey());
                     entry.getValue().flush();
                     entry.getValue().close();
                 }

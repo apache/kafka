@@ -30,6 +30,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -49,8 +50,8 @@ public class RequestResponseTest {
                 createControlledShutdownRequest(),
                 createControlledShutdownResponse(),
                 createControlledShutdownRequest().getErrorResponse(1, new UnknownServerException()),
-                createFetchRequest(),
-                createFetchRequest().getErrorResponse(1, new UnknownServerException()),
+                createFetchRequest(3),
+                createFetchRequest(3).getErrorResponse(3, new UnknownServerException()),
                 createFetchResponse(),
                 createHeartBeatRequest(),
                 createHeartBeatRequest().getErrorResponse(0, new UnknownServerException()),
@@ -73,8 +74,8 @@ public class RequestResponseTest {
                 createListOffsetResponse(),
                 MetadataRequest.allTopics(),
                 createMetadataRequest(Arrays.asList("topic1")),
-                createMetadataRequest(Arrays.asList("topic1")).getErrorResponse(1, new UnknownServerException()),
-                createMetadataResponse(1),
+                createMetadataRequest(Arrays.asList("topic1")).getErrorResponse(2, new UnknownServerException()),
+                createMetadataResponse(2),
                 createOffsetCommitRequest(2),
                 createOffsetCommitRequest(2).getErrorResponse(2, new UnknownServerException()),
                 createOffsetCommitResponse(),
@@ -112,9 +113,12 @@ public class RequestResponseTest {
         for (AbstractRequestResponse req : requestResponseList)
             checkSerialization(req, null);
 
-        createMetadataResponse(0);
-        createMetadataRequest(Arrays.asList("topic1")).getErrorResponse(0, new UnknownServerException());
-        checkSerialization(createFetchRequest().getErrorResponse(0, new UnknownServerException()), 0);
+
+        checkOlderFetchVersions();
+        checkSerialization(createMetadataResponse(0), 0);
+        checkSerialization(createMetadataResponse(1), 1);
+        checkSerialization(createMetadataRequest(Arrays.asList("topic1")).getErrorResponse(0, new UnknownServerException()), 0);
+        checkSerialization(createMetadataRequest(Arrays.asList("topic1")).getErrorResponse(1, new UnknownServerException()), 1);
         checkSerialization(createOffsetCommitRequest(0), 0);
         checkSerialization(createOffsetCommitRequest(0).getErrorResponse(0, new UnknownServerException()), 0);
         checkSerialization(createOffsetCommitRequest(1), 1);
@@ -125,6 +129,14 @@ public class RequestResponseTest {
         checkSerialization(createUpdateMetadataRequest(1, null), 1);
         checkSerialization(createUpdateMetadataRequest(1, "rack1"), 1);
         checkSerialization(createUpdateMetadataRequest(1, null).getErrorResponse(1, new UnknownServerException()), 1);
+    }
+
+    private void checkOlderFetchVersions() throws Exception {
+        int latestVersion = ProtoUtils.latestVersion(ApiKeys.FETCH.id);
+        for (int i = 0; i < latestVersion; ++i) {
+            checkSerialization(createFetchRequest(i).getErrorResponse(i, new UnknownServerException()), i);
+            checkSerialization(createFetchRequest(i), i);
+        }
     }
 
     private void checkSerialization(AbstractRequestResponse req, Integer version) throws Exception {
@@ -217,11 +229,15 @@ public class RequestResponseTest {
         return new GroupCoordinatorResponse(Errors.NONE.code(), new Node(10, "host1", 2014));
     }
 
-    private AbstractRequest createFetchRequest() {
-        Map<TopicPartition, FetchRequest.PartitionData> fetchData = new HashMap<>();
+    @SuppressWarnings("deprecation")
+    private AbstractRequest createFetchRequest(int version) {
+        LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = new LinkedHashMap<>();
         fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, 1000000));
         fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, 1000000));
-        return new FetchRequest(-1, 100, 100000, fetchData);
+        if (version < 3)
+            return new FetchRequest(100, 100000, fetchData);
+        else
+            return new FetchRequest(100, 1000, 1000000, fetchData);
     }
 
     private AbstractRequestResponse createFetchResponse() {
@@ -315,7 +331,7 @@ public class RequestResponseTest {
         allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, "topic2", false,
                 Collections.<MetadataResponse.PartitionMetadata>emptyList()));
 
-        return new MetadataResponse(Arrays.asList(node), MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata, version);
+        return new MetadataResponse(Arrays.asList(node), null, MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata, version);
     }
 
     private AbstractRequest createOffsetCommitRequest(int version) {
