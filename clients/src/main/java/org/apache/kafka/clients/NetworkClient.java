@@ -668,8 +668,8 @@ public class NetworkClient implements KafkaClient {
                 return reconnectBackoffMs;
             }
 
-            // connected, but can't send more
-            // In case, we just need to wait for a network event to let us know the selected
+            // connected, but can't send more OR connecting
+            // In either case, we just need to wait for a network event to let us know the selected
             // connection might be usable again.
             return Long.MAX_VALUE;
         }
