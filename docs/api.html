@@ -19,7 +19,9 @@ Apache Kafka includes new java clients (in the org.apache.kafka.clients package)
 
 <h3><a id="producerapi" href="#producerapi">2.1 Producer API</a></h3>
 
-We encourage all new development to use the new Java producer. This client is production tested and generally both faster and more fully featured than the previous Scala client. You can use this client by adding a dependency on the client jar using the following example maven co-ordinates (you can change the version numbers with new releases):
+We recommend the new Java producer for all new development. The old Scala producers have been deprecated and will be removed in a future major release.
+The new Java producer is production tested and generally faster and more fully featured than the previous Scala clients. You can use this client by adding a dependency on
+the client jar using the following example maven co-ordinates (you can change the version numbers with new releases):
 <pre>
 	&lt;dependency&gt;
 	    &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
@@ -38,14 +40,28 @@ here</a>.
 
 <h3><a id="consumerapi" href="#consumerapi">2.2 Consumer API</a></h3>
 
-As of the 0.9.0 release we have added a new Java consumer to replace our existing high-level ZooKeeper-based consumer
-and low-level consumer APIs. This client is considered beta quality. To ensure a smooth upgrade path
-for users, we still maintain the old 0.8 consumer clients that continue to work on an 0.9 Kafka cluster.
+We recommend the new Java consumer for all new development. The new Java consumer replaces the high-level ZooKeeper-based consumer and
+low-level consumer APIs (also known as old Scala consumers).
 
-In the following sections we introduce both the old 0.8 consumer APIs (both high-level ConsumerConnector and low-level SimpleConsumer)
-and the new Java consumer API respectively.
+To ensure a smooth upgrade path, the old Scala consumers are still maintained (although lacking features like security) and continue to work
+with the current Kafka clusters. The current plan is to deprecate them in the release after 0.10.1.0 and to remove them in a future major release.
 
-<h4><a id="highlevelconsumerapi" href="#highlevelconsumerapi">2.2.1 Old High Level Consumer API</a></h4>
+In the following sections we introduce new Java consumer API and the old Scala consumer APIs (both high-level ConsumerConnector and low-level SimpleConsumer).
+
+<h4><a id="newconsumerapi" href="#newconsumerapi">2.2.1 New Consumer API</a></h4>
+This new unified consumer API removes the distinction between the 0.8 high-level and low-level consumer APIs. You can use this client by adding a dependency on the client jar using the following example maven co-ordinates (you can change the version numbers with new releases):
+<pre>
+	&lt;dependency&gt;
+	    &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
+	    &lt;artifactId&gt;kafka-clients&lt;/artifactId&gt;
+	    &lt;version&gt;0.10.0.0&lt;/version&gt;
+	&lt;/dependency&gt;
+</pre>
+
+Examples showing how to use the consumer are given in the
+<a href="http://kafka.apache.org/0100/javadoc/index.html?org/apache/kafka/clients/consumer/KafkaConsumer.html" title="Kafka 0.10.0 Javadoc">javadocs</a>.
+
+<h4><a id="highlevelconsumerapi" href="#highlevelconsumerapi">2.2.2 Old High Level Consumer API</a></h4>
 <pre>
 class Consumer {
   /**
@@ -117,7 +133,7 @@ public interface kafka.javaapi.consumer.ConsumerConnector {
 </pre>
 You can follow
 <a href="https://cwiki.apache.org/confluence/display/KAFKA/Consumer+Group+Example" title="Kafka 0.8 consumer example">this example</a> to learn how to use the high level consumer api.
-<h4><a id="simpleconsumerapi" href="#simpleconsumerapi">2.2.2 Old Simple Consumer API</a></h4>
+<h4><a id="simpleconsumerapi" href="#simpleconsumerapi">2.2.3 Old Simple Consumer API</a></h4>
 <pre>
 class kafka.javaapi.consumer.SimpleConsumer {
   /**
@@ -150,21 +166,7 @@ class kafka.javaapi.consumer.SimpleConsumer {
   public void close();
 }
 </pre>
-For most applications, the high level consumer Api is good enough. Some applications want features not exposed to the high level consumer yet (e.g., set initial offset when restarting the consumer). They can instead use our low level SimpleConsumer Api. The logic will be a bit more complicated and you can follow the example in
-<a href="https://cwiki.apache.org/confluence/display/KAFKA/0.8.0+SimpleConsumer+Example" title="Kafka 0.8 SimpleConsumer example">here</a>.
-
-<h4><a id="newconsumerapi" href="#newconsumerapi">2.2.3 New Consumer API</a></h4>
-This new unified consumer API removes the distinction between the 0.8 high-level and low-level consumer APIs. You can use this client by adding a dependency on the client jar using the following example maven co-ordinates (you can change the version numbers with new releases):
-<pre>
-	&lt;dependency&gt;
-	    &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
-	    &lt;artifactId&gt;kafka-clients&lt;/artifactId&gt;
-	    &lt;version&gt;0.10.0.0&lt;/version&gt;
-	&lt;/dependency&gt;
-</pre>
-
-Examples showing how to use the consumer are given in the
-<a href="http://kafka.apache.org/0100/javadoc/index.html?org/apache/kafka/clients/consumer/KafkaConsumer.html" title="Kafka 0.9.0 Javadoc">javadocs</a>.
+For most applications, the new Java Consumer API is the best option and it's the API we intend to support going forward. However, if you need to use the SimpleConsumer API, the logic will be a bit more complicated and you can follow the example <a href="https://cwiki.apache.org/confluence/display/KAFKA/0.8.0+SimpleConsumer+Example" title="Kafka 0.8 SimpleConsumer example">here</a>.
 
 <h3><a id="streamsapi" href="#streamsapi">2.3 Streams API</a></h3>
 
