@@ -147,16 +147,23 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         }
 
-        if (configs.containsKey(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG)) {
-            internalTopicManager = new InternalTopicManager(
-                    (String) configs.get(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG),
-                    configs.containsKey(StreamsConfig.REPLICATION_FACTOR_CONFIG) ? (Integer) configs.get(StreamsConfig.REPLICATION_FACTOR_CONFIG) : 1,
-                    configs.containsKey(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG) ?
+//        if (configs.containsKey(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG)) {
+//            internalTopicManager = new InternalTopicManager(
+//                    (String) configs.get(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG),
+//                    configs.containsKey(StreamsConfig.REPLICATION_FACTOR_CONFIG) ? (Integer) configs.get(StreamsConfig.REPLICATION_FACTOR_CONFIG) : 1,
+//                    configs.containsKey(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG) ?
+//                            (Long) configs.get(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG)
+//                            : WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT);
+//        } else {
+//            log.info("stream-thread [{}] Config '{}' isn't supplied and hence no internal topics will be created.",  streamThread.getName(), StreamsConfig.ZOOKEEPER_CONNECT_CONFIG);
+//        }
+
+        internalTopicManager = new InternalTopicManager(
+                this.streamThread.config,
+                configs.containsKey(StreamsConfig.REPLICATION_FACTOR_CONFIG) ? (Integer) configs.get(StreamsConfig.REPLICATION_FACTOR_CONFIG) : 1,
+                configs.containsKey(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG) ?
                             (Long) configs.get(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG)
                             : WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT);
-        } else {
-            log.info("stream-thread [{}] Config '{}' isn't supplied and hence no internal topics will be created.",  streamThread.getName(), StreamsConfig.ZOOKEEPER_CONNECT_CONFIG);
-        }
     }
 
     @Override
