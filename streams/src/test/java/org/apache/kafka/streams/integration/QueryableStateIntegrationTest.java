@@ -573,8 +573,8 @@ public class QueryableStateIntegrationTest {
         final Set<KeyValue<String, Long>> countState = new TreeSet<>(stringLongComparator);
 
         final long timeout = System.currentTimeMillis() + 30000;
-        while (windowState.size() < 5 &&
-            countState.size() < 5 &&
+        while ((windowState.size() < keys.length ||
+            countState.size() < keys.length) &&
             System.currentTimeMillis() < timeout) {
             Thread.sleep(10);
             for (final String key : keys) {
