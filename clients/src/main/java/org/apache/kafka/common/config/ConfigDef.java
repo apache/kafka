@@ -68,7 +68,7 @@ import java.util.Set;
  */
 public class ConfigDef {
 
-    public static final Object NO_DEFAULT_VALUE = new String("");
+    public static final Object NO_DEFAULT_VALUE = "";
 
     private final Map<String, ConfigKey> configKeys = new HashMap<>();
     private final List<String> groups = new LinkedList<>();
@@ -107,7 +107,7 @@ public class ConfigDef {
         if (group != null && !groups.contains(group)) {
             groups.add(group);
         }
-        Object parsedDefault = defaultValue == NO_DEFAULT_VALUE ? NO_DEFAULT_VALUE : parseType(name, defaultValue, type);
+        Object parsedDefault = NO_DEFAULT_VALUE.equals(defaultValue) ? NO_DEFAULT_VALUE : parseType(name, defaultValue, type);
         configKeys.put(name, new ConfigKey(name, type, parsedDefault, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender));
         return this;
     }
@@ -417,7 +417,7 @@ public class ConfigDef {
             if (props.containsKey(key.name)) {
                 value = parseType(key.name, props.get(key.name), key.type);
                 // props map doesn't contain setting, the key is required because no default value specified - its an error
-            } else if (key.defaultValue == NO_DEFAULT_VALUE) {
+            } else if (NO_DEFAULT_VALUE.equals(key.defaultValue)) {
                 throw new ConfigException("Missing required configuration \"" + key.name + "\" which has no default value.");
             } else {
                 // otherwise assign setting its default value
@@ -519,7 +519,7 @@ public class ConfigDef {
             } catch (ConfigException e) {
                 config.addErrorMessage(e.getMessage());
             }
-        } else if (key.defaultValue == NO_DEFAULT_VALUE) {
+        } else if (NO_DEFAULT_VALUE.equals(key.defaultValue)) {
             config.addErrorMessage("Missing required configuration \"" + key.name + "\" which has no default value.");
         } else {
             value = key.defaultValue;
@@ -893,7 +893,7 @@ public class ConfigDef {
         }
 
         public boolean hasDefault() {
-            return this.defaultValue != NO_DEFAULT_VALUE;
+            return !NO_DEFAULT_VALUE.equals(this.defaultValue);
         }
     }
 
