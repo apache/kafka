@@ -12,10 +12,12 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.test;
 
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
+import org.apache.kafka.streams.state.internals.StateStoreProvider;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -25,10 +27,19 @@ import java.util.Map;
 public class StateStoreProviderStub implements StateStoreProvider {
 
     private final Map<String, StateStore> stores = new HashMap<>();
+    private final boolean throwException;
+
+    public StateStoreProviderStub(final boolean throwException) {
+
+        this.throwException = throwException;
+    }
 
     @SuppressWarnings("unchecked")
     @Override
     public <T> List<T> stores(final String storeName, final QueryableStoreType<T> queryableStoreType) {
+        if (throwException) {
+            throw new InvalidStateStoreException("store is unavailable");
+        }
         if (stores.containsKey(storeName) && queryableStoreType.accepts(stores.get(storeName))) {
             return (List<T>) Collections.singletonList(stores.get(storeName));
         }

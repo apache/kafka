@@ -210,6 +210,13 @@ public class StreamsMetadataStateTest {
     }
 
     @Test
+    public void shouldReturnNotAvailableWhenClusterIsEmpty() throws Exception {
+        discovery.onChange(Collections.<HostInfo, Set<TopicPartition>>emptyMap(), Cluster.empty());
+        final StreamsMetadata result = discovery.getMetadataWithKey("table-one", "a", Serdes.String().serializer());
+        assertEquals(StreamsMetadata.NOT_AVAILABLE, result);
+    }
+
+    @Test
     public void shouldGetInstanceWithKeyWithMergedStreams() throws Exception {
         final TopicPartition topic2P2 = new TopicPartition("topic-two", 2);
         hostToPartitions.put(hostTwo, Utils.mkSet(topic2P0, topic1P1, topic2P2));

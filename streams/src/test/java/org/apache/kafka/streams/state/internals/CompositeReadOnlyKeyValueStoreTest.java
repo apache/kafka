@@ -18,6 +18,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.test.StateStoreProviderStub;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -42,8 +43,8 @@ public class CompositeReadOnlyKeyValueStoreTest {
     @SuppressWarnings("unchecked")
     @Before
     public void before() {
-        final StateStoreProviderStub stubProviderOne = new StateStoreProviderStub();
-        stubProviderTwo = new StateStoreProviderStub();
+        final StateStoreProviderStub stubProviderOne = new StateStoreProviderStub(false);
+        stubProviderTwo = new StateStoreProviderStub(false);
 
         stubOneUnderlying = newStoreInstance();
         stubProviderOne.addStore(storeName, stubOneUnderlying);
@@ -148,19 +149,19 @@ public class CompositeReadOnlyKeyValueStoreTest {
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowInvalidStoreExceptionIfNoStoresExistOnGet() throws Exception {
-        noStores().get("anything");
+    public void shouldThrowInvalidStoreExceptionDuringRebalance() throws Exception {
+        rebalancing().get("anything");
     }
 
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowInvalidStoreExceptionIfNoStoresExistOnRange() throws Exception {
-        noStores().range("anything", "something");
+    public void shouldThrowInvalidStoreExceptionOnRangeDuringRebalance() throws Exception {
+        rebalancing().range("anything", "something");
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowInvalidStoreExceptionIfNoStoresExistOnAll() throws Exception {
-        noStores().all();
+    public void shouldThrowInvalidStoreExceptionOnAllDuringRebalance() throws Exception {
+        rebalancing().all();
     }
 
     @Test
@@ -192,8 +193,8 @@ public class CompositeReadOnlyKeyValueStoreTest {
         assertEquals(Long.MAX_VALUE, theStore.approximateNumEntries());
     }
 
-    private CompositeReadOnlyKeyValueStore<Object, Object> noStores() {
-        return new CompositeReadOnlyKeyValueStore<>(new WrappingStoreProvider(Collections.<StateStoreProvider>emptyList()),
+    private CompositeReadOnlyKeyValueStore<Object, Object> rebalancing() {
+        return new CompositeReadOnlyKeyValueStore<>(new WrappingStoreProvider(Collections.<StateStoreProvider>singletonList(new StateStoreProviderStub(true))),
                 QueryableStoreTypes.keyValueStore(), storeName);
     }
 
