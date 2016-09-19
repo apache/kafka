@@ -954,6 +954,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             topics or to the configured groupId
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. invalid groupId or
      *             session timeout, errors deserializing key/value pairs, or any new error cases in future versions)
+     * @throws java.lang.IllegalArgumentException if the timeout value is negative
+     * @throws java.lang.IllegalStateException if the consumer is not subscribed to any topics or manually assigned any
+     *             partitions to consume from
      */
     @Override
     public ConsumerRecords<K, V> poll(long timeout) {
@@ -961,6 +964,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             if (timeout < 0)
                 throw new IllegalArgumentException("Timeout must not be negative");
+
+            if (this.subscriptions.hasNoSubscriptionOrUserAssignment())
+                throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
 
             // poll for new data until the timeout expires
             long start = time.milliseconds();
