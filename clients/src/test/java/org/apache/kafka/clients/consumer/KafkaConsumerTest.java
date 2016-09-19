@@ -935,6 +935,38 @@ public class KafkaConsumerTest {
         consumer.close();
     }
 
+    @Test(expected = IllegalStateException.class)
+    public void testPollWithNoSubscription() {
+        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
+        try {
+            consumer.poll(0);
+        } finally {
+            consumer.close();
+        }
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testPollWithEmptySubscription() {
+        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
+        consumer.subscribe(Collections.<String>emptyList());
+        try {
+            consumer.poll(0);
+        } finally {
+            consumer.close();
+        }
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testPollWithEmptyUserAssignment() {
+        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
+        consumer.assign(Collections.<TopicPartition>emptySet());
+        try {
+            consumer.poll(0);
+        } finally {
+            consumer.close();
+        }
+    }
+
     private ConsumerRebalanceListener getConsumerRebalanceListener(final KafkaConsumer<String, String> consumer) {
         return new ConsumerRebalanceListener() {
             @Override
