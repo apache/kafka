@@ -490,7 +490,7 @@ public class KStreamKStreamJoinTest {
 
     @Test
     public void testAsymetricWindowingAfter() throws Exception {
-        long time = 0L;
+        long time = 1000L;
 
         KStreamBuilder builder = new KStreamBuilder();
 
@@ -514,35 +514,6 @@ public class KStreamKStreamJoinTest {
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
         driver = new KStreamTestDriver(builder, stateDir);
-
-        // push two items to the primary stream. the other window is empty. this should produce no items.
-        // w1 = {}
-        // w2 = {}
-        // --> w1 = { 0:X0, 1:X1 }
-        //     w2 = {}
-
-        setRecordContext(time, topic1);
-        for (int i = 0; i < 2; i++) {
-            driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
-        }
-
-        processor.checkAndClearProcessResult();
-
-        // push two items to the other stream. this should produce two items.
-        // w1 = { 0:X0, 1:X1 }
-        // w2 = {}
-        // --> w1 = { 0:X0, 1:X1 }
-        //     w2 = { 0:Y0, 1:Y1 }
-
-        setRecordContext(time, topic2);
-        for (int i = 0; i < 2; i++) {
-            driver.process(topic2, expectedKeys[i], "Y" + expectedKeys[i]);
-        }
-
-        processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1");
-
-        // clear logically
-        time = 1000L;
 
         for (int i = 0; i < expectedKeys.length; i++) {
             setRecordContext(time + i, topic1);
@@ -628,7 +599,7 @@ public class KStreamKStreamJoinTest {
 
     @Test
     public void testAsymetricWindowingBefore() throws Exception {
-        long time = 0L;
+        long time = 1000L;
 
         KStreamBuilder builder = new KStreamBuilder();
 
@@ -652,35 +623,6 @@ public class KStreamKStreamJoinTest {
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
         driver = new KStreamTestDriver(builder, stateDir);
-
-        // push two items to the primary stream. the other window is empty. this should produce no items.
-        // w1 = {}
-        // w2 = {}
-        // --> w1 = { 0:X0, 1:X1 }
-        //     w2 = {}
-
-        setRecordContext(time, topic1);
-        for (int i = 0; i < 2; i++) {
-            driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
-        }
-
-        processor.checkAndClearProcessResult();
-
-        // push two items to the other stream. this should produce two items.
-        // w1 = { 0:X0, 1:X1 }
-        // w2 = {}
-        // --> w1 = { 0:X0, 1:X1 }
-        //     w2 = { 0:Y0, 1:Y1 }
-
-        setRecordContext(time, topic2);
-        for (int i = 0; i < 2; i++) {
-            driver.process(topic2, expectedKeys[i], "Y" + expectedKeys[i]);
-        }
-
-        processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1");
-
-        // clear logically
-        time = 1000L;
 
         for (int i = 0; i < expectedKeys.length; i++) {
             setRecordContext(time + i, topic1);
