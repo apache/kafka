@@ -418,10 +418,11 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
 
             final int numConsumers = consumers.size();
-            Map<TaskId, Set<TopicPartition>> standby = new HashMap<>();
+
 
             int i = 0;
             for (String consumer : consumers) {
+                Map<TaskId, Set<TopicPartition>> standby = new HashMap<>();
                 ArrayList<AssignedPartition> assignedPartitions = new ArrayList<>();
 
                 final int numTaskIds = taskIds.size();
