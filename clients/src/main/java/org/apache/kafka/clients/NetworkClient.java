@@ -663,10 +663,6 @@ public class NetworkClient implements KafkaClient {
                 // we don't have a connection to this node right now, make one
                 log.debug("Initialize connection to node {} for sending metadata request", node.id());
                 initiateConnect(node, now);
-                // If initiateConnect failed immediately, this node will be put into blackout and we
-                // should allow immediately retrying in case there is another candidate node. If it
-                // is still connecting, the worst case is that we end up setting a longer timeout
-                // on the next round and then wait for the response.
                 this.lastConnectAttemptNodeId = nodeConnectionId;
                 this.lastConnectAttemptForMetadataRequestMs = now;
                 return reconnectBackoffMs;
