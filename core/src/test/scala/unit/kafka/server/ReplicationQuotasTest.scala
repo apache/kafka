@@ -100,7 +100,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
     val msg = msg100KB
     val msgCount = 100
-    val expectedDuration = 5 //Keep the test to N seconds
+    val expectedDuration = 10 //Keep the test to N seconds
     var throttle: Long = msgCount * msg.length / expectedDuration
     if (!leaderThrottle) throttle = throttle * 3 //Follower throttle needs to replicate 3x as fast to get the same duration as there are three replicas to replicate for each of the two follower brokers
 
@@ -153,7 +153,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
     //Check the times for throttled/unthrottled are each side of what we expect
     val throttledLowerBound = expectedDuration * 1000 * 0.9
-    val throttledUpperBound = expectedDuration * 1000 * 1.5
+    val throttledUpperBound = expectedDuration * 1000 * 3
     assertTrue(s"Expected $unthrottledTook < $throttledLowerBound", unthrottledTook < throttledLowerBound)
     assertTrue(s"Expected $throttledTook > $throttledLowerBound", throttledTook > throttledLowerBound)
     assertTrue(s"Expected $throttledTook < $throttledUpperBound", throttledTook < throttledUpperBound)
