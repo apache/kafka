@@ -243,7 +243,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
       case dc => channel.transferTo(position, count, dc)
     }).toInt
     trace("FileMessageSet " + file.getAbsolutePath + " : bytes transferred : " + bytesTransferred
-      + " bytes requested for transfer : " + math.min(size, sizeInBytes))
+      + " bytes requested for transfer : " + count)
     bytesTransferred
   }
 
