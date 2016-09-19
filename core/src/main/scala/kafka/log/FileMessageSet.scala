@@ -111,9 +111,9 @@ class FileMessageSet private[kafka](@volatile var file: File,
    */
   def read(position: Int, size: Int): FileMessageSet = {
     if(position < 0)
-      throw new IllegalArgumentException("Invalid position: " + position)
+      throw new IllegalArgumentException(s"Invalid position: $position")
     if(size < 0)
-      throw new IllegalArgumentException("Invalid size: " + size)
+      throw new IllegalArgumentException(s"Invalid size: $size")
     new FileMessageSet(file,
                        channel,
                        start = this.start + position,
@@ -142,13 +142,12 @@ class FileMessageSet private[kafka](@volatile var file: File,
       buffer.rewind()
       channel.read(buffer, position)
       if(buffer.hasRemaining)
-        throw new IllegalStateException("Failed to read complete buffer for targetOffset %d startPosition %d in %s"
-          .format(targetOffset, startingPosition, file.getAbsolutePath))
+        throw new IllegalStateException(s"Failed to read complete buffer for targetOffset $targetOffset startPosition $startingPosition in ${file.getAbsolutePath}")
       buffer.rewind()
       val offset = buffer.getLong()
       val messageSize = buffer.getInt()
       if (messageSize < Message.MinMessageOverhead)
-        throw new IllegalStateException("Invalid message size: " + messageSize)
+        throw new IllegalStateException(s"Invalid message size: $messageSize")
       if (offset >= targetOffset)
         return (OffsetPosition(offset, position), messageSize + MessageSet.LogOverhead)
       position += MessageSet.LogOverhead + messageSize
@@ -233,8 +232,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
     // Ensure that the underlying size has not changed.
     val newSize = math.min(channel.size.toInt, end) - start
     if (newSize < _size.get()) {
-      throw new KafkaException("Size of FileMessageSet %s has been truncated during write: old size %d, new size %d"
-        .format(file.getAbsolutePath, _size.get(), newSize))
+      throw new KafkaException(s"Size of FileMessageSet ${file.getAbsolutePath} has been truncated during write: old size ${_size.get()}, new size $newSize")
     }
     val position = start + writePosition
     val count = math.min(size, sizeInBytes)
@@ -242,8 +240,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
       case tl: TransportLayer => tl.transferFrom(channel, position, count)
       case dc => channel.transferTo(position, count, dc)
     }).toInt
-    trace("FileMessageSet " + file.getAbsolutePath + " : bytes transferred : " + bytesTransferred
-      + " bytes requested for transfer : " + math.min(size, sizeInBytes))
+    trace(s"FileMessageSet ${file.getAbsolutePath} : bytes transferred $bytesTransferred : bytes requested for transfer $count")
     bytesTransferred
   }
 
@@ -267,7 +264,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
       offsetAndSizeBuffer.getLong // skip offset field
       val messageSize = offsetAndSizeBuffer.getInt
       if (messageSize < Message.MinMessageOverhead)
-        throw new IllegalStateException("Invalid message size: " + messageSize)
+        throw new IllegalStateException(s"Invalid message size: $messageSize")
       crcAndMagicByteBuffer.rewind()
       channel.read(crcAndMagicByteBuffer, location + MessageSet.LogOverhead)
       if (crcAndMagicByteBuffer.get(Message.MagicOffset) != expectedMagicValue)
@@ -343,7 +340,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
         if(size < Message.MinMessageOverhead || location + sizeOffsetLength + size > end)
           return allDone()
         if(size > maxMessageSize)
-          throw new CorruptRecordException("Message size exceeds the largest allowable message size (%d).".format(maxMessageSize))
+          throw new CorruptRecordException(s"Message size exceeds the largest allowable message size ($maxMessageSize).")
 
         // read the item itself
         val buffer = ByteBuffer.allocate(size)
@@ -417,8 +414,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
   def truncateTo(targetSize: Int): Int = {
     val originalSize = sizeInBytes
     if(targetSize > originalSize || targetSize < 0)
-      throw new KafkaException("Attempt to truncate log segment to " + targetSize + " bytes failed, " +
-                               " size of this log segment is " + originalSize + " bytes.")
+      throw new KafkaException(s"Attempt to truncate log segment to $targetSize bytes failed, size of this log segment is $originalSize bytes.")
     if (targetSize < channel.size.toInt) {
       channel.truncate(targetSize)
       channel.position(targetSize)
