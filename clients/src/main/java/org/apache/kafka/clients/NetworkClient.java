@@ -546,27 +546,27 @@ public class NetworkClient implements KafkaClient {
             // should we update our metadata?
             long timeToNextMetadataUpdate = metadata.timeToNextUpdate(now);
             long waitForMetadataFetch = this.metadataFetchInProgress ? Integer.MAX_VALUE : 0;
-            // if there is no node available to connect, back off refreshing metadata
-            long metadataTimeout = Math.max(timeToNextMetadataUpdate, waitForMetadataFetch);
 
-            if (metadataTimeout == 0) {
-                // Beware that the behavior of this method and the computation of timeouts for poll() are
-                // highly dependent on the behavior of leastLoadedNode.
-                Node node = leastLoadedNode(now);
-                if (node == null) {
-                    log.debug("Give up sending metadata request since no node is available");
-                    long shortestBackoff = Long.MAX_VALUE;
-                    // Find the shortest remaining reconnect backoff.
-                    for (Node backingOffNode : metadataUpdater.fetchNodes()) {
-                        long backoff = connectionStates.connectionDelay(backingOffNode.idString(), now);
-                        shortestBackoff = Math.min(shortestBackoff, backoff);
-                    }
-                    return shortestBackoff;
-                }
-                return maybeUpdate(now, node);
+            long metadataTimeout = Math.max(timeToNextMetadataUpdate, waitForMetadataFetch);
+            if (metadataTimeout > 0) {
+                return metadataTimeout;
             }
 
-            return metadataTimeout;
+            // Beware that the behavior of this method and the computation of timeouts for poll() are
+            // highly dependent on the behavior of leastLoadedNode.
+            Node node = leastLoadedNode(now);
+            if (node == null) {
+                log.debug("Give up sending metadata request since no node is available");
+                long shortestBackoff = Long.MAX_VALUE;
+                // Find the shortest remaining reconnect backoff.
+                for (Node backingOffNode : metadataUpdater.fetchNodes()) {
+                    long backoff = connectionStates.connectionDelay(backingOffNode.idString(), now);
+                    shortestBackoff = Math.min(shortestBackoff, backoff);
+                }
+                return shortestBackoff;
+            }
+
+            return maybeUpdate(now, node);
         }
 
         @Override
