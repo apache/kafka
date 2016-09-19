@@ -16,7 +16,6 @@
  */
 
 package org.apache.kafka.streams.processor.internals;
-
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -178,7 +177,7 @@ public class StreamThread extends Thread {
             log.warn("Negative cache size passed in thread [{}]. Reverting to cache size of 0 bytes.", threadName);
         }
         this.cacheSizeBytes = Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
-            config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG));
+                config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG));
         this.cache = new ThreadCache(threadClientId, cacheSizeBytes, this.sensors);
         // set the producer and consumer clients
 
@@ -832,20 +831,20 @@ public class StreamThread extends Thread {
 
         private void addCacheMetrics(String metricGrpName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
             maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-avg", metricGrpName,
-                "The current count of " + entityName + " " + opName + " operation.", tags), new Avg());
+                    "The current count of " + entityName + " " + opName + " operation.", tags), new Avg());
             maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-min", metricGrpName,
-                "The current count of " + entityName + " " + opName + " operation.", tags), new Min());
+                    "The current count of " + entityName + " " + opName + " operation.", tags), new Min());
             maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-max", metricGrpName,
-                "The current count of " + entityName + " " + opName + " operation.", tags), new Max());
+                    "The current count of " + entityName + " " + opName + " operation.", tags), new Max());
         }
 
         private void addLatencyMetrics(String metricGrpName, Sensor sensor, String entityName, String opName, Map<String, String> tags) {
             maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-avg-latency-ms", metricGrpName,
-                "The average latency in milliseconds of " + entityName + " " + opName + " operation.", tags), new Avg());
+                    "The average latency in milliseconds of " + entityName + " " + opName + " operation.", tags), new Avg());
             maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-max-latency-ms", metricGrpName,
-                "The max latency in milliseconds of " + entityName + " " + opName + " operation.", tags), new Max());
+                    "The max latency in milliseconds of " + entityName + " " + opName + " operation.", tags), new Max());
             maybeAddMetric(sensor, metrics.metricName(entityName + "-" + opName + "-qps", metricGrpName,
-                "The average number of occurrence of " + entityName + " " + opName + " operation per second.", tags), new Rate(new Count()));
+                    "The average number of occurrence of " + entityName + " " + opName + " operation per second.", tags), new Rate(new Count()));
         }
 
         private void maybeAddMetric(Sensor sensor, MetricName name, MeasurableStat stat) {

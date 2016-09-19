@@ -495,7 +495,7 @@ project(':core') {
 
   task siteDocsTar(dependsOn: ['genProtocolErrorDocs', 'genProtocolApiKeyDocs', 'genProtocolMessageDocs',
                                'genProducerConfigDocs', 'genConsumerConfigDocs', 'genKafkaConfigDocs',
-                               'genTopicConfigDocs', ':connect:runtime:genConnectConfigDocs', 
+                               'genTopicConfigDocs', ':connect:runtime:genConnectConfigDocs',
                                ':streams:genStreamsConfigDocs'], type: Tar) {
     classifier = 'site-docs'
     compression = Compression.GZIP
@@ -685,7 +685,6 @@ project(':streams') {
     compile project(':connect:json')  // this dependency should be removed after we unify data API
     compile libs.slf4jApi
     compile libs.rocksDBJni
-
 
     // zkclient has a hard log4j dependency, we set it here as well to avoid copying an older
     // version to the binary package; the following two dependencies should be removed after KIP-4

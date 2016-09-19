@@ -734,7 +734,7 @@ public class StreamPartitionAssignorTest {
             this.restoreConsumer = restoreConsumer;
         }
 
-        @Override
+//        @Override
         public void makeReady(InternalTopicConfig topic, int numPartitions) {
             readyTopics.put(topic.name(), numPartitions);
 
