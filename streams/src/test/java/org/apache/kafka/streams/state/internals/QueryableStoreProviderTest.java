@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.state.NoOpWindowStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.test.StateStoreProviderStub;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -33,7 +34,7 @@ public class QueryableStoreProviderTest {
 
     @Before
     public void before() {
-        final StateStoreProviderStub theStoreProvider = new StateStoreProviderStub();
+        final StateStoreProviderStub theStoreProvider = new StateStoreProviderStub(false);
         theStoreProvider.addStore(keyValueStore, new StateStoreTestUtils.NoOpReadOnlyStore<>());
         theStoreProvider.addStore(windowStore, new NoOpWindowStore());
         storeProvider =

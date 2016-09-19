@@ -39,14 +39,14 @@ public class StreamThreadStateStoreProvider implements StateStoreProvider {
     @Override
     public <T> List<T> stores(final String storeName, final QueryableStoreType<T> queryableStoreType) {
         if (!streamThread.isInitialized()) {
-            throw new InvalidStateStoreException("Store: " + storeName + " is currently not available as the stream thread has not (re-)initialized yet");
+            throw new InvalidStateStoreException("the state store, " + storeName + ", may have migrated to another instance.");
         }
         final List<T> stores = new ArrayList<>();
         for (StreamTask streamTask : streamThread.tasks().values()) {
             final StateStore store = streamTask.getStore(storeName);
             if (store != null && queryableStoreType.accepts(store)) {
                 if (!store.isOpen()) {
-                    throw new InvalidStateStoreException("Store: " + storeName + " isn't isOpen");
+                    throw new InvalidStateStoreException("the state store, " + storeName + ", may have migrated to another instance.");
                 }
                 stores.add((T) store);
             }

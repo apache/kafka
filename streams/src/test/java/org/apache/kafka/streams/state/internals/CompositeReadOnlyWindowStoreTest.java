@@ -15,8 +15,10 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.test.StateStoreProviderStub;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -42,8 +44,8 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Before
     public void before() {
-        stubProviderOne = new StateStoreProviderStub();
-        stubProviderTwo = new StateStoreProviderStub();
+        stubProviderOne = new StateStoreProviderStub(false);
+        stubProviderTwo = new StateStoreProviderStub(false);
         underlyingWindowStore = new ReadOnlyWindowStoreStub<>();
         stubProviderOne.addStore(storeName, underlyingWindowStore);
 
@@ -101,6 +103,19 @@ public class CompositeReadOnlyWindowStoreTest {
 
         final List<KeyValue<Long, String>> results = toList(windowStore.fetch("some-key", 0L, 2L));
         assertEquals(Collections.singletonList(new KeyValue<>(1L, "my-value")), results);
+    }
+
+
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowInvalidStateStoreExceptionOnRebalance() throws Exception {
+        final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(new StateStoreProviderStub(true), QueryableStoreTypes.windowStore(), "foo");
+        store.fetch("key", 1, 10);
+    }
+
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowInvalidStateStoreExceptionIfFetchThrows() throws Exception {
+        underlyingWindowStore.setOpen(false);
+        underlyingWindowStore.fetch("key", 1, 10);
     }
 
     static <K, V> List<KeyValue<K, V>> toList(final Iterator<KeyValue<K, V>> iterator) {
