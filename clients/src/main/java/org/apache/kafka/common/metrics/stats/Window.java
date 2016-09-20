@@ -72,7 +72,7 @@ public class Window {
      *
      * This policy is suited to use cases where immediate accuracy,
      * and potential for overestimates is preferred. So for example, when setting
-     * off a rebalance you want the throttle to react quickly to the change in rate.
+     * off a re-balance you want the throttle to react quickly to the change in rate.
      */
     private static class ElapsedWindowPolicy implements Policy {
         @Override
