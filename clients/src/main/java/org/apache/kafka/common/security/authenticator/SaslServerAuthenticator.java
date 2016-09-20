@@ -44,6 +44,9 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.apache.kafka.common.security.kerberos.KerberosName;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
+import org.apache.kafka.common.security.scram.ScramCredentialCache;
+import org.apache.kafka.common.security.scram.ScramMechanism;
+import org.apache.kafka.common.security.scram.ScramServerCallbackHandler;
 import org.ietf.jgss.GSSContext;
 import org.ietf.jgss.GSSCredential;
 import org.ietf.jgss.GSSException;
@@ -83,6 +86,7 @@ public class SaslServerAuthenticator implements Authenticator {
     private final KerberosShortNamer kerberosNamer;
     private final int maxReceiveSize;
     private final String host;
+    private final ScramCredentialCache scramCredentialCache;
 
     // Current SASL state
     private SaslState saslState = SaslState.GSSAPI_OR_HANDSHAKE_REQUEST;
@@ -101,7 +105,7 @@ public class SaslServerAuthenticator implements Authenticator {
     private NetworkReceive netInBuffer;
     private Send netOutBuffer;
 
-    public SaslServerAuthenticator(String node, Configuration jaasConfig, final Subject subject, KerberosShortNamer kerberosNameParser, String host, int maxReceiveSize) throws IOException {
+    public SaslServerAuthenticator(String node, Configuration jaasConfig, final Subject subject, KerberosShortNamer kerberosNameParser, String host, int maxReceiveSize, ScramCredentialCache scramCredentialCache) throws IOException {
         if (subject == null)
             throw new IllegalArgumentException("subject cannot be null");
         this.node = node;
@@ -110,6 +114,7 @@ public class SaslServerAuthenticator implements Authenticator {
         this.kerberosNamer = kerberosNameParser;
         this.maxReceiveSize = maxReceiveSize;
         this.host = host;
+        this.scramCredentialCache = scramCredentialCache;
     }
 
     public void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder, Map<String, ?> configs) {
@@ -123,7 +128,11 @@ public class SaslServerAuthenticator implements Authenticator {
 
     private void createSaslServer(String mechanism) throws IOException {
         this.saslMechanism = mechanism;
-        callbackHandler = new SaslServerCallbackHandler(jaasConfig, kerberosNamer);
+        ScramMechanism scramMechanism = ScramMechanism.forMechanismName(mechanism);
+        if (scramMechanism == null)
+            callbackHandler = new SaslServerCallbackHandler(jaasConfig, kerberosNamer);
+        else
+            callbackHandler = new ScramServerCallbackHandler(scramCredentialCache.cache(scramMechanism));
         callbackHandler.configure(configs, Mode.SERVER, subject, saslMechanism);
         if (mechanism.equals(SaslConfigs.GSSAPI_MECHANISM)) {
             if (subject.getPrincipals().isEmpty())

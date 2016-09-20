@@ -17,12 +17,13 @@
 
 package kafka.server
 
-import java.util.Properties
+import java.util.{Locale, Properties}
 import kafka.log.LogConfig
 import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.common.config.ConfigDef.Importance._
 import org.apache.kafka.common.config.ConfigDef.Range._
 import org.apache.kafka.common.config.ConfigDef.Type._
+import org.apache.kafka.common.security.scram.ScramMechanism
 import scala.collection.JavaConverters._
 
 /**
@@ -79,6 +80,20 @@ object DynamicConfig {
     def names = clientConfigs.names
 
     def validate(props: Properties) = DynamicConfig.validate(clientConfigs, props)
+  }
+
+  object User {
+
+    //Definitions
+    private val userConfigs = ScramMechanism.values.foldLeft(new ConfigDef) {
+          (c, m) => c.define(m.mechanismName.toLowerCase(Locale.ROOT), STRING, null, MEDIUM, s"User credentials for SCRAM mechanism ${m.mechanismName}")
+        }
+      .define(Client.ProducerByteRateOverrideProp, LONG, Client.DefaultProducerOverride, MEDIUM, Client.ProducerOverrideDoc)
+      .define(Client.ConsumerByteRateOverrideProp, LONG, Client.DefaultConsumerOverride, MEDIUM, Client.ConsumerOverrideDoc)
+
+    def names = userConfigs.names
+
+    def validate(props: Properties) = DynamicConfig.validate(userConfigs, props)
   }
 
   private def validate(configDef: ConfigDef, props: Properties) = {

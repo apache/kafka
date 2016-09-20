@@ -76,9 +76,8 @@ class ReplicaFetcherThread(name: String,
   // as the metrics tag to avoid metric name conflicts with
   // more than one fetcher thread to the same broker
   private val networkClient = {
-    val channelBuilder = ChannelBuilders.create(
+    val channelBuilder = ChannelBuilders.clientChannelBuilder(
       brokerConfig.interBrokerSecurityProtocol,
-      Mode.CLIENT,
       LoginType.SERVER,
       brokerConfig.values,
       brokerConfig.saslMechanismInterBrokerProtocol,

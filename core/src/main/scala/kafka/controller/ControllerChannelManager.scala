@@ -90,9 +90,8 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
     val brokerEndPoint = broker.getBrokerEndPoint(config.interBrokerSecurityProtocol)
     val brokerNode = new Node(broker.id, brokerEndPoint.host, brokerEndPoint.port)
     val networkClient = {
-      val channelBuilder = ChannelBuilders.create(
+      val channelBuilder = ChannelBuilders.clientChannelBuilder(
         config.interBrokerSecurityProtocol,
-        Mode.CLIENT,
         LoginType.SERVER,
         config.values,
         config.saslMechanismInterBrokerProtocol,

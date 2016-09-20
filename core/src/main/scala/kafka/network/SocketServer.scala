@@ -35,6 +35,7 @@ import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.network.{ChannelBuilders, KafkaChannel, LoginType, Mode, Selectable, Selector => KSelector}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.security.scram.ScramCredentialCache
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.protocol.types.SchemaException
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -49,7 +50,7 @@ import scala.util.control.{ControlThrowable, NonFatal}
  *   Acceptor has N Processor threads that each have their own selector and read requests from sockets
  *   M Handler threads that handle requests and produce responses back to the processor threads for writing.
  */
-class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time) extends Logging with KafkaMetricsGroup {
+class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time, val credentialCache: Option[ScramCredentialCache] = None) extends Logging with KafkaMetricsGroup {
 
   private val endpoints = config.listeners
   private val numProcessorThreads = config.numNetworkThreads
@@ -147,7 +148,8 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
       config.connectionsMaxIdleMs,
       protocol,
       config.values,
-      metrics
+      metrics,
+      credentialCache
     )
   }
 
@@ -373,7 +375,8 @@ private[kafka] class Processor(val id: Int,
                                connectionsMaxIdleMs: Long,
                                protocol: SecurityProtocol,
                                channelConfigs: java.util.Map[String, _],
-                               metrics: Metrics) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
+                               metrics: Metrics,
+                               credentialCache: Option[ScramCredentialCache] = None) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
 
   private object ConnectionId {
     def fromString(s: String): Option[ConnectionId] = s.split("-") match {
@@ -411,7 +414,7 @@ private[kafka] class Processor(val id: Int,
     "socket-server",
     metricTags,
     false,
-    ChannelBuilders.create(protocol, Mode.SERVER, LoginType.SERVER, channelConfigs, null, true))
+    ChannelBuilders.serverChannelBuilder(protocol, channelConfigs, credentialCache.getOrElse(null)))
 
   override def run() {
     startupComplete()

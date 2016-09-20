@@ -43,6 +43,7 @@ import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
 import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledShutdownResponse}
 import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.common.security.scram.{ScramCredentialCache, ScramMechanism}
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
 import org.apache.kafka.common.{ClusterResource, Node}
 
@@ -117,6 +118,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   var dynamicConfigHandlers: Map[String, ConfigHandler] = null
   var dynamicConfigManager: DynamicConfigManager = null
+  var scramCredentialCache: Option[ScramCredentialCache] = None
 
   var groupCoordinator: GroupCoordinator = null
 
@@ -202,8 +204,12 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         this.logIdent = "[Kafka Server " + config.brokerId + "], "
 
         metadataCache = new MetadataCache(config.brokerId)
+        config.saslEnabledMechanisms.asScala.find(ScramMechanism.isScram(_)) match {
+          case Some(m) => scramCredentialCache = Some(new ScramCredentialCache(config.saslEnabledMechanisms))
+          case None => scramCredentialCache = None
+        }
 
-        socketServer = new SocketServer(config, metrics, time)
+        socketServer = new SocketServer(config, metrics, time, scramCredentialCache)
         socketServer.startup()
 
         /* start replica manager */
@@ -242,7 +248,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         /* start dynamic config manager */
         dynamicConfigHandlers = Map[String, ConfigHandler](ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers),
                                                            ConfigType.Client -> new ClientIdConfigHandler(quotaManagers),
-                                                           ConfigType.User -> new UserConfigHandler(quotaManagers),
+                                                           ConfigType.User -> new UserConfigHandler(quotaManagers, scramCredentialCache),
                                                            ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
 
         // Create the config manager. start listening to notifications
@@ -351,9 +357,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     def networkClientControlledShutdown(retries: Int): Boolean = {
       val metadataUpdater = new ManualMetadataUpdater()
       val networkClient = {
-        val channelBuilder = ChannelBuilders.create(
+        val channelBuilder = ChannelBuilders.clientChannelBuilder(
           config.interBrokerSecurityProtocol,
-          Mode.CLIENT,
           LoginType.SERVER,
           config.values,
           config.saslMechanismInterBrokerProtocol,

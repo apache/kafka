@@ -56,6 +56,22 @@ object JaasTestUtils {
     }
   }
 
+  case class ScramLoginModule(username: String,
+                              password: String,
+                              debug: Boolean = false,
+                              validUsers: Map[String, String] = Map.empty) {
+    def toJaasModule: JaasModule = {
+      JaasModule(
+        "org.apache.kafka.common.security.scram.ScramLoginModule",
+        debug = debug,
+        entries = Map(
+          "username" -> username,
+          "password" -> password
+        ) ++ validUsers.map { case (user, pass) => s"user_$user" -> pass }
+      )
+    }
+  }
+
   case class JaasModule(moduleName: String,
                         debug: Boolean,
                         entries: Map[String, String]) {
@@ -93,6 +109,11 @@ object JaasTestUtils {
   private val KafkaPlainPassword = "testuser-secret"
   private val KafkaPlainAdmin = "admin"
   private val KafkaPlainAdminPassword = "admin-secret"
+
+  val KafkaScramUser = "scram-user"
+  val KafkaScramPassword = "scram-user-secret"
+  val KafkaScramAdmin = "scram-admin"
+  val KafkaScramAdminPassword = "scram-admin-secret"
 
   def writeZkFile(): String = {
     val jaasFile = TestUtils.tempFile()
@@ -138,6 +159,11 @@ object JaasTestUtils {
           KafkaPlainAdminPassword,
           debug = false,
           Map(KafkaPlainAdmin -> KafkaPlainAdminPassword, KafkaPlainUser -> KafkaPlainPassword)).toJaasModule
+      case "SCRAM-SHA-224" | "SCRAM-SHA-256" | "SCRAM-SHA-384" | "SCRAM-SHA-512" =>
+        ScramLoginModule(
+          KafkaScramAdmin,
+          KafkaScramAdminPassword,
+          debug = false).toJaasModule
       case mechanism => throw new IllegalArgumentException("Unsupported server mechanism " + mechanism)
     }
     new JaasSection(KafkaServerContextName, modules)
@@ -158,6 +184,11 @@ object JaasTestUtils {
         PlainLoginModule(
           KafkaPlainUser,
           KafkaPlainPassword
+        ).toJaasModule
+      case "SCRAM-SHA-224" | "SCRAM-SHA-256" | "SCRAM-SHA-384" | "SCRAM-SHA-512" =>
+        ScramLoginModule(
+          KafkaScramUser,
+          KafkaScramPassword
         ).toJaasModule
       case mechanism => throw new IllegalArgumentException("Unsupported client mechanism " + mechanism)
     }

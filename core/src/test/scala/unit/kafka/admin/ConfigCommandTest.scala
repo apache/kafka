@@ -24,9 +24,13 @@ import kafka.server.{ConfigEntityName, QuotaId}
 import kafka.utils.{Logging, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 
+import org.apache.kafka.common.security.scram.{ScramCredential, ScramCredentialFormatter}
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
+import scala.collection.mutable
+import scala.collection.JavaConverters._
+import org.apache.kafka.common.security.scram.ScramMechanism
 
 class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   @Test
@@ -230,6 +234,51 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       }
     }
     ConfigCommand.alterConfig(null, createOpts, configChange)
+  }
+
+  @Test
+  def testScramCredentials(): Unit = {
+    def createOpts(user: String, config: String): ConfigCommandOptions = {
+      new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+        "--entity-name", user,
+        "--entity-type", "users",
+        "--alter",
+        "--add-config", config))
+    }
+
+    def deleteOpts(user: String, mechanism: String) = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+        "--entity-name", user,
+        "--entity-type", "users",
+        "--alter",
+        "--delete-config", mechanism))
+
+    val credentials = mutable.Map[String, Properties]()
+    case class CredentialChange(val user: String, val mechanisms: Set[String], val iterations: Int) extends TestAdminUtils {
+      override def fetchEntityConfig(zkUtils: ZkUtils, entityType: String, entityName: String): Properties = {
+        credentials.getOrElse(entityName, new Properties())
+      }
+      override def changeUserOrUserClientIdConfig(zkUtils: ZkUtils, sanitizedEntityName: String, configChange: Properties): Unit = {
+        assertEquals(user, sanitizedEntityName)
+        assertEquals(mechanisms, configChange.keySet().asScala)
+        for (mechanism <- mechanisms) {
+          val value = configChange.getProperty(mechanism)
+          assertEquals(-1, value.indexOf("password="))
+          val scramCredential = ScramCredentialFormatter.fromString(value)
+          assertEquals(iterations, scramCredential.iterations)
+          if (configChange != null)
+              credentials.put(user, configChange)
+        }
+      }
+    }
+    val optsA = createOpts("userA", "scram-sha-256=[iterations=1024,password=abc, def]")
+    ConfigCommand.alterConfig(null, optsA, CredentialChange("userA", Set("scram-sha-256"), 1024))
+    val optsB = createOpts("userB", "scram-sha-256=[iterations=4096,password=abc, def],scram-sha-512=[password=1234=abc]")
+    ConfigCommand.alterConfig(null, optsB, CredentialChange("userB", Set("scram-sha-256", "scram-sha-512"), 4096))
+
+    val del256 = deleteOpts("userB", "scram-sha-256")
+    ConfigCommand.alterConfig(null, del256, CredentialChange("userB", Set("scram-sha-512"), 4096))
+    val del512 = deleteOpts("userB", "scram-sha-512")
+    ConfigCommand.alterConfig(null, del512, CredentialChange("userB", Set(), 4096))
   }
 
   @Test

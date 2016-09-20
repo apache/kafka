@@ -27,6 +27,8 @@ import java.util.Map;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.security.scram.ScramCredentialCache;
+import org.apache.kafka.common.security.scram.ScramMechanism;
 import org.apache.kafka.common.utils.MockTime;
 
 /**
@@ -42,6 +44,7 @@ public class NioEchoServer extends Thread {
     private final AcceptorThread acceptorThread;
     private final Selector selector;
     private volatile WritableByteChannel outputChannel;
+    private final ScramCredentialCache scramCredentialCache;
 
     public NioEchoServer(SecurityProtocol securityProtocol, Map<String, ?> configs, String serverHost) throws Exception {
         serverSocketChannel = ServerSocketChannel.open();
@@ -50,7 +53,11 @@ public class NioEchoServer extends Thread {
         this.port = serverSocketChannel.socket().getLocalPort();
         this.socketChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
         this.newChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
-        ChannelBuilder channelBuilder = ChannelBuilders.create(securityProtocol, Mode.SERVER, LoginType.SERVER, configs, null, true);
+        if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL)
+            this.scramCredentialCache = new ScramCredentialCache(ScramMechanism.mechanismNames());
+        else
+            this.scramCredentialCache = null;
+        ChannelBuilder channelBuilder = ChannelBuilders.serverChannelBuilder(securityProtocol, configs, scramCredentialCache);
         this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", channelBuilder);
         setName("echoserver");
         setDaemon(true);
@@ -59,6 +66,10 @@ public class NioEchoServer extends Thread {
 
     public int port() {
         return port;
+    }
+
+    public ScramCredentialCache scramCredentialCache() {
+        return scramCredentialCache;
     }
 
     @Override
