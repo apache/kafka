@@ -106,10 +106,11 @@ public class ResetIntegrationTest {
     public void testReprocessingFromScratchAfterReset() throws Exception {
         final Properties streamsConfiguration = prepareTest();
         final Properties resultTopicConsumerConfig = TestUtils.consumerConfig(
-            CLUSTER.bootstrapServers(),
-            APP_ID + "-standard-consumer-" + OUTPUT_TOPIC,
-            LongDeserializer.class,
-            LongDeserializer.class);
+                CLUSTER.bootstrapServers(),
+                APP_ID + "-standard-consumer-" + OUTPUT_TOPIC,
+                LongDeserializer.class,
+                LongDeserializer.class,
+                new Properties());
 
         prepareInputData();
         final KStreamBuilder builder = setupTopology(OUTPUT_TOPIC_2);
@@ -163,7 +164,6 @@ public class ResetIntegrationTest {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
