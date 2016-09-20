@@ -85,7 +85,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
     brokers = (100 to 105).map { id => TestUtils.createServer(fromProps(createBrokerConfig(id, zkConnect))) }
 
-    //Given six partitions, lead on nodes 0,1,2,3,4,5 but will followers on node 6,7 (not started yet)
+    //Given six partitions, led on nodes 0,1,2,3,4,5 but will followers on node 6,7 (not started yet)
     //And two extra partitions 6,7, which we don't intend on throttling.
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, Map(
       0 -> Seq(100, 106), //Throttled
@@ -109,7 +109,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
       changeBrokerConfig(zkUtils, Seq(brokerId), property(KafkaConfig.ThrottledReplicationRateLimitProp, throttle.toString))
     }
 
-    //Either throttle the six leaders or the two follower
+    //Either throttle the six leaders or the two followers
     val throttledReplicas = if (leaderThrottle) "0:100,1:101,2:102,3:103,4:104,5:105" else "0:106,1:106,2:106,3:107,4:107,5:107"
     changeTopicConfig(zkUtils, topic, property(ThrottledReplicasListProp, throttledReplicas))
 
