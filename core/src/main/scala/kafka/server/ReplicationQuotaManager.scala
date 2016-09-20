@@ -24,7 +24,8 @@ import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.metrics._
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import org.apache.kafka.common.metrics.stats.SimpleRate
+import org.apache.kafka.common.metrics.stats.Rate.SampledTotal
+import org.apache.kafka.common.metrics.stats.{Window, Rate}
 import org.apache.kafka.common.utils.Time
 
 /**
@@ -196,7 +197,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
       metrics,
       () => rateMetricName,
       () => getQuotaMetricConfig(quota),
-      () => new SimpleRate()
+      () => new Rate(Window.ELAPSED)
     )
   }
 }
