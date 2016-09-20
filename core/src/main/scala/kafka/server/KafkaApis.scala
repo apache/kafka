@@ -650,10 +650,11 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
           (topicPartition, new ListOffsetResponse.PartitionData(Errors.NONE.code, found.timestamp, found.offset))
         } catch {
-          // NOTE: UnknownTopicOrPartitionException and NotLeaderForPartitionException are special cased since these error messages
-          // are typically transient and there is no value in logging the entire stack trace for the same
+          // NOTE: These exceptions are special cased since these error messages are typically transient or the client
+          // would have received a clear exception and there is no value in logging the entire stack trace for the same
           case e @ (_ : UnknownTopicOrPartitionException |
-                    _ : NotLeaderForPartitionException) =>
+                    _ : NotLeaderForPartitionException |
+                    _ : InvalidRequestException) =>
             debug(s"Offset request with correlation id $correlationId from client $clientId on " +
                 s"partition $topicPartition failed due to ${e.getMessage}")
             (topicPartition, new PartitionData(Errors.forException(e).code,
