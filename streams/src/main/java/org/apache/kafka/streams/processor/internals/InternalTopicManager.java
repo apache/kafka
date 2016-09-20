@@ -17,8 +17,10 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,7 +42,7 @@ public class InternalTopicManager {
 
     private final int replicationFactor;
     private StreamsKafkaClient streamsKafkaClient;
-    StreamsConfig config;
+    private StreamsConfig config;
 
     public static boolean isValidCleanupPolicy(final String cleanupPolicy) {
         if (cleanupPolicy == null) {
@@ -56,13 +58,6 @@ public class InternalTopicManager {
     }
 
     public InternalTopicManager() {
-        this.replicationFactor = 0;
-        this.windowChangeLogAdditionalRetention = WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT;
-    }
-
-    public InternalTopicManager(StreamsConfig config) {
-        this.config = config;
-        this.streamsKafkaClient = new StreamsKafkaClient(config);
         this.replicationFactor = 0;
         this.windowChangeLogAdditionalRetention = WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT;
     }
@@ -84,6 +79,16 @@ public class InternalTopicManager {
 
         if (!streamsKafkaClient.topicExists(topic.name())) {
             streamsKafkaClient.createTopic(topic, numPartitions, replicationFactor, windowChangeLogAdditionalRetention);
+        } else {
+            MetadataResponse.TopicMetadata topicMetadata = streamsKafkaClient.getTopicMetadata(topic.name());
+            if (topicMetadata != null) {
+                if (topicMetadata.partitionMetadata().size() != numPartitions) {
+                    throw new StreamsException("Topic already exists but the number of partitions is not the same as the requested " + numPartitions + " partitions.");
+                }
+            } else {
+                throw new StreamsException("Topic metadata is corrupted.");
+            }
+
         }
     }
 }

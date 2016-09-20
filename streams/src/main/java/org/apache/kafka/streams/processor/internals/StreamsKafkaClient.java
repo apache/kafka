@@ -25,7 +25,6 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.metrics.JmxReporter;
@@ -39,10 +38,10 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.DeleteTopicsRequest;
+import org.apache.kafka.common.requests.DeleteTopicsResponse;
 import org.apache.kafka.common.requests.RequestSend;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
-
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
@@ -60,36 +59,30 @@ import java.util.HashSet;
 import java.util.Arrays;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 
 public class StreamsKafkaClient {
 
     private static final Logger log = LoggerFactory.getLogger(StreamsKafkaClient.class);
-    private Metadata metadata;
     private Metrics metrics;
-    private Selector selector;
-    private ChannelBuilder channelBuilder;
+
     private KafkaClient kafkaClient;
     private StreamsConfig streamsConfig;
-    private Node brokerNode;
 
-    public static final String CLEANUP_POLICY_PROP = "cleanup.policy";
-    private static final String COMPACT = "compact";
+    private static final int MAX_INFLIGHT_REQUESTS = 100;
+    private static final long MAX_WAIT_TIME_MS = 30000;
 
-    private int maxIterations = 10;
-
-    public StreamsKafkaClient(StreamsConfig streamsConfig) {
+    public StreamsKafkaClient(final StreamsConfig streamsConfig) {
 
         this.streamsConfig = streamsConfig;
-        Time time = new SystemTime();
+        final Time time = new SystemTime();
 
         Map<String, String> metricTags = new LinkedHashMap<>();
         metricTags.put("client-id", StreamsConfig.CLIENT_ID_CONFIG);
 
-        this.metadata = new Metadata(streamsConfig.getLong(streamsConfig.RETRY_BACKOFF_MS_CONFIG), streamsConfig.getLong(streamsConfig.METADATA_MAX_AGE_CONFIG));
+        Metadata metadata = new Metadata(streamsConfig.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG), streamsConfig.getLong(StreamsConfig.METADATA_MAX_AGE_CONFIG));
         List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(streamsConfig.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
-        metadata.update(Cluster.bootstrap(addresses), 0);
+        metadata.update(Cluster.bootstrap(addresses), time.milliseconds());
 
         MetricConfig metricConfig = new MetricConfig().samples(streamsConfig.getInt(CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG))
                 .timeWindow(streamsConfig.getLong(CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
@@ -100,37 +93,22 @@ public class StreamsKafkaClient {
         reporters.add(new JmxReporter("kafka.streams"));
         this.metrics = new Metrics(metricConfig, reporters, time);
 
-        this.channelBuilder = ClientUtils.createChannelBuilder(streamsConfig.values());
+        ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(streamsConfig.values());
 
-        selector = new Selector(streamsConfig.getLong(streamsConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), this.metrics, time, "kafka-client", this.channelBuilder);
+        Selector selector = new Selector(streamsConfig.getLong(StreamsConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), this.metrics, time, "kafka-client", channelBuilder);
 
         kafkaClient = new NetworkClient(
                 selector,
                 metadata,
                 streamsConfig.getString(StreamsConfig.CLIENT_ID_CONFIG),
-                100, // a fixed large enough value will suffice
-                streamsConfig.getLong(streamsConfig.RECONNECT_BACKOFF_MS_CONFIG),
-                streamsConfig.getInt(streamsConfig.SEND_BUFFER_CONFIG),
-                streamsConfig.getInt(streamsConfig.RECEIVE_BUFFER_CONFIG),
-                streamsConfig.getInt(streamsConfig.REQUEST_TIMEOUT_MS_CONFIG), time);
+                MAX_INFLIGHT_REQUESTS, // a fixed large enough value will suffice
+                streamsConfig.getLong(StreamsConfig.RECONNECT_BACKOFF_MS_CONFIG),
+                streamsConfig.getInt(StreamsConfig.SEND_BUFFER_CONFIG),
+                streamsConfig.getInt(StreamsConfig.RECEIVE_BUFFER_CONFIG),
+                streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG), time);
 
-        brokerNode = kafkaClient.leastLoadedNode(new SystemTime().milliseconds());
     }
 
-    public KafkaClient getKafkaClient() {
-        return kafkaClient;
-    }
-
-    public void shutdown() {
-        log.info("Closing the StreamsKafkaClient.");
-        // this will keep track of the first encountered exception
-        AtomicReference<Throwable> firstException = new AtomicReference<Throwable>();
-        ClientUtils.closeQuietly(metrics, "producer metrics", firstException);
-
-        log.debug("The StreamsKafkaClient has closed.");
-        if (firstException.get() != null)
-            throw new KafkaException("Failed to close kafka producer", firstException.get());
-    }
 
     /**
      * Cretes a new topic with the given number of partitions and replication factor.
@@ -139,28 +117,22 @@ public class StreamsKafkaClient {
      * @param numPartitions
      * @param replicationFactor
      */
-    public void createTopic(InternalTopicConfig internalTopicConfig, int numPartitions, int replicationFactor, long windowChangeLogAdditionalRetention) {
-        CreateTopicsRequest.TopicDetails topicDetails;
+    public void createTopic(final InternalTopicConfig internalTopicConfig, final int numPartitions, final int replicationFactor, final long windowChangeLogAdditionalRetention) {
         Properties topicProperties = internalTopicConfig.toProperties(windowChangeLogAdditionalRetention);
         Map<String, String> topicConfig = new HashMap<>();
         for (String key : topicProperties.stringPropertyNames()) {
             topicConfig.put(key, topicProperties.getProperty(key));
         }
-        topicDetails = new CreateTopicsRequest.TopicDetails(numPartitions, (short) replicationFactor, topicConfig);
+        CreateTopicsRequest.TopicDetails topicDetails = new CreateTopicsRequest.TopicDetails(numPartitions, (short) replicationFactor, topicConfig);
         Map<String, CreateTopicsRequest.TopicDetails> topics = new HashMap<>();
         topics.put(internalTopicConfig.name(), topicDetails);
 
         CreateTopicsRequest createTopicsRequest = new CreateTopicsRequest(topics, streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG));
 
-        RequestCompletionHandler callback = new RequestCompletionHandler() {
-            public void onComplete(ClientResponse response) {
-                // Do nothing!
-            }
-        };
-        ClientResponse clientResponse = sendRequest(createTopicsRequest.toStruct(), ApiKeys.CREATE_TOPICS, callback);
+        ClientResponse clientResponse = sendRequest(createTopicsRequest.toStruct(), ApiKeys.CREATE_TOPICS, null);
         CreateTopicsResponse createTopicsResponse = new CreateTopicsResponse(clientResponse.responseBody());
         if (createTopicsResponse.errors().get(internalTopicConfig.name()).code() > 0) {
-            throw new StreamsException("Could not create topic: " + internalTopicConfig.name());
+            throw new StreamsException("Could not create topic: " + internalTopicConfig.name() + ". " + createTopicsResponse.errors().get(internalTopicConfig.name()).name());
         }
     }
 
@@ -169,22 +141,17 @@ public class StreamsKafkaClient {
      *
      * @param topic
      */
-    public void deleteTopic(String topic) {
+    public void deleteTopic(final String topic) {
         log.debug("Deleting topic {} from ZK in partition assignor.", topic);
         Set<String> topics = new HashSet();
         topics.add(topic);
 
         DeleteTopicsRequest deleteTopicsRequest = new DeleteTopicsRequest(topics, streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG));
 
-        RequestCompletionHandler callback = new RequestCompletionHandler() {
-            public void onComplete(ClientResponse response) {
-                // Do nothing!
-            }
-        };
-        ClientResponse clientResponse = sendRequest(deleteTopicsRequest.toStruct(), ApiKeys.DELETE_TOPICS, callback);
-        CreateTopicsResponse createTopicsResponse = new CreateTopicsResponse(clientResponse.responseBody());
-        if (createTopicsResponse.errors().get(topic).code() > 0) {
-            throw new StreamsException("Could not delete topic: " + topic);
+        ClientResponse clientResponse = sendRequest(deleteTopicsRequest.toStruct(), ApiKeys.DELETE_TOPICS, null);
+        DeleteTopicsResponse deleteTopicsResponse = new DeleteTopicsResponse(clientResponse.responseBody());
+        if (deleteTopicsResponse.errors().get(topic).code() > 0) {
+            throw new StreamsException("Could not delete topic: " + topic + ". " + deleteTopicsResponse.errors().get(topic).name());
         }
 
     }
@@ -196,37 +163,38 @@ public class StreamsKafkaClient {
      * @param apiKeys
      * @param callback
      */
-    public ClientResponse sendRequest(Struct request, ApiKeys apiKeys, RequestCompletionHandler callback) {
+    public ClientResponse sendRequest(final Struct request, final ApiKeys apiKeys, final RequestCompletionHandler callback) {
 
+        Node brokerNode = kafkaClient.leastLoadedNode(new SystemTime().milliseconds());
         String brokerId = Integer.toString(brokerNode.id());
+
+        SystemTime systemTime = new SystemTime();
 
         RequestSend send = new RequestSend(brokerId,
                 kafkaClient.nextRequestHeader(apiKeys),
                 request);
 
-        ClientRequest clientRequest = new ClientRequest(new SystemTime().milliseconds(), true, send, callback);
-        SystemTime systemTime = new SystemTime();
-        int iterationCount = 0;
-        while (iterationCount < maxIterations) {
-            if (kafkaClient.ready(brokerNode, systemTime.milliseconds())) {
-                kafkaClient.send(clientRequest, systemTime.milliseconds());
-                break;
-            } else {
-                kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), systemTime.milliseconds());
-            }
-            iterationCount++;
-        }
+        ClientRequest clientRequest = new ClientRequest(systemTime.milliseconds(), true, send, callback);
 
-        iterationCount = 0;
+
+        final long timeout = systemTime.milliseconds() + MAX_WAIT_TIME_MS;
+        while (!kafkaClient.ready(brokerNode, systemTime.milliseconds()) && systemTime.milliseconds() < timeout) {
+            kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), systemTime.milliseconds());
+        }
+        if (!kafkaClient.ready(brokerNode, systemTime.milliseconds())) {
+            throw new StreamsException("Request timeout.");
+        }
+        kafkaClient.send(clientRequest, systemTime.milliseconds());
+
+        final long timeout2 = systemTime.milliseconds() + MAX_WAIT_TIME_MS;
         // Poll for the response.
-        while (iterationCount < maxIterations) {
-            List<ClientResponse> responseList = kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), new SystemTime().milliseconds());
+        while (systemTime.milliseconds() < timeout2) {
+            List<ClientResponse> responseList = kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), systemTime.milliseconds());
             for (ClientResponse clientResponse: responseList) {
                 if (clientResponse.request().equals(clientRequest)) {
                     return clientResponse;
                 }
             }
-            iterationCount++;
         }
         throw new StreamsException("StreamsKafkaClient failed to send the request: " + apiKeys.name());
     }
@@ -237,7 +205,7 @@ public class StreamsKafkaClient {
      * @param topic
      * @return
      */
-    public MetadataResponse.TopicMetadata getTopicMetadata(String topic) {
+    public MetadataResponse.TopicMetadata getTopicMetadata(final String topic) {
         MetadataRequest metadataRequest = new MetadataRequest(Arrays.asList(topic));
 
         RequestCompletionHandler callback = new RequestCompletionHandler() {
@@ -267,7 +235,6 @@ public class StreamsKafkaClient {
      * @return
      */
     public boolean topicExists(String topicName) {
-        Map<String, List<PartitionInfo>> topics;
 
         Properties props = new Properties();
         props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, streamsConfig.getList(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG));
@@ -275,7 +242,7 @@ public class StreamsKafkaClient {
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer");
 
         KafkaConsumer<String, String> consumer = new KafkaConsumer<String, String>(props);
-        topics = consumer.listTopics();
+        Map<String, List<PartitionInfo>> topics = consumer.listTopics();
         for (String topicNameInList:topics.keySet()) {
             if (topicNameInList.equalsIgnoreCase(topicName)) {
                 return true;

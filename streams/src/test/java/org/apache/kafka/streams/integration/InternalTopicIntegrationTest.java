@@ -37,9 +37,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
-import org.apache.kafka.streams.processor.internals.StreamsKafkaClient;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
@@ -51,7 +49,6 @@ import scala.collection.Iterator;
 import scala.collection.Map;
 
 import java.util.Properties;
-import java.util.Collections;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.List;
@@ -90,40 +87,6 @@ public class InternalTopicIntegrationTest {
         streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-    }
-
-    //@Test
-    public void testCreateTopic() throws Exception {
-
-        StreamsConfig streamsConfig = new StreamsConfig(streamsConfiguration);
-        StreamsKafkaClient streamsKafkaClient = new StreamsKafkaClient(streamsConfig);
-
-        String topicName = "testTopic" + mockTime.milliseconds();
-        InternalTopicConfig topicConfig = new InternalTopicConfig(topicName,
-                Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
-                Collections.<String, String>emptyMap());
-
-        streamsKafkaClient.createTopic(topicConfig, 1, 1, 0);
-
-        assertTrue(streamsKafkaClient.topicExists(topicName));
-
-    }
-
-    //@Test
-    public void testDeleteTopic() throws Exception {
-
-        StreamsConfig streamsConfig = new StreamsConfig(streamsConfiguration);
-        StreamsKafkaClient streamsKafkaClient = new StreamsKafkaClient(streamsConfig);
-
-        String topicName = "testTopic" + mockTime.milliseconds();
-        InternalTopicConfig topicConfig = new InternalTopicConfig(topicName,
-                Collections.singleton(InternalTopicConfig.CleanupPolicy.compact),
-                Collections.<String, String>emptyMap());
-
-        streamsKafkaClient.createTopic(topicConfig, 1, 1, 0);
-        streamsKafkaClient.deleteTopic(topicName);
-
-        assertTrue(!streamsKafkaClient.topicExists(topicName));
     }
 
     private Properties getTopicConfigProperties(final String changelog) {
