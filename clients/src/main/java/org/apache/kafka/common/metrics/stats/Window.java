@@ -32,20 +32,17 @@ public class Window {
      * estimating the rate.
      *
      * Imagine we have 11 sub-windows. We might get measurements in
-     * windows 3, 5, 7. This policy will take will fix the window to
-     * be the duration of 10 full sub-windows.
+     * windows 3, 5, 7. This policy will fix the window to be the
+     * duration of 10 full sub-windows (the 11th is ignored as it is
+     * considered partially filled).
      *
      * This is in contrast to the Elapsed policy, which would use the
-     * difference between measurement time in sub-windows 3 & 7.
+     * difference between measurement time for the measures in 3 & 7.
      *
-     * If the frequency of measurement is smaller than the sub-window
-     * size, as is often the case, this policy will simulate a slow-
-     * start over N-1 windows. It will stabilise after N-1 windows
-     * have passed
-     *
-     * This policy is well suited to use cases where measurements
-     * which are erratic in their frequency should be underestimated,
-     * and a slow start can be tolerated.
+     * This policy is well suited to use cases where the rate should
+     * slowly increase over the N window duration. So for example, when
+     * adding a throttle to a client connection, you want it to slowly
+     * throttle down to the desired value.
      */
     private static class FixedWindowPolicy implements Policy {
         @Override
@@ -65,16 +62,17 @@ public class Window {
 
     /**
      * This policy is essentially just the difference between first and last
-     * measurements. So when starting, say we have only two measurements, A & B,
-     * the elapsed window would be B.time - A.time. This creates a higher rate
-     * initially, which then drops gradually as more samples are collected.
+     * measurements. So say we have only two measurements, A & B, the elapsed
+     * window would be B.time - A.time. This creates a higher rate initially,
+     * which then drops gradually as more samples are collected.
      *
      * If the window is 0, meaning only one rate has been collected, the full-
-     * window duration is returned. This is equivalent to a "slow start" for
-     * the first measurement.
+     * window duration is returned. This is equivalent to the "slow start", seen
+     * in the Fixed window case, but only applied for the first measurement.
      *
-     * This policy is suited to use cases where immediate accuracy is preferred,
-     * regardless of whether you are starting or have infrequent measurements.
+     * This policy is suited to use cases where immediate accuracy,
+     * and potential for overestimates is preferred. So for example, when setting
+     * off a rebalance you want the throttle to react quickly to the change in rate.
      */
     private static class ElapsedWindowPolicy implements Policy {
         @Override
