@@ -31,7 +31,7 @@ import java.util.Map;
  *     WHERE
  *       stream1.key = stream2.key
  *       AND
- *       stream2.ts - before <= stream1.ts <= stream2.ts + after
+ *       stream1.ts - before <= stream2.ts AND stream2.ts <= stream1.ts + after
  * </pre>
  * There are three different window configuration supported:
  * <ul>
