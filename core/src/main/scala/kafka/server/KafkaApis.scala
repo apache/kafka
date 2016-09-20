@@ -35,11 +35,11 @@ import kafka.network._
 import kafka.network.RequestChannel.{Response, Session}
 import kafka.security.auth
 import kafka.security.auth.{Authorizer, ClusterAction, Create, Describe, Group, Operation, Read, Resource, Write, Delete}
-import kafka.server.QuotaType._
 import kafka.utils.{Logging, SystemTime, ZKGroupTopicDirs, ZkUtils}
-import org.apache.kafka.common.errors.{ClusterAuthorizationException, NotLeaderForPartitionException, UnknownTopicOrPartitionException, TopicExistsException}
+import org.apache.kafka.common.errors.{InvalidRequestException, ClusterAuthorizationException, NotLeaderForPartitionException, UnknownTopicOrPartitionException, TopicExistsException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, Protocol, SecurityProtocol}
+import org.apache.kafka.common.requests.ListOffsetResponse.PartitionData
 import org.apache.kafka.common.requests.{ApiVersionsResponse, DescribeGroupsRequest, DescribeGroupsResponse, GroupCoordinatorRequest, GroupCoordinatorResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsResponse, ListOffsetRequest, ListOffsetResponse, MetadataRequest, MetadataResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetFetchRequest, OffsetFetchResponse, ProduceRequest, ProduceResponse, ResponseHeader, ResponseSend, StopReplicaRequest, StopReplicaResponse, SyncGroupRequest, SyncGroupResponse, UpdateMetadataRequest, UpdateMetadataResponse, CreateTopicsRequest, CreateTopicsResponse, DeleteTopicsRequest, DeleteTopicsResponse}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
@@ -531,6 +531,22 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   def handleOffsetRequest(request: RequestChannel.Request) {
     val correlationId = request.header.correlationId
+    val version = request.header.apiVersion()
+
+    val mergedResponseMap =
+      if (version == 0)
+        handleOffsetRequestV0(request)
+      else
+        handleOffsetRequestV1(request)
+
+    val responseHeader = new ResponseHeader(correlationId)
+    val response = new ListOffsetResponse(mergedResponseMap.asJava, version)
+
+    requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, response)))
+  }
+
+  private def handleOffsetRequestV0(request : RequestChannel.Request) : Map[TopicPartition, ListOffsetResponse.PartitionData] = {
+    val correlationId = request.header.correlationId
     val clientId = request.header.clientId
     val offsetRequest = request.body.asInstanceOf[ListOffsetRequest]
 
@@ -539,11 +555,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val unauthorizedResponseStatus = unauthorizedRequestInfo.mapValues(_ =>
-      new ListOffsetResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED.code, List[JLong]().asJava)
+      new PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED.code, List[JLong]().asJava)
     )
 
-    val responseMap = authorizedRequestInfo.map(elem => {
-      val (topicPartition, partitionData) = elem
+    val responseMap = authorizedRequestInfo.map({case (topicPartition, partitionData) =>
       try {
         // ensure leader exists
         val localReplica = if (offsetRequest.replicaId != ListOffsetRequest.DEBUGGING_REPLICA_ID)
@@ -552,9 +567,9 @@ class KafkaApis(val requestChannel: RequestChannel,
           replicaManager.getReplicaOrException(topicPartition.topic, topicPartition.partition)
         val offsets = {
           val allOffsets = fetchOffsets(replicaManager.logManager,
-                                        topicPartition,
-                                        partitionData.timestamp,
-                                        partitionData.maxNumOffsets)
+            topicPartition,
+            partitionData.timestamp,
+            partitionData.maxNumOffsets)
           if (offsetRequest.replicaId != ListOffsetRequest.CONSUMER_REPLICA_ID) {
             allOffsets
           } else {
@@ -569,26 +584,91 @@ class KafkaApis(val requestChannel: RequestChannel,
       } catch {
         // NOTE: UnknownTopicOrPartitionException and NotLeaderForPartitionException are special cased since these error messages
         // are typically transient and there is no value in logging the entire stack trace for the same
-        case utpe: UnknownTopicOrPartitionException =>
+        case e @ ( _ : UnknownTopicOrPartitionException | _ : NotLeaderForPartitionException) =>
           debug("Offset request with correlation id %d from client %s on partition %s failed due to %s".format(
-               correlationId, clientId, topicPartition, utpe.getMessage))
-          (topicPartition, new ListOffsetResponse.PartitionData(Errors.forException(utpe).code, List[JLong]().asJava))
-        case nle: NotLeaderForPartitionException =>
-          debug("Offset request with correlation id %d from client %s on partition %s failed due to %s".format(
-               correlationId, clientId, topicPartition,nle.getMessage))
-          (topicPartition, new ListOffsetResponse.PartitionData(Errors.forException(nle).code, List[JLong]().asJava))
+            correlationId, clientId, topicPartition, e.getMessage))
+          (topicPartition, new ListOffsetResponse.PartitionData(Errors.forException(e).code, List[JLong]().asJava))
         case e: Throwable =>
           error("Error while responding to offset request", e)
           (topicPartition, new ListOffsetResponse.PartitionData(Errors.forException(e).code, List[JLong]().asJava))
       }
     })
+    responseMap ++ unauthorizedResponseStatus
+  }
 
-    val mergedResponseMap = responseMap ++ unauthorizedResponseStatus
+  private def handleOffsetRequestV1(request : RequestChannel.Request): Map[TopicPartition, ListOffsetResponse.PartitionData] = {
+    val correlationId = request.header.correlationId
+    val clientId = request.header.clientId
+    val offsetRequest = request.body.asInstanceOf[ListOffsetRequest]
 
-    val responseHeader = new ResponseHeader(correlationId)
-    val response = new ListOffsetResponse(mergedResponseMap.asJava)
+    val (authorizedRequestInfo, unauthorizedRequestInfo) = offsetRequest.partitionTimestamps.asScala.partition {
+      case (topicPartition, _) => authorize(request.session, Describe, new Resource(auth.Topic, topicPartition.topic))
+    }
 
-    requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, response)))
+    val unauthorizedResponseStatus = unauthorizedRequestInfo.mapValues(_ => {
+      new PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED.code,
+                        ListOffsetResponse.UNKNOWN_TIMESTAMP,
+                        ListOffsetResponse.UNKNOWN_OFFSET)
+    })
+
+    val responseMap = authorizedRequestInfo.map({case (topicPartition, timestamp) =>
+      if (offsetRequest.duplicatePartitions().contains(topicPartition)) {
+        debug(s"OffsetRequest with correlation id $correlationId from client $clientId on partition $topicPartition " +
+            s"failed because the partition is duplicated in the request.")
+        (topicPartition, new PartitionData(Errors.INVALID_REQUEST.code(),
+                                           ListOffsetResponse.UNKNOWN_TIMESTAMP,
+                                           ListOffsetResponse.UNKNOWN_OFFSET))
+      } else {
+        try {
+          // ensure leader exists
+          val localReplica = if (offsetRequest.replicaId != ListOffsetRequest.DEBUGGING_REPLICA_ID)
+            replicaManager.getLeaderReplicaIfLocal(topicPartition.topic, topicPartition.partition)
+          else
+            replicaManager.getReplicaOrException(topicPartition.topic, topicPartition.partition)
+          val found = {
+            fetchOffsetForTimestamp(replicaManager.logManager, topicPartition, timestamp) match {
+              case Some(timestampOffset) =>
+                // The request is not from a consumer client
+                if (offsetRequest.replicaId != ListOffsetRequest.CONSUMER_REPLICA_ID)
+                  timestampOffset
+                // The request is from a consumer client
+                else {
+                  // the found offset is smaller or equals to the high watermark
+                  if (timestampOffset.offset <= localReplica.highWatermark.messageOffset)
+                    timestampOffset
+                  // the consumer wants the latest offset.
+                  else if (timestamp == ListOffsetRequest.LATEST_TIMESTAMP)
+                    TimestampOffset(Message.NoTimestamp, localReplica.highWatermark.messageOffset)
+                  // The found offset is higher than the high watermark and the consumer is not asking for the end offset.
+                  else
+                    TimestampOffset(ListOffsetResponse.UNKNOWN_TIMESTAMP, ListOffsetResponse.UNKNOWN_OFFSET)
+                }
+
+              case None =>
+                TimestampOffset(ListOffsetResponse.UNKNOWN_TIMESTAMP, ListOffsetResponse.UNKNOWN_OFFSET)
+            }
+          }
+          (topicPartition, new ListOffsetResponse.PartitionData(Errors.NONE.code, found.timestamp, found.offset))
+        } catch {
+          // NOTE: These exceptions are special cased since these error messages are typically transient or the client
+          // would have received a clear exception and there is no value in logging the entire stack trace for the same
+          case e @ (_ : UnknownTopicOrPartitionException |
+                    _ : NotLeaderForPartitionException |
+                    _ : InvalidRequestException) =>
+            debug(s"Offset request with correlation id $correlationId from client $clientId on " +
+                s"partition $topicPartition failed due to ${e.getMessage}")
+            (topicPartition, new PartitionData(Errors.forException(e).code,
+                                               ListOffsetResponse.UNKNOWN_TIMESTAMP,
+                                               ListOffsetResponse.UNKNOWN_OFFSET))
+          case e: Throwable =>
+            error("Error while responding to offset request", e)
+            (topicPartition, new PartitionData(Errors.forException(e).code,
+                                               ListOffsetResponse.UNKNOWN_TIMESTAMP,
+                                               ListOffsetResponse.UNKNOWN_OFFSET))
+        }
+      }
+    })
+    responseMap ++ unauthorizedResponseStatus
   }
 
   def fetchOffsets(logManager: LogManager, topicPartition: TopicPartition, timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
@@ -600,6 +680,15 @@ class KafkaApis(val requestChannel: RequestChannel,
           Seq(0L)
         else
           Nil
+    }
+  }
+
+  private def fetchOffsetForTimestamp(logManager: LogManager, topicPartition: TopicPartition, timestamp: Long) : Option[TimestampOffset] = {
+    logManager.getLog(TopicAndPartition(topicPartition.topic, topicPartition.partition)) match {
+      case Some(log) =>
+        log.fetchOffsetsByTimestamp(timestamp)
+      case _ =>
+        throw new UnknownTopicOrPartitionException(s"$topicPartition does not exist on the broker.")
     }
   }
 
@@ -1063,8 +1152,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         (topic, Errors.CLUSTER_AUTHORIZATION_FAILED)
       }
       sendResponseCallback(results)
-    }
-    else {
+    } else {
       val (validTopics, duplicateTopics) = createTopicsRequest.topics.asScala.partition { case (topic, _) =>
         !createTopicsRequest.duplicateTopics.contains(topic)
       }
