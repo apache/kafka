@@ -14,8 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.plain;
+package org.apache.kafka.common.security.plain.internal;
 
+import org.apache.kafka.common.security.plain.PlainLoginModule;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -46,7 +47,9 @@ public class PlainSaslServerTest {
         options.put("user_" + USER_B, PASSWORD_B);
         jaasConfig.addEntry("jaasContext", PlainLoginModule.class.getName(), options);
         JaasContext jaasContext = new JaasContext("jaasContext", JaasContext.Type.SERVER, jaasConfig, null);
-        saslServer = new PlainSaslServer(jaasContext);
+        PlainServerCallbackHandler callbackHandler = new PlainServerCallbackHandler();
+        callbackHandler.configure(null, "PLAIN", jaasContext.configurationEntries());
+        saslServer = new PlainSaslServer(callbackHandler);
     }
 
     @Test

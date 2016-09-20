@@ -14,24 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.plain;
+package org.apache.kafka.common.security.scram.internal;
 
 import java.security.Provider;
 import java.security.Security;
 
-import org.apache.kafka.common.security.plain.PlainSaslServer.PlainSaslServerFactory;
+import org.apache.kafka.common.security.scram.internal.ScramSaslClient.ScramSaslClientFactory;
 
-public class PlainSaslServerProvider extends Provider {
+public class ScramSaslClientProvider extends Provider {
 
     private static final long serialVersionUID = 1L;
 
     @SuppressWarnings("deprecation")
-    protected PlainSaslServerProvider() {
-        super("Simple SASL/PLAIN Server Provider", 1.0, "Simple SASL/PLAIN Server Provider for Kafka");
-        put("SaslServerFactory." + PlainSaslServer.PLAIN_MECHANISM, PlainSaslServerFactory.class.getName());
+    protected ScramSaslClientProvider() {
+        super("SASL/SCRAM Client Provider", 1.0, "SASL/SCRAM Client Provider for Kafka");
+        for (ScramMechanism mechanism : ScramMechanism.values())
+            put("SaslClientFactory." + mechanism.mechanismName(), ScramSaslClientFactory.class.getName());
     }
 
     public static void initialize() {
-        Security.addProvider(new PlainSaslServerProvider());
+        Security.addProvider(new ScramSaslClientProvider());
     }
 }

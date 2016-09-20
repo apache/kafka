@@ -24,7 +24,7 @@ import kafka.utils.{JaasTestUtils, TestUtils, ZkUtils}
 import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.security.scram.ScramMechanism
+import org.apache.kafka.common.security.scram.internal.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.DelegationToken
 import org.junit.Before
 

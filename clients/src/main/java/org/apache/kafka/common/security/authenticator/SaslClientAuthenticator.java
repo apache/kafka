@@ -24,9 +24,8 @@ import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.network.Authenticator;
-import org.apache.kafka.common.network.Mode;
-import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.NetworkSend;
+import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -41,6 +40,8 @@ import org.apache.kafka.common.requests.SaslAuthenticateRequest;
 import org.apache.kafka.common.requests.SaslAuthenticateResponse;
 import org.apache.kafka.common.requests.SaslHandshakeRequest;
 import org.apache.kafka.common.requests.SaslHandshakeResponse;
+import org.apache.kafka.common.security.JaasContext;
+import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -87,7 +88,8 @@ public class SaslClientAuthenticator implements Authenticator {
     private final SaslClient saslClient;
     private final Map<String, ?> configs;
     private final String clientPrincipalName;
-    private final AuthCallbackHandler callbackHandler;
+    private final JaasContext jaasContext;
+    private final AuthenticateCallbackHandler callbackHandler;
 
     // buffers used in `authenticate`
     private NetworkReceive netInBuffer;
@@ -105,7 +107,9 @@ public class SaslClientAuthenticator implements Authenticator {
     private short saslAuthenticateVersion;
 
     public SaslClientAuthenticator(Map<String, ?> configs,
+                                   AuthenticateCallbackHandler callbackHandler,
                                    String node,
+                                   JaasContext jaasContext,
                                    Subject subject,
                                    String servicePrincipal,
                                    String host,
@@ -114,6 +118,8 @@ public class SaslClientAuthenticator implements Authenticator {
                                    TransportLayer transportLayer) throws IOException {
         this.node = node;
         this.subject = subject;
+        this.jaasContext = jaasContext;
+        this.callbackHandler = callbackHandler;
         this.host = host;
         this.servicePrincipal = servicePrincipal;
         this.mechanism = mechanism;
@@ -133,8 +139,7 @@ public class SaslClientAuthenticator implements Authenticator {
             else
                 this.clientPrincipalName = null;
 
-            callbackHandler = new SaslClientCallbackHandler();
-            callbackHandler.configure(configs, Mode.CLIENT, subject, mechanism);
+            callbackHandler.configure(configs, mechanism, jaasContext.configurationEntries());
 
             saslClient = createSaslClient();
         } catch (Exception e) {
@@ -325,8 +330,6 @@ public class SaslClientAuthenticator implements Authenticator {
     public void close() throws IOException {
         if (saslClient != null)
             saslClient.dispose();
-        if (callbackHandler != null)
-            callbackHandler.close();
     }
 
     private byte[] receiveToken() throws IOException {

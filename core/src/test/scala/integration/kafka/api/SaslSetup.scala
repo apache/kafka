@@ -30,7 +30,7 @@ import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.authenticator.LoginManager
-import org.apache.kafka.common.security.scram.ScramMechanism
+import org.apache.kafka.common.security.scram.internal.ScramMechanism
 
 /*
  * Implements an enumeration for the modes enabled here:

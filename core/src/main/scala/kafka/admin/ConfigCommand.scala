@@ -33,6 +33,7 @@ import org.apache.kafka.clients.admin.{AlterConfigsOptions, ConfigEntry, Describ
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.scram._
+import org.apache.kafka.common.security.scram.internal.{ScramCredentialUtils, ScramFormatter, ScramMechanism}
 import org.apache.kafka.common.utils.{Sanitizer, Time, Utils}
 
 import scala.collection._

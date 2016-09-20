@@ -16,6 +16,32 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import javax.security.auth.Subject;
+import javax.security.auth.callback.Callback;
+import javax.security.auth.callback.CallbackHandler;
+import javax.security.auth.callback.NameCallback;
+import javax.security.auth.callback.PasswordCallback;
+import javax.security.auth.callback.UnsupportedCallbackException;
+import javax.security.auth.login.Configuration;
+import javax.security.auth.login.AppConfigurationEntry;
+import javax.security.auth.login.LoginContext;
+import javax.security.auth.login.LoginException;
+
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
@@ -37,6 +63,7 @@ import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.security.auth.Login;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
@@ -54,31 +81,19 @@ import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
 import org.apache.kafka.common.security.scram.ScramCredential;
-import org.apache.kafka.common.security.scram.ScramCredentialUtils;
-import org.apache.kafka.common.security.scram.ScramFormatter;
+import org.apache.kafka.common.security.scram.internal.ScramCredentialUtils;
+import org.apache.kafka.common.security.scram.internal.ScramFormatter;
 import org.apache.kafka.common.security.scram.ScramLoginModule;
-import org.apache.kafka.common.security.scram.ScramMechanism;
+import org.apache.kafka.common.security.scram.internal.ScramMechanism;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.SecurityUtils;
+import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.authenticator.TestDigestLoginModule.DigestServerCallbackHandler;
+import org.apache.kafka.common.security.plain.internal.PlainServerCallbackHandler;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-
-import javax.security.auth.Subject;
-import javax.security.auth.login.Configuration;
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.channels.SelectionKey;
-import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -110,6 +125,7 @@ public class SaslAuthenticatorTest {
         saslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
         saslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
         credentialCache = new CredentialCache();
+        TestLogin.loginCount.set(0);
     }
 
     @After
@@ -234,6 +250,7 @@ public class SaslAuthenticatorTest {
         String node = "0";
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
         configureMechanisms("DIGEST-MD5", Arrays.asList("DIGEST-MD5"));
+        configureDigestMd5ServerCallback(securityProtocol);
 
         server = createEchoServer(securityProtocol);
         createAndCheckClientConnection(securityProtocol, node);
@@ -247,6 +264,7 @@ public class SaslAuthenticatorTest {
     public void testMultipleServerMechanisms() throws Exception {
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
         configureMechanisms("DIGEST-MD5", Arrays.asList("DIGEST-MD5", "PLAIN", "SCRAM-SHA-256"));
+        configureDigestMd5ServerCallback(securityProtocol);
         server = createEchoServer(securityProtocol);
         updateScramCredentialCache(TestJaasConfig.USERNAME, TestJaasConfig.PASSWORD);
 
@@ -681,6 +699,194 @@ public class SaslAuthenticatorTest {
     }
 
     /**
+     * Tests SASL client authentication callback handler override.
+     */
+    @Test
+    public void testClientAuthenticateCallbackHandler() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
+        saslClientConfigs.put(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, TestClientCallbackHandler.class.getName());
+        jaasConfig.setClientOptions("PLAIN", "", ""); // remove username, password in login context
+
+        Map<String, Object> options = new HashMap<>();
+        options.put("user_" + TestClientCallbackHandler.USERNAME, TestClientCallbackHandler.PASSWORD);
+        jaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_SERVER, PlainLoginModule.class.getName(), options);
+        server = createEchoServer(securityProtocol);
+        createAndCheckClientConnection(securityProtocol, "good");
+
+        options.clear();
+        options.put("user_" + TestClientCallbackHandler.USERNAME, "invalid-password");
+        jaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_SERVER, PlainLoginModule.class.getName(), options);
+        createAndCheckClientConnectionFailure(securityProtocol, "invalid");
+    }
+
+    /**
+     * Tests SASL server authentication callback handler override.
+     */
+    @Test
+    public void testServerAuthenticateCallbackHandler() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
+        jaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_SERVER, PlainLoginModule.class.getName(), new HashMap<String, Object>());
+        String callbackPrefix = ListenerName.forSecurityProtocol(securityProtocol).saslMechanismConfigPrefix("PLAIN");
+        saslServerConfigs.put(callbackPrefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS,
+                TestServerCallbackHandler.class.getName());
+        server = createEchoServer(securityProtocol);
+
+        jaasConfig.setClientOptions("PLAIN", TestServerCallbackHandler.USERNAME, TestServerCallbackHandler.PASSWORD);
+        createAndCheckClientConnection(securityProtocol, "good");
+
+        jaasConfig.setClientOptions("PLAIN", TestJaasConfig.USERNAME, "invalid-password");
+        createAndCheckClientConnectionFailure(securityProtocol, "invalid");
+    }
+
+    /**
+     * Test that callback handlers are only applied to connections for the mechanisms
+     * configured for the handler.
+     */
+    @Test
+    public void testAuthenticateCallbackHandlerMechanisms() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        configureMechanisms("DIGEST-MD5", Arrays.asList("DIGEST-MD5", "PLAIN"));
+
+        // Connections should fail using the digest callback handler if listener.mechanism prefix not specified
+        saslServerConfigs.put("plain." + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS,
+                TestServerCallbackHandler.class.getName());
+        saslServerConfigs.put("digest-md5." + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS,
+                DigestServerCallbackHandler.class.getName());
+        server = createEchoServer(securityProtocol);
+        createAndCheckClientConnectionFailure(securityProtocol, "invalid");
+
+        // Connections should succeed using the server callback handler associated with the listener
+        ListenerName listener = ListenerName.forSecurityProtocol(securityProtocol);
+        saslServerConfigs.remove("plain." + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS);
+        saslServerConfigs.remove("digest-md5." + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS);
+        saslServerConfigs.put(listener.saslMechanismConfigPrefix("plain") + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS,
+                TestServerCallbackHandler.class.getName());
+        saslServerConfigs.put(listener.saslMechanismConfigPrefix("digest-md5") + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS,
+                DigestServerCallbackHandler.class.getName());
+        server = createEchoServer(securityProtocol);
+        createAndCheckClientConnection(securityProtocol, "good2");
+    }
+
+    /**
+     * Tests SASL login class override.
+     */
+    @Test
+    public void testClientLoginOverride() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
+        jaasConfig.setClientOptions("PLAIN", "invaliduser", "invalidpassword");
+        server = createEchoServer(securityProtocol);
+
+        // Connection should succeed using login override that sets correct username/password in Subject
+        saslClientConfigs.put(SaslConfigs.SASL_LOGIN_CLASS, TestLogin.class.getName());
+        createAndCheckClientConnection(securityProtocol, "1");
+        assertEquals(1, TestLogin.loginCount.get());
+
+        // Connection should fail without login override since username/password in jaas config is invalid
+        saslClientConfigs.remove(SaslConfigs.SASL_LOGIN_CLASS);
+        createAndCheckClientConnectionFailure(securityProtocol, "invalid");
+        assertEquals(1, TestLogin.loginCount.get());
+    }
+
+    /**
+     * Tests SASL server login class override.
+     */
+    @Test
+    public void testServerLoginOverride() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
+        String prefix = ListenerName.forSecurityProtocol(securityProtocol).saslMechanismConfigPrefix("PLAIN");
+        saslServerConfigs.put(prefix + SaslConfigs.SASL_LOGIN_CLASS, TestLogin.class.getName());
+        server = createEchoServer(securityProtocol);
+        assertEquals(1, TestLogin.loginCount.get());
+
+        createAndCheckClientConnection(securityProtocol, "1");
+        assertEquals(1, TestLogin.loginCount.get());
+    }
+
+    /**
+     * Tests SASL login callback class override.
+     */
+    @Test
+    public void testClientLoginCallbackOverride() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
+        jaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_CLIENT, TestPlainLoginModule.class.getName(),
+                Collections.<String, Object>emptyMap());
+        server = createEchoServer(securityProtocol);
+
+        // Connection should succeed using login callback override that sets correct username/password
+        saslClientConfigs.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, TestLoginCallbackHandler.class.getName());
+        createAndCheckClientConnection(securityProtocol, "1");
+
+        // Connection should fail without login callback override since username/password in jaas config is invalid
+        saslClientConfigs.remove(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS);
+        try {
+            createClientConnection(securityProtocol, "invalid");
+        } catch (Exception e) {
+            assertTrue("Unexpected exception " + e.getCause(), e.getCause() instanceof LoginException);
+        }
+    }
+
+    /**
+     * Tests SASL server login callback class override.
+     */
+    @Test
+    public void testServerLoginCallbackOverride() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
+        jaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_SERVER, TestPlainLoginModule.class.getName(),
+                Collections.<String, Object>emptyMap());
+        jaasConfig.setClientOptions("PLAIN", TestServerCallbackHandler.USERNAME, TestServerCallbackHandler.PASSWORD);
+        ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
+        String prefix = listenerName.saslMechanismConfigPrefix("PLAIN");
+        saslServerConfigs.put(prefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS,
+                TestServerCallbackHandler.class.getName());
+        String loginCallback = TestLoginCallbackHandler.class.getName();
+
+        try {
+            createEchoServer(securityProtocol);
+            fail("Should have failed to create server with default login handler");
+        } catch (KafkaException e) {
+            // Expected exception
+        }
+
+        try {
+            saslServerConfigs.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
+            createEchoServer(securityProtocol);
+            fail("Should have failed to create server with login handler config without listener+mechanism prefix");
+        } catch (KafkaException e) {
+            // Expected exception
+            saslServerConfigs.remove(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS);
+        }
+
+        try {
+            saslServerConfigs.put("plain." + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
+            createEchoServer(securityProtocol);
+            fail("Should have failed to create server with login handler config without listener prefix");
+        } catch (KafkaException e) {
+            // Expected exception
+            saslServerConfigs.remove("plain." + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS);
+        }
+
+        try {
+            saslServerConfigs.put(listenerName.configPrefix() + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
+            createEchoServer(securityProtocol);
+            fail("Should have failed to create server with login handler config without mechanism prefix");
+        } catch (KafkaException e) {
+            // Expected exception
+            saslServerConfigs.remove("plain." + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS);
+        }
+
+        // Connection should succeed using login callback override for mechanism
+        saslServerConfigs.put(prefix + SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, loginCallback);
+        server = createEchoServer(securityProtocol);
+        createAndCheckClientConnection(securityProtocol, "1");
+    }
+
+    /**
      * Tests that mechanisms with default implementation in Kafka may be disabled in
      * the Kafka server by removing from the enabled mechanism list.
      */
@@ -1028,9 +1234,12 @@ public class SaslAuthenticatorTest {
                 securityProtocol, listenerName, false, saslMechanism, true, credentialCache, null) {
 
             @Override
-            protected SaslServerAuthenticator buildServerAuthenticator(Map<String, ?> configs, String id,
-                            TransportLayer transportLayer, Map<String, Subject> subjects) throws IOException {
-                return new SaslServerAuthenticator(configs, id, jaasContexts, subjects, null,
+            protected SaslServerAuthenticator buildServerAuthenticator(Map<String, ?> configs,
+                                                                       Map<String, AuthenticateCallbackHandler> callbackHandlers,
+                                                                       String id,
+                                                                       TransportLayer transportLayer,
+                                                                       Map<String, Subject> subjects) throws IOException {
+                return new SaslServerAuthenticator(configs, callbackHandlers, id, jaasContexts, subjects, null,
                                 credentialCache, listenerName, securityProtocol, transportLayer, null) {
 
                     @Override
@@ -1072,11 +1281,15 @@ public class SaslAuthenticatorTest {
                 securityProtocol, listenerName, false, saslMechanism, true, null, null) {
 
             @Override
-            protected SaslClientAuthenticator buildClientAuthenticator(Map<String, ?> configs, String id,
-                    String serverHost, String servicePrincipal,
-                    TransportLayer transportLayer, Subject subject) throws IOException {
+            protected SaslClientAuthenticator buildClientAuthenticator(Map<String, ?> configs,
+                                                                       AuthenticateCallbackHandler callbackHandler,
+                                                                       String id,
+                                                                       String serverHost,
+                                                                       String servicePrincipal,
+                                                                       TransportLayer transportLayer,
+                                                                       Subject subject) throws IOException {
 
-                return new SaslClientAuthenticator(configs, id, subject,
+                return new SaslClientAuthenticator(configs, callbackHandler, id, jaasContext, subject,
                         servicePrincipal, serverHost, saslMechanism, true, transportLayer) {
                     @Override
                     protected SaslHandshakeRequest createSaslHandshakeRequest(short version) {
@@ -1173,7 +1386,17 @@ public class SaslAuthenticatorTest {
     private TestJaasConfig configureMechanisms(String clientMechanism, List<String> serverMechanisms) {
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, clientMechanism);
         saslServerConfigs.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, serverMechanisms);
+        if (serverMechanisms.contains("DIGEST-MD5")) {
+            saslServerConfigs.put("digest-md5." + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS,
+                    TestDigestLoginModule.DigestServerCallbackHandler.class.getName());
+        }
         return TestJaasConfig.createConfiguration(clientMechanism, serverMechanisms);
+    }
+
+    private void configureDigestMd5ServerCallback(SecurityProtocol securityProtocol) {
+        String callbackPrefix = ListenerName.forSecurityProtocol(securityProtocol).saslMechanismConfigPrefix("DIGEST-MD5");
+        saslServerConfigs.put(callbackPrefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS,
+                TestDigestLoginModule.DigestServerCallbackHandler.class.getName());
     }
 
     private void createSelector(SecurityProtocol securityProtocol, Map<String, Object> clientConfigs) {
@@ -1261,6 +1484,17 @@ public class SaslAuthenticatorTest {
         return selector.completedReceives().get(0).payload();
     }
 
+    public static class TestServerCallbackHandler extends PlainServerCallbackHandler {
+
+        static final String USERNAME = "TestServerCallbackHandler-user";
+        static final String PASSWORD = "TestServerCallbackHandler-password";
+
+        @Override
+        protected boolean authenticate(String username, char[] password) throws IOException {
+            return USERNAME.equals(username) && new String(password).equals(PASSWORD);
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private void updateScramCredentialCache(String username, String password) throws NoSuchAlgorithmException {
         for (String mechanism : (List<String>) saslServerConfigs.get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG)) {
@@ -1286,6 +1520,111 @@ public class SaslAuthenticatorTest {
                 ScramFormatter formatter = new ScramFormatter(scramMechanism);
                 ScramCredential credential = formatter.generateCredential(password, 4096);
                 server.tokenCache().credentialCache(scramMechanism.mechanismName()).put(username, credential);
+            }
+        }
+    }
+
+    public static class TestClientCallbackHandler implements AuthenticateCallbackHandler {
+
+        static final String USERNAME = "TestClientCallbackHandler-user";
+        static final String PASSWORD = "TestClientCallbackHandler-password";
+
+        @Override
+        public void configure(Map<String, ?> configs, String mechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+        }
+
+        @Override
+        public void handle(Callback[] callbacks) throws IOException, UnsupportedCallbackException {
+            for (Callback callback : callbacks) {
+                if (callback instanceof NameCallback)
+                    ((NameCallback) callback).setName(USERNAME);
+                else if (callback instanceof PasswordCallback)
+                    ((PasswordCallback) callback).setPassword(PASSWORD.toCharArray());
+                else
+                    throw new UnsupportedCallbackException(callback);
+            }
+        }
+
+        @Override
+        public void close() {
+        }
+    }
+
+    public static class TestLogin implements Login {
+
+        static AtomicInteger loginCount = new AtomicInteger();
+
+        private String contextName;
+        private Configuration configuration;
+        private Subject subject;
+        @Override
+        public void configure(Map<String, ?> configs, String contextName, Configuration configuration,
+                              AuthenticateCallbackHandler callbackHandler) {
+            assertEquals(1, configuration.getAppConfigurationEntry(contextName).length);
+            this.contextName = contextName;
+            this.configuration = configuration;
+        }
+
+        @Override
+        public LoginContext login() throws LoginException {
+            LoginContext context = new LoginContext(contextName, null, new AbstractLogin.DefaultLoginCallbackHandler(), configuration);
+            context.login();
+            subject = context.getSubject();
+            subject.getPublicCredentials().clear();
+            subject.getPrivateCredentials().clear();
+            subject.getPublicCredentials().add(TestJaasConfig.USERNAME);
+            subject.getPrivateCredentials().add(TestJaasConfig.PASSWORD);
+            loginCount.incrementAndGet();
+            return context;
+        }
+
+        @Override
+        public Subject subject() {
+            return subject;
+        }
+
+        @Override
+        public String serviceName() {
+            return "kafka";
+        }
+
+        @Override
+        public void close() {
+        }
+    }
+
+    public static class TestLoginCallbackHandler implements AuthenticateCallbackHandler {
+        @Override
+        public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+        }
+
+        @Override
+        public void handle(Callback[] callbacks) throws IOException, UnsupportedCallbackException {
+            for (Callback callback : callbacks) {
+                if (callback instanceof NameCallback)
+                    ((NameCallback) callback).setName(TestJaasConfig.USERNAME);
+                else if (callback instanceof PasswordCallback)
+                    ((PasswordCallback) callback).setPassword(TestJaasConfig.PASSWORD.toCharArray());
+            }
+        }
+
+        @Override
+        public void close() {
+        }
+    }
+
+    public static final class TestPlainLoginModule extends PlainLoginModule {
+        @Override
+        public void initialize(Subject subject, CallbackHandler callbackHandler, Map<String, ?> sharedState, Map<String, ?> options) {
+            assertEquals(TestLoginCallbackHandler.class, callbackHandler.getClass());
+            try {
+                NameCallback nameCallback = new NameCallback("name:");
+                PasswordCallback passwordCallback = new PasswordCallback("password:", false);
+                callbackHandler.handle(new Callback[]{nameCallback, passwordCallback});
+                subject.getPublicCredentials().add(nameCallback.getName());
+                subject.getPrivateCredentials().add(new String(passwordCallback.getPassword()));
+            } catch (Exception e) {
+                throw new SaslAuthenticationException("Login initialization failed", e);
             }
         }
     }

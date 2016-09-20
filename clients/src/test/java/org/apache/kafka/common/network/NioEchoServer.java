@@ -24,8 +24,8 @@ import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
-import org.apache.kafka.common.security.scram.ScramCredentialUtils;
-import org.apache.kafka.common.security.scram.ScramMechanism;
+import org.apache.kafka.common.security.scram.ScramCredential;
+import org.apache.kafka.common.security.scram.internal.ScramMechanism;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestCondition;
@@ -79,8 +79,12 @@ public class NioEchoServer extends Thread {
         this.newChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
         this.credentialCache = credentialCache;
         this.tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames());
-        if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL)
-            ScramCredentialUtils.createCache(credentialCache, ScramMechanism.mechanismNames());
+        if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL) {
+            for (String mechanism : ScramMechanism.mechanismNames()) {
+                if (credentialCache.cache(mechanism, ScramCredential.class) == null)
+                    credentialCache.createCache(mechanism, ScramCredential.class);
+            }
+        }
         if (channelBuilder == null)
             channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, false, securityProtocol, config, credentialCache, tokenCache);
         this.metrics = new Metrics();

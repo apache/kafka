@@ -14,13 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.authenticator;
-
-import org.apache.kafka.common.security.JaasContext;
+package org.apache.kafka.common.security.auth;
 
 import java.util.Map;
 
 import javax.security.auth.Subject;
+import javax.security.auth.login.Configuration;
 import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
 
@@ -32,7 +31,8 @@ public interface Login {
     /**
      * Configures this login instance.
      */
-    void configure(Map<String, ?> configs, JaasContext jaasContext);
+    void configure(Map<String, ?> configs, String contextName, Configuration configuration,
+                   AuthenticateCallbackHandler loginCallbackHandler);
 
     /**
      * Performs login for each login module specified for the login context of this instance.
@@ -54,4 +54,3 @@ public interface Login {
      */
     void close();
 }
-

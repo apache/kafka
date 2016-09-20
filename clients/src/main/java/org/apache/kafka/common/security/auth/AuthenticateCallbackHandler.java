@@ -14,29 +14,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.authenticator;
 
+package org.apache.kafka.common.security.auth;
+
+import java.util.List;
 import java.util.Map;
 
-import org.apache.kafka.common.network.Mode;
-
-import javax.security.auth.Subject;
 import javax.security.auth.callback.CallbackHandler;
+import javax.security.auth.login.AppConfigurationEntry;
 
 /*
  * Callback handler for SASL-based authentication
  */
-public interface AuthCallbackHandler extends CallbackHandler {
+public interface AuthenticateCallbackHandler extends CallbackHandler {
 
     /**
-     * Configures this callback handler.
-     *
-     * @param configs Configuration
-     * @param mode The mode that indicates if this is a client or server connection
-     * @param subject Subject from login context
+     * Configures this callback handler for the specified SASL mechanism.
+     * @param configs Configuration options
      * @param saslMechanism Negotiated SASL mechanism
+     * @param jaasConfigEntries JAAS configuration entries from the JAAS login context.
+     *        This list contains a single entry for clients and may contain more than
+     *        one entry for servers if multiple mechanisms are enabled on a listener.
      */
-    void configure(Map<String, ?> configs, Mode mode, Subject subject, String saslMechanism);
+    void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries);
 
     /**
      * Closes this instance.
