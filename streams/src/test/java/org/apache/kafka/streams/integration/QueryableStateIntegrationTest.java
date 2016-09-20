@@ -265,7 +265,7 @@ public class QueryableStateIntegrationTest {
                 public boolean conditionMet() {
                     try {
                         final StreamsMetadata metadata = streams.metadataForKey(storeName, key, new StringSerializer());
-                        if (metadata == null) {
+                        if (metadata == null || metadata.equals(StreamsMetadata.NOT_AVAILABLE)) {
                             return false;
                         }
                         final int index = metadata.hostInfo().port();
@@ -295,7 +295,7 @@ public class QueryableStateIntegrationTest {
                 public boolean conditionMet() {
                     try {
                         final StreamsMetadata metadata = streams.metadataForKey(storeName, key, new StringSerializer());
-                        if (metadata == null) {
+                        if (metadata == null || metadata.equals(StreamsMetadata.NOT_AVAILABLE)) {
                             return false;
                         }
                         final int index = metadata.hostInfo().port();
