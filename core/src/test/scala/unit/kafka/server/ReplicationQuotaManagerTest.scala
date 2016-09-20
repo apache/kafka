@@ -14,13 +14,12 @@
   * See the License for the specific language governing permissions and
   * limitations under the License.
   */
-package unit.kafka.server
+package kafka.server
 
 import java.util.Collections
 
 import kafka.common.TopicAndPartition
 import kafka.server.QuotaType._
-import kafka.server.{QuotaType, ReplicationQuotaManager, ReplicationQuotaManagerConfig}
 import org.apache.kafka.common.metrics.{Quota, MetricConfig, Metrics}
 import org.apache.kafka.common.utils.MockTime
 import org.junit.Assert.{assertFalse, assertTrue, assertEquals}
