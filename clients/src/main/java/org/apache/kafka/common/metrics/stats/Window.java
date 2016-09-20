@@ -20,7 +20,6 @@ import org.apache.kafka.common.metrics.MetricConfig;
 
 public class Window {
     public static final Policy FIXED = new FixedWindowPolicy();
-    public static final Policy FIXED_THEN_ELAPSED = new FixedSubWindowPolicy();
     public static final Policy ELAPSED = new ElapsedWindowPolicy();
 
     interface Policy {
@@ -75,37 +74,13 @@ public class Window {
      * the first measurement.
      *
      * This policy is suited to use cases where immediate accuracy is preferred,
-     * be it due to a slow start or due to infrequent measurements.
+     * regardless of whether you are starting or have infrequent measurements.
      */
     private static class ElapsedWindowPolicy implements Policy {
         @Override
         public long windowSize(long first, long last, MetricConfig config) {
             long elapsed = last - first;
             return elapsed == 0 ? config.samples() * config.timeWindowMs() : elapsed;
-        }
-    }
-
-    /**
-     * This policy fixes the first sub-window. If measurements do not span
-     * more than one sub-window then the whole sub-window duration is used
-     * to calculate the rate.
-     *
-     * However if there are measurements spanning multiple sub windows this rate
-     * behaves identically to the elapsed window policy.
-     *
-     * So this provides a slow start, in a similar fashion to FixedWindows,
-     * but only over the duration of the first sub-window rather than all
-     * sub-windows.
-     *
-     * This policy policy provides a balance between the other two. It has a short
-     * "slow start", in comparison to teh Fixed policy, after which it will have
-     * the accuracy of the Elapsed policy.
-     */
-    private static class FixedSubWindowPolicy implements Policy {
-        @Override
-        public long windowSize(long first, long last, MetricConfig config) {
-            long elapsed = last - first;
-            return elapsed < config.timeWindowMs() ? config.timeWindowMs() : elapsed;
         }
     }
 }
