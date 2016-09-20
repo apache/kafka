@@ -85,7 +85,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
     brokers = (100 to 105).map { id => TestUtils.createServer(fromProps(createBrokerConfig(id, zkConnect))) }
 
-    //Given six partitions, led on nodes 0,1,2,3,4,5 but will followers on node 6,7 (not started yet)
+    //Given six partitions, led on nodes 0,1,2,3,4,5 but with followers on node 6,7 (not started yet)
     //And two extra partitions 6,7, which we don't intend on throttling.
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, Map(
       0 -> Seq(100, 106), //Throttled
@@ -167,9 +167,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     assertTrue(s"Expected ${rate} > $rateLowerBound", rate > rateLowerBound)
   }
 
-  def tp(partition: Int): TopicAndPartition = {
-    new TopicAndPartition(topic, partition)
-  }
+  def tp(partition: Int): TopicAndPartition = new TopicAndPartition(topic, partition)
 
   @Test
   def shouldThrottleOldSegments(): Unit = {
