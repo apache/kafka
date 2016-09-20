@@ -231,18 +231,18 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
   private def brokerFor(id: Int): KafkaServer = brokers.filter(_.config.brokerId == id)(0)
 
-  def createBrokers(brokerIds: Inclusive): Unit = {
+  def createBrokers(brokerIds: Seq[Int]): Unit = {
     brokerIds.foreach { id =>
       brokers = brokers :+ TestUtils.createServer(fromProps(createBrokerConfig(id, zkConnect)))
     }
   }
 
   private def avRate(replicationType: QuotaType, brokers: Inclusive): Double = {
-    brokers.map(brokerFor(_)).map(measuredRate(_, replicationType)).sum / brokers.length
+    brokers.map(brokerFor).map(measuredRate(_, replicationType)).sum / brokers.length
   }
 
   private def measuredRate(broker: KafkaServer, repType: QuotaType): Double = {
-    val metricName = broker.metrics.metricName("byte-rate", repType.toString, s"Tracking byte-rate for ${repType}")
-    broker.metrics.metrics.asScala(metricName).value()
+    val metricName = broker.metrics.metricName("byte-rate", repType.toString)
+    broker.metrics.metrics.asScala(metricName).value
   }
 }
