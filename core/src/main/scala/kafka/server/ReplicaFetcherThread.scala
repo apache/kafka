@@ -24,17 +24,16 @@ import kafka.admin.AdminUtils
 import kafka.cluster.BrokerEndPoint
 import kafka.log.LogConfig
 import kafka.message.ByteBufferMessageSet
-import kafka.api.{KAFKA_0_9_0, KAFKA_0_10_0_IV0, KAFKA_0_10_1_IV1}
+import kafka.api.{KAFKA_0_10_0_IV0, KAFKA_0_10_1_IV1, KAFKA_0_10_1_IV2, KAFKA_0_9_0}
 import kafka.common.{KafkaStorageException, TopicAndPartition}
 import ReplicaFetcherThread._
-
-import org.apache.kafka.clients.{ManualMetadataUpdater, NetworkClient, ClientRequest, ClientResponse}
-import org.apache.kafka.common.network.{LoginType, Selectable, ChannelBuilders, NetworkReceive, Selector, Mode}
-import org.apache.kafka.common.requests.{ListOffsetResponse, FetchResponse, RequestSend, AbstractRequest, ListOffsetRequest}
+import org.apache.kafka.clients.{ClientRequest, ClientResponse, ManualMetadataUpdater, NetworkClient}
+import org.apache.kafka.common.network.{ChannelBuilders, LoginType, Mode, NetworkReceive, Selectable, Selector}
+import org.apache.kafka.common.requests.{AbstractRequest, FetchResponse, ListOffsetRequest, ListOffsetResponse, RequestSend}
 import org.apache.kafka.common.requests.{FetchRequest => JFetchRequest}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.{Errors, ApiKeys}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.{JavaConverters, Map}
@@ -263,15 +262,23 @@ class ReplicaFetcherThread(name: String,
   }
 
   private def earliestOrLatestOffset(topicPartition: TopicPartition, earliestOrLatest: Long, consumerId: Int): Long = {
-    val partitions = Map(
-      topicPartition -> new ListOffsetRequest.PartitionData(earliestOrLatest, 1)
-    )
-    val request = new ListOffsetRequest(consumerId, partitions.asJava)
-    val clientResponse = sendRequest(ApiKeys.LIST_OFFSETS, None, request)
+    val (request, apiVersion) =
+      if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_1_IV2) {
+        val partitions = Map(topicPartition -> earliestOrLatest)
+        (new ListOffsetRequest(partitions.asJava, consumerId), 1)
+      } else {
+        val partitions = Map(topicPartition -> new ListOffsetRequest.PartitionData(earliestOrLatest, 1))
+        (new ListOffsetRequest(consumerId, partitions.asJava), 0)
+      }
+    val clientResponse = sendRequest(ApiKeys.LIST_OFFSETS, Some(apiVersion.toShort), request)
     val response = new ListOffsetResponse(clientResponse.responseBody)
     val partitionData = response.responseData.get(topicPartition)
     Errors.forCode(partitionData.errorCode) match {
-      case Errors.NONE => partitionData.offsets.asScala.head
+      case Errors.NONE =>
+        if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_1_IV2)
+          partitionData.offset
+        else
+          partitionData.offsets.get(0)
       case errorCode => throw errorCode.exception
     }
   }
