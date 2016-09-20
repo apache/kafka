@@ -530,8 +530,8 @@ public class Fetcher<K, V> {
     /**
      * Send the ListOffsetRequest to a specific broker for the partitions and target timestamps.
      *
-     * @param node The node of the
-     * @param timestampsToSearch The mapping from partitions to the targe timestamps.
+     * @param node The node to send the ListOffsetRequest to.
+     * @param timestampsToSearch The mapping from partitions to the target timestamps.
      * @return A response which can be polled to obtain the corresponding timestamps and offsets.
      */
     private RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> sendListOffsetRequest(Node node,

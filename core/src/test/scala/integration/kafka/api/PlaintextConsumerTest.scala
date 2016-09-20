@@ -988,7 +988,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val consumer = this.consumers.head
 
     // Test negative target time
-    val caught = intercept[IllegalArgumentException](
+    intercept[IllegalArgumentException](
       consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(topic1, 0), -1)))
 
     val timestampsToSearch = new util.HashMap[TopicPartition, java.lang.Long]()
@@ -996,12 +996,19 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     for (topic <- List(topic1, topic2, topic3)) {
       for (part <- 0 until numParts) {
         val tp = new TopicPartition(topic, part)
+        // In sendRecords(), each message will have key, value and timestamp equal to the sequence number.
         sendRecords(100, tp)
         timestampsToSearch.put(tp, i * 20)
         i += 1
       }
     }
-
+    // The timestampToSearch map should contain:
+    // (topic1Partition0 -> 0,
+    //  topic1Partitoin1 -> 20,
+    //  topic2Partition0 -> 40,
+    //  topic2Partition1 -> 60,
+    //  topic3Partition0 -> 80,
+    //  topic3Partition1 -> 100)
     val timestampOffsets = consumer.offsetsForTimes(timestampsToSearch)
     assertEquals(0, timestampOffsets.get(new TopicPartition(topic1, 0)).offset())
     assertEquals(0, timestampOffsets.get(new TopicPartition(topic1, 0)).timestamp())
@@ -1032,12 +1039,12 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val partitions = Set(t0p0, t0p1, t1p0).asJava
     val consumer = this.consumers.head
 
-    val earliests = consumer.earliestOffsets(partitions)
+    val earliests = consumer.beginningOffsets(partitions)
     assertEquals(0L, earliests.get(t0p0))
     assertEquals(0L, earliests.get(t0p1))
     assertEquals(0L, earliests.get(t1p0))
 
-    val latests = consumer.latestOffsets(partitions)
+    val latests = consumer.endOffsets(partitions)
     assertEquals(100L, latests.get(t0p0))
     assertEquals(100L, latests.get(t0p1))
     assertEquals(100L, latests.get(t1p0))

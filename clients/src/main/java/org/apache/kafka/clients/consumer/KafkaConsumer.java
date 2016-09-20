@@ -1396,16 +1396,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     /**
      * Look up the offsets for the given partitions by timestamp. The returned offset for each partition is the
-     * earliest offset whose timestamp is greater than or equals to the given timestamp in the corresponding partition.
+     * earliest offset whose timestamp is greater than or equal to the given timestamp in the corresponding partition.
      *
      * This is a blocking call. The consumer does not have to be assigned the partitions.
      * If the message format version in a partition is before 0.10.0, i.e. the messages do not have timestamps, null
      * will be returned for that partition.
      *
-     * Notice that this method may block infinitely if the partition does not exist.
+     * Notice that this method may block indefinitely if the partition does not exist.
      *
      * @param timestampsToSearch the mapping from partition to the timestamp to look up.
-     * @return For each partition, returns the timestamp and offset of the first message with timestamp greater
+     * @return a mapping from partition to the timestamp and offset of the first message with timestamp greater
      *         than or equal to the target timestamp. {@code null} will be returned for the partition if there is no
      *         such message.
      * @throws IllegalArgumentException if the target timestamp is negative.
@@ -1423,27 +1423,27 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Get the earliest available offsets for the given partitions.
      *
-     * Notice that this method may block infinitely if the partition does not exist.
+     * Notice that this method may block indefinitely if the partition does not exist.
      *
      * @param partitions the partitions to get the earliest offsets.
      * @return The earliest available offsets for the given partitions
      */
     @Override
-    public Map<TopicPartition, Long> earliestOffsets(Collection<TopicPartition> partitions) {
+    public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions) {
         return fetcher.earliestOffsets(partitions);
     }
 
     /**
-     * Get the latest offsets for the given partitions. The latest offset of a partition is the offset of the
-     * next coming message.
+     * Get the end offsets for the given partitions. The end offset of a partition is the offset of the upcoming
+     * message, i.e. the offset of the last available message + 1.
      *
-     * Notice that this method may block infinitely if the partition does not exist.
+     * Notice that this method may block indefinitely if the partition does not exist.
      *
-     * @param partitions the partitions to get the latest offsets.
-     * @return The latest available offsets for the given partitions.
+     * @param partitions the partitions to get the end offsets.
+     * @return The end offsets for the given partitions.
      */
     @Override
-    public Map<TopicPartition, Long> latestOffsets(Collection<TopicPartition> partitions) {
+    public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions) {
         return fetcher.latestOffsets(partitions);
     }
 

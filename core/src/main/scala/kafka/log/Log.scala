@@ -610,12 +610,15 @@ class Log(val dir: File,
       val earlierSegs = segsArray.takeWhile(_.largestTimestamp < targetTimestamp)
       // We need to search the first segment whose largest timestamp is greater than the target timestamp if there is one.
       if (earlierSegs.length < segsArray.length)
-        segsArray(earlierSegs.length)
+        Some(segsArray(earlierSegs.length))
       else
-        earlierSegs.last
+        None
     }
 
-    targetSeg.findOffsetByTimestamp(targetTimestamp)
+    targetSeg match {
+      case Some(segment) => segment.findOffsetByTimestamp(targetTimestamp)
+      case None => None
+    }
   }
 
   /**
