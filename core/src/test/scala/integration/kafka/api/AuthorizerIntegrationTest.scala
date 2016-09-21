@@ -44,6 +44,8 @@ import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
 import org.apache.kafka.common.KafkaException
+import java.util.HashMap
+import kafka.admin.AdminUtils
 
 class AuthorizerIntegrationTest extends BaseRequestTest {
 
@@ -58,6 +60,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   val correlationId = 0
   val clientId = "client-Id"
   val tp = new TopicPartition(topic, part)
+
   val topicAndPartition = new TopicAndPartition(topic, part)
   val group = "my-group"
   val topicResource = new Resource(Topic, topic)
@@ -282,6 +285,26 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       for ((resource, acls) <- RequestKeysToAcls(key))
         addAndVerifyAcls(acls, resource)
       sendRequestAndVerifyResponseErrorCode(key, request, resources, isAuthorized = true)
+    }
+  }
+
+  /*
+   * checking that whether the topic exists or not, when unauthorized, FETCH and PRODUCE do not leak the topic name
+   */
+  @Test
+  def testAuthorizationProduceFetchDoNotLeakTopicName() {
+    AdminUtils.deleteTopic(zkUtils, topic)
+    TestUtils.verifyTopicDeletion(zkUtils, topic, 1, servers)
+    
+    val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
+      ApiKeys.PRODUCE -> createProduceRequest,
+      ApiKeys.FETCH -> createFetchRequest
+    )
+
+    for ((key, request) <- requestKeyToRequest) {
+      removeAllAcls
+      val resources = RequestKeysToAcls(key).map(_._1.resourceType).toSet
+      sendRequestAndVerifyResponseErrorCode(key, request, resources, isAuthorized = false)
     }
   }
 
@@ -627,7 +650,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testListOfsetsWithTopicDescribe() {
+  def testListOffsetsWithTopicDescribe() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)), topicResource)
     this.consumers.head.partitionsFor(topic)
   }
@@ -674,9 +697,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val errorCode = RequestKeyToErrorCode(apiKey).asInstanceOf[(AbstractRequestResponse) => Short](response)
 
     val possibleErrorCodes = resources.flatMap { resourceType =>
-      if(resourceType == Topic)
-        // When completely unauthorized topic resources may return an INVALID_TOPIC_EXCEPTION to prevent leaking topic names
-        Seq(resourceType.errorCode, Errors.INVALID_TOPIC_EXCEPTION.code(), Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+      if (resourceType == Topic)
+        if (apiKey == ApiKeys.PRODUCE || apiKey == ApiKeys.FETCH ) {
+          //Only allowing TOPIC_AUTHORIZATION_FAILED as an error code
+          Seq(resourceType.errorCode)
+        } else {
+          // When completely unauthorized topic resources may return an INVALID_TOPIC_EXCEPTION/UNKNOWN_TOPIC_OR_PARTITION to prevent leaking topic names
+          Seq(Errors.INVALID_TOPIC_EXCEPTION.code(), Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+        }
       else
         Seq(resourceType.errorCode)
     }

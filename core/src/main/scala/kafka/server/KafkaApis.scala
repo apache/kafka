@@ -554,7 +554,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val unauthorizedResponseStatus = unauthorizedRequestInfo.mapValues(_ =>
-      new PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED.code, List[JLong]().asJava)
+      new PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION.code, List[JLong]().asJava)
     )
 
     val responseMap = authorizedRequestInfo.map({case (topicPartition, partitionData) =>
@@ -605,7 +605,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val unauthorizedResponseStatus = unauthorizedRequestInfo.mapValues(_ => {
-      new PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED.code,
+      new PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION.code,
                         ListOffsetResponse.UNKNOWN_TIMESTAMP,
                         ListOffsetResponse.UNKNOWN_OFFSET)
     })
@@ -838,7 +838,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         Set.empty[MetadataResponse.TopicMetadata]
       else
         unauthorizedForDescribeTopics.map(topic =>
-          new MetadataResponse.TopicMetadata(Errors.UNKNOWN_TOPIC_OR_PARTITION, topic, common.Topic.isInternal(topic), java.util.Collections.emptyList()))
+          new MetadataResponse.TopicMetadata(Errors.UNKNOWN_TOPIC_OR_PARTITION, topic, false, java.util.Collections.emptyList()))
 
     // In version 0, we returned an error when brokers with replicas were unavailable,
     // while in higher versions we simply don't include the broker in the returned broker list
