@@ -35,6 +35,7 @@ However, please notice the <a href="#upgrade_10_1_breaking">Potential breaking c
 <h5><a id="upgrade_1010_notable" href="#upgrade_1010_notable">Notable changes in 0.10.1.0</a></h5>
 <ul>
     <li> The BrokerState "RunningAsController" (value 4) has been removed. Due to a bug, a broker would only be in this state briefly before transitioning out of it and hence the impact of the removal should be minimal. The recommended way to detect if a given broker is the controller is via the kafka.controller:type=KafkaController,name=ActiveControllerCount metric. </li>
+    <li> Cluster Id has been added. It will be generated automatically on upgrading and restarting the brokers. It is available as kafka.server:type=KafkaServer,name=ClusterId metric and is also part of the Metadata response. Any class can get access to cluster id by implementing the ClusterResourceListener interface. </li>
 </ul>
 
 <h4><a id="upgrade_10" href="#upgrade_10">Upgrading from 0.8.x or 0.9.x to 0.10.0.0</a></h4>

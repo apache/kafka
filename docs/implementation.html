@@ -337,7 +337,7 @@ Each of the consumers in the group registers under its group and creates a znode
 Consumers track the maximum offset they have consumed in each partition. This value is stored in a ZooKeeper directory if <code>offsets.storage=zookeeper</code>.
 </p>
 <pre>
-/consumers/[group_id]/offsets/[topic]/[partition_id] --> offset_counter_value ((persistent node)
+/consumers/[group_id]/offsets/[topic]/[partition_id] --> offset_counter_value (persistent node)
 </pre>
 
 <h4><a id="impl_zkowner" href="#impl_zkowner">Partition Owner registry</a></h4>
@@ -350,10 +350,26 @@ Each broker partition is consumed by a single consumer within a given consumer g
 /consumers/[group_id]/owners/[topic]/[partition_id] --> consumer_node_id (ephemeral node)
 </pre>
 
+<h4><a id="impl_clusterid" href="#impl_clusterid">Cluster Id</a></h4>
+
+<p>
+    The cluster id is an unique and immutable identifier assigned to a Kafka cluster. The cluster id is 22 characters long and the allowed characters is defined by the regular expression [a-zA-Z0-9_\-]+, which corresponds to the characters used by the URL-safe Base64 variant. It is auto-generated when the cluster is started for the first time.
+</p>
+
+<pre>
+/cluster/id  --> {"version":...,"id": ...} (persistent node)
+</pre>
+
 <h4><a id="impl_brokerregistration" href="#impl_brokerregistration">Broker node registration</a></h4>
 
 <p>
 The broker nodes are basically independent, so they only publish information about what they have. When a broker joins, it registers itself under the broker node registry directory and writes information about its host name and port. The broker also register the list of existing topics and their logical partitions in the broker topic registry. New topics are registered dynamically when they are created on the broker.
+</p>
+
+<h4><a id="impl_clusteridgeneration" href="#impl_clusteridgeneration">Cluster Id generation</a></h4>
+
+<p>
+    During startup, the broker first tries to get the cluster id from /cluster/id znode. If the znode does not exist, the broker generates an id via UUID.randomUUID() and converts it to a string via URL-safe Base64 encoding. The broker then tries to create the znode with this id. If the znode creation fails with a ZkNodeExistsException, then another broker won the race, so it just retrieves the cluster id from the /cluster/id znode.
 </p>
 
 <h4><a id="impl_consumerregistration" href="#impl_consumerregistration">Consumer registration algorithm</a></h4>
