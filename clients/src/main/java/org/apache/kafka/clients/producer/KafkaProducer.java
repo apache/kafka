@@ -334,6 +334,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         } catch (Throwable t) {
             // call close methods if internal objects are already constructed
             // this is to prevent resource leak. see KAFKA-2121
+            t.printStackTrace();
             close(0, TimeUnit.MILLISECONDS, true);
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka producer", t);
