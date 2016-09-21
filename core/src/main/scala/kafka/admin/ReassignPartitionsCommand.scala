@@ -16,7 +16,6 @@
  */
 package kafka.admin
 
-import java.text.NumberFormat._
 import java.util.Properties
 import joptsimple.OptionParser
 import kafka.log.LogConfig
@@ -30,31 +29,24 @@ import org.apache.kafka.common.security.JaasUtils
 
 object ReassignPartitionsCommand extends Logging {
 
-  //TODO Note to reviewer - this class needs a little more work (which I'll complete on Monday, or we could just revert this, but including here as an outline of what is intended)
-
   def main(args: Array[String]): Unit = {
 
-    val opts = new ReassignPartitionsCommandOptions(args)
-
-    // should have exactly one action
-    val actions = Seq(opts.generateOpt, opts.executeOpt, opts.verifyOpt).count(opts.options.has _)
-    if(actions != 1)
-      CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --generate, --execute or --verify")
-
-    CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, opts.zkConnectOpt)
-
+    val opts = validateAndParseArgs(args)
     val zkConnect = opts.options.valueOf(opts.zkConnectOpt)
     val zkUtils = ZkUtils(zkConnect,
                           30000,
                           30000,
                           JaasUtils.isZkSecurityEnabled())
     try {
-      if(opts.options.has(opts.verifyOpt))
+      if(opts.options.has(opts.verifyOpt)) {
         verifyAssignment(zkUtils, opts)
-      else if(opts.options.has(opts.generateOpt))
+      }
+      else if(opts.options.has(opts.generateOpt)) {
         generateAssignment(zkUtils, opts)
-      else if (opts.options.has(opts.executeOpt))
+      }
+      else if (opts.options.has(opts.executeOpt)){
         executeAssignment(zkUtils, opts)
+      }
     } catch {
       case e: Throwable =>
         println("Partitions reassignment failed due to " + e.getMessage)
@@ -63,8 +55,6 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   def verifyAssignment(zkUtils: ZkUtils, opts: ReassignPartitionsCommandOptions) {
-    if(!opts.options.has(opts.reassignmentJsonFileOpt))
-      CommandLineUtils.printUsageAndDie(opts.parser, "If --verify option is used, command must include --reassignment-json-file that was used during the --execute option")
     val jsonFile = opts.options.valueOf(opts.reassignmentJsonFileOpt)
     val jsonString = Utils.readFileAsString(jsonFile)
     verifyAssignment(zkUtils, jsonString)
@@ -116,8 +106,6 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   def generateAssignment(zkUtils: ZkUtils, opts: ReassignPartitionsCommandOptions) {
-    if(!(opts.options.has(opts.topicsToMoveJsonFileOpt) && opts.options.has(opts.brokerListOpt)))
-      CommandLineUtils.printUsageAndDie(opts.parser, "If --generate option is used, command must include both --topics-to-move-json-file and --broker-list options")
     val topicsToMoveJsonFile = opts.options.valueOf(opts.topicsToMoveJsonFileOpt)
     val brokerListToReassign = opts.options.valueOf(opts.brokerListOpt).split(',').map(_.toInt)
     val duplicateReassignments = CoreUtils.duplicates(brokerListToReassign)
@@ -153,8 +141,6 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   def executeAssignment(zkUtils: ZkUtils, opts: ReassignPartitionsCommandOptions) {
-    if(!opts.options.has(opts.reassignmentJsonFileOpt))
-      CommandLineUtils.printUsageAndDie(opts.parser, "If --execute option is used, command must include --reassignment-json-file that was output " + "during the --generate option")
     val reassignmentJsonFile =  opts.options.valueOf(opts.reassignmentJsonFileOpt)
     val reassignmentJsonString = Utils.readFileAsString(reassignmentJsonFile)
     val throttle = if (opts.options.has(opts.throttleOpt)) opts.options.valueOf(opts.throttleOpt) else -1
@@ -235,6 +221,38 @@ object ReassignPartitionsCommand extends Logging {
     }
   }
 
+  def validateAndParseArgs(args: Array[String]): ReassignPartitionsCommandOptions = {
+    val opts = new ReassignPartitionsCommandOptions(args)
+
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(opts.parser, "This command moves topic partitions between replicas.")
+
+    // Should have exactly one action
+    val actions = Seq(opts.generateOpt, opts.executeOpt, opts.verifyOpt).count(opts.options.has _)
+    if(actions != 1)
+      CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --generate, --execute or --verify")
+
+    CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, opts.zkConnectOpt)
+
+    //Validate arguments for each action
+    if(opts.options.has(opts.verifyOpt)) {
+      if(!opts.options.has(opts.reassignmentJsonFileOpt))
+        CommandLineUtils.printUsageAndDie(opts.parser, "If --verify option is used, command must include --reassignment-json-file that was used during the --execute option")
+      CommandLineUtils.checkInvalidArgs(opts.parser, opts.options, opts.verifyOpt, Set(opts.throttleOpt, opts.topicsToMoveJsonFileOpt, opts.disableRackAware, opts.brokerListOpt))
+    }
+    else if(opts.options.has(opts.generateOpt)) {
+      if(!(opts.options.has(opts.topicsToMoveJsonFileOpt) && opts.options.has(opts.brokerListOpt)))
+        CommandLineUtils.printUsageAndDie(opts.parser, "If --generate option is used, command must include both --topics-to-move-json-file and --broker-list options")
+      CommandLineUtils.checkInvalidArgs(opts.parser, opts.options, opts.generateOpt, Set(opts.throttleOpt, opts.reassignmentJsonFileOpt))
+    }
+    else if (opts.options.has(opts.executeOpt)){
+      if(!opts.options.has(opts.reassignmentJsonFileOpt))
+        CommandLineUtils.printUsageAndDie(opts.parser, "If --execute option is used, command must include --reassignment-json-file that was output " + "during the --generate option")
+      CommandLineUtils.checkInvalidArgs(opts.parser, opts.options, opts.executeOpt, Set(opts.topicsToMoveJsonFileOpt, opts.disableRackAware, opts.brokerListOpt))
+    }
+    opts
+  }
+
   class ReassignPartitionsCommandOptions(args: Array[String]) {
     val parser = new OptionParser
 
@@ -270,9 +288,6 @@ object ReassignPartitionsCommand extends Logging {
                       .describedAs("throttle")
                       .defaultsTo("-1")
                       .ofType(classOf[Long])
-    if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(parser, "This command moves topic partitions between replicas.")
-
     val options = parser.parse(args : _*)
   }
 }

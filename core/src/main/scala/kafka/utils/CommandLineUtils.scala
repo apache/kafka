@@ -25,6 +25,16 @@ import java.util.Properties
  */
 object CommandLineUtils extends Logging {
 
+   trait ExitPolicy {
+     def exit(msg: String): Nothing
+   }
+
+   val DEFAULT_EXIT_POLICY = new ExitPolicy {
+     override def exit(msg: String): Nothing = sys.exit(1)
+   }
+
+   private var exitPolicy = DEFAULT_EXIT_POLICY
+
   /**
    * Check that all the listed options are present
    */
@@ -34,7 +44,7 @@ object CommandLineUtils extends Logging {
         printUsageAndDie(parser, "Missing required argument \"" + arg + "\"")
     }
   }
-  
+
   /**
    * Check that none of the listed options are present
    */
@@ -46,15 +56,17 @@ object CommandLineUtils extends Logging {
       }
     }
   }
-  
+
   /**
    * Print usage and exit
    */
   def printUsageAndDie(parser: OptionParser, message: String): Nothing = {
     System.err.println(message)
     parser.printHelpOn(System.err)
-    sys.exit(1)
+    exitPolicy.exit(message)
   }
+
+  def exitPolicy(policy: ExitPolicy): Unit = this.exitPolicy = policy
 
   /**
    * Parse key-value pairs in the form key=value
