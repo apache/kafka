@@ -74,7 +74,7 @@ public final class Metadata {
     }
 
     public Metadata(long refreshBackoffMs, long metadataExpireMs) {
-        this(refreshBackoffMs, metadataExpireMs, false, Cluster.empty(), new ClusterResourceListeners());
+        this(refreshBackoffMs, metadataExpireMs, false, new ClusterResourceListeners());
     }
 
     /**
@@ -85,11 +85,8 @@ public final class Metadata {
      * @param topicExpiryEnabled If true, enable expiry of unused topics
      * @param clusterResourceListeners List of ClusterResourceListeners which will receive metadata updates.
      */
-<<<<<<< HEAD
-    public Metadata(long refreshBackoffMs, long metadataExpireMs, boolean topicExpiryEnabled, Cluster cluster, ClusterResourceListeners clusterResourceListeners) {
-=======
-    public Metadata(long refreshBackoffMs, long metadataExpireMs, boolean topicExpiryEnabled) {
->>>>>>> refactored batch expiry logic into Sender
+
+    public Metadata(long refreshBackoffMs, long metadataExpireMs, boolean topicExpiryEnabled, ClusterResourceListeners clusterResourceListeners) {
         this.refreshBackoffMs = refreshBackoffMs;
         this.metadataExpireMs = metadataExpireMs;
         this.topicExpiryEnabled = topicExpiryEnabled;
