@@ -88,23 +88,30 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   def removeThrottle(zkUtils: ZkUtils, partitionsToBeReassigned: Map[TopicAndPartition, scala.Seq[Int]], reassignedPartitionsStatus: Map[TopicAndPartition, ReassignmentStatus]): Unit = {
+    var changed = false
+
     //If all partitions have completed remove the throttle
     if (reassignedPartitionsStatus.forall { case (topicPartition, status) => status == ReassignmentCompleted }) {
       //Remove the throttle limit from all brokers in the cluster
       for (brokerId <- zkUtils.getAllBrokersInCluster().map(_.id)) {
         val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Broker, brokerId.toString)
-        if (configs.remove(KafkaConfig.ThrottledReplicationRateLimitProp) != null)
+        if (configs.remove(KafkaConfig.ThrottledReplicationRateLimitProp) != null) {
           AdminUtils.changeBrokerConfig(zkUtils, Seq(brokerId), configs)
+          changed = true
+        }
       }
 
       //Remove the list of throttled replicas from all topics with partitions being moved
       val topics = partitionsToBeReassigned.keySet.map(tp => tp.topic).toSeq.distinct
       for (topic <- topics) {
         val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
-        if (configs.remove(LogConfig.ThrottledReplicasListProp) != null)
+        if (configs.remove(LogConfig.ThrottledReplicasListProp) != null) {
           AdminUtils.changeTopicConfig(zkUtils, topic, configs)
+          changed = true
+        }
       }
-      println("Throttle was removed.")
+      if (changed)
+        println("Throttle was removed.")
     }
   }
 
