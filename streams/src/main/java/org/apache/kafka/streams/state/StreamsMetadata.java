@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.KafkaStreams;
 
+import java.util.Collections;
 import java.util.Set;
 
 /**
@@ -29,6 +30,14 @@ import java.util.Set;
  * NOTE: This is a point in time view. It may change when rebalances happen.
  */
 public class StreamsMetadata {
+    /**
+     * Sentinel to indicate that the StreamsMetadata is currently unavailable. This can occur during rebalance
+     * operations.
+     */
+    public final static StreamsMetadata NOT_AVAILABLE = new StreamsMetadata(new HostInfo("unavailable", -1),
+                                                                            Collections.<String>emptySet(),
+                                                                            Collections.<TopicPartition>emptySet());
+
     private final HostInfo hostInfo;
     private final Set<String> stateStoreNames;
     private final Set<TopicPartition> topicPartitions;

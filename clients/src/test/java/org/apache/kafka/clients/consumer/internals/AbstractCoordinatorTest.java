@@ -43,6 +43,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -124,13 +125,31 @@ public class AbstractCoordinatorTest {
             synchronized (coordinator) {
                 coordinator.notify();
             }
-            Thread.sleep(100);
-
-            coordinator.pollHeartbeat(mockTime.milliseconds());
-            fail("Expected pollHeartbeat to raise an error");
+            long startMs = System.currentTimeMillis();
+            while (System.currentTimeMillis() - startMs < 1000) {
+                Thread.sleep(10);
+                coordinator.pollHeartbeat(mockTime.milliseconds());
+            }
+            fail("Expected pollHeartbeat to raise an error in 1 second");
         } catch (RuntimeException exception) {
             assertEquals(exception, e);
         }
+    }
+
+    @Test
+    public void testLookupCoordinator() throws Exception {
+        mockClient.setNode(null);
+        RequestFuture<Void> noBrokersAvailableFuture = coordinator.lookupCoordinator();
+        assertTrue("Failed future expected", noBrokersAvailableFuture.failed());
+
+        mockClient.setNode(node);
+        RequestFuture<Void> future = coordinator.lookupCoordinator();
+        assertFalse("Request not sent", future.isDone());
+        assertTrue("New request sent while one is in progress", future == coordinator.lookupCoordinator());
+
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady();
+        assertTrue("New request not sent after previous completed", future != coordinator.lookupCoordinator());
     }
 
     private Struct groupCoordinatorResponse(Node node, Errors error) {

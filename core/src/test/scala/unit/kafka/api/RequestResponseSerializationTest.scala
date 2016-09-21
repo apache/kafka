@@ -127,11 +127,11 @@ object SerializationTestUtils {
     ), ProducerRequest.CurrentVersion, 100)
 
   def createTestFetchRequest: FetchRequest = {
-    new FetchRequest(requestInfo = requestInfos)
+    new FetchRequest(requestInfo = requestInfos.toVector)
   }
 
   def createTestFetchResponse: FetchResponse = {
-    FetchResponse(1, topicDataFetchResponse)
+    FetchResponse(1, topicDataFetchResponse.toVector)
   }
 
   def createTestOffsetRequest = new OffsetRequest(
@@ -267,11 +267,11 @@ class RequestResponseSerializationTest extends JUnitSuite {
   def testFetchResponseVersion() {
     val oldClientResponse = FetchResponse(1, Map(
       TopicAndPartition("t1", 0) -> new FetchResponsePartitionData(messages = new ByteBufferMessageSet(new Message("first message".getBytes)))
-    ), 0)
+    ).toVector, 0)
 
     val newClientResponse = FetchResponse(1, Map(
       TopicAndPartition("t1", 0) -> new FetchResponsePartitionData(messages = new ByteBufferMessageSet(new Message("first message".getBytes)))
-    ), 1, 100)
+    ).toVector, 1, 100)
 
     // new response should have 4 bytes more than the old response since delayTime is an INT32
     assertEquals(oldClientResponse.sizeInBytes + 4, newClientResponse.sizeInBytes)

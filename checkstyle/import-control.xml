@@ -175,6 +175,7 @@
   <subpackage name="test">
     <allow pkg="org.apache.kafka" />
     <allow pkg="org.bouncycastle" />
+    <allow pkg="javax.xml.bind" />
   </subpackage>
 
   <subpackage name="connect">

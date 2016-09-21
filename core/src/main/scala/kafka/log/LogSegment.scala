@@ -113,18 +113,19 @@ class LogSegment(val log: FileMessageSet,
   /**
    * Find the physical file position for the first message with offset >= the requested offset.
    *
-   * The lowerBound argument is an optimization that can be used if we already know a valid starting position
+   * The startingFilePosition argument is an optimization that can be used if we already know a valid starting position
    * in the file higher than the greatest-lower-bound from the index.
    *
    * @param offset The offset we want to translate
    * @param startingFilePosition A lower bound on the file position from which to begin the search. This is purely an optimization and
    * when omitted, the search will begin at the position in the offset index.
-   * @return The position in the log storing the message with the least offset >= the requested offset or null if no message meets this criteria.
+   * @return The position in the log storing the message with the least offset >= the requested offset and the size of the
+    *        message or null if no message meets this criteria.
    */
   @threadsafe
-  private[log] def translateOffset(offset: Long, startingFilePosition: Int = 0): OffsetPosition = {
+  private[log] def translateOffset(offset: Long, startingFilePosition: Int = 0): (OffsetPosition, Int) = {
     val mapping = index.lookup(offset)
-    log.searchForOffset(offset, max(mapping.position, startingFilePosition))
+    log.searchForOffsetWithSize(offset, max(mapping.position, startingFilePosition))
   }
 
   /**
@@ -135,50 +136,58 @@ class LogSegment(val log: FileMessageSet,
    * @param maxSize The maximum number of bytes to include in the message set we read
    * @param maxOffset An optional maximum offset for the message set we read
    * @param maxPosition The maximum position in the log segment that should be exposed for read
+   * @param minOneMessage If this is true, the first message will be returned even if it exceeds `maxSize` (if one exists)
    *
    * @return The fetched data and the offset metadata of the first message whose offset is >= startOffset,
    *         or null if the startOffset is larger than the largest offset in this log
    */
   @threadsafe
-  def read(startOffset: Long, maxOffset: Option[Long], maxSize: Int, maxPosition: Long = size): FetchDataInfo = {
-    if(maxSize < 0)
+  def read(startOffset: Long, maxOffset: Option[Long], maxSize: Int, maxPosition: Long = size,
+           minOneMessage: Boolean = false): FetchDataInfo = {
+    if (maxSize < 0)
       throw new IllegalArgumentException("Invalid max size for log read (%d)".format(maxSize))
 
     val logSize = log.sizeInBytes // this may change, need to save a consistent copy
-    val startPosition = translateOffset(startOffset)
+    val startOffsetAndSize = translateOffset(startOffset)
 
     // if the start position is already off the end of the log, return null
-    if(startPosition == null)
+    if (startOffsetAndSize == null)
       return null
 
+    val (startPosition, messageSetSize) = startOffsetAndSize
     val offsetMetadata = new LogOffsetMetadata(startOffset, this.baseOffset, startPosition.position)
 
-    // if the size is zero, still return a log segment but with zero size
-    if(maxSize == 0)
+    val adjustedMaxSize =
+      if (minOneMessage) math.max(maxSize, messageSetSize)
+      else maxSize
+
+    // return a log segment but with zero size in the case below
+    if (adjustedMaxSize == 0)
       return FetchDataInfo(offsetMetadata, MessageSet.Empty)
 
     // calculate the length of the message set to read based on whether or not they gave us a maxOffset
     val length = maxOffset match {
       case None =>
         // no max offset, just read until the max position
-        min((maxPosition - startPosition.position).toInt, maxSize)
+        min((maxPosition - startPosition.position).toInt, adjustedMaxSize)
       case Some(offset) =>
         // there is a max offset, translate it to a file position and use that to calculate the max read size;
         // when the leader of a partition changes, it's possible for the new leader's high watermark to be less than the
         // true high watermark in the previous leader for a short window. In this window, if a consumer fetches on an
         // offset between new leader's high watermark and the log end offset, we want to return an empty response.
-        if(offset < startOffset)
-          return FetchDataInfo(offsetMetadata, MessageSet.Empty)
+        if (offset < startOffset)
+          return FetchDataInfo(offsetMetadata, MessageSet.Empty, firstMessageSetIncomplete = false)
         val mapping = translateOffset(offset, startPosition.position)
         val endPosition =
-          if(mapping == null)
+          if (mapping == null)
             logSize // the max offset is off the end of the log, use the end of the file
           else
-            mapping.position
-        min(min(maxPosition, endPosition) - startPosition.position, maxSize).toInt
+            mapping._1.position
+        min(min(maxPosition, endPosition) - startPosition.position, adjustedMaxSize).toInt
     }
 
-    FetchDataInfo(offsetMetadata, log.read(startPosition.position, length))
+    FetchDataInfo(offsetMetadata, log.read(startPosition.position, length),
+      firstMessageSetIncomplete = adjustedMaxSize < messageSetSize)
   }
 
   /**
@@ -260,14 +269,15 @@ class LogSegment(val log: FileMessageSet,
   @nonthreadsafe
   def truncateTo(offset: Long): Int = {
     val mapping = translateOffset(offset)
-    if(mapping == null)
+    if (mapping == null)
       return 0
     index.truncateTo(offset)
     timeIndex.truncateTo(offset)
     // after truncation, reset and allocate more space for the (new currently  active) index
     index.resize(index.maxIndexSize)
     timeIndex.resize(timeIndex.maxIndexSize)
-    val bytesTruncated = log.truncateTo(mapping.position)
+    val (offsetPosition, _) = mapping
+    val bytesTruncated = log.truncateTo(offsetPosition.position)
     if(log.sizeInBytes == 0) {
       created = time.milliseconds
       rollingBasedTimestamp = None
@@ -339,20 +349,25 @@ class LogSegment(val log: FileMessageSet,
   }
 
   /**
-   * The time this segment has waited to be rolled. If the first message in the segment does not have a timestamp,
-   * the time is based on the create time of the segment. Otherwise the time is based on the timestamp of that message.
+   * The time this segment has waited to be rolled.
+   * If the first message has a timestamp we use the message timestamp to determine when to roll a segment. A segment
+   * is rolled if the difference between the new message's timestamp and the first message's timestamp exceeds the
+   * segment rolling time.
+   * If the first message does not have a timestamp, we use the wall clock time to determine when to roll a segment. A
+   * segment is rolled if the difference between the current wall clock time and the segment create time exceeds the
+   * segment rolling time.
    */
-  def timeWaitedForRoll(now: Long) : Long= {
+  def timeWaitedForRoll(now: Long, messageTimestamp: Long) : Long = {
     // Load the timestamp of the first message into memory
-    if (!rollingBasedTimestamp.isDefined) {
+    if (rollingBasedTimestamp.isEmpty) {
       val iter = log.iterator
       if (iter.hasNext)
         rollingBasedTimestamp = Some(iter.next.message.timestamp)
-      else
-        // If the log is empty, we return time elapsed since the segment is created.
-        return now - created
     }
-    now - {if (rollingBasedTimestamp.get >= 0) rollingBasedTimestamp.get else created}
+    rollingBasedTimestamp match {
+      case Some(t) if t >= 0 => messageTimestamp - t
+      case _ => now - created
+    }
   }
 
   /**
@@ -372,21 +387,15 @@ class LogSegment(val log: FileMessageSet,
    * the truncated log and maybe retry or even do the search on another log segment.
    *
    * @param timestamp The timestamp to search for.
-   * @return an offset which points to the first message whose timestamp is larger than or equals to the
-   *         target timestamp.
-   *         None maybe returned when the log is truncated.
+   * @return the timestamp and offset of the first message whose timestamp is larger than or equals to the
+   *         target timestamp. None will be returned if there is no such message.
    */
-  def findOffsetByTimestamp(timestamp: Long): Option[Long] = {
-    if (log.end == log.start) {
-      // The log segment is empty, just return base offset with no timestamp.
-      Some(baseOffset)
-    } else {
-      // Get the index entry with a timestamp less than or equal to the target timestamp
-      val timestampOffset = timeIndex.lookup(timestamp)
-      val position = index.lookup(timestampOffset.offset).position
-      // Search the timestamp
-      log.searchForTimestamp(timestamp, position)
-    }
+  def findOffsetByTimestamp(timestamp: Long): Option[TimestampOffset] = {
+    // Get the index entry with a timestamp less than or equal to the target timestamp
+    val timestampOffset = timeIndex.lookup(timestamp)
+    val position = index.lookup(timestampOffset.offset).position
+    // Search the timestamp
+    log.searchForTimestamp(timestamp, position)
   }
 
   /**

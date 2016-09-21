@@ -52,6 +52,8 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 
 public class StreamPartitionAssignorTest {
 
@@ -81,7 +83,7 @@ public class StreamPartitionAssignorTest {
             new PartitionInfo("topic3", 3, Node.noNode(), new Node[0], new Node[0])
     );
 
-    private Cluster metadata = new Cluster(Arrays.asList(Node.noNode()), infos, Collections.<String>emptySet(),
+    private Cluster metadata = new Cluster("cluster", Arrays.asList(Node.noNode()), infos, Collections.<String>emptySet(),
         Collections.<String>emptySet());
 
     private final TaskId task0 = new TaskId(0, 0);
@@ -384,6 +386,8 @@ public class StreamPartitionAssignorTest {
         allActiveTasks.addAll(info11.activeTasks);
         allStandbyTasks.addAll(info11.standbyTasks.keySet());
 
+        assertNotEquals("same processId has same set of standby tasks", info11.standbyTasks.keySet(), info10.standbyTasks.keySet());
+
         // check active tasks assigned to the first client
         assertEquals(Utils.mkSet(task0, task1), new HashSet<>(allActiveTasks));
         assertEquals(Utils.mkSet(task2), new HashSet<>(allStandbyTasks));
@@ -649,7 +653,7 @@ public class StreamPartitionAssignorTest {
             // pass
         }
     }
-
+    
     @Test
     public void shouldThrowExceptionIfApplicationServerConfigPortIsNotAnInteger() throws Exception {
         final Properties properties = configProps();
@@ -691,6 +695,37 @@ public class StreamPartitionAssignorTest {
         assertEquals(hostState, partitionAssignor.getPartitionsByHostState());
     }
 
+    @Test
+    public void shouldSetClusterMetadataOnAssignment() throws Exception {
+        final StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
+
+        final List<TopicPartition> topic = Arrays.asList(new TopicPartition("topic", 0));
+        final Map<HostInfo, Set<TopicPartition>> hostState =
+                Collections.singletonMap(new HostInfo("localhost", 80),
+                                         Collections.singleton(new TopicPartition("topic", 0)));
+        final AssignmentInfo assignmentInfo = new AssignmentInfo(Collections.singletonList(new TaskId(0, 0)),
+                                                                 Collections.<TaskId, Set<TopicPartition>>emptyMap(),
+                                                                 hostState);
+
+
+        partitionAssignor.onAssignment(new PartitionAssignor.Assignment(topic, assignmentInfo.encode()));
+        final Cluster cluster = partitionAssignor.clusterMetadata();
+        final List<PartitionInfo> partitionInfos = cluster.partitionsForTopic("topic");
+        final PartitionInfo partitionInfo = partitionInfos.get(0);
+        assertEquals(1, partitionInfos.size());
+        assertEquals("topic", partitionInfo.topic());
+        assertEquals(0, partitionInfo.partition());
+    }
+
+    @Test
+    public void shouldReturnEmptyClusterMetadataIfItHasntBeenBuilt() throws Exception {
+        final StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
+        final Cluster cluster = partitionAssignor.clusterMetadata();
+        assertNotNull(cluster);
+
+    }
+
+
     private class MockInternalTopicManager extends InternalTopicManager {
 
         public Map<String, Integer> readyTopics = new HashMap<>();
@@ -703,15 +738,15 @@ public class StreamPartitionAssignorTest {
         }
 
         @Override
-        public void makeReady(String topic, int numPartitions, boolean compactTopic) {
-            readyTopics.put(topic, numPartitions);
+        public void makeReady(InternalTopicConfig topic, int numPartitions) {
+            readyTopics.put(topic.name(), numPartitions);
 
             List<PartitionInfo> partitions = new ArrayList<>();
             for (int i = 0; i < numPartitions; i++) {
-                partitions.add(new PartitionInfo(topic, i, null, null, null));
+                partitions.add(new PartitionInfo(topic.name(), i, null, null, null));
             }
 
-            restoreConsumer.updatePartitions(topic, partitions);
+            restoreConsumer.updatePartitions(topic.name(), partitions);
         }
     }
 }

@@ -75,6 +75,7 @@ class LogTest extends JUnitSuite {
                       scheduler = time.scheduler,
                       time = time)
     assertEquals("Log begins with a single empty segment.", 1, log.numberOfSegments)
+    // Test the segment rolling behavior when messages do not have a timestamp.
     time.sleep(log.config.segmentMs + 1)
     log.append(set)
     assertEquals("Log doesn't roll if doing so creates an empty segment.", 1, log.numberOfSegments)
@@ -88,19 +89,25 @@ class LogTest extends JUnitSuite {
       assertEquals("Changing time beyond rollMs and appending should create a new segment.", numSegments, log.numberOfSegments)
     }
 
-    time.sleep(log.config.segmentMs + 1)
+    // Append a message with timestamp to a segment whose first messgae do not have a timestamp.
     val setWithTimestamp =
       TestUtils.singleMessageSet(payload = "test".getBytes, timestamp = time.milliseconds + log.config.segmentMs + 1)
     log.append(setWithTimestamp)
+    assertEquals("Segment should not have been rolled out because the log rolling should be based on wall clock.", 4, log.numberOfSegments)
+
+    // Test the segment rolling behavior when messages have timestamps.
+    time.sleep(log.config.segmentMs + 1)
+    log.append(setWithTimestamp)
     assertEquals("A new segment should have been rolled out", 5, log.numberOfSegments)
 
+    // move the wall clock beyond log rolling time
     time.sleep(log.config.segmentMs + 1)
-    log.append(set)
-    assertEquals("Log should not roll because the roll should depend on the index of the first time index entry.", 5, log.numberOfSegments)
+    log.append(setWithTimestamp)
+    assertEquals("Log should not roll because the roll should depend on timestamp of the first message.", 5, log.numberOfSegments)
 
-    time.sleep(log.config.segmentMs + 1)
-    log.append(set)
-    assertEquals("Log should roll because the time since the timestamp of first time index entry has expired.", 6, log.numberOfSegments)
+    val setWithExpiredTimestamp = TestUtils.singleMessageSet(payload = "test".getBytes, timestamp = time.milliseconds)
+    log.append(setWithExpiredTimestamp)
+    assertEquals("Log should roll because the timestamp in the message should make the log segment expire.", 6, log.numberOfSegments)
 
     val numSegments = log.numberOfSegments
     time.sleep(log.config.segmentMs + 1)
@@ -237,6 +244,64 @@ class LogTest extends JUnitSuite {
     log.logSegments.head.truncateTo(1)
 
     assertEquals("A read should now return the last message in the log", log.logEndOffset - 1, log.read(1, 200, None).messageSet.head.offset)
+  }
+
+  @Test
+  def testReadWithMinMessage() {
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 71: java.lang.Integer)
+    val log = new Log(logDir,  LogConfig(logProps), recoveryPoint = 0L, time.scheduler, time = time)
+    val messageIds = ((0 until 50) ++ (50 until 200 by 7)).toArray
+    val messages = messageIds.map(id => new Message(id.toString.getBytes))
+
+    // now test the case that we give the offsets and use non-sequential offsets
+    for (i <- 0 until messages.length)
+      log.append(new ByteBufferMessageSet(NoCompressionCodec, new LongRef(messageIds(i)), messages = messages(i)),
+        assignOffsets = false)
+
+    for (i <- 50 until messageIds.max) {
+      val idx = messageIds.indexWhere(_ >= i)
+      val reads = Seq(
+        log.read(i, 1, minOneMessage = true),
+        log.read(i, 100, minOneMessage = true),
+        log.read(i, 100, Some(10000), minOneMessage = true)
+      ).map(_.messageSet.head)
+      reads.foreach { read =>
+        assertEquals("Offset read should match message id.", messageIds(idx), read.offset)
+        assertEquals("Message should match appended.", messages(idx), read.message)
+      }
+
+      assertEquals(Seq.empty, log.read(i, 1, Some(1), minOneMessage = true).messageSet.toIndexedSeq)
+    }
+
+  }
+
+  @Test
+  def testReadWithTooSmallMaxLength() {
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 71: java.lang.Integer)
+    val log = new Log(logDir,  LogConfig(logProps), recoveryPoint = 0L, time.scheduler, time = time)
+    val messageIds = ((0 until 50) ++ (50 until 200 by 7)).toArray
+    val messages = messageIds.map(id => new Message(id.toString.getBytes))
+
+    // now test the case that we give the offsets and use non-sequential offsets
+    for (i <- 0 until messages.length)
+      log.append(new ByteBufferMessageSet(NoCompressionCodec, new LongRef(messageIds(i)), messages = messages(i)),
+        assignOffsets = false)
+
+    for (i <- 50 until messageIds.max) {
+      assertEquals(MessageSet.Empty, log.read(i, 0).messageSet)
+
+      // we return an incomplete message instead of an empty one for the case below
+      // we use this mechanism to tell consumers of the fetch request version 2 and below that the message size is
+      // larger than the fetch size
+      // in fetch request version 3, we no longer need this as we return oversized messages from the first non-empty
+      // partition
+      val fetchInfo = log.read(i, 1)
+      assertTrue(fetchInfo.firstMessageSetIncomplete)
+      assertTrue(fetchInfo.messageSet.isInstanceOf[FileMessageSet])
+      assertEquals(1, fetchInfo.messageSet.sizeInBytes)
+    }
   }
 
   /**
@@ -560,9 +625,9 @@ class LogTest extends JUnitSuite {
     for(i <- 0 until numMessages) {
       assertEquals(i, log.read(i, 100, None).messageSet.head.offset)
       if (i == 0)
-        assertEquals(log.logSegments.head.baseOffset, log.fetchOffsetsByTimestamp(time.milliseconds + i * 10))
+        assertEquals(log.logSegments.head.baseOffset, log.fetchOffsetsByTimestamp(time.milliseconds + i * 10).get.offset)
       else
-        assertEquals(i, log.fetchOffsetsByTimestamp(time.milliseconds + i * 10))
+        assertEquals(i, log.fetchOffsetsByTimestamp(time.milliseconds + i * 10).get.offset)
     }
     log.close()
   }
@@ -636,9 +701,9 @@ class LogTest extends JUnitSuite {
     for(i <- 0 until numMessages) {
       assertEquals(i, log.read(i, 100, None).messageSet.head.offset)
       if (i == 0)
-        assertEquals(log.logSegments.head.baseOffset, log.fetchOffsetsByTimestamp(time.milliseconds + i * 10))
+        assertEquals(log.logSegments.head.baseOffset, log.fetchOffsetsByTimestamp(time.milliseconds + i * 10).get.offset)
       else
-        assertEquals(i, log.fetchOffsetsByTimestamp(time.milliseconds + i * 10))
+        assertEquals(i, log.fetchOffsetsByTimestamp(time.milliseconds + i * 10).get.offset)
     }
     log.close()
   }

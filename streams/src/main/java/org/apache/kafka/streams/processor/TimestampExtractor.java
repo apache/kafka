@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.streams.kstream.KTable;
 
 /**
  * An interface that allows the Kafka Streams framework to extract a timestamp from an instance of {@link ConsumerRecord}.
@@ -28,7 +29,12 @@ public interface TimestampExtractor {
     /**
      * Extracts a timestamp from a record.
      * <p>
-     * Typically, the timestamp represents the milliseconds since midnight, January 1, 1970 UTC.
+     * The extracted timestamp MUST represent the milliseconds since midnight, January 1, 1970 UTC.
+     *
+     * It is important to note that this timestamp may become the message timestamp for any messages sent to changelogs updated by {@link KTable}s
+     * and joins. The message timestamp is used for log retention and log rolling, so using nonsensical values may result in
+     * excessive log rolling and therefore broker performance degradation.
+     *
      *
      * @param record  a data record
      * @return        the timestamp of the record

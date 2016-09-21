@@ -33,23 +33,23 @@ public class TaskAssignor<C, T extends Comparable<T>> {
 
     private static final Logger log = LoggerFactory.getLogger(TaskAssignor.class);
 
-    public static <C, T extends Comparable<T>> Map<C, ClientState<T>> assign(Map<C, ClientState<T>> states, Set<T> tasks, int numStandbyReplicas) {
+    public static <C, T extends Comparable<T>> Map<C, ClientState<T>> assign(Map<C, ClientState<T>> states, Set<T> tasks, int numStandbyReplicas, String streamThreadId) {
         long seed = 0L;
         for (C client : states.keySet()) {
             seed += client.hashCode();
         }
 
         TaskAssignor<C, T> assignor = new TaskAssignor<>(states, tasks, seed);
-        log.info("Assigning tasks to clients: {}, prevAssignmentBalanced: {}, " +
-            "prevClientsUnchangeed: {}, tasks: {}, replicas: {}",
-            states, assignor.prevAssignmentBalanced, assignor.prevClientsUnchanged,
+        log.info("stream-thread [{}] Assigning tasks to clients: {}, prevAssignmentBalanced: {}, " +
+            "prevClientsUnchanged: {}, tasks: {}, replicas: {}",
+            streamThreadId, states, assignor.prevAssignmentBalanced, assignor.prevClientsUnchanged,
             tasks, numStandbyReplicas);
 
         assignor.assignTasks();
         if (numStandbyReplicas > 0)
             assignor.assignStandbyTasks(numStandbyReplicas);
 
-        log.info("Assigned with: " + assignor.states);
+        log.info("stream-thread [{}] Assigned with: {}", streamThreadId, assignor.states);
         return assignor.states;
     }
 

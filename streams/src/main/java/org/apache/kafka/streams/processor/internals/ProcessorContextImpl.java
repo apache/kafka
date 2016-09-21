@@ -21,15 +21,16 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.File;
+import java.util.List;
 import java.util.Map;
 
-public class ProcessorContextImpl implements ProcessorContext, RecordCollector.Supplier {
+public class ProcessorContextImpl implements InternalProcessorContext, RecordCollector.Supplier {
 
     public static final String NONEXIST_TOPIC = "__null_topic__";
 
@@ -42,8 +43,10 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     private final StreamsConfig config;
     private final Serde<?> keySerde;
     private final Serde<?> valSerde;
-
+    private final ThreadCache cache;
     private boolean initialized;
+    private RecordContext recordContext;
+    private ProcessorNode currentNode;
 
     @SuppressWarnings("unchecked")
     public ProcessorContextImpl(TaskId id,
@@ -51,7 +54,8 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
                                 StreamsConfig config,
                                 RecordCollector collector,
                                 ProcessorStateManager stateMgr,
-                                StreamsMetrics metrics) {
+                                StreamsMetrics metrics,
+                                final ThreadCache cache) {
         this.id = id;
         this.task = task;
         this.metrics = metrics;
@@ -61,7 +65,7 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         this.config = config;
         this.keySerde = config.keySerde();
         this.valSerde = config.valueSerde();
-
+        this.cache = cache;
         this.initialized = false;
     }
 
@@ -136,15 +140,20 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
         return stateMgr.getStore(name);
     }
 
+    @Override
+    public ThreadCache getCache() {
+        return cache;
+    }
+
     /**
      * @throws IllegalStateException if the task's record is null
      */
     @Override
     public String topic() {
-        if (task.record() == null)
+        if (recordContext == null)
             throw new IllegalStateException("This should not happen as topic() should only be called while a record is processed");
 
-        String topic = task.record().topic();
+        String topic = recordContext.topic();
 
         if (topic.equals(NONEXIST_TOPIC))
             return null;
@@ -153,51 +162,80 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     }
 
     /**
-     * @throws IllegalStateException if the task's record is null
+     * @throws IllegalStateException if partition is null
      */
     @Override
     public int partition() {
-        if (task.record() == null)
+        if (recordContext == null)
             throw new IllegalStateException("This should not happen as partition() should only be called while a record is processed");
 
-        return task.record().partition();
+        return recordContext.partition();
     }
 
     /**
-     * @throws IllegalStateException if the task's record is null
+     * @throws IllegalStateException if offset is null
      */
     @Override
     public long offset() {
-        if (this.task.record() == null)
+        if (recordContext == null)
             throw new IllegalStateException("This should not happen as offset() should only be called while a record is processed");
 
-        return this.task.record().offset();
+        return recordContext.offset();
     }
 
     /**
-     * @throws IllegalStateException if the task's record is null
+     * @throws IllegalStateException if timestamp is null
      */
     @Override
     public long timestamp() {
-        if (task.record() == null)
+        if (recordContext == null)
             throw new IllegalStateException("This should not happen as timestamp() should only be called while a record is processed");
 
-        return task.record().timestamp;
+        return recordContext.timestamp();
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(K key, V value) {
-        task.forward(key, value);
+        ProcessorNode previousNode = currentNode;
+        try {
+            for (ProcessorNode child : (List<ProcessorNode>) currentNode.children()) {
+                currentNode = child;
+                child.process(key, value);
+            }
+        } finally {
+            currentNode = previousNode;
+        }
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(K key, V value, int childIndex) {
-        task.forward(key, value, childIndex);
+        ProcessorNode previousNode = currentNode;
+        final ProcessorNode child = (ProcessorNode<K, V>) currentNode.children().get(childIndex);
+        currentNode = child;
+        try {
+            child.process(key, value);
+        } finally {
+            currentNode = previousNode;
+        }
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(K key, V value, String childName) {
-        task.forward(key, value, childName);
+        for (ProcessorNode child : (List<ProcessorNode<K, V>>) currentNode.children()) {
+            if (child.name().equals(childName)) {
+                ProcessorNode previousNode = currentNode;
+                currentNode = child;
+                try {
+                    child.process(key, value);
+                    return;
+                } finally {
+                    currentNode = previousNode;
+                }
+            }
+        }
     }
 
     @Override
@@ -218,5 +256,20 @@ public class ProcessorContextImpl implements ProcessorContext, RecordCollector.S
     @Override
     public Map<String, Object> appConfigsWithPrefix(String prefix) {
         return config.originalsWithPrefix(prefix);
+    }
+
+    @Override
+    public void setRecordContext(final RecordContext recordContext) {
+        this.recordContext = recordContext;
+    }
+
+    @Override
+    public RecordContext recordContext() {
+        return this.recordContext;
+    }
+
+    @Override
+    public void setCurrentNode(final ProcessorNode currentNode) {
+        this.currentNode = currentNode;
     }
 }

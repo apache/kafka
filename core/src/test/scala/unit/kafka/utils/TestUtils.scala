@@ -933,18 +933,24 @@ object TestUtils extends Logging {
 
   def produceMessages(servers: Seq[KafkaServer],
                       topic: String,
-                      numMessages: Int): Seq[String] = {
+                      numMessages: Int,
+                      acks: Int = -1,
+                      valueBytes: Int = -1): Seq[Array[Byte]] = {
 
     val producer = createNewProducer(
       TestUtils.getBrokerListStrFromServers(servers),
       retries = 5,
-      requestTimeoutMs = 2000
+      requestTimeoutMs = 2000,
+      acks = acks
     )
 
-    val values = (0 until numMessages).map(x => s"test-$x")
+    val values = (0 until numMessages).map(x => valueBytes match {
+      case -1 => s"test-$x".getBytes
+      case _ => new Array[Byte](valueBytes)
+    })
     
     val futures = values.map { value =>
-      producer.send(new ProducerRecord(topic, null, null, value.getBytes))
+      producer.send(new ProducerRecord(topic, value))
     }
     futures.foreach(_.get)
     producer.close()

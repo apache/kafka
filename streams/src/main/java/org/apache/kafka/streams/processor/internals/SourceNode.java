@@ -60,8 +60,9 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
             ((ChangedDeserializer) this.valDeserializer).setInner(context.valueSerde().deserializer());
     }
 
+
     @Override
-    public void process(K key, V value) {
+    public void process(final K key, final V value) {
         context.forward(key, value);
     }
 

@@ -70,6 +70,10 @@ public class StreamsMetadataState {
     public synchronized Collection<StreamsMetadata> getAllMetadataForStore(final String storeName) {
         Objects.requireNonNull(storeName, "storeName cannot be null");
 
+        if (!isInitialized()) {
+            return Collections.emptyList();
+        }
+
         final Set<String> sourceTopics = builder.stateStoreNameToSourceTopics().get(storeName);
         if (sourceTopics == null) {
             return Collections.emptyList();
@@ -96,7 +100,8 @@ public class StreamsMetadataState {
      * @param key           Key to use
      * @param keySerializer Serializer for the key
      * @param <K>           key type
-     * @return The {@link StreamsMetadata} for the storeName and key
+     * @return The {@link StreamsMetadata} for the storeName and key or {@link StreamsMetadata#NOT_AVAILABLE}
+     * if streams is (re-)initializing
      */
     public synchronized <K> StreamsMetadata getMetadataWithKey(final String storeName,
                                                                final K key,
@@ -105,10 +110,15 @@ public class StreamsMetadataState {
         Objects.requireNonNull(storeName, "storeName can't be null");
         Objects.requireNonNull(key, "key can't be null");
 
+        if (!isInitialized()) {
+            return StreamsMetadata.NOT_AVAILABLE;
+        }
+
         final SourceTopicsInfo sourceTopicsInfo = getSourceTopicsInfo(storeName);
         if (sourceTopicsInfo == null) {
             return null;
         }
+
         return getStreamsMetadataForKey(storeName,
                                         key,
                                         new DefaultStreamPartitioner<>(keySerializer,
@@ -131,7 +141,8 @@ public class StreamsMetadataState {
      * @param key         Key to use
      * @param partitioner partitioner to use to find correct partition for key
      * @param <K>         key type
-     * @return The {@link StreamsMetadata} for the storeName and key
+     * @return The {@link StreamsMetadata} for the storeName and key or {@link StreamsMetadata#NOT_AVAILABLE}
+     * if streams is (re-)initializing
      */
     public synchronized <K> StreamsMetadata getMetadataWithKey(final String storeName,
                                                                final K key,
@@ -139,6 +150,10 @@ public class StreamsMetadataState {
         Objects.requireNonNull(storeName, "storeName can't be null");
         Objects.requireNonNull(key, "key can't be null");
         Objects.requireNonNull(partitioner, "partitioner can't be null");
+
+        if (!isInitialized()) {
+            return StreamsMetadata.NOT_AVAILABLE;
+        }
 
         SourceTopicsInfo sourceTopicsInfo = getSourceTopicsInfo(storeName);
         if (sourceTopicsInfo == null) {
@@ -216,6 +231,10 @@ public class StreamsMetadataState {
             return null;
         }
         return new SourceTopicsInfo(sourceTopics);
+    }
+
+    private boolean isInitialized() {
+        return !clusterMetadata.topics().isEmpty();
     }
 
     private class SourceTopicsInfo {

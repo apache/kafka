@@ -66,7 +66,7 @@ class ReplicaManagerTest {
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false))
+      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time).follower)
     try {
       val partition = rm.getOrCreatePartition(topic, 1)
       partition.getOrCreateReplica(1)
@@ -84,7 +84,7 @@ class ReplicaManagerTest {
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false))
+      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time).follower)
     try {
       val partition = rm.getOrCreatePartition(topic, 1)
       partition.getOrCreateReplica(1)
@@ -101,7 +101,7 @@ class ReplicaManagerTest {
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false), Option(this.getClass.getName))
+      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time).follower, Option(this.getClass.getName))
     try {
       def callback(responseStatus: Map[TopicPartition, PartitionResponse]) = {
         assert(responseStatus.values.head.errorCode == Errors.INVALID_REQUIRED_ACKS.code)
@@ -126,7 +126,7 @@ class ReplicaManagerTest {
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false))
+      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time).follower)
 
     try {
       var produceCallbackFired = false
@@ -136,8 +136,8 @@ class ReplicaManagerTest {
       }
 
       var fetchCallbackFired = false
-      def fetchCallback(responseStatus: Map[TopicAndPartition, FetchResponsePartitionData]) = {
-        assertEquals("Should give NotLeaderForPartitionException", Errors.NOT_LEADER_FOR_PARTITION.code, responseStatus.values.head.error)
+      def fetchCallback(responseStatus: Seq[(TopicAndPartition, FetchResponsePartitionData)]) = {
+        assertEquals("Should give NotLeaderForPartitionException", Errors.NOT_LEADER_FOR_PARTITION.code, responseStatus.map(_._2).head.error)
         fetchCallbackFired = true
       }
 
@@ -171,7 +171,9 @@ class ReplicaManagerTest {
         timeout = 1000,
         replicaId = -1,
         fetchMinBytes = 100000,
-        fetchInfo = collection.immutable.Map(new TopicAndPartition(topic, 0) -> new PartitionFetchInfo(0, 100000)),
+        fetchMaxBytes = Int.MaxValue,
+        hardMaxBytesLimit = false,
+        fetchInfos = Seq(new TopicAndPartition(topic, 0) -> new PartitionFetchInfo(0, 100000)),
         responseCallback = fetchCallback)
 
       // Make this replica the follower
@@ -195,15 +197,15 @@ class ReplicaManagerTest {
     val config = KafkaConfig.fromProps(props)
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val rm = new ReplicaManager(config, metrics, time, jTime, zkUtils, new MockScheduler(time), mockLogMgr,
-      new AtomicBoolean(false), Option(this.getClass.getName))
+      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time).follower, Option(this.getClass.getName))
     try {
       val aliveBrokers = Seq(new Broker(0, "host0", 0), new Broker(1, "host1", 1), new Broker(1, "host2", 2))
       val metadataCache = EasyMock.createMock(classOf[MetadataCache])
       EasyMock.expect(metadataCache.getAliveBrokers).andReturn(aliveBrokers).anyTimes()
       EasyMock.replay(metadataCache)
       
-      val brokerList : java.util.List[Integer] = Seq[Integer](0, 1, 2).asJava
-      val brokerSet : java.util.Set[Integer] = Set[Integer](0, 1, 2).asJava
+      val brokerList: java.util.List[Integer] = Seq[Integer](0, 1, 2).asJava
+      val brokerSet: java.util.Set[Integer] = Set[Integer](0, 1, 2).asJava
       
       val partition = rm.getOrCreatePartition(topic, 0)
       partition.getOrCreateReplica(0)
@@ -229,9 +231,9 @@ class ReplicaManagerTest {
       var fetchCallbackFired = false
       var fetchError = 0
       var fetchedMessages: MessageSet = null
-      def fetchCallback(responseStatus: Map[TopicAndPartition, FetchResponsePartitionData]) = {
-        fetchError = responseStatus.values.head.error
-        fetchedMessages = responseStatus.values.head.messages
+      def fetchCallback(responseStatus: Seq[(TopicAndPartition, FetchResponsePartitionData)]) = {
+        fetchError = responseStatus.map(_._2).head.error
+        fetchedMessages = responseStatus.map(_._2).head.messages
         fetchCallbackFired = true
       }
       
@@ -240,7 +242,9 @@ class ReplicaManagerTest {
         timeout = 1000,
         replicaId = 1,
         fetchMinBytes = 0,
-        fetchInfo = collection.immutable.Map(new TopicAndPartition(topic, 0) -> new PartitionFetchInfo(1, 100000)),
+        fetchMaxBytes = Int.MaxValue,
+        hardMaxBytesLimit = false,
+        fetchInfos = Seq(new TopicAndPartition(topic, 0) -> new PartitionFetchInfo(1, 100000)),
         responseCallback = fetchCallback)
         
       
@@ -254,7 +258,9 @@ class ReplicaManagerTest {
         timeout = 1000,
         replicaId = -1,
         fetchMinBytes = 0,
-        fetchInfo = collection.immutable.Map(new TopicAndPartition(topic, 0) -> new PartitionFetchInfo(1, 100000)),
+        fetchMaxBytes = Int.MaxValue,
+        hardMaxBytesLimit = false,
+        fetchInfos = Seq(new TopicAndPartition(topic, 0) -> new PartitionFetchInfo(1, 100000)),
         responseCallback = fetchCallback)
           
         assertTrue(fetchCallbackFired)
