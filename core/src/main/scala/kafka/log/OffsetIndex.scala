@@ -59,7 +59,11 @@ import sun.nio.ch.DirectBuffer
 class OffsetIndex(@volatile private[this] var _file: File, val baseOffset: Long, val maxIndexSize: Int = -1) extends Logging {
   
   private val lock = new ReentrantLock
-  
+
+  /* handle to the file channel so that we can close it during un-mapping */
+  @volatile
+  private[this] var _fileChannel: FileChannel = null
+
   /* initialize the memory mapping for this index */
   @volatile
   private[this] var mmap: MappedByteBuffer = {
@@ -76,7 +80,8 @@ class OffsetIndex(@volatile private[this] var _file: File, val baseOffset: Long,
       /* memory-map the file */
       val len = raf.length()
       CoreUtils.swallow(raf.close())
-      val idx = FileChannel.open(_file.toPath, StandardOpenOption.WRITE, StandardOpenOption.READ).map(FileChannel.MapMode.READ_WRITE, 0, len)
+      _fileChannel = FileChannel.open(_file.toPath, StandardOpenOption.WRITE, StandardOpenOption.READ)
+      val idx = _fileChannel.map(FileChannel.MapMode.READ_WRITE, 0, len)
 
       /* set the position in the index for the next entry */
       if (newlyCreated)
@@ -297,7 +302,8 @@ class OffsetIndex(@volatile private[this] var _file: File, val baseOffset: Long,
       try {
         raf.setLength(roundedNewSize)
         CoreUtils.swallow(raf.close())
-        mmap = FileChannel.open(_file.toPath, StandardOpenOption.WRITE, StandardOpenOption.READ).map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
+        _fileChannel = FileChannel.open(_file.toPath, StandardOpenOption.WRITE, StandardOpenOption.READ)
+        mmap = _fileChannel.map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
         _maxEntries = mmap.limit / 8
         mmap.position(position)
       } finally {
@@ -312,7 +318,13 @@ class OffsetIndex(@volatile private[this] var _file: File, val baseOffset: Long,
   private def forceUnmap(m: MappedByteBuffer) {
     try {
       m match {
-        case buffer: DirectBuffer => buffer.cleaner().clean()
+        case buffer: DirectBuffer =>
+          val bufferCleaner = buffer.cleaner()
+          /* cleaner can be null if the mapped region has size 0 */
+          if (bufferCleaner != null)
+            bufferCleaner.clean()
+          _fileChannel.close()
+          mmap = null
         case _ =>
       }
     } catch {
