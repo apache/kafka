@@ -467,17 +467,17 @@ public class MetricsTest {
         //Given
         MetricConfig config = new MetricConfig().timeWindow(1, TimeUnit.SECONDS).samples(10);
 
-        //When we record anything, if there is no time, rate will be the average over the full duration (10s)
+        //When there is only one recorded value, the rate will be the average over the full duration (10s)
         record(rate, config, 1000);
         assertEquals(100, measure(rate, config), 0);
 
         //Inside the first window, the rate will be in proportion to the elapsed time
         time.sleep(100);
-        assertEquals(10000, measure(rate, config), 0); // 1000B / 0.1s me
+        assertEquals(1000 / 0.1, measure(rate, config), 0);
         time.sleep(100);
-        assertEquals(5000, measure(rate, config), 0); // 1000B / 0.2s
+        assertEquals(1000 / 0.2, measure(rate, config), 0);
         time.sleep(200);
-        assertEquals(2500, measure(rate, config), 0); // 1000B / 0.4s
+        assertEquals(1000 / 0.4, measure(rate, config), 0);
 
         //Adding another value, inside the same window should double the rate
         record(rate, config, 1000);
