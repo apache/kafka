@@ -378,15 +378,15 @@ public class Fetcher<K, V> {
         }
     }
 
-    public Map<TopicPartition, Long> earliestOffsets(Collection<TopicPartition> partitions) {
-        return earliestOrLatestOffset(partitions, ListOffsetRequest.EARLIEST_TIMESTAMP);
+    public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions) {
+        return beginningOrEndOffset(partitions, ListOffsetRequest.EARLIEST_TIMESTAMP);
     }
 
-    public Map<TopicPartition, Long> latestOffsets(Collection<TopicPartition> partitions) {
-        return earliestOrLatestOffset(partitions, ListOffsetRequest.LATEST_TIMESTAMP);
+    public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions) {
+        return beginningOrEndOffset(partitions, ListOffsetRequest.LATEST_TIMESTAMP);
     }
 
-    private Map<TopicPartition, Long> earliestOrLatestOffset(Collection<TopicPartition> partitions, long timestamp) {
+    private Map<TopicPartition, Long> beginningOrEndOffset(Collection<TopicPartition> partitions, long timestamp) {
         Map<TopicPartition, Long> timestampsToSearch = new HashMap<>();
         for (TopicPartition tp : partitions)
             timestampsToSearch.put(tp, timestamp);
@@ -557,6 +557,7 @@ public class Fetcher<K, V> {
                                           ClientResponse clientResponse,
                                           RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> future) {
         ListOffsetResponse lor = new ListOffsetResponse(clientResponse.responseBody());
+        log.trace("Received ListOffsetResponse {}", lor);
         Map<TopicPartition, OffsetAndTimestamp> timestampOffsetMap = new HashMap<>();
         for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
             TopicPartition topicPartition = entry.getKey();

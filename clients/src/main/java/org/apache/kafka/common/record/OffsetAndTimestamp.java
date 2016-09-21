@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.record;
 
-import java.util.Objects;
-
 /**
  * A container class for offset and timestamp.
  */
@@ -45,7 +43,7 @@ public final class OffsetAndTimestamp {
 
     @Override
     public int hashCode() {
-        return Objects.hash(timestamp, offset);
+        return 31 * Long.valueOf(timestamp).hashCode() + Long.valueOf(offset).hashCode();
     }
 
     @Override

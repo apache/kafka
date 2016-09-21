@@ -52,7 +52,11 @@ Note: Because new protocols are introduced, it is important to upgrade your Kafk
     <li> The open file handlers of 0.10.0 will increase by ~33% because of the addition of time index files for each segment.</li>
     <li> The time index and offset index share the same index size configuration. Since each time index entry is 1.5x the size of offset index entry. User may need to increase log.index.size.max.bytes to avoid potential frequent log rolling. </li>
     <li> Due to the increased number of index files, on some brokers with large amount the log segments (e.g. >15K), the log loading process during the broker startup could be longer. Based on our experiment, setting the num.recovery.threads.per.data.dir to one may reduce the log loading time. </li>
+</ul>
 
+<h5><a id="upgrade_10_1_protocol_change" href="#upgrade_10_1_protocol_change">Protocol changes in 0.10.1.0</a></h5>
+<ul>
+    <li> ListOffsetRequest v1 is introduced and used by default to support accurate offset search based on timestamp.
 </ul>
 
 <h5><a id="upgrade_1010_notable" href="#upgrade_1010_notable">Notable changes in 0.10.1.0</a></h5>

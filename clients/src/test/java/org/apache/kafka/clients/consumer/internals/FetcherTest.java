@@ -84,8 +84,8 @@ public class FetcherTest {
     private int fetchSize = 1000;
     private long retryBackoffMs = 100;
     private MockTime time = new MockTime(1);
-    private MockClient client = new MockClient(time);
     private Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+    private MockClient client = new MockClient(time, metadata);
     private Cluster cluster = TestUtils.singletonCluster(topicName, 1);
     private Node node = cluster.nodes().get(0);
     private SubscriptionState subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);
@@ -638,13 +638,27 @@ public class FetcherTest {
 
     @Test
     public void testGetOffsetsByTimes() {
-        client.prepareResponseFrom(listOffsetResponse(Errors.NONE, 100L, 100L), cluster.leaderFor(tp));
+        TopicPartition tp0 = tp;
+        TopicPartition tp1 = new TopicPartition(topicName, 1);
+        // Ensure metadata has both partition.
+        Cluster cluster = TestUtils.clusterWith(2, topicName, 2);
+        metadata.update(cluster, time.milliseconds());
 
-        Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap =
-                fetcher.getOffsetsByTimes(Collections.singletonMap(tp, 0L));
-        assertEquals(offsetAndTimestampMap.get(tp).timestamp(), 100L);
-        assertEquals(offsetAndTimestampMap.get(tp).offset(), 100L);
+        // First try should fail due to metadata error.
+        client.prepareResponseFrom(listOffsetResponse(Errors.NONE, 10L, 10L), cluster.leaderFor(tp0));
+        client.prepareResponseFrom(listOffsetResponse(tp1, Errors.NOT_LEADER_FOR_PARTITION, -1L, -1L), cluster.leaderFor(tp1));
+        // Second try should succeed.
+        client.prepareResponseFrom(listOffsetResponse(Errors.NONE, 100L, 100L), cluster.leaderFor(tp0));
+        client.prepareResponseFrom(listOffsetResponse(tp1, Errors.NONE, 200L, 200L), cluster.leaderFor(tp1));
 
+        Map<TopicPartition, Long> timestampToSearch = new HashMap<>();
+        timestampToSearch.put(tp0, 0L);
+        timestampToSearch.put(tp1, 0L);
+        Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = fetcher.getOffsetsByTimes(timestampToSearch);
+        assertEquals(offsetAndTimestampMap.get(tp0).timestamp(), 100L);
+        assertEquals(offsetAndTimestampMap.get(tp0).offset(), 100L);
+        assertEquals(offsetAndTimestampMap.get(tp1).timestamp(), 200L);
+        assertEquals(offsetAndTimestampMap.get(tp1).offset(), 200L);
     }
 
     private MockClient.RequestMatcher listOffsetRequestMatcher(final long timestamp) {
@@ -659,6 +673,10 @@ public class FetcherTest {
     }
 
     private Struct listOffsetResponse(Errors error, long timestamp, long offset) {
+        return listOffsetResponse(tp, error, timestamp, offset);
+    }
+
+    private Struct listOffsetResponse(TopicPartition tp, Errors error, long timestamp, long offset) {
         ListOffsetResponse.PartitionData partitionData = new ListOffsetResponse.PartitionData(error.code(), timestamp, offset);
         Map<TopicPartition, ListOffsetResponse.PartitionData> allPartitionData = new HashMap<>();
         allPartitionData.put(tp, partitionData);

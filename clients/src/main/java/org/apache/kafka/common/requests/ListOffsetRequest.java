@@ -92,7 +92,7 @@ public class ListOffsetRequest extends AbstractRequest {
     /**
      * Constructor for ListOffsetRequest v1.
      */
-    public ListOffsetRequest(Map<TopicPartition, ?> targetTimes, int replicaId) {
+    public ListOffsetRequest(Map<TopicPartition, Long> targetTimes, int replicaId) {
         this(replicaId, targetTimes, 1);
     }
 

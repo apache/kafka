@@ -1427,30 +1427,36 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Get the earliest available offsets for the given partitions.
-     *
+     * Get the first offset for the given partitions.
+     * <p>
      * Notice that this method may block indefinitely if the partition does not exist.
+     * This method does not change the current consumer position of the partitions.
+     *
+     * @see #seekToBeginning(Collection)
      *
      * @param partitions the partitions to get the earliest offsets.
      * @return The earliest available offsets for the given partitions
      */
     @Override
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions) {
-        return fetcher.earliestOffsets(partitions);
+        return fetcher.beginningOffsets(partitions);
     }
 
     /**
-     * Get the end offsets for the given partitions. The end offset of a partition is the offset of the upcoming
+     * Get the last offset for the given partitions. The last offset of a partition is the offset of the upcoming
      * message, i.e. the offset of the last available message + 1.
-     *
+     * <p>
      * Notice that this method may block indefinitely if the partition does not exist.
+     * This method does not change the current consumer position of the partitions.
+     *
+     * @see #seekToEnd(Collection)
      *
      * @param partitions the partitions to get the end offsets.
      * @return The end offsets for the given partitions.
      */
     @Override
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions) {
-        return fetcher.latestOffsets(partitions);
+        return fetcher.endOffsets(partitions);
     }
 
     /**

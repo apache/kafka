@@ -615,10 +615,7 @@ class Log(val dir: File,
         None
     }
 
-    targetSeg match {
-      case Some(segment) => segment.findOffsetByTimestamp(targetTimestamp)
-      case None => None
-    }
+    targetSeg.map(_.findOffsetByTimestamp(targetTimestamp).get)
   }
 
   /**
