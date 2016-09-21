@@ -935,6 +935,38 @@ public class KafkaConsumerTest {
         consumer.close();
     }
 
+    @Test(expected = IllegalStateException.class)
+    public void testPollWithNoSubscription() {
+        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
+        try {
+            consumer.poll(0);
+        } finally {
+            consumer.close();
+        }
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testPollWithEmptySubscription() {
+        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
+        consumer.subscribe(Collections.<String>emptyList());
+        try {
+            consumer.poll(0);
+        } finally {
+            consumer.close();
+        }
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testPollWithEmptyUserAssignment() {
+        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
+        consumer.assign(Collections.<TopicPartition>emptySet());
+        try {
+            consumer.poll(0);
+        } finally {
+            consumer.close();
+        }
+    }
+
     private ConsumerRebalanceListener getConsumerRebalanceListener(final KafkaConsumer<String, String> consumer) {
         return new ConsumerRebalanceListener() {
             @Override
@@ -1034,9 +1066,9 @@ public class KafkaConsumerTest {
         Map<TopicPartition, ListOffsetResponse.PartitionData> partitionData = new HashMap<>();
         for (Map.Entry<TopicPartition, Long> partitionOffset : offsets.entrySet()) {
             partitionData.put(partitionOffset.getKey(), new ListOffsetResponse.PartitionData(error,
-                    singletonList(partitionOffset.getValue())));
+                    1L, partitionOffset.getValue()));
         }
-        return new ListOffsetResponse(partitionData).toStruct();
+        return new ListOffsetResponse(partitionData, 1).toStruct();
     }
 
     private Struct fetchResponse(Map<TopicPartition, FetchInfo> fetches) {

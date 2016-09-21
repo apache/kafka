@@ -37,6 +37,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
+import org.apache.kafka.common.record.OffsetAndTimestamp;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.AppInfoParser;
@@ -954,6 +955,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             topics or to the configured groupId
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. invalid groupId or
      *             session timeout, errors deserializing key/value pairs, or any new error cases in future versions)
+     * @throws java.lang.IllegalArgumentException if the timeout value is negative
+     * @throws java.lang.IllegalStateException if the consumer is not subscribed to any topics or manually assigned any
+     *             partitions to consume from
      */
     @Override
     public ConsumerRecords<K, V> poll(long timeout) {
@@ -961,6 +965,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             if (timeout < 0)
                 throw new IllegalArgumentException("Timeout must not be negative");
+
+            if (this.subscriptions.hasNoSubscriptionOrUserAssignment())
+                throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
 
             // poll for new data until the timeout expires
             long start = time.milliseconds();
@@ -1391,6 +1398,59 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         } finally {
             release();
         }
+    }
+
+    /**
+     * Look up the offsets for the given partitions by timestamp. The returned offset for each partition is the
+     * earliest offset whose timestamp is greater than or equal to the given timestamp in the corresponding partition.
+     *
+     * This is a blocking call. The consumer does not have to be assigned the partitions.
+     * If the message format version in a partition is before 0.10.0, i.e. the messages do not have timestamps, null
+     * will be returned for that partition.
+     *
+     * Notice that this method may block indefinitely if the partition does not exist.
+     *
+     * @param timestampsToSearch the mapping from partition to the timestamp to look up.
+     * @return a mapping from partition to the timestamp and offset of the first message with timestamp greater
+     *         than or equal to the target timestamp. {@code null} will be returned for the partition if there is no
+     *         such message.
+     * @throws IllegalArgumentException if the target timestamp is negative.
+     */
+    @Override
+    public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {
+        for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
+            if (entry.getValue() < 0)
+                throw new IllegalArgumentException("The target time for partition " + entry.getKey() + " is " +
+                        entry.getValue() + ". The target time cannot be negative.");
+        }
+        return fetcher.getOffsetsByTimes(timestampsToSearch);
+    }
+
+    /**
+     * Get the earliest available offsets for the given partitions.
+     *
+     * Notice that this method may block indefinitely if the partition does not exist.
+     *
+     * @param partitions the partitions to get the earliest offsets.
+     * @return The earliest available offsets for the given partitions
+     */
+    @Override
+    public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions) {
+        return fetcher.earliestOffsets(partitions);
+    }
+
+    /**
+     * Get the end offsets for the given partitions. The end offset of a partition is the offset of the upcoming
+     * message, i.e. the offset of the last available message + 1.
+     *
+     * Notice that this method may block indefinitely if the partition does not exist.
+     *
+     * @param partitions the partitions to get the end offsets.
+     * @return The end offsets for the given partitions.
+     */
+    @Override
+    public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions) {
+        return fetcher.latestOffsets(partitions);
     }
 
     /**

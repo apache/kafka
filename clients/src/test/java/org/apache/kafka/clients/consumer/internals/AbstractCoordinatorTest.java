@@ -125,10 +125,12 @@ public class AbstractCoordinatorTest {
             synchronized (coordinator) {
                 coordinator.notify();
             }
-            Thread.sleep(100);
-
-            coordinator.pollHeartbeat(mockTime.milliseconds());
-            fail("Expected pollHeartbeat to raise an error");
+            long startMs = System.currentTimeMillis();
+            while (System.currentTimeMillis() - startMs < 1000) {
+                Thread.sleep(10);
+                coordinator.pollHeartbeat(mockTime.milliseconds());
+            }
+            fail("Expected pollHeartbeat to raise an error in 1 second");
         } catch (RuntimeException exception) {
             assertEquals(exception, e);
         }

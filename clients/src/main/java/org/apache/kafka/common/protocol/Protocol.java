@@ -375,6 +375,12 @@ public class Protocol {
                                                                              new Field("max_num_offsets",
                                                                                        INT32,
                                                                                        "Maximum offsets to return."));
+    public static final Schema LIST_OFFSET_REQUEST_PARTITION_V1 = new Schema(new Field("partition",
+                                                                                       INT32,
+                                                                                       "Topic partition id."),
+                                                                             new Field("timestamp",
+                                                                                       INT64,
+                                                                                       "The target timestamp for the partition."));
 
     public static final Schema LIST_OFFSET_REQUEST_TOPIC_V0 = new Schema(new Field("topic",
                                                                                    STRING,
@@ -382,12 +388,24 @@ public class Protocol {
                                                                          new Field("partitions",
                                                                                    new ArrayOf(LIST_OFFSET_REQUEST_PARTITION_V0),
                                                                                    "Partitions to list offset."));
+    public static final Schema LIST_OFFSET_REQUEST_TOPIC_V1 = new Schema(new Field("topic",
+                                                                                   STRING,
+                                                                                   "Topic to list offset."),
+                                                                         new Field("partitions",
+                                                                                   new ArrayOf(LIST_OFFSET_REQUEST_PARTITION_V1),
+                                                                                   "Partitions to list offset."));
 
     public static final Schema LIST_OFFSET_REQUEST_V0 = new Schema(new Field("replica_id",
                                                                              INT32,
                                                                              "Broker id of the follower. For normal consumers, use -1."),
                                                                    new Field("topics",
                                                                              new ArrayOf(LIST_OFFSET_REQUEST_TOPIC_V0),
+                                                                             "Topics to list offsets."));
+    public static final Schema LIST_OFFSET_REQUEST_V1 = new Schema(new Field("replica_id",
+                                                                             INT32,
+                                                                             "Broker id of the follower. For normal consumers, use -1."),
+                                                                   new Field("topics",
+                                                                             new ArrayOf(LIST_OFFSET_REQUEST_TOPIC_V1),
                                                                              "Topics to list offsets."));
 
     public static final Schema LIST_OFFSET_RESPONSE_PARTITION_V0 = new Schema(new Field("partition",
@@ -398,15 +416,33 @@ public class Protocol {
                                                                                         new ArrayOf(INT64),
                                                                                         "A list of offsets."));
 
+    public static final Schema LIST_OFFSET_RESPONSE_PARTITION_V1 = new Schema(new Field("partition",
+                                                                                        INT32,
+                                                                                        "Topic partition id."),
+                                                                              new Field("error_code", INT16),
+                                                                              new Field("timestamp",
+                                                                                        INT64,
+                                                                                        "The timestamp associated with the returned offset"),
+                                                                              new Field("offset",
+                                                                                        INT64,
+                                                                                        "offsets found"));
+
     public static final Schema LIST_OFFSET_RESPONSE_TOPIC_V0 = new Schema(new Field("topic", STRING),
                                                                           new Field("partition_responses",
                                                                                     new ArrayOf(LIST_OFFSET_RESPONSE_PARTITION_V0)));
 
+    public static final Schema LIST_OFFSET_RESPONSE_TOPIC_V1 = new Schema(new Field("topic", STRING),
+                                                                          new Field("partition_responses",
+                                                                                    new ArrayOf(LIST_OFFSET_RESPONSE_PARTITION_V1)));
+
     public static final Schema LIST_OFFSET_RESPONSE_V0 = new Schema(new Field("responses",
                                                                               new ArrayOf(LIST_OFFSET_RESPONSE_TOPIC_V0)));
 
-    public static final Schema[] LIST_OFFSET_REQUEST = new Schema[] {LIST_OFFSET_REQUEST_V0};
-    public static final Schema[] LIST_OFFSET_RESPONSE = new Schema[] {LIST_OFFSET_RESPONSE_V0};
+    public static final Schema LIST_OFFSET_RESPONSE_V1 = new Schema(new Field("responses",
+                                                                              new ArrayOf(LIST_OFFSET_RESPONSE_TOPIC_V1)));
+
+    public static final Schema[] LIST_OFFSET_REQUEST = new Schema[] {LIST_OFFSET_REQUEST_V0, LIST_OFFSET_REQUEST_V1};
+    public static final Schema[] LIST_OFFSET_RESPONSE = new Schema[] {LIST_OFFSET_RESPONSE_V0, LIST_OFFSET_RESPONSE_V1};
 
     /* Fetch api */
     public static final Schema FETCH_REQUEST_PARTITION_V0 = new Schema(new Field("partition",

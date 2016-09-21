@@ -212,6 +212,10 @@ public class SubscriptionState {
         return this.subscriptionType == SubscriptionType.AUTO_PATTERN;
     }
 
+    public boolean hasNoSubscriptionOrUserAssignment() {
+        return this.subscriptionType == SubscriptionType.NONE;
+    }
+
     public void unsubscribe() {
         this.subscription = Collections.emptySet();
         this.userAssignment = Collections.emptySet();

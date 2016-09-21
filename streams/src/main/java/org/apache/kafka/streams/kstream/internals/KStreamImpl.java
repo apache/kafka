@@ -690,8 +690,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                                                                   joiner,
                                                                                   outer);
             KStreamKStreamJoin<K1, R, V2, V1> joinOther = new KStreamKStreamJoin<>(thisWindow.name(),
-                                                                                   windows.before,
                                                                                    windows.after,
+                                                                                   windows.before,
                                                                                    reverseJoiner(joiner),
                                                                                    outer);
 
