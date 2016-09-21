@@ -50,7 +50,7 @@ public final class Metadata {
     public static final long TOPIC_EXPIRY_MS = 5 * 60 * 1000;
     private static final long TOPIC_EXPIRY_NEEDS_UPDATE = -1L;
     private static final long DEFAULT_RETRY_BACKOFF_MS = 100L;
-    private static final long DEFAULT_METADATA_MAX_AGE_MS = 60 * 60 * 1000L;
+    private static final long DEFAULT_METADATA_MAX_AGE_MS = 300 * 1000L;
 
     private final long refreshBackoffMs;
     private final long metadataExpireMs;
