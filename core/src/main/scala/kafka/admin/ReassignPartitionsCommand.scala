@@ -61,7 +61,7 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   def verifyAssignment(zkUtils: ZkUtils, jsonString: String): Unit = {
-    println("Status of partition reassignment:")
+    println("Status of partition reassignment: ")
     val partitionsToBeReassigned = ZkUtils.parsePartitionReassignmentData(jsonString)
     val reassignedPartitionsStatus = checkIfReassignmentSucceeded(zkUtils, partitionsToBeReassigned)
     reassignedPartitionsStatus.foreach { case (topicPartition, status) =>
