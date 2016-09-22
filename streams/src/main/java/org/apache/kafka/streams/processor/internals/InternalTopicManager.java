@@ -18,14 +18,10 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Locale;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 public class InternalTopicManager {
@@ -34,7 +30,6 @@ public class InternalTopicManager {
 
     // TODO: the following LogConfig dependency should be removed after KIP-4
     public static final String CLEANUP_POLICY_PROP = "cleanup.policy";
-    private static final Set<String> CLEANUP_POLICIES = Utils.mkSet("compact", "delete");
     public static final String RETENTION_MS = "retention.ms";
     public static final Long WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
 
@@ -42,29 +37,15 @@ public class InternalTopicManager {
 
     private final int replicationFactor;
     private StreamsKafkaClient streamsKafkaClient;
-    private StreamsConfig config;
 
-    public static boolean isValidCleanupPolicy(final String cleanupPolicy) {
-        if (cleanupPolicy == null) {
-            return false;
-        }
-        final String[] policies = cleanupPolicy.toLowerCase(Locale.ROOT).split(",");
-        for (String policy : policies) {
-            if (!CLEANUP_POLICIES.contains(policy.trim())) {
-                return false;
-            }
-        }
-        return true;
-    }
 
     public InternalTopicManager() {
         this.replicationFactor = 0;
         this.windowChangeLogAdditionalRetention = WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT;
     }
-
-    public InternalTopicManager(StreamsConfig config, final int replicationFactor, long windowChangeLogAdditionalRetention) {
-        this.config = config;
-        this.streamsKafkaClient = new StreamsKafkaClient(config);
+    
+    public InternalTopicManager(StreamsKafkaClient streamsKafkaClient, final int replicationFactor, long windowChangeLogAdditionalRetention) {
+        this.streamsKafkaClient = streamsKafkaClient;
         this.replicationFactor = replicationFactor;
         this.windowChangeLogAdditionalRetention = windowChangeLogAdditionalRetention;
     }
@@ -75,18 +56,21 @@ public class InternalTopicManager {
      * @param topic
      * @param numPartitions
      */
-    public void makeReady(InternalTopicConfig topic, int numPartitions) {
+    public void makeReady(final InternalTopicConfig topic, final int numPartitions) {
 
         if (!streamsKafkaClient.topicExists(topic.name())) {
             streamsKafkaClient.createTopic(topic, numPartitions, replicationFactor, windowChangeLogAdditionalRetention);
         } else {
-            MetadataResponse.TopicMetadata topicMetadata = streamsKafkaClient.getTopicMetadata(topic.name());
+            final MetadataResponse.TopicMetadata topicMetadata = streamsKafkaClient.getTopicMetadata(topic.name());
             if (topicMetadata != null) {
+                if (topicMetadata.error().code() != 0) {
+                    throw new StreamsException("Topic metadata request returned with error code " + topicMetadata.error().code());
+                }
                 if (topicMetadata.partitionMetadata().size() != numPartitions) {
                     throw new StreamsException("Topic already exists but the number of partitions is not the same as the requested " + numPartitions + " partitions.");
                 }
             } else {
-                throw new StreamsException("Topic metadata is corrupted.");
+                throw new StreamsException("Could not fetch the topic metadata.");
             }
 
         }

@@ -286,7 +286,7 @@ public class StreamsConfig extends AbstractConfig {
                                 .define(SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,
                                         DEFAULT_SECURITY_PROTOCOL,
-                                        Importance.LOW, //TODO: Is this the right value? Investigate!
+                                        Importance.MEDIUM,
                                         SECURITY_PROTOCOL_DOC)
                                 .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
                                         ConfigDef.Type.LONG,
