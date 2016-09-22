@@ -246,7 +246,8 @@ public final class RecordAccumulator {
             // 
             // Finally, we expire batches if the last metadata refresh was too long ago. I.e., > {@link Sender#metadataStaleMs}. 
             // We might run in to this situation when the producer is disconnected from all the brokers. 
-            if (!muted.contains(tp) && (isMetadataStale || cluster.leaderFor(tp) == null)) {
+            boolean guaranteeExpirationOrder = muted.contains(tp);
+            if (!guaranteeExpirationOrder && (isMetadataStale || cluster.leaderFor(tp) == null)) {
                 synchronized (dq) {
                     // iterate over the batches and expire them if they have been in the accumulator for more than requestTimeOut
                     RecordBatch lastBatch = dq.peekLast();

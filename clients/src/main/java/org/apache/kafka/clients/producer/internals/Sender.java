@@ -124,7 +124,7 @@ public class Sender implements Runnable {
         this.sensors = new SenderMetrics(metrics);
         this.requestTimeout = requestTimeout;
         
-        this.metadataStaleMs = getMetadataStaleMs(metadata.maxAge(), requestTimeout, metadata.refreshBackoff());
+        this.metadataStaleMs = getMetadataStaleMs(metadata.maxAge(), requestTimeout, metadata.refreshBackoff(), retries);
     }
 
     /**
@@ -388,8 +388,8 @@ public class Sender implements Runnable {
      * metadata retries have no upper bound. However, as retries are subject to both regular request timeout and 
      * the backoff, staleness determination is delayed by that factor.
      */
-    static long getMetadataStaleMs(long metadataMaxAge, int requestTimeout, long refreshBackoff) {
-        return metadataMaxAge + 3 * (requestTimeout + refreshBackoff);
+    static long getMetadataStaleMs(long metadataMaxAge, int requestTimeout, long refreshBackoff, int retries) {
+        return metadataMaxAge + Math.max(retries, 1) * (requestTimeout + refreshBackoff);
     }
     
     static boolean isMetadataStale(long now, Metadata metadata, long metadataStaleMs) {

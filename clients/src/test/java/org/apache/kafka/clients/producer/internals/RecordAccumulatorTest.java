@@ -351,7 +351,8 @@ public class RecordAccumulatorTest {
         int batchSize = 1024;
         long totalSize = 10 * 1024;
         long metadataMaxAgeMs = 5 * 60 * 1000L; // 5 min
-        long staleMetadataAgeMs  = Sender.getMetadataStaleMs(metadataMaxAgeMs, requestTimeoutMs, retryBackoffMs);
+        int retries = 1;
+        long staleMetadataAgeMs  = Sender.getMetadataStaleMs(metadataMaxAgeMs, requestTimeoutMs, retryBackoffMs, retries);
         List<RecordBatch> expiredBatches;
         RecordAccumulator.ReadyCheckResult result;
         Set<Node> readyNodes;
