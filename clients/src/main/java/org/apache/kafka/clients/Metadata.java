@@ -53,7 +53,7 @@ public final class Metadata {
     private static final long DEFAULT_METADATA_MAX_AGE_MS = 300 * 1000L;
 
     private final long refreshBackoffMs;
-    private final long metadataExpireMs;
+    private final long metadataMaxAgeMs;
     private int version;
     private long lastRefreshMs;
     private long lastSuccessfulRefreshMs;
@@ -73,22 +73,22 @@ public final class Metadata {
         this(DEFAULT_RETRY_BACKOFF_MS, DEFAULT_METADATA_MAX_AGE_MS);
     }
 
-    public Metadata(long refreshBackoffMs, long metadataExpireMs) {
-        this(refreshBackoffMs, metadataExpireMs, false, new ClusterResourceListeners());
+    public Metadata(long refreshBackoffMs, long metadataMaxAgeMs) {
+        this(refreshBackoffMs, metadataMaxAgeMs, false, new ClusterResourceListeners());
     }
 
     /**
      * Create a new Metadata instance
      * @param refreshBackoffMs The minimum amount of time that must expire between metadata refreshes to avoid busy
      *        polling
-     * @param metadataExpireMs The maximum amount of time that metadata can be retained without refresh
+     * @param metadataMaxAgeMs The maximum amount of time that metadata can be retained without refresh
      * @param topicExpiryEnabled If true, enable expiry of unused topics
      * @param clusterResourceListeners List of ClusterResourceListeners which will receive metadata updates.
      */
 
-    public Metadata(long refreshBackoffMs, long metadataExpireMs, boolean topicExpiryEnabled, ClusterResourceListeners clusterResourceListeners) {
+    public Metadata(long refreshBackoffMs, long metadataMaxAgeMs, boolean topicExpiryEnabled, ClusterResourceListeners clusterResourceListeners) {
         this.refreshBackoffMs = refreshBackoffMs;
-        this.metadataExpireMs = metadataExpireMs;
+        this.metadataMaxAgeMs = metadataMaxAgeMs;
         this.topicExpiryEnabled = topicExpiryEnabled;
         this.lastRefreshMs = 0L;
         this.lastSuccessfulRefreshMs = 0L;
@@ -122,7 +122,7 @@ public final class Metadata {
      * is now
      */
     public synchronized long timeToNextUpdate(long nowMs) {
-        long timeToExpire = needUpdate ? 0 : Math.max(this.lastSuccessfulRefreshMs + this.metadataExpireMs - nowMs, 0);
+        long timeToExpire = needUpdate ? 0 : Math.max(this.lastSuccessfulRefreshMs + this.metadataMaxAgeMs - nowMs, 0);
         long timeToAllowUpdate = this.lastRefreshMs + this.refreshBackoffMs - nowMs;
         return Math.max(timeToExpire, timeToAllowUpdate);
     }
@@ -269,8 +269,8 @@ public final class Metadata {
     /**
      * The max allowable age of metadata.
      */
-    public long maxAge() { 
-        return this.metadataExpireMs; 
+    public long maxAgeMs() { 
+        return this.metadataMaxAgeMs; 
     }
 
     /**
