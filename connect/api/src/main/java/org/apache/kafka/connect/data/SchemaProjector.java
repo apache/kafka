@@ -111,14 +111,12 @@ public class SchemaProjector {
                 } catch (SchemaProjectorException e) {
                     throw new SchemaProjectorException("Error projecting " + sourceField.name(), e);
                 }
+            } else if (targetField.schema().isOptional()) {
+                // Ignore missing field
+            } else if (targetField.schema().defaultValue() != null) {
+                targetStruct.put(fieldName, targetField.schema().defaultValue());
             } else {
-                Object targetDefault;
-                if (targetField.schema().defaultValue() != null) {
-                    targetDefault = targetField.schema().defaultValue();
-                } else {
-                    throw new SchemaProjectorException("Cannot project " + source.schema() + " to " + target.schema());
-                }
-                targetStruct.put(fieldName, targetDefault);
+                throw new SchemaProjectorException("Required field `" +  fieldName + "` is missing from source schema: " + source);
             }
         }
         return targetStruct;

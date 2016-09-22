@@ -22,14 +22,14 @@ import kafka.cluster.BrokerEndPoint
 import kafka.message.ByteBufferMessageSet
 import kafka.server.{PartitionFetchState, AbstractFetcherThread}
 import kafka.common.{ErrorMapping, TopicAndPartition}
-import scala.collection.JavaConverters
-import JavaConverters._
+import scala.collection.Map
 import ConsumerFetcherThread._
+import org.apache.kafka.common.TopicPartition
 
 class ConsumerFetcherThread(name: String,
                             val config: ConsumerConfig,
                             sourceBroker: BrokerEndPoint,
-                            partitionMap: Map[TopicAndPartition, PartitionTopicInfo],
+                            partitionMap: Map[TopicPartition, PartitionTopicInfo],
                             val consumerFetcherManager: ConsumerFetcherManager)
         extends AbstractFetcherThread(name = name,
                                       clientId = config.clientId,
@@ -66,56 +66,59 @@ class ConsumerFetcherThread(name: String,
   }
 
   // process fetched data
-  def processPartitionData(topicAndPartition: TopicAndPartition, fetchOffset: Long, partitionData: PartitionData) {
-    val pti = partitionMap(topicAndPartition)
+  def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PartitionData) {
+    val pti = partitionMap(topicPartition)
     if (pti.getFetchOffset != fetchOffset)
       throw new RuntimeException("Offset doesn't match for partition [%s,%d] pti offset: %d fetch offset: %d"
-                                .format(topicAndPartition.topic, topicAndPartition.partition, pti.getFetchOffset, fetchOffset))
+                                .format(topicPartition.topic, topicPartition.partition, pti.getFetchOffset, fetchOffset))
     pti.enqueue(partitionData.underlying.messages.asInstanceOf[ByteBufferMessageSet])
   }
 
   // handle a partition whose offset is out of range and return a new fetch offset
-  def handleOffsetOutOfRange(topicAndPartition: TopicAndPartition): Long = {
+  def handleOffsetOutOfRange(topicPartition: TopicPartition): Long = {
     val startTimestamp = config.autoOffsetReset match {
       case OffsetRequest.SmallestTimeString => OffsetRequest.EarliestTime
       case OffsetRequest.LargestTimeString => OffsetRequest.LatestTime
       case _ => OffsetRequest.LatestTime
     }
+    val topicAndPartition = new TopicAndPartition(topicPartition.topic, topicPartition.partition)
     val newOffset = simpleConsumer.earliestOrLatestOffset(topicAndPartition, startTimestamp, Request.OrdinaryConsumerId)
-    val pti = partitionMap(topicAndPartition)
+    val pti = partitionMap(topicPartition)
     pti.resetFetchOffset(newOffset)
     pti.resetConsumeOffset(newOffset)
     newOffset
   }
 
   // any logic for partitions whose leader has changed
-  def handlePartitionsWithErrors(partitions: Iterable[TopicAndPartition]) {
+  def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]) {
     removePartitions(partitions.toSet)
     consumerFetcherManager.addPartitionsWithError(partitions)
   }
 
-  protected def buildFetchRequest(partitionMap: collection.Map[TopicAndPartition, PartitionFetchState]): FetchRequest = {
-    partitionMap.foreach { case ((topicAndPartition, partitionFetchState)) =>
+  protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): FetchRequest = {
+    partitionMap.foreach { case ((topicPartition, partitionFetchState)) =>
       if (partitionFetchState.isActive)
-        fetchRequestBuilder.addFetch(topicAndPartition.topic, topicAndPartition.partition, partitionFetchState.offset,
+        fetchRequestBuilder.addFetch(topicPartition.topic, topicPartition.partition, partitionFetchState.offset,
           fetchSize)
     }
 
     new FetchRequest(fetchRequestBuilder.build())
   }
 
-  protected def fetch(fetchRequest: FetchRequest): collection.Map[TopicAndPartition, PartitionData] =
-    simpleConsumer.fetch(fetchRequest.underlying).data.map { case (key, value) =>
-      key -> new PartitionData(value)
+  protected def fetch(fetchRequest: FetchRequest): Seq[(TopicPartition, PartitionData)] =
+    simpleConsumer.fetch(fetchRequest.underlying).data.map { case (TopicAndPartition(t, p), value) =>
+      new TopicPartition(t, p) -> new PartitionData(value)
     }
-
 }
 
 object ConsumerFetcherThread {
 
   class FetchRequest(val underlying: kafka.api.FetchRequest) extends AbstractFetcherThread.FetchRequest {
+    private lazy val tpToOffset: Map[TopicPartition, Long] = underlying.requestInfo.map { case (tp, fetchInfo) =>
+      new TopicPartition(tp.topic, tp.partition) -> fetchInfo.offset
+    }.toMap
     def isEmpty: Boolean = underlying.requestInfo.isEmpty
-    def offset(topicAndPartition: TopicAndPartition): Long = underlying.requestInfo(topicAndPartition).offset
+    def offset(topicPartition: TopicPartition): Long = tpToOffset(topicPartition)
   }
 
   class PartitionData(val underlying: FetchResponsePartitionData) extends AbstractFetcherThread.PartitionData {

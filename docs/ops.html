@@ -111,10 +111,8 @@ However if racks are assigned different numbers of brokers, the assignment of re
 
 <h4><a id="basic_ops_mirror_maker" href="#basic_ops_mirror_maker">Mirroring data between clusters</a></h4>
 
-We refer to the process of replicating data <i>between</i> Kafka clusters "mirroring" to avoid confusion with the replication that happens amongst the nodes in a single cluster. Kafka comes with a tool for mirroring data between Kafka clusters. The tool reads from a source cluster and writes to a destination cluster, like this:
-<p>
-<img src="images/mirror-maker.png">
-<p>
+We refer to the process of replicating data <i>between</i> Kafka clusters "mirroring" to avoid confusion with the replication that happens amongst the nodes in a single cluster. Kafka comes with a tool for mirroring data between Kafka clusters. The tool consumes from a source cluster and produces to a destination cluster.
+
 A common use case for this kind of mirroring is to provide a replica in another datacenter. This scenario will be discussed in more detail in the next section.
 <p>
 You can run many such mirroring processes to increase throughput and for fault-tolerance (if one process dies, the others will take overs the additional load).
@@ -123,10 +121,10 @@ Data will be read from topics in the source cluster and written to a topic with 
 <p>
 The source and destination clusters are completely independent entities: they can have different numbers of partitions and the offsets will not be the same. For this reason the mirror cluster is not really intended as a fault-tolerance mechanism (as the consumer position will be different); for that we recommend using normal in-cluster replication. The mirror maker process will, however, retain and use the message key for partitioning so order is preserved on a per-key basis.
 <p>
-Here is an example showing how to mirror a single topic (named <i>my-topic</i>) from two input clusters:
+Here is an example showing how to mirror a single topic (named <i>my-topic</i>) from an input cluster:
 <pre>
  &gt; bin/kafka-mirror-maker.sh
-       --consumer.config consumer-1.properties --consumer.config consumer-2.properties
+       --consumer.config consumer.properties
        --producer.config producer.properties --whitelist my-topic
 </pre>
 Note that we specify the list of topics with the <code>--whitelist</code> option. This option allows any regular expression using <a href="http://docs.oracle.com/javase/7/docs/api/java/util/regex/Pattern.html">Java-style regular expressions</a>. So you could mirror two topics named <i>A</i> and <i>B</i> using <code>--whitelist 'A|B'</code>. Or you could mirror <i>all</i> topics using <code>--whitelist '*'</code>. Make sure to quote any regular expression to ensure the shell doesn't try to expand it as a file path. For convenience we allow the use of ',' instead of '|' to specify a list of topics.
@@ -342,23 +340,83 @@ Topic:foo	PartitionCount:1	ReplicationFactor:3	Configs:
 </pre>
 
 <h4><a id="quotas" href="#quotas">Setting quotas</a></h4>
-It is possible to set default quotas that apply to all client-ids by setting these configs on the brokers. By default, each client-id receives an unlimited quota. The following sets the default quota per producer and consumer client-id to 10MB/sec.
+Quotas overrides and defaults may be configured at (user, client-id), user or client-id levels as described <a href="#design_quotas">here</a>.
+By default, clients receive an unlimited quota.
+
+It is possible to set custom quotas for each (user, client-id), user or client-id group.
+<p>
+Configure custom quota for (user=user1, client-id=clientA):
+<pre>
+> bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048' --entity-type users --entity-name user1 --entity-type clients --entity-name clientA
+Updated config for entity: user-principal 'user1', client-id 'clientA'.
+</pre>
+
+Configure custom quota for user=user1:
+<pre>
+> bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048' --entity-type users --entity-name user1
+Updated config for entity: user-principal 'user1'.
+</pre>
+
+Configure custom quota for client-id=clientA:
+<pre>
+> bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048' --entity-type clients --entity-name clientA
+Updated config for entity: client-id 'clientA'.
+</pre>
+
+It is possible to set default quotas for each (user, client-id), user or client-id group by specifying <i>--entity-default</i> option instead of <i>--entity-name</i>.
+<p>
+Configure default client-id quota for user=userA:
+<pre>
+> bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048' --entity-type users --entity-name user1 --entity-type clients --entity-default
+Updated config for entity: user-principal 'user1', default client-id.
+</pre>
+
+Configure default quota for user:
+<pre>
+> bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048' --entity-type users --entity-default
+Updated config for entity: default user-principal.
+</pre>
+
+Configure default quota for client-id:
+<pre>
+> bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048' --entity-type clients --entity-default
+Updated config for entity: default client-id.
+</pre>
+
+Here's how to describe the quota for a given (user, client-id):
+<pre>
+> bin/kafka-configs.sh  --zookeeper localhost:2181 --describe --entity-type users --entity-name user1 --entity-type clients --entity-name clientA
+Configs for user-principal 'user1', client-id 'clientA' are producer_byte_rate=1024,consumer_byte_rate=2048
+</pre>
+Describe quota for a given user:
+<pre>
+> bin/kafka-configs.sh  --zookeeper localhost:2181 --describe --entity-type users --entity-name user1
+Configs for user-principal 'user1' are producer_byte_rate=1024,consumer_byte_rate=2048
+</pre>
+Describe quota for a given client-id:
+<pre>
+> bin/kafka-configs.sh  --zookeeper localhost:2181 --describe --entity-type clients --entity-name clientA
+Configs for client-id 'clientA' are producer_byte_rate=1024,consumer_byte_rate=2048
+</pre>
+If entity name is not specified, all entities of the specified type are described. For example, describe all users:
+<pre>
+> bin/kafka-configs.sh  --zookeeper localhost:2181 --describe --entity-type users
+Configs for user-principal 'user1' are producer_byte_rate=1024,consumer_byte_rate=2048
+Configs for default user-principal are producer_byte_rate=1024,consumer_byte_rate=2048
+</pre>
+Similarly for (user, client):
+<pre>
+> bin/kafka-configs.sh  --zookeeper localhost:2181 --describe --entity-type users --entity-type clients
+Configs for user-principal 'user1', default client-id are producer_byte_rate=1024,consumer_byte_rate=2048
+Configs for user-principal 'user1', client-id 'clientA' are producer_byte_rate=1024,consumer_byte_rate=2048
+</pre>
+<p>
+It is possible to set default quotas that apply to all client-ids by setting these configs on the brokers. These properties are applied only if quota overrides or defaults are not configured in Zookeeper. By default, each client-id receives an unlimited quota. The following sets the default quota per producer and consumer client-id to 10MB/sec.
 <pre>
   quota.producer.default=10485760
   quota.consumer.default=10485760
 </pre>
-
-It is also possible to set custom quotas for each client.
-<pre>
-> bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048' --entity-name clientA --entity-type clients
-Updated config for clientId: "clientA".
-</pre>
-
-Here's how to describe the quota for a given client.
-<pre>
-> ./kafka-configs.sh  --zookeeper localhost:2181 --describe --entity-name clientA --entity-type clients
-Configs for clients:clientA are producer_byte_rate=1024,consumer_byte_rate=2048
-</pre>
+Note that these properties are being deprecated and may be removed in a future release. Defaults configured using kafka-configs.sh take precedence over these properties.
 
 <h3><a id="datacenters" href="#datacenters">6.2 Datacenters</a></h3>
 
@@ -647,12 +705,12 @@ We do graphing and alerting on the following metrics:
       <td>broken into queue, local, remote and response send time</td>
     </tr>
     <tr>
-      <td>Time the request waiting in the request queue</td>
-       <td>kafka.network:type=RequestMetrics,name=QueueTimeMs,request={Produce|FetchConsumer|FetchFollower}</td>
+      <td>Time the request waits in the request queue</td>
+       <td>kafka.network:type=RequestMetrics,name=RequestQueueTimeMs,request={Produce|FetchConsumer|FetchFollower}</td>
       <td></td>
     </tr>
     <tr>
-      <td>Time the request being processed at the leader</td>
+      <td>Time the request is processed at the leader</td>
       <td>kafka.network:type=RequestMetrics,name=LocalTimeMs,request={Produce|FetchConsumer|FetchFollower}</td>
       <td></td>
     </tr>
@@ -660,6 +718,11 @@ We do graphing and alerting on the following metrics:
       <td>Time the request waits for the follower</td>
       <td>kafka.network:type=RequestMetrics,name=RemoteTimeMs,request={Produce|FetchConsumer|FetchFollower}</td>
       <td>non-zero for produce requests when ack=-1</td>
+    </tr>
+    <tr>
+        <td>Time the request waits in the response queue</td>
+        <td>kafka.network:type=RequestMetrics,name=ResponseQueueTimeMs,request={Produce|FetchConsumer|FetchFollower}</td>
+        <td></td>
     </tr>
     <tr>
       <td>Time to send the response</td>
@@ -682,10 +745,11 @@ We do graphing and alerting on the following metrics:
       <td>between 0 and 1, ideally &gt 0.3</td>
     </tr>
     <tr>
-      <td>Quota metrics per client-id</td>
-      <td>kafka.server:type={Produce|Fetch},client-id==([-.\w]+)</td>
-      <td>Two attributes. throttle-time indicates the amount of time in ms the client-id was throttled. Ideally = 0.
-          byte-rate indicates the data produce/consume rate of the client in bytes/sec.</td>
+      <td>Quota metrics per (user, client-id), user or client-id</td>
+      <td>kafka.server:type={Produce|Fetch},user=([-.\w]+),client-id=([-.\w]+)</td>
+      <td>Two attributes. throttle-time indicates the amount of time in ms the client was throttled. Ideally = 0.
+          byte-rate indicates the data produce/consume rate of the client in bytes/sec.
+          For (user, client-id) quotas, both user and client-id are specified. If per-client-id quota is applied to the client, user is not specified. If per-user quota is applied, client-id is not specified.</td>
     </tr>
 </tbody></table>
 
@@ -1182,7 +1246,7 @@ Operationally, we do the following for a healthy ZooKeeper installation:
   <li>I/O segregation: if you do a lot of write type traffic you'll almost definitely want the transaction logs on a dedicated disk group. Writes to the transaction log are synchronous (but batched for performance), and consequently, concurrent writes can significantly affect performance. ZooKeeper snapshots can be one such a source of concurrent writes, and ideally should be written on a disk group separate from the transaction log. Snapshots are written to disk asynchronously, so it is typically ok to share with the operating system and message log files. You can configure a server to use a separate disk group with the dataLogDir parameter.</li>
   <li>Application segregation: Unless you really understand the application patterns of other apps that you want to install on the same box, it can be a good idea to run ZooKeeper in isolation (though this can be a balancing act with the capabilities of the hardware).</li>
   <li>Use care with virtualization: It can work, depending on your cluster layout and read/write patterns and SLAs, but the tiny overheads introduced by the virtualization layer can add up and throw off ZooKeeper, as it can be very time sensitive</li>
-  <li>ZooKeeper configuration: It's java, make sure you give it 'enough' heap space (We usually run them with 3-5G, but that's mostly due to the data set size we have here). Unfortunately we don't have a good formula for it, but keep in mind that allowing for more ZooKeeper state means that snapshots can become large, and large snapshots affect recovery time. In fact, if the snapshot becomes too large (a few gigabytes), then you may need to increase the initLimit parameter to give enough time for servers to recover and join the ensemble.</li> 
+  <li>ZooKeeper configuration: It's java, make sure you give it 'enough' heap space (We usually run them with 3-5G, but that's mostly due to the data set size we have here). Unfortunately we don't have a good formula for it, but keep in mind that allowing for more ZooKeeper state means that snapshots can become large, and large snapshots affect recovery time. In fact, if the snapshot becomes too large (a few gigabytes), then you may need to increase the initLimit parameter to give enough time for servers to recover and join the ensemble.</li>
   <li>Monitoring: Both JMX and the 4 letter words (4lw) commands are very useful, they do overlap in some cases (and in those cases we prefer the 4 letter commands, they seem more predictable, or at the very least, they work better with the LI monitoring infrastructure)</li>
   <li>Don't overbuild the cluster: large clusters, especially in a write heavy usage pattern, means a lot of intracluster communication (quorums on the writes and subsequent cluster member updates), but don't underbuild it (and risk swamping the cluster). Having more servers adds to your read capacity.</li>
 </ul>

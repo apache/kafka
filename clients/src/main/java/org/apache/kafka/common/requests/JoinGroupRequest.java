@@ -24,10 +24,11 @@ import java.util.Collections;
 import java.util.List;
 
 public class JoinGroupRequest extends AbstractRequest {
-    
+
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.JOIN_GROUP.id);
     private static final String GROUP_ID_KEY_NAME = "group_id";
     private static final String SESSION_TIMEOUT_KEY_NAME = "session_timeout";
+    private static final String REBALANCE_TIMEOUT_KEY_NAME = "rebalance_timeout";
     private static final String MEMBER_ID_KEY_NAME = "member_id";
     private static final String PROTOCOL_TYPE_KEY_NAME = "protocol_type";
     private static final String GROUP_PROTOCOLS_KEY_NAME = "group_protocols";
@@ -38,6 +39,7 @@ public class JoinGroupRequest extends AbstractRequest {
 
     private final String groupId;
     private final int sessionTimeout;
+    private final int rebalanceTimeout;
     private final String memberId;
     private final String protocolType;
     private final List<ProtocolMetadata> groupProtocols;
@@ -60,14 +62,40 @@ public class JoinGroupRequest extends AbstractRequest {
         }
     }
 
+    // v0 constructor
+    @Deprecated
     public JoinGroupRequest(String groupId,
                             int sessionTimeout,
                             String memberId,
                             String protocolType,
                             List<ProtocolMetadata> groupProtocols) {
-        super(new Struct(CURRENT_SCHEMA));
+        this(0, groupId, sessionTimeout, sessionTimeout, memberId, protocolType, groupProtocols);
+    }
+
+    public JoinGroupRequest(String groupId,
+                            int sessionTimeout,
+                            int rebalanceTimeout,
+                            String memberId,
+                            String protocolType,
+                            List<ProtocolMetadata> groupProtocols) {
+        this(1, groupId, sessionTimeout, rebalanceTimeout, memberId, protocolType, groupProtocols);
+    }
+
+    private JoinGroupRequest(int version,
+                             String groupId,
+                             int sessionTimeout,
+                             int rebalanceTimeout,
+                             String memberId,
+                             String protocolType,
+                             List<ProtocolMetadata> groupProtocols) {
+        super(new Struct(ProtoUtils.requestSchema(ApiKeys.JOIN_GROUP.id, version)));
+
         struct.set(GROUP_ID_KEY_NAME, groupId);
         struct.set(SESSION_TIMEOUT_KEY_NAME, sessionTimeout);
+
+        if (version >= 1)
+            struct.set(REBALANCE_TIMEOUT_KEY_NAME, rebalanceTimeout);
+
         struct.set(MEMBER_ID_KEY_NAME, memberId);
         struct.set(PROTOCOL_TYPE_KEY_NAME, protocolType);
 
@@ -82,6 +110,7 @@ public class JoinGroupRequest extends AbstractRequest {
         struct.set(GROUP_PROTOCOLS_KEY_NAME, groupProtocolsList.toArray());
         this.groupId = groupId;
         this.sessionTimeout = sessionTimeout;
+        this.rebalanceTimeout = rebalanceTimeout;
         this.memberId = memberId;
         this.protocolType = protocolType;
         this.groupProtocols = groupProtocols;
@@ -89,8 +118,17 @@ public class JoinGroupRequest extends AbstractRequest {
 
     public JoinGroupRequest(Struct struct) {
         super(struct);
+
         groupId = struct.getString(GROUP_ID_KEY_NAME);
         sessionTimeout = struct.getInt(SESSION_TIMEOUT_KEY_NAME);
+
+        if (struct.hasField(REBALANCE_TIMEOUT_KEY_NAME))
+            // rebalance timeout is added in v1
+            rebalanceTimeout = struct.getInt(REBALANCE_TIMEOUT_KEY_NAME);
+        else
+            // v0 had no rebalance timeout but used session timeout implicitly
+            rebalanceTimeout = sessionTimeout;
+
         memberId = struct.getString(MEMBER_ID_KEY_NAME);
         protocolType = struct.getString(PROTOCOL_TYPE_KEY_NAME);
 
@@ -107,13 +145,16 @@ public class JoinGroupRequest extends AbstractRequest {
     public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
         switch (versionId) {
             case 0:
+            case 1:
                 return new JoinGroupResponse(
+                        versionId,
                         Errors.forException(e).code(),
                         JoinGroupResponse.UNKNOWN_GENERATION_ID,
                         JoinGroupResponse.UNKNOWN_PROTOCOL,
                         JoinGroupResponse.UNKNOWN_MEMBER_ID, // memberId
                         JoinGroupResponse.UNKNOWN_MEMBER_ID, // leaderId
                         Collections.<String, ByteBuffer>emptyMap());
+
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.JOIN_GROUP.id)));
@@ -126,6 +167,10 @@ public class JoinGroupRequest extends AbstractRequest {
 
     public int sessionTimeout() {
         return sessionTimeout;
+    }
+
+    public int rebalanceTimeout() {
+        return rebalanceTimeout;
     }
 
     public String memberId() {

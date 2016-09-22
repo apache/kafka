@@ -147,7 +147,7 @@ public class MockClient implements KafkaClient {
 
     @Override
     public List<ClientResponse> poll(long timeoutMs, long now) {
-        List<ClientResponse> copy = new ArrayList<ClientResponse>(this.responses);
+        List<ClientResponse> copy = new ArrayList<>(this.responses);
 
         while (!this.responses.isEmpty()) {
             ClientResponse response = this.responses.poll();

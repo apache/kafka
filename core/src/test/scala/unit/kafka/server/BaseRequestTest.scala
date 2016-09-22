@@ -39,17 +39,12 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
   protected def propertyOverrides(properties: Properties) {}
 
   def generateConfigs() = {
-    val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect, enableControlledShutdown = false,
+    val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect,
+      enableControlledShutdown = false, enableDeleteTopic = true,
       interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = saslProperties)
     props.foreach(propertyOverrides)
     props.map(KafkaConfig.fromProps)
-  }
-
-  @Before
-  override def setUp() {
-    super.setUp()
-    TestUtils.waitUntilTrue(() => servers.head.metadataCache.getAliveBrokers.size == numBrokers, "Wait for cache to update")
   }
 
   def anySocketServer = {

@@ -15,6 +15,7 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 
 /**
  * A window store that only supports read operations
@@ -31,6 +32,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * the existing windows.
      *
      * @return an iterator over key-value pairs {@code <timestamp, value>}
+     * @throws InvalidStateStoreException if the store is not initialized
      */
     WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo);
 }

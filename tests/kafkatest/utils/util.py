@@ -73,13 +73,3 @@ def is_int_with_prefix(msg):
                         "prefix dot integer value, but one of the two parts (before or after dot) "
                         "are not integers. Message: %s" % (msg))
 
-
-def retry_on_exception(fun, exception, retries, retry_backoff=.01):
-    exception_to_throw = None
-    for i in range(0, retries + 1):
-        try:
-            return fun()
-        except exception as e:
-            exception_to_throw = e
-            time.sleep(retry_backoff)
-    raise exception_to_throw

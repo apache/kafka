@@ -59,12 +59,12 @@ public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
         public void process(K key, V value) {
             processed.add((key == null ? "null" : key) + ":" +
                     (value == null ? "null" : value));
+
         }
 
         @Override
         public void punctuate(long streamTime) {
             assertEquals(streamTime, context().timestamp());
-            assertEquals(null, context().topic());
             assertEquals(-1, context().partition());
             assertEquals(-1L, context().offset());
 
@@ -73,8 +73,7 @@ public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
     }
 
     public void checkAndClearProcessResult(String... expected) {
-        assertEquals("the number of outputs:", expected.length, processed.size());
-
+        assertEquals("the number of outputs:" + processed, expected.length, processed.size());
         for (int i = 0; i < expected.length; i++) {
             assertEquals("output[" + i + "]:", expected[i], processed.get(i));
         }

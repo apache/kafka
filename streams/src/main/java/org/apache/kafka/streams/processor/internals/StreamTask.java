@@ -26,12 +26,12 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static java.util.Collections.singleton;
@@ -56,7 +56,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     private boolean commitRequested = false;
     private boolean commitOffsetNeeded = false;
-    private StampedRecord currRecord = null;
     private ProcessorNode currNode = null;
 
     private boolean requiresPoll = true;
@@ -83,8 +82,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
                       Consumer<byte[], byte[]> restoreConsumer,
                       StreamsConfig config,
                       StreamsMetrics metrics,
-                      StateDirectory stateDirectory) {
-        super(id, applicationId, partitions, topology, consumer, restoreConsumer, false, stateDirectory);
+                      StateDirectory stateDirectory,
+                      ThreadCache cache) {
+        super(id, applicationId, partitions, topology, consumer, restoreConsumer, false, stateDirectory, cache);
         this.punctuationQueue = new PunctuationQueue();
         this.maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
 
@@ -105,12 +105,12 @@ public class StreamTask extends AbstractTask implements Punctuator {
         this.consumedOffsets = new HashMap<>();
 
         // create the record recordCollector that maintains the produced offsets
-        this.recordCollector = new RecordCollector(producer);
+        this.recordCollector = new RecordCollector(producer, id().toString());
 
-        log.info("Creating restoration consumer client for stream task #" + id());
+        log.info("task [{}] Creating restoration consumer client", id());
 
         // initialize the topology with its own context
-        this.processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics);
+        this.processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics, cache);
 
         // initialize the state stores
         initializeStateStores();
@@ -165,18 +165,18 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
         try {
             // process the record by passing to the source node of the topology
-            this.currRecord = record;
             this.currNode = recordInfo.node();
             TopicPartition partition = recordInfo.partition();
 
-            log.debug("Start processing one record [{}]", currRecord);
+            log.debug("task [{}] Start processing one record [{}]", id(), record);
+            final ProcessorRecordContext recordContext = createRecordContext(record);
+            updateProcessorContext(recordContext, currNode);
+            this.currNode.process(record.key(), record.value());
 
-            this.currNode.process(currRecord.key(), currRecord.value());
-
-            log.debug("Completed processing one record [{}]", currRecord);
+            log.debug("task [{}] Completed processing one record [{}]", id(), record);
 
             // update the consumed offset map after processing is done
-            consumedOffsets.put(partition, currRecord.offset());
+            consumedOffsets.put(partition, record.offset());
             commitOffsetNeeded = true;
 
             // after processing this record, if its partition queue's buffered size has been
@@ -190,11 +190,16 @@ public class StreamTask extends AbstractTask implements Punctuator {
                 requiresPoll = true;
             }
         } finally {
-            this.currRecord = null;
+            processorContext.setCurrentNode(null);
             this.currNode = null;
         }
 
         return partitionGroup.numBuffered();
+    }
+
+    private void updateProcessorContext(final ProcessorRecordContext recordContext, final ProcessorNode currNode) {
+        processorContext.setRecordContext(recordContext);
+        processorContext.setCurrentNode(currNode);
     }
 
     public boolean requiresPoll() {
@@ -222,22 +227,19 @@ public class StreamTask extends AbstractTask implements Punctuator {
     @Override
     public void punctuate(ProcessorNode node, long timestamp) {
         if (currNode != null)
-            throw new IllegalStateException("Current node is not null");
+            throw new IllegalStateException(String.format("task [%s] Current node is not null", id()));
 
         currNode = node;
-        currRecord = new StampedRecord(DUMMY_RECORD, timestamp);
-
+        final StampedRecord stampedRecord = new StampedRecord(DUMMY_RECORD, timestamp);
+        updateProcessorContext(createRecordContext(stampedRecord), node);
         try {
             node.processor().punctuate(timestamp);
         } finally {
+            processorContext.setCurrentNode(null);
             currNode = null;
-            currRecord = null;
         }
     }
 
-    public StampedRecord record() {
-        return this.currRecord;
-    }
 
     public ProcessorNode node() {
         return this.currNode;
@@ -248,7 +250,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      */
     public void commit() {
         // 1) flush local state
-        stateMgr.flush();
+        stateMgr.flush(processorContext);
 
         // 2) flush produced records in the downstream and change logs of local states
         recordCollector.flush();
@@ -291,7 +293,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      */
     public void schedule(long interval) {
         if (currNode == null)
-            throw new IllegalStateException("Current node is null");
+            throw new IllegalStateException(String.format("task [%s] Current node is null", id()));
 
         punctuationQueue.schedule(new PunctuationSchedule(currNode, interval));
     }
@@ -333,45 +335,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
         return new RecordQueue(partition, source);
     }
 
-    @SuppressWarnings("unchecked")
-    public <K, V> void forward(K key, V value) {
-        ProcessorNode thisNode = currNode;
-        try {
-            for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
-                currNode = childNode;
-                childNode.process(key, value);
-            }
-        } finally {
-            currNode = thisNode;
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    public <K, V> void forward(K key, V value, int childIndex) {
-        ProcessorNode thisNode = currNode;
-        ProcessorNode childNode = (ProcessorNode<K, V>) thisNode.children().get(childIndex);
-        currNode = childNode;
-        try {
-            childNode.process(key, value);
-        } finally {
-            currNode = thisNode;
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    public <K, V> void forward(K key, V value, String childName) {
-        ProcessorNode thisNode = currNode;
-        for (ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
-            if (childNode.name().equals(childName)) {
-                currNode = childNode;
-                try {
-                    childNode.process(key, value);
-                } finally {
-                    currNode = thisNode;
-                }
-                break;
-            }
-        }
+    private ProcessorRecordContext createRecordContext(final StampedRecord currRecord) {
+        return new ProcessorRecordContext(currRecord.timestamp, currRecord.offset(), currRecord.partition(), currRecord.topic());
     }
 
     /**
@@ -382,4 +347,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
     public String toString() {
         return super.toString();
     }
+
+
 }

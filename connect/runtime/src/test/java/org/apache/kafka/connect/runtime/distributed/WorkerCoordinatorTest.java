@@ -67,6 +67,7 @@ public class WorkerCoordinatorTest {
 
     private String groupId = "test-group";
     private int sessionTimeoutMs = 10;
+    private int rebalanceTimeoutMs = 60;
     private int heartbeatIntervalMs = 2;
     private long retryBackoffMs = 100;
     private MockTime time;
@@ -98,6 +99,7 @@ public class WorkerCoordinatorTest {
 
         this.coordinator = new WorkerCoordinator(consumerClient,
                 groupId,
+                rebalanceTimeoutMs,
                 sessionTimeoutMs,
                 heartbeatIntervalMs,
                 metrics,

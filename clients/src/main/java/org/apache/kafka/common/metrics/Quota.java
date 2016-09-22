@@ -67,4 +67,9 @@ public final class Quota {
         Quota that = (Quota) obj;
         return (that.bound == this.bound) && (that.upper == this.upper);
     }
+
+    @Override
+    public String toString() {
+        return (upper ? "upper=" : "lower=") + bound;
+    }
 }

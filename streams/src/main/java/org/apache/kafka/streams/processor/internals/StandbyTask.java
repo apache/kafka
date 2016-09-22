@@ -23,6 +23,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.TaskId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -34,6 +36,7 @@ import java.util.Map;
  */
 public class StandbyTask extends AbstractTask {
 
+    private static final Logger log = LoggerFactory.getLogger(StandbyTask.class);
     private final Map<TopicPartition, Long> checkpointedOffsets;
 
     /**
@@ -56,7 +59,9 @@ public class StandbyTask extends AbstractTask {
                        Consumer<byte[], byte[]> restoreConsumer,
                        StreamsConfig config,
                        StreamsMetrics metrics, final StateDirectory stateDirectory) {
-        super(id, applicationId, partitions, topology, consumer, restoreConsumer, true, stateDirectory);
+        super(id, applicationId, partitions, topology, consumer, restoreConsumer, true, stateDirectory, null);
+
+        log.info("task [{}] Creating processorContext", id());
 
         // initialize the topology with its own context
         this.processorContext = new StandbyContextImpl(id, applicationId, config, stateMgr, metrics);
@@ -81,11 +86,13 @@ public class StandbyTask extends AbstractTask {
      * @return a list of records not consumed
      */
     public List<ConsumerRecord<byte[], byte[]>> update(TopicPartition partition, List<ConsumerRecord<byte[], byte[]>> records) {
+        log.debug("task [{}] updates for partition [{}]", id(), partition);
         return stateMgr.updateStandbyStates(partition, records);
     }
 
     public void commit() {
-        stateMgr.flush();
+        log.debug("task [{}] flushing", id());
+        stateMgr.flush(processorContext);
 
         // reinitialize offset limits
         initializeOffsetLimits();

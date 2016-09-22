@@ -548,9 +548,10 @@ private[kafka] class Processor(val id: Int,
         // We explicitly catch all non fatal exceptions and close the socket to avoid a socket leak. The other
         // throwables will be caught in processor and logged as uncaught exceptions.
         case NonFatal(e) =>
+          val remoteAddress = channel.getRemoteAddress
           // need to close the channel here to avoid a socket leak.
           close(channel)
-          error(s"Processor $id closed connection from ${channel.getRemoteAddress}", e)
+          error(s"Processor $id closed connection from $remoteAddress", e)
       }
     }
   }

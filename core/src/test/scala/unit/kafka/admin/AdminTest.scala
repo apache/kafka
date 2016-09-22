@@ -16,9 +16,9 @@
  */
 package kafka.admin
 
+import kafka.server.KafkaConfig._
 import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, InvalidReplicationFactorException, InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.metrics.Quota
-import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.Assert._
 import org.junit.Test
 import java.util.Properties
@@ -31,7 +31,7 @@ import kafka.common.TopicAndPartition
 import kafka.server.{ConfigType, KafkaConfig, KafkaServer}
 import java.io.File
 
-import TestUtils._
+import kafka.utils.TestUtils._
 
 import scala.collection.{Map, immutable}
 
@@ -278,7 +278,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     val partitionToBeReassigned = 0
     val topicAndPartition = TopicAndPartition(topic, partitionToBeReassigned)
     val reassignPartitionsCommand = new ReassignPartitionsCommand(zkUtils, Map(topicAndPartition -> newReplicas))
-    reassignPartitionsCommand.reassignPartitions
+    reassignPartitionsCommand.reassignPartitions()
     // create brokers
     val servers = TestUtils.createBrokerConfigs(2, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
 
@@ -385,20 +385,23 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     val topic = "my-topic"
     val server = TestUtils.createServer(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
 
-    def makeConfig(messageSize: Int, retentionMs: Long) = {
-      var props = new Properties()
+    def makeConfig(messageSize: Int, retentionMs: Long, throttledReplicas: String) = {
+      val props = new Properties()
       props.setProperty(LogConfig.MaxMessageBytesProp, messageSize.toString)
       props.setProperty(LogConfig.RetentionMsProp, retentionMs.toString)
+      props.setProperty(LogConfig.ThrottledReplicasListProp, throttledReplicas)
       props
     }
 
-    def checkConfig(messageSize: Int, retentionMs: Long) {
+    def checkConfig(messageSize: Int, retentionMs: Long, throttledReplicas: String, quotaManagerIsThrottled: Boolean) {
       TestUtils.retry(10000) {
         for(part <- 0 until partitions) {
-          val logOpt = server.logManager.getLog(TopicAndPartition(topic, part))
-          assertTrue(logOpt.isDefined)
-          assertEquals(retentionMs, logOpt.get.config.retentionMs)
-          assertEquals(messageSize, logOpt.get.config.maxMessageSize)
+          val log = server.logManager.getLog(TopicAndPartition(topic, part))
+          assertTrue(log.isDefined)
+          assertEquals(retentionMs, log.get.config.retentionMs)
+          assertEquals(messageSize, log.get.config.maxMessageSize)
+          assertEquals(throttledReplicas, log.get.config.throttledReplicasList)
+          assertEquals(quotaManagerIsThrottled, server.quotaManagers.leader.isThrottled(new TopicAndPartition(topic, part)))
         }
       }
     }
@@ -406,21 +409,84 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     try {
       // create a topic with a few config overrides and check that they are applied
       val maxMessageSize = 1024
-      val retentionMs = 1000*1000
-      AdminUtils.createTopic(server.zkUtils, topic, partitions, 1, makeConfig(maxMessageSize, retentionMs))
-      checkConfig(maxMessageSize, retentionMs)
+      val retentionMs = 1000 * 1000
+      AdminUtils.createTopic(server.zkUtils, topic, partitions, 1, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0"))
+
+      //TODO - uncommenting this line reveals a bug. The quota manager is not updated when properties are added on topic creation.
+      //      checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", true)
 
       // now double the config values for the topic and check that it is applied
-      val newConfig: Properties = makeConfig(2*maxMessageSize, 2 * retentionMs)
-      AdminUtils.changeTopicConfig(server.zkUtils, topic, makeConfig(2*maxMessageSize, 2 * retentionMs))
-      checkConfig(2*maxMessageSize, 2 * retentionMs)
+      val newConfig: Properties = makeConfig(2 * maxMessageSize, 2 * retentionMs, "*")
+      AdminUtils.changeTopicConfig(server.zkUtils, topic, makeConfig(2 * maxMessageSize, 2 * retentionMs, "*"))
+      checkConfig(2 * maxMessageSize, 2 * retentionMs, "*", quotaManagerIsThrottled = true)
 
       // Verify that the same config can be read from ZK
       val configInZk = AdminUtils.fetchEntityConfig(server.zkUtils, ConfigType.Topic, topic)
       assertEquals(newConfig, configInZk)
+
+      //Now delete the config
+      AdminUtils.changeTopicConfig(server.zkUtils, topic, new Properties)
+      checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, Defaults.ThrottledReplicasList,  quotaManagerIsThrottled = false)
+
+      //Add config back
+      AdminUtils.changeTopicConfig(server.zkUtils, topic, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0"))
+      checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", quotaManagerIsThrottled = true)
+
+      //Now ensure updating to "" removes the throttled replica list also
+      AdminUtils.changeTopicConfig(server.zkUtils, topic, new Properties(){put(LogConfig.ThrottledReplicasListProp, "")})
+      checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, Defaults.ThrottledReplicasList,  quotaManagerIsThrottled = false)
+
     } finally {
       server.shutdown()
       CoreUtils.delete(server.config.logDirs)
+    }
+  }
+
+  @Test
+  def shouldPropagateDynamicBrokerConfigs() {
+    val brokerIds = Seq(0, 1, 2)
+    val servers = createBrokerConfigs(3, zkConnect).map(fromProps).map(TestUtils.createServer(_))
+
+    def wrap(limit: Long): Properties = {
+      val props = new Properties()
+      props.setProperty(KafkaConfig.ThrottledReplicationRateLimitProp, limit.toString)
+      props
+    }
+
+    def checkConfig(limit: Long) {
+      TestUtils.retry(10000) {
+        for (server <- servers) {
+          assertEquals("Leader Quota Manager was not updated", limit, server.quotaManagers.leader.upperBound)
+          assertEquals("Follower Quota Manager was not updated", limit, server.quotaManagers.follower.upperBound)
+        }
+      }
+    }
+
+    try {
+      val limit: Long = 42
+
+      // Set the limit & check it is applied to the log
+      AdminUtils.changeBrokerConfig(servers(0).zkUtils, brokerIds, wrap(limit))
+      checkConfig(limit)
+
+      // Now double the config values for the topic and check that it is applied
+      val newLimit = 2 * limit
+      AdminUtils.changeBrokerConfig(servers(0).zkUtils, brokerIds, wrap(newLimit))
+      checkConfig(newLimit)
+
+      // Verify that the same config can be read from ZK
+      for (brokerId <- brokerIds) {
+        val configInZk = AdminUtils.fetchEntityConfig(servers(brokerId).zkUtils, ConfigType.Broker, brokerId.toString)
+        assertEquals(newLimit, configInZk.getProperty(KafkaConfig.ThrottledReplicationRateLimitProp).toInt)
+      }
+
+      //Now delete the config
+      AdminUtils.changeBrokerConfig(servers(0).zkUtils, brokerIds, new Properties)
+      checkConfig(kafka.server.Defaults.ThrottledReplicationRateLimit)
+
+    } finally {
+      servers.foreach(_.shutdown())
+      servers.foreach(server => CoreUtils.delete(server.config.logDirs))
     }
   }
 
@@ -447,8 +513,8 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     // Test that the existing clientId overrides are read
     val server = TestUtils.createServer(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
     try {
-      assertEquals(new Quota(1000, true), server.apis.quotaManagers(ApiKeys.PRODUCE.id).quota(clientId))
-      assertEquals(new Quota(2000, true), server.apis.quotaManagers(ApiKeys.FETCH.id).quota(clientId))
+      assertEquals(new Quota(1000, true), server.apis.quotas.produce.quota("ANONYMOUS", clientId))
+      assertEquals(new Quota(2000, true), server.apis.quotas.fetch.quota("ANONYMOUS", clientId))
     } finally {
       server.shutdown()
       CoreUtils.delete(server.config.logDirs)

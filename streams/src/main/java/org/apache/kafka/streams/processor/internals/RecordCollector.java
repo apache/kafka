@@ -49,10 +49,12 @@ public class RecordCollector {
 
     private final Producer<byte[], byte[]> producer;
     private final Map<TopicPartition, Long> offsets;
+    private String streamTaskId = null;
 
-    public RecordCollector(Producer<byte[], byte[]> producer) {
+    public RecordCollector(Producer<byte[], byte[]> producer, String streamTaskId) {
         this.producer = producer;
         this.offsets = new HashMap<>();
+        this.streamTaskId = streamTaskId;
     }
 
     public <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
@@ -81,7 +83,8 @@ public class RecordCollector {
                     TopicPartition tp = new TopicPartition(metadata.topic(), metadata.partition());
                     offsets.put(tp, metadata.offset());
                 } else {
-                    log.error("Error sending record to topic {}", topic, exception);
+                    String prefix = String.format("task [%s]", streamTaskId);
+                    log.error("{} Error sending record to topic {}", prefix, topic, exception);
                 }
             }
         });

@@ -25,6 +25,8 @@ import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Factory for creating state stores in Kafka Streams.
@@ -44,11 +46,15 @@ public class Stores {
                 return new ValueFactory<K>() {
                     @Override
                     public <V> KeyValueFactory<K, V> withValues(final Serde<V> valueSerde) {
+
                         return new KeyValueFactory<K, V>() {
+
                             @Override
                             public InMemoryKeyValueFactory<K, V> inMemory() {
                                 return new InMemoryKeyValueFactory<K, V>() {
                                     private int capacity = Integer.MAX_VALUE;
+                                    private final Map<String, String> logConfig = new HashMap<>();
+                                    private boolean logged = true;
 
                                     /**
                                      * @param capacity the maximum capacity of the in-memory cache; should be one less than a power of 2
@@ -62,11 +68,25 @@ public class Stores {
                                     }
 
                                     @Override
+                                    public InMemoryKeyValueFactory<K, V> enableLogging(final Map<String, String> config) {
+                                        logged = true;
+                                        logConfig.putAll(config);
+                                        return this;
+                                    }
+
+                                    @Override
+                                    public InMemoryKeyValueFactory<K, V> disableLogging() {
+                                        logged = false;
+                                        logConfig.clear();
+                                        return this;
+                                    }
+
+                                    @Override
                                     public StateStoreSupplier build() {
                                         if (capacity < Integer.MAX_VALUE) {
-                                            return new InMemoryLRUCacheStoreSupplier<>(name, capacity, keySerde, valueSerde);
+                                            return new InMemoryLRUCacheStoreSupplier<>(name, capacity, keySerde, valueSerde, logged, logConfig);
                                         }
-                                        return new InMemoryKeyValueStoreSupplier<>(name, keySerde, valueSerde);
+                                        return new InMemoryKeyValueStoreSupplier<>(name, keySerde, valueSerde, logged, logConfig);
                                     }
                                 };
                             }
@@ -74,12 +94,17 @@ public class Stores {
                             @Override
                             public PersistentKeyValueFactory<K, V> persistent() {
                                 return new PersistentKeyValueFactory<K, V>() {
+                                    public boolean cachingEnabled;
+                                    private long windowSize;
+                                    private final Map<String, String> logConfig = new HashMap<>();
                                     private int numSegments = 0;
                                     private long retentionPeriod = 0L;
                                     private boolean retainDuplicates = false;
+                                    private boolean logged = true;
 
                                     @Override
-                                    public PersistentKeyValueFactory<K, V> windowed(long retentionPeriod, int numSegments, boolean retainDuplicates) {
+                                    public PersistentKeyValueFactory<K, V> windowed(final long windowSize, long retentionPeriod, int numSegments, boolean retainDuplicates) {
+                                        this.windowSize = windowSize;
                                         this.numSegments = numSegments;
                                         this.retentionPeriod = retentionPeriod;
                                         this.retainDuplicates = retainDuplicates;
@@ -88,21 +113,44 @@ public class Stores {
                                     }
 
                                     @Override
+                                    public PersistentKeyValueFactory<K, V> enableLogging(final Map<String, String> config) {
+                                        logged = true;
+                                        logConfig.putAll(config);
+                                        return this;
+                                    }
+
+                                    @Override
+                                    public PersistentKeyValueFactory<K, V> disableLogging() {
+                                        logged = false;
+                                        logConfig.clear();
+                                        return this;
+                                    }
+
+                                    @Override
+                                    public PersistentKeyValueFactory<K, V> enableCaching() {
+                                        cachingEnabled = true;
+                                        return this;
+                                    }
+
+                                    @Override
                                     public StateStoreSupplier build() {
                                         if (numSegments > 0) {
-                                            return new RocksDBWindowStoreSupplier<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde);
+                                            return new RocksDBWindowStoreSupplier<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, windowSize, logged, logConfig, cachingEnabled);
                                         }
-
-                                        return new RocksDBKeyValueStoreSupplier<>(name, keySerde, valueSerde);
+                                        return new RocksDBKeyValueStoreSupplier<>(name, keySerde, valueSerde, logged, logConfig, cachingEnabled);
                                     }
+
                                 };
                             }
+
+
                         };
                     }
                 };
             }
         };
     }
+
 
     public static abstract class StoreFactory {
         /**
@@ -257,12 +305,7 @@ public class Stores {
         public abstract <V> KeyValueFactory<K, V> withValues(Serde<V> valueSerde);
     }
 
-    /**
-     * The interface used to specify the different kinds of key-value stores.
-     *
-     * @param <K> the type of keys
-     * @param <V> the type of values
-     */
+
     public interface KeyValueFactory<K, V> {
         /**
          * Keep all key-value entries in-memory, although for durability all entries are recorded in a Kafka topic that can be
@@ -299,6 +342,23 @@ public class Stores {
         InMemoryKeyValueFactory<K, V> maxEntries(int capacity);
 
         /**
+         * Indicates that a changelog should be created for the store. The changelog will be created
+         * with the provided cleanupPolicy and configs.
+         *
+         * Note: Any unrecognized configs will be ignored.
+         * @param config    any configs that should be applied to the changelog
+         * @return  the factory to create an in-memory key-value store
+         */
+        InMemoryKeyValueFactory<K, V> enableLogging(final Map<String, String> config);
+
+        /**
+         * Indicates that a changelog should not be created for the key-value store
+         * @return the factory to create an in-memory key-value store
+         */
+        InMemoryKeyValueFactory<K, V> disableLogging();
+
+
+        /**
          * Return the instance of StateStoreSupplier of new key-value store.
          * @return the state store supplier; never null
          */
@@ -316,16 +376,39 @@ public class Stores {
         /**
          * Set the persistent store as a windowed key-value store
          *
+         * @param windowSize size of the windows
          * @param retentionPeriod the maximum period of time in milli-second to keep each window in this store
          * @param numSegments the maximum number of segments for rolling the windowed store
          * @param retainDuplicates whether or not to retain duplicate data within the window
          */
-        PersistentKeyValueFactory<K, V> windowed(long retentionPeriod, int numSegments, boolean retainDuplicates);
+        PersistentKeyValueFactory<K, V> windowed(final long windowSize, long retentionPeriod, int numSegments, boolean retainDuplicates);
 
+        /**
+         * Indicates that a changelog should be created for the store. The changelog will be created
+         * with the provided cleanupPolicy and configs.
+         *
+         * Note: Any unrecognized configs will be ignored.
+         * @param config            any configs that should be applied to the changelog
+         * @return  the factory to create a persistent key-value store
+         */
+        PersistentKeyValueFactory<K, V> enableLogging(final Map<String, String> config);
+
+        /**
+         * Indicates that a changelog should not be created for the key-value store
+         * @return the factory to create a persistent key-value store
+         */
+        PersistentKeyValueFactory<K, V> disableLogging();
+
+        /**
+         * Caching should be enabled on the created store.
+         * @return the factory to create a persistent key-value store
+         */
+        PersistentKeyValueFactory<K, V> enableCaching();
         /**
          * Return the instance of StateStoreSupplier of new key-value store.
          * @return the key-value store; never null
          */
         StateStoreSupplier build();
+
     }
 }
