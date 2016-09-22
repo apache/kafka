@@ -40,8 +40,8 @@ import static org.junit.Assert.fail;
 public class MetadataTest {
 
     private long refreshBackoffMs = 100;
-    private long metadataExpireMs = 1000;
-    private Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs);
+    private long metadataMaxAgeMs = 1000;
+    private Metadata metadata = new Metadata(refreshBackoffMs, metadataMaxAgeMs);
     private AtomicReference<String> backgroundError = new AtomicReference<String>();
 
     @After
@@ -75,7 +75,7 @@ public class MetadataTest {
         t1.join();
         t2.join();
         assertFalse("No update needed.", metadata.timeToNextUpdate(time) == 0);
-        time += metadataExpireMs;
+        time += metadataMaxAgeMs;
         assertTrue("Update needed due to stale metadata.", metadata.timeToNextUpdate(time) == 0);
     }
 
@@ -153,7 +153,7 @@ public class MetadataTest {
         MockClusterResourceListener mockClusterListener = new MockClusterResourceListener();
         ClusterResourceListeners listeners = new ClusterResourceListeners();
         listeners.maybeAdd(mockClusterListener);
-        metadata = new Metadata(refreshBackoffMs, metadataExpireMs, false, listeners);
+        metadata = new Metadata(refreshBackoffMs, metadataMaxAgeMs, false, listeners);
 
         String hostName = "www.example.com";
         Cluster cluster = Cluster.bootstrap(Arrays.asList(new InetSocketAddress(hostName, 9002)));
@@ -246,7 +246,7 @@ public class MetadataTest {
 
     @Test
     public void testTopicExpiry() throws Exception {
-        metadata = new Metadata(refreshBackoffMs, metadataExpireMs, true, new ClusterResourceListeners());
+        metadata = new Metadata(refreshBackoffMs, metadataMaxAgeMs, true, new ClusterResourceListeners());
 
         // Test that topic is expired if not used within the expiry interval
         long time = 0;
@@ -278,7 +278,7 @@ public class MetadataTest {
 
     @Test
     public void testNonExpiringMetadata() throws Exception {
-        metadata = new Metadata(refreshBackoffMs, metadataExpireMs, false, new ClusterResourceListeners());
+        metadata = new Metadata(refreshBackoffMs, metadataMaxAgeMs, false, new ClusterResourceListeners());
 
         // Test that topic is not expired if not used within the expiry interval
         long time = 0;
@@ -302,7 +302,7 @@ public class MetadataTest {
         HashSet<String> topics = new HashSet<>();
         topics.add("topic4");
         metadata.setTopics(topics);
-        time += metadataExpireMs * 2;
+        time += metadataMaxAgeMs * 2;
         metadata.update(Cluster.empty(), time);
         assertTrue("Unused topic expired when expiry disabled", metadata.containsTopic("topic4"));
     }
