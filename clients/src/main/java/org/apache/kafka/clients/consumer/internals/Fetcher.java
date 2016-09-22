@@ -502,6 +502,7 @@ public class Fetcher<K, V> {
 
         final RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> listOffsetRequestsFuture = new RequestFuture<>();
         final Map<TopicPartition, OffsetAndTimestamp> fetchedTimestampOffsets = new HashMap<>();
+        final AtomicInteger remainingResponses = new AtomicInteger(timestampsToSearchByNode.size());
         for (Map.Entry<Node, Map<TopicPartition, Long>> entry : timestampsToSearchByNode.entrySet()) {
             sendListOffsetRequest(entry.getKey(), entry.getValue())
                     .addListener(new RequestFutureListener<Map<TopicPartition, OffsetAndTimestamp>>() {
@@ -509,7 +510,7 @@ public class Fetcher<K, V> {
                         public void onSuccess(Map<TopicPartition, OffsetAndTimestamp> value) {
                             synchronized (listOffsetRequestsFuture) {
                                 fetchedTimestampOffsets.putAll(value);
-                                if (fetchedTimestampOffsets.size() == timestampsToSearch.size() && !listOffsetRequestsFuture.isDone())
+                                if (remainingResponses.decrementAndGet() == 0 && !listOffsetRequestsFuture.isDone())
                                     listOffsetRequestsFuture.complete(fetchedTimestampOffsets);
                             }
                         }

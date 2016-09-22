@@ -615,7 +615,7 @@ class Log(val dir: File,
         None
     }
 
-    targetSeg.map(_.findOffsetByTimestamp(targetTimestamp).get)
+    targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp))
   }
 
   /**

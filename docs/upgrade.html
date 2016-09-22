@@ -54,9 +54,10 @@ Note: Because new protocols are introduced, it is important to upgrade your Kafk
     <li> Due to the increased number of index files, on some brokers with large amount the log segments (e.g. >15K), the log loading process during the broker startup could be longer. Based on our experiment, setting the num.recovery.threads.per.data.dir to one may reduce the log loading time. </li>
 </ul>
 
-<h5><a id="upgrade_10_1_protocol_change" href="#upgrade_10_1_protocol_change">Protocol changes in 0.10.1.0</a></h5>
+<h5><a id="upgrade_10_1_protocol_change" href="#upgrade_10_1_protocol_change">New protocol versions in 0.10.1.0</a></h5>
 <ul>
-    <li> ListOffsetRequest v1 is introduced and used by default to support accurate offset search based on timestamp.
+    <li> ListOffsetRequest v1 is introduced and used by default to support accurate offset search based on timestamp. See <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=65868090">KIP-79</a> for details.</li>
+    <li> FetchRequest v3 is introduced to cap the maximum bytes returned by each fetch response. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-74%3A+Add+Fetch+Response+Size+Limit+in+Bytes">KIP-74</a> for details.</li>
 </ul>
 
 <h5><a id="upgrade_1010_notable" href="#upgrade_1010_notable">Notable changes in 0.10.1.0</a></h5>
