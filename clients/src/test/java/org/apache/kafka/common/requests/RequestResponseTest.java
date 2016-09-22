@@ -69,9 +69,9 @@ public class RequestResponseTest {
                 createDescribeGroupRequest(),
                 createDescribeGroupRequest().getErrorResponse(0, new UnknownServerException()),
                 createDescribeGroupResponse(),
-                createListOffsetRequest(),
-                createListOffsetRequest().getErrorResponse(0, new UnknownServerException()),
-                createListOffsetResponse(),
+                createListOffsetRequest(1),
+                createListOffsetRequest(1).getErrorResponse(1, new UnknownServerException()),
+                createListOffsetResponse(1),
                 MetadataRequest.allTopics(),
                 createMetadataRequest(Arrays.asList("topic1")),
                 createMetadataRequest(Arrays.asList("topic1")).getErrorResponse(2, new UnknownServerException()),
@@ -129,6 +129,9 @@ public class RequestResponseTest {
         checkSerialization(createUpdateMetadataRequest(1, null), 1);
         checkSerialization(createUpdateMetadataRequest(1, "rack1"), 1);
         checkSerialization(createUpdateMetadataRequest(1, null).getErrorResponse(1, new UnknownServerException()), 1);
+        checkSerialization(createListOffsetRequest(0), 0);
+        checkSerialization(createListOffsetRequest(0).getErrorResponse(0, new UnknownServerException()), 0);
+        checkSerialization(createListOffsetResponse(0), 0);
     }
 
     private void checkOlderFetchVersions() throws Exception {
@@ -151,7 +154,7 @@ public class RequestResponseTest {
             Method deserializer = req.getClass().getDeclaredMethod("parse", ByteBuffer.class, Integer.TYPE);
             deserialized = (AbstractRequestResponse) deserializer.invoke(null, buffer, version);
         }
-        assertEquals("The original and deserialized of " + req.getClass().getSimpleName() + " should be the same.", req, deserialized);
+        assertEquals("The original and deserialized of " + req.getClass().getSimpleName() + "(version " + version + ") should be the same.", req, deserialized);
         assertEquals("The original and deserialized of " + req.getClass().getSimpleName() + " should have the same hashcode.",
                 req.hashCode(), deserialized.hashCode());
     }
@@ -304,16 +307,32 @@ public class RequestResponseTest {
         return new LeaveGroupResponse(Errors.NONE.code());
     }
 
-    private AbstractRequest createListOffsetRequest() {
-        Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = new HashMap<>();
-        offsetData.put(new TopicPartition("test", 0), new ListOffsetRequest.PartitionData(1000000L, 10));
-        return new ListOffsetRequest(-1, offsetData);
+    private AbstractRequest createListOffsetRequest(int version) {
+        if (version == 0) {
+            Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = new HashMap<>();
+            offsetData.put(new TopicPartition("test", 0), new ListOffsetRequest.PartitionData(1000000L, 10));
+            return new ListOffsetRequest(offsetData);
+        } else if (version == 1) {
+            Map<TopicPartition, Long> offsetData = new HashMap<>();
+            offsetData.put(new TopicPartition("test", 0), 1000000L);
+            return new ListOffsetRequest(offsetData, ListOffsetRequest.CONSUMER_REPLICA_ID);
+        } else {
+            throw new IllegalArgumentException("Illegal ListOffsetRequest version " + version);
+        }
     }
 
-    private AbstractRequestResponse createListOffsetResponse() {
-        Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<>();
-        responseData.put(new TopicPartition("test", 0), new ListOffsetResponse.PartitionData(Errors.NONE.code(), Arrays.asList(100L)));
-        return new ListOffsetResponse(responseData);
+    private AbstractRequestResponse createListOffsetResponse(int version) {
+        if (version == 0) {
+            Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<>();
+            responseData.put(new TopicPartition("test", 0), new ListOffsetResponse.PartitionData(Errors.NONE.code(), Arrays.asList(100L)));
+            return new ListOffsetResponse(responseData);
+        } else if (version == 1) {
+            Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<>();
+            responseData.put(new TopicPartition("test", 0), new ListOffsetResponse.PartitionData(Errors.NONE.code(), 10000L, 100L));
+            return new ListOffsetResponse(responseData, 1);
+        } else {
+            throw new IllegalArgumentException("Illegal ListOffsetResponse version " + version);
+        }
     }
 
     private AbstractRequest createMetadataRequest(List<String> topics) {

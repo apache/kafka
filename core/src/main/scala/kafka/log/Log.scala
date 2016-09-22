@@ -17,7 +17,7 @@
 
 package kafka.log
 
-import kafka.api.OffsetRequest
+import kafka.api.KAFKA_0_10_0_IV0
 import kafka.utils._
 import kafka.message._
 import kafka.common._
@@ -28,8 +28,9 @@ import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap}
 import java.util.concurrent.atomic._
 import java.text.NumberFormat
 
-import org.apache.kafka.common.errors.{CorruptRecordException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException}
+import org.apache.kafka.common.errors.{InvalidRequestException, CorruptRecordException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException}
 import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.common.requests.ListOffsetRequest
 
 import scala.collection.{Seq, JavaConversions}
 import com.yammer.metrics.core.Gauge
@@ -583,59 +584,41 @@ class Log(val dir: File,
    * `NOTE:` OffsetRequest V0 does not use this method, the behavior of OffsetRequest V0 remains the same as before
    * , i.e. it only gives back the timestamp based on the last modification time of the log segments.
    *
-   * @param timestamp The given timestamp for offset fetching.
+   * @param targetTimestamp The given timestamp for offset fetching.
    * @return The offset of the first message whose timestamp is greater than or equals to the given timestamp.
+   *         None if no such message is found.
    */
-  def fetchOffsetsByTimestamp(timestamp: Long): Long = {
-    debug(s"Searching offset for timestamp $timestamp")
-    val segsArray = logSegments.toArray
-    if (timestamp == OffsetRequest.EarliestTime)
-      return segsArray(0).baseOffset
+  def fetchOffsetsByTimestamp(targetTimestamp: Long): Option[TimestampOffset] = {
+    debug(s"Searching offset for timestamp $targetTimestamp")
 
-    // set the target timestamp to be Long.MaxValue if we need to find from the latest.
-    val targetTimestamp = timestamp match {
-      case OffsetRequest.LatestTime => Long.MaxValue
-      case _ => timestamp
+    if (config.messageFormatVersion < KAFKA_0_10_0_IV0 &&
+        targetTimestamp != ListOffsetRequest.EARLIEST_TIMESTAMP &&
+        targetTimestamp != ListOffsetRequest.LATEST_TIMESTAMP)
+      throw new InvalidRequestException(s"Cannot search offsets based on timestamp because message format version " +
+          s"for partition $topicAndPartition is ${config.messageFormatVersion} which is earlier than the minimum " +
+          s"required version $KAFKA_0_10_0_IV0")
+
+    // For the earliest and latest, we do not need to return the timestamp.
+    val segsArray = logSegments.toArray
+    if (targetTimestamp == ListOffsetRequest.EARLIEST_TIMESTAMP)
+        return Some(TimestampOffset(Message.NoTimestamp, segsArray(0).baseOffset))
+    else if (targetTimestamp == ListOffsetRequest.LATEST_TIMESTAMP)
+        return Some(TimestampOffset(Message.NoTimestamp, logEndOffset))
+
+    val targetSeg = {
+      // Get all the segments whose largest timestamp is smaller than target timestamp
+      val earlierSegs = segsArray.takeWhile(_.largestTimestamp < targetTimestamp)
+      // We need to search the first segment whose largest timestamp is greater than the target timestamp if there is one.
+      if (earlierSegs.length < segsArray.length)
+        Some(segsArray(earlierSegs.length))
+      else
+        None
     }
 
-    var foundOffset: Long = -1L
-    // We have this while loop here to make sure we are returning the valid offsets to our best knowledge.
-    // This while loop is to handle the case where the log is truncated during the timestamp search and we did not
-    // find any message. In this case, we need to retry the search.
-    do {
-      val targetSeg = {
-        // Get all the segments whose largest timestamp is smaller than target timestamp
-        val earlierSegs = segsArray.takeWhile(_.largestTimestamp < targetTimestamp)
-        // We need to search the first segment whose largest timestamp is greater than the target timestamp if there is one.
-        if (earlierSegs.length < segsArray.length)
-          segsArray(earlierSegs.length)
-        else
-          earlierSegs.last
-      }
-
-      // First cache the current log end offset
-      val leo = logEndOffset
-      foundOffset = {
-        // Use the cached log end offsets if
-        // 1. user is asking for latest messages, or,
-        // 2. we are searching on the active segment and the target timestamp is greater than the largestTimestamp
-        // after we cached the log end offset. (We have to use the cached log end offsets because it is possible that
-        // some messages with a larger timestamp are appended after we check the largest timestamp. Using log end offset
-        // after the timestamp check might skip those messages.)
-        if (targetTimestamp == Long.MaxValue
-          || (targetTimestamp > targetSeg.largestTimestamp && targetSeg == activeSegment))
-          leo
-        else
-        // The findOffsetByTimestamp() method may return None when the log is truncated during the timestamp search.
-        // In that case we simply set the foundOffset to -1 so that we will search the timestamp again in the
-        // while loop.
-          targetSeg.findOffsetByTimestamp(targetTimestamp) match {
-            case Some(offset) => offset
-            case None => -1L
-          }
-      }
-    } while (foundOffset < 0)
-    foundOffset
+    targetSeg match {
+      case Some(segment) => segment.findOffsetByTimestamp(targetTimestamp)
+      case None => None
+    }
   }
 
   /**

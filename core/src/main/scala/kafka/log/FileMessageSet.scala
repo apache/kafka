@@ -159,49 +159,34 @@ class FileMessageSet private[kafka](@volatile var file: File,
   /**
    * Search forward for the message whose timestamp is greater than or equals to the target timestamp.
    *
-   * The search will stop immediately when it sees a message in format version before 0.10.0. This is to avoid
-   * scanning the entire log when all the messages are still in old format.
-   *
    * @param targetTimestamp The timestamp to search for.
    * @param startingPosition The starting position to search.
-   * @return None, if no message exists at or after the starting position.
-   *         Some(the_next_offset_to_read) otherwise.
+   * @return The timestamp and offset of the message found. None, if no message is found.
    */
-  def searchForTimestamp(targetTimestamp: Long, startingPosition: Int): Option[Long] = {
-    var maxTimestampChecked = Message.NoTimestamp
+  def searchForTimestamp(targetTimestamp: Long, startingPosition: Int): Option[TimestampOffset] = {
     var lastOffsetChecked = -1L
     val messagesToSearch = read(startingPosition, sizeInBytes)
     for (messageAndOffset <- messagesToSearch) {
       val message = messageAndOffset.message
       lastOffsetChecked = messageAndOffset.offset
-      // Stop searching once we see message format before 0.10.0.
-      // This equivalent as treating message without timestamp has the largest timestamp.
-      // We do this to avoid scanning the entire log if no message has a timestamp.
-      if (message.magic == Message.MagicValue_V0)
-        return Some(messageAndOffset.offset)
-      else if (message.timestamp >= targetTimestamp) {
+      if (message.timestamp >= targetTimestamp) {
         // We found a message
         message.compressionCodec match {
           case NoCompressionCodec =>
-            return Some(messageAndOffset.offset)
+            return Some(TimestampOffset(messageAndOffset.message.timestamp, messageAndOffset.offset))
           case _ =>
             // Iterate over the inner messages to get the exact offset.
-            for (innerMessage <- ByteBufferMessageSet.deepIterator(messageAndOffset)) {
-              val timestamp = innerMessage.message.timestamp
+            for (innerMessageAndOffset <- ByteBufferMessageSet.deepIterator(messageAndOffset)) {
+              val timestamp = innerMessageAndOffset.message.timestamp
               if (timestamp >= targetTimestamp)
-                return Some(innerMessage.offset)
+                return Some(TimestampOffset(innerMessageAndOffset.message.timestamp, innerMessageAndOffset.offset))
             }
             throw new IllegalStateException(s"The message set (max timestamp = ${message.timestamp}, max offset = ${messageAndOffset.offset}" +
                 s" should contain target timestamp $targetTimestamp but it does not.")
         }
-      } else
-        maxTimestampChecked = math.max(maxTimestampChecked, message.timestamp)
+      }
     }
-
-    if (lastOffsetChecked >= 0)
-      Some(lastOffsetChecked + 1)
-    else
-      None
+    None
   }
 
   /**

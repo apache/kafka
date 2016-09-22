@@ -934,7 +934,7 @@ object TestUtils extends Logging {
   def produceMessages(servers: Seq[KafkaServer],
                       topic: String,
                       numMessages: Int,
-                      acks: Int = 0,
+                      acks: Int = -1,
                       valueBytes: Int = -1): Seq[Array[Byte]] = {
 
     val producer = createNewProducer(
