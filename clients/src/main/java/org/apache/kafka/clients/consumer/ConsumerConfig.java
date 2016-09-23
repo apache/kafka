@@ -131,6 +131,7 @@ public class ConsumerConfig extends AbstractConfig {
 
     /** <code>metadata.max.age.ms</code> */
     public static final String METADATA_MAX_AGE_CONFIG = CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
+    public static final long DEFAULT_METADATA_MAX_AGE_MS = 5 * 60 * 1000L;
 
     /**
      * <code>max.partition.fetch.bytes</code>
@@ -163,6 +164,7 @@ public class ConsumerConfig extends AbstractConfig {
      * <code>retry.backoff.ms</code>
      */
     public static final String RETRY_BACKOFF_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
+    public static final long DEFAULT_RETRY_BACKOFF_MS = 100L;
 
     /**
      * <code>metrics.sample.window.ms</code>
@@ -236,7 +238,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         PARTITION_ASSIGNMENT_STRATEGY_DOC)
                                 .define(METADATA_MAX_AGE_CONFIG,
                                         Type.LONG,
-                                        5 * 60 * 1000,
+                                        DEFAULT_METADATA_MAX_AGE_MS,
                                         atLeast(0),
                                         Importance.LOW,
                                         CommonClientConfigs.METADATA_MAX_AGE_DOC)
@@ -300,7 +302,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC)
                                 .define(RETRY_BACKOFF_MS_CONFIG,
                                         Type.LONG,
-                                        100L,
+                                        DEFAULT_RETRY_BACKOFF_MS,
                                         atLeast(0L),
                                         Importance.LOW,
                                         CommonClientConfigs.RETRY_BACKOFF_MS_DOC)

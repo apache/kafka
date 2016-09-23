@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.Node;
@@ -49,10 +50,8 @@ public final class Metadata {
 
     public static final long TOPIC_EXPIRY_MS = 5 * 60 * 1000;
     private static final long TOPIC_EXPIRY_NEEDS_UPDATE = -1L;
-    private static final long DEFAULT_RETRY_BACKOFF_MS = 100L;
-    private static final long DEFAULT_METADATA_MAX_AGE_MS = 300 * 1000L;
 
-    private final long refreshBackoffMs;
+    private final long retryBackoffMs;
     private final long metadataMaxAgeMs;
     private int version;
     private long lastRefreshMs;
@@ -70,24 +69,24 @@ public final class Metadata {
      * Create a metadata instance with reasonable defaults
      */
     public Metadata() {
-        this(DEFAULT_RETRY_BACKOFF_MS, DEFAULT_METADATA_MAX_AGE_MS);
+        this(ConsumerConfig.DEFAULT_RETRY_BACKOFF_MS, ConsumerConfig.DEFAULT_METADATA_MAX_AGE_MS);
     }
 
-    public Metadata(long refreshBackoffMs, long metadataMaxAgeMs) {
-        this(refreshBackoffMs, metadataMaxAgeMs, false, new ClusterResourceListeners());
+    public Metadata(long retryBackoffMs, long metadataMaxAgeMs) {
+        this(retryBackoffMs, metadataMaxAgeMs, false, new ClusterResourceListeners());
     }
 
     /**
      * Create a new Metadata instance
-     * @param refreshBackoffMs The minimum amount of time that must expire between metadata refreshes to avoid busy
+     * @param retryBackoffMs The minimum amount of time that must expire between metadata refreshes to avoid busy
      *        polling
      * @param metadataMaxAgeMs The maximum amount of time that metadata can be retained without refresh
      * @param topicExpiryEnabled If true, enable expiry of unused topics
      * @param clusterResourceListeners List of ClusterResourceListeners which will receive metadata updates.
      */
 
-    public Metadata(long refreshBackoffMs, long metadataMaxAgeMs, boolean topicExpiryEnabled, ClusterResourceListeners clusterResourceListeners) {
-        this.refreshBackoffMs = refreshBackoffMs;
+    public Metadata(long retryBackoffMs, long metadataMaxAgeMs, boolean topicExpiryEnabled, ClusterResourceListeners clusterResourceListeners) {
+        this.retryBackoffMs = retryBackoffMs;
         this.metadataMaxAgeMs = metadataMaxAgeMs;
         this.topicExpiryEnabled = topicExpiryEnabled;
         this.lastRefreshMs = 0L;
@@ -123,7 +122,7 @@ public final class Metadata {
      */
     public synchronized long timeToNextUpdate(long nowMs) {
         long timeToExpire = needUpdate ? 0 : Math.max(this.lastSuccessfulRefreshMs + this.metadataMaxAgeMs - nowMs, 0);
-        long timeToAllowUpdate = this.lastRefreshMs + this.refreshBackoffMs - nowMs;
+        long timeToAllowUpdate = this.lastRefreshMs + this.retryBackoffMs - nowMs;
         return Math.max(timeToExpire, timeToAllowUpdate);
     }
 
@@ -277,7 +276,7 @@ public final class Metadata {
      * The metadata refresh backoff in ms
      */
     public long refreshBackoff() {
-        return refreshBackoffMs;
+        return retryBackoffMs;
     }
 
     /**
