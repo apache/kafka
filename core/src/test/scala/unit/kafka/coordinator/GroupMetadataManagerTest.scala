@@ -108,8 +108,7 @@ class GroupMetadataManagerTest {
 
     val delayedStore = groupMetadataManager.prepareStoreGroup(group, Map.empty, callback)
     groupMetadataManager.store(delayedStore)
-    assertTrue(maybeError.isDefined)
-    assertEquals(Errors.NONE, maybeError.get)
+    assertEquals(Some(Errors.NONE), maybeError)
   }
 
   @Test
@@ -141,8 +140,7 @@ class GroupMetadataManagerTest {
 
     val delayedStore = groupMetadataManager.prepareStoreGroup(group, Map.empty, callback)
     groupMetadataManager.store(delayedStore)
-    assertTrue(maybeError.isDefined)
-    assertEquals(expectedError, maybeError.get)
+    assertEquals(Some(expectedError), maybeError)
 
     EasyMock.verify(replicaManager)
   }
@@ -173,8 +171,7 @@ class GroupMetadataManagerTest {
 
     val delayedStore = groupMetadataManager.prepareStoreGroup(group, Map(memberId -> Array[Byte]()), callback)
     groupMetadataManager.store(delayedStore)
-    assertTrue(maybeError.isDefined)
-    assertEquals(Errors.NONE, maybeError.get)
+    assertEquals(Some(Errors.NONE), maybeError)
   }
 
   @Test
