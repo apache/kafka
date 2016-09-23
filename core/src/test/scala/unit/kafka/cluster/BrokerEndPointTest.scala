@@ -97,6 +97,11 @@ class BrokerEndPointTest extends Logging {
     var endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
     assert(endpoint.host == "localhost")
     assert(endpoint.port == 9092)
+    //KAFKA-3719
+    connectionString = "local_host:9092"
+    endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
+    assert(endpoint.host == "local_host")
+    assert(endpoint.port == 9092)
     // also test for ipv6
     connectionString = "[::1]:9092"
     endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
@@ -121,6 +126,12 @@ class BrokerEndPointTest extends Logging {
     assert(endpoint.host == "localhost")
     assert(endpoint.port == 9092)
     assert(endpoint.connectionString == "PLAINTEXT://localhost:9092")
+    // KAFKA-3719
+    connectionString = "PLAINTEXT://local_host:9092"
+    endpoint = EndPoint.createEndPoint(connectionString)
+    assert(endpoint.host == "local_host")
+    assert(endpoint.port == 9092)
+    assert(endpoint.connectionString == "PLAINTEXT://local_host:9092")
     // also test for default bind
     connectionString = "PLAINTEXT://:9092"
     endpoint = EndPoint.createEndPoint(connectionString)
