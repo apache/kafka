@@ -137,6 +137,45 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         else:
             self.minikdc = None
 
+    def start_some(self, nodes_to_start, create_topics=True, add_principals=""):
+        """Starts a subset of alloted nodes.
+
+        Keyword arguments:
+            nodes_to_start -- a list of nodes to start. Node ids range from
+                [0 .. num_nodes)
+            create_topics -- whether or not to create the configured topics.
+         """
+        self.open_port(self.security_protocol)
+        self.open_port(self.interbroker_security_protocol)
+        self.start_minikdc(add_principals)
+        for node_id in nodes_to_start:
+            node = self.nodes[node_id]
+            # Added precaution - kill running processes, clean persistent files
+            # try/except for each step, since each of these steps may fail if
+            # there are no processes to kill or no files to remove
+            try:
+                self.stop_node(node)
+            except:
+                pass
+
+            try:
+                self.clean_node(node)
+            except:
+                pass
+
+            self.logger.debug("%s: starting node" % self.who_am_i(node))
+            self.start_node(node)
+
+        # Create topics if necessary
+        if create_topics is True:
+            if self.topics is not None:
+                for topic, topic_cfg in self.topics.items():
+                    if topic_cfg is None:
+                        topic_cfg = {}
+
+                    topic_cfg["topic"] = topic
+                    self.create_topic(topic_cfg)
+
     def start(self, add_principals=""):
         self.open_port(self.security_protocol)
         self.open_port(self.interbroker_security_protocol)
@@ -251,15 +290,23 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         """
         if node is None:
             node = self.nodes[0]
-        self.logger.info("Creating topic %s with settings %s", topic_cfg["topic"], topic_cfg)
+        self.logger.info("Creating topic %s with settings %s",
+                         topic_cfg["topic"], topic_cfg)
         kafka_topic_script = self.path.script("kafka-topics.sh", node)
 
         cmd = kafka_topic_script + " "
-        cmd += "--zookeeper %(zk_connect)s --create --topic %(topic)s --partitions %(partitions)d --replication-factor %(replication)d" % {
+        cmd += "--zookeeper %(zk_connect)s --create --topic %(topic)s " % {
                 'zk_connect': self.zk.connect_setting(),
                 'topic': topic_cfg.get("topic"),
-                'partitions': topic_cfg.get('partitions', 1), 
-                'replication': topic_cfg.get('replication-factor', 1)
+           }
+        if 'replica-assignment' in topic_cfg:
+            cmd += " --replica-assignment %(replica-assignment)s" % {
+                'replica-assignment': topic_cfg.get('replica-assignment')
+            }
+        else:
+            cmd += " --partitions %(partitions)d --replication-factor %(replication-factor)d" % {
+                'partitions': topic_cfg.get('partitions', 1),
+                'replication-factor': topic_cfg.get('replication-factor', 1)
             }
 
         if "configs" in topic_cfg.keys() and topic_cfg["configs"] is not None:
@@ -283,7 +330,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         for line in node.account.ssh_capture(cmd):
             output += line
         return output
-    
+
     def alter_message_format(self, topic, msg_format_version, node=None):
         if node is None:
             node = self.nodes[0]
@@ -351,12 +398,18 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         self.logger.debug(output)
 
-        if re.match(".*is in progress.*", output) is not None:
+        if re.match(".*Reassignment of partition.*failed.*",
+                    output.replace('\n', '')) is not None:
+            return False
+
+        if re.match(".*is still in progress.*",
+                    output.replace('\n', '')) is not None:
             return False
 
         return True
 
-    def execute_reassign_partitions(self, reassignment, node=None):
+    def execute_reassign_partitions(self, reassignment, node=None,
+                                    throttle=None):
         """Run the reassign partitions admin tool in "verify" mode
         """
         if node is None:
@@ -373,6 +426,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         cmd += "--zookeeper %s " % self.zk.connect_setting()
         cmd += "--reassignment-json-file %s " % json_file
         cmd += "--execute"
+        if throttle is not None:
+            cmd += " --throttle %d" % throttle
         cmd += " && sleep 1 && rm -f %s" % json_file
 
         # send command
@@ -393,7 +448,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         """
         payload_match = "payload: " + "$|payload: ".join(str(x) for x in messages) + "$"
         found = set([])
-
+        self.logger.debug("number of unique missing messages we will search for: %d",
+                          len(messages))
         for node in self.nodes:
             # Grab all .log files in directories prefixed with this topic
             files = node.account.ssh_capture("find %s -regex  '.*/%s-.*/[^/]*.log'" % (KafkaService.DATA_LOG_DIR, topic))
@@ -409,6 +465,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                             self.logger.debug("Found %s in data-file [%s] in line: [%s]" % (val, log.strip(), line.strip()))
                             found.add(val)
 
+        self.logger.debug("Number of unique messages found in the log: %d",
+                          len(found))
         missing = list(set(messages) - found)
 
         if len(missing) > 0:
