@@ -267,14 +267,14 @@ class GroupCoordinator(val brokerId: Int,
               val missing = group.allMembers -- groupAssignment.keySet
               val assignment = groupAssignment ++ missing.map(_ -> Array.empty[Byte]).toMap
 
-              delayedGroupStore = Some(groupManager.prepareStoreGroup(group, assignment, (errorCode: Short) => {
+              delayedGroupStore = Some(groupManager.prepareStoreGroup(group, assignment, (error: Errors) => {
                 group synchronized {
                   // another member may have joined the group while we were awaiting this callback,
                   // so we must ensure we are still in the AwaitingSync state and the same generation
                   // when it gets invoked. if we have transitioned to another state, then do nothing
                   if (group.is(AwaitingSync) && generationId == group.generationId) {
-                    if (errorCode != Errors.NONE.code) {
-                      resetAndPropagateAssignmentError(group, errorCode)
+                    if (error != Errors.NONE) {
+                      resetAndPropagateAssignmentError(group, error)
                       maybePrepareRebalance(group)
                     } else {
                       setAndPropagateAssignment(group, assignment)
@@ -549,19 +549,19 @@ class GroupCoordinator(val brokerId: Int,
   private def setAndPropagateAssignment(group: GroupMetadata, assignment: Map[String, Array[Byte]]) {
     assert(group.is(AwaitingSync))
     group.allMemberMetadata.foreach(member => member.assignment = assignment(member.memberId))
-    propagateAssignment(group, Errors.NONE.code)
+    propagateAssignment(group, Errors.NONE)
   }
 
-  private def resetAndPropagateAssignmentError(group: GroupMetadata, errorCode: Short) {
+  private def resetAndPropagateAssignmentError(group: GroupMetadata, error: Errors) {
     assert(group.is(AwaitingSync))
     group.allMemberMetadata.foreach(_.assignment = Array.empty[Byte])
-    propagateAssignment(group, errorCode)
+    propagateAssignment(group, error)
   }
 
-  private def propagateAssignment(group: GroupMetadata, errorCode: Short) {
+  private def propagateAssignment(group: GroupMetadata, error: Errors) {
     for (member <- group.allMemberMetadata) {
       if (member.awaitingSyncCallback != null) {
-        member.awaitingSyncCallback(member.assignment, errorCode)
+        member.awaitingSyncCallback(member.assignment, error.code)
         member.awaitingSyncCallback = null
 
         // reset the session timeout for members after propagating the member's assignment.
@@ -645,7 +645,7 @@ class GroupCoordinator(val brokerId: Int,
   private def prepareRebalance(group: GroupMetadata) {
     // if any members are awaiting sync, cancel their request and have them rejoin
     if (group.is(AwaitingSync))
-      resetAndPropagateAssignmentError(group, Errors.REBALANCE_IN_PROGRESS.code)
+      resetAndPropagateAssignmentError(group, Errors.REBALANCE_IN_PROGRESS)
 
     group.transitionTo(PreparingRebalance)
     info("Preparing to restabilize group %s with old generation %s".format(group.groupId, group.generationId))
@@ -692,12 +692,12 @@ class GroupCoordinator(val brokerId: Int,
         if (group.is(Empty)) {
           info(s"Group ${group.groupId} with generation ${group.generationId} is now empty")
 
-          delayedStore = Some(groupManager.prepareStoreGroup(group, Map.empty, errorCode => {
-            if (errorCode != Errors.NONE.code) {
+          delayedStore = Some(groupManager.prepareStoreGroup(group, Map.empty, error => {
+            if (error != Errors.NONE) {
               // we failed to write the empty group metadata. If the broker fails before another rebalance,
               // the previous generation written to the log will become active again (and most likely timeout).
               // This should be safe since there are no active members in an empty generation, so we just warn.
-              warn(s"Failed to write empty metadata for group ${group.groupId}: ${Errors.forCode(errorCode).message()}")
+              warn(s"Failed to write empty metadata for group ${group.groupId}: ${error.message}")
             }
           }))
         } else {

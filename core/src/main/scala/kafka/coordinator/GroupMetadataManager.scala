@@ -175,7 +175,7 @@ class GroupMetadataManager(val brokerId: Int,
 
   def prepareStoreGroup(group: GroupMetadata,
                         groupAssignment: Map[String, Array[Byte]],
-                        responseCallback: Short => Unit): DelayedStore = {
+                        responseCallback: Errors => Unit): DelayedStore = {
     val (magicValue, timestamp) = getMessageFormatVersionAndTimestamp(partitionFor(group.groupId))
     val groupMetadataValueVersion = if (interBrokerProtocolVersion < KAFKA_0_10_1_IV0) 0.toShort else GroupMetadataManager.CURRENT_GROUP_VALUE_SCHEMA_VERSION
 
@@ -202,36 +202,45 @@ class GroupMetadataManager(val brokerId: Int,
       // construct the error status in the propagated assignment response
       // in the cache
       val status = responseStatus(groupMetadataPartition)
+      val statusError = Errors.forCode(status.errorCode)
 
-      var responseCode = Errors.NONE.code
-      if (status.errorCode != Errors.NONE.code) {
-        debug("Metadata from group %s with generation %d failed when appending to log due to %s"
-          .format(group.groupId, generationId, Errors.forCode(status.errorCode).exceptionName))
+      val responseError = if (statusError == Errors.NONE) {
+        Errors.NONE
+      } else {
+        debug(s"Metadata from group ${group.groupId} with generation $generationId failed when appending to log " +
+          s"due to ${statusError.exceptionName}")
 
         // transform the log append error code to the corresponding the commit status error code
-        responseCode = if (status.errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code) {
-          Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code
-        } else if (status.errorCode == Errors.NOT_LEADER_FOR_PARTITION.code) {
-          Errors.NOT_COORDINATOR_FOR_GROUP.code
-        } else if (status.errorCode == Errors.REQUEST_TIMED_OUT.code) {
-          Errors.REBALANCE_IN_PROGRESS.code
-        } else if (status.errorCode == Errors.MESSAGE_TOO_LARGE.code
-          || status.errorCode == Errors.RECORD_LIST_TOO_LARGE.code
-          || status.errorCode == Errors.INVALID_FETCH_SIZE.code) {
+        statusError match {
+          case Errors.UNKNOWN_TOPIC_OR_PARTITION
+            | Errors.NOT_ENOUGH_REPLICAS
+            | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND =>
+            Errors.GROUP_COORDINATOR_NOT_AVAILABLE
 
-          error("Appending metadata message for group %s generation %d failed due to %s, returning UNKNOWN error code to the client"
-            .format(group.groupId, generationId, Errors.forCode(status.errorCode).exceptionName))
+          case Errors.NOT_LEADER_FOR_PARTITION =>
+            Errors.NOT_COORDINATOR_FOR_GROUP
 
-          Errors.UNKNOWN.code
-        } else {
-          error("Appending metadata message for group %s generation %d failed due to unexpected error: %s"
-            .format(group.groupId, generationId, status.errorCode))
+          case Errors.REQUEST_TIMED_OUT =>
+            Errors.REBALANCE_IN_PROGRESS
 
-          status.errorCode
+          case Errors.MESSAGE_TOO_LARGE
+            | Errors.RECORD_LIST_TOO_LARGE
+            | Errors.INVALID_FETCH_SIZE =>
+
+            error(s"Appending metadata message for group ${group.groupId} generation $generationId failed due to " +
+              s"${statusError.exceptionName}, returning UNKNOWN error code to the client")
+
+            Errors.UNKNOWN
+
+          case other =>
+            error(s"Appending metadata message for group ${group.groupId} generation $generationId failed " +
+              s"due to unexpected error: ${statusError.exceptionName}")
+
+            other
         }
       }
 
-      responseCallback(responseCode)
+      responseCallback(responseError)
     }
 
     DelayedStore(groupMetadataMessageSet, putCacheCallback)
@@ -286,10 +295,11 @@ class GroupMetadataManager(val brokerId: Int,
       // construct the commit response status and insert
       // the offset and metadata to cache if the append status has no error
       val status = responseStatus(offsetTopicPartition)
+      val statusError = Errors.forCode(status.errorCode)
 
       val responseCode =
         group synchronized {
-          if (status.errorCode == Errors.NONE.code) {
+          if (statusError == Errors.NONE) {
             if (!group.is(Dead)) {
               filteredOffsetMetadata.foreach { case (topicAndPartition, offsetAndMetadata) =>
                 group.completePendingOffsetWrite(topicAndPartition, offsetAndMetadata)
@@ -303,20 +313,28 @@ class GroupMetadataManager(val brokerId: Int,
               }
             }
 
-            debug("Offset commit %s from group %s consumer %s with generation %d failed when appending to log due to %s"
-              .format(filteredOffsetMetadata, group.groupId, consumerId, generationId, Errors.forCode(status.errorCode).exceptionName))
+            debug(s"Offset commit $filteredOffsetMetadata from group ${group.groupId}, consumer $consumerId " +
+              s"with generation $generationId failed when appending to log due to ${statusError.exceptionName}")
 
             // transform the log append error code to the corresponding the commit status error code
-            if (status.errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
-              Errors.GROUP_COORDINATOR_NOT_AVAILABLE.code
-            else if (status.errorCode == Errors.NOT_LEADER_FOR_PARTITION.code)
-              Errors.NOT_COORDINATOR_FOR_GROUP.code
-            else if (status.errorCode == Errors.MESSAGE_TOO_LARGE.code
-              || status.errorCode == Errors.RECORD_LIST_TOO_LARGE.code
-              || status.errorCode == Errors.INVALID_FETCH_SIZE.code)
-              Errors.INVALID_COMMIT_OFFSET_SIZE.code
-            else
-              status.errorCode
+            val responseError = statusError match {
+              case Errors.UNKNOWN_TOPIC_OR_PARTITION
+                   | Errors.NOT_ENOUGH_REPLICAS
+                   | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND =>
+                Errors.GROUP_COORDINATOR_NOT_AVAILABLE
+
+              case Errors.NOT_LEADER_FOR_PARTITION =>
+                Errors.NOT_COORDINATOR_FOR_GROUP
+
+              case Errors.MESSAGE_TOO_LARGE
+                   | Errors.RECORD_LIST_TOO_LARGE
+                   | Errors.INVALID_FETCH_SIZE =>
+                Errors.INVALID_COMMIT_OFFSET_SIZE
+
+              case other => other
+            }
+
+            responseError.code
           }
         }
 
