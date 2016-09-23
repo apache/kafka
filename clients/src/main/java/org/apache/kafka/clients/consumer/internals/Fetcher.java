@@ -535,7 +535,7 @@ public class Fetcher<K, V> {
      * @param timestampsToSearch The mapping from partitions to the target timestamps.
      * @return A response which can be polled to obtain the corresponding timestamps and offsets.
      */
-    private RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> sendListOffsetRequest(Node node,
+    private RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> sendListOffsetRequest(final Node node,
                                                                                          final Map<TopicPartition, Long> timestampsToSearch) {
         ListOffsetRequest request = new ListOffsetRequest(timestampsToSearch, ListOffsetRequest.CONSUMER_REPLICA_ID);
         log.trace("Sending ListOffsetRequest {} to broker {}", request, node);
@@ -543,6 +543,7 @@ public class Fetcher<K, V> {
                 .compose(new RequestFutureAdapter<ClientResponse, Map<TopicPartition, OffsetAndTimestamp>>() {
                     @Override
                     public void onSuccess(ClientResponse response, RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> future) {
+                        log.trace("ListOffsetResponse received from node {}", node);
                         handleListOffsetResponse(timestampsToSearch, response, future);
                     }
                 });

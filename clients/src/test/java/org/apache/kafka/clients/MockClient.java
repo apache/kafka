@@ -250,6 +250,15 @@ public class MockClient implements KafkaClient {
         futureResponses.add(new FutureResponse(body, disconnected, matcher, node));
     }
 
+    public void reset() {
+        ready.clear();
+        blackedOut.clear();
+        requests.clear();
+        responses.clear();
+        futureResponses.clear();
+        metadataUpdates.clear();
+    }
+
     public void prepareMetadataUpdate(Cluster cluster) {
         metadataUpdates.add(cluster);
     }

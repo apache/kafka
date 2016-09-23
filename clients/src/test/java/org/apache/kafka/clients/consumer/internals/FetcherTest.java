@@ -637,7 +637,29 @@ public class FetcherTest {
     }
 
     @Test
-    public void testGetOffsetsByTimes() {
+    public void testGetOffsetsForTimes() {
+        // Error code none with unknown offset
+        testGetOffsetsForTimesWithError(Errors.NONE, Errors.NONE, -1L, 100L, null, 100L);
+        // Error code none with known offset
+        testGetOffsetsForTimesWithError(Errors.NONE, Errors.NONE, 10L, 100L, 10L, 100L);
+        // Test both of partition has error.
+        testGetOffsetsForTimesWithError(Errors.NOT_LEADER_FOR_PARTITION, Errors.INVALID_REQUEST, 10L, 100L, 10L, 100L);
+        // Test the second partition has error.
+        testGetOffsetsForTimesWithError(Errors.NONE, Errors.NOT_LEADER_FOR_PARTITION, 10L, 100L, 10L, 100L);
+        // Test different errors.
+        testGetOffsetsForTimesWithError(Errors.NOT_LEADER_FOR_PARTITION, Errors.NONE, 10L, 100L, 10L, 100L);
+        testGetOffsetsForTimesWithError(Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.NONE, 10L, 100L, 10L, 100L);
+        testGetOffsetsForTimesWithError(Errors.INVALID_REQUEST, Errors.NONE, 10L, 100L, null, 100L);
+        testGetOffsetsForTimesWithError(Errors.BROKER_NOT_AVAILABLE, Errors.NONE, 10L, 100L, 10L, 100L);
+    }
+
+    private void testGetOffsetsForTimesWithError(Errors errorForTp0,
+                                                 Errors errorForTp1,
+                                                 Long offsetForTp0,
+                                                 Long offsetForTp1,
+                                                 Long expectedOffsetForTp0,
+                                                 Long expectedOffsetForTp1) {
+        client.reset();
         TopicPartition tp0 = tp;
         TopicPartition tp1 = new TopicPartition(topicName, 1);
         // Ensure metadata has both partition.
@@ -645,20 +667,30 @@ public class FetcherTest {
         metadata.update(cluster, time.milliseconds());
 
         // First try should fail due to metadata error.
-        client.prepareResponseFrom(listOffsetResponse(Errors.NONE, 10L, 10L), cluster.leaderFor(tp0));
-        client.prepareResponseFrom(listOffsetResponse(tp1, Errors.NOT_LEADER_FOR_PARTITION, -1L, -1L), cluster.leaderFor(tp1));
+        client.prepareResponseFrom(listOffsetResponse(tp0, errorForTp0, offsetForTp0, offsetForTp0), cluster.leaderFor(tp0));
+        client.prepareResponseFrom(listOffsetResponse(tp1, errorForTp1, offsetForTp1, offsetForTp1), cluster.leaderFor(tp1));
         // Second try should succeed.
-        client.prepareResponseFrom(listOffsetResponse(Errors.NONE, 100L, 100L), cluster.leaderFor(tp0));
-        client.prepareResponseFrom(listOffsetResponse(tp1, Errors.NONE, 200L, 200L), cluster.leaderFor(tp1));
+        client.prepareResponseFrom(listOffsetResponse(tp0, Errors.NONE, offsetForTp0, offsetForTp0), cluster.leaderFor(tp0));
+        client.prepareResponseFrom(listOffsetResponse(tp1, Errors.NONE, offsetForTp1, offsetForTp1), cluster.leaderFor(tp1));
 
         Map<TopicPartition, Long> timestampToSearch = new HashMap<>();
         timestampToSearch.put(tp0, 0L);
         timestampToSearch.put(tp1, 0L);
         Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = fetcher.getOffsetsByTimes(timestampToSearch);
-        assertEquals(offsetAndTimestampMap.get(tp0).timestamp(), 100L);
-        assertEquals(offsetAndTimestampMap.get(tp0).offset(), 100L);
-        assertEquals(offsetAndTimestampMap.get(tp1).timestamp(), 200L);
-        assertEquals(offsetAndTimestampMap.get(tp1).offset(), 200L);
+
+        if (expectedOffsetForTp0 == null)
+            assertNull(offsetAndTimestampMap.get(tp0));
+        else {
+            assertEquals(expectedOffsetForTp0.longValue(), offsetAndTimestampMap.get(tp0).timestamp());
+            assertEquals(expectedOffsetForTp0.longValue(), offsetAndTimestampMap.get(tp0).offset());
+        }
+
+        if (expectedOffsetForTp1 == null)
+            assertNull(offsetAndTimestampMap.get(tp1));
+        else {
+            assertEquals(expectedOffsetForTp1.longValue(), offsetAndTimestampMap.get(tp1).timestamp());
+            assertEquals(expectedOffsetForTp1.longValue(), offsetAndTimestampMap.get(tp1).offset());
+        }
     }
 
     private MockClient.RequestMatcher listOffsetRequestMatcher(final long timestamp) {
