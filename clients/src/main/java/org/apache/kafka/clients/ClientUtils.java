@@ -39,12 +39,14 @@ public class ClientUtils {
         List<InetSocketAddress> addresses = new ArrayList<InetSocketAddress>();
         for (String url : urls) {
             if (url != null && url.length() > 0) {
-                String host = getHost(url);
-                Integer port = getPort(url);
-                if (host == null || port == null)
-                    throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
                 try {
+                    String host = getHost(url);
+                    Integer port = getPort(url);
+                    if (host == null || port == null)
+                        throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
+
                     InetSocketAddress address = new InetSocketAddress(host, port);
+            
                     if (address.isUnresolved()) {
                         log.warn("Removing server from " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + " as DNS resolution failed: " + host);
                     } else {
