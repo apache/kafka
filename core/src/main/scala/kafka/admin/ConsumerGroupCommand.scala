@@ -55,8 +55,6 @@ object ConsumerGroupCommand {
 
     val consumerGroupService = {
       if (opts.useOldConsumer) {
-        Console.err.println("Using the ConsumerGroupCommand with old consumer is deprecated and will be removed in a future release. " +
-          "Consider using the new consumer.")
         new ZkConsumerGroupService(opts)
       } else {
         new KafkaConsumerGroupService(opts)
@@ -434,6 +432,8 @@ object ConsumerGroupCommand {
       if (useOldConsumer) {
         if (options.has(bootstrapServerOpt))
           CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is not valid with $zkConnectOpt.")
+        else if (options.has(newConsumerOpt))
+          CommandLineUtils.printUsageAndDie(parser, s"Option $newConsumerOpt is not valid with $zkConnectOpt.")
       } else {
         CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
 
