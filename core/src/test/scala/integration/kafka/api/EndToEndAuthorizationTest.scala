@@ -19,7 +19,7 @@ package kafka.api
 
 import java.io.File
 import java.util.ArrayList
-import java.util.concurrent.ExecutionException
+import java.util.concurrent.{ExecutionException, TimeoutException => JTimeoutException}
 
 import kafka.admin.AclCommand
 import kafka.common.TopicAndPartition
@@ -159,8 +159,6 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "3")
   this.serverConfig.setProperty(KafkaConfig.MinInSyncReplicasProp, "3")
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group")
-  //to have testNoProduceAclWithoutDescribeAcl terminate quicker
-  this.producerConfig.setProperty(ProducerConfig.MAX_BLOCK_MS_CONFIG, "5000")
 
   /**
     * Starts MiniKDC and only then sets up the parent trait.
@@ -187,6 +185,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     */
   @After
   override def tearDown {
+    consumers.foreach(_.wakeup())
     super.tearDown
     closeSasl()
   }
@@ -229,7 +228,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     * isn't set.
     */
   @Test
-  def testNoProduceAclWithoutDescribeAcl {
+  def testNoProduceWithoutDescribeAcl {
     //Produce records
     debug("Starting to send records")
     try{
@@ -241,7 +240,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   }
 
   @Test
-  def testNoProduceAclWithDescribeAcl {
+  def testNoProduceWithDescribeAcl {
     AclCommand.main(describeAclArgs)
     servers.foreach { s =>
       TestUtils.waitAndVerifyAcls(TopicDescribeAcl, s.apis.authorizer.get, topicResource)
@@ -282,7 +281,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
       consumeRecords(this.consumers.head)
       fail("exception expected")
     } catch {
-      case e: TestTimeoutException => //expected
+      case e: JTimeoutException => //expected
     }
   } 
   
@@ -312,8 +311,8 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     * ACL set.
     */
   @Test
-  def testNoConsumeAclWithDescribeAclViaAssign {
-    noConsumeAclWithDescribeAclProlog
+  def testNoConsumeWithDescribeAclViaAssign {
+    noConsumeWithDescribeAclSetup
     consumers.head.assign(List(tp).asJava)
 
     try {
@@ -325,8 +324,8 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   }
   
   @Test
-  def testNoConsumeAclWithDescribeAclViaSubscribe {
-    noConsumeAclWithDescribeAclProlog
+  def testNoConsumeWithDescribeAclViaSubscribe {
+    noConsumeWithDescribeAclSetup
     consumers.head.subscribe(List(topic).asJava)
 
     try {
@@ -337,7 +336,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     }
   }
   
-  private def noConsumeAclWithDescribeAclProlog {
+  private def noConsumeWithDescribeAclSetup {
     AclCommand.main(produceAclArgs) 
     AclCommand.main(groupAclArgs)
     servers.foreach { s =>
@@ -394,18 +393,11 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
                              topic: String = topic,
                              part: Int = part) {
     val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
-    val maxIters = numRecords * 50
-    
+
     val future = Future {
-      var iters = 0
-      while (records.size < numRecords) {
-        for (record <- consumer.poll(50).asScala) {
+      while (records.size < numRecords) 
+        for (record <- consumer.poll(50).asScala) 
           records.add(record)
-        }
-        if (iters > maxIters)
-          throw new TestTimeoutException("Failed to consume the expected records after " + iters + " iterations.")
-        iters += 1
-      }
       records
     }
     val result = Await.result(future, 10 seconds)
@@ -419,6 +411,4 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     }
   }
 }
-
-class TestTimeoutException(msg:String) extends java.lang.RuntimeException (msg)
 

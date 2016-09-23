@@ -14,7 +14,7 @@ package kafka.api
 
 import java.nio.ByteBuffer
 import java.util
-import java.util.concurrent.ExecutionException
+import java.util.concurrent.{TimeoutException ⇒ JTimeoutException, ExecutionException}
 import java.util.regex.Pattern
 import java.util.{ArrayList, Collections, Properties}
 
@@ -175,6 +175,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @After
   override def tearDown() = {
     producers.foreach(_.close())
+    consumers.foreach(_.wakeup())
     consumers.foreach(_.close())
     removeAllAcls
     super.tearDown()
@@ -522,7 +523,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       consumer.subscribe(Pattern.compile(".*"), new NoOpConsumerRebalanceListener)
       consumeRecords(consumer)
     } catch {
-      case e: TestTimeoutException => //expected
+      case e: JTimeoutException => //expected
     } finally consumer.close()
   }
 
@@ -700,10 +701,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       if (resourceType == Topic)
         if (apiKey == ApiKeys.PRODUCE || apiKey == ApiKeys.FETCH ) {
           //Only allowing TOPIC_AUTHORIZATION_FAILED as an error code
-          Seq(resourceType.errorCode)
+          Seq(Errors.TOPIC_AUTHORIZATION_FAILED.code)
         } else {
           // When completely unauthorized topic resources may return an INVALID_TOPIC_EXCEPTION/UNKNOWN_TOPIC_OR_PARTITION to prevent leaking topic names
-          Seq(Errors.INVALID_TOPIC_EXCEPTION.code(), Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+          Seq(Errors.INVALID_TOPIC_EXCEPTION.code, Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
         }
       else
         Seq(resourceType.errorCode)
@@ -745,21 +746,16 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
                              topic: String = topic,
                              part: Int = part) {
     val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
-    val maxIters = numRecords * 50
 
     val future = Future {
-      var iters = 0
-      while (records.size < numRecords) {
-        for (record <- consumer.poll(50).asScala) {
+      TestUtils.waitUntilTrue(() => {
+        for (record <- consumer.poll(50).asScala) 
           records.add(record)
-        }
-        if (iters > maxIters)
-          throw new TestTimeoutException("Failed to consume the expected records after " + iters + " iterations.")
-        iters += 1
-      }
+        records.size >= numRecords
+        }, "Failed to consume %d records".format(numRecords), 10000L)
       records
     }
-    val result = Await.result(future, 10 seconds)
+    val result = Await.result(future, 15 seconds)
 
     for (i <- 0 until numRecords) {
       val record = records.get(i)

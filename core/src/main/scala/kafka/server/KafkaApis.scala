@@ -233,9 +233,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       val responseBody = new OffsetCommitResponse(results.asJava)
       requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
     } else {
-
       val (existingOrAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) = offsetCommitRequest.offsetData.asScala.toMap.partition {
-        case (topicPartition, _) => metadataCache.contains(topicPartition.topic) && authorize(request.session, Describe, new Resource(auth.Topic, topicPartition.topic))
+        case (topicPartition, _) => authorize(request.session, Describe, new Resource(auth.Topic, topicPartition.topic)) && metadataCache.contains(topicPartition.topic)
       }
 
       val (authorizedTopics, unauthorizedForReadTopics) = existingOrAuthorizedForDescribeTopics.partition {
@@ -807,15 +806,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       topics.partition(topic => authorize(request.session, Describe, new Resource(auth.Topic, topic)))
 
     var unauthorizedForCreateTopics = Set[String]()
-      
+
     if (authorizedTopics.nonEmpty) {
       val nonExistingTopics = metadataCache.getNonExistingTopics(authorizedTopics)
       if (config.autoCreateTopicsEnable && nonExistingTopics.nonEmpty) {
-        authorizer.foreach { az =>
-          if (!az.authorize(request.session, Create, Resource.ClusterResource)) {
-            authorizedTopics --= nonExistingTopics
-            unauthorizedForCreateTopics ++= nonExistingTopics
-          }
+        if (!authorize(request.session, Create, Resource.ClusterResource)) {
+          authorizedTopics --= nonExistingTopics
+          unauthorizedForCreateTopics ++= nonExistingTopics
         }
       }
     }
@@ -824,10 +821,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       new MetadataResponse.TopicMetadata(Errors.TOPIC_AUTHORIZATION_FAILED, topic, common.Topic.isInternal(topic),
         java.util.Collections.emptyList()))
 
-    // do not disclose the existence of unauthorized topics
+    // do not disclose the existence of topics unauthorized for Describe
     val unauthorizedForDescribeTopicMetadata =
-      // In case of all topics, don't include unauthorized topics
-      if ((requestVersion == 0 && (metadataRequest.topics() == null || metadataRequest.topics().isEmpty)) || (metadataRequest.isAllTopics))
+      // In case of all topics, don't include topics unauthorized for Describe
+      if ((requestVersion == 0 && (metadataRequest.topics == null || metadataRequest.topics.isEmpty)) || metadataRequest.isAllTopics)
         Set.empty[MetadataResponse.TopicMetadata]
       else
         unauthorizedForDescribeTopics.map(topic =>
