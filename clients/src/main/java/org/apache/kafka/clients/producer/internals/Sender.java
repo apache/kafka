@@ -384,9 +384,9 @@ public class Sender implements Runnable {
 
     /* metadata becomes "stale" for batch expiry purpose when the time since the last successful update exceeds
      * the metadataStaleMs value. This value must be greater than the metadata.max.age and some delta to account
-     * for a few retries and transient network disconnections. A small number of retries (3) are chosen because 
-     * metadata retries have no upper bound. However, as retries are subject to both regular request timeout and 
-     * the backoff, staleness determination is delayed by that factor.
+     * for retries and transient network disconnections. There must be enough time for at least one retry. 
+     * As retries are subject to both regular request timeout and the backoff, staleness determination is delayed 
+     * by that factor.
      */
     static long getMetadataStaleMs(long metadataMaxAgeMs, int requestTimeoutMs, long refreshBackoffMs, int retries) {
         return metadataMaxAgeMs + Math.max(retries, 1) * (requestTimeoutMs + refreshBackoffMs);
