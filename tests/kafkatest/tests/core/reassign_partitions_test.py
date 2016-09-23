@@ -86,7 +86,7 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         # Wait until finished or timeout
         wait_until(lambda: self.kafka.verify_reassign_partitions(partition_info), timeout_sec=self.timeout_sec, backoff_sec=.5)
 
-    @parametrize(security_protocol="PLAINTEXT", bounce_brokers=True)
+    @parametrize(security_protocol="PLAINTEXT", bounce_brokers=False)
     def test_reassign_partitions(self, bounce_brokers, security_protocol):
         """Reassign partitions tests.
         Setup: 1 zk, 3 kafka nodes, 1 topic with partitions=3, replication-factor=3, and min.insync.replicas=2
