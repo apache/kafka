@@ -38,7 +38,7 @@ public class ClientUtils {
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls) {
         List<InetSocketAddress> addresses = new ArrayList<InetSocketAddress>();
         for (String url : urls) {
-            if (url != null && url.length() > 0) {
+            if (url != null && !url.isEmpty()) {
                 try {
                     String host = getHost(url);
                     Integer port = getPort(url);
@@ -46,7 +46,7 @@ public class ClientUtils {
                         throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
 
                     InetSocketAddress address = new InetSocketAddress(host, port);
-            
+
                     if (address.isUnresolved()) {
                         log.warn("Removing server from " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + " as DNS resolution failed: " + host);
                     } else {
@@ -57,7 +57,7 @@ public class ClientUtils {
                 }
             }
         }
-        if (addresses.size() < 1)
+        if (addresses.isEmpty())
             throw new ConfigException("No resolvable bootstrap urls given in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
         return addresses;
     }
