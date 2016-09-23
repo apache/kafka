@@ -234,7 +234,7 @@ class GroupMetadataManager(val brokerId: Int,
 
           case other =>
             error(s"Appending metadata message for group ${group.groupId} generation $generationId failed " +
-              s"due to unexpected error code: ${statusError.code}")
+              s"due to unexpected error: ${statusError.exceptionName}")
 
             other
         }
