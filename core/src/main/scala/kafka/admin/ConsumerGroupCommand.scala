@@ -55,7 +55,8 @@ object ConsumerGroupCommand {
 
     val consumerGroupService = {
       if (opts.useOldConsumer) {
-        Console.err.println("Old consumer is deprecated and will be removed in a future release. Consider using the new consumer.")
+        Console.err.println("Using the ConsumerGroupCommand with old consumer is deprecated and will be removed in a future release. " +
+          "Consider using the new consumer.")
         new ZkConsumerGroupService(opts)
       } else {
         new KafkaConsumerGroupService(opts)
@@ -431,19 +432,13 @@ object ConsumerGroupCommand {
     def checkArgs() {
       // check required args
       if (useOldConsumer) {
-        CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
-
         if (options.has(bootstrapServerOpt))
-          CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is not valid with old consumer.")
-
+          CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is not valid with $zkConnectOpt.")
       } else {
         CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
 
-        if (options.has(zkConnectOpt))
-          CommandLineUtils.printUsageAndDie(parser, s"Option $zkConnectOpt is only valid with old consumer.")
-
         if (options.has(deleteOpt))
-          CommandLineUtils.printUsageAndDie(parser, s"Option $deleteOpt is only valid with old consumer. Note that " +
+          CommandLineUtils.printUsageAndDie(parser, s"Option $deleteOpt is only valid with $zkConnectOpt. Note that " +
             "there's no need to delete group metadata for the new consumer as it is automatically deleted when the last " +
             "member leaves")
       }

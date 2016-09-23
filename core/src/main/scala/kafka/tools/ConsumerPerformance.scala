@@ -50,9 +50,6 @@ object ConsumerPerformance {
     val totalBytesRead = new AtomicLong(0)
     val consumerTimeout = new AtomicBoolean(false)
 
-    if (config.useOldConsumer)
-      Console.err.println("Old consumer is deprecated and will be removed in a future release. Consider using the new consumer.")
-
     if (!config.hideHeader) {
       if (!config.showDetailedStats)
         println("start.time, end.time, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")

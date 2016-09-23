@@ -320,7 +320,8 @@ object ConsoleConsumer extends Logging {
         CommandLineUtils.printUsageAndDie(parser, "Exactly one of whitelist/blacklist/topic is required.")
       topicArg = options.valueOf(topicOrFilterOpt.head)
       filterSpec = if (options.has(blacklistOpt)) new Blacklist(topicArg) else new Whitelist(topicArg)
-      Console.err.println("Old consumer is deprecated and will be removed in a future release. Consider using the new consumer.")
+      Console.err.println("Using the ConsoleConsumer with old consumer is deprecated and will be removed " +
+        "in a future release. Consider using the new consumer.")
     } else {
       val topicOrFilterOpt = List(topicIdOpt, whitelistOpt).filter(options.has)
       if (topicOrFilterOpt.size != 1)
@@ -362,7 +363,8 @@ object ConsoleConsumer extends Logging {
       else if (fromBeginning) OffsetRequest.EarliestTime
       else OffsetRequest.LatestTime
 
-    CommandLineUtils.checkRequiredArgs(parser, options, if (useOldConsumer) zkConnectOpt else bootstrapServerOpt)
+    if (!useOldConsumer)
+      CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
 
     if (options.has(csvMetricsReporterEnabledOpt)) {
       val csvReporterProps = new Properties()

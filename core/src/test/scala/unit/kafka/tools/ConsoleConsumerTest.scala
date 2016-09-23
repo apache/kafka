@@ -178,7 +178,7 @@ class ConsoleConsumerTest extends JUnitSuite {
   def shouldParseConfigsFromFile() {
     val propsFile = TestUtils.tempFile()
     val propsStream = new FileOutputStream(propsFile)
-    propsStream.write("consumer.timeout.ms=1000".getBytes())
+    propsStream.write("request.timeout.ms=1000".getBytes())
     propsStream.close()
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -188,6 +188,6 @@ class ConsoleConsumerTest extends JUnitSuite {
 
     val config = new ConsoleConsumer.ConsumerConfig(args)
 
-    assertEquals("1000", config.consumerProps.getProperty("consumer.timeout.ms"))
+    assertEquals("1000", config.consumerProps.getProperty("request.timeout.ms"))
   }
 }
