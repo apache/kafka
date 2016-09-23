@@ -232,6 +232,10 @@ public abstract class AbstractCoordinator implements Closeable {
         return rejoinNeeded;
     }
 
+    private synchronized boolean rejoinIncomplete() {
+        return joinFuture != null;
+    }
+
     /**
      * Check the status of the heartbeat thread (if it is active) and indicate the liveness
      * of the client. This must be called periodically after joining with {@link #ensureActiveGroup()}
@@ -287,7 +291,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
     // visible for testing. Joins the group without starting the heartbeat thread.
     void joinGroupIfNeeded() {
-        while (needRejoin()) {
+        while (needRejoin() || rejoinIncomplete()) {
             ensureCoordinatorReady();
 
             // call onJoinPrepare if needed. We set a flag to make sure that we do not call it a second
@@ -298,18 +302,6 @@ public abstract class AbstractCoordinator implements Closeable {
             if (needsJoinPrepare) {
                 onJoinPrepare(generation.generationId, generation.memberId);
                 needsJoinPrepare = false;
-            }
-
-            // fence off the heartbeat thread explicitly so that it cannot interfere with the join group.
-            // Note that this must come after the call to onJoinPrepare since we must be able to continue
-            // sending heartbeats if that callback takes some time.
-            disableHeartbeatThread();
-
-            // ensure that there are no pending requests to the coordinator. This is important
-            // in particular to avoid resending a pending JoinGroup request.
-            if (client.pendingRequestCount(this.coordinator) > 0) {
-                client.awaitPendingRequests(this.coordinator);
-                continue;
             }
 
             RequestFuture<ByteBuffer> future = initiateJoinGroup();
@@ -341,6 +333,11 @@ public abstract class AbstractCoordinator implements Closeable {
         // rebalance in the call to poll below. This ensures that we do not mistakenly attempt
         // to rejoin before the pending rebalance has completed.
         if (joinFuture == null) {
+            // fence off the heartbeat thread explicitly so that it cannot interfere with the join group.
+            // Note that this must come after the call to onJoinPrepare since we must be able to continue
+            // sending heartbeats if that callback takes some time.
+            disableHeartbeatThread();
+
             state = MemberState.REBALANCING;
             joinFuture = sendJoinGroupRequest();
             joinFuture.addListener(new RequestFutureListener<ByteBuffer>() {
