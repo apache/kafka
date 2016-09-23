@@ -44,25 +44,21 @@ import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 
 public class StreamsKafkaClient {
 
-    private static final Logger log = LoggerFactory.getLogger(StreamsKafkaClient.class);
-
-    private KafkaClient kafkaClient;
-    private StreamsConfig streamsConfig;
+    private final KafkaClient kafkaClient;
+    private final StreamsConfig streamsConfig;
 
     private static final int MAX_INFLIGHT_REQUESTS = 100;
     private static final long MAX_WAIT_TIME_MS = 30000;
@@ -122,10 +118,10 @@ public class StreamsKafkaClient {
         final Map<String, CreateTopicsRequest.TopicDetails> topics = new HashMap<>();
         topics.put(internalTopicConfig.name(), topicDetails);
 
-        CreateTopicsRequest createTopicsRequest = new CreateTopicsRequest(topics, streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG));
+        final CreateTopicsRequest createTopicsRequest = new CreateTopicsRequest(topics, streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG));
 
-        ClientResponse clientResponse = sendRequest(createTopicsRequest.toStruct(), ApiKeys.CREATE_TOPICS);
-        CreateTopicsResponse createTopicsResponse = new CreateTopicsResponse(clientResponse.responseBody());
+        final ClientResponse clientResponse = sendRequest(createTopicsRequest.toStruct(), ApiKeys.CREATE_TOPICS);
+        final CreateTopicsResponse createTopicsResponse = new CreateTopicsResponse(clientResponse.responseBody());
         if (createTopicsResponse.errors().get(internalTopicConfig.name()).code() > 0) {
             throw new StreamsException("Could not create topic: " + internalTopicConfig.name() + ". " + createTopicsResponse.errors().get(internalTopicConfig.name()).name());
         }
@@ -145,7 +141,7 @@ public class StreamsKafkaClient {
 
         final SystemTime systemTime = new SystemTime();
 
-        RequestSend send = new RequestSend(brokerId,
+        final RequestSend send = new RequestSend(brokerId,
                 kafkaClient.nextRequestHeader(apiKeys),
                 request);
 
@@ -181,7 +177,7 @@ public class StreamsKafkaClient {
      * @return
      */
     public MetadataResponse.TopicMetadata getTopicMetadata(final String topic) {
-        final MetadataRequest metadataRequest = new MetadataRequest(Arrays.asList(topic));
+        final MetadataRequest metadataRequest = new MetadataRequest(Collections.singletonList(topic));
 
         final ClientResponse clientResponse = sendRequest(metadataRequest.toStruct(), ApiKeys.METADATA);
         final MetadataResponse metadataResponse = new MetadataResponse(clientResponse.responseBody());

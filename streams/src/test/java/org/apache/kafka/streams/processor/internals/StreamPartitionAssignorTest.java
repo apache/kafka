@@ -505,7 +505,7 @@ public class StreamPartitionAssignorTest {
 
         StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
         partitionAssignor.configure(config.getConsumerConfigs(thread10, applicationId, client1));
-        MockInternalTopicManager internalTopicManager = new MockInternalTopicManager(clientSupplier.restoreConsumer);
+        MockInternalTopicManager internalTopicManager = new MockInternalTopicManager(thread10.config, clientSupplier.restoreConsumer);
         partitionAssignor.setInternalTopicManager(internalTopicManager);
 
         Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
@@ -547,7 +547,7 @@ public class StreamPartitionAssignorTest {
 
         StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
         partitionAssignor.configure(config.getConsumerConfigs(thread10, applicationId, client1));
-        MockInternalTopicManager internalTopicManager = new MockInternalTopicManager(clientSupplier.restoreConsumer);
+        MockInternalTopicManager internalTopicManager = new MockInternalTopicManager(thread10.config, clientSupplier.restoreConsumer);
         partitionAssignor.setInternalTopicManager(internalTopicManager);
 
         Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
@@ -731,8 +731,8 @@ public class StreamPartitionAssignorTest {
         public Map<String, Integer> readyTopics = new HashMap<>();
         public MockConsumer<byte[], byte[]> restoreConsumer;
 
-        public MockInternalTopicManager(MockConsumer<byte[], byte[]> restoreConsumer) {
-            super();
+        public MockInternalTopicManager(StreamsConfig streamsConfig, MockConsumer<byte[], byte[]> restoreConsumer) {
+            super(new StreamsKafkaClient(streamsConfig), 0, 0);
 
             this.restoreConsumer = restoreConsumer;
         }

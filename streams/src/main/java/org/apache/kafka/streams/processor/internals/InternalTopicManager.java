@@ -19,16 +19,12 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
 
 import java.util.concurrent.TimeUnit;
 
 public class InternalTopicManager {
 
-    private static final Logger log = LoggerFactory.getLogger(InternalTopicManager.class);
-
-    // TODO: the following LogConfig dependency should be removed after KIP-4
     public static final String CLEANUP_POLICY_PROP = "cleanup.policy";
     public static final String RETENTION_MS = "retention.ms";
     public static final Long WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
@@ -38,13 +34,7 @@ public class InternalTopicManager {
     private final int replicationFactor;
     private StreamsKafkaClient streamsKafkaClient;
 
-
-    public InternalTopicManager() {
-        this.replicationFactor = 0;
-        this.windowChangeLogAdditionalRetention = WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT;
-    }
-    
-    public InternalTopicManager(StreamsKafkaClient streamsKafkaClient, final int replicationFactor, long windowChangeLogAdditionalRetention) {
+    public InternalTopicManager(final StreamsKafkaClient streamsKafkaClient, final int replicationFactor, final long windowChangeLogAdditionalRetention) {
         this.streamsKafkaClient = streamsKafkaClient;
         this.replicationFactor = replicationFactor;
         this.windowChangeLogAdditionalRetention = windowChangeLogAdditionalRetention;
@@ -64,7 +54,7 @@ public class InternalTopicManager {
             final MetadataResponse.TopicMetadata topicMetadata = streamsKafkaClient.getTopicMetadata(topic.name());
             if (topicMetadata != null) {
                 if (topicMetadata.error().code() != 0) {
-                    throw new StreamsException("Topic metadata request returned with error code " + topicMetadata.error().code());
+                    throw new StreamsException("Topic metadata request returned with error code " + topicMetadata.error().code() + ": " + topicMetadata.error().message());
                 }
                 if (topicMetadata.partitionMetadata().size() != numPartitions) {
                     throw new StreamsException("Topic already exists but the number of partitions is not the same as the requested " + numPartitions + " partitions.");
