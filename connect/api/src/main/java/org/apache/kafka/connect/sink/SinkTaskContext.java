@@ -22,6 +22,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Map;
 import java.util.Set;
+import java.util.Collection;
 
 /**
  * Context passed to SinkTasks, allowing them to access utilities in the Kafka Connect runtime.
@@ -79,4 +80,27 @@ public interface SinkTaskContext {
      * @param partitions the partitions to resume
      */
     void resume(TopicPartition... partitions);
+
+    /**
+     * Whether to disable consumer offset commit in the framework. SinkTasks should use this if they manage offsets
+     * in the sink data store rather than using Kafka consumer offsets.  For example, an HDFS connector might record
+     * offsets in HDFS to provide exactly once delivery. When the SinkTask is started or a rebalance occurs, the task
+     * would reload offsets from HDFS. In this case, disabling consumer offset commit will save some CPU cycles and
+     * network IOs. It also saves the cost of unnecessary data pre fetches from the committed offsets and later
+     * be discarded as the connector may rewind the offsets.
+     *
+     * As Kafka Connect invokes the {@link SinkTask#flush(Map)} during offset commit which flushes all records that
+     * have been {@link SinkTask#put(Collection)} for the specified topic partitions. Disabling offset commits in Kafka
+     * Connect has some implications to the connector implementations: {@link SinkTask}s are now required to manually
+     * call {@link SinkTask#flush(Map)} or implement the flush logic that in {@link SinkTask#put(Collection)} to ensure
+     * the data and offsets are successfully written to the destination system.
+     *
+     * In case of manual offset management, the connector needs to make sure that offsets are written to the destination
+     * system before rebalance and task stop. Also, the connector needs to make sure that offset are reset after rebalance
+     * and task restart. {@link SinkTask#close(Collection)} is invoked before consumer group rebalance and task stops.
+     * In {@link SinkTask#close(Collection)}, connectors need to write the offsets to the destination system. During
+     * restart and after rebalance, the connector needs to reset the offset using {@link #offset(Map)} by passing in
+     * the offset information from the destination system.
+     */
+    void disableOffsetCommit();
 }

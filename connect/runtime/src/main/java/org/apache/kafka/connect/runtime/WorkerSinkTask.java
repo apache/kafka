@@ -149,6 +149,15 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     protected void iteration() {
+        long timeoutMs = Integer.MAX_VALUE;
+        if (!context.offsetCommitDisabled()) {
+            timeoutMs = maybeCommitOffsets();
+        }
+        // And process messages
+        poll(timeoutMs);
+    }
+
+    private long maybeCommitOffsets() {
         long now = time.milliseconds();
 
         // Maybe commit
@@ -159,16 +168,14 @@ class WorkerSinkTask extends WorkerTask {
 
         // Check for timed out commits
         long commitTimeout = commitStarted + workerConfig.getLong(
-                WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
+            WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
         if (committing && now >= commitTimeout) {
             log.warn("Commit of {} offsets timed out", this);
             commitFailures++;
             committing = false;
         }
 
-        // And process messages
-        long timeoutMs = Math.max(nextCommit - now, 0);
-        poll(timeoutMs);
+        return Math.max(nextCommit - now, 0);
     }
 
     private void onCommitCompleted(Throwable error, long seqno) {
@@ -432,7 +439,9 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private void closePartitions() {
-        commitOffsets(time.milliseconds(), true);
+        if (!context.offsetCommitDisabled()) {
+            commitOffsets(time.milliseconds(), true);
+        }
     }
 
     private class HandleRebalance implements ConsumerRebalanceListener {
