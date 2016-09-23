@@ -485,9 +485,11 @@ public class Fetcher<K, V> {
             PartitionInfo info = cluster.partition(tp);
             if (info == null) {
                 if (!cluster.topics().contains(tp.topic()))
-                    log.warn("No metadata available for topic {}, wait for metadata refresh", tp.topic());
+                    log.warn("Could not lookup offsets for partition {} since no metadata is available for topic {}. " +
+                            "Wait for metadata refresh and try again", tp, tp.topic());
                 else
-                    log.warn("No metadata available for partition {}, wait for metadata refresh", tp);
+                    log.warn("Could not lookup offsets for partition {} since no metadata is available for it. " +
+                            "Wait for metadata refresh and try again", tp);
 
                 metadata.add(tp.topic());
                 return RequestFuture.staleMetadata();
