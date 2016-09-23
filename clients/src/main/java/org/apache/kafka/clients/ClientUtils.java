@@ -46,11 +46,11 @@ public class ClientUtils {
                 try {
                     InetSocketAddress address = new InetSocketAddress(host, port);
                     if (address.isUnresolved()) {
-                        log.warn("Removing server from " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + " as DNS resolution failed: " + url);
+                        log.warn("Removing server from " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + " as DNS resolution failed: " + host);
                     } else {
                         addresses.add(address);
                     }
-                } catch (NumberFormatException e) {
+                } catch (IllegalArgumentException e) {
                     throw new ConfigException("Invalid port in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
                 }
             }
