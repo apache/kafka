@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
+import time
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
 
@@ -28,16 +30,32 @@ class ProduceConsumeValidateTest(Test):
 
     def __init__(self, test_context):
         super(ProduceConsumeValidateTest, self).__init__(test_context=test_context)
+        # How long to wait for the producer to declare itself healthy? This can
+        # be overidden by inheriting classes.
+        self.producer_start_timeout_sec = 60
+
+        # How long to delay between the start of the producer and consumer? This
+        # is important in the case when the consumer is starting from the end,
+        # and we don't want it to miss any messages. The race condition this
+        # timeout avoids is that the consumer is still starting after the
+        # producer begins producing messages, in which case we will miss the
+        # initial set of messages and get spurious test failures.
+        self.delay_between_consumer_and_producer_start_sec = 0
 
     def setup_producer_and_consumer(self):
         raise NotImplementedError("Subclasses should implement this")
 
     def start_producer_and_consumer(self):
         # Start background producer and consumer
-        self.producer.start()
-        wait_until(lambda: self.producer.num_acked > 5, timeout_sec=20,
-             err_msg="Producer failed to start in a reasonable amount of time.")
         self.consumer.start()
+        if (self.delay_between_consumer_and_producer_start_sec > 0):
+            self.logger.debug("Sleeping %ds between producer and consumer start",
+                              self.delay_between_consumer_and_producer_start_sec)
+
+        time.sleep(self.delay_between_consumer_and_producer_start_sec)
+        self.producer.start()
+        wait_until(lambda: self.producer.num_acked > 5, timeout_sec=self.producer_start_timeout_sec,
+             err_msg="Producer failed to start in a reasonable amount of time.")
         wait_until(lambda: len(self.consumer.messages_consumed[1]) > 0, timeout_sec=60,
              err_msg="Consumer failed to start in a reasonable amount of time.")
 
@@ -80,14 +98,16 @@ class ProduceConsumeValidateTest(Test):
 
     @staticmethod
     def annotate_missing_msgs(missing, acked, consumed, msg):
-        msg += "%s acked message did not make it to the Consumer. They are: " % len(missing)
-        if len(missing) < 20:
-            msg += str(missing) + ". "
+        missing_list = list(missing)
+        msg += "%s acked message did not make it to the Consumer. They are: " %\
+            len(missing_list)
+        if len(missing_list) < 20:
+            msg += str(missing_list) + ". "
         else:
             for i in range(20):
-                msg += str(missing.pop()) + ", "
+                msg += str(missing_list[i]) + ", "
             msg += "...plus %s more. Total Acked: %s, Total Consumed: %s. " \
-                   % (len(missing) - 20, len(set(acked)), len(set(consumed)))
+                   % (len(missing_list) - 20, len(set(acked)), len(set(consumed)))
         return msg
 
     @staticmethod
