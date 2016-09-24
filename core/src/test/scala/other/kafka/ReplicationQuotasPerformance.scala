@@ -109,7 +109,6 @@ object ReplicationQuotasPerformance {
       super.tearDown()
     }
 
-
     def run(config: Config) {
       experimentName = config.name
       val replicaSpread = config.brokers
@@ -180,7 +179,7 @@ object ReplicationQuotasPerformance {
         printRateMetrics()
         val success = !zkUtils.pathExists(ReassignPartitionsPath)
         success
-      }, s"Znode ${ZkUtils.ReassignPartitionsPath} wasn't deleted after " + (200), Int.MaxValue)
+      }, s"Znode ${ZkUtils.ReassignPartitionsPath} wasn't deleted", Int.MaxValue, pause = 1000L)
 
       println("Showing leader chart")
       showChart(leaderRates, "Leader")
