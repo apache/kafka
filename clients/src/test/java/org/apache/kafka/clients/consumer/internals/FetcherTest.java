@@ -637,6 +637,16 @@ public class FetcherTest {
     }
 
     @Test
+    public void testGetOffsetsForTimesTimeout() {
+        try {
+            fetcher.getOffsetsByTimes(Collections.singletonMap(new TopicPartition(topicName, 2), 1000L), 100L);
+            fail("Should throw timeout exception.");
+        } catch (TimeoutException e) {
+            // let it go.
+        }
+    }
+
+    @Test
     public void testGetOffsetsForTimes() {
         // Error code none with unknown offset
         testGetOffsetsForTimesWithError(Errors.NONE, Errors.NONE, -1L, 100L, null, 100L);
@@ -676,7 +686,7 @@ public class FetcherTest {
         Map<TopicPartition, Long> timestampToSearch = new HashMap<>();
         timestampToSearch.put(tp0, 0L);
         timestampToSearch.put(tp1, 0L);
-        Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = fetcher.getOffsetsByTimes(timestampToSearch);
+        Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = fetcher.getOffsetsByTimes(timestampToSearch, Long.MAX_VALUE);
 
         if (expectedOffsetForTp0 == null)
             assertNull(offsetAndTimestampMap.get(tp0));

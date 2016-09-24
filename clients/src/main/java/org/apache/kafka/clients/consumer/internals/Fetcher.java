@@ -353,14 +353,16 @@ public class Fetcher<K, V> {
             throw new NoOffsetForPartitionException(partition);
 
         log.debug("Resetting offset for partition {} to {} offset.", partition, strategy.name().toLowerCase(Locale.ROOT));
-        long offset = getOffsetsByTimes(Collections.singletonMap(partition, timestamp)).get(partition).offset();
+        long offset = getOffsetsByTimes(Collections.singletonMap(partition, timestamp), Long.MAX_VALUE).get(partition).offset();
 
         // we might lose the assignment while fetching the offset, so check it is still active
         if (subscriptions.isAssigned(partition))
             this.subscriptions.seek(partition, offset);
     }
 
-    public Map<TopicPartition, OffsetAndTimestamp> getOffsetsByTimes(Map<TopicPartition, Long> timestampsToSearch) {
+    public Map<TopicPartition, OffsetAndTimestamp> getOffsetsByTimes(Map<TopicPartition, Long> timestampsToSearch,
+                                                                     Long timeout) {
+        long startMs = time.milliseconds();
         while (true) {
             RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> future = sendListOffsetRequests(timestampsToSearch);
             client.poll(future);
@@ -371,6 +373,9 @@ public class Fetcher<K, V> {
             if (!future.isRetriable())
                 throw future.exception();
 
+            if (time.milliseconds() - startMs > timeout)
+                throw new TimeoutException("Failed to get offsets by times in " + timeout + " ms");
+
             if (future.exception() instanceof InvalidMetadataException)
                 client.awaitMetadataUpdate();
             else
@@ -378,20 +383,22 @@ public class Fetcher<K, V> {
         }
     }
 
-    public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions) {
-        return beginningOrEndOffset(partitions, ListOffsetRequest.EARLIEST_TIMESTAMP);
+    public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions, Long timeout) {
+        return beginningOrEndOffset(partitions, ListOffsetRequest.EARLIEST_TIMESTAMP, timeout);
     }
 
-    public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions) {
-        return beginningOrEndOffset(partitions, ListOffsetRequest.LATEST_TIMESTAMP);
+    public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Long timeout) {
+        return beginningOrEndOffset(partitions, ListOffsetRequest.LATEST_TIMESTAMP, timeout);
     }
 
-    private Map<TopicPartition, Long> beginningOrEndOffset(Collection<TopicPartition> partitions, long timestamp) {
+    private Map<TopicPartition, Long> beginningOrEndOffset(Collection<TopicPartition> partitions,
+                                                           long timestamp,
+                                                           Long timeout) {
         Map<TopicPartition, Long> timestampsToSearch = new HashMap<>();
         for (TopicPartition tp : partitions)
             timestampsToSearch.put(tp, timestamp);
         Map<TopicPartition, Long> result = new HashMap<>();
-        for (Map.Entry<TopicPartition, OffsetAndTimestamp> entry : getOffsetsByTimes(timestampsToSearch).entrySet())
+        for (Map.Entry<TopicPartition, OffsetAndTimestamp> entry : getOffsetsByTimes(timestampsToSearch, timeout).entrySet())
             result.put(entry.getKey(), entry.getValue().offset());
 
         return result;

@@ -1423,7 +1423,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throw new IllegalArgumentException("The target time for partition " + entry.getKey() + " is " +
                         entry.getValue() + ". The target time cannot be negative.");
         }
-        return fetcher.getOffsetsByTimes(timestampsToSearch);
+        return fetcher.getOffsetsByTimes(timestampsToSearch, requestTimeoutMs);
     }
 
     /**
@@ -1439,7 +1439,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions) {
-        return fetcher.beginningOffsets(partitions);
+        return fetcher.beginningOffsets(partitions, requestTimeoutMs);
     }
 
     /**
@@ -1456,7 +1456,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions) {
-        return fetcher.endOffsets(partitions);
+        return fetcher.endOffsets(partitions, requestTimeoutMs);
     }
 
     /**
