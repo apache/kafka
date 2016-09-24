@@ -36,10 +36,6 @@ import org.jfree.data.xy.{XYSeries, XYSeriesCollection}
 import scala.collection.JavaConverters._
 import scala.collection.{Seq, mutable}
 
-/**
-  * This requires the JFreechart libraries on the classpath (I lazily never added them to the build) https://sourceforge.net/projects/jfreechart/files/1.%20JFreeChart/
-  */
-
 object ReplicationQuotasPerformance {
   new File("Experiments").mkdir()
   val dir = "Experiments/Run" + System.currentTimeMillis().toString.substring(8)
