@@ -111,20 +111,21 @@ object ReplicationQuotasPerformance {
 
     def run(config: Config) {
       experimentName = config.name
-      val replicaSpread = config.brokers
       val brokers = (100 to 100 + config.brokers)
 
       var count = 0
+      val shift = Math.round(config.brokers / 2)
       def nextReplicaRoundRobin(): Int = {
         count = count + 1
-        if (count == replicaSpread) count = 0
-        100 + count
+        100 + (count + shift) % config.brokers
       }
       val replicas = (0 to config.partitions).map(partition => partition -> Seq(nextReplicaRoundRobin())).toMap
+
 
       println("Starting Brokers")
       startBrokers(brokers)
       createTopic(zkUtils, topicName, replicas, servers)
+
       println("Writing Data")
       val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers), retries = 5, acks = 0)
       (0 to config.msgCount).foreach { x =>
@@ -132,8 +133,8 @@ object ReplicationQuotasPerformance {
           producer.send(new ProducerRecord(topicName, partition, null, new Array[Byte](config.msgSize)))
         }
       }
-      println("Starting Reassignment")
 
+      println("Starting Reassignment")
       val newAssignment = ReassignPartitionsCommand.generateAssignment(zkUtils, brokers, json(topicName), true)._1
       ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), config.throttle)
 
@@ -147,10 +148,11 @@ object ReplicationQuotasPerformance {
       val allMoves = moves.get(topicName)
       val physicalMoves = allMoves.get.split(",").size / 2
 
-
       //Long stats
-      println("Creating replicas: " + replicas)
+      println("The replicas are "+replicas.toSeq.sortBy(_._1).map("\n"+_))
       println("This is the current replica assignment:\n" + actual.toSeq)
+      println("proposed assignment is: \n" + newAssignment)
+
       println("moves are: " + allMoves)
       println("This is the assigment we eneded up with" + actual)
 
