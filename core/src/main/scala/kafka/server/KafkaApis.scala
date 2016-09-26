@@ -233,11 +233,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       val responseBody = new OffsetCommitResponse(results.asJava)
       requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, responseHeader, responseBody)))
     } else {
-      val (existingOrAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) = offsetCommitRequest.offsetData.asScala.toMap.partition {
+      val (existingAndAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) = offsetCommitRequest.offsetData.asScala.toMap.partition {
         case (topicPartition, _) => authorize(request.session, Describe, new Resource(auth.Topic, topicPartition.topic)) && metadataCache.contains(topicPartition.topic)
       }
 
-      val (authorizedTopics, unauthorizedForReadTopics) = existingOrAuthorizedForDescribeTopics.partition {
+      val (authorizedTopics, unauthorizedForReadTopics) = existingAndAuthorizedForDescribeTopics.partition {
         case (topicPartition, _) => authorize(request.session, Read, new Resource(auth.Topic, topicPartition.topic))
       }
 
@@ -249,8 +249,12 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         combinedCommitStatus.foreach { case (topicPartition, errorCode) =>
           if (errorCode != Errors.NONE.code) {
-            debug(s"Offset commit request with correlation id ${header.correlationId} from client ${header.clientId} " +
-              s"on partition $topicPartition failed due to ${Errors.forCode(errorCode).exceptionName}")
+            if (errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code && metadataCache.contains(topicPartition.topic)) 
+              debug(s"Offset commit request with correlation id ${header.correlationId} from client ${header.clientId} " +
+                s"on partition $topicPartition failed due to user not having DESCRIBE authorization, but returning UNKNOWN_TOPIC_OR_PARTITION")
+            else  
+              debug(s"Offset commit request with correlation id ${header.correlationId} from client ${header.clientId} " +
+                s"on partition $topicPartition failed due to ${Errors.forCode(errorCode).exceptionName}")
           }
         }
         val responseHeader = new ResponseHeader(header.correlationId)
@@ -821,7 +825,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       new MetadataResponse.TopicMetadata(Errors.TOPIC_AUTHORIZATION_FAILED, topic, common.Topic.isInternal(topic),
         java.util.Collections.emptyList()))
 
-    // do not disclose the existence of topics unauthorized for Describe
+    // do not disclose the existence of topics unauthorized for Describe, so we've not even checked if they exist or not
     val unauthorizedForDescribeTopicMetadata =
       // In case of all topics, don't include topics unauthorized for Describe
       if ((requestVersion == 0 && (metadataRequest.topics == null || metadataRequest.topics.isEmpty)) || metadataRequest.isAllTopics)

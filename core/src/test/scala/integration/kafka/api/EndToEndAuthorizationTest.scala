@@ -28,7 +28,7 @@ import kafka.server._
 import kafka.utils._
 
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerRecord, ConsumerConfig}
-import org.apache.kafka.clients.producer.{ProducerRecord, ProducerConfig}
+import org.apache.kafka.clients.producer.{ProducerRecord, ProducerConfig, KafkaProducer}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{TopicPartition,KafkaException}
 import org.apache.kafka.common.protocol.SecurityProtocol
@@ -180,6 +180,15 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     TestUtils.createTopic(zkUtils, topic, 1, 3, this.servers)
   }
 
+  override def createNewProducer() : KafkaProducer[Array[Byte], Array[Byte]] = {
+    TestUtils.createNewProducer(brokerList,
+                                  maxBlockMs = 5000L,
+                                  securityProtocol = this.securityProtocol,
+                                  trustStoreFile = this.trustStoreFile,
+                                  saslProperties = this.saslProperties,
+                                  props = Some(producerConfig))
+  }
+  
   /**
     * Closes MiniKDC last when tearing down.
     */
