@@ -363,23 +363,32 @@ public class Fetcher<K, V> {
     public Map<TopicPartition, OffsetAndTimestamp> getOffsetsByTimes(Map<TopicPartition, Long> timestampsToSearch,
                                                                      long timeout) {
         long startMs = time.milliseconds();
+        long remaining = timeout;
         while (true) {
             RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> future = sendListOffsetRequests(timestampsToSearch);
-            client.poll(future);
+            client.poll(future, remaining);
 
             if (future.succeeded())
                 return future.value();
 
-            if (!future.isRetriable())
+            if (future.isDone() && !future.isRetriable())
                 throw future.exception();
 
-            if (time.milliseconds() - startMs > timeout)
+            long elapsed = time.milliseconds() - startMs;
+            remaining = timeout - elapsed;
+            if (remaining <= 0)
                 throw new TimeoutException("Failed to get offsets by times in " + timeout + " ms");
 
-            if (future.exception() instanceof InvalidMetadataException)
-                client.awaitMetadataUpdate();
-            else
-                time.sleep(retryBackoffMs);
+            if (future.exception() instanceof InvalidMetadataException) {
+                if (!client.awaitMetadataUpdate(remaining))
+                    throw new TimeoutException("Failed to get offsets by times in " + timeout + " ms");
+            } else
+                time.sleep(Math.min(remaining, retryBackoffMs));
+
+            elapsed = time.milliseconds() - startMs;
+            remaining = timeout - elapsed;
+            if (remaining <= 0)
+                throw new TimeoutException("Failed to get offsets by times in " + timeout + " ms");
         }
     }
 
@@ -550,8 +559,9 @@ public class Fetcher<K, V> {
                 .compose(new RequestFutureAdapter<ClientResponse, Map<TopicPartition, OffsetAndTimestamp>>() {
                     @Override
                     public void onSuccess(ClientResponse response, RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> future) {
-                        log.trace("ListOffsetResponse received from node {}", node);
-                        handleListOffsetResponse(timestampsToSearch, response, future);
+                        ListOffsetResponse lor = new ListOffsetResponse(response.responseBody());
+                        log.trace("Received ListOffsetResponse {} from broker {}", lor, node);
+                        handleListOffsetResponse(timestampsToSearch, lor, future);
                     }
                 });
     }
@@ -559,18 +569,16 @@ public class Fetcher<K, V> {
     /**
      * Callback for the response of the list offset call above.
      * @param timestampsToSearch The mapping from partitions to target timestamps
-     * @param clientResponse The response from the server.
+     * @param listOffsetResponse The response from the server.
      * @param future The future to be completed by the response.
      */
     private void handleListOffsetResponse(Map<TopicPartition, Long> timestampsToSearch,
-                                          ClientResponse clientResponse,
+                                          ListOffsetResponse listOffsetResponse,
                                           RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> future) {
-        ListOffsetResponse lor = new ListOffsetResponse(clientResponse.responseBody());
-        log.trace("Received ListOffsetResponse {}", lor);
         Map<TopicPartition, OffsetAndTimestamp> timestampOffsetMap = new HashMap<>();
         for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
             TopicPartition topicPartition = entry.getKey();
-            ListOffsetResponse.PartitionData partitionData = lor.responseData().get(topicPartition);
+            ListOffsetResponse.PartitionData partitionData = listOffsetResponse.responseData().get(topicPartition);
             Errors error = Errors.forCode(partitionData.errorCode);
             if (error == Errors.NONE) {
                 OffsetAndTimestamp offsetAndTimestamp = null;
