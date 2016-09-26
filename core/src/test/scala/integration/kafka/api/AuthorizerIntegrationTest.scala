@@ -260,22 +260,22 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @Test
   def testAuthorization() {
     val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
-//      ApiKeys.METADATA -> createMetadataRequest,
-//      ApiKeys.PRODUCE -> createProduceRequest,
-//      ApiKeys.FETCH -> createFetchRequest,
-//      ApiKeys.LIST_OFFSETS -> createListOffsetsRequest,
-//      ApiKeys.OFFSET_FETCH -> createOffsetFetchRequest,
-//      ApiKeys.GROUP_COORDINATOR -> createGroupCoordinatorRequest,
-//      ApiKeys.UPDATE_METADATA_KEY -> createUpdateMetadataRequest,
-//      ApiKeys.JOIN_GROUP -> createJoinGroupRequest,
-//      ApiKeys.SYNC_GROUP -> createSyncGroupRequest,
-//      ApiKeys.OFFSET_COMMIT -> createOffsetCommitRequest,
-//      ApiKeys.HEARTBEAT -> createHeartbeatRequest,
-//      ApiKeys.LEAVE_GROUP -> createLeaveGroupRequest,
-//      ApiKeys.LEADER_AND_ISR -> createLeaderAndIsrRequest,
-//      ApiKeys.STOP_REPLICA -> createStopReplicaRequest,
-//      ApiKeys.CONTROLLED_SHUTDOWN_KEY -> createControlledShutdownRequest,
-//      ApiKeys.CREATE_TOPICS -> createTopicsRequest,
+      ApiKeys.METADATA -> createMetadataRequest,
+      ApiKeys.PRODUCE -> createProduceRequest,
+      ApiKeys.FETCH -> createFetchRequest,
+      ApiKeys.LIST_OFFSETS -> createListOffsetsRequest,
+      ApiKeys.OFFSET_FETCH -> createOffsetFetchRequest,
+      ApiKeys.GROUP_COORDINATOR -> createGroupCoordinatorRequest,
+      ApiKeys.UPDATE_METADATA_KEY -> createUpdateMetadataRequest,
+      ApiKeys.JOIN_GROUP -> createJoinGroupRequest,
+      ApiKeys.SYNC_GROUP -> createSyncGroupRequest,
+      ApiKeys.OFFSET_COMMIT -> createOffsetCommitRequest,
+      ApiKeys.HEARTBEAT -> createHeartbeatRequest,
+      ApiKeys.LEAVE_GROUP -> createLeaveGroupRequest,
+      ApiKeys.LEADER_AND_ISR -> createLeaderAndIsrRequest,
+      ApiKeys.STOP_REPLICA -> createStopReplicaRequest,
+      ApiKeys.CONTROLLED_SHUTDOWN_KEY -> createControlledShutdownRequest,
+      ApiKeys.CREATE_TOPICS -> createTopicsRequest,
       ApiKeys.DELETE_TOPICS -> deleteTopicsRequest
     )
 
