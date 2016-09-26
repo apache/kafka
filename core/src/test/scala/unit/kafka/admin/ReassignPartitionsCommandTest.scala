@@ -52,48 +52,58 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
 
   @Test
   def shouldFindMovingReplicas() {
+    val control = TopicAndPartition("topic1", 1) -> Seq(100, 102)
     val assigner = new ReassignPartitionsCommand(null, null)
 
-    //Given partition 0 moves from broker 100 -> 102
-    val existing = Map(TopicAndPartition("topic1",0) -> Seq(100, 101))
-    val proposed = Map(TopicAndPartition("topic1",0) -> Seq(101, 102))
+    //Given partition 0 moves from broker 100 -> 102. Partition 1 does not move.
+    val existing = Map(TopicAndPartition("topic1",0) -> Seq(100, 101), control)
+    val proposed = Map(TopicAndPartition("topic1",0) -> Seq(101, 102), control)
 
       //When
-    val moves = assigner.replicaMoves(existing, proposed)
+    val destinations = assigner.destinationReplicas(existing, proposed)
+    val sources = assigner.sourceReplicas(existing, proposed)
 
     //Then moving replicas should be throttled
-    assertEquals("0:100,0:102", moves.get("topic1").get)
+    assertEquals("0:102", destinations.get("topic1").get) //Should only follower throttle the moving replica
+    assertEquals("0:100,0:101", sources.get("topic1").get) //Should leader-throttle all existing (pre move) replicas
   }
 
   @Test
   def shouldFindMovingReplicasMultiplePartitions() {
+    val control = TopicAndPartition("topic1", 2) -> Seq(100, 102)
     val assigner = new ReassignPartitionsCommand(null, null)
 
-    //Given partitions 0 & 1 moves from broker 100 -> 102
-    val existing = Map(TopicAndPartition("topic1",0) -> Seq(100, 101), TopicAndPartition("topic1",1) -> Seq(100, 101))
-    val proposed = Map(TopicAndPartition("topic1",0) -> Seq(101, 102), TopicAndPartition("topic1",1) -> Seq(101, 102))
+    //Given partitions 0 & 1 moves from broker 100 -> 102. Partition 2 does not move.
+    val existing = Map(TopicAndPartition("topic1",0) -> Seq(100, 101), TopicAndPartition("topic1",1) -> Seq(100, 101), control)
+    val proposed = Map(TopicAndPartition("topic1",0) -> Seq(101, 102), TopicAndPartition("topic1",1) -> Seq(101, 102), control)
 
       //When
-    val moves = assigner.replicaMoves(existing, proposed)
+    val destinations = assigner.destinationReplicas(existing, proposed)
+    val sources = assigner.sourceReplicas(existing, proposed)
 
     //Then moving replicas should be throttled
-    assertEquals("0:100,0:102,1:100,1:102", moves.get("topic1").get)
+    assertEquals("0:102,1:102", destinations.get("topic1").get) //Should only follower throttle the moving replica
+    assertEquals("0:100,0:101,1:100,1:101", sources.get("topic1").get) //Should leader-throttle all existing (pre move) replicas
   }
 
   @Test
   def shouldFindMovingReplicasMultipleTopics() {
+    val control = TopicAndPartition("topic1", 1) -> Seq(100, 102)
     val assigner = new ReassignPartitionsCommand(null, null)
 
     //Given partition 0 on topics 1 & 2 move from broker 100 -> 102
-    val existing = Map(TopicAndPartition("topic1",0) -> Seq(100, 101), TopicAndPartition("topic2",0) -> Seq(100, 101))
-    val proposed = Map(TopicAndPartition("topic1",0) -> Seq(101, 102), TopicAndPartition("topic2",0) -> Seq(101, 102))
+    val existing = Map(TopicAndPartition("topic1",0) -> Seq(100, 101), TopicAndPartition("topic2",0) -> Seq(100, 101), control)
+    val proposed = Map(TopicAndPartition("topic1",0) -> Seq(101, 102), TopicAndPartition("topic2",0) -> Seq(101, 102), control)
 
     //When
-    val moves = assigner.replicaMoves(existing, proposed)
+    val destinations = assigner.destinationReplicas(existing, proposed)
+    val sources = assigner.sourceReplicas(existing, proposed)
 
     //Then moving replicas should be throttled
-    assertEquals("0:100,0:102", moves.get("topic1").get)
-    assertEquals("0:100,0:102", moves.get("topic2").get)
+    assertEquals("0:102", destinations.get("topic1").get)
+    assertEquals("0:100,0:101", sources.get("topic1").get)
+    assertEquals("0:102", destinations.get("topic2").get)
+    assertEquals("0:100,0:101", sources.get("topic2").get)
   }
 
   @Test
@@ -108,32 +118,38 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
       TopicAndPartition("topic2",1) -> Seq(100, 101)
     )
     val proposed = Map(
-      TopicAndPartition("topic1",0) -> Seq(101, 102),
-      TopicAndPartition("topic1",1) -> Seq(101, 102),
-      TopicAndPartition("topic2",0) -> Seq(101, 102),
-      TopicAndPartition("topic2",1) -> Seq(101, 102)
+      TopicAndPartition("topic1",0) -> Seq(101, 102), //moves to 102
+      TopicAndPartition("topic1",1) -> Seq(101, 102), //moves to 102
+      TopicAndPartition("topic2",0) -> Seq(101, 102), //moves to 102
+      TopicAndPartition("topic2",1) -> Seq(101, 102)  //moves to 102
     )
 
     //When
-    val moves = assigner.replicaMoves(existing, proposed)
+    val destinations = assigner.destinationReplicas(existing, proposed)
+    val sources = assigner.sourceReplicas(existing, proposed)
 
     //Then moving replicas should be throttled
-    assertEquals("0:100,0:102,1:100,1:102", moves.get("topic1").get)
-    assertEquals("0:100,0:102,1:100,1:102", moves.get("topic2").get)
+    assertEquals("0:102,1:102", destinations.get("topic1").get)
+    assertEquals("0:100,0:101,1:100,1:101", sources.get("topic1").get)
+    assertEquals("0:102,1:102", destinations.get("topic2").get)
+    assertEquals("0:100,0:101,1:100,1:101", sources.get("topic2").get)
   }
 
   @Test
   def shouldFindTwoMovingReplicasInSamePartition() {
+    val control = TopicAndPartition("topic1", 1) -> Seq(100, 102)
     val assigner = new ReassignPartitionsCommand(null, null)
 
     //Given partition 0 has 2 moves from broker 102 -> 104 & 103 -> 105
-    val existing = Map(TopicAndPartition("topic1",0) -> Seq(100, 101, 102, 103))
-    val proposed = Map(TopicAndPartition("topic1",0) -> Seq(100, 101, 104, 105))
+    val existing = Map(TopicAndPartition("topic1",0) -> Seq(100, 101, 102, 103), control)
+    val proposed = Map(TopicAndPartition("topic1",0) -> Seq(100, 101, 104, 105), control)
 
     //When
-    val moves = assigner.replicaMoves(existing, proposed)
+    val destinations = assigner.destinationReplicas(existing, proposed)
+    val sources = assigner.sourceReplicas(existing, proposed)
 
     //Then moving replicas should be throttled
-    assertEquals( "0:102,0:103,0:104,0:105", moves.get("topic1").get)
+    assertEquals( "0:104,0:105", destinations.get("topic1").get)
+    assertEquals( "0:100,0:101,0:102,0:103", sources.get("topic1").get)
   }
 }

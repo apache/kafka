@@ -17,15 +17,17 @@
 package kafka.admin
 
 import java.util.Properties
+
 import joptsimple.OptionParser
 import kafka.log.LogConfig
 import kafka.server.{DynamicConfig, ConfigType}
 import kafka.utils._
 import scala.collection._
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
-import kafka.common.{TopicAndPartition, AdminCommandFailedException}
+import kafka.common.{AdminCommandFailedException, TopicAndPartition}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.security.JaasUtils
+import scala.Seq
 
 object ReassignPartitionsCommand extends Logging {
 
@@ -92,7 +94,8 @@ object ReassignPartitionsCommand extends Logging {
       val topics = partitionsToBeReassigned.keySet.map(tp => tp.topic).toSeq.distinct
       for (topic <- topics) {
         val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
-        if (configs.remove(LogConfig.ThrottledReplicasListProp) != null) {
+        if (configs.remove(LogConfig.LeaderThrottledReplicasListProp) != null
+          || configs.remove(LogConfig.FollowerThrottledReplicasListProp) != null){
           AdminUtils.changeTopicConfig(zkUtils, topic, configs)
           changed = true
         }
@@ -317,21 +320,41 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: Map[TopicAndPartit
   def addThrottledReplicaList(): Unit = {
     //apply the throttle to all move destinations and all move sources
     val existing = zkUtils.getReplicaAssignmentForTopics(partitions.map(_._1.topic).toSeq)
-    val moves = replicaMoves(existing, proposed = partitions)
-    for (topic <- partitions.keySet.map(tp => tp.topic).toSeq.distinct)
-      AdminUtils.changeTopicConfig(zkUtils, topic, new Properties {
-        put(LogConfig.ThrottledReplicasListProp, moves.get(topic).get )
-      })
-    println(s"Throttles were added to the following replicas: $moves")
+
+    val followerSideMoves = destinationReplicas(existing, partitions)
+    val leaderSideMoves = sourceReplicas(existing, partitions)
+    for (topic <- partitions.keySet.map(tp => tp.topic).toSeq.distinct) {
+      val props = new Properties()
+      props.put(LogConfig.LeaderThrottledReplicasListProp, leaderSideMoves.get(topic).get)
+      props.put(LogConfig.FollowerThrottledReplicasListProp, followerSideMoves.get(topic).get)
+      AdminUtils.changeTopicConfig(zkUtils, topic, props)
+    }
+    println(s"Throttles were added to ${followerSideMoves.values.flatMap(x=>x).size} follower and ${leaderSideMoves.values.flatMap(x=>x).size} leader replicas.")
   }
 
-  def replicaMoves(existing: Map[TopicAndPartition, Seq[Int]], proposed: Map[TopicAndPartition, Seq[Int]]): Map[String, String] = {
+  def destinationReplicas(existing: Map[TopicAndPartition, Seq[Int]], proposed: Map[TopicAndPartition, Seq[Int]]): Map[String, String] = {
     //Find the replicas that have moved
     val movesByPartition = existing.map { case (topicAndPartition, existingReplicas) =>
       val before = existingReplicas.toSet
       val after = proposed.get(topicAndPartition).get.toSet
-      val moving = (after.filterNot(before) ++ before.filterNot(after)).toSeq.distinct.sorted
+      val moving = after.filterNot(before).toSeq.sorted
       val formatted = moving.map { brokerId => s"${topicAndPartition.partition}:$brokerId" }
+      (topicAndPartition, formatted)
+    }
+    //Group by topic
+    val movesByTopic = movesByPartition.groupBy(_._1.topic)
+      .map { case (topic, reps) => (topic, reps.values.flatMap(rep => rep)) }
+
+    movesByTopic.map { case (topic, moves) => topic -> moves.mkString(",") }
+  }
+
+  def sourceReplicas(existing: Map[TopicAndPartition, Seq[Int]], proposed: Map[TopicAndPartition, Seq[Int]]): Map[String, String] = {
+    //Find the replicas that have moved
+    val movesByPartition = existing.map { case (topicAndPartition, existingReplicas) =>
+      val before = existingReplicas.toSet
+      val after = proposed.get(topicAndPartition).get.toSet
+      val moving = after.filterNot(before).toSeq.sorted
+      val formatted = if(moving.size > 0 ) before.map { brokerId => s"${topicAndPartition.partition}:$brokerId" } else Seq[String]()
       (topicAndPartition, formatted)
     }
     //Group by topic

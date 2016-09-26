@@ -19,7 +19,7 @@ package kafka.log
 
 import java.util.Properties
 
-import kafka.server.{ThrottledReplicaValidator, KafkaConfig, KafkaServer}
+import kafka.server.{ThrottledReplicaListValidator, KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigException
 import org.junit.{Assert, Test}
@@ -85,7 +85,7 @@ class LogConfigTest {
 
   private def isValid(configValue: String): Boolean = {
     try {
-      ThrottledReplicaValidator.ensureValid("", configValue)
+      ThrottledReplicaListValidator.ensureValid("", configValue)
     } catch {
       case e: ConfigException => return false
     }

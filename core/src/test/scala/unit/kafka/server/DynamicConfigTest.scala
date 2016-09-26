@@ -38,21 +38,21 @@ class DynamicConfigTest {
 
   @Test(expected = classOf[IllegalArgumentException])
   def shouldFailWhenChangingBrokerUnknownConfig() {
-    AdminUtils.changeBrokerConfig(zkUtils, Seq(0), wrapInProps(nonExistentConfig, someValue))
+    AdminUtils.changeBrokerConfig(zkUtils, Seq(0), wrap((nonExistentConfig, someValue)))
   }
 
   @Test(expected = classOf[IllegalArgumentException])
   def shouldFailWhenChangingClientIdUnknownConfig() {
-    AdminUtils.changeClientIdConfig(zkUtils, "ClientId", wrapInProps(nonExistentConfig, someValue))
+    AdminUtils.changeClientIdConfig(zkUtils, "ClientId", wrap((nonExistentConfig, someValue)))
   }
 
   @Test(expected = classOf[IllegalArgumentException])
   def shouldFailWhenChangingUserUnknownConfig() {
-    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, "UserId", wrapInProps(nonExistentConfig, someValue))
+    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, "UserId", wrap((nonExistentConfig, someValue)))
   }
 
   @Test(expected = classOf[ConfigException])
   def shouldFailConfigsWithInvalidValues() {
-    AdminUtils.changeBrokerConfig(zkUtils, Seq(0), wrapInProps(DynamicConfig.Broker.ThrottledReplicationRateLimitProp, "-100"))
+    AdminUtils.changeBrokerConfig(zkUtils, Seq(0), wrap((DynamicConfig.Broker.ThrottledReplicationRateLimitProp, "-100")))
   }
 }

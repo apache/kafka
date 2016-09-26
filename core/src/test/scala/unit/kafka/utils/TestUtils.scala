@@ -1126,12 +1126,11 @@ object TestUtils extends Logging {
 
   }
 
-  def wrapInProps(key: String, value: String): Properties = {
-    val props: Properties = new Properties()
-    props.put(key, value)
-    props
+  def wrap(props: (String, String)*): Properties = {
+    val properties = new Properties()
+    props.foreach{prop => properties.put(prop._1, prop._2)}
+    properties
   }
-
 }
 
 class IntEncoder(props: VerifiableProperties = null) extends Encoder[Int] {
