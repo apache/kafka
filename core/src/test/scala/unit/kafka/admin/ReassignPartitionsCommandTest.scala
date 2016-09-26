@@ -60,12 +60,12 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
     val proposed = Map(TopicAndPartition("topic1",0) -> Seq(101, 102), control)
 
       //When
-    val destinations = assigner.destinationReplicas(existing, proposed)
-    val sources = assigner.sourceReplicas(existing, proposed)
+    val moves = assigner.topicToLeaderAndFollowerThrottles(existing, proposed)
 
     //Then moving replicas should be throttled
-    assertEquals("0:102", destinations.get("topic1").get) //Should only follower throttle the moving replica
-    assertEquals("0:100,0:101", sources.get("topic1").get) //Should leader-throttle all existing (pre move) replicas
+    val (leader, follower) = moves.get("topic1").get
+    assertEquals("0:102", follower) //Should only follower throttle the moving replica
+    assertEquals("0:100,0:101", leader) //Should leader-throttle all existing (pre move) replicas
   }
 
   @Test
@@ -78,12 +78,12 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
     val proposed = Map(TopicAndPartition("topic1",0) -> Seq(101, 102), TopicAndPartition("topic1",1) -> Seq(101, 102), control)
 
       //When
-    val destinations = assigner.destinationReplicas(existing, proposed)
-    val sources = assigner.sourceReplicas(existing, proposed)
+    val moves = assigner.topicToLeaderAndFollowerThrottles(existing, proposed)
 
     //Then moving replicas should be throttled
-    assertEquals("0:102,1:102", destinations.get("topic1").get) //Should only follower throttle the moving replica
-    assertEquals("0:100,0:101,1:100,1:101", sources.get("topic1").get) //Should leader-throttle all existing (pre move) replicas
+    val (leader, follower) = moves.get("topic1").get
+    assertEquals("0:102,1:102", follower) //Should only follower throttle the moving replica
+    assertEquals("0:100,0:101,1:100,1:101", leader) //Should leader-throttle all existing (pre move) replicas
   }
 
   @Test
@@ -96,14 +96,15 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
     val proposed = Map(TopicAndPartition("topic1",0) -> Seq(101, 102), TopicAndPartition("topic2",0) -> Seq(101, 102), control)
 
     //When
-    val destinations = assigner.destinationReplicas(existing, proposed)
-    val sources = assigner.sourceReplicas(existing, proposed)
+    val moves = assigner.topicToLeaderAndFollowerThrottles(existing, proposed)
 
     //Then moving replicas should be throttled
-    assertEquals("0:102", destinations.get("topic1").get)
-    assertEquals("0:100,0:101", sources.get("topic1").get)
-    assertEquals("0:102", destinations.get("topic2").get)
-    assertEquals("0:100,0:101", sources.get("topic2").get)
+    val (leaderT1, followerT1) = moves.get("topic1").get
+    val (leaderT2, followerT2) = moves.get("topic2").get
+    assertEquals("0:102", followerT1)
+    assertEquals("0:100,0:101", leaderT1)
+    assertEquals("0:102", followerT2)
+    assertEquals("0:100,0:101", leaderT2)
   }
 
   @Test
@@ -125,14 +126,15 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
     )
 
     //When
-    val destinations = assigner.destinationReplicas(existing, proposed)
-    val sources = assigner.sourceReplicas(existing, proposed)
+    val moves = assigner.topicToLeaderAndFollowerThrottles(existing, proposed)
 
     //Then moving replicas should be throttled
-    assertEquals("0:102,1:102", destinations.get("topic1").get)
-    assertEquals("0:100,0:101,1:100,1:101", sources.get("topic1").get)
-    assertEquals("0:102,1:102", destinations.get("topic2").get)
-    assertEquals("0:100,0:101,1:100,1:101", sources.get("topic2").get)
+    val (leaderT1, followerT1) = moves.get("topic1").get
+    val (leaderT2, followerT2) = moves.get("topic2").get
+    assertEquals("0:102,1:102", followerT1)
+    assertEquals("0:100,0:101,1:100,1:101", leaderT1)
+    assertEquals("0:102,1:102", followerT2)
+    assertEquals("0:100,0:101,1:100,1:101", leaderT2)
   }
 
   @Test
@@ -145,11 +147,11 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
     val proposed = Map(TopicAndPartition("topic1",0) -> Seq(100, 101, 104, 105), control)
 
     //When
-    val destinations = assigner.destinationReplicas(existing, proposed)
-    val sources = assigner.sourceReplicas(existing, proposed)
+    val moves = assigner.topicToLeaderAndFollowerThrottles(existing, proposed)
 
     //Then moving replicas should be throttled
-    assertEquals( "0:104,0:105", destinations.get("topic1").get)
-    assertEquals( "0:100,0:101,0:102,0:103", sources.get("topic1").get)
+    val (leader, follower) = moves.get("topic1").get
+    assertEquals( "0:104,0:105", follower)
+    assertEquals( "0:100,0:101,0:102,0:103", leader)
   }
 }

@@ -318,50 +318,35 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: Map[TopicAndPartit
   }
 
   def addThrottledReplicaList(): Unit = {
-    //apply the throttle to all move destinations and all move sources
     val existing = zkUtils.getReplicaAssignmentForTopics(partitions.map(_._1.topic).toSeq)
-
-    val followerSideMoves = destinationReplicas(existing, partitions)
-    val leaderSideMoves = sourceReplicas(existing, partitions)
+    val throttled = topicToLeaderAndFollowerThrottles(existing, partitions)
     for (topic <- partitions.keySet.map(tp => tp.topic).toSeq.distinct) {
       val props = new Properties()
-      props.put(LogConfig.LeaderThrottledReplicasListProp, leaderSideMoves.get(topic).get)
-      props.put(LogConfig.FollowerThrottledReplicasListProp, followerSideMoves.get(topic).get)
+      val (leaderThrottledReplicas, followerThrottledReplicas) = throttled.get(topic).get
+      props.put(LogConfig.LeaderThrottledReplicasListProp, leaderThrottledReplicas)
+      props.put(LogConfig.FollowerThrottledReplicasListProp, followerThrottledReplicas)
       AdminUtils.changeTopicConfig(zkUtils, topic, props)
     }
-    println(s"Throttles were added to ${followerSideMoves.values.flatMap(x=>x).size} follower and ${leaderSideMoves.values.flatMap(x=>x).size} leader replicas.")
+    println(s"Throttles were added for topics ${throttled.keySet}")
   }
 
-  def destinationReplicas(existing: Map[TopicAndPartition, Seq[Int]], proposed: Map[TopicAndPartition, Seq[Int]]): Map[String, String] = {
-    //Find the replicas that have moved
+  def topicToLeaderAndFollowerThrottles(existing: Map[TopicAndPartition, Seq[Int]], proposed: Map[TopicAndPartition, Seq[Int]]): Map[String, (String, String)] = {
+    //Find the replicas that are either move destinations (where we're moving to, aka follower throttles)
+    //or move sources (which are defined as all current replicas - aka leader throttles)
     val movesByPartition = existing.map { case (topicAndPartition, existingReplicas) =>
       val before = existingReplicas.toSet
       val after = proposed.get(topicAndPartition).get.toSet
       val moving = after.filterNot(before).toSeq.sorted
-      val formatted = moving.map { brokerId => s"${topicAndPartition.partition}:$brokerId" }
-      (topicAndPartition, formatted)
+      val leaderThrottles = if (moving.size > 0) before.map { brokerId => s"${topicAndPartition.partition}:$brokerId" }.toSeq else Seq[String]()
+      val followerThrottles = moving.map { brokerId => s"${topicAndPartition.partition}:$brokerId" }
+      (topicAndPartition, (leaderThrottles, followerThrottles))
     }
     //Group by topic
     val movesByTopic = movesByPartition.groupBy(_._1.topic)
-      .map { case (topic, reps) => (topic, reps.values.flatMap(rep => rep)) }
-
-    movesByTopic.map { case (topic, moves) => topic -> moves.mkString(",") }
-  }
-
-  def sourceReplicas(existing: Map[TopicAndPartition, Seq[Int]], proposed: Map[TopicAndPartition, Seq[Int]]): Map[String, String] = {
-    //Find the replicas that have moved
-    val movesByPartition = existing.map { case (topicAndPartition, existingReplicas) =>
-      val before = existingReplicas.toSet
-      val after = proposed.get(topicAndPartition).get.toSet
-      val moving = after.filterNot(before).toSeq.sorted
-      val formatted = if(moving.size > 0 ) before.map { brokerId => s"${topicAndPartition.partition}:$brokerId" } else Seq[String]()
-      (topicAndPartition, formatted)
-    }
-    //Group by topic
-    val movesByTopic = movesByPartition.groupBy(_._1.topic)
-      .map { case (topic, reps) => (topic, reps.values.flatMap(rep => rep)) }
-
-    movesByTopic.map { case (topic, moves) => topic -> moves.mkString(",") }
+      .map { case (topic, reps) =>
+        (topic, (reps.values.flatMap(rep => rep._1), reps.values.flatMap(rep => rep._2)))
+      }
+    movesByTopic.map { case (topic, leaderAndFollower) => topic -> (leaderAndFollower._1.mkString(","), leaderAndFollower._2.mkString(",")) }
   }
 
   def reassignPartitions(throttle: Long = -1): Boolean = {
