@@ -120,12 +120,6 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
     }
   }
 
-  def hasTopicMetadata(topic: String): Boolean = {
-    inReadLock(partitionMetadataLock) {
-      cache.contains(topic)
-    }
-  }
-
   def getAllTopics(): Set[String] = {
     inReadLock(partitionMetadataLock) {
       cache.keySet.toSet

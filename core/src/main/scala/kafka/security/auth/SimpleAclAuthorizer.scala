@@ -127,9 +127,9 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     //check if there is any Deny acl match that would disallow this operation.
     val denyMatch = aclMatch(session, operation, resource, principal, host, Deny, acls)
 
-    //if principal is allowed to read or write we allow describe by default, the reverse does not apply to Deny.
+    //if principal is allowed to read, write or delete we allow describe by default, the reverse does not apply to Deny.
     val ops = if (Describe == operation)
-      Set[Operation](operation, Read, Write)
+      Set[Operation](operation, Read, Write, Delete)
     else
       Set[Operation](operation)
 

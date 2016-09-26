@@ -243,7 +243,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       // the callback for sending an offset commit response
       def sendResponseCallback(commitStatus: immutable.Map[TopicPartition, Short]) {
-        var combinedCommitStatus = commitStatus.mapValues(new JShort(_)) ++
+        val combinedCommitStatus = commitStatus.mapValues(new JShort(_)) ++
           unauthorizedForReadTopics.mapValues(_ => new JShort(Errors.TOPIC_AUTHORIZATION_FAILED.code)) ++
           nonExistingOrUnauthorizedForDescribeTopics.mapValues(_ => new JShort(Errors.UNKNOWN_TOPIC_OR_PARTITION.code))
 
@@ -270,9 +270,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           case (topicPartition, partitionData) =>
             val topicDirs = new ZKGroupTopicDirs(offsetCommitRequest.groupId, topicPartition.topic)
             try {
-              if (!metadataCache.hasTopicMetadata(topicPartition.topic))
-                (topicPartition, Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
-              else if (partitionData.metadata != null && partitionData.metadata.length > config.offsetMetadataMaxSize)
+              if (partitionData.metadata != null && partitionData.metadata.length > config.offsetMetadataMaxSize)
                 (topicPartition, Errors.OFFSET_METADATA_TOO_LARGE.code)
               else {
                 zkUtils.updatePersistentPath(s"${topicDirs.consumerOffsetDir}/${topicPartition.partition}", partitionData.offset.toString)
@@ -338,15 +336,22 @@ class KafkaApis(val requestChannel: RequestChannel,
     val produceRequest = request.body.asInstanceOf[ProduceRequest]
     val numBytesAppended = request.header.sizeOf + produceRequest.sizeOf
 
-    val (authorizedRequestInfo, unauthorizedRequestInfo) = produceRequest.partitionRecords.asScala.partition {
+    val (existingAndAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) = produceRequest.partitionRecords.asScala.partition {
+      case (topicPartition, _) => authorize(request.session, Describe, new Resource(auth.Topic, topicPartition.topic)) && metadataCache.contains(topicPartition.topic)
+    }
+
+    val (authorizedRequestInfo, unauthorizedForWriteRequestInfo) = existingAndAuthorizedForDescribeTopics.partition {
       case (topicPartition, _) => authorize(request.session, Write, new Resource(auth.Topic, topicPartition.topic))
     }
 
     // the callback for sending a produce response
     def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
 
-      val mergedResponseStatus = responseStatus ++ unauthorizedRequestInfo.mapValues(_ =>
-        new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1, Message.NoTimestamp))
+      val mergedResponseStatus = responseStatus ++ 
+        unauthorizedForWriteRequestInfo.mapValues(_ =>
+           new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1, Message.NoTimestamp)) ++ 
+        nonExistingOrUnauthorizedForDescribeTopics.mapValues(_ => 
+           new PartitionResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION.code, -1, Message.NoTimestamp))
 
       var errorInResponse = false
 
@@ -434,11 +439,18 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleFetchRequest(request: RequestChannel.Request) {
     val fetchRequest = request.requestObj.asInstanceOf[FetchRequest]
 
-    val (authorizedRequestInfo, unauthorizedRequestInfo) = fetchRequest.requestInfo.partition {
+    val (existingAndAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) = fetchRequest.requestInfo.partition {
+      case (topicAndPartition, _) => authorize(request.session, Describe, new Resource(auth.Topic, topicAndPartition.topic)) && metadataCache.contains(topicAndPartition.topic)
+    }
+
+    val (authorizedRequestInfo, unauthorizedForReadRequestInfo) = existingAndAuthorizedForDescribeTopics.partition {
       case (topicAndPartition, _) => authorize(request.session, Read, new Resource(auth.Topic, topicAndPartition.topic))
     }
 
-    val unauthorizedPartitionData = unauthorizedRequestInfo.map { case (tp, _) =>
+    val nonExistingOrUnauthorizedForDescribePartitionData = nonExistingOrUnauthorizedForDescribeTopics.map { case (tp, _) =>
+      (tp, FetchResponsePartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION.code, -1, MessageSet.Empty))
+    }
+    val unauthorizedForReadPartitionData = unauthorizedForReadRequestInfo.map { case (tp, _) =>
       (tp, FetchResponsePartitionData(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1, MessageSet.Empty))
     }
 
@@ -468,7 +480,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
         } else responsePartitionData
 
-      val mergedPartitionData = convertedPartitionData ++ unauthorizedPartitionData
+      val mergedPartitionData = convertedPartitionData ++ unauthorizedForReadPartitionData ++ nonExistingOrUnauthorizedForDescribePartitionData
 
       mergedPartitionData.foreach { case (topicAndPartition, data) =>
         if (data.error != Errors.NONE.code)
@@ -888,7 +900,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         val responseInfo = authorizedTopicPartitions.map { topicPartition =>
           val topicDirs = new ZKGroupTopicDirs(offsetFetchRequest.groupId, topicPartition.topic)
           try {
-            if (!metadataCache.hasTopicMetadata(topicPartition.topic))
+            if (!metadataCache.contains(topicPartition.topic))
               (topicPartition, unknownTopicPartitionResponse)
             else {
               val payloadOpt = zkUtils.readDataMaybeNull(s"${topicDirs.consumerOffsetDir}/${topicPartition.partition}")._1
@@ -1179,21 +1191,17 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleDeleteTopicsRequest(request: RequestChannel.Request) {
     val deleteTopicRequest = request.body.asInstanceOf[DeleteTopicsRequest]
 
-    val (authorizedTopics, unauthorizedTopics) = deleteTopicRequest.topics.asScala.partition( topic =>
-      authorize(request.session, Delete, new Resource(auth.Topic, topic))
+    val (existingAndAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) = deleteTopicRequest.topics.asScala.partition( topic =>
+      authorize(request.session, Describe, new Resource(auth.Topic, topic)) && metadataCache.contains(topic)
     )
 
-    val unauthorizedResults = unauthorizedTopics.map ( topic =>
-      // Avoid leaking that the topic exists if the user is not authorized to describe the topic
-      if (authorize(request.session, Describe, new Resource(auth.Topic, topic))) {
-        (topic, Errors.TOPIC_AUTHORIZATION_FAILED)
-      } else {
-        (topic, Errors.INVALID_TOPIC_EXCEPTION)
-      }
-    ).toMap
-
+    val (authorizedTopics, unauthorizedForDeleteTopics) = existingAndAuthorizedForDescribeTopics.partition( topic =>
+      authorize(request.session, Delete, new Resource(auth.Topic, topic))
+    )
+    
     def sendResponseCallback(results: Map[String, Errors]): Unit = {
-      val completeResults = results ++ unauthorizedResults
+      val completeResults = nonExistingOrUnauthorizedForDescribeTopics.map( topic => (topic, Errors.UNKNOWN_TOPIC_OR_PARTITION)).toMap ++
+          unauthorizedForDeleteTopics.map( topic => (topic, Errors.TOPIC_AUTHORIZATION_FAILED)).toMap ++ results
       val respHeader = new ResponseHeader(request.header.correlationId)
       val responseBody = new DeleteTopicsResponse(completeResults.asJava)
       trace(s"Sending delete topics response $responseBody for correlation id ${request.header.correlationId} to client ${request.header.clientId}.")

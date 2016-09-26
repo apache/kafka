@@ -260,22 +260,22 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @Test
   def testAuthorization() {
     val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
-      ApiKeys.METADATA -> createMetadataRequest,
-      ApiKeys.PRODUCE -> createProduceRequest,
-      ApiKeys.FETCH -> createFetchRequest,
-      ApiKeys.LIST_OFFSETS -> createListOffsetsRequest,
-      ApiKeys.OFFSET_FETCH -> createOffsetFetchRequest,
-      ApiKeys.GROUP_COORDINATOR -> createGroupCoordinatorRequest,
-      ApiKeys.UPDATE_METADATA_KEY -> createUpdateMetadataRequest,
-      ApiKeys.JOIN_GROUP -> createJoinGroupRequest,
-      ApiKeys.SYNC_GROUP -> createSyncGroupRequest,
-      ApiKeys.OFFSET_COMMIT -> createOffsetCommitRequest,
-      ApiKeys.HEARTBEAT -> createHeartbeatRequest,
-      ApiKeys.LEAVE_GROUP -> createLeaveGroupRequest,
-      ApiKeys.LEADER_AND_ISR -> createLeaderAndIsrRequest,
-      ApiKeys.STOP_REPLICA -> createStopReplicaRequest,
-      ApiKeys.CONTROLLED_SHUTDOWN_KEY -> createControlledShutdownRequest,
-      ApiKeys.CREATE_TOPICS -> createTopicsRequest,
+//      ApiKeys.METADATA -> createMetadataRequest,
+//      ApiKeys.PRODUCE -> createProduceRequest,
+//      ApiKeys.FETCH -> createFetchRequest,
+//      ApiKeys.LIST_OFFSETS -> createListOffsetsRequest,
+//      ApiKeys.OFFSET_FETCH -> createOffsetFetchRequest,
+//      ApiKeys.GROUP_COORDINATOR -> createGroupCoordinatorRequest,
+//      ApiKeys.UPDATE_METADATA_KEY -> createUpdateMetadataRequest,
+//      ApiKeys.JOIN_GROUP -> createJoinGroupRequest,
+//      ApiKeys.SYNC_GROUP -> createSyncGroupRequest,
+//      ApiKeys.OFFSET_COMMIT -> createOffsetCommitRequest,
+//      ApiKeys.HEARTBEAT -> createHeartbeatRequest,
+//      ApiKeys.LEAVE_GROUP -> createLeaveGroupRequest,
+//      ApiKeys.LEADER_AND_ISR -> createLeaderAndIsrRequest,
+//      ApiKeys.STOP_REPLICA -> createStopReplicaRequest,
+//      ApiKeys.CONTROLLED_SHUTDOWN_KEY -> createControlledShutdownRequest,
+//      ApiKeys.CREATE_TOPICS -> createTopicsRequest,
       ApiKeys.DELETE_TOPICS -> deleteTopicsRequest
     )
 
@@ -293,19 +293,25 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
    * checking that whether the topic exists or not, when unauthorized, FETCH and PRODUCE do not leak the topic name
    */
   @Test
-  def testAuthorizationProduceFetchDoNotLeakTopicName() {
+  def testAuthorizationWithTopicNotExisting() {
     AdminUtils.deleteTopic(zkUtils, topic)
     TestUtils.verifyTopicDeletion(zkUtils, topic, 1, servers)
+    AdminUtils.deleteTopic(zkUtils, deleteTopic)
+    TestUtils.verifyTopicDeletion(zkUtils, deleteTopic, 1, servers)
     
     val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
       ApiKeys.PRODUCE -> createProduceRequest,
-      ApiKeys.FETCH -> createFetchRequest
+      ApiKeys.FETCH -> createFetchRequest,
+      ApiKeys.DELETE_TOPICS -> deleteTopicsRequest
     )
 
     for ((key, request) <- requestKeyToRequest) {
       removeAllAcls
       val resources = RequestKeysToAcls(key).map(_._1.resourceType).toSet
-      sendRequestAndVerifyResponseErrorCode(key, request, resources, isAuthorized = false)
+      sendRequestAndVerifyResponseErrorCode(key, request, resources, isAuthorized = false, topicExists = false)
+      for ((resource, acls) <- RequestKeysToAcls(key))
+        addAndVerifyAcls(acls, resource)
+      sendRequestAndVerifyResponseErrorCode(key, request, resources, isAuthorized = true, topicExists = false)
     }
   }
 
@@ -478,7 +484,26 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
     this.consumers.head.subscribe(Pattern.compile(topicPattern), new NoOpConsumerRebalanceListener)
     this.consumers.head.poll(50)
-    assertTrue(this.consumers.head.subscription().isEmpty())
+    assertTrue(this.consumers.head.subscription.isEmpty)
+  }
+
+  @Test
+  def testPatternSubscriptionWithTopicDescribeOnlyAndGroupRead() {
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
+    sendRecords(1, tp)
+    removeAllAcls()
+
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)), topicResource)
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
+    val consumer = consumers.head
+    consumer.subscribe(Pattern.compile(topicPattern), new NoOpConsumerRebalanceListener)
+    try {
+      consumeRecords(consumer)
+      Assert.fail("Expected TopicAuthorizationException")
+    } catch {
+      case e: TopicAuthorizationException => //expected
+    } 
+
   }
 
   @Test
@@ -522,8 +547,31 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     try {
       consumer.subscribe(Pattern.compile(".*"), new NoOpConsumerRebalanceListener)
       consumeRecords(consumer)
+      assertEquals(Set[String](topic).asJava, consumer.subscription)
+    } finally consumer.close()
+  }
+
+  @Test
+  def testPatternSubscriptionMatchingInternalTopicWithDescribeOnlyPermission() {
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
+    sendRecords(1, tp)
+    removeAllAcls()
+
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), topicResource)
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
+    val internalTopicResource = new Resource(Topic, kafka.common.Topic.GroupMetadataTopicName)
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)), internalTopicResource)
+
+    val consumerConfig = new Properties
+    consumerConfig.put(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG, "false")
+    val consumer = TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group,
+      securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(consumerConfig))
+    try {
+      consumer.subscribe(Pattern.compile(".*"), new NoOpConsumerRebalanceListener)
+      consumeRecords(consumer)
+      Assert.fail("Expected TopicAuthorizationException")
     } catch {
-      case e: JTimeoutException => //expected
+      case e: TopicAuthorizationException => //expected
     } finally consumer.close()
   }
 
@@ -661,7 +709,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val response = send(deleteTopicsRequest, ApiKeys.DELETE_TOPICS)
     val deleteResponse = DeleteTopicsResponse.parse(response)
 
-    assertEquals(Errors.INVALID_TOPIC_EXCEPTION, deleteResponse.errors.asScala.head._2)
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, deleteResponse.errors.asScala.head._2)
   }
 
   @Test
@@ -692,29 +740,28 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   def sendRequestAndVerifyResponseErrorCode(apiKey: ApiKeys,
                                             request: AbstractRequest,
                                             resources: Set[ResourceType],
-                                            isAuthorized: Boolean): AbstractRequestResponse = {
+                                            isAuthorized: Boolean,
+                                            topicExists: Boolean = true): AbstractRequestResponse = {
     val resp = send(request, apiKey)
     val response = RequestKeyToResponseDeserializer(apiKey).getMethod("parse", classOf[ByteBuffer]).invoke(null, resp).asInstanceOf[AbstractRequestResponse]
     val errorCode = RequestKeyToErrorCode(apiKey).asInstanceOf[(AbstractRequestResponse) => Short](response)
 
     val possibleErrorCodes = resources.flatMap { resourceType =>
       if (resourceType == Topic)
-        if (apiKey == ApiKeys.PRODUCE || apiKey == ApiKeys.FETCH ) {
-          //Only allowing TOPIC_AUTHORIZATION_FAILED as an error code
-          Seq(Errors.TOPIC_AUTHORIZATION_FAILED.code)
-        } else {
-          // When completely unauthorized topic resources may return an INVALID_TOPIC_EXCEPTION/UNKNOWN_TOPIC_OR_PARTITION to prevent leaking topic names
-          Seq(Errors.INVALID_TOPIC_EXCEPTION.code, Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
-        }
+          // When completely unauthorized topic resources must return an UNKNOWN_TOPIC_OR_PARTITION to prevent leaking topic names
+          Seq(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
       else
-        Seq(resourceType.errorCode)
+          Seq(resourceType.errorCode)
     }
 
-    if (isAuthorized)
-      assertFalse(s"${apiKey} should be allowed. Found error code $errorCode", possibleErrorCodes.contains(errorCode))
+    if (topicExists)
+      if (isAuthorized)
+        assertFalse(s"${apiKey} should be allowed. Found error code $errorCode", possibleErrorCodes.contains(errorCode))
+      else
+        assertTrue(s"${apiKey} should be forbidden. Found error code $errorCode but expected one of ${possibleErrorCodes.mkString(",")} ", possibleErrorCodes.contains(errorCode))
     else
-      assertTrue(s"${apiKey} should be forbidden. Found error code $errorCode but expected one of ${possibleErrorCodes.mkString(",")} ", possibleErrorCodes.contains(errorCode))
-
+      assertEquals(s"${apiKey} - Found error code $errorCode", Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), errorCode) 
+      
     response
   }
 
