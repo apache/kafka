@@ -41,7 +41,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.Compressor;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.OffsetAndTimestamp;
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
@@ -659,7 +659,7 @@ public class FetcherTest {
         // Test different errors.
         testGetOffsetsForTimesWithError(Errors.NOT_LEADER_FOR_PARTITION, Errors.NONE, 10L, 100L, 10L, 100L);
         testGetOffsetsForTimesWithError(Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.NONE, 10L, 100L, 10L, 100L);
-        testGetOffsetsForTimesWithError(Errors.INVALID_REQUEST, Errors.NONE, 10L, 100L, null, 100L);
+        testGetOffsetsForTimesWithError(Errors.MESSAGE_FORMAT_TOO_OLD, Errors.NONE, 10L, 100L, null, 100L);
         testGetOffsetsForTimesWithError(Errors.BROKER_NOT_AVAILABLE, Errors.NONE, 10L, 100L, 10L, 100L);
     }
 

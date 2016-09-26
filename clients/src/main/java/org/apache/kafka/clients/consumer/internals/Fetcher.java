@@ -41,7 +41,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.LogEntry;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.OffsetAndTimestamp;
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.FetchRequest;
@@ -361,7 +361,7 @@ public class Fetcher<K, V> {
     }
 
     public Map<TopicPartition, OffsetAndTimestamp> getOffsetsByTimes(Map<TopicPartition, Long> timestampsToSearch,
-                                                                     Long timeout) {
+                                                                     long timeout) {
         long startMs = time.milliseconds();
         while (true) {
             RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> future = sendListOffsetRequests(timestampsToSearch);
@@ -383,17 +383,17 @@ public class Fetcher<K, V> {
         }
     }
 
-    public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions, Long timeout) {
+    public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions, long timeout) {
         return beginningOrEndOffset(partitions, ListOffsetRequest.EARLIEST_TIMESTAMP, timeout);
     }
 
-    public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Long timeout) {
+    public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, long timeout) {
         return beginningOrEndOffset(partitions, ListOffsetRequest.LATEST_TIMESTAMP, timeout);
     }
 
     private Map<TopicPartition, Long> beginningOrEndOffset(Collection<TopicPartition> partitions,
                                                            long timestamp,
-                                                           Long timeout) {
+                                                           long timeout) {
         Map<TopicPartition, Long> timestampsToSearch = new HashMap<>();
         for (TopicPartition tp : partitions)
             timestampsToSearch.put(tp, timestamp);
@@ -578,7 +578,7 @@ public class Fetcher<K, V> {
                     offsetAndTimestamp = new OffsetAndTimestamp(partitionData.offset, partitionData.timestamp);
                 log.debug("Fetched {} for partition {}", offsetAndTimestamp, topicPartition);
                 timestampOffsetMap.put(topicPartition, offsetAndTimestamp);
-            } else if (error == Errors.INVALID_REQUEST) {
+            } else if (error == Errors.MESSAGE_FORMAT_TOO_OLD) {
                 // The message format on the broker side is before 0.10.0, we simply put null in the response.
                 log.debug("Cannot search by timestamp for partition {} because the message format version " +
                         "is before 0.10.0", topicPartition);

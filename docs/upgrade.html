@@ -54,11 +54,6 @@ Note: Because new protocols are introduced, it is important to upgrade your Kafk
     <li> Due to the increased number of index files, on some brokers with large amount the log segments (e.g. >15K), the log loading process during the broker startup could be longer. Based on our experiment, setting the num.recovery.threads.per.data.dir to one may reduce the log loading time. </li>
 </ul>
 
-<h5><a id="upgrade_10_1_protocol_change" href="#upgrade_10_1_protocol_change">New protocols in 0.10.1.0</a></h5>
-<ul>
-    <li> ListOffsetRequest v1 is introduced and used by default to support accurate offset search based on timestamp.
-</ul>
-
 <h5><a id="upgrade_1010_notable" href="#upgrade_1010_notable">Notable changes in 0.10.1.0</a></h5>
 <ul>
     <li> The new Java consumer is no longer in beta and we recommend it for all new development. The old Scala consumers are still supported, but they will be deprecated in the next release
