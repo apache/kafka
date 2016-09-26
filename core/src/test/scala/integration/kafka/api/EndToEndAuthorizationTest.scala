@@ -405,7 +405,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
 
     val future = Future {
       while (records.size < numRecords) 
-        for (record <- consumer.poll(50).asScala) 
+        for (record <- consumer.poll(50).asScala)
           records.add(record)
       records
     }

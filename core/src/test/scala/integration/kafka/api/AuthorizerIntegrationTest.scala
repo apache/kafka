@@ -748,14 +748,12 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
 
     val future = Future {
-      TestUtils.waitUntilTrue(() => {
-        for (record <- consumer.poll(50).asScala) 
+      while (records.size < numRecords) 
+        for (record <- consumer.poll(50).asScala)
           records.add(record)
-        records.size >= numRecords
-        }, "Failed to consume %d records".format(numRecords), 10000L)
       records
     }
-    val result = Await.result(future, 15 seconds)
+    val result = Await.result(future, 10 seconds)
 
     for (i <- 0 until numRecords) {
       val record = records.get(i)
