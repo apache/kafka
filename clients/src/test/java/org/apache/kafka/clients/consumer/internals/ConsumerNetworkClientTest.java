@@ -40,7 +40,7 @@ import static org.junit.Assert.fail;
 public class ConsumerNetworkClientTest {
 
     private String topicName = "test";
-    private MockTime time = new MockTime();
+    private MockTime time = new MockTime(1);
     private MockClient client = new MockClient(time);
     private Cluster cluster = TestUtils.singletonCluster(topicName, 1);
     private Node node = cluster.nodes().get(0);
@@ -130,6 +130,11 @@ public class ConsumerNetworkClientTest {
         client.respond(heartbeatResponse(Errors.NONE.code()));
         consumerClient.poll(future);
         assertTrue(future.isDone());
+    }
+
+    @Test
+    public void testAwaitForMetadataUpdateWithTimeout() {
+        assertFalse(consumerClient.awaitMetadataUpdate(10L));
     }
 
     @Test
