@@ -30,7 +30,7 @@ import kafka.utils.CoreUtils._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.security.JaasUtils
 
-import scala.Seq
+import scala.{Iterable, Seq}
 
 object ReassignPartitionsCommand extends Logging {
 
@@ -321,7 +321,8 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: Map[TopicAndPartit
   }
 
   def assignThrottledReplicas(): Unit = {
-    val current = zkUtils.getReplicaAssignmentForTopics(partitions.map(_._1.topic).toSeq)
+    val topicsForMove = partitions.map { case (tp, _) => tp.topic }.toSeq
+    val current = zkUtils.getReplicaAssignmentForTopics(topicsForMove)
     assignThrottledReplicas(current, partitions)
   }
 
