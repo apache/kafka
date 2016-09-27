@@ -84,7 +84,7 @@ public class RecordCollector {
                     offsets.put(tp, metadata.offset());
                 } else {
                     String prefix = String.format("task [%s]", streamTaskId);
-                    log.error("{} Error sending record to topic {}", prefix, topic, exception);
+                    log.error(String.format("%s Error sending record to topic %s", prefix, topic), exception);
                 }
             }
         });
