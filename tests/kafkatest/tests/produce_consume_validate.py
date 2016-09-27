@@ -14,7 +14,6 @@
 # limitations under the License.
 
 
-import time
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
 
@@ -32,7 +31,7 @@ class ProduceConsumeValidateTest(Test):
         super(ProduceConsumeValidateTest, self).__init__(test_context=test_context)
         # How long to wait for the producer to declare itself healthy? This can
         # be overidden by inheriting classes.
-        self.producer_start_timeout_sec = 60
+        self.producer_start_timeout_sec = 20
 
         # How long to delay between the start of the producer and consumer? This
         # is important in the case when the consumer is starting from the end,
@@ -51,8 +50,11 @@ class ProduceConsumeValidateTest(Test):
         if (self.delay_between_consumer_and_producer_start_sec > 0):
             self.logger.debug("Sleeping %ds between producer and consumer start",
                               self.delay_between_consumer_and_producer_start_sec)
+            wait_until(lambda: self.consumer.alive() is True,
+                       timeout_sec=self.delay_between_consumer_and_producer_start_sec,
+                       err_msg="Consumer process took more than %d s to start" %\
+                       self.delay_between_consumer_and_producer_start_sec)
 
-        time.sleep(self.delay_between_consumer_and_producer_start_sec)
         self.producer.start()
         wait_until(lambda: async or self.producer.num_acked > 5, timeout_sec=20,
              err_msg="Producer failed to start in a reasonable amount of time.")
@@ -104,8 +106,7 @@ class ProduceConsumeValidateTest(Test):
         if len(missing_list) < 20:
             msg += str(missing_list) + ". "
         else:
-            for i in range(20):
-                msg += str(missing_list[i]) + ", "
+            msg += ",".join(missing_list[:20])
             msg += "...plus %s more. Total Acked: %s, Total Consumed: %s. " \
                    % (len(missing_list) - 20, len(set(acked)), len(set(consumed)))
         return msg

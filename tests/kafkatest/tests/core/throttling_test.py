@@ -28,11 +28,16 @@ from kafkatest.utils import is_int
 
 
 class ThrottlingTest(ProduceConsumeValidateTest):
-    """
-    These tests validate partition reassignment.
-    Create a topic with few partitions, load some data, trigger partition
-    re-assignment with and without broker failure, check that partition
-    re-assignment can complete and there is no data loss.
+    """Tests throttled partition reassignment. This is essentially similar
+    to the reassign_partitions_test, except that we throttle the reassignment
+    and verify that it takes a sensible amount of time given the throttle
+    and the amount of data being moved.
+
+    Since the correctness is time dependent, this test also simplifies the
+    cluster topology. We have 4 brokers, 1 topic with 4 partitions, and a
+    replication-factor of 1. The reassignment moves every partition. Hence
+    the data transfer in and out of each broker is fixed, and we can make
+    very accurate predicitons about whether throttling is working or not.
     """
 
     def __init__(self, test_context):
