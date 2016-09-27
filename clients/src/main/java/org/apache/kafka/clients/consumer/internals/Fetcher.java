@@ -381,7 +381,7 @@ public class Fetcher<K, V> {
 
             if (future.exception() instanceof InvalidMetadataException) {
                 if (!client.awaitMetadataUpdate(remaining))
-                    throw new TimeoutException("Failed to get offsets by times in " + timeout + " ms");
+                    break;
             } else
                 time.sleep(Math.min(remaining, retryBackoffMs));
 
