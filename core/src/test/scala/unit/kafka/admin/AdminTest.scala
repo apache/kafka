@@ -440,7 +440,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
       checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1", quotaManagerIsThrottled = true)
 
       //Now ensure updating to "" removes the throttled replica list also
-      AdminUtils.changeTopicConfig(server.zkUtils, topic, TestUtils.wrap((LogConfig.FollowerThrottledReplicasListProp, ""), (LogConfig.LeaderThrottledReplicasListProp, "")))
+      AdminUtils.changeTopicConfig(server.zkUtils, topic, wrap((LogConfig.FollowerThrottledReplicasListProp, ""), (LogConfig.LeaderThrottledReplicasListProp, "")))
       checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, Defaults.LeaderThrottledReplicasList, Defaults.LeaderThrottledReplicasList,  quotaManagerIsThrottled = false)
 
     } finally {

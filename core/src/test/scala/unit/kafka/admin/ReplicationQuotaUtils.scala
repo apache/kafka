@@ -27,9 +27,9 @@ object ReplicationQuotaUtils {
         !brokerConfig.contains(DynamicConfig.Broker.ThrottledReplicationRateLimitProp)
       }
       val topicConfig = AdminUtils.fetchEntityConfig(servers(0).zkUtils, ConfigType.Topic, topic)
-      val topicReset = ! (topicConfig.contains(LogConfig.LeaderThrottledReplicasListProp)
+      val topicReset = !(topicConfig.contains(LogConfig.LeaderThrottledReplicasListProp)
         || topicConfig.contains(LogConfig.FollowerThrottledReplicasListProp))
-        brokerReset && topicReset
+      brokerReset && topicReset
     }, "Throttle limit/replicas was not unset")
   }
 
@@ -45,7 +45,7 @@ object ReplicationQuotaUtils {
       val topicConfig = AdminUtils.fetchEntityConfig(servers(0).zkUtils, ConfigType.Topic, topic)
       val leader = topicConfig.getProperty(LogConfig.LeaderThrottledReplicasListProp)
       val follower = topicConfig.getProperty(LogConfig.FollowerThrottledReplicasListProp)
-      val topicConfigAvailable = (leader == throttledLeaders && follower ==throttledFollowers)
+      val topicConfigAvailable = (leader == throttledLeaders && follower == throttledFollowers)
       brokerConfigAvailable && topicConfigAvailable
     }, "throttle limit/replicas was not set")
   }
