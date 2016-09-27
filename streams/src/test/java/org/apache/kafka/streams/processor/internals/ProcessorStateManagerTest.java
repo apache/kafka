@@ -460,5 +460,4 @@ public class ProcessorStateManagerTest {
         assertEquals(1, checkpointedOffsets.size());
         assertEquals(new Long(123L + 1L), checkpointedOffsets.get(new TopicPartition(persistentStoreTopicName, 1)));
     }
-
 }

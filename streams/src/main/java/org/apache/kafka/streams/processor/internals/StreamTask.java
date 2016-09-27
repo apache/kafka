@@ -246,7 +246,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         try {
             node.processor().punctuate(timestamp);
         } catch (KafkaException ke) {
-            throw new StreamsException("exception caught in punctuate. taskId=" + id + " processor=" + node.name(), ke);
+            throw new StreamsException(String.format("exception caught in punctuate. taskId=%s processor=%s", id,  node.name()), ke);
         } finally {
             processorContext.setCurrentNode(null);
             currNode = null;
