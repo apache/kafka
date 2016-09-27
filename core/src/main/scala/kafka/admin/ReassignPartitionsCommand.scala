@@ -19,7 +19,7 @@ package kafka.admin
 import java.util.Properties
 import joptsimple.OptionParser
 import kafka.log.LogConfig
-import kafka.server.{ConfigType, KafkaConfig}
+import kafka.server.{DynamicConfig, ConfigType}
 import kafka.utils._
 import scala.collection._
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
@@ -82,7 +82,7 @@ object ReassignPartitionsCommand extends Logging {
       //Remove the throttle limit from all brokers in the cluster
       for (brokerId <- zkUtils.getAllBrokersInCluster().map(_.id)) {
         val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Broker, brokerId.toString)
-        if (configs.remove(KafkaConfig.ThrottledReplicationRateLimitProp) != null) {
+        if (configs.remove(DynamicConfig.Broker.ThrottledReplicationRateLimitProp) != null){
           AdminUtils.changeBrokerConfig(zkUtils, Seq(brokerId), configs)
           changed = true
         }
@@ -280,7 +280,7 @@ object ReassignPartitionsCommand extends Logging {
                       .describedAs("brokerlist")
                       .ofType(classOf[String])
     val disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment")
-    val throttleOpt = parser.accepts("throttle", "The movement of partitions will be throttled to this value (bytes/sec). Rerunning with this option, whilst a rebalance is in progress, will alter the throttle value.")
+    val throttleOpt = parser.accepts("throttle", "The movement of partitions will be throttled to this value (bytes/sec). Rerunning with this option, whilst a rebalance is in progress, will alter the throttle value. The throttle rate should be at least 1 KB/s.")
                       .withRequiredArg()
                       .describedAs("throttle")
                       .defaultsTo("-1")
@@ -307,7 +307,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: Map[TopicAndPartit
 
       for (id <- brokers) {
         val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Broker, id.toString)
-        configs.put(KafkaConfig.ThrottledReplicationRateLimitProp, throttle.toString)
+        configs.put(DynamicConfig.Broker.ThrottledReplicationRateLimitProp, throttle.toString)
         AdminUtils.changeBrokerConfig(zkUtils, Seq(id), configs)
       }
       println(f"The throttle limit was set to $throttle%,d B/s")
