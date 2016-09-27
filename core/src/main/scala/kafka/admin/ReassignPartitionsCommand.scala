@@ -38,15 +38,12 @@ object ReassignPartitionsCommand extends Logging {
                           30000,
                           JaasUtils.isZkSecurityEnabled())
     try {
-      if(opts.options.has(opts.verifyOpt)) {
+      if(opts.options.has(opts.verifyOpt))
         verifyAssignment(zkUtils, opts)
-      }
-      else if(opts.options.has(opts.generateOpt)) {
+      else if(opts.options.has(opts.generateOpt))
         generateAssignment(zkUtils, opts)
-      }
-      else if (opts.options.has(opts.executeOpt)){
+      else if (opts.options.has(opts.executeOpt))
         executeAssignment(zkUtils, opts)
-      }
     } catch {
       case e: Throwable =>
         println("Partitions reassignment failed due to " + e.getMessage)
@@ -77,7 +74,7 @@ object ReassignPartitionsCommand extends Logging {
     removeThrottle(zkUtils, partitionsToBeReassigned, reassignedPartitionsStatus)
   }
 
-  def removeThrottle(zkUtils: ZkUtils, partitionsToBeReassigned: Map[TopicAndPartition, scala.Seq[Int]], reassignedPartitionsStatus: Map[TopicAndPartition, ReassignmentStatus]): Unit = {
+  private def removeThrottle(zkUtils: ZkUtils, partitionsToBeReassigned: Map[TopicAndPartition, scala.Seq[Int]], reassignedPartitionsStatus: Map[TopicAndPartition, ReassignmentStatus]): Unit = {
     var changed = false
 
     //If all partitions have completed remove the throttle

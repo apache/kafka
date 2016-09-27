@@ -68,6 +68,16 @@ class ReassignPartitionsCommandArgsTest extends JUnitSuite {
     ReassignPartitionsCommand.validateAndParseArgs(args)
   }
 
+  @Test
+  def shouldAllowThrottleOptionOnExecute(): Unit = {
+    val args = Array(
+      "--zookeeper", "localhost:1234",
+      "--execute",
+      "--throttle", "100",
+      "--reassignment-json-file", "myfile.json")
+    ReassignPartitionsCommand.validateAndParseArgs(args)
+  }
+
   /**
     * NO ARGS
     */
@@ -87,16 +97,6 @@ class ReassignPartitionsCommandArgsTest extends JUnitSuite {
   /**
     * UNHAPPY PATH: EXECUTE ACTION
     */
-
-  @Test
-  def shouldAllowThrottleOptionOnExecute(): Unit = {
-    val args = Array(
-      "--zookeeper", "localhost:1234",
-      "--execute",
-      "--throttle", "100",
-      "--reassignment-json-file", "myfile.json")
-    ReassignPartitionsCommand.validateAndParseArgs(args)
-  }
 
   @Test
   def shouldNotAllowExecuteWithTopicsOption(): Unit = {
