@@ -176,7 +176,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
               "--topic %(topic)s --consumer.config %(config_file)s" % args
 
         if self.new_consumer:
-            cmd += " --new-consumer --bootstrap-server %(broker_list)s" % args
+            cmd += " --bootstrap-server %(broker_list)s" % args
         else:
             cmd += " --zookeeper %(zk_connect)s" % args
         if self.from_beginning:
