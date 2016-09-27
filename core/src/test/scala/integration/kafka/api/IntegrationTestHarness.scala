@@ -78,7 +78,7 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   //extracted method to allow for different params in some specific tests
-  def createNewProducer() : KafkaProducer[Array[Byte], Array[Byte]] = {
+  def createNewProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
       TestUtils.createNewProducer(brokerList,
                                   securityProtocol = this.securityProtocol,
                                   trustStoreFile = this.trustStoreFile,
@@ -87,7 +87,7 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
   }
   
   //extracted method to allow for different params in some specific tests
-  def createNewConsumer() : KafkaConsumer[Array[Byte], Array[Byte]] = {
+  def createNewConsumer: KafkaConsumer[Array[Byte], Array[Byte]] = {
       TestUtils.createNewConsumer(brokerList,
                                   securityProtocol = this.securityProtocol,
                                   trustStoreFile = this.trustStoreFile,

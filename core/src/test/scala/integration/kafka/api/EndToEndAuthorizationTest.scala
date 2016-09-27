@@ -180,7 +180,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     TestUtils.createTopic(zkUtils, topic, 1, 3, this.servers)
   }
 
-  override def createNewProducer() : KafkaProducer[Array[Byte], Array[Byte]] = {
+  override def createNewProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
     TestUtils.createNewProducer(brokerList,
                                   maxBlockMs = 5000L,
                                   securityProtocol = this.securityProtocol,
