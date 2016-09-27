@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
 
@@ -50,7 +49,7 @@ class ProduceConsumeValidateTest(Test):
         if (self.delay_between_consumer_and_producer_start_sec > 0):
             self.logger.debug("Sleeping %ds between producer and consumer start",
                               self.delay_between_consumer_and_producer_start_sec)
-            wait_until(lambda: self.consumer.alive() is True,
+            wait_until(lambda: self.consumer.alive(self.consumer.nodes[0]) is True,
                        timeout_sec=self.delay_between_consumer_and_producer_start_sec,
                        err_msg="Consumer process took more than %d s to start" %\
                        self.delay_between_consumer_and_producer_start_sec)
