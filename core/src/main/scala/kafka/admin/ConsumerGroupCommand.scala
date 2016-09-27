@@ -439,8 +439,8 @@ object ConsumerGroupCommand {
 
         if (options.has(deleteOpt))
           CommandLineUtils.printUsageAndDie(parser, s"Option $deleteOpt is only valid with $zkConnectOpt. Note that " +
-            "there's no need to delete group metadata for the new consumer as it is automatically deleted when the last " +
-            "member leaves")
+            "there's no need to delete group metadata for the new consumer as the group is deleted when the last " +
+            "committed offset for that group expires.")
       }
 
       if (options.has(describeOpt))
