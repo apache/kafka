@@ -364,7 +364,7 @@ public class Fetcher<K, V> {
                                                                      long timeout) {
         long startMs = time.milliseconds();
         long remaining = timeout;
-        while (true) {
+        do {
             RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> future = sendListOffsetRequests(timestampsToSearch);
             client.poll(future, remaining);
 
@@ -377,7 +377,7 @@ public class Fetcher<K, V> {
             long elapsed = time.milliseconds() - startMs;
             remaining = timeout - elapsed;
             if (remaining <= 0)
-                throw new TimeoutException("Failed to get offsets by times in " + timeout + " ms");
+                break;
 
             if (future.exception() instanceof InvalidMetadataException) {
                 if (!client.awaitMetadataUpdate(remaining))
@@ -387,9 +387,8 @@ public class Fetcher<K, V> {
 
             elapsed = time.milliseconds() - startMs;
             remaining = timeout - elapsed;
-            if (remaining <= 0)
-                throw new TimeoutException("Failed to get offsets by times in " + timeout + " ms");
-        }
+        } while (remaining > 0);
+        throw new TimeoutException("Failed to get offsets by times in " + timeout + " ms");
     }
 
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions, long timeout) {
