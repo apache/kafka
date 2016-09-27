@@ -23,6 +23,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.test.MockProcessorContext;
 import org.junit.Test;
 import org.rocksdb.Options;
 
@@ -113,6 +114,27 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
         assertEquals("hi", range.next().value);
         assertEquals("goodbye", range.next().value);
         assertFalse(range.hasNext());
+    }
+
+    @Test
+    public void shouldCloseOpenIteratorsWhenStoreClosed() throws Exception {
+        final KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
+        final MockProcessorContext context = (MockProcessorContext) driver.context();
+        context.setTime(1L);
+        final KeyValueStore<Integer, String> store = createStore(context, Integer.class, String.class, false, false);
+        store.put(1, "hi");
+        store.put(2, "goodbye");
+        final KeyValueIterator<Integer, String> iteratorOne = store.range(1, 5);
+        final KeyValueIterator<Integer, String> iteratorTwo = store.range(1, 4);
+
+        assertTrue(iteratorOne.hasNext());
+        assertTrue(iteratorTwo.hasNext());
+
+        store.close();
+
+        assertFalse(iteratorOne.hasNext());
+        assertFalse(iteratorTwo.hasNext());
+
     }
 
 }

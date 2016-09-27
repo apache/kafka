@@ -839,6 +839,33 @@ public class RocksDBWindowStoreTest {
         }
     }
 
+    @Test
+    public void shouldCloseOpenIteratorsWhenStoreIsClosed() throws Exception {
+        final File baseDir = TestUtils.tempDirectory();
+        Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerde.serializer(), byteArraySerde.serializer());
+        RecordCollector recordCollector = new RecordCollector(producer, "RocksDBWindowStoreTest-ShouldOnlyIterateOpenSegments") {
+            @Override
+            public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
+            }
+        };
+
+        MockProcessorContext context = new MockProcessorContext(
+                null, baseDir,
+                byteArraySerde, byteArraySerde,
+                recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+
+        final WindowStore<Integer, String> windowStore = createWindowStore(context, false, true);
+        context.setRecordContext(createRecordContext(0));
+        windowStore.put(1, "one", 1L);
+        windowStore.put(1, "two", 2L);
+        windowStore.put(1, "three", 3L);
+
+        final WindowStoreIterator<String> iterator = windowStore.fetch(1, 1L, 3L);
+        assertTrue(iterator.hasNext());
+        windowStore.close();
+        assertFalse(iterator.hasNext());
+    }
+
     private <E> List<E> toList(WindowStoreIterator<E> iterator) {
         ArrayList<E> list = new ArrayList<>();
         while (iterator.hasNext()) {
