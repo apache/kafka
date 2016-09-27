@@ -21,20 +21,28 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.InMemoryKeyValueLoggedStore;
+import org.apache.kafka.streams.state.internals.MemoryLRUCache;
 import org.apache.kafka.test.MockProcessorNode;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
+import org.apache.kafka.test.NullProcessor;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Test;
@@ -50,6 +58,7 @@ import java.util.Set;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class StreamTaskTest {
 
@@ -282,6 +291,55 @@ public class StreamTaskTest {
         task.close();
 
     }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldNotThrowExceptionWhenStoreIsWrittenToDuringInitAndCommitIsCalledWithoutAnyRecordsProcessed() throws Exception {
+        final StreamsConfig config = createConfig(baseDir);
+        final StateStore store = new InMemoryKeyValueLoggedStore<>("the-store", new MemoryLRUCache<>("the-store", 100, Serdes.Integer(), Serdes.Integer()), Serdes.Integer(), Serdes.Integer());
+        final ProcessorNode processorNode = new ProcessorNode("test", new NullProcessor() {
+            @Override
+            public void init(final ProcessorContext context) {
+                ((KeyValueStore) store).put(1, 1);
+            }
+        }, Collections.singleton("whateva"));
+        final ProcessorTopology topology = new ProcessorTopology(Collections.singletonList(processorNode),
+                                                                 Collections.<String, SourceNode>singletonMap(topic1[0], source1),
+                                                                 Collections.<String, SinkNode>emptyMap(),
+                                                                 Collections.singletonList(store),
+                                                                 Collections.<String, String>emptyMap(),
+                                                                 Collections.singletonMap(store, processorNode));
+
+        final TopicPartition changelog = new TopicPartition("applicationId-the-store-changelog", 0);
+        consumer.assign(Arrays.asList(partition1, changelog));
+        restoreStateConsumer.updatePartitions(changelog.topic(),
+                                              Collections.singletonList(new PartitionInfo(
+                                                      changelog.topic(),
+                                                      changelog.partition(),
+                                                      null,
+                                                      new Node[0],
+                                                      new Node[0]
+                                              )));
+        restoreStateConsumer.updateEndOffsets(Collections.singletonMap(changelog, 0L));
+        restoreStateConsumer.updateBeginningOffsets(Collections.singletonMap(changelog, 0L));
+        final StreamTask task = new StreamTask(new TaskId(0, 0),
+                                               "applicationId",
+                                               Arrays.asList(partition1, changelog),
+                                               topology,
+                                               consumer,
+                                               producer,
+                                               restoreStateConsumer,
+                                               config,
+                                               null,
+                                               stateDirectory,
+                                               null);
+        try {
+            task.commit();
+        } catch (IllegalStateException e) {
+            fail("illegal state exception shouldn't happen as the context should be initialized with a dummy record");
+        }
+    }
+
 
     private Iterable<ConsumerRecord<byte[], byte[]>> records(ConsumerRecord<byte[], byte[]>... recs) {
         return Arrays.asList(recs);

@@ -116,6 +116,15 @@ public class StreamTask extends AbstractTask implements Punctuator {
         initializeStateStores();
 
         // initialize the task by initializing all its processor nodes in the topology
+        initializeProcessors();
+
+        ((ProcessorContextImpl) this.processorContext).initialized();
+    }
+
+    private void initializeProcessors() {
+        // Set the record context to have a DUMMY_RECORD with current wall clock time to avoid exceptions occurring
+        // if people write to state stores on processor.init()
+        updateProcessorContext(createRecordContext(new StampedRecord(DUMMY_RECORD, System.currentTimeMillis())), null);
         for (ProcessorNode node : this.topology.processors()) {
             this.currNode = node;
             try {
@@ -124,8 +133,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
                 this.currNode = null;
             }
         }
-
-        ((ProcessorContextImpl) this.processorContext).initialized();
     }
 
     /**
