@@ -915,19 +915,27 @@ class ZKGroupTopicDirs(group: String, topic: String) extends ZKGroupDirs(group) 
   def consumerOwnerDir = consumerGroupOwnersDir + "/" + topic
 }
 
+object ZKConfig {
+  val ZkConnectProp = "zookeeper.connect"
+  val ZkSessionTimeoutMsProp = "zookeeper.session.timeout.ms"
+  val ZkConnectionTimeoutMsProp = "zookeeper.connection.timeout.ms"
+  val ZkSyncTimeMsProp = "zookeeper.sync.time.ms"
+}
 
 class ZKConfig(props: VerifiableProperties) {
+  import ZKConfig._
+
   /** ZK host string */
-  val zkConnect = props.getString("zookeeper.connect")
+  val zkConnect = props.getString(ZkConnectProp)
 
   /** zookeeper session timeout */
-  val zkSessionTimeoutMs = props.getInt("zookeeper.session.timeout.ms", 6000)
+  val zkSessionTimeoutMs = props.getInt(ZkSessionTimeoutMsProp, 6000)
 
   /** the max time that the client waits to establish a connection to zookeeper */
-  val zkConnectionTimeoutMs = props.getInt("zookeeper.connection.timeout.ms",zkSessionTimeoutMs)
+  val zkConnectionTimeoutMs = props.getInt(ZkConnectionTimeoutMsProp, zkSessionTimeoutMs)
 
   /** how far a ZK follower can be behind a ZK leader */
-  val zkSyncTimeMs = props.getInt("zookeeper.sync.time.ms", 2000)
+  val zkSyncTimeMs = props.getInt(ZkSyncTimeMsProp, 2000)
 }
 
 object ZkPath {
