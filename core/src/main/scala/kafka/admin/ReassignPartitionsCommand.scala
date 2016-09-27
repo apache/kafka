@@ -327,27 +327,30 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: Map[TopicAndPartit
   }
 
   private[admin] def assignThrottledReplicas(allExisting: Map[TopicAndPartition, Seq[Int]], allProposed: Map[TopicAndPartition, Seq[Int]], admin: AdminUtilities = AdminUtils): Unit = {
-    //apply the throttle to all move destinations and all move sources
     for (topic <- allProposed.keySet.map(tp => tp.topic).toSeq.distinct) {
       val (existing, proposed) = filterBy(topic, allExisting, allProposed)
-      val leader = format(leaderThrottles(existing, proposed))
-      val follower = format(followerThrottles(existing, proposed))
+
+      //Apply the leader throttle to all replicas that exist before the re-balance.
+      val leader = format(preRebalanceReplicaForMovingPartitions(existing, proposed))
+
+      //Apply a follower throttle to all "move destinations".
+      val follower = format(postRebalanceReplicasThatMoved(existing, proposed))
+
       admin.changeTopicConfig(zkUtils, topic, wrap((LeaderThrottledReplicasListProp, leader), (FollowerThrottledReplicasListProp, follower)))
       info(s"Updated leader-throttled replicas for topic $topic with: $leader")
       info(s"Updated follower-throttled replicas for topic $topic with: $follower")
     }
   }
 
-  private def followerThrottles(existing: Map[TopicAndPartition, Seq[Int]], proposed: Map[TopicAndPartition, Seq[Int]]): Map[TopicAndPartition, Seq[Int]] = {
+  private def postRebalanceReplicasThatMoved(existing: Map[TopicAndPartition, Seq[Int]], proposed: Map[TopicAndPartition, Seq[Int]]): Map[TopicAndPartition, Seq[Int]] = {
     //For each partition in the proposed list, filter out any replicas that exist now (i.e. not moving)
     existing.map { case (tp, current) =>
       (tp -> proposed.get(tp).get.filterNot(current.toSet))
     }
   }
 
-  private def leaderThrottles(existing: Map[TopicAndPartition, Seq[Int]], proposed: Map[TopicAndPartition, Seq[Int]]): Map[TopicAndPartition, Seq[Int]] = {
-    //Throttle all existing replicas (as any one might be a leader).
-    //So just filter out those which aren't moving
+  private def preRebalanceReplicaForMovingPartitions(existing: Map[TopicAndPartition, Seq[Int]], proposed: Map[TopicAndPartition, Seq[Int]]): Map[TopicAndPartition, Seq[Int]] = {
+    //Throttle all existing replicas (as any one might be a leader). So just filter out those which aren't moving
     existing.filter { case (tp, current) =>
       proposed.get(tp).get.filterNot(current.toSet).size > 0
     }
