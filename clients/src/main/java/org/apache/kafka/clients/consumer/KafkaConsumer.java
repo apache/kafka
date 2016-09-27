@@ -1418,6 +1418,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Override
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {
         for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
+            // we explicitly exclude the earliest and latest offset in offsets for times so the timestamp in
+            // OffsetAndTimestamp is always positive.
             if (entry.getValue() < 0)
                 throw new IllegalArgumentException("The target time for partition " + entry.getKey() + " is " +
                         entry.getValue() + ". The target time cannot be negative.");
