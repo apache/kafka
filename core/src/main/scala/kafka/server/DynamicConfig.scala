@@ -39,12 +39,12 @@ object DynamicConfig {
 
     //Documentation
     val ThrottledReplicationRateLimitDoc = "A long representing the upper bound (bytes/sec) on replication traffic for replicas enumerated in the " +
-      s"property $ThrottledReplicationRateLimitProp. This property can be only set dynamically via the config command etc. The minimum value is 1MB/s."
+      s"property $ThrottledReplicationRateLimitProp. This property can be only set dynamically via the config command etc. The minimum value is 1KB/s."
 
     //Definitions
     private val brokerConfigDef = new ConfigDef()
       //round minimum value down, to make it easier for users.
-      .define(ThrottledReplicationRateLimitProp, LONG, DefaultThrottledReplicationRateLimit, atLeast(1000 * 1000), MEDIUM, ThrottledReplicationRateLimitDoc)
+      .define(ThrottledReplicationRateLimitProp, LONG, DefaultThrottledReplicationRateLimit, atLeast(1000), MEDIUM, ThrottledReplicationRateLimitDoc)
 
     def names = brokerConfigDef.names
 
