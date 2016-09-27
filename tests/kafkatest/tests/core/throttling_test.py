@@ -53,15 +53,15 @@ class ThrottlingTest(ProduceConsumeValidateTest):
         # so that we don't miss any messages. This delay ensures the sufficient
         # condition.
         self.delay_between_consumer_and_producer_start_sec = 10
-        self.num_brokers = 4
-        self.num_partitions = 4
+        self.num_brokers = 6
+        self.num_partitions = 3
         self.kafka = KafkaService(test_context,
                                   num_nodes=self.num_brokers,
                                   zk=self.zk,
                                   topics={
                                       self.topic: {
                                           "partitions": self.num_partitions,
-                                          "replication-factor": 1,
+                                          "replication-factor": 2,
                                           "configs": {
                                               "segment.bytes": 64 * 1024 * 1024
                                           }
@@ -75,7 +75,7 @@ class ThrottlingTest(ProduceConsumeValidateTest):
         self.partition_size = (self.num_records * self.record_size) / self.num_partitions
         self.num_producers = 2
         self.num_consumers = 1
-        self.throttle = 4 * 1024 * 1024  # 2 MB/s
+        self.throttle = 3 * 1024 * 1024  # 2 MB/s
 
     def setUp(self):
         self.zk.start()
@@ -132,18 +132,6 @@ class ThrottlingTest(ProduceConsumeValidateTest):
     @parametrize(bounce_brokers=False, new_consumer=True)
     @parametrize(bounce_brokers=False, new_consumer=False)
     def test_throttled_reassignment(self, bounce_brokers, new_consumer):
-        """Tests throttled partition reassignment. This is essentially similar
-        to the reassign_partitions_test, except that we throttle the reassignment
-        and verify that it takes a sensible amount of time given the throttle
-        and the amount of data being moved.
-
-        Since the correctness is time dependent, this test also simplifies the
-        cluster topology. We have 4 brokers, 1 topic with 4 partitions, and a
-        replication-factor of 1. The reassignment moves every partition. Hence
-        the data transfer in and out of each broker is fixed, and we can make
-        very accurate predicitons about whether throttling is working or not.
-        """
-
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol
         self.kafka.interbroker_security_protocol = security_protocol
