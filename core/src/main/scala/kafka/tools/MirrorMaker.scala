@@ -120,6 +120,12 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         .ofType(classOf[java.lang.Integer])
         .defaultsTo(60000)
 
+      val assignmentStrategyOpt = parser.accepts("assignment.strategy",
+        "The assignment strategy to be used by mirror maker instances that leverage the new consumer.")
+        .withRequiredArg()
+        .describedAs("Assignment strategy (String)")
+        .ofType(classOf[String])
+
       val consumerRebalanceListenerOpt = parser.accepts("consumer.rebalance.listener",
         "The consumer rebalance listener to use for mirror maker consumer.")
         .withRequiredArg()
@@ -178,6 +184,11 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
           "you prefer to make this switch in advance of that release add the following to the corresponding " +
           "config: 'partition.assignment.strategy=org.apache.kafka.clients.consumer.RoundRobinAssignor'")
 
+      if (options.has(assignmentStrategyOpt)) {
+        error("assignment.strategy can not be used when using old consumer in mirror maker.")
+        System.exit(1)
+      }
+
       abortOnSendFailure = options.valueOf(abortOnSendFailureOpt).toBoolean
       offsetCommitIntervalMs = options.valueOf(offsetCommitIntervalMsOpt).intValue()
       val numStreams = options.valueOf(numStreamsOpt).intValue()
@@ -219,7 +230,8 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         numStreams,
         consumerProps,
         customRebalanceListener,
-        Option(options.valueOf(whitelistOpt)))
+        Option(options.valueOf(whitelistOpt)),
+        Option(options.valueOf(assignmentStrategyOpt)))
 
       // Create mirror maker threads.
       mirrorMakerThreads = (0 until numStreams) map (i =>
@@ -251,12 +263,15 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   def createConsumers(numStreams: Int,
                       consumerConfigProps: Properties,
                       customRebalanceListener: Option[ConsumerRebalanceListener],
-                      whitelist: Option[String]): Seq[ConsumerWrapper] = {
+                      whitelist: Option[String],
+                      assignmentStrategy: Option[String]): Seq[ConsumerWrapper] = {
     // Disable consumer auto offsets commit to prevent data loss.
     maybeSetDefaultProperty(consumerConfigProps, "enable.auto.commit", "false")
     // Hardcode the deserializer to ByteArrayDeserializer
     consumerConfigProps.setProperty("key.deserializer", classOf[ByteArrayDeserializer].getName)
     consumerConfigProps.setProperty("value.deserializer", classOf[ByteArrayDeserializer].getName)
+    if (assignmentStrategy.nonEmpty)
+      consumerConfigProps.setProperty("partition.assignment.strategy", assignmentStrategy.get)
     // The default client id is group id, we manually set client id to groupId-index to avoid metric collision
     val groupIdString = consumerConfigProps.getProperty("group.id")
     val consumers = (0 until numStreams) map { i =>
