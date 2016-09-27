@@ -24,9 +24,11 @@ import kafka.server.{KafkaConfig, KafkaServer}
 import org.junit.Assert._
 import org.junit.Test
 import java.util.Properties
+import java.util.concurrent.{ExecutionException}
 
 import kafka.common.{TopicAlreadyMarkedForDeletionException, TopicAndPartition}
-import org.apache.kafka.common.errors.InvalidTopicException
+import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.common.errors.{InvalidTopicException, TimeoutException}
 
 class DeleteTopicTest extends ZooKeeperTestHarness {
 
@@ -90,6 +92,41 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     follower.startup()
 
     TestUtils.verifyTopicDeletion(zkUtils, topic, 1, servers)
+    servers.foreach(_.shutdown())
+  }
+
+  @Test
+  def testProducerWithControllerFailoverWithDeleteTopicDisabled() {
+    val topicAndPartition = TopicAndPartition("test", 0)
+    val topic = topicAndPartition.topic
+
+    //create cluster with delete.topic.enable=false
+    val servers = createTestTopicAndCluster(topic, "false")
+    val controllerId = zkUtils.getController()
+    val controller = servers.filter(s => s.config.brokerId == controllerId).head
+
+    // start topic deletion
+    AdminUtils.deleteTopic(zkUtils, topic)
+    // shut down the controller to trigger controller failover during delete topic
+    controller.shutdown()
+    assertTrue("delete topic zk path does not exists", zkUtils.pathExists(getDeleteTopicPath(topic)))
+
+    val producer = TestUtils.createNewProducer(
+      TestUtils.getBrokerListStrFromServers(servers),
+      maxBlockMs = 5 * 1000L,
+      retries = 5,
+      requestTimeoutMs = 2000
+    )
+
+    try {
+      producer.send(new ProducerRecord(topic, topic.getBytes, "message".getBytes())).get
+      producer.close()
+    } catch {
+      case e: ExecutionException =>
+        if (e.getCause.isInstanceOf[TimeoutException])
+          fail(e.getCause)
+    }
+
     servers.foreach(_.shutdown())
   }
 
@@ -277,10 +314,10 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     servers.foreach(_.shutdown())
   }
 
-  private def createTestTopicAndCluster(topic: String): Seq[KafkaServer] = {
+  private def createTestTopicAndCluster(topic: String, deleteTopic: String = "true"): Seq[KafkaServer] = {
 
     val brokerConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false)
-    brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", "true")
+    brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", deleteTopic)
     )
     createTestTopicAndCluster(topic,brokerConfigs)
   }

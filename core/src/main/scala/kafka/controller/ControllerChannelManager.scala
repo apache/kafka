@@ -328,10 +328,10 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
         controllerContext.partitionLeadershipInfo.keySet
       else
         partitions
-      if (controller.deleteTopicManager.partitionsToBeDeleted.isEmpty)
+      if (controller.deleteTopicManager.getPartitionsToBeDeleted.isEmpty)
         givenPartitions
       else
-        givenPartitions -- controller.deleteTopicManager.partitionsToBeDeleted
+        givenPartitions -- controller.deleteTopicManager.getPartitionsToBeDeleted
     }
     if (filteredPartitions.isEmpty)
       brokerIds.filter(b => b >= 0).foreach { brokerId =>
@@ -340,7 +340,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
     else
       filteredPartitions.foreach(partition => updateMetadataRequestMapFor(partition, beingDeleted = false))
 
-    controller.deleteTopicManager.partitionsToBeDeleted.foreach(partition => updateMetadataRequestMapFor(partition, beingDeleted = true))
+    controller.deleteTopicManager.getPartitionsToBeDeleted.foreach(partition => updateMetadataRequestMapFor(partition, beingDeleted = true))
   }
 
   def sendRequestsToBrokers(controllerEpoch: Int) {
