@@ -951,7 +951,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             partitions is undefined or out of range and no offset reset policy has been configured
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
-     * @throws org.apache.kafka.common.errors.AuthorizationException if caller does Read access to any of the subscribed
+     * @throws org.apache.kafka.common.errors.AuthorizationException if caller lacks Read access to any of the subscribed
      *             topics or to the configured groupId
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. invalid groupId or
      *             session timeout, errors deserializing key/value pairs, or any new error cases in future versions)
