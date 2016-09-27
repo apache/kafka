@@ -126,8 +126,6 @@ class MirrorMaker(KafkaPathResolverMixin, Service):
             cmd += " --whitelist=\"%s\"" % self.whitelist
         if self.blacklist is not None:
             cmd += " --blacklist=\"%s\"" % self.blacklist
-        if self.new_consumer:
-            cmd += " --new.consumer"
 
         cmd += " 1>> %s 2>> %s &" % (MirrorMaker.LOG_FILE, MirrorMaker.LOG_FILE)
         return cmd
