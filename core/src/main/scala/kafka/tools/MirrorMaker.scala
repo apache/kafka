@@ -170,7 +170,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
       if (options.has(helpOpt)) {
         parser.printHelpOn(System.out)
-        System.exit(0)
+        sys.exit(0)
       }
 
       CommandLineUtils.checkRequiredArgs(parser, options, consumerConfigOpt, producerConfigOpt)
@@ -181,28 +181,28 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       if (useOldConsumer) {
         if (options.has(useNewConsumerOpt)) {
           error(s"The consumer configuration parameter `${ZKConfig.ZkConnectProp}` is not valid when using --new.consumer")
-          System.exit(1)
+          sys.exit(1)
         }
 
         if (consumerProps.containsKey(NewConsumerConfig.BOOTSTRAP_SERVERS_CONFIG)) {
           error(s"The configuration parameters `${ZKConfig.ZkConnectProp}` (old consumer) and " +
             s"`${NewConsumerConfig.BOOTSTRAP_SERVERS_CONFIG}` (new consumer) cannot be used together.")
-          System.exit(1)
+          sys.exit(1)
         }
 
         if (List(whitelistOpt, blacklistOpt).count(options.has) != 1) {
           error("Exactly one of whitelist or blacklist is required.")
-          System.exit(1)
+          sys.exit(1)
         }
       } else {
         if (options.has(blacklistOpt)) {
           error("blacklist can not be used when using new consumer in mirror maker. Use whitelist instead.")
-          System.exit(1)
+          sys.exit(1)
         }
 
         if (!options.has(whitelistOpt)) {
           error("whitelist must be specified when using new consumer in mirror maker.")
-          System.exit(1)
+          sys.exit(1)
         }
 
         if (!consumerProps.containsKey(NewConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG))
@@ -463,7 +463,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         // if it exits accidentally, stop the entire mirror maker
         if (!isShuttingdown.get()) {
           fatal("Mirror maker thread exited abnormally, stopping the whole mirror maker.")
-          System.exit(-1)
+          sys.exit(-1)
         }
       }
     }
