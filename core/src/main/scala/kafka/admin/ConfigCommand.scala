@@ -18,16 +18,14 @@
 package kafka.admin
 
 import java.util.Properties
-
 import joptsimple._
-import kafka.admin.TopicCommand._
 import kafka.common.Config
-import kafka.log.{Defaults, LogConfig}
-import kafka.server.{KafkaConfig, QuotaConfigOverride, ConfigType, ConfigEntityName, QuotaId}
+import kafka.log.{LogConfig}
+import kafka.server.{ConfigEntityName, QuotaId}
+import kafka.server.{DynamicConfig, ConfigType}
 import kafka.utils.{CommandLineUtils, ZkUtils}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Utils
-
 import scala.collection.JavaConversions._
 import scala.collection._
 
@@ -277,12 +275,10 @@ object ConfigCommand extends Config {
 
     val nl = System.getProperty("line.separator")
     val addConfig = parser.accepts("add-config", "Key Value pairs of configs to add. Square brackets can be used to group values which contain commas: 'k1=v1,k2=[v1,v2,v2],k3=v3'. The following is a list of valid configurations: " +
-            "For entity_type '" + ConfigType.Topic + "': " + nl + LogConfig.configNames.map("\t" + _).mkString(nl) + nl +
-            "For entity_type '" + ConfigType.Broker + "': " + nl + KafkaConfig.dynamicBrokerConfigs.map("\t" + _).mkString(nl) + nl +
-            "For entity_type '" + ConfigType.Client + "': " + nl + "\t" + QuotaConfigOverride.ProducerOverride
-                                                            + nl + "\t" + QuotaConfigOverride.ConsumerOverride + nl +
-            "For entity_type '" + ConfigType.User + "': " + nl + "\t" + QuotaConfigOverride.ProducerOverride
-                                                          + nl + "\t" + QuotaConfigOverride.ConsumerOverride + nl +
+            "For entity_type '" + ConfigType.Topic + "': " + LogConfig.configNames.map("\t" + _).mkString(nl, nl, nl) +
+            "For entity_type '" + ConfigType.Broker + "': " + DynamicConfig.Broker.names.map("\t" + _).mkString(nl, nl, nl) +
+            "For entity_type '" + ConfigType.User + "': " + DynamicConfig.Client.names.map("\t" + _).mkString(nl, nl, nl) +
+            "For entity_type '" + ConfigType.Client + "': " + DynamicConfig.Client.names.map("\t" + _).mkString(nl, nl, nl) +
             s"Entity types '${ConfigType.User}' and '${ConfigType.Client}' may be specified together to update config for clients of a specific user.")
             .withRequiredArg
             .ofType(classOf[String])

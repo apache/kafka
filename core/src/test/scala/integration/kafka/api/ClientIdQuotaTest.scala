@@ -17,7 +17,7 @@ package kafka.api
 import java.util.Properties
 
 import kafka.admin.AdminUtils
-import kafka.server.{KafkaConfig, QuotaConfigOverride, QuotaId}
+import kafka.server.{DynamicConfig, KafkaConfig, QuotaId}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.junit.Before
 
@@ -36,11 +36,11 @@ class ClientIdQuotaTest extends BaseQuotaTest {
 
   override def overrideQuotas(producerQuota: Long, consumerQuota: Long) {
     val producerProps = new Properties()
-    producerProps.put(QuotaConfigOverride.ProducerOverride, producerQuota.toString)
+    producerProps.put(DynamicConfig.Client.ProducerByteRateOverrideProp, producerQuota.toString)
     updateQuotaOverride(producerClientId, producerProps)
 
     val consumerProps = new Properties()
-    consumerProps.put(QuotaConfigOverride.ConsumerOverride, consumerQuota.toString)
+    consumerProps.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, consumerQuota.toString)
     updateQuotaOverride(consumerClientId, consumerProps)
   }
   override def removeQuotaOverrides() {
