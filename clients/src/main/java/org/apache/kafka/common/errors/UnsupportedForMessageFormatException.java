@@ -13,16 +13,16 @@
 package org.apache.kafka.common.errors;
 
 /**
- * The message format version is too old and the requested function is not supported.
+ * The message format version does not support the requested function.
  */
-public class MessageFormatTooOldException extends ApiException {
+public class UnsupportedForMessageFormatException extends ApiException {
     private static final long serialVersionUID = 1L;
 
-    public MessageFormatTooOldException(String message) {
+    public UnsupportedForMessageFormatException(String message) {
         super(message);
     }
 
-    public MessageFormatTooOldException(String message, Throwable cause) {
+    public UnsupportedForMessageFormatException(String message, Throwable cause) {
         super(message, cause);
     }
 

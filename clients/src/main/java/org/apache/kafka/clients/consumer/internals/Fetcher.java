@@ -585,7 +585,7 @@ public class Fetcher<K, V> {
                     offsetAndTimestamp = new OffsetAndTimestamp(partitionData.offset, partitionData.timestamp);
                 log.debug("Fetched {} for partition {}", offsetAndTimestamp, topicPartition);
                 timestampOffsetMap.put(topicPartition, offsetAndTimestamp);
-            } else if (error == Errors.MESSAGE_FORMAT_TOO_OLD) {
+            } else if (error == Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT) {
                 // The message format on the broker side is before 0.10.0, we simply put null in the response.
                 log.debug("Cannot search by timestamp for partition {} because the message format version " +
                         "is before 0.10.0", topicPartition);
