@@ -87,16 +87,14 @@ class TopicDeletionManager(controller: KafkaController,
   var deleteTopicsThread: DeleteTopicsThread = null
   val isDeleteTopicEnabled = controller.config.deleteTopicEnable
   val topicsToBeDeleted: mutable.Set[String] = mutable.Set.empty[String]
-  if (isDeleteTopicEnabled) {
+  if(isDeleteTopicEnabled) {
     topicsToBeDeleted ++= initialTopicsToBeDeleted
-  }
-  else {
+  } else {
     // if delete topic is disabled clean the topic entries under /admin/delete_topics
-    for (topic <- initialTopicsToBeDeleted) {
+    for(topic <- initialTopicsToBeDeleted) {
       cleanZkStateForDeleteTopic(topic)
     }
   }
-
   val partitionsToBeDeleted: mutable.Set[TopicAndPartition] = topicsToBeDeleted.flatMap(controllerContext.partitionsForTopic)
 
   /**
