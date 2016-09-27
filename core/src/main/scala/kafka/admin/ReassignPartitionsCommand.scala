@@ -16,8 +16,6 @@
  */
 package kafka.admin
 
-import java.util.Properties
-
 import joptsimple.OptionParser
 import kafka.log.LogConfig
 import kafka.server.{DynamicConfig, ConfigType}
@@ -25,6 +23,8 @@ import kafka.utils._
 import scala.collection._
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import kafka.common.{AdminCommandFailedException, TopicAndPartition}
+import kafka.log.LogConfig._
+import kafka.utils.CoreUtils._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.security.JaasUtils
 import scala.Seq
@@ -298,7 +298,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: Map[TopicAndPartit
   private def maybeThrottle(throttle: Long): Unit = {
     if (throttle >= 0) {
       maybeLimit(throttle)
-      addThrottledReplicaList()
+      assignThrottledReplicas()
     }
   }
 
@@ -317,36 +317,48 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: Map[TopicAndPartit
     }
   }
 
-  def addThrottledReplicaList(): Unit = {
-    val existing = zkUtils.getReplicaAssignmentForTopics(partitions.map(_._1.topic).toSeq)
-    val throttled = topicToLeaderAndFollowerThrottles(existing, partitions)
-    for (topic <- partitions.keySet.map(tp => tp.topic).toSeq.distinct) {
-      val props = new Properties()
-      val (leaderThrottledReplicas, followerThrottledReplicas) = throttled.get(topic).get
-      props.put(LogConfig.LeaderThrottledReplicasListProp, leaderThrottledReplicas)
-      props.put(LogConfig.FollowerThrottledReplicasListProp, followerThrottledReplicas)
-      AdminUtils.changeTopicConfig(zkUtils, topic, props)
-    }
-    println(s"Throttles were added for topics ${throttled.keySet}")
+  def assignThrottledReplicas(): Unit = {
+    val current = zkUtils.getReplicaAssignmentForTopics(partitions.map(_._1.topic).toSeq)
+    assignThrottledReplicas(current, partitions)
   }
 
-  def topicToLeaderAndFollowerThrottles(existing: Map[TopicAndPartition, Seq[Int]], proposed: Map[TopicAndPartition, Seq[Int]]): Map[String, (String, String)] = {
-    //Find the replicas that are either move destinations (where we're moving to, aka follower throttles)
-    //or move sources (which are defined as all current replicas - aka leader throttles)
-    val movesByPartition = existing.map { case (topicAndPartition, existingReplicas) =>
-      val before = existingReplicas.toSet
-      val after = proposed.get(topicAndPartition).get.toSet
-      val moving = after.filterNot(before).toSeq.sorted
-      val leaderThrottles = if (moving.size > 0) before.map { brokerId => s"${topicAndPartition.partition}:$brokerId" }.toSeq else Seq[String]()
-      val followerThrottles = moving.map { brokerId => s"${topicAndPartition.partition}:$brokerId" }
-      (topicAndPartition, (leaderThrottles, followerThrottles))
+  private[admin] def assignThrottledReplicas(allExisting: Map[TopicAndPartition, Seq[Int]], allProposed: Map[TopicAndPartition, Seq[Int]], admin: AdminUtilities = AdminUtils): Unit = {
+    //apply the throttle to all move destinations and all move sources
+    for (topic <- allProposed.keySet.map(tp => tp.topic).toSeq.distinct) {
+      val (existing, proposed) = filterBy(topic, allExisting, allProposed)
+      val leader = format(leaderThrottles(existing, proposed))
+      val follower = format(followerThrottles(existing, proposed))
+      admin.changeTopicConfig(zkUtils, topic, wrap((LeaderThrottledReplicasListProp, leader), (FollowerThrottledReplicasListProp, follower)))
+      info(s"Updated leader-throttled replicas for topic $topic with: $leader")
+      info(s"Updated follower-throttled replicas for topic $topic with: $follower")
     }
-    //Group by topic
-    val movesByTopic = movesByPartition.groupBy(_._1.topic)
-      .map { case (topic, reps) =>
-        (topic, (reps.values.flatMap(rep => rep._1), reps.values.flatMap(rep => rep._2)))
-      }
-    movesByTopic.map { case (topic, leaderAndFollower) => topic -> (leaderAndFollower._1.mkString(","), leaderAndFollower._2.mkString(",")) }
+  }
+
+  private def followerThrottles(existing: Map[TopicAndPartition, Seq[Int]], proposed: Map[TopicAndPartition, Seq[Int]]): Map[TopicAndPartition, Seq[Int]] = {
+    //For each partition in the proposed list, filter out any replicas that exist now (i.e. not moving)
+    existing.map { case (tp, current) =>
+      (tp -> proposed.get(tp).get.filterNot(current.toSet))
+    }
+  }
+
+  private def leaderThrottles(existing: Map[TopicAndPartition, Seq[Int]], proposed: Map[TopicAndPartition, Seq[Int]]): Map[TopicAndPartition, Seq[Int]] = {
+    //Throttle all existing replicas (as any one might be a leader).
+    //So just filter out those which aren't moving
+    existing.filter { case (tp, current) =>
+      proposed.get(tp).get.filterNot(current.toSet).size > 0
+    }
+  }
+
+  def format(moves: Map[TopicAndPartition, Seq[Int]]): String = {
+    val formatted = moves.map { case (tp, moves) => moves.map { replicaId => s"${tp.partition}:${replicaId}" } }.flatMap(x => x).mkString(",")
+    info(s"Assigning throttled replicas [$formatted]")
+    formatted
+  }
+
+
+  def filterBy(topic: String, allExisting: Map[TopicAndPartition, Seq[Int]], allProposed: Map[TopicAndPartition, Seq[Int]]): (Map[TopicAndPartition, Seq[Int]], Map[TopicAndPartition, Seq[Int]]) = {
+    (allExisting.filter(_._1.topic == topic),
+      allProposed.filter(_._1.topic == topic))
   }
 
   def reassignPartitions(throttle: Long = -1): Boolean = {
