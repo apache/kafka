@@ -20,13 +20,16 @@ import joptsimple.OptionParser
 import kafka.log.LogConfig
 import kafka.server.{DynamicConfig, ConfigType}
 import kafka.utils._
+
 import scala.collection._
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import kafka.common.{AdminCommandFailedException, TopicAndPartition}
+import kafka.log.LogConfig
 import kafka.log.LogConfig._
 import kafka.utils.CoreUtils._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.security.JaasUtils
+
 import scala.Seq
 
 object ReassignPartitionsCommand extends Logging {
