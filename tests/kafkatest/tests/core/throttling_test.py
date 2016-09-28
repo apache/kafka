@@ -34,10 +34,10 @@ class ThrottlingTest(ProduceConsumeValidateTest):
     and the amount of data being moved.
 
     Since the correctness is time dependent, this test also simplifies the
-    cluster topology. We have 4 brokers, 1 topic with 4 partitions, and a
-    replication-factor of 1. The reassignment moves every partition. Hence
-    the data transfer in and out of each broker is fixed, and we can make
-    very accurate predicitons about whether throttling is working or not.
+    cluster topology. In particular, we fix the number of brokers, the
+    replication-factor, the number of partitions, the partition size, and
+    the number of partitions being moved so that we can accurately predict
+    the time throttled reassignment should take.
     """
 
     def __init__(self, test_context):
@@ -91,21 +91,23 @@ class ThrottlingTest(ProduceConsumeValidateTest):
             self.kafka.restart_node(node, clean_shutdown=True)
 
     def reassign_partitions(self, bounce_brokers, throttle):
+        """This method reassigns partitions using a throttle. It makes an
+        assertion about the minimum amount of time the reassignment should take
+        given the value of the throttle, the number of partitions being moved,
+        and the size of each partition.
+        """
         partition_info = self.kafka.parse_describe_topic(
             self.kafka.describe_topic(self.topic))
         self.logger.debug("Partitions before reassignment:" +
                           str(partition_info))
-
-
-        num_moves = 0
+        max_num_moves = 0
         for i in range(0, self.num_partitions):
             old_replicas = set(partition_info["partitions"][i]["replicas"])
             new_part = (i+1) % self.num_partitions
             new_replicas = set(partition_info["partitions"][new_part]["replicas"])
-            num_moves = max(len(new_replicas - old_replicas), num_moves)
+            max_num_moves = max(len(new_replicas - old_replicas), max_num_moves)
             partition_info["partitions"][i]["partition"] = new_part
         self.logger.debug("Jumbled partitions: " + str(partition_info))
-        # send reassign partitions command
 
         self.kafka.execute_reassign_partitions(partition_info,
                                                throttle=throttle)
@@ -115,15 +117,16 @@ class ThrottlingTest(ProduceConsumeValidateTest):
             self.clean_bounce_some_brokers()
 
         # Wait until finished or timeout
-        size_per_broker = num_moves * self.partition_size
+        size_per_broker = max_num_moves * self.partition_size
         self.logger.debug("Max amount of data transfer per broker: %fb",
                           size_per_broker)
         estimated_throttled_time = math.ceil(float(size_per_broker) /
                                              self.throttle)
+        estimated_time_with_buffer = estimated_throttled_time * 2
         self.logger.debug("Waiting %ds for the reassignment to complete",
-                          estimated_throttled_time * 2)
+                          estimated_time_with_buffer)
         wait_until(lambda: self.kafka.verify_reassign_partitions(partition_info),
-                   timeout_sec=estimated_throttled_time * 2, backoff_sec=.5)
+                   timeout_sec=estimated_time_with_buffer, backoff_sec=.5)
         stop = time.time()
         time_taken = stop - start
         self.logger.debug("Transfer took %d second. Estimated time : %ds",
