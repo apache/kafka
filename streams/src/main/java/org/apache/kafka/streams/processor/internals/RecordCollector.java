@@ -98,9 +98,9 @@ public class RecordCollector {
                 return;
             } catch (TimeoutException e) {
                 if (attempt == MAX_SEND_ATTEMPTS) {
-                    throw new StreamsException(String.format("failed to send record to topic %s after %d attempts", topic, attempt));
+                    throw new StreamsException(String.format("task [%s] failed to send record to topic %s after %d attempts", streamTaskId, topic, attempt));
                 }
-                log.warn(String.format("timeout exception caught when sending record to topic %s attempt %s", topic, attempt));
+                log.warn(String.format("task [%s] timeout exception caught when sending record to topic %s attempt %s", streamTaskId, topic, attempt));
                 Utils.sleep(SEND_RETRY_BACKOFF);
             }
 
