@@ -32,13 +32,16 @@ class ProduceConsumeValidateTest(Test):
         # be overidden by inheriting classes.
         self.producer_start_timeout_sec = 20
 
+        # How long to wait for the consumer to start consuming messages?
+        self.consumer_start_timeout_sec = 60
+
         # How long to delay between the start of the producer and consumer? This
         # is important in the case when the consumer is starting from the end,
         # and we don't want it to miss any messages. The race condition this
         # timeout avoids is that the consumer is still starting after the
         # producer begins producing messages, in which case we will miss the
         # initial set of messages and get spurious test failures.
-        self.delay_between_consumer_and_producer_start_sec = 0
+        self.consumer_init_timeout_sec = 0
 
     def setup_producer_and_consumer(self):
         raise NotImplementedError("Subclasses should implement this")
@@ -46,13 +49,13 @@ class ProduceConsumeValidateTest(Test):
     def start_producer_and_consumer(self, async=False):
         # Start background producer and consumer
         self.consumer.start()
-        if (self.delay_between_consumer_and_producer_start_sec > 0):
+        if (self.consumer_init_timeout_sec > 0):
             self.logger.debug("Sleeping %ds between producer and consumer start",
-                              self.delay_between_consumer_and_producer_start_sec)
+                              self.consumer_init_timeout_sec)
             wait_until(lambda: self.consumer.alive(self.consumer.nodes[0]) is True,
-                       timeout_sec=self.delay_between_consumer_and_producer_start_sec,
+                       timeout_sec=self.consumer_init_timeout_sec,
                        err_msg="Consumer process took more than %d s to start" %\
-                       self.delay_between_consumer_and_producer_start_sec)
+                       self.consumer_init_timeout_sec)
 
         self.producer.start()
         wait_until(lambda: async or self.producer.num_acked > 5, timeout_sec=20,
