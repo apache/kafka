@@ -610,7 +610,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                                            ListOffsetResponse.UNKNOWN_OFFSET)
     })
 
-    val responseMap = authorizedRequestInfo.map({case (topicPartition, timestamp) =>
+    val responseMap = authorizedRequestInfo.map { case (topicPartition, timestamp) =>
       if (offsetRequest.duplicatePartitions().contains(topicPartition)) {
         debug(s"OffsetRequest with correlation id $correlationId from client $clientId on partition $topicPartition " +
             s"failed because the partition is duplicated in the request.")
@@ -619,35 +619,28 @@ class KafkaApis(val requestChannel: RequestChannel,
                                                               ListOffsetResponse.UNKNOWN_OFFSET))
       } else {
         try {
+          val fromConsumer = offsetRequest.replicaId == ListOffsetRequest.CONSUMER_REPLICA_ID
+
           // ensure leader exists
           val localReplica = if (offsetRequest.replicaId != ListOffsetRequest.DEBUGGING_REPLICA_ID)
             replicaManager.getLeaderReplicaIfLocal(topicPartition.topic, topicPartition.partition)
           else
             replicaManager.getReplicaOrException(topicPartition.topic, topicPartition.partition)
-          // There are following two special cases to be handled when a ListOffsetRequest is from a consumer.
-          // 1. If a consumer asks for the latest offset, return the high watermark instead of log end offset.
-          // 2. If a consumer searches for a timestamp and the offset found is greater than the high watermark,
-          //    return the unknown offset as if the target timestamp is not found.
-          // In the other cases, we just return the search result without speical handling.
+
           val found = {
-            // case 1
-            if (offsetRequest.replicaId == ListOffsetRequest.CONSUMER_REPLICA_ID
-                && timestamp == ListOffsetRequest.LATEST_TIMESTAMP)
+            if (fromConsumer && timestamp == ListOffsetRequest.LATEST_TIMESTAMP)
               TimestampOffset(Message.NoTimestamp, localReplica.highWatermark.messageOffset)
             else {
+              def allowed(timestampOffset: TimestampOffset): Boolean =
+                !fromConsumer || timestampOffset.offset <= localReplica.highWatermark.messageOffset
+
               fetchOffsetForTimestamp(replicaManager.logManager, topicPartition, timestamp) match {
-                case Some(timestampOffset) =>
-                  // case 2
-                  if (offsetRequest.replicaId == ListOffsetRequest.CONSUMER_REPLICA_ID
-                      && timestampOffset.offset > localReplica.highWatermark.messageOffset)
-                    TimestampOffset(ListOffsetResponse.UNKNOWN_TIMESTAMP, ListOffsetResponse.UNKNOWN_OFFSET)
-                  else
-                    timestampOffset
-                case None =>
-                  TimestampOffset(ListOffsetResponse.UNKNOWN_TIMESTAMP, ListOffsetResponse.UNKNOWN_OFFSET)
+                case Some(timestampOffset) if allowed(timestampOffset) => timestampOffset
+                case _ => TimestampOffset(ListOffsetResponse.UNKNOWN_TIMESTAMP, ListOffsetResponse.UNKNOWN_OFFSET)
               }
             }
           }
+
           (topicPartition, new ListOffsetResponse.PartitionData(Errors.NONE.code, found.timestamp, found.offset))
         } catch {
           // NOTE: These exceptions are special cased since these error messages are typically transient or the client
@@ -667,7 +660,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                                                                   ListOffsetResponse.UNKNOWN_OFFSET))
         }
       }
-    })
+    }
     responseMap ++ unauthorizedResponseStatus
   }
 
