@@ -286,14 +286,14 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
    */
   private class Watchers(val key: Any) {
 
-    private[this] var operations = List[T]()
+    private[this] var operations = Vector[T]()
 
     def watched: Int = synchronized(operations.size)
 
     // add the element to watch
     def watch(t: T) {
       synchronized {
-        operations = t :: operations
+        operations = operations :+ t
       }
     }
 
@@ -320,15 +320,12 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
 
     // traverse the list and purge elements that are already completed by others
     def purgeCompleted(): Int = {
-      val (purged, needRemoveKey) = synchronized {
+      val purged = synchronized {
         val initialCount = operations.size
         operations = operations.filterNot(_.isCompleted())
-        (initialCount - operations.size, operations.isEmpty)
+        initialCount - operations.size
       }
-
-      if (needRemoveKey)
-        removeKeyIfEmpty(key, this)
-
+      removeKeyIfEmpty(key, this)
       purged
     }
   }
