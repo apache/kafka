@@ -191,7 +191,7 @@ object ReassignPartitionsCommand extends Logging {
       throw new AdminCommandFailedException("Partition replica lists may not contain duplicate entries: %s".format(duplicatesMsg))
     }
     //Check that all partitions in the proposed assignment exist in the cluster
-    val proposedTopics = partitionsToBeReassigned.map { case (tp, _) => tp.topic }
+    val proposedTopics = partitionsToBeReassigned.map { case (tp, _) => tp.topic }.distinct
     val existingAssignment = zkUtils.getReplicaAssignmentForTopics(proposedTopics)
 
     if (!partitionsToBeReassigned.forall { case (tp, _) => existingAssignment.contains(tp) }) {
@@ -304,7 +304,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
   extends Logging {
 
   def existingAssignment(): Map[TopicAndPartition, Seq[Int]] = {
-    val proposedTopics = proposedAssignment.map { case (tp, _) => tp.topic }.toSeq
+    val proposedTopics = proposedAssignment.keySet.map { tp => tp.topic }.toSeq.distinct
     zkUtils.getReplicaAssignmentForTopics(proposedTopics)
   }
 
