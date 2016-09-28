@@ -137,6 +137,8 @@ public class ConsumerNetworkClient implements Closeable {
 
     /**
      * Block waiting on the metadata refresh with a timeout.
+     *
+     * @return true if update succeeded, false otherwise.
      */
     public boolean awaitMetadataUpdate(long timeout) {
         long startMs = time.milliseconds();

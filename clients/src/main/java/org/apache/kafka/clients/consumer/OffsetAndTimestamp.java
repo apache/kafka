@@ -16,8 +16,12 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.common.utils.Utils;
+
 /**
  * A container class for offset and timestamp.
+ *
+ * Both the offsets the timestamp in this class is non-negative.
  */
 public final class OffsetAndTimestamp {
     private final long timestamp;
@@ -43,7 +47,7 @@ public final class OffsetAndTimestamp {
 
     @Override
     public int hashCode() {
-        return 31 * Long.valueOf(timestamp).hashCode() + Long.valueOf(offset).hashCode();
+        return 31 * Utils.longHashcode(timestamp) + Utils.longHashcode(offset);
     }
 
     @Override

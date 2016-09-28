@@ -624,27 +624,28 @@ class KafkaApis(val requestChannel: RequestChannel,
             replicaManager.getLeaderReplicaIfLocal(topicPartition.topic, topicPartition.partition)
           else
             replicaManager.getReplicaOrException(topicPartition.topic, topicPartition.partition)
+          // There are following two special cases to be handled when a ListOffsetRequest is from a consumer.
+          // 1. If a consumer asks for the latest offset, return the high watermark instead of log end offset.
+          // 2. If a consumer searches for a timestamp and the offset found is greater than the high watermark,
+          //    return the unknown offset as if the target timestamp is not found.
+          // In the other cases, we just return the search result without speical handling.
           val found = {
-            fetchOffsetForTimestamp(replicaManager.logManager, topicPartition, timestamp) match {
-              case Some(timestampOffset) =>
-                // The request is not from a consumer client
-                if (offsetRequest.replicaId != ListOffsetRequest.CONSUMER_REPLICA_ID)
-                  timestampOffset
-                // The request is from a consumer client
-                else {
-                  // the found offset is smaller or equals to the high watermark
-                  if (timestampOffset.offset <= localReplica.highWatermark.messageOffset)
-                    timestampOffset
-                  // the consumer wants the latest offset.
-                  else if (timestamp == ListOffsetRequest.LATEST_TIMESTAMP)
-                    TimestampOffset(Message.NoTimestamp, localReplica.highWatermark.messageOffset)
-                  // The found offset is higher than the high watermark and the consumer is not asking for the end offset.
-                  else
+            // case 1
+            if (offsetRequest.replicaId == ListOffsetRequest.CONSUMER_REPLICA_ID
+                && timestamp == ListOffsetRequest.LATEST_TIMESTAMP)
+              TimestampOffset(Message.NoTimestamp, localReplica.highWatermark.messageOffset)
+            else {
+              fetchOffsetForTimestamp(replicaManager.logManager, topicPartition, timestamp) match {
+                case Some(timestampOffset) =>
+                  // case 2
+                  if (offsetRequest.replicaId == ListOffsetRequest.CONSUMER_REPLICA_ID
+                      && timestampOffset.offset > localReplica.highWatermark.messageOffset)
                     TimestampOffset(ListOffsetResponse.UNKNOWN_TIMESTAMP, ListOffsetResponse.UNKNOWN_OFFSET)
-                }
-
-              case None =>
-                TimestampOffset(ListOffsetResponse.UNKNOWN_TIMESTAMP, ListOffsetResponse.UNKNOWN_OFFSET)
+                  else
+                    timestampOffset
+                case None =>
+                  TimestampOffset(ListOffsetResponse.UNKNOWN_TIMESTAMP, ListOffsetResponse.UNKNOWN_OFFSET)
+              }
             }
           }
           (topicPartition, new ListOffsetResponse.PartitionData(Errors.NONE.code, found.timestamp, found.offset))
