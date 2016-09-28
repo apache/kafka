@@ -304,7 +304,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
   extends Logging {
 
   def existingAssignment(): Map[TopicAndPartition, Seq[Int]] = {
-    val proposedTopics = proposedAssignment.keySet.map { tp => tp.topic }.toSeq.distinct
+    val proposedTopics = proposedAssignment.keySet.map { tp => tp.topic }.toSeq
     zkUtils.getReplicaAssignmentForTopics(proposedTopics)
   }
 
