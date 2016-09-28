@@ -83,7 +83,7 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
   def parseThrottledPartitions(topicConfig: Properties, brokerId: Int, prop: String): Seq[Int] = {
     val configValue = topicConfig.get(prop).toString.trim
     ThrottledReplicaListValidator.ensureValidString(prop, configValue)
-    configValue.trim match {
+    configValue match {
       case "" => Seq()
       case "*" => AllReplicas
       case _ => configValue.trim
