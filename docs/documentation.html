@@ -31,16 +31,13 @@ Prior releases: <a href="/07/documentation.html">0.7.x</a>, <a href="/08/documen
              <li><a href="#upgrade">1.5 Upgrading</a>
          </ul>
     </li>
-    <li><a href="#api">2. API</a>
+    <li><a href="#api">2. APIs</a>
           <ul>
               <li><a href="#producerapi">2.1 Producer API</a>
               <li><a href="#consumerapi">2.2 Consumer API</a>
-                  <ul>
-                      <li><a href="#newconsumerapi">2.2.1 New Consumer API</a>
-                      <li><a href="#highlevelconsumerapi">2.2.2 Old High Level Consumer API</a>
-                      <li><a href="#simpleconsumerapi">2.2.3 Old Simple Consumer API</a>
-                  </ul>
               <li><a href="#streamsapi">2.3 Streams API</a>
+			  <li><a href="#connectapi">2.4 Connect API</a>
+			  <li><a href="#legacyapis">2.5 Legacy APIs</a>
           </ul>
     </li>
     <li><a href="#configuration">3. Configuration</a>
@@ -110,11 +107,6 @@ Prior releases: <a href="/07/documentation.html">0.7.x</a>, <a href="/08/documen
                     <li><a href="#ext4">Ext4 Notes</a>
                 </ul>
               <li><a href="#monitoring">6.6 Monitoring</a>
-                <ul>
-                    <li><a href="#selector_monitoring">Common monitoring metrics for producer/consumer/connect</a></li>
-                    <li><a href="#new_producer_monitoring">New producer monitoring</a></li>
-                    <li><a href="#new_consumer_monitoring">New consumer monitoring</a></li>
-                </ul>
               <li><a href="#zk">6.7 ZooKeeper</a>
                 <ul>
                     <li><a href="#zkversion">Stable Version</a>
@@ -158,13 +150,18 @@ Prior releases: <a href="/07/documentation.html">0.7.x</a>, <a href="/08/documen
 </ul>
 
 <h2><a id="gettingStarted" href="#gettingStarted">1. Getting Started</a></h2>
-<!--#include virtual="introduction.html" -->
-<!--#include virtual="uses.html" -->
-<!--#include virtual="quickstart.html" -->
-<!--#include virtual="ecosystem.html" -->
-<!--#include virtual="upgrade.html" -->
+  <h3><a id="introduction" href="#introduction">1.1 Introduction</a></h3>
+  <!--#include virtual="introduction.html" -->
+  <h3><a id="uses" href="#uses">1.2 Use Cases</a></h3>
+  <!--#include virtual="uses.html" -->
+  <h3><a id="quickstart" href="#quickstart">1.3 Quick Start</a></h3>
+  <!--#include virtual="quickstart.html" -->
+  <h3><a id="ecosystem" href="#ecosystem">1.4 Ecosystem</a></h3>
+  <!--#include virtual="ecosystem.html" -->
+  <h3><a id="upgrade" href="#upgrade">1.5 Upgrading From Previous Versions</a></h3>
+  <!--#include virtual="upgrade.html" -->
 
-<h2><a id="api" href="#api">2. API</a></h2>
+<h2><a id="api" href="#api">2. APIs</a></h2>
 
 <!--#include virtual="api.html" -->
 
