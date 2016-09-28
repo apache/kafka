@@ -25,6 +25,8 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.util.ArrayDeque;
 
+import static java.lang.String.format;
+
 /**
  * RecordQueue is a FIFO queue of {@link StampedRecord} (ConsumerRecord + timestamp). It also keeps track of the
  * partition timestamp defined as the minimum timestamp of records in its queue; in addition, its partition
@@ -75,8 +77,21 @@ public class RecordQueue {
     public int addRawRecords(Iterable<ConsumerRecord<byte[], byte[]>> rawRecords, TimestampExtractor timestampExtractor) {
         for (ConsumerRecord<byte[], byte[]> rawRecord : rawRecords) {
             // deserialize the raw record, extract the timestamp and put into the queue
-            Object key = source.deserializeKey(rawRecord.topic(), rawRecord.key());
-            Object value = source.deserializeValue(rawRecord.topic(), rawRecord.value());
+            final Object key;
+            try {
+                key = source.deserializeKey(rawRecord.topic(), rawRecord.key());
+            } catch (Exception e) {
+                throw new StreamsException(format("Failed to deserialize key for record. topic=%s, partition=%d, offset=%d",
+                                                  rawRecord.topic(), rawRecord.partition(), rawRecord.offset()), e);
+            }
+
+            final Object value;
+            try {
+                value = source.deserializeValue(rawRecord.topic(), rawRecord.value());
+            } catch (Exception e) {
+                throw new StreamsException(format("Failed to deserialize value for record. topic=%s, partition=%d, offset=%d",
+                                                  rawRecord.topic(), rawRecord.partition(), rawRecord.offset()), e);
+            }
 
             ConsumerRecord<Object, Object> record = new ConsumerRecord<>(rawRecord.topic(), rawRecord.partition(), rawRecord.offset(),
                                                                          rawRecord.timestamp(), TimestampType.CREATE_TIME,
