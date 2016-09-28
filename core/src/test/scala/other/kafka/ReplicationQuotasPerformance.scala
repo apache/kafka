@@ -18,7 +18,7 @@
 package other.kafka
 
 import java.awt.image.BufferedImage
-import java.io.{FileOutputStream, PrintWriter, File}
+import java.io.{File, FileOutputStream, PrintWriter}
 import javax.imageio.ImageIO
 
 import kafka.admin.ReassignPartitionsCommand
@@ -34,13 +34,14 @@ import org.jfree.chart.{ChartFactory, ChartFrame, JFreeChart}
 import org.jfree.data.xy.{XYSeries, XYSeriesCollection}
 
 import scala.collection.JavaConverters._
-import scala.collection.{Seq, mutable}
+import scala.collection.{Map, Seq, mutable}
 
 object ReplicationQuotasPerformance {
   new File("Experiments").mkdir()
-  val dir = "Experiments/Run" + System.currentTimeMillis().toString.substring(8)
+  private val dir = "Experiments/Run" + System.currentTimeMillis().toString.substring(8)
   new File(dir).mkdir()
-
+  private val log = new File(dir, "Log.txt")
+  private val showGraphsOnExperimentCompletion = true
 
   def main(args: Array[String]): Unit = {
     val configs = Seq(
@@ -51,7 +52,6 @@ object ReplicationQuotasPerformance {
       new Config("Experiment5", brokers = 5, partitions = 50, throttle = 50 * 1000 * 1000, msgCount = 1 * 1000, msgSize = 100 * 1000)
 
     )
-//    System.exit(0)
     configs.foreach(run(_))
   }
 
@@ -67,12 +67,11 @@ object ReplicationQuotasPerformance {
 
   case class Config(name: String, brokers: Int, partitions: Int, throttle: Long, msgCount: Int, msgSize: Int) {
     val targetBytesPerBrokerMB: Long = msgCount.toLong * msgSize.toLong * partitions.toLong / brokers.toLong / 1000000
-    val file = new File(s"$dir/Log.txt")
     writeToFile
 
     def writeToFile(): Unit = {
       val stream = new FileOutputStream(
-        file,
+        log,
         true)
       val message = s"\n\n$name " +
         s"\n\t- BrokerCount: $brokers" +
@@ -141,7 +140,10 @@ object ReplicationQuotasPerformance {
       //Await completion
       waitForReassignmentToComplete()
 
-      //Logging
+      logOutput(config, replicas, newAssignment)
+    }
+
+    def logOutput(config: Config, replicas: Map[Int, Seq[Int]], newAssignment: Map[TopicAndPartition, Seq[Int]]): Unit = {
       val actual = zkUtils.getPartitionAssignmentForTopics(Seq(topicName))(topicName)
       val existing = zkUtils.getReplicaAssignmentForTopics(newAssignment.map(_._1.topic).toSeq)
       val moves = new ReassignPartitionsCommand(zkUtils, newAssignment).replicaMoves(existing, newAssignment)
@@ -149,10 +151,9 @@ object ReplicationQuotasPerformance {
       val physicalMoves = allMoves.get.split(",").size / 2
 
       //Long stats
-      println("The replicas are "+replicas.toSeq.sortBy(_._1).map("\n"+_))
+      println("The replicas are " + replicas.toSeq.sortBy(_._1).map("\n" + _))
       println("This is the current replica assignment:\n" + actual.toSeq)
       println("proposed assignment is: \n" + newAssignment)
-
       println("moves are: " + allMoves)
       println("This is the assigment we eneded up with" + actual)
 
@@ -167,14 +168,12 @@ object ReplicationQuotasPerformance {
       println("move count is : " + physicalMoves)
     }
 
-
     private def waitForOffsetsToMatch(offset: Int, partitionId: Int, broker: KafkaServer, topic: String): Boolean = {
       waitUntilTrue(() => {
         offset == broker.getLogManager.getLog(TopicAndPartition(topic, partitionId))
           .map(_.logEndOffset).getOrElse(0)
       }, s"Offsets did not match for partition $partitionId on broker ${broker.config.brokerId}", 60000)
     }
-
 
     def waitForReassignmentToComplete() {
       waitUntilTrue(() => {
@@ -183,13 +182,11 @@ object ReplicationQuotasPerformance {
         success
       }, s"Znode ${ZkUtils.ReassignPartitionsPath} wasn't deleted", Int.MaxValue, pause = 1000L)
 
-      println("Showing leader chart")
-      showChart(leaderRates, "Leader")
-      println("Showing follower chart")
-      showChart(followerRates, "Follower")
+      renderChart(leaderRates, "Leader")
+      renderChart(followerRates, "Follower")
     }
 
-    def showChart(data: mutable.Map[Int, Array[Double]], name: String): Unit = {
+    def renderChart(data: mutable.Map[Int, Array[Double]], name: String): Unit = {
       val dataset = new XYSeriesCollection
 
       data.foreach { case (broker, values) =>
@@ -210,18 +207,23 @@ object ReplicationQuotasPerformance {
         dataset
         , PlotOrientation.VERTICAL, false, true, false
       )
-      val frame = new ChartFrame(
-        experimentName,
-        chart
-      )
 
       saveToFile(chart.createBufferedImage(1000, 700), experimentName + "-" + name)
-      frame.pack()
-      frame.setVisible(true)
+
+      if(showGraphsOnExperimentCompletion) {
+        val frame = new ChartFrame(
+          experimentName,
+          chart
+        )
+        frame.pack()
+        frame.setVisible(true)
+      }
+
+      println(s"Chart generated for $name")
     }
 
     def saveToFile(img: BufferedImage, name: String) {
-      val out = new File(dir + "/" + name + ".png")
+      val out = new File(dir, name + ".png")
       ImageIO.write(img, "png", out)
     }
 
