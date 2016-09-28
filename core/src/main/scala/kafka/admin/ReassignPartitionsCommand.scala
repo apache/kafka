@@ -364,7 +364,9 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
   }
 
   def format(moves: Map[TopicAndPartition, Seq[Int]]): String =
-    moves.map { case (tp, moves) => moves.map { replicaId => s"${tp.partition}:${replicaId}" } }.flatMap(x => x).mkString(",")
+    moves.flatMap { case (tp, moves) =>
+      moves.map(replicaId => s"${tp.partition}:${replicaId}")
+    }.mkString(",")
 
   def filterBy(topic: String, allExisting: Map[TopicAndPartition, Seq[Int]], allProposed: Map[TopicAndPartition, Seq[Int]]): (Map[TopicAndPartition, Seq[Int]], Map[TopicAndPartition, Seq[Int]]) = {
     (allExisting.filter(_._1.topic == topic),
