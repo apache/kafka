@@ -12,7 +12,7 @@
   */
 package kafka.admin
 
-import kafka.common.TopicAndPartition
+import kafka.common.{AdminCommandFailedException, TopicAndPartition}
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils._
 import kafka.utils.ZkUtils._
@@ -234,6 +234,16 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     //Check move occurred
     val actual = zkUtils.getPartitionAssignmentForTopics(Seq(topicName))(topicName)
     assertEquals(actual.values.flatten.toSeq.distinct.sorted, Seq(101, 102))
+  }
+
+  @Test (expected=classOf[AdminCommandFailedException])
+  def shouldFailIfProposedDoesNotMatchExisting() {
+    //Given a single replica on server 100
+    startBrokers(Seq(100, 101))
+    createTopic(zkUtils, topicName, Map(0 -> Seq(100)), servers = servers)
+
+    //When we execute an assignment that includes an invalid partition (1:101 in this case)
+    ReassignPartitionsCommand.executeAssignment(zkUtils, s"""{"version":1,"partitions":[{"topic":"$topicName","partition":1,"replicas":[101]}]}""")
   }
 
   def waitForReassignmentToComplete() {

@@ -148,7 +148,7 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   def executeAssignment(zkUtils: ZkUtils, reassignmentJsonString: String, throttle: Long = -1) {
-    val partitionsToBeReassigned = parseAndValidate(reassignmentJsonString)
+    val partitionsToBeReassigned = parseAndValidate(zkUtils, reassignmentJsonString)
     val reassignPartitionsCommand = new ReassignPartitionsCommand(zkUtils, partitionsToBeReassigned.toMap)
 
     // If there is an existing rebalance running, attempt to change its throttle
@@ -174,7 +174,7 @@ object ReassignPartitionsCommand extends Logging {
       .format(ZkUtils.formatAsReassignmentJson(currentPartitionReplicaAssignment)))
   }
 
-  def parseAndValidate(reassignmentJsonString: String): scala.Seq[(TopicAndPartition, scala.Seq[Int])] = {
+  def parseAndValidate(zkUtils: ZkUtils, reassignmentJsonString: String): scala.Seq[(TopicAndPartition, scala.Seq[Int])] = {
     val partitionsToBeReassigned = ZkUtils.parsePartitionReassignmentDataWithoutDedup(reassignmentJsonString)
     if (partitionsToBeReassigned.isEmpty)
       throw new AdminCommandFailedException("Partition reassignment data file is empty")
@@ -189,6 +189,14 @@ object ReassignPartitionsCommand extends Logging {
         .map { case (tp, duplicateReplicas) => "%s contains multiple entries for %s".format(tp, duplicateReplicas.mkString(",")) }
         .mkString(". ")
       throw new AdminCommandFailedException("Partition replica lists may not contain duplicate entries: %s".format(duplicatesMsg))
+    }
+    //Check that all partitions in the proposed assignment exist in the cluster
+    val proposedTopics = partitionsToBeReassigned.map { case (tp, _) => tp.topic }
+    val existingAssignment = zkUtils.getReplicaAssignmentForTopics(proposedTopics)
+
+    if (!partitionsToBeReassigned.forall { case (tp, _) => existingAssignment.contains(tp) }) {
+      throw new AdminCommandFailedException(s"The proposed assignment contains non-existent partitions:" +
+        partitionsToBeReassigned.filterNot(existingAssignment.toSet))
     }
     partitionsToBeReassigned
   }
@@ -295,16 +303,21 @@ object ReassignPartitionsCommand extends Logging {
 class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicAndPartition, Seq[Int]])
   extends Logging {
 
+  def existingAssignment(): Map[TopicAndPartition, Seq[Int]] = {
+    val proposedTopics = proposedAssignment.map { case (tp, _) => tp.topic }.toSeq
+    zkUtils.getReplicaAssignmentForTopics(proposedTopics)
+  }
+
   private def maybeThrottle(throttle: Long): Unit = {
     if (throttle >= 0) {
       maybeLimit(throttle)
-      assignThrottledReplicas()
+      assignThrottledReplicas(existingAssignment(), proposedAssignment)
     }
   }
 
   def maybeLimit(throttle: Long) {
     if (throttle >= 0) {
-      val existingBrokers = zkUtils.getReplicaAssignmentForTopics(proposedAssignment.map(_._1.topic).toSeq).flatMap(_._2).toSeq
+      val existingBrokers = existingAssignment().flatMap(_._2).toSeq
       val proposedBrokers = proposedAssignment.flatMap(_._2).toSeq
       val brokers = (existingBrokers ++ proposedBrokers).distinct
 
@@ -315,12 +328,6 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
       }
       println(f"The throttle limit was set to $throttle%,d B/s")
     }
-  }
-
-  def assignThrottledReplicas(): Unit = {
-    val topicsForMove = proposedAssignment.map { case (tp, _) => tp.topic }.toSeq
-    val currentAssignment = zkUtils.getReplicaAssignmentForTopics(topicsForMove)
-    assignThrottledReplicas(currentAssignment, proposedAssignment)
   }
 
   private[admin] def assignThrottledReplicas(allExisting: Map[TopicAndPartition, Seq[Int]], allProposed: Map[TopicAndPartition, Seq[Int]], admin: AdminUtilities = AdminUtils): Unit = {
