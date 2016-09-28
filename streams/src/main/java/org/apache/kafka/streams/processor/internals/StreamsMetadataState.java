@@ -234,7 +234,7 @@ public class StreamsMetadataState {
     }
 
     private boolean isInitialized() {
-        return !clusterMetadata.topics().isEmpty();
+        return clusterMetadata != null && !clusterMetadata.topics().isEmpty();
     }
 
     private class SourceTopicsInfo {

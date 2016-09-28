@@ -19,7 +19,10 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -122,8 +125,16 @@ public abstract class AbstractTask {
 
     protected void initializeOffsetLimits() {
         for (TopicPartition partition : partitions) {
-            OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
-            stateMgr.putOffsetLimit(partition, metadata != null ? metadata.offset() : 0L);
+            try {
+                OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
+                stateMgr.putOffsetLimit(partition, metadata != null ? metadata.offset() : 0L);
+            } catch (AuthorizationException e) {
+                throw new ProcessorStateException(String.format("AuthorizationException when initializing offsets for %s", partition), e);
+            } catch (WakeupException e) {
+                throw e;
+            } catch (KafkaException e) {
+                throw new ProcessorStateException(String.format("Failed to initialize offsets for %s", partition), e);
+            }
         }
     }
 

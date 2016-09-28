@@ -26,13 +26,16 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 public class RecordQueueTest {
@@ -114,5 +117,23 @@ public class RecordQueueTest {
         assertEquals(4L, queue.poll().timestamp);
         assertEquals(2, queue.size());
         assertEquals(5L, queue.timestamp());
+    }
+
+    @Test(expected = StreamsException.class)
+    public void shouldThrowStreamsExceptionWhenKeyDeserializationFails() throws Exception {
+        final byte[] key = Serdes.Long().serializer().serialize("foo", 1L);
+        final List<ConsumerRecord<byte[], byte[]>> records = Collections.singletonList(
+                new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, key, recordValue));
+
+        queue.addRawRecords(records, timestampExtractor);
+    }
+
+    @Test(expected = StreamsException.class)
+    public void shouldThrowStreamsExceptionWhenValueDeserializationFails() throws Exception {
+        final byte[] value = Serdes.Long().serializer().serialize("foo", 1L);
+        final List<ConsumerRecord<byte[], byte[]>> records = Collections.singletonList(
+                new ConsumerRecord<>("topic", 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, value));
+
+        queue.addRawRecords(records, timestampExtractor);
     }
 }

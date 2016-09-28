@@ -148,7 +148,7 @@ public class WorkerSinkTaskTest {
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
-        workerTask.poll(Long.MAX_VALUE);
+        workerTask.iteration();
 
         PowerMock.verifyAll();
     }
@@ -197,14 +197,14 @@ public class WorkerSinkTaskTest {
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
-        workerTask.poll(Long.MAX_VALUE); // initial assignment
-        workerTask.poll(Long.MAX_VALUE); // fetch some data
+        workerTask.iteration(); // initial assignment
+        workerTask.iteration(); // fetch some data
         workerTask.transitionTo(TargetState.PAUSED);
-        workerTask.poll(Long.MAX_VALUE); // wakeup
-        workerTask.poll(Long.MAX_VALUE); // now paused
+        workerTask.iteration(); // wakeup
+        workerTask.iteration(); // now paused
         workerTask.transitionTo(TargetState.STARTED);
-        workerTask.poll(Long.MAX_VALUE); // wakeup
-        workerTask.poll(Long.MAX_VALUE); // now unpaused
+        workerTask.iteration(); // wakeup
+        workerTask.iteration(); // now unpaused
 
         PowerMock.verifyAll();
     }
@@ -241,9 +241,9 @@ public class WorkerSinkTaskTest {
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
-        workerTask.poll(Long.MAX_VALUE);
-        workerTask.poll(Long.MAX_VALUE);
-        workerTask.poll(Long.MAX_VALUE);
+        workerTask.iteration();
+        workerTask.iteration();
+        workerTask.iteration();
 
         PowerMock.verifyAll();
     }
@@ -260,9 +260,9 @@ public class WorkerSinkTaskTest {
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
-        workerTask.poll(Long.MAX_VALUE);
+        workerTask.iteration();
         try {
-            workerTask.poll(Long.MAX_VALUE);
+            workerTask.iteration();
             fail("Poll should have raised the rebalance exception");
         } catch (RuntimeException e) {
             assertEquals(exception, e);
@@ -283,9 +283,9 @@ public class WorkerSinkTaskTest {
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
-        workerTask.poll(Long.MAX_VALUE);
+        workerTask.iteration();
         try {
-            workerTask.poll(Long.MAX_VALUE);
+            workerTask.iteration();
             fail("Poll should have raised the rebalance exception");
         } catch (RuntimeException e) {
             assertEquals(exception, e);
@@ -343,8 +343,8 @@ public class WorkerSinkTaskTest {
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
-        workerTask.poll(Long.MAX_VALUE); // poll for initial assignment
-        workerTask.poll(Long.MAX_VALUE); // now rebalance with the wakeup triggered
+        workerTask.iteration(); // poll for initial assignment
+        workerTask.iteration(); // now rebalance with the wakeup triggered
 
         PowerMock.verifyAll();
     }
@@ -363,7 +363,7 @@ public class WorkerSinkTaskTest {
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
-        workerTask.poll(Long.MAX_VALUE);
+        workerTask.iteration();
 
         SinkRecord record = records.getValue().iterator().next();
 
@@ -391,7 +391,7 @@ public class WorkerSinkTaskTest {
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
-        workerTask.poll(Long.MAX_VALUE);
+        workerTask.iteration();
 
         SinkRecord record = records.getValue().iterator().next();
 

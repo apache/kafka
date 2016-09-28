@@ -58,15 +58,15 @@ object ConsoleConsumer extends Logging {
   def run(conf: ConsumerConfig) {
 
     val consumer =
-      if (conf.useNewConsumer) {
+      if (conf.useOldConsumer) {
+        checkZk(conf)
+        new OldConsumer(conf.filterSpec, getOldConsumerProps(conf))
+      } else {
         val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs else Long.MaxValue
         if (conf.partitionArg.isDefined)
           new NewShinyConsumer(Option(conf.topicArg), conf.partitionArg, Option(conf.offsetArg), None, getNewConsumerProps(conf), timeoutMs)
         else
           new NewShinyConsumer(Option(conf.topicArg), None, None, Option(conf.whitelistArg), getNewConsumerProps(conf), timeoutMs)
-      } else {
-        checkZk(conf)
-        new OldConsumer(conf.filterSpec, getOldConsumerProps(conf))
       }
 
     addShutdownHook(consumer, conf)
@@ -224,7 +224,7 @@ object ConsoleConsumer extends Logging {
       .describedAs("consume offset")
       .ofType(classOf[String])
       .defaultsTo("latest")
-    val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the form host:port. " +
+    val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED (only when using old consumer): The connection string for the zookeeper connection in the form host:port. " +
       "Multiple URLS can be given to allow fail-over.")
       .withRequiredArg
       .describedAs("urls")
@@ -265,8 +265,8 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("metrics directory")
       .ofType(classOf[java.lang.String])
-    val useNewConsumerOpt = parser.accepts("new-consumer", "Use the new consumer implementation.")
-    val bootstrapServerOpt = parser.accepts("bootstrap-server")
+    val newConsumerOpt = parser.accepts("new-consumer", "Use the new consumer implementation. This is the default.")
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED (unless old consumer is used): The server to connect to.")
       .withRequiredArg
       .describedAs("server to connect to")
       .ofType(classOf[String])
@@ -287,7 +287,7 @@ object ConsoleConsumer extends Logging {
 
     var groupIdPassed = true
     val options: OptionSet = tryParse(parser, args)
-    val useNewConsumer = options.has(useNewConsumerOpt)
+    val useOldConsumer = options.has(zkConnectOpt)
     val enableSystestEventsLogging = options.has(enableSystestEventsLoggingOpt)
 
     // If using old consumer, exactly one of whitelist/blacklist/topic is required.
@@ -314,21 +314,27 @@ object ConsoleConsumer extends Logging {
     val formatter: MessageFormatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
     formatter.init(formatterArgs)
 
-    if (useNewConsumer) {
-      val topicOrFilterOpt = List(topicIdOpt, whitelistOpt).filter(options.has)
-      if (topicOrFilterOpt.size != 1)
-        CommandLineUtils.printUsageAndDie(parser, "Exactly one of whitelist/topic is required.")
-      topicArg = options.valueOf(topicIdOpt)
-      whitelistArg = options.valueOf(whitelistOpt)
-    } else {
+    if (useOldConsumer) {
+      if (options.has(bootstrapServerOpt))
+        CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is not valid with $zkConnectOpt.")
+      else if (options.has(newConsumerOpt))
+        CommandLineUtils.printUsageAndDie(parser, s"Option $newConsumerOpt is not valid with $zkConnectOpt.")
       val topicOrFilterOpt = List(topicIdOpt, whitelistOpt, blacklistOpt).filter(options.has)
       if (topicOrFilterOpt.size != 1)
         CommandLineUtils.printUsageAndDie(parser, "Exactly one of whitelist/blacklist/topic is required.")
       topicArg = options.valueOf(topicOrFilterOpt.head)
       filterSpec = if (options.has(blacklistOpt)) new Blacklist(topicArg) else new Whitelist(topicArg)
+      Console.err.println("Using the ConsoleConsumer with old consumer is deprecated and will be removed " +
+        s"in a future major release. Consider using the new consumer by passing $bootstrapServerOpt instead of ${zkConnectOpt}.")
+    } else {
+      val topicOrFilterOpt = List(topicIdOpt, whitelistOpt).filter(options.has)
+      if (topicOrFilterOpt.size != 1)
+        CommandLineUtils.printUsageAndDie(parser, "Exactly one of whitelist/topic is required.")
+      topicArg = options.valueOf(topicIdOpt)
+      whitelistArg = options.valueOf(whitelistOpt)
     }
 
-    if (!useNewConsumer && (partitionArg.isDefined || options.has(offsetOpt)))
+    if (useOldConsumer && (partitionArg.isDefined || options.has(offsetOpt)))
       CommandLineUtils.printUsageAndDie(parser, "Partition-offset based consumption is supported in the new consumer only.")
 
     if (partitionArg.isDefined) {
@@ -361,7 +367,8 @@ object ConsoleConsumer extends Logging {
       else if (fromBeginning) OffsetRequest.EarliestTime
       else OffsetRequest.LatestTime
 
-    CommandLineUtils.checkRequiredArgs(parser, options, if (useNewConsumer) bootstrapServerOpt else zkConnectOpt)
+    if (!useOldConsumer)
+      CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
 
     if (options.has(csvMetricsReporterEnabledOpt)) {
       val csvReporterProps = new Properties()

@@ -337,7 +337,7 @@ Each of the consumers in the group registers under its group and creates a znode
 Consumers track the maximum offset they have consumed in each partition. This value is stored in a ZooKeeper directory if <code>offsets.storage=zookeeper</code>.
 </p>
 <pre>
-/consumers/[group_id]/offsets/[topic]/[partition_id] --> offset_counter_value ((persistent node)
+/consumers/[group_id]/offsets/[topic]/[partition_id] --> offset_counter_value (persistent node)
 </pre>
 
 <h4><a id="impl_zkowner" href="#impl_zkowner">Partition Owner registry</a></h4>
@@ -349,6 +349,15 @@ Each broker partition is consumed by a single consumer within a given consumer g
 <pre>
 /consumers/[group_id]/owners/[topic]/[partition_id] --> consumer_node_id (ephemeral node)
 </pre>
+
+<h4><a id="impl_clusterid" href="#impl_clusterid">Cluster Id</a></h4>
+
+<p>
+    The cluster id is a unique and immutable identifier assigned to a Kafka cluster. The cluster id can have a maximum of 22 characters and the allowed characters are defined by the regular expression [a-zA-Z0-9_\-]+, which corresponds to the characters used by the URL-safe Base64 variant with no padding. Conceptually, it is auto-generated when a cluster is started for the first time.
+</p>
+<p>
+    Implementation-wise, it is generated when a broker with version 0.10.1 or later is successfully started for the first time. The broker tries to get the cluster id from the <code>/cluster/id</code> znode during startup. If the znode does not exist, the broker generates a new cluster id and creates the znode with this cluster id.
+</p>
 
 <h4><a id="impl_brokerregistration" href="#impl_brokerregistration">Broker node registration</a></h4>
 
