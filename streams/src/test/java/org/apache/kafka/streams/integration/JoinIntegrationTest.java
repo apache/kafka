@@ -161,7 +161,7 @@ public class JoinIntegrationTest {
         CLUSTER.deleteTopic(INPUT_TOPIC_2);
         CLUSTER.deleteTopic(OUTPUT_TOPIC);
 
-        TestUtils.waitForCondition(topicsGotDeleted, 120, "Topics not deleted after 120 seconds.");
+        TestUtils.waitForCondition(topicsGotDeleted, 300, "Topics not deleted after 120 seconds.");
     }
 
     private void checkResult(final String outputTopic, final List<String> expectedResult) throws Exception {
