@@ -21,7 +21,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
-import org.apache.kafka.common.MetricName
+import org.apache.kafka.common.{MetricName, TopicPartition}
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.Assert._
@@ -115,6 +115,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   def testQuotaOverrideDelete() {
     // Override producer and consumer quotas to unlimited
     overrideQuotas(Long.MaxValue, Long.MaxValue)
+    waitForQuotaUpdate(Long.MaxValue, Long.MaxValue)
 
     val numRecords = 1000
     assertEquals(numRecords, produceUntilThrottled(producers.head, numRecords))
@@ -126,9 +127,12 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     // throttled since broker defaults are very small
     removeQuotaOverrides()
     val produced = produceUntilThrottled(producers.head, numRecords)
-
     assertTrue("Should have been throttled", producerThrottleMetric.value > 0)
-    consumeUntilThrottled(consumers.head, produced)
+
+    // Since producer may have been throttled after producing a couple of records,
+    // consume from beginning till throttled
+    consumers.head.seekToBeginning(Collections.singleton(new TopicPartition(topic1, 0)))
+    consumeUntilThrottled(consumers.head, numRecords + produced)
     assertTrue("Should have been throttled", consumerThrottleMetric.value > 0)
   }
 
