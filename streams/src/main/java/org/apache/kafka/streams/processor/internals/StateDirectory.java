@@ -155,7 +155,7 @@ public class StateDirectory {
 
     /**
      * List all of the task directories
-     * @return
+     * @return The list of all the existing local directories for stream tasks
      */
     public File[] listTaskDirectories() {
         return stateDir.listFiles(new FileFilter() {
