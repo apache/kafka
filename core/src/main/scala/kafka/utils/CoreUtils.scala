@@ -308,7 +308,7 @@ object CoreUtils extends Logging {
 
   def propsWith(props: (String, String)*): Properties = {
     val properties = new Properties()
-    props.foreach { prop => properties.put(prop._1, prop._2) }
+    props.foreach { case (k, v) => properties.put(k, v) }
     properties
   }
 }

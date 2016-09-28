@@ -234,7 +234,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     props.put(LeaderThrottledReplicasListProp, "")
 
     //When
-    val result = configHandler.parseThrottledPartitions(props, 102, LeaderThrottledReplicasListProp)
+    val result = configHandler.parseThrottledPartitions(props, 102, FollowerThrottledReplicasListProp)
 
     //Then
     assertEquals(Seq(), result)
