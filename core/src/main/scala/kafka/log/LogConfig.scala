@@ -17,20 +17,19 @@
 
 package kafka.log
 
-import java.util.Properties
+import java.util.{Collections, Locale, Properties}
 
 import scala.collection.JavaConverters._
 import kafka.api.ApiVersion
 import kafka.message.{BrokerCompressionCodec, Message}
-import kafka.server.{ThrottledReplicaListValidator, KafkaConfig}
+import kafka.server.{KafkaConfig, ThrottledReplicaListValidator}
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.utils.Utils
-import java.util.Locale
 
 import scala.collection.mutable
-import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList,Validator}
+import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList, Validator}
 
 object Defaults {
   val SegmentSize = kafka.server.Defaults.LogSegmentBytes
@@ -55,8 +54,8 @@ object Defaults {
   val MessageFormatVersion = kafka.server.Defaults.LogMessageFormatVersion
   val MessageTimestampType = kafka.server.Defaults.LogMessageTimestampType
   val MessageTimestampDifferenceMaxMs = kafka.server.Defaults.LogMessageTimestampDifferenceMaxMs
-  val LeaderThrottledReplicasList = ""
-  val FollowerThrottledReplicasList = ""
+  val LeaderThrottledReplicasList = Collections.emptyList[String]()
+  val FollowerThrottledReplicasList = Collections.emptyList[String]()
 }
 
 case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfig.configDef, props, false) {
@@ -87,8 +86,8 @@ case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfi
   val messageFormatVersion = ApiVersion(getString(LogConfig.MessageFormatVersionProp))
   val messageTimestampType = TimestampType.forName(getString(LogConfig.MessageTimestampTypeProp))
   val messageTimestampDifferenceMaxMs = getLong(LogConfig.MessageTimestampDifferenceMaxMsProp).longValue
-  val leaderThrottledReplicasList = getString(LogConfig.LeaderThrottledReplicasListProp)
-  val followerThrottledReplicasList = getString(LogConfig.FollowerThrottledReplicasListProp)
+  val leaderThrottledReplicasList = getList(LogConfig.LeaderThrottledReplicasListProp)
+  val followerThrottledReplicasList = getList(LogConfig.FollowerThrottledReplicasListProp)
 
   def randomSegmentJitter: Long =
     if (segmentJitterMs == 0) 0 else Utils.abs(scala.util.Random.nextInt()) % math.min(segmentJitterMs, segmentMs)
@@ -290,8 +289,8 @@ object LogConfig {
         KafkaConfig.LogMessageTimestampTypeProp)
       .define(MessageTimestampDifferenceMaxMsProp, LONG, Defaults.MessageTimestampDifferenceMaxMs,
         atLeast(0), MEDIUM, MessageTimestampDifferenceMaxMsDoc, KafkaConfig.LogMessageTimestampDifferenceMaxMsProp)
-      .define(LeaderThrottledReplicasListProp, STRING, Defaults.LeaderThrottledReplicasList, ThrottledReplicaListValidator, MEDIUM, LeaderThrottledReplicasListDoc, LeaderThrottledReplicasListProp)
-      .define(FollowerThrottledReplicasListProp, STRING, Defaults.FollowerThrottledReplicasList, ThrottledReplicaListValidator, MEDIUM, FollowerThrottledReplicasListDoc, FollowerThrottledReplicasListProp)
+      .define(LeaderThrottledReplicasListProp, LIST, Defaults.LeaderThrottledReplicasList,ThrottledReplicaListValidator, MEDIUM, LeaderThrottledReplicasListDoc, LeaderThrottledReplicasListProp)
+      .define(FollowerThrottledReplicasListProp, LIST, Defaults.FollowerThrottledReplicasList, ThrottledReplicaListValidator, MEDIUM, FollowerThrottledReplicasListDoc, FollowerThrottledReplicasListProp)
   }
 
   def apply(): LogConfig = LogConfig(new Properties())

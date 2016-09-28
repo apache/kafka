@@ -239,4 +239,18 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     //Then
     assertEquals(Seq(), result)
   }
+
+  @Test
+  def shouldParseRegardlessOfWhitespaceAroundValues() {
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
+    assertEquals(AllReplicas, parse(configHandler, "* "))
+    assertEquals(Seq(), parse(configHandler, " "))
+    assertEquals(Seq(6), parse(configHandler, "6:102"))
+    assertEquals(Seq(6), parse(configHandler, "6:102 "))
+    assertEquals(Seq(6), parse(configHandler, " 6:102"))
+  }
+
+  def parse(configHandler: TopicConfigHandler, value: String): Seq[Int] = {
+    configHandler.parseThrottledPartitions(CoreUtils.propsWith(LeaderThrottledReplicasListProp, value), 102, LeaderThrottledReplicasListProp)
+  }
 }

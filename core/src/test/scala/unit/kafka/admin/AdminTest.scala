@@ -31,10 +31,12 @@ import kafka.utils.{Logging, TestUtils, ZkUtils}
 import kafka.common.TopicAndPartition
 import kafka.server.{ConfigType, KafkaConfig, KafkaServer}
 import java.io.File
+import java.util
 import kafka.utils.TestUtils._
 import kafka.admin.AdminUtils._
 import scala.collection.{Map, immutable}
 import kafka.utils.CoreUtils._
+import scala.collection.JavaConversions._
 
 class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
@@ -396,14 +398,21 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     }
 
     def checkConfig(messageSize: Int, retentionMs: Long, throttledLeaders: String, throttledFollowers: String, quotaManagerIsThrottled: Boolean) {
+      def checkList(actual: util.List[String], expected: String): Unit = {
+        assertNotNull(actual)
+        if(expected == "")
+            assertTrue(actual.size() == 0)
+        else
+          assertEquals(expected.split(",").toList, actual.toList)
+      }
       TestUtils.retry(10000) {
         for(part <- 0 until partitions) {
           val log = server.logManager.getLog(TopicAndPartition(topic, part))
           assertTrue(log.isDefined)
           assertEquals(retentionMs, log.get.config.retentionMs)
           assertEquals(messageSize, log.get.config.maxMessageSize)
-          assertEquals(throttledLeaders, log.get.config.leaderThrottledReplicasList)
-          assertEquals(throttledFollowers, log.get.config.followerThrottledReplicasList)
+          checkList(log.get.config.leaderThrottledReplicasList, throttledLeaders)
+          checkList(log.get.config.followerThrottledReplicasList, throttledFollowers)
           assertEquals(quotaManagerIsThrottled, server.quotaManagers.leader.isThrottled(new TopicAndPartition(topic, part)))
         }
       }
@@ -434,7 +443,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
       //Now delete the config
       AdminUtils.changeTopicConfig(server.zkUtils, topic, new Properties)
-      checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, Defaults.LeaderThrottledReplicasList, Defaults.LeaderThrottledReplicasList, quotaManagerIsThrottled = false)
+      checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, "", "", quotaManagerIsThrottled = false)
 
       //Add config back
       AdminUtils.changeTopicConfig(server.zkUtils, topic, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1"))
@@ -442,7 +451,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
       //Now ensure updating to "" removes the throttled replica list also
       AdminUtils.changeTopicConfig(server.zkUtils, topic, propsWith((LogConfig.FollowerThrottledReplicasListProp, ""), (LogConfig.LeaderThrottledReplicasListProp, "")))
-      checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, Defaults.LeaderThrottledReplicasList, Defaults.LeaderThrottledReplicasList,  quotaManagerIsThrottled = false)
+      checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, "", "",  quotaManagerIsThrottled = false)
 
     } finally {
       server.shutdown()

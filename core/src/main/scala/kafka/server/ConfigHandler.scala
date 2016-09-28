@@ -82,7 +82,7 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
 
   def parseThrottledPartitions(topicConfig: Properties, brokerId: Int, prop: String): Seq[Int] = {
     val configValue = topicConfig.get(prop).toString.trim
-    ThrottledReplicaListValidator.ensureValid(prop, configValue)
+    ThrottledReplicaListValidator.ensureValidString(prop, configValue)
     configValue.trim match {
       case "" => Seq()
       case "*" => AllReplicas
@@ -163,15 +163,20 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig, private val quo
 }
 
 object ThrottledReplicaListValidator extends Validator {
-  override def ensureValid(name: String, value: scala.Any): Unit = {
-    value match {
-      case s: String => if (!isValid(s))
-        throw new ConfigException(name, value, s"$name  must match for format [partitionId],[brokerId]:[partitionId],[brokerId]:[partitionId],[brokerId] etc")
-      case _ => throw new ConfigException(name, value, s"$name  must be a string")
-    }
+  def ensureValidString(name: String, value: String): Unit ={
+    ensureValid(name, value.split(",").map(_.trim).toList)
   }
 
-  private def isValid(proposed: String): Boolean = {
-    proposed.trim.equals("*") || proposed.trim.matches("([0-9]+:[0-9]+)?(,[0-9]+:[0-9]+)*")
+  override def ensureValid(name: String, value: scala.Any): Unit = {
+    def check(proposed: List[Any]): Unit = {
+      if (!(proposed.forall { s => s.toString.trim.matches("([0-9]+:[0-9]+)?") }
+        || proposed(0).toString.trim.equals("*")))
+        throw new ConfigException(name, value, s"$name  must match for format [partitionId],[brokerId]:[partitionId],[brokerId]:[partitionId],[brokerId] etc")
+    }
+    value match {
+      case scalaList: List[Any] => check(scalaList)
+      case javaList: java.util.List[String] => check(javaList.asScala.toList)
+      case _ => throw new ConfigException(name, value, s"$name  must be a List but was ${value.getClass.getName}")
+    }
   }
 }
