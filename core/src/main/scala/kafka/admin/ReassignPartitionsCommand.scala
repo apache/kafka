@@ -292,7 +292,7 @@ object ReassignPartitionsCommand extends Logging {
   }
 }
 
-class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: Map[TopicAndPartition, Seq[Int]])
+class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicAndPartition, Seq[Int]])
   extends Logging {
 
   private def maybeThrottle(throttle: Long): Unit = {
@@ -304,8 +304,8 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: Map[TopicAndPartit
 
   def maybeLimit(throttle: Long) {
     if (throttle >= 0) {
-      val existingBrokers = zkUtils.getReplicaAssignmentForTopics(partitions.map(_._1.topic).toSeq).flatMap(_._2).toSeq
-      val proposedBrokers = partitions.flatMap(_._2).toSeq
+      val existingBrokers = zkUtils.getReplicaAssignmentForTopics(proposedAssignment.map(_._1.topic).toSeq).flatMap(_._2).toSeq
+      val proposedBrokers = proposedAssignment.flatMap(_._2).toSeq
       val brokers = (existingBrokers ++ proposedBrokers).distinct
 
       for (id <- brokers) {
@@ -318,9 +318,9 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: Map[TopicAndPartit
   }
 
   def assignThrottledReplicas(): Unit = {
-    val topicsForMove = partitions.map { case (tp, _) => tp.topic }.toSeq
-    val current = zkUtils.getReplicaAssignmentForTopics(topicsForMove)
-    assignThrottledReplicas(current, partitions)
+    val topicsForMove = proposedAssignment.map { case (tp, _) => tp.topic }.toSeq
+    val currentAssignment = zkUtils.getReplicaAssignmentForTopics(topicsForMove)
+    assignThrottledReplicas(currentAssignment, proposedAssignment)
   }
 
   private[admin] def assignThrottledReplicas(allExisting: Map[TopicAndPartition, Seq[Int]], allProposed: Map[TopicAndPartition, Seq[Int]], admin: AdminUtilities = AdminUtils): Unit = {
@@ -334,15 +334,16 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: Map[TopicAndPartit
       val follower = format(postRebalanceReplicasThatMoved(existing, proposed))
 
       admin.changeTopicConfig(zkUtils, topic, propsWith((LeaderThrottledReplicasListProp, leader), (FollowerThrottledReplicasListProp, follower)))
-      info(s"Updated leader-throttled replicas for topic $topic with: $leader")
-      info(s"Updated follower-throttled replicas for topic $topic with: $follower")
+
+      debug(s"Updated leader-throttled replicas for topic $topic with: $leader")
+      debug(s"Updated follower-throttled replicas for topic $topic with: $follower")
     }
   }
 
   private def postRebalanceReplicasThatMoved(existing: Map[TopicAndPartition, Seq[Int]], proposed: Map[TopicAndPartition, Seq[Int]]): Map[TopicAndPartition, Seq[Int]] = {
     //For each partition in the proposed list, filter out any replicas that exist now (i.e. not moving)
     existing.map { case (tp, current) =>
-      (tp -> proposed.get(tp).get.filterNot(current.toSet))
+      tp -> proposed(tp).filterNot(current.toSet)
     }
   }
 
@@ -353,11 +354,8 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: Map[TopicAndPartit
     }
   }
 
-  def format(moves: Map[TopicAndPartition, Seq[Int]]): String = {
-    val formatted = moves.map { case (tp, moves) => moves.map { replicaId => s"${tp.partition}:${replicaId}" } }.flatMap(x => x).mkString(",")
-    info(s"Assigning throttled replicas [$formatted]")
-    formatted
-  }
+  def format(moves: Map[TopicAndPartition, Seq[Int]]): String =
+    moves.map { case (tp, moves) => moves.map { replicaId => s"${tp.partition}:${replicaId}" } }.flatMap(x => x).mkString(",")
 
   def filterBy(topic: String, allExisting: Map[TopicAndPartition, Seq[Int]], allProposed: Map[TopicAndPartition, Seq[Int]]): (Map[TopicAndPartition, Seq[Int]], Map[TopicAndPartition, Seq[Int]]) = {
     (allExisting.filter(_._1.topic == topic),
@@ -367,7 +365,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: Map[TopicAndPartit
   def reassignPartitions(throttle: Long = -1): Boolean = {
     maybeThrottle(throttle)
     try {
-      val validPartitions = partitions.filter(p => validatePartition(zkUtils, p._1.topic, p._1.partition))
+      val validPartitions = proposedAssignment.filter(p => validatePartition(zkUtils, p._1.topic, p._1.partition))
       if (validPartitions.isEmpty) false
       else {
         val jsonReassignmentData = ZkUtils.formatAsReassignmentJson(validPartitions)
