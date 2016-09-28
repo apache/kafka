@@ -113,7 +113,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
           case "topic2" =>
             assertEquals("0:100", configChange.get(FollowerThrottledReplicasListProp))
             assertEquals("0:101,0:102", configChange.get(LeaderThrottledReplicasListProp))
-          case _ => fail()
+          case _ => fail("Unexpected topic $topic")
         }
       }
     }
