@@ -86,12 +86,12 @@ public class StandbyTask extends AbstractTask {
      * @return a list of records not consumed
      */
     public List<ConsumerRecord<byte[], byte[]>> update(TopicPartition partition, List<ConsumerRecord<byte[], byte[]>> records) {
-        log.debug("task [{}] updates for partition [{}]", id(), partition);
+        log.debug("task [{}] Updates for partition [{}]", id(), partition);
         return stateMgr.updateStandbyStates(partition, records);
     }
 
     public void commit() {
-        log.debug("task [{}] flushing", id());
+        log.debug("task [{}] Flushing", id());
         stateMgr.flush(processorContext);
 
         // reinitialize offset limits

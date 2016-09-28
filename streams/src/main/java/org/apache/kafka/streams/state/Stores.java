@@ -399,6 +399,10 @@ public class Stores {
          */
         PersistentKeyValueFactory<K, V> disableLogging();
 
+        /**
+         * Caching should be enabled on the created store.
+         * @return the factory to create a persistent key-value store
+         */
         PersistentKeyValueFactory<K, V> enableCaching();
         /**
          * Return the instance of StateStoreSupplier of new key-value store.

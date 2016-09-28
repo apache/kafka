@@ -38,6 +38,7 @@ public class UtilsTest {
         assertEquals("127.0.0.1", getHost("127.0.0.1:8000"));
         assertEquals("mydomain.com", getHost("PLAINTEXT://mydomain.com:8080"));
         assertEquals("MyDomain.com", getHost("PLAINTEXT://MyDomain.com:8080"));
+        assertEquals("My_Domain.com", getHost("PLAINTEXT://My_Domain.com:8080"));
         assertEquals("::1", getHost("[::1]:1234"));
         assertEquals("2001:db8:85a3:8d3:1319:8a2e:370:7348", getHost("PLAINTEXT://[2001:db8:85a3:8d3:1319:8a2e:370:7348]:5678"));
         assertEquals("2001:DB8:85A3:8D3:1319:8A2E:370:7348", getHost("PLAINTEXT://[2001:DB8:85A3:8D3:1319:8A2E:370:7348]:5678"));

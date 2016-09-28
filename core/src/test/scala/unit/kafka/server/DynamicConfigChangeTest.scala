@@ -60,8 +60,9 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     assertTrue("Should contain a ConfigHandler for " + rootEntityType ,
                this.servers.head.dynamicConfigHandlers.contains(rootEntityType))
     val props = new Properties()
-    props.put(QuotaConfigOverride.ProducerOverride, "1000")
-    props.put(QuotaConfigOverride.ConsumerOverride, "2000")
+    props.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "1000")
+    props.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "2000")
+
     val quotaManagers = servers.head.apis.quotas
     rootEntityType match {
       case ConfigType.Client => AdminUtils.changeClientIdConfig(zkUtils, configEntityName, props)

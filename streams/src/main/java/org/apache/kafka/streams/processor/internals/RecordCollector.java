@@ -91,7 +91,7 @@ public class RecordCollector {
                             offsets.put(tp, metadata.offset());
                         } else {
                             String prefix = String.format("task [%s]", streamTaskId);
-                            log.error("{} Error sending record to topic {}", prefix, topic, exception);
+                            log.error(String.format("%s Error sending record to topic %s", prefix, topic), exception);
                         }
                     }
                 });
@@ -100,9 +100,10 @@ public class RecordCollector {
                 if (attempt == MAX_SEND_ATTEMPTS) {
                     throw new StreamsException(String.format("failed to send record to topic %s after %d attempts", topic, attempt));
                 }
-                log.warn("timeout exception caught when sending record to topic {} attempt {}", topic, attempt);
+                log.warn(String.format("timeout exception caught when sending record to topic %s attempt %s", topic, attempt));
                 Utils.sleep(SEND_RETRY_BACKOFF);
             }
+
         }
     }
 
