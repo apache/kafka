@@ -165,6 +165,7 @@ public class ListOffsetRequest extends AbstractRequest {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
         Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<TopicPartition, ListOffsetResponse.PartitionData>();
 
