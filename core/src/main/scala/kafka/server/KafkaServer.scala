@@ -589,6 +589,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
         CoreUtils.swallow(authorizer.foreach(_.close()))
         if(replicaManager != null)
           CoreUtils.swallow(replicaManager.shutdown())
+        if (adminManager != null)
+          CoreUtils.swallow(adminManager.shutdown())
         if(logManager != null)
           CoreUtils.swallow(logManager.shutdown())
         if(groupCoordinator != null)
