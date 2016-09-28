@@ -340,7 +340,9 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
       //Apply a follower throttle to all "move destinations".
       val follower = format(postRebalanceReplicasThatMoved(existing, proposed))
 
-      admin.changeTopicConfig(zkUtils, topic, propsWith((LeaderThrottledReplicasListProp, leader), (FollowerThrottledReplicasListProp, follower)))
+      admin.changeTopicConfig(zkUtils, topic, propsWith(
+        (LeaderThrottledReplicasListProp, leader),
+        (FollowerThrottledReplicasListProp, follower)))
 
       debug(s"Updated leader-throttled replicas for topic $topic with: $leader")
       debug(s"Updated follower-throttled replicas for topic $topic with: $follower")
