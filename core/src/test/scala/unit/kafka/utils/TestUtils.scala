@@ -1125,12 +1125,6 @@ object TestUtils extends Logging {
     assertTrue(s"$message failed with exception(s) $exceptions", exceptions.isEmpty)
 
   }
-
-  def wrap(props: (String, String)*): Properties = {
-    val properties = new Properties()
-    props.foreach{prop => properties.put(prop._1, prop._2)}
-    properties
-  }
 }
 
 class IntEncoder(props: VerifiableProperties = null) extends Encoder[Int] {

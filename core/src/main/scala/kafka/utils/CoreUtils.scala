@@ -302,7 +302,11 @@ object CoreUtils extends Logging {
     urlSafeBase64EncodedUUID.substring(0, urlSafeBase64EncodedUUID.length - 2)
   }
 
-  def wrap(props: (String, String)*): Properties = {
+  def propsWith(key: String, value: String): Properties = {
+    propsWith((key, value))
+  }
+
+  def propsWith(props: (String, String)*): Properties = {
     val properties = new Properties()
     props.foreach { prop => properties.put(prop._1, prop._2) }
     properties

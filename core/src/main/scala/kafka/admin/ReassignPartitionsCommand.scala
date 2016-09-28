@@ -17,10 +17,8 @@
 package kafka.admin
 
 import joptsimple.OptionParser
-import kafka.log.LogConfig
 import kafka.server.{DynamicConfig, ConfigType}
 import kafka.utils._
-
 import scala.collection._
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import kafka.common.{AdminCommandFailedException, TopicAndPartition}
@@ -29,8 +27,7 @@ import kafka.log.LogConfig._
 import kafka.utils.CoreUtils._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.security.JaasUtils
-
-import scala.{Iterable, Seq}
+import scala.Seq
 
 object ReassignPartitionsCommand extends Logging {
 
@@ -336,7 +333,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, partitions: Map[TopicAndPartit
       //Apply a follower throttle to all "move destinations".
       val follower = format(postRebalanceReplicasThatMoved(existing, proposed))
 
-      admin.changeTopicConfig(zkUtils, topic, wrap((LeaderThrottledReplicasListProp, leader), (FollowerThrottledReplicasListProp, follower)))
+      admin.changeTopicConfig(zkUtils, topic, propsWith((LeaderThrottledReplicasListProp, leader), (FollowerThrottledReplicasListProp, follower)))
       info(s"Updated leader-throttled replicas for topic $topic with: $leader")
       info(s"Updated follower-throttled replicas for topic $topic with: $follower")
     }

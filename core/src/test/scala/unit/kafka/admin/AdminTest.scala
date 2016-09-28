@@ -34,6 +34,7 @@ import java.io.File
 import kafka.utils.TestUtils._
 import kafka.admin.AdminUtils._
 import scala.collection.{Map, immutable}
+import kafka.utils.CoreUtils._
 
 class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
@@ -440,7 +441,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
       checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1", quotaManagerIsThrottled = true)
 
       //Now ensure updating to "" removes the throttled replica list also
-      AdminUtils.changeTopicConfig(server.zkUtils, topic, wrap((LogConfig.FollowerThrottledReplicasListProp, ""), (LogConfig.LeaderThrottledReplicasListProp, "")))
+      AdminUtils.changeTopicConfig(server.zkUtils, topic, propsWith((LogConfig.FollowerThrottledReplicasListProp, ""), (LogConfig.LeaderThrottledReplicasListProp, "")))
       checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, Defaults.LeaderThrottledReplicasList, Defaults.LeaderThrottledReplicasList,  quotaManagerIsThrottled = false)
 
     } finally {
@@ -467,12 +468,12 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
       val limit: Long = 1000000
 
       // Set the limit & check it is applied to the log
-      changeBrokerConfig(servers(0).zkUtils, brokerIds,  wrap((ThrottledReplicationRateLimitProp, limit.toString)))
+      changeBrokerConfig(servers(0).zkUtils, brokerIds,  propsWith(ThrottledReplicationRateLimitProp, limit.toString))
       checkConfig(limit)
 
       // Now double the config values for the topic and check that it is applied
       val newLimit = 2 * limit
-      changeBrokerConfig(servers(0).zkUtils, brokerIds,  wrap((ThrottledReplicationRateLimitProp, newLimit.toString)))
+      changeBrokerConfig(servers(0).zkUtils, brokerIds,  propsWith(ThrottledReplicationRateLimitProp, newLimit.toString))
       checkConfig(newLimit)
 
       // Verify that the same config can be read from ZK

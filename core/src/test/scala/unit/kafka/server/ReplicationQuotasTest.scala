@@ -25,8 +25,8 @@ import kafka.common._
 import kafka.log.LogConfig._
 import kafka.server.KafkaConfig.fromProps
 import kafka.server.QuotaType._
-import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
+import kafka.utils.CoreUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.junit.Assert._
@@ -105,14 +105,14 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
     //Set the throttle limit on all 8 brokers, but only assign throttled replicas to the six leaders, or two followers
     (100 to 107).foreach { brokerId =>
-      changeBrokerConfig(zkUtils, Seq(brokerId), wrap((DynamicConfig.Broker.ThrottledReplicationRateLimitProp, throttle.toString)))
+      changeBrokerConfig(zkUtils, Seq(brokerId), propsWith(DynamicConfig.Broker.ThrottledReplicationRateLimitProp, throttle.toString))
     }
 
     //Either throttle the six leaders or the two followers
     if (leaderThrottle)
-      changeTopicConfig(zkUtils, topic, wrap((LeaderThrottledReplicasListProp, "0:100,1:101,2:102,3:103,4:104,5:105" )))
+      changeTopicConfig(zkUtils, topic, propsWith(LeaderThrottledReplicasListProp, "0:100,1:101,2:102,3:103,4:104,5:105" ))
     else
-      changeTopicConfig(zkUtils, topic, wrap((FollowerThrottledReplicasListProp, "0:106,1:106,2:106,3:107,4:107,5:107")))
+      changeTopicConfig(zkUtils, topic, propsWith(FollowerThrottledReplicasListProp, "0:106,1:106,2:106,3:107,4:107,5:107"))
 
     //Add data equally to each partition
     producer = createNewProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 0)
@@ -189,8 +189,8 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     val throttle: Long = msg.length * msgCount / expectedDuration
 
     //Set the throttle limit leader
-    changeBrokerConfig(zkUtils, Seq(100), wrap((DynamicConfig.Broker.ThrottledReplicationRateLimitProp, throttle.toString)))
-    changeTopicConfig(zkUtils, topic, wrap((LeaderThrottledReplicasListProp, "0:100")))
+    changeBrokerConfig(zkUtils, Seq(100), propsWith(DynamicConfig.Broker.ThrottledReplicationRateLimitProp, throttle.toString))
+    changeTopicConfig(zkUtils, topic, propsWith(LeaderThrottledReplicasListProp, "0:100"))
 
     //Add data
     addData(msgCount, msg)
