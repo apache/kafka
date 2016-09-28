@@ -121,11 +121,11 @@ public class ProcessorStateManager {
     public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
 
         if (store.name().equals(CHECKPOINT_FILE_NAME)) {
-            throw new IllegalArgumentException(String.format("task [%s]  Illegal store name: %s", taskId, CHECKPOINT_FILE_NAME));
+            throw new IllegalArgumentException(String.format("task [%s] Illegal store name: %s", taskId, CHECKPOINT_FILE_NAME));
         }
 
         if (this.stores.containsKey(store.name())) {
-            throw new IllegalArgumentException(String.format("task [%s]  Store %s has already been registered.", taskId, store.name()));
+            throw new IllegalArgumentException(String.format("task [%s] Store %s has already been registered.", taskId, store.name()));
         }
 
         if (loggingEnabled) {
@@ -160,7 +160,7 @@ public class ProcessorStateManager {
 
             List<PartitionInfo> partitionInfos = restoreConsumer.partitionsFor(topic);
             if (partitionInfos == null) {
-                throw new StreamsException(String.format("task [%s]  Could not find partition info for topic: %s", taskId, topic));
+                throw new StreamsException(String.format("task [%s] Could not find partition info for topic: %s", taskId, topic));
             }
             for (PartitionInfo partitionInfo : partitionInfos) {
                 if (partitionInfo.partition() == partition) {
@@ -171,7 +171,7 @@ public class ProcessorStateManager {
         } while (partitionNotFound && System.currentTimeMillis() < startTime + waitTime);
 
         if (partitionNotFound) {
-            throw new StreamsException(String.format("task [%s]  Store %s's change log (%s) does not contain partition %s", taskId, store.name(), topic, partition));
+            throw new StreamsException(String.format("task [%s] Store %s's change log (%s) does not contain partition %s", taskId, store.name(), topic, partition));
         }
 
         if (isStandby) {
