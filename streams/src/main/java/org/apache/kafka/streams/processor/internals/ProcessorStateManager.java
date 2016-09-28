@@ -21,6 +21,8 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -158,7 +160,12 @@ public class ProcessorStateManager {
                 // ignore
             }
 
-            List<PartitionInfo> partitionInfos = restoreConsumer.partitionsFor(topic);
+            List<PartitionInfo> partitionInfos = null;
+            try {
+                partitionInfos = restoreConsumer.partitionsFor(topic);
+            } catch (TimeoutException e) {
+                throw new StreamsException(String.format("task [%s] Could not find partition info for topic: %s", taskId, topic));
+            }
             if (partitionInfos == null) {
                 throw new StreamsException(String.format("task [%s] Could not find partition info for topic: %s", taskId, topic));
             }
@@ -190,7 +197,7 @@ public class ProcessorStateManager {
 
         // subscribe to the store's partition
         if (!restoreConsumer.subscription().isEmpty()) {
-            throw new IllegalStateException(String.format("task [%s]  Restore consumer should have not subscribed to any partitions beforehand", taskId));
+            throw new IllegalStateException(String.format("task [%s] Restore consumer should have not subscribed to any partitions beforehand", taskId));
         }
         TopicPartition storePartition = new TopicPartition(topicName, getPartition(topicName));
         restoreConsumer.assign(Collections.singletonList(storePartition));
@@ -268,7 +275,11 @@ public class ProcessorStateManager {
         int count = 0;
         for (ConsumerRecord<byte[], byte[]> record : records) {
             if (record.offset() < limit) {
-                restoreCallback.restore(record.key(), record.value());
+                try {
+                    restoreCallback.restore(record.key(), record.value());
+                } catch (Exception e) {
+                    throw new ProcessorStateException(String.format("task [%s] exception caught while trying to restore state from %s", taskId, storePartition), e);
+                }
                 lastOffset = record.offset();
             } else {
                 if (remainingRecords == null)
@@ -305,7 +316,11 @@ public class ProcessorStateManager {
                 if (processorNode != null) {
                     context.setCurrentNode(processorNode);
                 }
-                store.flush();
+                try {
+                    store.flush();
+                } catch (Exception e) {
+                    throw new ProcessorStateException(String.format("task [%s] Failed to flush state store %s", taskId, store.name()), e);
+                }
             }
         }
     }
@@ -321,8 +336,12 @@ public class ProcessorStateManager {
                 log.debug("task [{}] Closing stores.", taskId);
                 for (Map.Entry<String, StateStore> entry : stores.entrySet()) {
                     log.debug("task [{}} Closing storage engine {}", taskId, entry.getKey());
-                    entry.getValue().flush();
-                    entry.getValue().close();
+                    try {
+                        entry.getValue().flush();
+                        entry.getValue().close();
+                    } catch (Exception e) {
+                        throw new ProcessorStateException(String.format("task [%s] Failed to close state store %s", taskId, entry.getKey()), e);
+                    }
                 }
 
                 Map<TopicPartition, Long> checkpointOffsets = new HashMap<>();
