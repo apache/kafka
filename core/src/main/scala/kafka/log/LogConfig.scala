@@ -328,7 +328,7 @@ object LogConfig {
     */
   def validateValues(props: Properties) {
     require(props.getProperty(SegmentBytesProp).toLong <= props.getProperty(RetentionBytesProp).toLong,
-      "segment.bytes "+props.getProperty(SegmentBytesProp)+" is not less than or equal to retention.bytes "+props.getProperty(RetentionBytesProp))
+      s"segment.bytes ${props.getProperty(SegmentBytesProp)} is not less than or equal to retention.bytes ${props.getProperty(RetentionBytesProp)}")
   }
 
   /**
@@ -336,8 +336,8 @@ object LogConfig {
    */
   def validate(props: Properties) {
     validateNames(props)
-    validateValues(props)
     configDef.parse(props)
+    validateValues(props)
   }
 
 }
