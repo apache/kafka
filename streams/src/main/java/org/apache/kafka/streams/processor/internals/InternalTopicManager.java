@@ -32,7 +32,7 @@ public class InternalTopicManager {
     private final long windowChangeLogAdditionalRetention;
 
     private final int replicationFactor;
-    private StreamsKafkaClient streamsKafkaClient;
+    private final StreamsKafkaClient streamsKafkaClient;
 
     public InternalTopicManager(final StreamsKafkaClient streamsKafkaClient, final int replicationFactor, final long windowChangeLogAdditionalRetention) {
         this.streamsKafkaClient = streamsKafkaClient;

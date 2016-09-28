@@ -237,8 +237,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 }
             }
             if (!missingTopics.isEmpty()) {
-                log.warn("stream-thread [{}] Topic {} do not exists but couldn't created as the config '{}' isn't supplied",
-                        streamThread.getName(), missingTopics, StreamsConfig.ZOOKEEPER_CONNECT_CONFIG);
+                log.warn("stream-thread [{}] Topic {} do not exists but couldn't created.",
+                        streamThread.getName(), missingTopics);
 
             }
         }

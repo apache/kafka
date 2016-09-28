@@ -58,10 +58,6 @@ public class StreamsConfig extends AbstractConfig {
     public static final String STATE_DIR_CONFIG = "state.dir";
     private static final String STATE_DIR_DOC = "Directory location for state store.";
 
-    /** <code>zookeeper.connect<code/> */
-    public static final String ZOOKEEPER_CONNECT_CONFIG = "zookeeper.connect";
-    private static final String ZOOKEEPER_CONNECT_DOC = "Zookeeper connect string for Kafka topics management.";
-
     /** <code>commit.interval.ms</code> */
     public static final String COMMIT_INTERVAL_MS_CONFIG = "commit.interval.ms";
     private static final String COMMIT_INTERVAL_MS_DOC = "The frequency with which to save the position of the processor.";
@@ -142,29 +138,21 @@ public class StreamsConfig extends AbstractConfig {
     public static final String CACHE_MAX_BYTES_BUFFERING_DOC = "Maximum number of memory bytes to be used for buffering across all threads";
 
     public static final String SECURITY_PROTOCOL_CONFIG = CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
-    public static final String SECURITY_PROTOCOL_DOC = CommonClientConfigs.SECURITY_PROTOCOL_DOC;
     public static final String DEFAULT_SECURITY_PROTOCOL = CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL;
 
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
-    public static final String CONNECTIONS_MAX_IDLE_MS_DOC = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC;
 
     public static final String RETRY_BACKOFF_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
-    public static final String RETRY_BACKOFF_MS_DOC = CommonClientConfigs.RETRY_BACKOFF_MS_DOC;
 
     public static final String METADATA_MAX_AGE_CONFIG = CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
-    public static final String METADATA_MAX_AGE_DOC = CommonClientConfigs.METADATA_MAX_AGE_DOC;
 
     public static final String RECONNECT_BACKOFF_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG;
-    public static final String RECONNECT_BACKOFF_MS_DOC = CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC;
 
     public static final String SEND_BUFFER_CONFIG = CommonClientConfigs.SEND_BUFFER_CONFIG;
-    public static final String SEND_BUFFER_DOC = CommonClientConfigs.SEND_BUFFER_DOC;
 
     public static final String RECEIVE_BUFFER_CONFIG = CommonClientConfigs.RECEIVE_BUFFER_CONFIG;
-    public static final String RECEIVE_BUFFER_DOC = CommonClientConfigs.RECEIVE_BUFFER_DOC;
 
     public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
-    public static final String REQUEST_TIMEOUT_MS_DOC = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
 
 
     static {
@@ -181,11 +169,6 @@ public class StreamsConfig extends AbstractConfig {
                                         "",
                                         Importance.HIGH,
                                         CommonClientConfigs.CLIENT_ID_DOC)
-                                .define(ZOOKEEPER_CONNECT_CONFIG,
-                                        Type.STRING,
-                                        "",
-                                        Importance.HIGH,
-                                        StreamsConfig.ZOOKEEPER_CONNECT_DOC)
                                 .define(STATE_DIR_CONFIG,
                                         Type.STRING,
                                         "/tmp/kafka-streams",
@@ -288,48 +271,48 @@ public class StreamsConfig extends AbstractConfig {
                                         Type.STRING,
                                         DEFAULT_SECURITY_PROTOCOL,
                                         Importance.MEDIUM,
-                                        SECURITY_PROTOCOL_DOC)
+                                        CommonClientConfigs.SECURITY_PROTOCOL_DOC)
                                 .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
                                         ConfigDef.Type.LONG,
                                         9 * 60 * 1000,
                                         ConfigDef.Importance.MEDIUM,
-                                        CONNECTIONS_MAX_IDLE_MS_DOC)
+                                        CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
                                 .define(RETRY_BACKOFF_MS_CONFIG,
                                         ConfigDef.Type.LONG,
                                         100L,
                                         atLeast(0L),
                                         ConfigDef.Importance.LOW,
-                                        RETRY_BACKOFF_MS_DOC)
+                                        CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
                                 .define(METADATA_MAX_AGE_CONFIG,
                                         ConfigDef.Type.LONG,
                                         5 * 60 * 1000,
                                         atLeast(0),
                                         ConfigDef.Importance.LOW,
-                                        METADATA_MAX_AGE_DOC)
+                                        CommonClientConfigs.METADATA_MAX_AGE_DOC)
                                 .define(RECONNECT_BACKOFF_MS_CONFIG,
                                         ConfigDef.Type.LONG,
                                         50L,
                                         atLeast(0L),
                                         ConfigDef.Importance.LOW,
-                                        RECONNECT_BACKOFF_MS_DOC)
+                                        CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC)
                                 .define(SEND_BUFFER_CONFIG,
                                         ConfigDef.Type.INT,
-                                        128 * 1024,
+                                        32 * 1024,
                                         atLeast(0),
                                         ConfigDef.Importance.MEDIUM,
-                                        SEND_BUFFER_DOC)
+                                        CommonClientConfigs.SEND_BUFFER_DOC)
                                 .define(RECEIVE_BUFFER_CONFIG,
                                         ConfigDef.Type.INT,
                                         32 * 1024,
                                         atLeast(0),
                                         ConfigDef.Importance.MEDIUM,
-                                        RECEIVE_BUFFER_DOC)
+                                        CommonClientConfigs.RECEIVE_BUFFER_DOC)
                                 .define(REQUEST_TIMEOUT_MS_CONFIG,
                                         ConfigDef.Type.INT,
                                         40 * 1000,
                                         atLeast(0),
                                         ConfigDef.Importance.MEDIUM,
-                                        REQUEST_TIMEOUT_MS_DOC);
+                                        CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC);
     }
 
     // this is the list of configs for underlying clients
@@ -417,8 +400,6 @@ public class StreamsConfig extends AbstractConfig {
         props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, getInt(NUM_STANDBY_REPLICAS_CONFIG));
         props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamPartitionAssignor.class.getName());
         props.put(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, getLong(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG));
-        if (!getString(ZOOKEEPER_CONNECT_CONFIG).equals(""))
-            props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, getString(ZOOKEEPER_CONNECT_CONFIG));
 
         props.put(APPLICATION_SERVER_CONFIG, getString(APPLICATION_SERVER_CONFIG));
         return props;
