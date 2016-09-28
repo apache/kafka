@@ -368,10 +368,13 @@ public class Fetcher<K, V> {
             RequestFuture<Map<TopicPartition, OffsetAndTimestamp>> future = sendListOffsetRequests(timestampsToSearch);
             client.poll(future, remaining);
 
+            if (!future.isDone())
+                break;
+
             if (future.succeeded())
                 return future.value();
 
-            if (future.isDone() && !future.isRetriable())
+            if (!future.isRetriable())
                 throw future.exception();
 
             long elapsed = time.milliseconds() - startMs;
@@ -379,10 +382,9 @@ public class Fetcher<K, V> {
             if (remaining <= 0)
                 break;
 
-            if (future.exception() instanceof InvalidMetadataException) {
-                if (!client.awaitMetadataUpdate(remaining))
-                    break;
-            } else
+            if (future.exception() instanceof InvalidMetadataException)
+                client.awaitMetadataUpdate(remaining);
+            else
                 time.sleep(Math.min(remaining, retryBackoffMs));
 
             elapsed = time.milliseconds() - startMs;
