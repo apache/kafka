@@ -21,7 +21,7 @@ import org.apache.kafka.common.utils.Utils;
 /**
  * A container class for offset and timestamp.
  *
- * Both the offsets the timestamp in this class is non-negative.
+ * Both offset and timestamp are non-negative.
  */
 public final class OffsetAndTimestamp {
     private final long timestamp;
@@ -42,7 +42,7 @@ public final class OffsetAndTimestamp {
 
     @Override
     public String toString() {
-        return "{Timestamp = " + timestamp + ", Offset = " + offset + "}";
+        return "{timestamp=" + timestamp + ", offset=" + offset + "}";
     }
 
     @Override

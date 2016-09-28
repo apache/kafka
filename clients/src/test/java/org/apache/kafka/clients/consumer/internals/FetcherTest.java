@@ -665,8 +665,8 @@ public class FetcherTest {
 
     private void testGetOffsetsForTimesWithError(Errors errorForTp0,
                                                  Errors errorForTp1,
-                                                 Long offsetForTp0,
-                                                 Long offsetForTp1,
+                                                 long offsetForTp0,
+                                                 long offsetForTp1,
                                                  Long expectedOffsetForTp0,
                                                  Long expectedOffsetForTp1) {
         client.reset();
