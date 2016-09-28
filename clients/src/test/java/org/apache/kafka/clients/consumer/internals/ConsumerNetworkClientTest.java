@@ -15,9 +15,10 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
-import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -25,8 +26,10 @@ import org.apache.kafka.common.requests.HeartbeatRequest;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
+import org.easymock.EasyMock;
 import org.junit.Test;
 
+import java.util.Collections;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertEquals;
@@ -76,19 +79,42 @@ public class ConsumerNetworkClientTest {
     }
 
     @Test
-    public void schedule() {
-        TestDelayedTask task = new TestDelayedTask();
-        consumerClient.schedule(task, time.milliseconds());
-        consumerClient.poll(0);
-        assertEquals(1, task.executions);
+    public void doNotBlockIfPollConditionIsSatisfied() {
+        NetworkClient mockNetworkClient = EasyMock.mock(NetworkClient.class);
+        ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(mockNetworkClient, metadata, time, 100, 1000);
 
-        consumerClient.schedule(task, time.milliseconds() + 100);
-        consumerClient.poll(0);
-        assertEquals(1, task.executions);
+        // expect poll, but with no timeout
+        EasyMock.expect(mockNetworkClient.poll(EasyMock.eq(0L), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
 
-        time.sleep(100);
-        consumerClient.poll(0);
-        assertEquals(2, task.executions);
+        EasyMock.replay(mockNetworkClient);
+
+        consumerClient.poll(Long.MAX_VALUE, time.milliseconds(), new ConsumerNetworkClient.PollCondition() {
+            @Override
+            public boolean shouldBlock() {
+                return false;
+            }
+        });
+
+        EasyMock.verify(mockNetworkClient);
+    }
+
+    @Test
+    public void blockWhenPollConditionNotSatisfied() {
+        NetworkClient mockNetworkClient = EasyMock.mock(NetworkClient.class);
+        ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(mockNetworkClient, metadata, time, 100, 1000);
+
+        EasyMock.expect(mockNetworkClient.poll(EasyMock.eq(Long.MAX_VALUE), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
+
+        EasyMock.replay(mockNetworkClient);
+
+        consumerClient.poll(Long.MAX_VALUE, time.milliseconds(), new ConsumerNetworkClient.PollCondition() {
+            @Override
+            public boolean shouldBlock() {
+                return true;
+            }
+        });
+
+        EasyMock.verify(mockNetworkClient);
     }
 
     @Test
@@ -173,14 +199,6 @@ public class ConsumerNetworkClientTest {
     private Struct heartbeatResponse(short error) {
         HeartbeatResponse response = new HeartbeatResponse(error);
         return response.toStruct();
-    }
-
-    private static class TestDelayedTask implements DelayedTask {
-        int executions = 0;
-        @Override
-        public void run(long now) {
-            executions++;
-        }
     }
 
 }

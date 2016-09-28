@@ -63,10 +63,17 @@ class ConnectStandaloneFileTest(Test):
     @parametrize(converter="org.apache.kafka.connect.storage.StringConverter", schemas=None)
     @matrix(security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL])
     def test_file_source_and_sink(self, converter="org.apache.kafka.connect.json.JsonConverter", schemas=True, security_protocol='PLAINTEXT'):
+        """
+        Validates basic end-to-end functionality of Connect standalone using the file source and sink converters. Includes
+        parameterizations to test different converters (which also test per-connector converter overrides), schema/schemaless
+        modes, and security support.
+        """
         assert converter != None, "converter type must be set"
-        # Template parameters
-        self.key_converter = converter
-        self.value_converter = converter
+        # Template parameters. Note that we don't set key/value.converter. These default to JsonConverter and we validate
+        # converter overrides via the connector configuration.
+        if converter != "org.apache.kafka.connect.json.JsonConverter":
+            self.override_key_converter = converter
+            self.override_value_converter = converter
         self.schemas = schemas
 
         self.kafka = KafkaService(self.test_context, self.num_brokers, self.zk,

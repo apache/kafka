@@ -20,14 +20,17 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
@@ -35,9 +38,11 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
@@ -57,12 +62,14 @@ public class StreamThreadStateStoreProviderTest {
     private StreamTask taskTwo;
     private StreamThreadStateStoreProvider provider;
     private StateDirectory stateDirectory;
+    private File stateDir;
+    private boolean storesAvailable;
 
     @Before
     public void before() throws IOException {
         final TopologyBuilder builder = new TopologyBuilder();
-        builder.addSource("the-source");
-        builder.addProcessor("the-processor", new MockProcessorSupplier());
+        builder.addSource("the-source", "the-source");
+        builder.addProcessor("the-processor", new MockProcessorSupplier(), "the-source");
         builder.addStateStore(Stores.create("kv-store")
                                   .withStringKeys()
                                   .withStringValues().inMemory().build(), "the-processor");
@@ -71,13 +78,14 @@ public class StreamThreadStateStoreProviderTest {
                                   .withStringKeys()
                                   .withStringValues()
                                   .persistent()
-                                  .windowed(10, 2, false).build(), "the-processor");
+                                  .windowed(10, 10, 2, false).build(), "the-processor");
 
         final Properties properties = new Properties();
         final String applicationId = "applicationId";
         properties.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        final String stateConfigDir = TestUtils.tempDirectory().getPath();
+        stateDir = TestUtils.tempDirectory();
+        final String stateConfigDir = stateDir.getPath();
         properties.put(StreamsConfig.STATE_DIR_CONFIG,
                 stateConfigDir);
 
@@ -86,7 +94,8 @@ public class StreamThreadStateStoreProviderTest {
         configureRestoreConsumer(clientSupplier, "applicationId-kv-store-changelog");
         configureRestoreConsumer(clientSupplier, "applicationId-window-store-changelog");
 
-        final ProcessorTopology topology = builder.build("X", null);
+        builder.setApplicationId(applicationId);
+        final ProcessorTopology topology = builder.build(null);
         final Map<TaskId, StreamTask> tasks = new HashMap<>();
         stateDirectory = new StateDirectory(applicationId, stateConfigDir);
         taskOne = createStreamsTask(applicationId, streamsConfig, clientSupplier, topology,
@@ -98,23 +107,34 @@ public class StreamThreadStateStoreProviderTest {
         tasks.put(new TaskId(0, 1),
                   taskTwo);
 
+        storesAvailable = true;
         thread = new StreamThread(builder, streamsConfig, clientSupplier,
                                   applicationId,
                                   "clientId", UUID.randomUUID(), new Metrics(),
-                                  new SystemTime()) {
+                                  new SystemTime(), new StreamsMetadataState(builder)) {
             @Override
             public Map<TaskId, StreamTask> tasks() {
                 return tasks;
+            }
+
+            @Override
+            public boolean isInitialized() {
+                return storesAvailable;
             }
         };
         provider = new StreamThreadStateStoreProvider(thread);
 
     }
 
+    @After
+    public void cleanUp() {
+        Utils.delete(stateDir);
+    }
+    
     @Test
     public void shouldFindKeyValueStores() throws Exception {
         List<ReadOnlyKeyValueStore<String, String>> kvStores =
-            provider.getStores("kv-store", QueryableStoreTypes.<String, String>keyValueStore());
+            provider.stores("kv-store", QueryableStoreTypes.<String, String>keyValueStore());
         assertEquals(2, kvStores.size());
     }
 
@@ -122,33 +142,39 @@ public class StreamThreadStateStoreProviderTest {
     public void shouldFindWindowStores() throws Exception {
         final List<ReadOnlyWindowStore<Object, Object>>
             windowStores =
-            provider.getStores("window-store", windowStore());
+            provider.stores("window-store", windowStore());
         assertEquals(2, windowStores.size());
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfWindowStoreClosed() throws Exception {
         taskOne.getStore("window-store").close();
-        provider.getStores("window-store", QueryableStoreTypes.windowStore());
+        provider.stores("window-store", QueryableStoreTypes.windowStore());
     }
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfKVStoreClosed() throws Exception {
         taskOne.getStore("kv-store").close();
-        provider.getStores("kv-store", QueryableStoreTypes.keyValueStore());
+        provider.stores("kv-store", QueryableStoreTypes.keyValueStore());
     }
 
     @Test
     public void shouldReturnEmptyListIfNoStoresFoundWithName() throws Exception {
-        assertEquals(Collections.emptyList(), provider.getStores("not-a-store", QueryableStoreTypes
+        assertEquals(Collections.emptyList(), provider.stores("not-a-store", QueryableStoreTypes
             .keyValueStore()));
     }
 
 
     @Test
     public void shouldReturnEmptyListIfStoreExistsButIsNotOfTypeValueStore() throws Exception {
-        assertEquals(Collections.emptyList(), provider.getStores("window-store",
-                                                                 QueryableStoreTypes.keyValueStore()));
+        assertEquals(Collections.emptyList(), provider.stores("window-store",
+                                                              QueryableStoreTypes.keyValueStore()));
+    }
+
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowInvalidStoreExceptionIfNotAllStoresAvailable() throws Exception {
+        storesAvailable = false;
+        provider.stores("kv-store", QueryableStoreTypes.keyValueStore());
     }
 
     private StreamTask createStreamsTask(final String applicationId,
@@ -161,7 +187,7 @@ public class StreamThreadStateStoreProviderTest {
                               clientSupplier.consumer,
                               clientSupplier.producer,
                               clientSupplier.restoreConsumer,
-                              streamsConfig, new TheStreamMetrics(), stateDirectory) {
+                              streamsConfig, new TheStreamMetrics(), stateDirectory, null) {
             @Override
             protected void initializeOffsetLimits() {
 
@@ -207,8 +233,7 @@ public class StreamThreadStateStoreProviderTest {
         }
 
         @Override
-        public void recordLatency(final Sensor sensor, final long startNs,
-                                  final long endNs) {
+        public void recordLatency(final Sensor sensor, final long startNs, final long endNs) {
 
         }
     }

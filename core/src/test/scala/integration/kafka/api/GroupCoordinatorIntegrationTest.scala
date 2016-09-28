@@ -12,7 +12,7 @@
  */
 package integration.kafka.api
 
-import kafka.common.TopicAndPartition
+import kafka.common.{Topic, TopicAndPartition}
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.Log
 import kafka.message.GZIPCompressionCodec
@@ -20,7 +20,6 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.internals.TopicConstants
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.Test
 import org.junit.Assert._
@@ -43,13 +42,13 @@ class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
     val consumer = TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers),
                                                securityProtocol = SecurityProtocol.PLAINTEXT)
     val offsetMap = Map(
-      new TopicPartition(TopicConstants.GROUP_METADATA_TOPIC_NAME, 0) -> new OffsetAndMetadata(10, "")
+      new TopicPartition(Topic.GroupMetadataTopicName, 0) -> new OffsetAndMetadata(10, "")
     ).asJava
     consumer.commitSync(offsetMap)
     val logManager = servers.head.getLogManager
 
     def getGroupMetadataLogOpt: Option[Log] =
-      logManager.getLog(TopicAndPartition(TopicConstants.GROUP_METADATA_TOPIC_NAME, 0))
+      logManager.getLog(TopicAndPartition(Topic.GroupMetadataTopicName, 0))
 
     TestUtils.waitUntilTrue(() => getGroupMetadataLogOpt.exists(_.logSegments.exists(_.log.nonEmpty)),
                             "Commit message not appended in time")

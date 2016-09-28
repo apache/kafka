@@ -65,9 +65,9 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
 
     }
 
+
     @Override
-    public void process(K key, V value) {
-        // send to all the registered topics
+    public void process(final K key, final V value) {
         RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
         collector.send(new ProducerRecord<>(topic, null, context.timestamp(), key, value), keySerializer, valSerializer, partitioner);
     }
@@ -80,5 +80,14 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
     // for test only
     public Serializer<V> valueSerializer() {
         return valSerializer;
+    }
+
+    /**
+     * @return a string representation of this node, useful for debugging.
+     */
+    public String toString() {
+        StringBuilder sb = new StringBuilder(super.toString());
+        sb.append("topic:" + topic);
+        return sb.toString();
     }
 }

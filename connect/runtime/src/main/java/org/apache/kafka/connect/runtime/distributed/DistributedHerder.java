@@ -17,7 +17,6 @@
 
 package org.apache.kafka.connect.runtime.distributed;
 
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -31,7 +30,6 @@ import org.apache.kafka.connect.runtime.HerderConnectorContext;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
-import org.apache.kafka.connect.runtime.TaskConfig;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
@@ -322,7 +320,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
             // additionally, if the worker is running the connector itself, then we need to
             // request reconfiguration to ensure that config changes while paused take effect
-            if (worker.ownsConnector(connector) && targetState == TargetState.STARTED)
+            if (targetState == TargetState.STARTED)
                 reconfigureConnectorTasksWithRetry(connector);
         }
     }
@@ -331,18 +329,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     public void halt() {
         synchronized (this) {
             // Clean up any connectors and tasks that are still running.
-            log.info("Stopping connectors and tasks that are still assigned to this worker.");
-            for (String connName : new HashSet<>(worker.connectorNames())) {
-                try {
-                    worker.stopConnector(connName);
-                } catch (Throwable t) {
-                    log.error("Failed to shut down connector " + connName, t);
-                }
-            }
-
-            Set<ConnectorTaskId> tasks = new HashSet<>(worker.taskIds());
-            worker.stopTasks(tasks);
-            worker.awaitStopTasks(tasks);
+            log.info("Stopping connectors and tasks that are still assigned to the worker");
+            worker.stopConnectors();
+            worker.stopAndAwaitTasks();
 
             member.stop();
 
@@ -573,11 +562,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     return null;
                 }
 
-                if (worker.ownsConnector(connName)) {
+                if (assignment.connectors().contains(connName)) {
                     try {
                         worker.stopConnector(connName);
-                        startConnector(connName);
-                        callback.onCompletion(null, null);
+                        if (startConnector(connName))
+                            callback.onCompletion(null, null);
+                        else
+                            callback.onCompletion(new ConnectException("Failed to start connector: " + connName), null);
                     } catch (Throwable t) {
                         callback.onCompletion(t, null);
                     }
@@ -609,11 +600,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     return null;
                 }
 
-                if (worker.ownsTask(id)) {
+                if (assignment.tasks().contains(id)) {
                     try {
                         worker.stopAndAwaitTask(id);
-                        startTask(id);
-                        callback.onCompletion(null, null);
+                        if (startTask(id))
+                            callback.onCompletion(null, null);
+                        else
+                            callback.onCompletion(new ConnectException("Failed to start task: " + id), null);
                     } catch (Throwable t) {
                         callback.onCompletion(t, null);
                     }
@@ -751,48 +744,41 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         // Start assigned connectors and tasks
         log.info("Starting connectors and tasks using config offset {}", assignment.offset());
         for (String connectorName : assignment.connectors()) {
-            try {
-                startConnector(connectorName);
-            } catch (ConfigException e) {
-                log.error("Couldn't instantiate connector " + connectorName + " because it has an invalid connector " +
-                        "configuration. This connector will not execute until reconfigured.", e);
-            }
+            startConnector(connectorName);
         }
         for (ConnectorTaskId taskId : assignment.tasks()) {
-            try {
-                startTask(taskId);
-            } catch (ConfigException e) {
-                log.error("Couldn't instantiate task " + taskId + " because it has an invalid task " +
-                        "configuration. This task will not execute until reconfigured.", e);
-            }
+            startTask(taskId);
         }
         log.info("Finished starting connectors and tasks");
     }
 
-    private void startTask(ConnectorTaskId taskId) {
+    private boolean startTask(ConnectorTaskId taskId) {
         log.info("Starting task {}", taskId);
-        TargetState initialState = configState.targetState(taskId.connector());
-        Map<String, String> configs = configState.taskConfig(taskId);
-        TaskConfig taskConfig = new TaskConfig(configs);
-        worker.startTask(taskId, taskConfig, this, initialState);
+        return worker.startTask(
+                taskId,
+                configState.connectorConfig(taskId.connector()),
+                configState.taskConfig(taskId),
+                this,
+                configState.targetState(taskId.connector())
+        );
     }
 
     // Helper for starting a connector with the given name, which will extract & parse the config, generate connector
     // context and add to the worker. This needs to be called from within the main worker thread for this herder.
-    private void startConnector(String connectorName) {
+    private boolean startConnector(String connectorName) {
         log.info("Starting connector {}", connectorName);
-        Map<String, String> configs = configState.connectorConfig(connectorName);
-        ConnectorConfig connConfig = new ConnectorConfig(configs);
-        String connName = connConfig.getString(ConnectorConfig.NAME_CONFIG);
-        ConnectorContext ctx = new HerderConnectorContext(DistributedHerder.this, connName);
-        TargetState initialState = configState.targetState(connectorName);
-        worker.startConnector(connConfig, ctx, this, initialState);
+        final Map<String, String> configProps = configState.connectorConfig(connectorName);
+        final ConnectorContext ctx = new HerderConnectorContext(DistributedHerder.this, connectorName);
+        final TargetState initialState = configState.targetState(connectorName);
+        boolean started = worker.startConnector(connectorName, configProps, ctx, this, initialState);
 
         // Immediately request configuration since this could be a brand new connector. However, also only update those
         // task configs if they are actually different from the existing ones to avoid unnecessary updates when this is
         // just restoring an existing connector.
-        if (initialState == TargetState.STARTED)
-            reconfigureConnectorTasksWithRetry(connName);
+        if (started && initialState == TargetState.STARTED)
+            reconfigureConnectorTasksWithRetry(connectorName);
+
+        return started;
     }
 
     private void reconfigureConnectorTasksWithRetry(final String connName) {
@@ -1027,7 +1013,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 rebalanceResolved = false;
             }
 
-            // Delete the statuses of all connectors removed prior to the start of this reblaance. This has to
+            // Delete the statuses of all connectors removed prior to the start of this rebalance. This has to
             // be done after the rebalance completes to avoid race conditions as the previous generation attempts
             // to change the state to UNASSIGNED after tasks have been stopped.
             if (isLeader())
@@ -1053,17 +1039,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 // this worker. Instead, we can let them continue to run but buffer any update requests (which should be
                 // rare anyway). This would avoid a steady stream of start/stop, which probably also includes lots of
                 // unnecessary repeated connections to the source/sink system.
-                for (String connectorName : connectors)
-                    worker.stopConnector(connectorName);
+                worker.stopConnectors(connectors);
 
                 // TODO: We need to at least commit task offsets, but if we could commit offsets & pause them instead of
                 // stopping them then state could continue to be reused when the task remains on this worker. For example,
                 // this would avoid having to close a connection and then reopen it when the task is assigned back to this
                 // worker again.
-                if (!tasks.isEmpty()) {
-                    worker.stopTasks(tasks); // trigger stop() for all tasks
-                    worker.awaitStopTasks(tasks); // await stopping tasks
-                }
+                worker.stopAndAwaitTasks(tasks);
 
                 // Ensure that all status updates have been pushed to the storage system before rebalancing.
                 // Otherwise, we may inadvertently overwrite the state with a stale value after the rebalance

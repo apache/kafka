@@ -44,6 +44,7 @@ public class ProcessorNode<K, V> {
         this.stateStores = stateStores;
     }
 
+
     public final String name() {
         return name;
     }
@@ -64,11 +65,28 @@ public class ProcessorNode<K, V> {
         processor.init(context);
     }
 
-    public void process(K key, V value) {
+    public void close() {
+        processor.close();
+    }
+
+    public void process(final K key, final V value) {
         processor.process(key, value);
     }
 
-    public void close() {
-        processor.close();
+    /**
+     * @return a string representation of this node, useful for debugging.
+     */
+    public String toString() {
+        StringBuilder sb = new StringBuilder("");
+        sb.append(name + ": ");
+        if (stateStores != null && !stateStores.isEmpty()) {
+            sb.append("stateStores [");
+            for (String store : (Set<String>) stateStores) {
+                sb.append(store + ",");
+            }
+            sb.setLength(sb.length() - 1);
+            sb.append("] ");
+        }
+        return sb.toString();
     }
 }

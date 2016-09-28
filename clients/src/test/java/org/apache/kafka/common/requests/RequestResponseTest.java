@@ -30,6 +30,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -49,14 +50,15 @@ public class RequestResponseTest {
                 createControlledShutdownRequest(),
                 createControlledShutdownResponse(),
                 createControlledShutdownRequest().getErrorResponse(1, new UnknownServerException()),
-                createFetchRequest(),
-                createFetchRequest().getErrorResponse(1, new UnknownServerException()),
+                createFetchRequest(3),
+                createFetchRequest(3).getErrorResponse(3, new UnknownServerException()),
                 createFetchResponse(),
                 createHeartBeatRequest(),
                 createHeartBeatRequest().getErrorResponse(0, new UnknownServerException()),
                 createHeartBeatResponse(),
-                createJoinGroupRequest(),
-                createJoinGroupRequest().getErrorResponse(0, new UnknownServerException()),
+                createJoinGroupRequest(1),
+                createJoinGroupRequest(0).getErrorResponse(0, new UnknownServerException()),
+                createJoinGroupRequest(1).getErrorResponse(1, new UnknownServerException()),
                 createJoinGroupResponse(),
                 createLeaveGroupRequest(),
                 createLeaveGroupRequest().getErrorResponse(0, new UnknownServerException()),
@@ -67,13 +69,13 @@ public class RequestResponseTest {
                 createDescribeGroupRequest(),
                 createDescribeGroupRequest().getErrorResponse(0, new UnknownServerException()),
                 createDescribeGroupResponse(),
-                createListOffsetRequest(),
-                createListOffsetRequest().getErrorResponse(0, new UnknownServerException()),
-                createListOffsetResponse(),
+                createListOffsetRequest(1),
+                createListOffsetRequest(1).getErrorResponse(1, new UnknownServerException()),
+                createListOffsetResponse(1),
                 MetadataRequest.allTopics(),
                 createMetadataRequest(Arrays.asList("topic1")),
-                createMetadataRequest(Arrays.asList("topic1")).getErrorResponse(1, new UnknownServerException()),
-                createMetadataResponse(1),
+                createMetadataRequest(Arrays.asList("topic1")).getErrorResponse(2, new UnknownServerException()),
+                createMetadataResponse(2),
                 createOffsetCommitRequest(2),
                 createOffsetCommitRequest(2).getErrorResponse(2, new UnknownServerException()),
                 createOffsetCommitResponse(),
@@ -102,24 +104,42 @@ public class RequestResponseTest {
                 createApiVersionResponse(),
                 createCreateTopicRequest(),
                 createCreateTopicRequest().getErrorResponse(0, new UnknownServerException()),
-                createCreateTopicResponse()
+                createCreateTopicResponse(),
+                createDeleteTopicsRequest(),
+                createDeleteTopicsRequest().getErrorResponse(0, new UnknownServerException()),
+                createDeleteTopicsResponse()
         );
 
         for (AbstractRequestResponse req : requestResponseList)
             checkSerialization(req, null);
 
-        createMetadataResponse(0);
-        createMetadataRequest(Arrays.asList("topic1")).getErrorResponse(0, new UnknownServerException());
-        checkSerialization(createFetchRequest().getErrorResponse(0, new UnknownServerException()), 0);
+
+        checkOlderFetchVersions();
+        checkSerialization(createMetadataResponse(0), 0);
+        checkSerialization(createMetadataResponse(1), 1);
+        checkSerialization(createMetadataRequest(Arrays.asList("topic1")).getErrorResponse(0, new UnknownServerException()), 0);
+        checkSerialization(createMetadataRequest(Arrays.asList("topic1")).getErrorResponse(1, new UnknownServerException()), 1);
         checkSerialization(createOffsetCommitRequest(0), 0);
         checkSerialization(createOffsetCommitRequest(0).getErrorResponse(0, new UnknownServerException()), 0);
         checkSerialization(createOffsetCommitRequest(1), 1);
         checkSerialization(createOffsetCommitRequest(1).getErrorResponse(1, new UnknownServerException()), 1);
+        checkSerialization(createJoinGroupRequest(0), 0);
         checkSerialization(createUpdateMetadataRequest(0, null), 0);
         checkSerialization(createUpdateMetadataRequest(0, null).getErrorResponse(0, new UnknownServerException()), 0);
         checkSerialization(createUpdateMetadataRequest(1, null), 1);
         checkSerialization(createUpdateMetadataRequest(1, "rack1"), 1);
         checkSerialization(createUpdateMetadataRequest(1, null).getErrorResponse(1, new UnknownServerException()), 1);
+        checkSerialization(createListOffsetRequest(0), 0);
+        checkSerialization(createListOffsetRequest(0).getErrorResponse(0, new UnknownServerException()), 0);
+        checkSerialization(createListOffsetResponse(0), 0);
+    }
+
+    private void checkOlderFetchVersions() throws Exception {
+        int latestVersion = ProtoUtils.latestVersion(ApiKeys.FETCH.id);
+        for (int i = 0; i < latestVersion; ++i) {
+            checkSerialization(createFetchRequest(i).getErrorResponse(i, new UnknownServerException()), i);
+            checkSerialization(createFetchRequest(i), i);
+        }
     }
 
     private void checkSerialization(AbstractRequestResponse req, Integer version) throws Exception {
@@ -134,7 +154,7 @@ public class RequestResponseTest {
             Method deserializer = req.getClass().getDeclaredMethod("parse", ByteBuffer.class, Integer.TYPE);
             deserialized = (AbstractRequestResponse) deserializer.invoke(null, buffer, version);
         }
-        assertEquals("The original and deserialized of " + req.getClass().getSimpleName() + " should be the same.", req, deserialized);
+        assertEquals("The original and deserialized of " + req.getClass().getSimpleName() + "(version " + version + ") should be the same.", req, deserialized);
         assertEquals("The original and deserialized of " + req.getClass().getSimpleName() + " should have the same hashcode.",
                 req.hashCode(), deserialized.hashCode());
     }
@@ -212,11 +232,15 @@ public class RequestResponseTest {
         return new GroupCoordinatorResponse(Errors.NONE.code(), new Node(10, "host1", 2014));
     }
 
-    private AbstractRequest createFetchRequest() {
-        Map<TopicPartition, FetchRequest.PartitionData> fetchData = new HashMap<>();
+    @SuppressWarnings("deprecation")
+    private AbstractRequest createFetchRequest(int version) {
+        LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = new LinkedHashMap<>();
         fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, 1000000));
         fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, 1000000));
-        return new FetchRequest(-1, 100, 100000, fetchData);
+        if (version < 3)
+            return new FetchRequest(100, 100000, fetchData);
+        else
+            return new FetchRequest(100, 1000, 1000000, fetchData);
     }
 
     private AbstractRequestResponse createFetchResponse() {
@@ -233,11 +257,15 @@ public class RequestResponseTest {
         return new HeartbeatResponse(Errors.NONE.code());
     }
 
-    private AbstractRequest createJoinGroupRequest() {
+    private AbstractRequest createJoinGroupRequest(int version) {
         ByteBuffer metadata = ByteBuffer.wrap(new byte[] {});
         List<JoinGroupRequest.ProtocolMetadata> protocols = new ArrayList<>();
         protocols.add(new JoinGroupRequest.ProtocolMetadata("consumer-range", metadata));
-        return new JoinGroupRequest("group1", 30000, "consumer1", "consumer", protocols);
+        if (version == 0) {
+            return new JoinGroupRequest("group1", 30000, "consumer1", "consumer", protocols);
+        } else {
+            return new JoinGroupRequest("group1", 10000, 60000, "consumer1", "consumer", protocols);
+        }
     }
 
     private AbstractRequestResponse createJoinGroupResponse() {
@@ -279,16 +307,32 @@ public class RequestResponseTest {
         return new LeaveGroupResponse(Errors.NONE.code());
     }
 
-    private AbstractRequest createListOffsetRequest() {
-        Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = new HashMap<>();
-        offsetData.put(new TopicPartition("test", 0), new ListOffsetRequest.PartitionData(1000000L, 10));
-        return new ListOffsetRequest(-1, offsetData);
+    private AbstractRequest createListOffsetRequest(int version) {
+        if (version == 0) {
+            Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = new HashMap<>();
+            offsetData.put(new TopicPartition("test", 0), new ListOffsetRequest.PartitionData(1000000L, 10));
+            return new ListOffsetRequest(offsetData);
+        } else if (version == 1) {
+            Map<TopicPartition, Long> offsetData = new HashMap<>();
+            offsetData.put(new TopicPartition("test", 0), 1000000L);
+            return new ListOffsetRequest(offsetData, ListOffsetRequest.CONSUMER_REPLICA_ID);
+        } else {
+            throw new IllegalArgumentException("Illegal ListOffsetRequest version " + version);
+        }
     }
 
-    private AbstractRequestResponse createListOffsetResponse() {
-        Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<>();
-        responseData.put(new TopicPartition("test", 0), new ListOffsetResponse.PartitionData(Errors.NONE.code(), Arrays.asList(100L)));
-        return new ListOffsetResponse(responseData);
+    private AbstractRequestResponse createListOffsetResponse(int version) {
+        if (version == 0) {
+            Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<>();
+            responseData.put(new TopicPartition("test", 0), new ListOffsetResponse.PartitionData(Errors.NONE.code(), Arrays.asList(100L)));
+            return new ListOffsetResponse(responseData);
+        } else if (version == 1) {
+            Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<>();
+            responseData.put(new TopicPartition("test", 0), new ListOffsetResponse.PartitionData(Errors.NONE.code(), 10000L, 100L));
+            return new ListOffsetResponse(responseData, 1);
+        } else {
+            throw new IllegalArgumentException("Illegal ListOffsetResponse version " + version);
+        }
     }
 
     private AbstractRequest createMetadataRequest(List<String> topics) {
@@ -306,7 +350,7 @@ public class RequestResponseTest {
         allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, "topic2", false,
                 Collections.<MetadataResponse.PartitionMetadata>emptyList()));
 
-        return new MetadataResponse(Arrays.asList(node), MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata, version);
+        return new MetadataResponse(Arrays.asList(node), null, MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata, version);
     }
 
     private AbstractRequest createOffsetCommitRequest(int version) {
@@ -478,5 +522,16 @@ public class RequestResponseTest {
         errors.put("t1", Errors.INVALID_TOPIC_EXCEPTION);
         errors.put("t2", Errors.LEADER_NOT_AVAILABLE);
         return new CreateTopicsResponse(errors);
+    }
+
+    private AbstractRequest createDeleteTopicsRequest() {
+        return new DeleteTopicsRequest(new HashSet<>(Arrays.asList("my_t1", "my_t2")), 10000);
+    }
+
+    private AbstractRequestResponse createDeleteTopicsResponse() {
+        Map<String, Errors> errors = new HashMap<>();
+        errors.put("t1", Errors.INVALID_TOPIC_EXCEPTION);
+        errors.put("t2", Errors.TOPIC_AUTHORIZATION_FAILED);
+        return new DeleteTopicsResponse(errors);
     }
 }

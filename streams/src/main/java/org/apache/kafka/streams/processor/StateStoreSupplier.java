@@ -17,6 +17,8 @@
 
 package org.apache.kafka.streams.processor;
 
+import java.util.Map;
+
 /**
  * A state store supplier which can create one or more {@link StateStore} instances.
  */
@@ -35,4 +37,18 @@ public interface StateStoreSupplier {
      * @return  a new {@link StateStore} instance
      */
     StateStore get();
+
+    /**
+     * Returns a Map containing any log configs that will be used when creating the changelog for the {@link StateStore}
+     *
+     * Note: any unrecognized configs will be ignored by the Kafka brokers.
+     * @return Map containing any log configs to be used when creating the changelog for the {@link StateStore}
+     * If {@code loggingEnabled} returns false, this function will always return an empty map
+     */
+    Map<String, String> logConfig();
+
+    /**
+     * @return true if the {@link StateStore} should have logging enabled
+     */
+    boolean loggingEnabled();
 }

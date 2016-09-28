@@ -100,7 +100,7 @@ class LogManagerTest {
     time.sleep(maxLogAgeMs + 1)
     assertEquals("Now there should only be only one segment in the index.", 1, log.numberOfSegments)
     time.sleep(log.config.fileDeleteDelayMs + 1)
-    assertEquals("Files should have been deleted", log.numberOfSegments * 2, log.dir.list.length)
+    assertEquals("Files should have been deleted", log.numberOfSegments * 3, log.dir.list.length)
     assertEquals("Should get empty fetch off new log.", 0, log.read(offset+1, 1024).messageSet.sizeInBytes)
 
     try {
@@ -146,7 +146,7 @@ class LogManagerTest {
     time.sleep(logManager.InitialTaskDelayMs)
     assertEquals("Now there should be exactly 6 segments", 6, log.numberOfSegments)
     time.sleep(log.config.fileDeleteDelayMs + 1)
-    assertEquals("Files should have been deleted", log.numberOfSegments * 2, log.dir.list.length)
+    assertEquals("Files should have been deleted", log.numberOfSegments * 3, log.dir.list.length)
     assertEquals("Should get empty fetch off new log.", 0, log.read(offset + 1, 1024).messageSet.sizeInBytes)
     try {
       log.read(0, 1024)
@@ -156,6 +156,31 @@ class LogManagerTest {
     }
     // log should still be appendable
     log.append(TestUtils.singleMessageSet("test".getBytes()))
+  }
+
+  /**
+    * Ensures that LogManager only runs on logs with cleanup.policy=delete
+    * LogCleaner.CleanerThread handles all logs where compaction is enabled.
+    */
+  @Test
+  def testDoesntCleanLogsWithCompactDeletePolicy() {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact + "," + LogConfig.Delete)
+    val log = logManager.createLog(TopicAndPartition(name, 0), LogConfig.fromProps(logConfig.originals, logProps))
+    var offset = 0L
+    for(i <- 0 until 200) {
+      var set = TestUtils.singleMessageSet("test".getBytes(), key="test".getBytes())
+      val info = log.append(set)
+      offset = info.lastOffset
+    }
+
+    val numSegments = log.numberOfSegments
+    assertTrue("There should be more than one segment now.", log.numberOfSegments > 1)
+
+    log.logSegments.foreach(_.log.file.setLastModified(time.milliseconds))
+
+    time.sleep(maxLogAgeMs + 1)
+    assertEquals("number of segments shouldn't have changed", numSegments, log.numberOfSegments)
   }
 
   /**
