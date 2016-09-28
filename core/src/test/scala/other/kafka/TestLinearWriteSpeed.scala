@@ -23,8 +23,9 @@ import java.nio.channels._
 import java.util.{Properties, Random}
 
 import kafka.log._
-import kafka.utils._
 import kafka.message._
+import kafka.server.BrokerState
+import kafka.utils._
 
 import scala.math._
 import joptsimple._
@@ -117,7 +118,8 @@ object TestLinearWriteSpeed {
         val logProperties = new Properties()
         logProperties.put(LogConfig.SegmentBytesProp, segmentSize: java.lang.Integer)
         logProperties.put(LogConfig.FlushMessagesProp, flushInterval: java.lang.Long)
-        writables(i) = new LogWritable(new File(dir, "kafka-test-" + i), new LogConfig(logProperties), scheduler, messageSet)
+        val brokerState = new BrokerState()
+        writables(i) = new LogWritable(new File(dir, "kafka-test-" + i), new LogConfig(logProperties), scheduler, messageSet, brokerState)
       } else {
         System.err.println("Must specify what to write to with one of --log, --channel, or --mmap") 
         System.exit(1)
@@ -199,9 +201,9 @@ object TestLinearWriteSpeed {
     }
   }
   
-  class LogWritable(val dir: File, config: LogConfig, scheduler: Scheduler, val messages: ByteBufferMessageSet) extends Writable {
+  class LogWritable(val dir: File, config: LogConfig, scheduler: Scheduler, val messages: ByteBufferMessageSet, brokerState: BrokerState) extends Writable {
     Utils.delete(dir)
-    val log = new Log(dir, config, 0L, scheduler, SystemTime)
+    val log = new Log(dir, config, 0L, scheduler, SystemTime, brokerState)
     def write(): Int = {
       log.append(messages, true)
       messages.sizeInBytes

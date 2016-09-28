@@ -22,7 +22,7 @@ import kafka.utils._
 import kafka.message._
 import kafka.common._
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.{BrokerTopicStats, FetchDataInfo, LogOffsetMetadata}
+import kafka.server.{BrokerState, BrokerTopicStats, FetchDataInfo, LogOffsetMetadata, RecoveringFromUncleanShutdown}
 import java.io.{File, IOException}
 import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap}
 import java.util.concurrent.atomic._
@@ -86,7 +86,8 @@ class Log(val dir: File,
           @volatile var config: LogConfig,
           @volatile var recoveryPoint: Long = 0L,
           scheduler: Scheduler,
-          time: Time = SystemTime) extends Logging with KafkaMetricsGroup {
+          time: Time = SystemTime,
+          val brokerState: BrokerState) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
 
@@ -275,13 +276,8 @@ class Log(val dir: File,
   }
 
   private def recoverLog() {
-    // if we have the clean shutdown marker, skip recovery
-    if(hasCleanShutdownFile) {
-      this.recoveryPoint = activeSegment.nextOffset
-      return
-    }
-
     // okay we need to actually recovery this log
+    brokerState.newState(RecoveringFromUncleanShutdown)
     val unflushed = logSegments(this.recoveryPoint, Long.MaxValue).iterator
     while(unflushed.hasNext) {
       val curr = unflushed.next
@@ -303,11 +299,6 @@ class Log(val dir: File,
       }
     }
   }
-
-  /**
-   * Check if we have the "clean shutdown" file
-   */
-  private def hasCleanShutdownFile() = new File(dir.getParentFile, CleanShutdownFile).exists()
 
   /**
    * The number of segments in the log.
@@ -1043,11 +1034,6 @@ object Log {
 
   /** A temporary file used when swapping files into the log */
   val SwapFileSuffix = ".swap"
-
-  /** Clean shutdown file that indicates the broker was cleanly shutdown in 0.8. This is required to maintain backwards compatibility
-   * with 0.8 and avoid unnecessary log recovery when upgrading from 0.8 to 0.8.1 */
-  /** TODO: Get rid of CleanShutdownFile in 0.8.2 */
-  val CleanShutdownFile = ".kafka_cleanshutdown"
 
   /**
    * Make log segment file name from offset bytes. All this does is pad out the offset number with zeros

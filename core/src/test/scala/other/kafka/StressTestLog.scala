@@ -22,6 +22,7 @@ import java.util.concurrent.atomic._
 
 import kafka.message._
 import kafka.log._
+import kafka.server.BrokerState
 import kafka.utils._
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException
 import org.apache.kafka.common.utils.Utils
@@ -40,12 +41,14 @@ object StressTestLog {
     logProprties.put(LogConfig.SegmentBytesProp, 64*1024*1024: java.lang.Integer)
     logProprties.put(LogConfig.MaxMessageBytesProp, Int.MaxValue: java.lang.Integer)
     logProprties.put(LogConfig.SegmentIndexBytesProp, 1024*1024: java.lang.Integer)
+    val brokerState = new BrokerState()
 
     val log = new Log(dir = dir,
                       config = LogConfig(logProprties),
                       recoveryPoint = 0L,
                       scheduler = time.scheduler,
-                      time = time)
+                      time = time,
+                      brokerState = brokerState)
     val writer = new WriterThread(log)
     writer.start()
     val reader = new ReaderThread(log)

@@ -181,11 +181,13 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
 
     val config = LogConfig(logProps)
     val partitionDir = new File(logDir, "log-0")
+    val brokerState = new BrokerState()
     val log = new Log(partitionDir,
       config,
       recoveryPoint = 0L,
       time.scheduler,
-      time)
+      time,
+      brokerState)
     log
   }
 

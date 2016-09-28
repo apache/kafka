@@ -110,23 +110,11 @@ class LogManager(val logDirs: Array[File],
     info("Loading logs.")
     val startMs = time.milliseconds
     val threadPools = mutable.ArrayBuffer.empty[ExecutorService]
-    val jobs = mutable.Map.empty[File, Seq[Future[_]]]
+    val jobs = mutable.ArrayBuffer.empty[Future[_]]
 
     for (dir <- this.logDirs) {
       val pool = Executors.newFixedThreadPool(ioThreads)
       threadPools.append(pool)
-
-      val cleanShutdownFile = new File(dir, Log.CleanShutdownFile)
-
-      if (cleanShutdownFile.exists) {
-        debug(
-          "Found clean shutdown file. " +
-          "Skipping recovery for all logs in data directory: " +
-          dir.getAbsolutePath)
-      } else {
-        // log recovery itself is being performed by `Log` class during initialization
-        brokerState.newState(RecoveringFromUncleanShutdown)
-      }
 
       var recoveryPoints = Map[TopicAndPartition, Long]()
       try {
@@ -148,7 +136,7 @@ class LogManager(val logDirs: Array[File],
           val config = topicConfigs.getOrElse(topicPartition.topic, defaultConfig)
           val logRecoveryPoint = recoveryPoints.getOrElse(topicPartition, 0L)
 
-          val current = new Log(logDir, config, logRecoveryPoint, scheduler, time)
+          val current = new Log(logDir, config, logRecoveryPoint, scheduler, time, brokerState)
           val previous = this.logs.put(topicPartition, current)
 
           if (previous != null) {
@@ -158,16 +146,13 @@ class LogManager(val logDirs: Array[File],
           }
         }
       }
-
-      jobs(cleanShutdownFile) = jobsForDir.map(pool.submit).toSeq
+      jobs ++= jobsForDir.map(pool.submit).toSeq
     }
 
 
     try {
-      for ((cleanShutdownFile, dirJobs) <- jobs) {
-        dirJobs.foreach(_.get)
-        cleanShutdownFile.delete()
-      }
+      // TODO proper block on set of futures
+      jobs.foreach(_.get)
     } catch {
       case e: ExecutionException => {
         error("There was an error in one of the threads during logs loading: " + e.getCause)
@@ -250,10 +235,6 @@ class LogManager(val logDirs: Array[File],
         // update the last flush point
         debug("Updating recovery points at " + dir)
         checkpointLogsInDir(dir)
-
-        // mark that the shutdown was clean by creating marker file
-        debug("Writing clean shutdown marker at " + dir)
-        CoreUtils.swallow(new File(dir, Log.CleanShutdownFile).createNewFile())
       }
     } catch {
       case e: ExecutionException => {
@@ -363,7 +344,8 @@ class LogManager(val logDirs: Array[File],
                     config,
                     recoveryPoint = 0L,
                     scheduler,
-                    time)
+                    time,
+                    brokerState)
       logs.put(topicAndPartition, log)
       info("Created log for partition [%s,%d] in %s with properties {%s}."
            .format(topicAndPartition.topic, 

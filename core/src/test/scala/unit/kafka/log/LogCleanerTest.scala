@@ -24,6 +24,7 @@ import java.util.Properties
 
 import kafka.common._
 import kafka.message._
+import kafka.server.BrokerState
 import kafka.utils._
 import org.apache.kafka.common.record.{MemoryRecords, TimestampType}
 import org.apache.kafka.common.utils.Utils
@@ -47,6 +48,8 @@ class LogCleanerTest extends JUnitSuite {
   val logConfig = LogConfig(logProps)
   val time = new MockTime()
   val throttler = new Throttler(desiredRatePerSec = Double.MaxValue, checkIntervalMs = Long.MaxValue, time = time)
+  val brokerState = new BrokerState()
+
   
   @After
   def teardown(): Unit = {
@@ -767,7 +770,8 @@ class LogCleanerTest extends JUnitSuite {
   
   
   def makeLog(dir: File = dir, config: LogConfig = logConfig) =
-    new Log(dir = dir, config = config, recoveryPoint = 0L, scheduler = time.scheduler, time = time)
+    new Log(dir = dir, config = config, recoveryPoint = 0L, scheduler = time.scheduler, time = time,
+      brokerState = brokerState)
 
   def noOpCheckDone(topicAndPartition: TopicAndPartition) { /* do nothing */  }
 

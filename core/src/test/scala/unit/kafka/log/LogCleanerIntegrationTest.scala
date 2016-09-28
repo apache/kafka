@@ -23,7 +23,7 @@ import java.util.Properties
 import kafka.api.{KAFKA_0_10_0_IV1, KAFKA_0_9_0}
 import kafka.common.TopicAndPartition
 import kafka.message._
-import kafka.server.OffsetCheckpoint
+import kafka.server.{BrokerState, OffsetCheckpoint}
 import kafka.utils._
 import org.apache.kafka.common.record.CompressionType
 import org.apache.kafka.common.utils.Utils
@@ -319,7 +319,8 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
                           maxMessageSize: Int = 128,
                           logCleanerBackOffMillis: Long = 15000L,
                           propertyOverrides: Properties = new Properties()): LogCleaner = {
-    
+    val brokerState = new BrokerState()
+
     // create partitions and add them to the pool
     val logs = new Pool[TopicAndPartition, Log]()
     for(i <- 0 until parts) {
@@ -330,7 +331,8 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
                         LogConfig(logConfigProperties(propertyOverrides, maxMessageSize, minCleanableDirtyRatio)),
                         recoveryPoint = 0L,
                         scheduler = time.scheduler,
-                        time = time)
+                        time = time,
+                        brokerState = brokerState)
       logs.put(TopicAndPartition("log", i), log)      
     }
   
