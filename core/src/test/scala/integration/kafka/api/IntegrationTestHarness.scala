@@ -29,6 +29,8 @@ import kafka.integration.KafkaServerTestHarness
 import org.junit.{After, Before}
 
 import scala.collection.mutable.Buffer
+import scala.util.control.Breaks.{breakable, break}
+import java.util.ConcurrentModificationException
 
 /**
  * A helper class for writing integration tests that involve producers, consumers, and servers
@@ -98,7 +100,21 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
   @After
   override def tearDown() {
     producers.foreach(_.close())
-    consumers.foreach(_.close())
+    
+    consumers.foreach { consumer => 
+      breakable {
+        while(true) {
+          try {
+            consumer.close
+            break
+          } catch {
+            //short wait to make sure that woken up consumer can be closed without spurious ConcurrentModificationException
+            case e: ConcurrentModificationException => Thread.sleep(100L)
+          }
+        }
+      }
+    }
+    
     super.tearDown()
   }
 

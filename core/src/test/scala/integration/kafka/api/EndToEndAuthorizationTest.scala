@@ -42,7 +42,6 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
-
 /**
   * The test cases here verify that a producer authorized to publish to a topic
   * is able to, and that consumers in a group authorized to consume are able to
@@ -270,7 +269,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     */
   @Test
   def testNoConsumeWithoutDescribeAclViaAssign {
-    noConsumeWithoutDescribeAclProlog
+    noConsumeWithoutDescribeAclSetup
     consumers.head.assign(List(tp).asJava)
 
     try {
@@ -283,7 +282,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
   
   @Test
   def testNoConsumeWithoutDescribeAclViaSubscribe {
-    noConsumeWithoutDescribeAclProlog
+    noConsumeWithoutDescribeAclSetup
     consumers.head.subscribe(List(topic).asJava)
 
     try {
@@ -294,7 +293,7 @@ trait EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
     }
   } 
   
-  private def noConsumeWithoutDescribeAclProlog {
+  private def noConsumeWithoutDescribeAclSetup {
     AclCommand.main(produceAclArgs)
     AclCommand.main(groupAclArgs)
     servers.foreach { s =>
