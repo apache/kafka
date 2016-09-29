@@ -220,6 +220,6 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
 
   @Before
   def setup(): Unit = {
-    calls = 0;
+    calls = 0
   }
 }
