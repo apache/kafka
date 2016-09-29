@@ -12,7 +12,7 @@
   */
 package kafka.admin
 
-import kafka.common.TopicAndPartition
+import kafka.common.{AdminCommandFailedException, TopicAndPartition}
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils._
 import kafka.utils.ZkUtils._
@@ -127,7 +127,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), initialThrottle)
 
     //Check throttle config. Should be throttling replica 0 on 100 and 102 only.
-    checkThrottleConfigAddedToZK(initialThrottle, servers, topicName, "0:100,0:102")
+    checkThrottleConfigAddedToZK(initialThrottle, servers, topicName, "0:100,0:101", "0:102")
 
     //Await completion
     waitForReassignmentToComplete()
@@ -177,8 +177,14 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), throttle)
 
     //Check throttle config. Should be throttling specific replicas for each topic.
-    checkThrottleConfigAddedToZK(throttle, servers, "topic1", "1:101,1:102,0:101,0:102")
-    checkThrottleConfigAddedToZK(throttle, servers, "topic2", "1:103,1:104,0:103,0:104")
+    checkThrottleConfigAddedToZK(throttle, servers, "topic1",
+      "1:100,1:101,0:100,0:101", //All replicas for moving partitions should be leader-throttled
+      "1:102,0:102" //Move destinations should be follower throttled.
+    )
+    checkThrottleConfigAddedToZK(throttle, servers, "topic2",
+      "1:104,1:105,0:104,0:105", //All replicas for moving partitions should be leader-throttled
+      "1:103,0:103" //Move destinations should be follower throttled.
+    )
   }
 
   @Test
@@ -200,13 +206,13 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), initialThrottle)
 
     //Check throttle config
-    checkThrottleConfigAddedToZK(initialThrottle, servers, topicName, "0:100,0:102")
+    checkThrottleConfigAddedToZK(initialThrottle, servers, topicName, "0:100,0:101", "0:102")
 
     //Ensure that running Verify, whilst the command is executing, should have no effect
     ReassignPartitionsCommand.verifyAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment))
 
     //Check throttle config again
-    checkThrottleConfigAddedToZK(initialThrottle, servers, topicName, "0:100,0:102")
+    checkThrottleConfigAddedToZK(initialThrottle, servers, topicName, "0:100,0:101", "0:102")
 
     //Now re-run the same assignment with a larger throttle, which should only act to increase the throttle and make progress
     val newThrottle = initialThrottle * 1000
@@ -214,7 +220,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), newThrottle)
 
     //Check throttle was changed
-    checkThrottleConfigAddedToZK(newThrottle, servers, topicName, "0:100,0:102")
+    checkThrottleConfigAddedToZK(newThrottle, servers, topicName, "0:100,0:101", "0:102")
 
     //Await completion
     waitForReassignmentToComplete()
@@ -228,6 +234,16 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     //Check move occurred
     val actual = zkUtils.getPartitionAssignmentForTopics(Seq(topicName))(topicName)
     assertEquals(actual.values.flatten.toSeq.distinct.sorted, Seq(101, 102))
+  }
+
+  @Test(expected = classOf[AdminCommandFailedException])
+  def shouldFailIfProposedDoesNotMatchExisting() {
+    //Given a single replica on server 100
+    startBrokers(Seq(100, 101))
+    createTopic(zkUtils, topicName, Map(0 -> Seq(100)), servers = servers)
+
+    //When we execute an assignment that includes an invalid partition (1:101 in this case)
+    ReassignPartitionsCommand.executeAssignment(zkUtils, s"""{"version":1,"partitions":[{"topic":"$topicName","partition":1,"replicas":[101]}]}""")
   }
 
   def waitForReassignmentToComplete() {

@@ -17,12 +17,12 @@
 package kafka.server
 
 import kafka.admin.AdminUtils
-import kafka.utils.TestUtils._
 import kafka.utils.ZkUtils
 import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.config._
 import org.easymock.EasyMock
 import org.junit.{Before, Test}
+import kafka.utils.CoreUtils._
 
 class DynamicConfigTest {
   private final val nonExistentConfig: String = "some.config.that.does.not.exist"
@@ -38,21 +38,21 @@ class DynamicConfigTest {
 
   @Test(expected = classOf[IllegalArgumentException])
   def shouldFailWhenChangingBrokerUnknownConfig() {
-    AdminUtils.changeBrokerConfig(zkUtils, Seq(0), wrapInProps(nonExistentConfig, someValue))
+    AdminUtils.changeBrokerConfig(zkUtils, Seq(0), propsWith(nonExistentConfig, someValue))
   }
 
   @Test(expected = classOf[IllegalArgumentException])
   def shouldFailWhenChangingClientIdUnknownConfig() {
-    AdminUtils.changeClientIdConfig(zkUtils, "ClientId", wrapInProps(nonExistentConfig, someValue))
+    AdminUtils.changeClientIdConfig(zkUtils, "ClientId", propsWith(nonExistentConfig, someValue))
   }
 
   @Test(expected = classOf[IllegalArgumentException])
   def shouldFailWhenChangingUserUnknownConfig() {
-    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, "UserId", wrapInProps(nonExistentConfig, someValue))
+    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, "UserId", propsWith(nonExistentConfig, someValue))
   }
 
   @Test(expected = classOf[ConfigException])
   def shouldFailConfigsWithInvalidValues() {
-    AdminUtils.changeBrokerConfig(zkUtils, Seq(0), wrapInProps(DynamicConfig.Broker.ThrottledReplicationRateLimitProp, "-100"))
+    AdminUtils.changeBrokerConfig(zkUtils, Seq(0), propsWith(DynamicConfig.Broker.ThrottledReplicationRateLimitProp, "-100"))
   }
 }

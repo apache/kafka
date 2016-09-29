@@ -22,7 +22,7 @@ import java.nio._
 import java.nio.channels._
 import java.util.concurrent.locks.{Lock, ReadWriteLock}
 import java.lang.management._
-import java.util.UUID
+import java.util.{Properties, UUID}
 import javax.management._
 import javax.xml.bind.DatatypeConverter
 
@@ -300,5 +300,15 @@ object CoreUtils extends Logging {
     val urlSafeBase64EncodedUUID = base64EncodedUUID.replace("+", "-").replace("/", "_")
     // Remove the "==" padding at the end.
     urlSafeBase64EncodedUUID.substring(0, urlSafeBase64EncodedUUID.length - 2)
+  }
+
+  def propsWith(key: String, value: String): Properties = {
+    propsWith((key, value))
+  }
+
+  def propsWith(props: (String, String)*): Properties = {
+    val properties = new Properties()
+    props.foreach { case (k, v) => properties.put(k, v) }
+    properties
   }
 }
