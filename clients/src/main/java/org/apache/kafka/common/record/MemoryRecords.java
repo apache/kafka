@@ -40,7 +40,7 @@ public class MemoryRecords implements Records {
     private final int initialCapacity;
 
     // the underlying buffer used for read; while the records are still writable it is null
-    private ByteBuffer buffer;
+    private volatile ByteBuffer buffer;
 
     // indicate if the memory records is writable or not (i.e. used for appends or read-only)
     private volatile boolean writable;
