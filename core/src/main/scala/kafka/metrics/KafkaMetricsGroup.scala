@@ -27,6 +27,7 @@ import kafka.producer.{ProducerRequestStatsRegistry, ProducerStatsRegistry, Prod
 import kafka.utils.Logging
 
 import scala.collection.immutable
+import javax.management.ObjectName
 
 
 trait KafkaMetricsGroup extends Logging {
@@ -43,9 +44,10 @@ trait KafkaMetricsGroup extends Logging {
     val pkg = if (klass.getPackage == null) "" else klass.getPackage.getName
     val simpleName = klass.getSimpleName.replaceAll("\\$$", "")
     // Tags may contain ipv6 address with ':', which is not valid in JMX ObjectName
-    val sanitizedTags = tags.map(kv => (kv._1, kv._2.replace(':', '_')))
+    def quoteIfRequired(value: String) = if (value.contains(':')) ObjectName.quote(value) else value
+    val metricTags = tags.map(kv => (kv._1, quoteIfRequired(kv._2)))
 
-    explicitMetricName(pkg, simpleName, name, sanitizedTags)
+    explicitMetricName(pkg, simpleName, name, metricTags)
   }
 
 
