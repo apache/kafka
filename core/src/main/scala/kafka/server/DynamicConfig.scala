@@ -41,11 +41,11 @@ object DynamicConfig {
 
     //Documentation
     val ThrottledLeaderReplicationRateDoc = "A long representing the upper bound (bytes/sec) on replication traffic for leaders enumerated in the " +
-      s"property ${LogConfig.LeaderThrottledReplicasListProp} (for each topic). This property can be only set dynamically (via the kafka-configs.sh etc). It is suggested that the " +
-      s"limit be kept above the value of ${KafkaConfig.ReplicaFetchMaxBytesProp} which defaults to ${Defaults.ReplicaFetchMaxBytes}B/s"
+      s"property ${LogConfig.LeaderThrottledReplicasListProp} (for each topic). This property can be only set dynamically. It is suggested that the " +
+      s"limit be kept above 1MB/s for accurate behaviour."
     val ThrottledFollowerReplicationRateDoc = "A long representing the upper bound (bytes/sec) on replication traffic for followers enumerated in the " +
-      s"property ${LogConfig.FollowerThrottledReplicasListProp} (for each topic). This property can be only set dynamically (via the kafka-configs.sh etc) It is suggested that the " +
-      s"limit be kept above the value of ${KafkaConfig.ReplicaFetchMaxBytesProp} which defaults to ${Defaults.ReplicaFetchMaxBytes}B/s"
+      s"property ${LogConfig.FollowerThrottledReplicasListProp} (for each topic). This property can be only set dynamically. It is suggested that the " +
+      s"limit be kept above 1MB/s for accurate behaviour."
 
     //Definitions
     private val brokerConfigDef = new ConfigDef()

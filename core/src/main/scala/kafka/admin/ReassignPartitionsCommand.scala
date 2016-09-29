@@ -336,7 +336,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
   }
 
   private[admin] def assignThrottledReplicas(allExisting: Map[TopicAndPartition, Seq[Int]], allProposed: Map[TopicAndPartition, Seq[Int]], admin: AdminUtilities = AdminUtils): Unit = {
-    //Set throttles to replicas that are moving. Note: this command should only be used when the assignment is initiated.
+    //Set throttles to replicas that are moving. Note: this method should only be used when the assignment is initiated.
     for (topic <- allProposed.keySet.map(_.topic).toSeq) {
       val (existing, proposed) = filterBy(topic, allExisting, allProposed)
 
