@@ -43,7 +43,7 @@ public class MemoryRecords implements Records {
     private ByteBuffer buffer;
 
     // indicate if the memory records is writable or not (i.e. used for appends or read-only)
-    private boolean writable;
+    private volatile boolean writable;
 
     // Construct a writable memory records
     private MemoryRecords(ByteBuffer buffer, CompressionType type, boolean writable, int writeLimit) {
