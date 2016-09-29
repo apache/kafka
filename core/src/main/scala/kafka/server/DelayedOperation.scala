@@ -299,20 +299,18 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
 
     // traverse the list and try to complete some watched elements
     def tryCompleteWatched(): Int = {
-      val ops = synchronized(operations)
-
       // call tryComplete without holding the lock to avoid potential deadlocks
-      var alreadyCompleted = 0
+      var completedAlready = 0
       var completedNow = 0
-      for (op <- ops) {
+      for (op <- synchronized(operations)) {
         if (op.isCompleted())
-          alreadyCompleted += 1
+          completedAlready += 1
         else if (op synchronized op.tryComplete())
           completedNow += 1
       }
 
       // purge if there are any completed operations
-      if (alreadyCompleted + completedNow > 0)
+      if (completedAlready + completedNow > 0)
         purgeCompleted()
 
       completedNow
@@ -321,9 +319,9 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
     // traverse the list and purge elements that are already completed by others
     def purgeCompleted(): Int = {
       val purged = synchronized {
-        val initialCount = operations.size
+        val initialSize = operations.size
         operations = operations.filterNot(_.isCompleted())
-        initialCount - operations.size
+        initialSize - operations.size
       }
       removeKeyIfEmpty(key, this)
       purged
