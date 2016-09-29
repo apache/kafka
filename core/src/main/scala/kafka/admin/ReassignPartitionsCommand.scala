@@ -79,7 +79,7 @@ object ReassignPartitionsCommand extends Logging {
     var changed = false
 
     //If all partitions have completed remove the throttle
-    if (reassignedPartitionsStatus.forall { case (topicPartition, status) => status == ReassignmentCompleted }) {
+    if (reassignedPartitionsStatus.forall { case (_, status) => status == ReassignmentCompleted }) {
       //Remove the throttle limit from all brokers in the cluster
       for (brokerId <- zkUtils.getAllBrokersInCluster().map(_.id)) {
         val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Broker, brokerId.toString)
