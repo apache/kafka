@@ -124,8 +124,8 @@ object LogConfig {
   val MessageFormatVersionProp = "message.format.version"
   val MessageTimestampTypeProp = "message.timestamp.type"
   val MessageTimestampDifferenceMaxMsProp = "message.timestamp.difference.max.ms"
-  val LeaderThrottledReplicasListProp = "quota.leader.replication.throttled.replicas"
-  val FollowerThrottledReplicasListProp = "quota.follower.replication.throttled.replicas"
+  val LeaderThrottledReplicasListProp = "leader.replication.throttled.replicas"
+  val FollowerThrottledReplicasListProp = "follower.replication.throttled.replicas"
 
   val SegmentSizeDoc = "This configuration controls the segment file size for " +
     "the log. Retention and cleaning is always done a file at a time so a larger " +

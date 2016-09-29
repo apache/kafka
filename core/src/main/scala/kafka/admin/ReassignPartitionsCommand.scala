@@ -83,7 +83,8 @@ object ReassignPartitionsCommand extends Logging {
       //Remove the throttle limit from all brokers in the cluster
       for (brokerId <- zkUtils.getAllBrokersInCluster().map(_.id)) {
         val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Broker, brokerId.toString)
-        if (configs.remove(DynamicConfig.Broker.ThrottledReplicationRateLimitProp) != null){
+        if (configs.remove(DynamicConfig.Broker.ThrottledLeaderReplicationRateProp) != null
+          || configs.remove(DynamicConfig.Broker.ThrottledFollowerReplicationRateProp) != null){
           AdminUtils.changeBrokerConfig(zkUtils, Seq(brokerId), configs)
           changed = true
         }
@@ -323,7 +324,8 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
 
       for (id <- brokers) {
         val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Broker, id.toString)
-        configs.put(DynamicConfig.Broker.ThrottledReplicationRateLimitProp, throttle.toString)
+        configs.put(DynamicConfig.Broker.ThrottledLeaderReplicationRateProp, throttle.toString)
+        configs.put(DynamicConfig.Broker.ThrottledFollowerReplicationRateProp, throttle.toString)
         AdminUtils.changeBrokerConfig(zkUtils, Seq(id), configs)
       }
       println(s"The throttle limit was set to $throttle B/s")
