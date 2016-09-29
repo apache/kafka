@@ -81,7 +81,7 @@ object ReassignPartitionsCommand extends Logging {
     //If all partitions have completed remove the throttle
     if (reassignedPartitionsStatus.forall { case (_, status) => status == ReassignmentCompleted }) {
       //Remove the throttle limit from all brokers in the cluster
-      //(as we no longer know which, specific, brokers were involved in the move)
+      //(as we no longer know which specific brokers were involved in the move)
       for (brokerId <- zkUtils.getAllBrokersInCluster().map(_.id)) {
         val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Broker, brokerId.toString)
         if (configs.remove(DynamicConfig.Broker.ThrottledLeaderReplicationRateProp) != null
