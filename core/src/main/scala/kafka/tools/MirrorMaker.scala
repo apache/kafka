@@ -444,6 +444,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         }
       } catch {
         case t: Throwable =>
+          exitingOnSendFailure = true
           fatal("Mirror maker thread failure due to ", t)
       } finally {
         CoreUtils.swallow {
