@@ -71,6 +71,10 @@ ext {
   gradleVersion = "3.0"
   buildVersionFileName = "kafka-version.properties"
 
+  maxPermSizeArgs = []
+  if (!JavaVersion.current().isJava8Compatible())
+    maxPermSizeArgs = ['-XX:MaxPermSize=512m']
+
   userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
 
   skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
@@ -157,11 +161,17 @@ subprojects {
 
   test {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+
+    minHeapSize = "256m"
+    maxHeapSize = "2048m"
+    jvmArgs = maxPermSizeArgs
+
     testLogging {
       events = userTestLoggingEvents ?: ["passed", "skipped", "failed"]
       showStandardStreams = userShowStandardStreams ?: false
       exceptionFormat = 'full'
     }
+
   }
 
   jar {
@@ -250,7 +260,7 @@ subprojects {
 
     configure(scalaCompileOptions.forkOptions) {
       memoryMaximumSize = '1g'
-      jvmArgs = ['-XX:MaxPermSize=512m', '-Xss2m']
+      jvmArgs = ['-Xss2m'] + maxPermSizeArgs
     }
   }
 

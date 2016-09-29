@@ -18,7 +18,7 @@ import os
 
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version import TRUNK, V_0_9_0_0
+from kafkatest.version import TRUNK, V_0_9_0_0, LATEST_0_10_0
 
 
 class ConsumerPerformanceService(PerformanceService):
@@ -97,8 +97,7 @@ class ConsumerPerformanceService(PerformanceService):
         for node in self.nodes:
             node.version = version
 
-    @property
-    def args(self):
+    def args(self, version):
         """Dictionary of arguments used to start the Consumer Performance script."""
         args = {
             'topic': self.topic,
@@ -106,6 +105,8 @@ class ConsumerPerformanceService(PerformanceService):
         }
 
         if self.new_consumer:
+            if version <= LATEST_0_10_0:
+                args['new-consumer'] = ""
             args['broker-list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
         else:
             args['zookeeper'] = self.kafka.zk.connect_setting()
@@ -135,7 +136,7 @@ class ConsumerPerformanceService(PerformanceService):
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\";" % ConsumerPerformanceService.LOG4J_CONFIG
         cmd += " %s" % self.path.script("kafka-consumer-perf-test.sh", node)
-        for key, value in self.args.items():
+        for key, value in self.args(node.version).items():
             cmd += " --%s %s" % (key, value)
 
         if node.version >= V_0_9_0_0:

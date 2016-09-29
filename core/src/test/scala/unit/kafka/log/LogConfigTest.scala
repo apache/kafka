@@ -19,7 +19,7 @@ package kafka.log
 
 import java.util.Properties
 
-import kafka.server.{ThrottledReplicaValidator, KafkaConfig, KafkaServer}
+import kafka.server.{ThrottledReplicaListValidator, KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigException
 import org.junit.{Assert, Test}
@@ -74,22 +74,25 @@ class LogConfigTest {
     assertTrue(isValid("100:10,12:10"))
     assertTrue(isValid("100:10,12:10,15:1"))
     assertTrue(isValid("100:10,12:10,15:1  "))
+    assertTrue(isValid("100:0,"))
 
     assertFalse(isValid("100"))
     assertFalse(isValid("100:"))
-    assertFalse(isValid("100:0,"))
     assertFalse(isValid("100:0,10"))
     assertFalse(isValid("100:0,10:"))
     assertFalse(isValid("100:0,10:   "))
+    assertFalse(isValid("100 :0,10:   "))
+    assertFalse(isValid("100: 0,10:   "))
+    assertFalse(isValid("100:0,10 :   "))
   }
 
   private def isValid(configValue: String): Boolean = {
     try {
-      ThrottledReplicaValidator.ensureValid("", configValue)
+      ThrottledReplicaListValidator.ensureValidString("", configValue)
+      true
     } catch {
-      case e: ConfigException => return false
+      case _: ConfigException => false
     }
-    true
   }
 
   private def assertPropertyInvalid(name: String, values: AnyRef*) {
