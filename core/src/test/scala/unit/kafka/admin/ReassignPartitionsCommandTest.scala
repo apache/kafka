@@ -159,7 +159,6 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
     assigner.assignThrottledReplicas(existing, proposed, mock)
   }
 
-
   @Test
   def shouldFindTwoMovingReplicasInSamePartition() {
     val control = TopicAndPartition("topic1", 1) -> Seq(100, 102)

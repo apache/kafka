@@ -318,6 +318,8 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
   }
 
   def maybeLimit(throttle: Long) {
+    // Limit the throttle on currently moving replicas. Note that this command can use used to alter the throttle,
+    // but it may not alter all limits originally set, if some of the brokers have completed their rebalance.
     if (throttle >= 0) {
       val existingBrokers = existingAssignment().values.flatten.toSeq
       val proposedBrokers = proposedAssignment.values.flatten.toSeq
@@ -334,6 +336,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
   }
 
   private[admin] def assignThrottledReplicas(allExisting: Map[TopicAndPartition, Seq[Int]], allProposed: Map[TopicAndPartition, Seq[Int]], admin: AdminUtilities = AdminUtils): Unit = {
+    //Set throttles to replicas that are moving. Note: this command should only be used when the assignment is initiated.
     for (topic <- allProposed.keySet.map(_.topic).toSeq) {
       val (existing, proposed) = filterBy(topic, allExisting, allProposed)
 
