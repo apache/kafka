@@ -85,7 +85,7 @@ object ReassignPartitionsCommand extends Logging {
       for (brokerId <- zkUtils.getAllBrokersInCluster().map(_.id)) {
         val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Broker, brokerId.toString)
         if (configs.remove(DynamicConfig.Broker.ThrottledLeaderReplicationRateProp) != null
-          || configs.remove(DynamicConfig.Broker.ThrottledFollowerReplicationRateProp) != null){
+          | configs.remove(DynamicConfig.Broker.ThrottledFollowerReplicationRateProp) != null){
           AdminUtils.changeBrokerConfig(zkUtils, Seq(brokerId), configs)
           changed = true
         }
@@ -96,7 +96,7 @@ object ReassignPartitionsCommand extends Logging {
       for (topic <- topics) {
         val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
         if (configs.remove(LogConfig.LeaderThrottledReplicasListProp) != null
-          || configs.remove(LogConfig.FollowerThrottledReplicasListProp) != null){
+          | configs.remove(LogConfig.FollowerThrottledReplicasListProp) != null){
           AdminUtils.changeTopicConfig(zkUtils, topic, configs)
           changed = true
         }
