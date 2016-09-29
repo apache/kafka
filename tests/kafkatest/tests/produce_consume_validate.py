@@ -32,13 +32,13 @@ class ProduceConsumeValidateTest(Test):
     def setup_producer_and_consumer(self):
         raise NotImplementedError("Subclasses should implement this")
 
-    def start_producer_and_consumer(self):
+    def start_producer_and_consumer(self, async=False):
         # Start background producer and consumer
         self.producer.start()
-        wait_until(lambda: self.producer.num_acked > 5, timeout_sec=20,
+        wait_until(lambda: async or self.producer.num_acked > 5, timeout_sec=20,
              err_msg="Producer failed to start in a reasonable amount of time.")
         self.consumer.start()
-        wait_until(lambda: len(self.consumer.messages_consumed[1]) > 0, timeout_sec=60,
+        wait_until(lambda: async or len(self.consumer.messages_consumed[1]) > 0, timeout_sec=60,
              err_msg="Consumer failed to start in a reasonable amount of time.")
 
     def check_alive(self):
@@ -63,10 +63,10 @@ class ProduceConsumeValidateTest(Test):
         self.producer.stop()
         self.consumer.wait()
 
-    def run_produce_consume_validate(self, core_test_action=None, *args):
+    def run_produce_consume_validate(self, async=False, core_test_action=None, *args):
         """Top-level template for simple produce/consume/validate tests."""
         try:
-            self.start_producer_and_consumer()
+            self.start_producer_and_consumer(async)
 
             if core_test_action is not None:
                 core_test_action(*args)
@@ -108,6 +108,7 @@ class ProduceConsumeValidateTest(Test):
         msg = ""
         acked = self.producer.acked
         consumed = self.consumer.messages_consumed[1]
+        # Correctness of the set difference operation depends on using equivalent message_validators in procuder and consumer
         missing = set(acked) - set(consumed)
 
         self.logger.info("num consumed:  %d" % len(consumed))
