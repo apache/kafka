@@ -435,7 +435,10 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         @Override
         public synchronized boolean hasNext() {
-            return open && iter.isValid();
+            if (!open) {
+                throw new InvalidStateStoreException("store %s has closed");
+            }
+            return iter.isValid();
         }
 
         /**

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -32,6 +33,7 @@ import java.util.Map;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
@@ -117,7 +119,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldCloseOpenIteratorsWhenStoreClosed() throws Exception {
+    public void shouldCloseOpenIteratorsWhenStoreClosedAndThrowInvalidStateStoreOnHasNextAndNext() throws Exception {
         final KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
         final MockProcessorContext context = (MockProcessorContext) driver.context();
         context.setTime(1L);
@@ -132,8 +134,33 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
         store.close();
 
-        assertFalse(iteratorOne.hasNext());
-        assertFalse(iteratorTwo.hasNext());
+        try {
+            iteratorOne.hasNext();
+            fail("should have thrown InvalidStateStoreException on closed store");
+        } catch (InvalidStateStoreException e) {
+            // ok
+        }
+
+        try {
+            iteratorOne.next();
+            fail("should have thrown InvalidStateStoreException on closed store");
+        } catch (InvalidStateStoreException e) {
+            // ok
+        }
+
+        try {
+            iteratorTwo.hasNext();
+            fail("should have thrown InvalidStateStoreException on closed store");
+        } catch (InvalidStateStoreException e) {
+            // ok
+        }
+
+        try {
+            iteratorTwo.next();
+            fail("should have thrown InvalidStateStoreException on closed store");
+        } catch (InvalidStateStoreException e) {
+            // ok
+        }
 
     }
 

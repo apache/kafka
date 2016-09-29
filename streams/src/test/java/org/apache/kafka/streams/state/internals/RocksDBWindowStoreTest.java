@@ -25,6 +25,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
@@ -51,6 +52,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class RocksDBWindowStoreTest {
 
@@ -840,7 +842,7 @@ public class RocksDBWindowStoreTest {
     }
 
     @Test
-    public void shouldCloseOpenIteratorsWhenStoreIsClosed() throws Exception {
+    public void shouldCloseOpenIteratorsWhenStoreIsClosedAndThrowInvalidStateStoreExceptionOnHasNextAndNext() throws Exception {
         final File baseDir = TestUtils.tempDirectory();
         Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerde.serializer(), byteArraySerde.serializer());
         RecordCollector recordCollector = new RecordCollector(producer, "RocksDBWindowStoreTest-ShouldOnlyIterateOpenSegments") {
@@ -863,7 +865,19 @@ public class RocksDBWindowStoreTest {
         final WindowStoreIterator<String> iterator = windowStore.fetch(1, 1L, 3L);
         assertTrue(iterator.hasNext());
         windowStore.close();
-        assertFalse(iterator.hasNext());
+        try {
+            iterator.hasNext();
+            fail("should have thrown InvalidStateStoreException on closed store");
+        } catch (InvalidStateStoreException e) {
+            // ok
+        }
+
+        try {
+            iterator.next();
+            fail("should have thrown InvalidStateStoreException on closed store");
+        } catch (InvalidStateStoreException e) {
+            // ok
+        }
     }
 
     private <E> List<E> toList(WindowStoreIterator<E> iterator) {
