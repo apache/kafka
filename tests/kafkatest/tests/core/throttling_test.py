@@ -52,7 +52,7 @@ class ThrottlingTest(ProduceConsumeValidateTest):
         # ensure that the consumer is fully started before the producer starts
         # so that we don't miss any messages. This delay ensures the sufficient
         # condition.
-        self.delay_between_consumer_and_producer_start_sec = 10
+        self.consumer_init_timeout_sec =  10
         self.num_brokers = 6
         self.num_partitions = 3
         self.kafka = KafkaService(test_context,
