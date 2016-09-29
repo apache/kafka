@@ -13,7 +13,7 @@
 package kafka.admin
 
 import kafka.log.LogConfig
-import kafka.server.{KafkaConfig, ConfigType, KafkaServer}
+import kafka.server.{DynamicConfig, KafkaConfig, ConfigType, KafkaServer}
 import kafka.utils.TestUtils
 
 import scala.collection.Seq
@@ -24,7 +24,7 @@ object ReplicationQuotaUtils {
     TestUtils.waitUntilTrue(() => {
       val brokerReset = servers.forall { server =>
         val brokerConfig = AdminUtils.fetchEntityConfig(server.zkUtils, ConfigType.Broker, server.config.brokerId.toString)
-        !brokerConfig.contains(KafkaConfig.ThrottledReplicationRateLimitProp)
+        !brokerConfig.contains(DynamicConfig.Broker.ThrottledReplicationRateLimitProp)
       }
       val topicConfig = AdminUtils.fetchEntityConfig(servers(0).zkUtils, ConfigType.Topic, topic)
       val topicReset = !topicConfig.contains(LogConfig.ThrottledReplicasListProp)
@@ -37,7 +37,7 @@ object ReplicationQuotaUtils {
       //Check for limit in ZK
       val brokerConfigAvailable = servers.forall { server =>
         val configInZk = AdminUtils.fetchEntityConfig(server.zkUtils, ConfigType.Broker, server.config.brokerId.toString)
-        val zkThrottleRate = configInZk.getProperty(KafkaConfig.ThrottledReplicationRateLimitProp)
+        val zkThrottleRate = configInZk.getProperty(DynamicConfig.Broker.ThrottledReplicationRateLimitProp)
         zkThrottleRate != null && expectedThrottleRate == zkThrottleRate.toLong
       }
       //Check replicas assigned

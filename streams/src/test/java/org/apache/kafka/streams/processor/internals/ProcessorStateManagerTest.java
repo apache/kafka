@@ -48,6 +48,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
@@ -459,6 +460,14 @@ public class ProcessorStateManagerTest {
         Map<TopicPartition, Long> checkpointedOffsets = newCheckpoint.read();
         assertEquals(1, checkpointedOffsets.size());
         assertEquals(new Long(123L + 1L), checkpointedOffsets.get(new TopicPartition(persistentStoreTopicName, 1)));
+    }
+
+    @Test
+    public void shouldRegisterStoreWithoutLoggingEnabledAndNotBackedByATopic() throws Exception {
+        MockStateStoreSupplier.MockStateStore mockStateStore = new MockStateStoreSupplier.MockStateStore(nonPersistentStoreName, false);
+        ProcessorStateManager stateMgr = new ProcessorStateManager(applicationId, new TaskId(0, 1), noPartitions, new MockRestoreConsumer(), false, stateDirectory, null, Collections.<StateStore, ProcessorNode>emptyMap());
+        stateMgr.register(mockStateStore, false, mockStateStore.stateRestoreCallback);
+        assertNotNull(stateMgr.getStore(nonPersistentStoreName));
     }
 
 }

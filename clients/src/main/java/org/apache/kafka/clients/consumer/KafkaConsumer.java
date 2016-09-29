@@ -37,7 +37,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
-import org.apache.kafka.common.record.OffsetAndTimestamp;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.AppInfoParser;
@@ -1419,38 +1418,46 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Override
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {
         for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
+            // we explicitly exclude the earliest and latest offset here so the timestamp in the returned
+            // OffsetAndTimestamp is always positive.
             if (entry.getValue() < 0)
                 throw new IllegalArgumentException("The target time for partition " + entry.getKey() + " is " +
                         entry.getValue() + ". The target time cannot be negative.");
         }
-        return fetcher.getOffsetsByTimes(timestampsToSearch);
+        return fetcher.getOffsetsByTimes(timestampsToSearch, requestTimeoutMs);
     }
 
     /**
-     * Get the earliest available offsets for the given partitions.
-     *
+     * Get the first offset for the given partitions.
+     * <p>
      * Notice that this method may block indefinitely if the partition does not exist.
+     * This method does not change the current consumer position of the partitions.
+     *
+     * @see #seekToBeginning(Collection)
      *
      * @param partitions the partitions to get the earliest offsets.
      * @return The earliest available offsets for the given partitions
      */
     @Override
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions) {
-        return fetcher.earliestOffsets(partitions);
+        return fetcher.beginningOffsets(partitions, requestTimeoutMs);
     }
 
     /**
-     * Get the end offsets for the given partitions. The end offset of a partition is the offset of the upcoming
+     * Get the last offset for the given partitions. The last offset of a partition is the offset of the upcoming
      * message, i.e. the offset of the last available message + 1.
-     *
+     * <p>
      * Notice that this method may block indefinitely if the partition does not exist.
+     * This method does not change the current consumer position of the partitions.
+     *
+     * @see #seekToEnd(Collection)
      *
      * @param partitions the partitions to get the end offsets.
      * @return The end offsets for the given partitions.
      */
     @Override
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions) {
-        return fetcher.latestOffsets(partitions);
+        return fetcher.endOffsets(partitions, requestTimeoutMs);
     }
 
     /**

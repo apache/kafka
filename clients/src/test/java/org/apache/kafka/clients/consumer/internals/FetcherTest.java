@@ -41,7 +41,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.Compressor;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.OffsetAndTimestamp;
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
@@ -84,8 +84,8 @@ public class FetcherTest {
     private int fetchSize = 1000;
     private long retryBackoffMs = 100;
     private MockTime time = new MockTime(1);
-    private MockClient client = new MockClient(time);
     private Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+    private MockClient client = new MockClient(time, metadata);
     private Cluster cluster = TestUtils.singletonCluster(topicName, 1);
     private Node node = cluster.nodes().get(0);
     private SubscriptionState subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);
@@ -637,14 +637,70 @@ public class FetcherTest {
     }
 
     @Test
-    public void testGetOffsetsByTimes() {
-        client.prepareResponseFrom(listOffsetResponse(Errors.NONE, 100L, 100L), cluster.leaderFor(tp));
+    public void testGetOffsetsForTimesTimeout() {
+        try {
+            fetcher.getOffsetsByTimes(Collections.singletonMap(new TopicPartition(topicName, 2), 1000L), 100L);
+            fail("Should throw timeout exception.");
+        } catch (TimeoutException e) {
+            // let it go.
+        }
+    }
 
-        Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap =
-                fetcher.getOffsetsByTimes(Collections.singletonMap(tp, 0L));
-        assertEquals(offsetAndTimestampMap.get(tp).timestamp(), 100L);
-        assertEquals(offsetAndTimestampMap.get(tp).offset(), 100L);
+    @Test
+    public void testGetOffsetsForTimes() {
+        // Error code none with unknown offset
+        testGetOffsetsForTimesWithError(Errors.NONE, Errors.NONE, -1L, 100L, null, 100L);
+        // Error code none with known offset
+        testGetOffsetsForTimesWithError(Errors.NONE, Errors.NONE, 10L, 100L, 10L, 100L);
+        // Test both of partition has error.
+        testGetOffsetsForTimesWithError(Errors.NOT_LEADER_FOR_PARTITION, Errors.INVALID_REQUEST, 10L, 100L, 10L, 100L);
+        // Test the second partition has error.
+        testGetOffsetsForTimesWithError(Errors.NONE, Errors.NOT_LEADER_FOR_PARTITION, 10L, 100L, 10L, 100L);
+        // Test different errors.
+        testGetOffsetsForTimesWithError(Errors.NOT_LEADER_FOR_PARTITION, Errors.NONE, 10L, 100L, 10L, 100L);
+        testGetOffsetsForTimesWithError(Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.NONE, 10L, 100L, 10L, 100L);
+        testGetOffsetsForTimesWithError(Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT, Errors.NONE, 10L, 100L, null, 100L);
+        testGetOffsetsForTimesWithError(Errors.BROKER_NOT_AVAILABLE, Errors.NONE, 10L, 100L, 10L, 100L);
+    }
 
+    private void testGetOffsetsForTimesWithError(Errors errorForTp0,
+                                                 Errors errorForTp1,
+                                                 long offsetForTp0,
+                                                 long offsetForTp1,
+                                                 Long expectedOffsetForTp0,
+                                                 Long expectedOffsetForTp1) {
+        client.reset();
+        TopicPartition tp0 = tp;
+        TopicPartition tp1 = new TopicPartition(topicName, 1);
+        // Ensure metadata has both partition.
+        Cluster cluster = TestUtils.clusterWith(2, topicName, 2);
+        metadata.update(cluster, time.milliseconds());
+
+        // First try should fail due to metadata error.
+        client.prepareResponseFrom(listOffsetResponse(tp0, errorForTp0, offsetForTp0, offsetForTp0), cluster.leaderFor(tp0));
+        client.prepareResponseFrom(listOffsetResponse(tp1, errorForTp1, offsetForTp1, offsetForTp1), cluster.leaderFor(tp1));
+        // Second try should succeed.
+        client.prepareResponseFrom(listOffsetResponse(tp0, Errors.NONE, offsetForTp0, offsetForTp0), cluster.leaderFor(tp0));
+        client.prepareResponseFrom(listOffsetResponse(tp1, Errors.NONE, offsetForTp1, offsetForTp1), cluster.leaderFor(tp1));
+
+        Map<TopicPartition, Long> timestampToSearch = new HashMap<>();
+        timestampToSearch.put(tp0, 0L);
+        timestampToSearch.put(tp1, 0L);
+        Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = fetcher.getOffsetsByTimes(timestampToSearch, Long.MAX_VALUE);
+
+        if (expectedOffsetForTp0 == null)
+            assertNull(offsetAndTimestampMap.get(tp0));
+        else {
+            assertEquals(expectedOffsetForTp0.longValue(), offsetAndTimestampMap.get(tp0).timestamp());
+            assertEquals(expectedOffsetForTp0.longValue(), offsetAndTimestampMap.get(tp0).offset());
+        }
+
+        if (expectedOffsetForTp1 == null)
+            assertNull(offsetAndTimestampMap.get(tp1));
+        else {
+            assertEquals(expectedOffsetForTp1.longValue(), offsetAndTimestampMap.get(tp1).timestamp());
+            assertEquals(expectedOffsetForTp1.longValue(), offsetAndTimestampMap.get(tp1).offset());
+        }
     }
 
     private MockClient.RequestMatcher listOffsetRequestMatcher(final long timestamp) {
@@ -659,6 +715,10 @@ public class FetcherTest {
     }
 
     private Struct listOffsetResponse(Errors error, long timestamp, long offset) {
+        return listOffsetResponse(tp, error, timestamp, offset);
+    }
+
+    private Struct listOffsetResponse(TopicPartition tp, Errors error, long timestamp, long offset) {
         ListOffsetResponse.PartitionData partitionData = new ListOffsetResponse.PartitionData(error.code(), timestamp, offset);
         Map<TopicPartition, ListOffsetResponse.PartitionData> allPartitionData = new HashMap<>();
         allPartitionData.put(tp, partitionData);

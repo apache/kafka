@@ -257,6 +257,7 @@ public class RequestResponseTest {
         return new HeartbeatResponse(Errors.NONE.code());
     }
 
+    @SuppressWarnings("deprecation")
     private AbstractRequest createJoinGroupRequest(int version) {
         ByteBuffer metadata = ByteBuffer.wrap(new byte[] {});
         List<JoinGroupRequest.ProtocolMetadata> protocols = new ArrayList<>();
@@ -307,6 +308,7 @@ public class RequestResponseTest {
         return new LeaveGroupResponse(Errors.NONE.code());
     }
 
+    @SuppressWarnings("deprecation")
     private AbstractRequest createListOffsetRequest(int version) {
         if (version == 0) {
             Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = new HashMap<>();
@@ -321,6 +323,7 @@ public class RequestResponseTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     private AbstractRequestResponse createListOffsetResponse(int version) {
         if (version == 0) {
             Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<>();
@@ -353,6 +356,7 @@ public class RequestResponseTest {
         return new MetadataResponse(Arrays.asList(node), null, MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata, version);
     }
 
+    @SuppressWarnings("deprecation")
     private AbstractRequest createOffsetCommitRequest(int version) {
         Map<TopicPartition, OffsetCommitRequest.PartitionData> commitData = new HashMap<>();
         commitData.put(new TopicPartition("test", 0), new OffsetCommitRequest.PartitionData(100, ""));

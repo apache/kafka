@@ -425,7 +425,7 @@ public class Protocol {
                                                                                         "The timestamp associated with the returned offset"),
                                                                               new Field("offset",
                                                                                         INT64,
-                                                                                        "offsets found"));
+                                                                                        "offset found"));
 
     public static final Schema LIST_OFFSET_RESPONSE_TOPIC_V0 = new Schema(new Field("topic", STRING),
                                                                           new Field("partition_responses",

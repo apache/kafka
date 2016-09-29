@@ -20,18 +20,18 @@ package kafka.tools
 import java.util
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-import java.util.regex.{PatternSyntaxException, Pattern}
+import java.util.regex.{Pattern, PatternSyntaxException}
 import java.util.{Collections, Properties}
 
 import com.yammer.metrics.core.Gauge
 import joptsimple.OptionParser
-import kafka.consumer.{BaseConsumerRecord, ConsumerIterator, BaseConsumer, Blacklist, ConsumerConfig => OldConsumerConfig, ConsumerThreadId, ConsumerTimeoutException, TopicFilter, Whitelist, ZookeeperConsumerConnector}
+import kafka.consumer.{BaseConsumer, BaseConsumerRecord, Blacklist, ConsumerIterator, ConsumerThreadId, ConsumerTimeoutException, TopicFilter, Whitelist, ZookeeperConsumerConnector, ConsumerConfig => OldConsumerConfig}
 import kafka.javaapi.consumer.ConsumerRebalanceListener
 import kafka.metrics.KafkaMetricsGroup
 import kafka.serializer.DefaultDecoder
-import kafka.utils.{CommandLineUtils, CoreUtils, Logging}
+import kafka.utils.{CommandLineUtils, CoreUtils, Logging, ZKConfig}
 import org.apache.kafka.clients.consumer
-import org.apache.kafka.clients.consumer.{OffsetAndMetadata, Consumer, ConsumerRecord, KafkaConsumer, CommitFailedException}
+import org.apache.kafka.clients.consumer.{CommitFailedException, Consumer, ConsumerRecord, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.TopicPartition
@@ -95,7 +95,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         .ofType(classOf[String])
 
       val useNewConsumerOpt = parser.accepts("new.consumer",
-        "Use new consumer in mirror maker.")
+        "Use new consumer in mirror maker (this is the default).")
 
       val producerConfigOpt = parser.accepts("producer.config",
         "Embedded producer config.")
@@ -170,34 +170,47 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
       if (options.has(helpOpt)) {
         parser.printHelpOn(System.out)
-        System.exit(0)
+        sys.exit(0)
       }
 
       CommandLineUtils.checkRequiredArgs(parser, options, consumerConfigOpt, producerConfigOpt)
 
       val consumerProps = Utils.loadProps(options.valueOf(consumerConfigOpt))
+      val useOldConsumer = consumerProps.containsKey(ZKConfig.ZkConnectProp)
 
-      val useNewConsumer = options.has(useNewConsumerOpt)
-      if (useNewConsumer) {
+      if (useOldConsumer) {
+        if (options.has(useNewConsumerOpt)) {
+          error(s"The consumer configuration parameter `${ZKConfig.ZkConnectProp}` is not valid when using --new.consumer")
+          sys.exit(1)
+        }
+
+        if (consumerProps.containsKey(NewConsumerConfig.BOOTSTRAP_SERVERS_CONFIG)) {
+          error(s"The configuration parameters `${ZKConfig.ZkConnectProp}` (old consumer) and " +
+            s"`${NewConsumerConfig.BOOTSTRAP_SERVERS_CONFIG}` (new consumer) cannot be used together.")
+          sys.exit(1)
+        }
+
+        if (List(whitelistOpt, blacklistOpt).count(options.has) != 1) {
+          error("Exactly one of whitelist or blacklist is required.")
+          sys.exit(1)
+        }
+      } else {
         if (options.has(blacklistOpt)) {
           error("blacklist can not be used when using new consumer in mirror maker. Use whitelist instead.")
-          System.exit(1)
-        }
-        if (!options.has(whitelistOpt)) {
-          error("whitelist must be specified when using new consumer in mirror maker.")
-          System.exit(1)
+          sys.exit(1)
         }
 
-        if (!consumerProps.keySet().contains(NewConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG))
+        if (!options.has(whitelistOpt)) {
+          error("whitelist must be specified when using new consumer in mirror maker.")
+          sys.exit(1)
+        }
+
+        if (!consumerProps.containsKey(NewConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG))
           System.err.println("WARNING: The default partition assignment strategy of the new-consumer-based mirror maker will " +
             "change from 'range' to 'roundrobin' in an upcoming release (so that better load balancing can be achieved). If " +
             "you prefer to make this switch in advance of that release add the following to the corresponding new-consumer " +
             "config: 'partition.assignment.strategy=org.apache.kafka.clients.consumer.RoundRobinAssignor'")
-      } else {
-        if (List(whitelistOpt, blacklistOpt).count(options.has) != 1) {
-          error("Exactly one of whitelist or blacklist is required.")
-          System.exit(1)
-        }
+
       }
 
       abortOnSendFailure = options.valueOf(abortOnSendFailureOpt).toBoolean
@@ -223,7 +236,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       producer = new MirrorMakerProducer(producerProps)
 
       // Create consumers
-      val mirrorMakerConsumers = if (!useNewConsumer) {
+      val mirrorMakerConsumers = if (useOldConsumer) {
         val customRebalanceListener = {
           val customRebalanceListenerClass = options.valueOf(consumerRebalanceListenerOpt)
           if (customRebalanceListenerClass != null) {
@@ -450,7 +463,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         // if it exits accidentally, stop the entire mirror maker
         if (!isShuttingdown.get()) {
           fatal("Mirror maker thread exited abnormally, stopping the whole mirror maker.")
-          System.exit(-1)
+          sys.exit(-1)
         }
       }
     }

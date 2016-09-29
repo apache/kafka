@@ -16,6 +16,7 @@
  */
 package kafka.admin
 
+import kafka.server.DynamicConfig.Broker._
 import kafka.server.KafkaConfig._
 import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, InvalidReplicationFactorException, InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.metrics.Quota
@@ -30,9 +31,8 @@ import kafka.utils.{Logging, TestUtils, ZkUtils}
 import kafka.common.TopicAndPartition
 import kafka.server.{ConfigType, KafkaConfig, KafkaServer}
 import java.io.File
-
 import kafka.utils.TestUtils._
-
+import kafka.admin.AdminUtils._
 import scala.collection.{Map, immutable}
 
 class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
@@ -445,16 +445,10 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
   @Test
   def shouldPropagateDynamicBrokerConfigs() {
     val brokerIds = Seq(0, 1, 2)
-    val servers = createBrokerConfigs(3, zkConnect).map(fromProps).map(TestUtils.createServer(_))
-
-    def wrap(limit: Long): Properties = {
-      val props = new Properties()
-      props.setProperty(KafkaConfig.ThrottledReplicationRateLimitProp, limit.toString)
-      props
-    }
+    val servers = createBrokerConfigs(3, zkConnect).map(fromProps).map(createServer(_))
 
     def checkConfig(limit: Long) {
-      TestUtils.retry(10000) {
+      retry(10000) {
         for (server <- servers) {
           assertEquals("Leader Quota Manager was not updated", limit, server.quotaManagers.leader.upperBound)
           assertEquals("Follower Quota Manager was not updated", limit, server.quotaManagers.follower.upperBound)
@@ -463,26 +457,26 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     }
 
     try {
-      val limit: Long = 42
+      val limit: Long = 1000000
 
       // Set the limit & check it is applied to the log
-      AdminUtils.changeBrokerConfig(servers(0).zkUtils, brokerIds, wrap(limit))
+      changeBrokerConfig(servers(0).zkUtils, brokerIds,  wrapInProps(ThrottledReplicationRateLimitProp, limit.toString))
       checkConfig(limit)
 
       // Now double the config values for the topic and check that it is applied
       val newLimit = 2 * limit
-      AdminUtils.changeBrokerConfig(servers(0).zkUtils, brokerIds, wrap(newLimit))
+      changeBrokerConfig(servers(0).zkUtils, brokerIds,  wrapInProps(ThrottledReplicationRateLimitProp, newLimit.toString))
       checkConfig(newLimit)
 
       // Verify that the same config can be read from ZK
       for (brokerId <- brokerIds) {
         val configInZk = AdminUtils.fetchEntityConfig(servers(brokerId).zkUtils, ConfigType.Broker, brokerId.toString)
-        assertEquals(newLimit, configInZk.getProperty(KafkaConfig.ThrottledReplicationRateLimitProp).toInt)
+        assertEquals(newLimit, configInZk.getProperty(ThrottledReplicationRateLimitProp).toInt)
       }
 
       //Now delete the config
-      AdminUtils.changeBrokerConfig(servers(0).zkUtils, brokerIds, new Properties)
-      checkConfig(kafka.server.Defaults.ThrottledReplicationRateLimit)
+      changeBrokerConfig(servers(0).zkUtils, brokerIds, new Properties)
+      checkConfig(DefaultThrottledReplicationRateLimit)
 
     } finally {
       servers.foreach(_.shutdown())
