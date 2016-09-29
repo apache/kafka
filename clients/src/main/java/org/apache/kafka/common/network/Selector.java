@@ -30,7 +30,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+
+import javax.security.sasl.SaslException;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.metrics.Measurable;
@@ -97,6 +102,7 @@ public class Selector implements Selectable {
     private final int maxReceiveSize;
     private final boolean metricsPerConnection;
     private final IdleExpiryManager idleExpiryManager;
+    private final ScheduledExecutorService delayedCloseScheduler;
 
     /**
      * Create a new nioSelector
@@ -139,6 +145,8 @@ public class Selector implements Selectable {
         this.channelBuilder = channelBuilder;
         this.metricsPerConnection = metricsPerConnection;
         this.idleExpiryManager = connectionMaxIdleMs < 0 ? null : new IdleExpiryManager(time, connectionMaxIdleMs);
+        ThreadFactory threadFactory = new NamedThreadFactory("selector-close-async-" + channelBuilder.getClass().getSimpleName());
+        this.delayedCloseScheduler = Executors.newScheduledThreadPool(1, threadFactory);
     }
 
     public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder) {
@@ -230,6 +238,7 @@ public class Selector implements Selectable {
         }
         sensors.close();
         channelBuilder.close();
+        delayedCloseScheduler.shutdownNow();
     }
 
     /**
@@ -365,7 +374,7 @@ public class Selector implements Selectable {
                     log.debug("Connection with {} disconnected", desc, e);
                 else
                     log.warn("Unexpected error from {}; closing connection", desc, e);
-                close(channel);
+                close(channel, e);
                 this.disconnected.add(channel.id());
             }
         }
@@ -483,10 +492,22 @@ public class Selector implements Selectable {
      * Begin closing this connection
      */
     private void close(KafkaChannel channel) {
-        try {
-            channel.close();
-        } catch (IOException e) {
-            log.error("Exception closing connection to node {}:", channel.id(), e);
+        close(channel, null);
+    }
+    
+    /**
+     * Begin closing this connection
+     */
+    private void close(final KafkaChannel channel, Exception ex) {
+        if (ex != null && ex.getCause() instanceof SaslException) {
+            //close delayed asyncronously 
+            delayedCloseScheduler.schedule(new Runnable() {
+                public void run() {
+                    closeNow(channel);
+                }
+            }, 10, TimeUnit.SECONDS);
+        } else {
+            closeNow(channel);
         }
         this.stagedReceives.remove(channel);
         this.channels.remove(channel.id());
@@ -494,6 +515,14 @@ public class Selector implements Selectable {
 
         if (idleExpiryManager != null)
             idleExpiryManager.remove(channel.id());
+    }
+
+    private void closeNow(final KafkaChannel channel) {
+        try {
+            channel.close();
+        } catch (IOException e) {
+            log.error("Exception closing connection to node {}:", channel.id(), e);
+        }
     }
 
 
@@ -779,4 +808,20 @@ public class Selector implements Selectable {
         }
     }
 
+    private static class NamedThreadFactory implements ThreadFactory {
+        private final String name;
+
+        public NamedThreadFactory(String name) {
+            this.name = name;
+        }
+        
+        @Override
+        public Thread newThread(Runnable r) {
+            Thread t = Executors.defaultThreadFactory().newThread(r);
+            t.setName(name);
+            t.setDaemon(true);
+            return t;
+        }
+        
+    }
 }
