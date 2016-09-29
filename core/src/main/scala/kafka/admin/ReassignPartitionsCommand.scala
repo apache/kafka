@@ -346,9 +346,10 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
       //Apply a follower throttle to all "move destinations".
       val follower = format(postRebalanceReplicasThatMoved(existing, proposed))
 
-      admin.changeTopicConfig(zkUtils, topic, propsWith(
-        (LeaderThrottledReplicasListProp, leader),
-        (FollowerThrottledReplicasListProp, follower)))
+      val configs = admin.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
+      configs.put(LeaderThrottledReplicasListProp, leader)
+      configs.put(FollowerThrottledReplicasListProp, follower)
+      admin.changeTopicConfig(zkUtils, topic, configs)
 
       debug(s"Updated leader-throttled replicas for topic $topic with: $leader")
       debug(s"Updated follower-throttled replicas for topic $topic with: $follower")
@@ -356,7 +357,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
   }
 
   private def postRebalanceReplicasThatMoved(existing: Map[TopicAndPartition, Seq[Int]], proposed: Map[TopicAndPartition, Seq[Int]]): Map[TopicAndPartition, Seq[Int]] = {
-    //For each partition in the proposed list, filter out any replicas that exist now (i.e. not moving)
+    //For each partition in the proposed list, filter out any replicas that exist now (i.e. are in the proposed list and hence are not moving)
     existing.map { case (tp, current) =>
       tp -> (proposed(tp).toSet -- current).toSeq
     }
