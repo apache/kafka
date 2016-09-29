@@ -41,18 +41,21 @@ object ReplicationQuotasPerformance {
   private val dir = "Experiments/Run" + System.currentTimeMillis().toString.substring(8)
   new File(dir).mkdir()
   private val log = new File(dir, "Log.txt")
-  private val showGraphsOnExperimentCompletion = true
+  private var showGraphsOnExperimentCompletion = false
 
   def main(args: Array[String]): Unit = {
+    if (args.length > 0 && args(0) == "graph") showGraphsOnExperimentCompletion = true
+
     val configs = Seq(
-      new Config("Experiment1", brokers = 5, partitions = 50, throttle = 1000 * 1000, msgCount = 100, msgSize = 100 * 1000),
+      new Config("Experiment1", brokers = 5, partitions = 5, throttle = 1000 * 1000, msgCount = 100, msgSize = 100 * 1000),
       new Config("Experiment2", brokers = 5, partitions = 50, throttle = 10 * 1000 * 1000, msgCount = 10 * 100, msgSize = 100 * 1000),
       new Config("Experiment3", brokers = 50, partitions = 50, throttle = 2 * 1000 * 1000, msgCount = 10 * 100, msgSize = 100 * 1000),
       new Config("Experiment4", brokers = 25, partitions = 100, throttle = 4 * 1000 * 1000, msgCount = 1 * 1000, msgSize = 100 * 1000),
       new Config("Experiment5", brokers = 5, partitions = 50, throttle = 50 * 1000 * 1000, msgCount = 1 * 1000, msgSize = 100 * 1000)
-
     )
     configs.foreach(run(_))
+    if(!showGraphsOnExperimentCompletion)
+      System.exit(0)
   }
 
   def run(config: Config) {
@@ -60,16 +63,18 @@ object ReplicationQuotasPerformance {
     try {
       experiment.setUp
       experiment.run(config)
-    } finally {
+    }
+    catch {case e: Exception => e.printStackTrace()}
+    finally {
       experiment.tearDown
     }
   }
 
   case class Config(name: String, brokers: Int, partitions: Int, throttle: Long, msgCount: Int, msgSize: Int) {
     val targetBytesPerBrokerMB: Long = msgCount.toLong * msgSize.toLong * partitions.toLong / brokers.toLong / 1000000
-    writeToFile
+    appendToJournal
 
-    def writeToFile(): Unit = {
+    def appendToJournal(): Unit = {
       val stream = new FileOutputStream(
         log,
         true)
@@ -98,6 +103,7 @@ object ReplicationQuotasPerformance {
     val followerRates = mutable.Map[Int, Array[Double]]()
 
     def startBrokers(brokerIds: Seq[Int]) {
+      println("Starting Brokers")
       servers = brokerIds.map(i => createBrokerConfig(i, zkConnect))
         .map(c => createServer(KafkaConfig.fromProps(c)))
     }
@@ -111,17 +117,15 @@ object ReplicationQuotasPerformance {
     def run(config: Config) {
       experimentName = config.name
       val brokers = (100 to 100 + config.brokers)
-
       var count = 0
       val shift = Math.round(config.brokers / 2)
+
       def nextReplicaRoundRobin(): Int = {
         count = count + 1
         100 + (count + shift) % config.brokers
       }
       val replicas = (0 to config.partitions).map(partition => partition -> Seq(nextReplicaRoundRobin())).toMap
 
-
-      println("Starting Brokers")
       startBrokers(brokers)
       createTopic(zkUtils, topicName, replicas, servers)
 
@@ -140,6 +144,8 @@ object ReplicationQuotasPerformance {
       //Await completion
       waitForReassignmentToComplete()
 
+      renderChart(leaderRates, "Leader")
+      renderChart(followerRates, "Follower")
       logOutput(config, replicas, newAssignment)
     }
 
@@ -164,8 +170,8 @@ object ReplicationQuotasPerformance {
       println(s"numMessages: ${config.msgCount}")
       println(s"msgSize: ${config.msgSize}")
       println(s"We will write ${config.targetBytesPerBrokerMB / 1000000}MB of data per broker")
-      println("Worst case duration is " + config.targetBytesPerBrokerMB / config.throttle)
-      println("move count is : " + physicalMoves)
+      println(s"Worst case duration is ${config.targetBytesPerBrokerMB / config.throttle}")
+      println(s"Move count is : $physicalMoves")
     }
 
     private def waitForOffsetsToMatch(offset: Int, partitionId: Int, broker: KafkaServer, topic: String): Boolean = {
@@ -181,9 +187,6 @@ object ReplicationQuotasPerformance {
         val success = !zkUtils.pathExists(ReassignPartitionsPath)
         success
       }, s"Znode ${ZkUtils.ReassignPartitionsPath} wasn't deleted", Int.MaxValue, pause = 1000L)
-
-      renderChart(leaderRates, "Leader")
-      renderChart(followerRates, "Follower")
     }
 
     def renderChart(data: mutable.Map[Int, Array[Double]], name: String): Unit = {
@@ -250,7 +253,6 @@ object ReplicationQuotasPerformance {
         if (followerRate > 0)
           trace("Follower Rate on " + broker.config.brokerId + " is " + followerRate)
       }
-
     }
 
     private def measuredRate(broker: KafkaServer, repType: QuotaType): Double = {
