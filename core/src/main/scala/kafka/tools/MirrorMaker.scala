@@ -434,6 +434,10 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
               records.foreach(producer.send)
               maybeFlushAndCommitOffsets()
             }
+            if (!mirrorMakerConsumer.hasData && !shuttingDown && !exitingOnSendFailure) {
+              //consumer has closed (due to error)
+              throw new IllegalStateException("Consumer has shut down")
+            }
           } catch {
             case cte: ConsumerTimeoutException =>
               trace("Caught ConsumerTimeoutException, continue iteration.")
