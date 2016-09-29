@@ -16,7 +16,6 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.OffsetAndTimestamp;
 
 import java.io.Closeable;
 import java.util.Collection;

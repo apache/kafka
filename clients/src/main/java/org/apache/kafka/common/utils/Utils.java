@@ -728,4 +728,8 @@ public class Utils {
     public static int toPositive(int number) {
         return number & 0x7fffffff;
     }
+
+    public static int longHashcode(long value) {
+        return (int) (value ^ (value >>> 32));
+    }
 }

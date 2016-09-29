@@ -164,11 +164,9 @@ class FileMessageSet private[kafka](@volatile var file: File,
    * @return The timestamp and offset of the message found. None, if no message is found.
    */
   def searchForTimestamp(targetTimestamp: Long, startingPosition: Int): Option[TimestampOffset] = {
-    var lastOffsetChecked = -1L
     val messagesToSearch = read(startingPosition, sizeInBytes)
     for (messageAndOffset <- messagesToSearch) {
       val message = messageAndOffset.message
-      lastOffsetChecked = messageAndOffset.offset
       if (message.timestamp >= targetTimestamp) {
         // We found a message
         message.compressionCodec match {

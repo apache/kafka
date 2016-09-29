@@ -49,7 +49,7 @@ public class ListOffsetResponse extends AbstractRequestResponse {
      *
      *  UNKNOWN_TOPIC_OR_PARTITION (3)
      *  NOT_LEADER_FOR_PARTITION (6)
-     *  INVALID_REQUEST (42)
+     *  UNSUPPORTED_FOR_MESSAGE_FORMAT (43)
      *  UNKNOWN (-1)
      */
 
