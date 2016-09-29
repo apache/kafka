@@ -71,7 +71,7 @@ abstract class DelayedOperation(override val delayMs: Long) extends TimerTask wi
   /**
    * Check if the delayed operation is already completed
    */
-  def isCompleted(): Boolean = completed.get()
+  def isCompleted: Boolean = completed.get()
 
   /**
    * Call-back to execute when a delayed operation gets expired and hence forced to complete.
@@ -188,7 +188,7 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
     var watchCreated = false
     for(key <- watchKeys) {
       // If the operation is already completed, stop adding it to the rest of the watcher list.
-      if (operation.isCompleted())
+      if (operation.isCompleted)
         return false
       watchForOperation(key, operation)
 
@@ -203,9 +203,9 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
       return true
 
     // if it cannot be completed by now and hence is watched, add to the expire queue also
-    if (! operation.isCompleted()) {
+    if (!operation.isCompleted) {
       timeoutTimer.add(operation)
-      if (operation.isCompleted()) {
+      if (operation.isCompleted) {
         // cancel the timer task
         operation.cancel()
       }
@@ -282,7 +282,7 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
   }
 
   /**
-   * A linked list of watched delayed operations based on some key
+   * A vector of watched delayed operations for a specific key
    */
   private class Watchers(val key: Any) {
 
@@ -303,7 +303,7 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
       var completedAlready = 0
       var completedNow = 0
       for (op <- synchronized(operations)) {
-        if (op.isCompleted())
+        if (op.isCompleted)
           completedAlready += 1
         else if (op synchronized op.tryComplete())
           completedNow += 1
@@ -320,7 +320,7 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
     def purgeCompleted(): Int = {
       val (purged, shouldRemove) = synchronized {
         val initialSize = operations.size
-        operations = operations.filterNot(_.isCompleted())
+        operations = operations.filterNot(_.isCompleted)
         (initialSize - operations.size, operations.isEmpty)
       }
 
