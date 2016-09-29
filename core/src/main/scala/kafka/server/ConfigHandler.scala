@@ -66,24 +66,24 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
       logs.foreach(_.config = logConfig)
     }
 
-    val brokerId = kafkaConfig.brokerId
-
-    if (topicConfig.containsKey(LogConfig.ThrottledReplicasListProp) && topicConfig.getProperty(LogConfig.ThrottledReplicasListProp).length > 0) {
-      val partitions = parseThrottledPartitions(topicConfig, brokerId)
-      quotas.leader.markThrottled(topic, partitions)
-      quotas.follower.markThrottled(topic, partitions)
-      logger.debug(s"Setting throttled partitions on broker $brokerId for topic: $topic and partitions $partitions")
-    } else {
-      quotas.leader.removeThrottle(topic)
-      quotas.follower.removeThrottle(topic)
-      logger.debug(s"Removing throttled partitions from broker $brokerId for topic $topic")
+    def updateThrottledList(prop: String, quotaManager: ReplicationQuotaManager) = {
+      if (topicConfig.containsKey(prop) && topicConfig.getProperty(prop).length > 0) {
+        val partitions = parseThrottledPartitions(topicConfig, kafkaConfig.brokerId, prop)
+        quotaManager.markThrottled(topic, partitions)
+        logger.debug(s"Setting $prop on broker ${kafkaConfig.brokerId} for topic: $topic and partitions $partitions")
+      } else {
+        quotaManager.removeThrottle(topic)
+        logger.debug(s"Removing $prop from broker ${kafkaConfig.brokerId} for topic $topic")
+      }
     }
+    updateThrottledList(LogConfig.LeaderThrottledReplicasListProp, quotas.leader)
+    updateThrottledList(LogConfig.FollowerThrottledReplicasListProp, quotas.follower)
   }
 
-  def parseThrottledPartitions(topicConfig: Properties, brokerId: Int): Seq[Int] = {
-    val configValue = topicConfig.get(LogConfig.ThrottledReplicasListProp).toString.trim
-    ThrottledReplicaValidator.ensureValid(LogConfig.ThrottledReplicasListProp, configValue)
-    configValue.trim match {
+  def parseThrottledPartitions(topicConfig: Properties, brokerId: Int, prop: String): Seq[Int] = {
+    val configValue = topicConfig.get(prop).toString.trim
+    ThrottledReplicaListValidator.ensureValidString(prop, configValue)
+    configValue match {
       case "" => Seq()
       case "*" => AllReplicas
       case _ => configValue.trim
@@ -162,16 +162,20 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig, private val quo
   }
 }
 
-object ThrottledReplicaValidator extends Validator {
-  override def ensureValid(name: String, value: scala.Any): Unit = {
-    value match {
-      case s: String => if (!isValid(s))
-        throw new ConfigException(name, value, s"$name  must match for format [partitionId],[brokerId]:[partitionId],[brokerId]:[partitionId],[brokerId] etc")
-      case _ => throw new ConfigException(name, value, s"$name  must be a string")
-    }
-  }
+object ThrottledReplicaListValidator extends Validator {
+  def ensureValidString(name: String, value: String): Unit =
+    ensureValid(name, value.split(",").map(_.trim).toSeq)
 
-  private def isValid(proposed: String): Boolean = {
-    proposed.trim.equals("*") || proposed.trim.matches("([0-9]+:[0-9]+)?(,[0-9]+:[0-9]+)*")
+  override def ensureValid(name: String, value: Any): Unit = {
+    def check(proposed: Seq[Any]): Unit = {
+      if (!(proposed.forall(_.toString.trim.matches("([0-9]+:[0-9]+)?"))
+        || proposed.headOption.exists(_.toString.trim.equals("*"))))
+        throw new ConfigException(name, value, s"$name  must match for format [partitionId],[brokerId]:[partitionId],[brokerId]:[partitionId],[brokerId] etc")
+    }
+    value match {
+      case scalaSeq: Seq[_] => check(scalaSeq)
+      case javaList: java.util.List[_] => check(javaList.asScala)
+      case _ => throw new ConfigException(name, value, s"$name  must be a List but was ${value.getClass.getName}")
+    }
   }
 }

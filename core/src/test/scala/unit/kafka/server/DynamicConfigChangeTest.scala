@@ -203,11 +203,11 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val props: Properties = new Properties()
 
     //Given
-    props.put(ThrottledReplicasListProp, "0:101,0:102,1:101,1:102")
+    props.put(LeaderThrottledReplicasListProp, "0:101,0:102,1:101,1:102")
 
     //When/Then
-    assertEquals(Seq(0,1), configHandler.parseThrottledPartitions(props, 102))
-    assertEquals(Seq(), configHandler.parseThrottledPartitions(props, 103))
+    assertEquals(Seq(0,1), configHandler.parseThrottledPartitions(props, 102, LeaderThrottledReplicasListProp))
+    assertEquals(Seq(), configHandler.parseThrottledPartitions(props, 103, LeaderThrottledReplicasListProp))
   }
 
   @Test
@@ -216,10 +216,10 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val props: Properties = new Properties()
 
     //Given
-    props.put(ThrottledReplicasListProp, "*")
+    props.put(LeaderThrottledReplicasListProp, "*")
 
     //When
-    val result = configHandler.parseThrottledPartitions(props, 102)
+    val result = configHandler.parseThrottledPartitions(props, 102, LeaderThrottledReplicasListProp)
 
     //Then
     assertEquals(AllReplicas, result)
@@ -231,12 +231,26 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val props: Properties = new Properties()
 
     //Given
-    props.put(ThrottledReplicasListProp, "")
+    props.put(FollowerThrottledReplicasListProp, "")
 
     //When
-    val result = configHandler.parseThrottledPartitions(props, 102)
+    val result = configHandler.parseThrottledPartitions(props, 102, FollowerThrottledReplicasListProp)
 
     //Then
     assertEquals(Seq(), result)
+  }
+
+  @Test
+  def shouldParseRegardlessOfWhitespaceAroundValues() {
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
+    assertEquals(AllReplicas, parse(configHandler, "* "))
+    assertEquals(Seq(), parse(configHandler, " "))
+    assertEquals(Seq(6), parse(configHandler, "6:102"))
+    assertEquals(Seq(6), parse(configHandler, "6:102 "))
+    assertEquals(Seq(6), parse(configHandler, " 6:102"))
+  }
+
+  def parse(configHandler: TopicConfigHandler, value: String): Seq[Int] = {
+    configHandler.parseThrottledPartitions(CoreUtils.propsWith(LeaderThrottledReplicasListProp, value), 102, LeaderThrottledReplicasListProp)
   }
 }

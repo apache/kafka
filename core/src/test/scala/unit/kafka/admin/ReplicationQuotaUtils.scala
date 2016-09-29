@@ -27,12 +27,13 @@ object ReplicationQuotaUtils {
         !brokerConfig.contains(DynamicConfig.Broker.ThrottledReplicationRateLimitProp)
       }
       val topicConfig = AdminUtils.fetchEntityConfig(servers(0).zkUtils, ConfigType.Topic, topic)
-      val topicReset = !topicConfig.contains(LogConfig.ThrottledReplicasListProp)
+      val topicReset = !(topicConfig.contains(LogConfig.LeaderThrottledReplicasListProp)
+        || topicConfig.contains(LogConfig.FollowerThrottledReplicasListProp))
       brokerReset && topicReset
     }, "Throttle limit/replicas was not unset")
   }
 
-  def checkThrottleConfigAddedToZK(expectedThrottleRate: Long, servers: Seq[KafkaServer], topic: String, throttledReplicas: String): Boolean = {
+  def checkThrottleConfigAddedToZK(expectedThrottleRate: Long, servers: Seq[KafkaServer], topic: String, throttledLeaders: String, throttledFollowers: String): Boolean = {
     TestUtils.waitUntilTrue(() => {
       //Check for limit in ZK
       val brokerConfigAvailable = servers.forall { server =>
@@ -42,9 +43,9 @@ object ReplicationQuotaUtils {
       }
       //Check replicas assigned
       val topicConfig = AdminUtils.fetchEntityConfig(servers(0).zkUtils, ConfigType.Topic, topic)
-      val property: String = topicConfig.getProperty(LogConfig.ThrottledReplicasListProp)
-      println(topic + "we found "+property)
-      val topicConfigAvailable = property == throttledReplicas
+      val leader = topicConfig.getProperty(LogConfig.LeaderThrottledReplicasListProp)
+      val follower = topicConfig.getProperty(LogConfig.FollowerThrottledReplicasListProp)
+      val topicConfigAvailable = (leader == throttledLeaders && follower == throttledFollowers)
       brokerConfigAvailable && topicConfigAvailable
     }, "throttle limit/replicas was not set")
   }
