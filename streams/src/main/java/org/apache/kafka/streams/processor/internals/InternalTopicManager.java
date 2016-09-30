@@ -61,7 +61,13 @@ public class InternalTopicManager {
                     throw new StreamsException("Topic metadata request returned with error code " + topicMetadata.error().code() + ": " + topicMetadata.error().message());
                 }
                 if (topicMetadata.partitionMetadata().size() != numPartitions) {
-                    throw new StreamsException("Topic already exists but the number of partitions, " + topicMetadata.partitionMetadata().size() + ", is not the same as the requested " + numPartitions + " partitions.");
+                    // Delete the topic and create a new one with the requested number of partitions.
+                    streamsKafkaClient.deleteTopic(topic);
+                    streamsKafkaClient.createTopic(topic, numPartitions, replicationFactor, windowChangeLogAdditionalRetention);
+                    if (!streamsKafkaClient.topicExists(topic.name())) {
+                        throw new StreamsException("Deleted the topic " + topic.name() + " but could not create it again.");
+                    }
+
                 }
             } else {
                 throw new StreamsException("Could not fetch the topic metadata.");

@@ -34,6 +34,8 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
+import org.apache.kafka.common.requests.DeleteTopicsRequest;
+import org.apache.kafka.common.requests.DeleteTopicsResponse;
 import org.apache.kafka.common.requests.RequestSend;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -49,7 +51,8 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
-
+import java.util.Set;
+import java.util.HashSet;
 
 public class StreamsKafkaClient {
 
@@ -122,6 +125,22 @@ public class StreamsKafkaClient {
         }
     }
 
+
+    /**
+     * Delete a given topic.
+     *
+     * @param internalTopicConfig
+     */
+    public void deleteTopic(final InternalTopicConfig internalTopicConfig) {
+        final Set<String> topics = new HashSet();
+        topics.add(internalTopicConfig.name());
+        final DeleteTopicsRequest deleteTopicsRequest = new DeleteTopicsRequest(topics, streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG));
+        final ClientResponse clientResponse = sendRequest(deleteTopicsRequest.toStruct(), ApiKeys.DELETE_TOPICS);
+        final DeleteTopicsResponse deleteTopicsResponse = new DeleteTopicsResponse(clientResponse.responseBody());
+        if (deleteTopicsResponse.errors().get(internalTopicConfig.name()).code() > 0) {
+            throw new StreamsException("Could not delete topic: " + internalTopicConfig.name());
+        }
+    }
 
     /**
      * Send a request to kafka broker of this client. Keep polling until the corresponding response is received.
