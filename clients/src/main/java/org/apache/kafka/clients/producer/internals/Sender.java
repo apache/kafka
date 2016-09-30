@@ -239,8 +239,10 @@ public class Sender implements Runnable {
      * Start closing the sender (won't actually complete until all data is sent out)
      */
     public void initiateClose() {
-        this.running = false;
+        // It is important to close the record accumulator before setting the running flag to false. Otherwise we may
+        // miss some callbacks.
         this.accumulator.close();
+        this.running = false;
         this.wakeup();
     }
 
