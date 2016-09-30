@@ -239,8 +239,10 @@ public class Sender implements Runnable {
      * Start closing the sender (won't actually complete until all data is sent out)
      */
     public void initiateClose() {
-        this.running = false;
+        // Ensure accumulator is closed first to guarantee that no more appends are accepted after
+        // breaking from the sender loop. Otherwise, we may miss some callbacks when shutting down.
         this.accumulator.close();
+        this.running = false;
         this.wakeup();
     }
 
