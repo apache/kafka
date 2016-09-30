@@ -44,6 +44,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -57,6 +58,7 @@ import java.util.HashSet;
 public class StreamsKafkaClient {
 
     private final KafkaClient kafkaClient;
+    private final List<MetricsReporter> reporters;
     private final StreamsConfig streamsConfig;
 
     private static final int MAX_INFLIGHT_REQUESTS = 100;
@@ -77,7 +79,7 @@ public class StreamsKafkaClient {
         final MetricConfig metricConfig = new MetricConfig().samples(streamsConfig.getInt(CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG))
                 .timeWindow(streamsConfig.getLong(CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
                 .tags(metricTags);
-        final List<MetricsReporter> reporters = streamsConfig.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
+        reporters = streamsConfig.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class);
         // TODO: This should come from the KafkaStream
         reporters.add(new JmxReporter("kafka.admin"));
@@ -98,6 +100,11 @@ public class StreamsKafkaClient {
                 streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG), time);
     }
 
+    public void close() throws IOException {
+        for (MetricsReporter metricsReporter: this.reporters) {
+            metricsReporter.close();
+        }
+    }
 
     /**
      * Cretes a new topic with the given number of partitions and replication factor.

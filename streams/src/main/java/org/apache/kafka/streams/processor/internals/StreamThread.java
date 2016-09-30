@@ -290,6 +290,12 @@ public class StreamThread extends Thread {
             log.error("stream-thread [{}] Failed to close restore consumer: ", this.getName(), e);
         }
 
+        try {
+            partitionAssignor.close();
+        } catch (Throwable e) {
+            log.error("stream-thread [{}] Failed to close KafkaStreamClient: ", this.getName(), e);
+        }
+
         removeStreamTasks();
 
         log.info("stream-thread [{}] Stream thread shutdown complete", this.getName());

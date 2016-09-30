@@ -21,6 +21,7 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.streams.errors.StreamsException;
 
 
+import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
 public class InternalTopicManager {
@@ -74,5 +75,9 @@ public class InternalTopicManager {
             }
 
         }
+    }
+
+    public void close() throws IOException {
+        streamsKafkaClient.close();
     }
 }
