@@ -105,7 +105,11 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
     //Set the throttle limit on all 8 brokers, but only assign throttled replicas to the six leaders, or two followers
     (100 to 107).foreach { brokerId =>
-      changeBrokerConfig(zkUtils, Seq(brokerId), propsWith(DynamicConfig.Broker.ThrottledReplicationRateLimitProp, throttle.toString))
+      changeBrokerConfig(zkUtils, Seq(brokerId),
+        propsWith(
+          (DynamicConfig.Broker.ThrottledLeaderReplicationRateProp, throttle.toString),
+          (DynamicConfig.Broker.ThrottledFollowerReplicationRateProp, throttle.toString)
+        ))
     }
 
     //Either throttle the six leaders or the two followers
@@ -188,8 +192,8 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     val expectedDuration = 4
     val throttle: Long = msg.length * msgCount / expectedDuration
 
-    //Set the throttle limit leader
-    changeBrokerConfig(zkUtils, Seq(100), propsWith(DynamicConfig.Broker.ThrottledReplicationRateLimitProp, throttle.toString))
+    //Set the throttle to only limit leader
+    changeBrokerConfig(zkUtils, Seq(100), propsWith(DynamicConfig.Broker.ThrottledLeaderReplicationRateProp, throttle.toString))
     changeTopicConfig(zkUtils, topic, propsWith(LeaderThrottledReplicasListProp, "0:100"))
 
     //Add data

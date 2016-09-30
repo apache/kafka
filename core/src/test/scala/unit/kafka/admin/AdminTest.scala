@@ -477,23 +477,28 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
       val limit: Long = 1000000
 
       // Set the limit & check it is applied to the log
-      changeBrokerConfig(servers(0).zkUtils, brokerIds,  propsWith(ThrottledReplicationRateLimitProp, limit.toString))
+      changeBrokerConfig(zkUtils, brokerIds, propsWith(
+        (ThrottledLeaderReplicationRateProp, limit.toString),
+        (ThrottledFollowerReplicationRateProp, limit.toString)))
       checkConfig(limit)
 
       // Now double the config values for the topic and check that it is applied
       val newLimit = 2 * limit
-      changeBrokerConfig(servers(0).zkUtils, brokerIds,  propsWith(ThrottledReplicationRateLimitProp, newLimit.toString))
+      changeBrokerConfig(zkUtils, brokerIds,  propsWith(
+        (ThrottledLeaderReplicationRateProp, newLimit.toString),
+        (ThrottledFollowerReplicationRateProp, newLimit.toString)))
       checkConfig(newLimit)
 
       // Verify that the same config can be read from ZK
       for (brokerId <- brokerIds) {
         val configInZk = AdminUtils.fetchEntityConfig(servers(brokerId).zkUtils, ConfigType.Broker, brokerId.toString)
-        assertEquals(newLimit, configInZk.getProperty(ThrottledReplicationRateLimitProp).toInt)
+        assertEquals(newLimit, configInZk.getProperty(ThrottledLeaderReplicationRateProp).toInt)
+        assertEquals(newLimit, configInZk.getProperty(ThrottledFollowerReplicationRateProp).toInt)
       }
 
       //Now delete the config
       changeBrokerConfig(servers(0).zkUtils, brokerIds, new Properties)
-      checkConfig(DefaultThrottledReplicationRateLimit)
+      checkConfig(DefaultThrottledReplicationRate)
 
     } finally {
       servers.foreach(_.shutdown())
