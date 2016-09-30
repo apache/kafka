@@ -40,9 +40,9 @@ class Producer<T> {
 
 The goal is to expose all the producer functionality through a single API to the client.
 
-The new producer -
+The Kafka producer
 <ul>
-<li>can handle queueing/buffering of multiple producer requests and asynchronous dispatch of the batched data -
+<li>can handle queueing/buffering of multiple producer requests and asynchronous dispatch of the batched data:
 <p><code>kafka.producer.Producer</code> provides the ability to batch multiple produce requests (<code>producer.type=async</code>), before serializing and dispatching them to the appropriate kafka broker partition. The size of the batch can be controlled by a few config parameters. As events enter a queue, they are buffered in a queue, until either <code>queue.time</code> or <code>batch.size</code> is reached. A background thread (<code>kafka.producer.async.ProducerSendThread</code>) dequeues the batch of data and lets the <code>kafka.producer.EventHandler</code> serialize and send the data to the appropriate kafka broker partition. A custom event handler can be plugged in through the <code>event.handler</code> config parameter. At various stages of this producer queue pipeline, it is helpful to be able to inject callbacks, either for plugging in custom logging/tracing code or custom monitoring logic. This is possible by implementing the <code>kafka.producer.async.CallbackHandler</code> interface and setting <code>callback.handler</code> config parameter to that class.
 </p>
 </li>

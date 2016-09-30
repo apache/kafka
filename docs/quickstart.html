@@ -78,7 +78,7 @@ Run the producer and then type a few messages into the console to send to the se
 Kafka also has a command line consumer that will dump out messages to standard output.
 
 <pre>
-&gt; <b>bin/kafka-console-consumer.sh --zookeeper localhost:2181 --topic test --from-beginning</b>
+&gt; <b>bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic test --from-beginning</b>
 This is a message
 This is another message
 </pre>
@@ -159,7 +159,7 @@ Let's publish a few messages to our new topic:
 </pre>
 Now let's consume these messages:
 <pre>
-&gt; <b>bin/kafka-console-consumer.sh --zookeeper localhost:2181 --from-beginning --topic my-replicated-topic</b>
+&gt; <b>bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --from-beginning --topic my-replicated-topic</b>
 ...
 my test message 1
 my test message 2
@@ -181,7 +181,7 @@ Topic:my-replicated-topic	PartitionCount:1	ReplicationFactor:3	Configs:
 </pre>
 But the messages are still be available for consumption even though the leader that took the writes originally is down:
 <pre>
-&gt; <b>bin/kafka-console-consumer.sh --zookeeper localhost:2181 --from-beginning --topic my-replicated-topic</b>
+&gt; <b>bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --from-beginning --topic my-replicated-topic</b>
 ...
 my test message 1
 my test message 2
@@ -236,7 +236,7 @@ Note that the data is being stored in the Kafka topic <pre>connect-test</pre>, s
 data in the topic (or use custom consumer code to process it):
 
 <pre>
-&gt; <b>bin/kafka-console-consumer.sh --zookeeper localhost:2181 --topic connect-test --from-beginning</b>
+&gt; <b>bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic connect-test --from-beginning</b>
 {"schema":{"type":"string","optional":false},"payload":"foo"}
 {"schema":{"type":"string","optional":false},"payload":"bar"}
 ...
@@ -333,7 +333,7 @@ We can now inspect the output of the WordCount demo application by reading from 
 </p>
 
 <pre>
-&gt; <b>bin/kafka-console-consumer.sh --zookeeper localhost:2181 \</b>
+&gt; <b>bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \</b>
             <b>--topic streams-wordcount-output \</b>
             <b>--from-beginning \</b>
             <b>--formatter kafka.tools.DefaultMessageFormatter \</b>
