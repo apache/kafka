@@ -614,8 +614,7 @@ public class KafkaConsumerTest {
      * do not immediately change, and the latest consumed offsets of its to-be-revoked
      * partitions are properly committed (when auto-commit is enabled).
      * Upon unsubscribing from subscribed topics the consumer subscription and assignment
-     * are both updated right away and its consumed offsets are committed (if auto-commit
-     * is enabled).
+     * are both updated right away but its consumed offsets are not auto committed.
      */
     @Test
     public void testSubscriptionChangesWithAutoCommitEnabled() {
@@ -722,20 +721,11 @@ public class KafkaConsumerTest {
         assertTrue(consumer.assignment().size() == 2);
         assertTrue(consumer.assignment().contains(tp0) && consumer.assignment().contains(t3p0));
 
-        // mock the offset commit response for to be revoked partitions
-        Map<TopicPartition, Long> partitionOffsets2 = new HashMap<>();
-        partitionOffsets2.put(tp0, 2L);
-        partitionOffsets2.put(t3p0, 100L);
-        commitReceived = prepareOffsetCommitResponse(client, coordinator, partitionOffsets2);
-
         consumer.unsubscribe();
 
         // verify that subscription and assignment are both cleared
         assertTrue(consumer.subscription().isEmpty());
         assertTrue(consumer.assignment().isEmpty());
-
-        // verify that the offset commits occurred as expected
-        assertTrue(commitReceived.get());
 
         consumer.close();
     }
