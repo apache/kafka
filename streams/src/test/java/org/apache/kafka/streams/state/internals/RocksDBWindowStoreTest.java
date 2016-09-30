@@ -25,6 +25,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
@@ -51,6 +52,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class RocksDBWindowStoreTest {
 
@@ -836,6 +838,45 @@ public class RocksDBWindowStoreTest {
 
         } finally {
             Utils.delete(baseDir);
+        }
+    }
+
+    @Test
+    public void shouldCloseOpenIteratorsWhenStoreIsClosedAndThrowInvalidStateStoreExceptionOnHasNextAndNext() throws Exception {
+        final File baseDir = TestUtils.tempDirectory();
+        Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerde.serializer(), byteArraySerde.serializer());
+        RecordCollector recordCollector = new RecordCollector(producer, "RocksDBWindowStoreTest-ShouldOnlyIterateOpenSegments") {
+            @Override
+            public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
+            }
+        };
+
+        MockProcessorContext context = new MockProcessorContext(
+                null, baseDir,
+                byteArraySerde, byteArraySerde,
+                recordCollector, new ThreadCache(DEFAULT_CACHE_SIZE_BYTES));
+
+        final WindowStore<Integer, String> windowStore = createWindowStore(context, false, true);
+        context.setRecordContext(createRecordContext(0));
+        windowStore.put(1, "one", 1L);
+        windowStore.put(1, "two", 2L);
+        windowStore.put(1, "three", 3L);
+
+        final WindowStoreIterator<String> iterator = windowStore.fetch(1, 1L, 3L);
+        assertTrue(iterator.hasNext());
+        windowStore.close();
+        try {
+            iterator.hasNext();
+            fail("should have thrown InvalidStateStoreException on closed store");
+        } catch (InvalidStateStoreException e) {
+            // ok
+        }
+
+        try {
+            iterator.next();
+            fail("should have thrown InvalidStateStoreException on closed store");
+        } catch (InvalidStateStoreException e) {
+            // ok
         }
     }
 
