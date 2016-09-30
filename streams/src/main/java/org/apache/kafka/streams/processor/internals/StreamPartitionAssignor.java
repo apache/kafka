@@ -217,12 +217,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
                 internalTopicManager.makeReady(topic, numPartitions);
 
-                // wait until the topic metadata has been propagated to all brokers
-                List<PartitionInfo> partitions;
-                do {
-                    partitions = streamThread.restoreConsumer.partitionsFor(topic.name());
-                } while (partitions == null || partitions.size() != numPartitions);
-
+                List<PartitionInfo> partitions = streamThread.restoreConsumer.partitionsFor(topic.name());
                 for (PartitionInfo partition : partitions)
                     partitionInfos.put(new TopicPartition(partition.topic(), partition.partition()), partition);
             }

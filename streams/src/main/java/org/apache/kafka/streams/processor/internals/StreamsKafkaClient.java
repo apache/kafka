@@ -47,7 +47,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
-import java.util.Collections;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
@@ -189,18 +188,15 @@ public class StreamsKafkaClient {
      * @return
      */
     public MetadataResponse.TopicMetadata getTopicMetadata(final String topic) {
-        final MetadataRequest metadataRequest = new MetadataRequest(Collections.singletonList(topic));
 
-        final ClientResponse clientResponse = sendRequest(metadataRequest.toStruct(), ApiKeys.METADATA);
+        final ClientResponse clientResponse = sendRequest(MetadataRequest.allTopics().toStruct(), ApiKeys.METADATA);
         final MetadataResponse metadataResponse = new MetadataResponse(clientResponse.responseBody());
-
         for (MetadataResponse.TopicMetadata topicMetadata: metadataResponse.topicMetadata()) {
             if (topicMetadata.topic().equalsIgnoreCase(topic)) {
                 return topicMetadata;
             }
         }
-
-        throw new StreamsException("Topic " + topic + " was not found.");
+        return null;
     }
 
     /**
@@ -210,12 +206,8 @@ public class StreamsKafkaClient {
      */
     public boolean topicExists(final String topicName) {
 
-        final ClientResponse clientResponse = sendRequest(MetadataRequest.allTopics().toStruct(), ApiKeys.METADATA);
-        final MetadataResponse metadataResponse = new MetadataResponse(clientResponse.responseBody());
-        for (MetadataResponse.TopicMetadata topicMetadata: metadataResponse.topicMetadata()) {
-            if (topicMetadata.topic().equalsIgnoreCase(topicName)) {
-                return true;
-            }
+        if (getTopicMetadata(topicName) != null) {
+            return true;
         }
         return false;
     }
