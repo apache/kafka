@@ -73,7 +73,7 @@ public class RecordCollector {
         Integer partition = record.partition();
         if (partition == null && partitioner != null) {
             List<PartitionInfo> partitions = this.producer.partitionsFor(record.topic());
-            if (partitions != null)
+            if (partitions != null && partitions.size() > 0)
                 partition = partitioner.partition(record.key(), record.value(), partitions.size());
         }
 
