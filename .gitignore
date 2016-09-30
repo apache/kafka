@@ -3,6 +3,7 @@ dist
 target/
 build/
 .gradle/
+gradle/wrapper/
 lib_managed/
 src_managed/
 project/boot/
