@@ -48,12 +48,12 @@ class KStreamKTableJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
         private final KTableValueGetter<K, V2> valueGetter;
 
-        KStreamKTableLeftJoinProcessor(final KTableValueGetter<K, V2> valueGetter) {
+        public KStreamKTableLeftJoinProcessor(KTableValueGetter<K, V2> valueGetter) {
             this.valueGetter = valueGetter;
         }
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(ProcessorContext context) {
             super.init(context);
             valueGetter.init(context);
         }

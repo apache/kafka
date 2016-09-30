@@ -119,8 +119,8 @@ public class KTableKTableJoinTest {
 
         // push all four items to the primary stream. this should produce two items.
 
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "XX" + expectedKey);
+        for (int i = 0; i < expectedKeys.length; i++) {
+            driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
         driver.flushState();
 
@@ -128,8 +128,8 @@ public class KTableKTableJoinTest {
         checkJoinedValues(getter, kv(0, "XX0+Y0"), kv(1, "XX1+Y1"));
 
         // push all items to the other stream. this should produce two items.
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic2, expectedKey, "YY" + expectedKey);
+        for (int i = 0; i < expectedKeys.length; i++) {
+            driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
         }
         driver.flushState();
 
@@ -138,8 +138,8 @@ public class KTableKTableJoinTest {
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "X" + expectedKey);
+        for (int i = 0; i < expectedKeys.length; i++) {
+            driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
         }
         driver.flushState();
 
@@ -158,8 +158,8 @@ public class KTableKTableJoinTest {
 
         // push all four items to the primary stream. this should produce two items.
 
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "XX" + expectedKey);
+        for (int i = 0; i < expectedKeys.length; i++) {
+            driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
         driver.flushState();
 
@@ -212,25 +212,24 @@ public class KTableKTableJoinTest {
 
         // push all four items to the primary stream. this should produce two items.
 
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "XX" + expectedKey);
+        for (int i = 0; i < expectedKeys.length; i++) {
+            driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
         driver.flushState();
 
         proc.checkAndClearProcessResult("0:(XX0+Y0<-null)", "1:(XX1+Y1<-null)");
 
         // push all items to the other stream. this should produce four items.
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic2, expectedKey, "YY" + expectedKey);
+        for (int i = 0; i < expectedKeys.length; i++) {
+            driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
         }
         driver.flushState();
-
         proc.checkAndClearProcessResult("0:(XX0+YY0<-null)", "1:(XX1+YY1<-null)", "2:(XX2+YY2<-null)", "3:(XX3+YY3<-null)");
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "X" + expectedKey);
+        for (int i = 0; i < expectedKeys.length; i++) {
+            driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
         }
         driver.flushState();
         proc.checkAndClearProcessResult("0:(X0+YY0<-null)", "1:(X1+YY1<-null)", "2:(X2+YY2<-null)", "3:(X3+YY3<-null)");
@@ -245,11 +244,10 @@ public class KTableKTableJoinTest {
 
         // push all four items to the primary stream. this should produce two items.
 
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "XX" + expectedKey);
+        for (int i = 0; i < expectedKeys.length; i++) {
+            driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
         driver.flushState();
-
         proc.checkAndClearProcessResult("2:(XX2+YY2<-null)", "3:(XX3+YY3<-null)");
     }
 
@@ -286,7 +284,6 @@ public class KTableKTableJoinTest {
             driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
         }
         driver.flushState();
-
         proc.checkAndClearProcessResult();
 
         // push two items to the other stream. this should produce two items.
@@ -299,28 +296,25 @@ public class KTableKTableJoinTest {
 
         // push all four items to the primary stream. this should produce two items.
 
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "XX" + expectedKey);
+        for (int i = 0; i < expectedKeys.length; i++) {
+            driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
         driver.flushState();
-
         proc.checkAndClearProcessResult("0:(XX0+Y0<-X0+Y0)", "1:(XX1+Y1<-X1+Y1)");
 
         // push all items to the other stream. this should produce four items.
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic2, expectedKey, "YY" + expectedKey);
+        for (int i = 0; i < expectedKeys.length; i++) {
+            driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
         }
         driver.flushState();
-
         proc.checkAndClearProcessResult("0:(XX0+YY0<-XX0+Y0)", "1:(XX1+YY1<-XX1+Y1)", "2:(XX2+YY2<-null)", "3:(XX3+YY3<-null)");
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "X" + expectedKey);
+        for (int i = 0; i < expectedKeys.length; i++) {
+            driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
         }
         driver.flushState();
-
         proc.checkAndClearProcessResult("0:(X0+YY0<-XX0+YY0)", "1:(X1+YY1<-XX1+YY1)", "2:(X2+YY2<-XX2+YY2)", "3:(X3+YY3<-XX3+YY3)");
 
         // push two items with null to the other stream as deletes. this should produce two item.
@@ -333,22 +327,20 @@ public class KTableKTableJoinTest {
 
         // push all four items to the primary stream. this should produce two items.
 
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "XX" + expectedKey);
+        for (int i = 0; i < expectedKeys.length; i++) {
+            driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
         driver.flushState();
-
         proc.checkAndClearProcessResult("2:(XX2+YY2<-X2+YY2)", "3:(XX3+YY3<-X3+YY3)");
     }
 
-    private KeyValue<Integer, String> kv(final Integer key, final String value) {
+    private KeyValue<Integer, String> kv(Integer key, String value) {
         return new KeyValue<>(key, value);
     }
 
-    @SafeVarargs
-    private final void checkJoinedValues(final KTableValueGetter<Integer, String> getter, final KeyValue<Integer, String>... expected) {
-        for (final KeyValue<Integer, String> kv : expected) {
-            final String value = getter.get(kv.key);
+    private void checkJoinedValues(KTableValueGetter<Integer, String> getter, KeyValue<Integer, String>... expected) {
+        for (KeyValue<Integer, String> kv : expected) {
+            String value = getter.get(kv.key);
             if (kv.value == null) {
                 assertNull(value);
             } else {

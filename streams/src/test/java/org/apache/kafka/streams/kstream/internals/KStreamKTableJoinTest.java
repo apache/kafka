@@ -102,25 +102,25 @@ public class KStreamKTableJoinTest {
 
         processor.checkAndClearProcessResult();
 
-        // push all four items to the primary stream. this should produce four items.
+        // push all four items to the primary stream. this should produce two items.
 
-        for (final int expectedKey2 : expectedKeys) {
-            driver.process(topic1, expectedKey2, "X" + expectedKey2);
+        for (int i = 0; i < expectedKeys.length; i++) {
+            driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
         }
 
         processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1");
 
         // push all items to the other stream. this should not produce any item
-        for (final int expectedKey1 : expectedKeys) {
-            driver.process(topic2, expectedKey1, "YY" + expectedKey1);
+        for (int i = 0; i < expectedKeys.length; i++) {
+            driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
         }
 
         processor.checkAndClearProcessResult();
 
         // push all four items to the primary stream. this should produce four items.
 
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "X" + expectedKey);
+        for (int i = 0; i < expectedKeys.length; i++) {
+            driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
         }
 
         processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
@@ -133,10 +133,10 @@ public class KStreamKTableJoinTest {
 
         processor.checkAndClearProcessResult();
 
-        // push all four items to the primary stream. this should produce four items.
+        // push all four items to the primary stream. this should produce two items.
 
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "XX" + expectedKey);
+        for (int i = 0; i < expectedKeys.length; i++) {
+            driver.process(topic1, expectedKeys[i], "XX" + expectedKeys[i]);
         }
 
         processor.checkAndClearProcessResult("2:XX2+YY2", "3:XX3+YY3");

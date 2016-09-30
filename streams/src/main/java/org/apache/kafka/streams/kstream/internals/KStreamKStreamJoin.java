@@ -35,7 +35,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
     private final ValueJoiner<V1, V2, R> joiner;
     private final boolean outer;
 
-    KStreamKStreamJoin(final String otherWindowName, final long joinBeforeMs, final long joinAfterMs, final ValueJoiner<V1, V2, R> joiner, final boolean outer) {
+    KStreamKStreamJoin(String otherWindowName, long joinBeforeMs, long joinAfterMs, ValueJoiner<V1, V2, R> joiner, boolean outer) {
         this.otherWindowName = otherWindowName;
         this.joinBeforeMs = joinBeforeMs;
         this.joinAfterMs = joinAfterMs;
@@ -53,7 +53,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
         private WindowStore<K, V2> otherWindow;
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(ProcessorContext context) {
             super.init(context);
 
             otherWindow = (WindowStore<K, V2>) context.getStateStore(otherWindowName);

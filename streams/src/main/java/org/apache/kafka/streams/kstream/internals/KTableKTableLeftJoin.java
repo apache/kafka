@@ -25,13 +25,13 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 
 class KTableKTableLeftJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, V2> {
 
-    KTableKTableLeftJoin(final KTableImpl<K, ?, V1> table1, final KTableImpl<K, ?, V2> table2, final ValueJoiner<V1, V2, R> joiner) {
+    KTableKTableLeftJoin(KTableImpl<K, ?, V1> table1, KTableImpl<K, ?, V2> table2, ValueJoiner<V1, V2, R> joiner) {
         super(table1, table2, joiner);
     }
 
     @Override
     public Processor<K, Change<V1>> get() {
-        return new KTableKTableLeftJoinProcessor(this.valueGetterSupplier2.get());
+        return new KTableKTableLeftJoinProcessor(valueGetterSupplier2.get());
     }
 
     @Override
@@ -55,12 +55,13 @@ class KTableKTableLeftJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, 
 
         private final KTableValueGetter<K, V2> valueGetter;
 
-        KTableKTableLeftJoinProcessor(final KTableValueGetter<K, V2> valueGetter) {
+        public KTableKTableLeftJoinProcessor(KTableValueGetter<K, V2> valueGetter) {
             this.valueGetter = valueGetter;
         }
 
+        @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(ProcessorContext context) {
             super.init(context);
             valueGetter.init(context);
         }
@@ -98,23 +99,23 @@ class KTableKTableLeftJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, 
         private final KTableValueGetter<K, V1> valueGetter1;
         private final KTableValueGetter<K, V2> valueGetter2;
 
-        KTableKTableLeftJoinValueGetter(final KTableValueGetter<K, V1> valueGetter1, final KTableValueGetter<K, V2> valueGetter2) {
+        public KTableKTableLeftJoinValueGetter(KTableValueGetter<K, V1> valueGetter1, KTableValueGetter<K, V2> valueGetter2) {
             this.valueGetter1 = valueGetter1;
             this.valueGetter2 = valueGetter2;
         }
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(ProcessorContext context) {
             valueGetter1.init(context);
             valueGetter2.init(context);
         }
 
         @Override
-        public R get(final K key) {
-            final V1 value1 = valueGetter1.get(key);
+        public R get(K key) {
+            V1 value1 = valueGetter1.get(key);
 
             if (value1 != null) {
-                final V2 value2 = valueGetter2.get(key);
+                V2 value2 = valueGetter2.get(key);
                 return joiner.apply(value1, value2);
             } else {
                 return null;
