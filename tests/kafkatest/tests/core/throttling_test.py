@@ -50,7 +50,7 @@ class ThrottlingTest(ProduceConsumeValidateTest):
         # seeding the cluster with big data (to test throttling), we need to
         # Start the consumer from the end of the stream. further, we need to
         # ensure that the consumer is fully started before the producer starts
-        # so that we don't miss any messages. This delay ensures the sufficient
+        # so that we don't miss any messages. This timeout ensures the sufficient
         # condition.
         self.consumer_init_timeout_sec =  10
         self.num_brokers = 6
