@@ -13,7 +13,7 @@
 package kafka.admin
 
 import kafka.log.LogConfig
-import kafka.server.{DynamicConfig, KafkaConfig, ConfigType, KafkaServer}
+import kafka.server.{DynamicConfig, ConfigType, KafkaServer}
 import kafka.utils.TestUtils
 
 import scala.collection.Seq
@@ -22,14 +22,15 @@ object ReplicationQuotaUtils {
 
   def checkThrottleConfigRemovedFromZK(topic: String, servers: Seq[KafkaServer]): Boolean = {
     TestUtils.waitUntilTrue(() => {
-      val brokerReset = servers.forall { server =>
+      val hasRateProp = servers.forall { server =>
         val brokerConfig = AdminUtils.fetchEntityConfig(server.zkUtils, ConfigType.Broker, server.config.brokerId.toString)
-        !brokerConfig.contains(DynamicConfig.Broker.ThrottledReplicationRateLimitProp)
+        brokerConfig.contains(DynamicConfig.Broker.ThrottledLeaderReplicationRateProp) ||
+          brokerConfig.contains(DynamicConfig.Broker.ThrottledFollowerReplicationRateProp)
       }
       val topicConfig = AdminUtils.fetchEntityConfig(servers(0).zkUtils, ConfigType.Topic, topic)
-      val topicReset = !(topicConfig.contains(LogConfig.LeaderThrottledReplicasListProp)
-        || topicConfig.contains(LogConfig.FollowerThrottledReplicasListProp))
-      brokerReset && topicReset
+      val hasReplicasProp = topicConfig.contains(LogConfig.LeaderThrottledReplicasListProp) ||
+        topicConfig.contains(LogConfig.FollowerThrottledReplicasListProp)
+      !hasRateProp && !hasReplicasProp
     }, "Throttle limit/replicas was not unset")
   }
 
@@ -38,8 +39,10 @@ object ReplicationQuotaUtils {
       //Check for limit in ZK
       val brokerConfigAvailable = servers.forall { server =>
         val configInZk = AdminUtils.fetchEntityConfig(server.zkUtils, ConfigType.Broker, server.config.brokerId.toString)
-        val zkThrottleRate = configInZk.getProperty(DynamicConfig.Broker.ThrottledReplicationRateLimitProp)
-        zkThrottleRate != null && expectedThrottleRate == zkThrottleRate.toLong
+        val zkLeaderRate = configInZk.getProperty(DynamicConfig.Broker.ThrottledLeaderReplicationRateProp)
+        val zkFollowerRate = configInZk.getProperty(DynamicConfig.Broker.ThrottledFollowerReplicationRateProp)
+        zkLeaderRate != null && expectedThrottleRate == zkLeaderRate.toLong &&
+          zkFollowerRate != null && expectedThrottleRate == zkFollowerRate.toLong
       }
       //Check replicas assigned
       val topicConfig = AdminUtils.fetchEntityConfig(servers(0).zkUtils, ConfigType.Topic, topic)

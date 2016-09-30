@@ -23,8 +23,7 @@ import scala.collection._
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import kafka.common.{AdminCommandFailedException, TopicAndPartition}
 import kafka.log.LogConfig
-import kafka.log.LogConfig._
-import kafka.utils.CoreUtils._
+import LogConfig._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.security.JaasUtils
 
@@ -79,11 +78,14 @@ object ReassignPartitionsCommand extends Logging {
     var changed = false
 
     //If all partitions have completed remove the throttle
-    if (reassignedPartitionsStatus.forall { case (topicPartition, status) => status == ReassignmentCompleted }) {
+    if (reassignedPartitionsStatus.forall { case (_, status) => status == ReassignmentCompleted }) {
       //Remove the throttle limit from all brokers in the cluster
+      //(as we no longer know which specific brokers were involved in the move)
       for (brokerId <- zkUtils.getAllBrokersInCluster().map(_.id)) {
         val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Broker, brokerId.toString)
-        if (configs.remove(DynamicConfig.Broker.ThrottledReplicationRateLimitProp) != null){
+        // bitwise OR as we don't want to short-circuit
+        if (configs.remove(DynamicConfig.Broker.ThrottledLeaderReplicationRateProp) != null
+          | configs.remove(DynamicConfig.Broker.ThrottledFollowerReplicationRateProp) != null){
           AdminUtils.changeBrokerConfig(zkUtils, Seq(brokerId), configs)
           changed = true
         }
@@ -93,8 +95,9 @@ object ReassignPartitionsCommand extends Logging {
       val topics = partitionsToBeReassigned.keySet.map(tp => tp.topic).toSeq.distinct
       for (topic <- topics) {
         val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
+        // bitwise OR as we don't want to short-circuit
         if (configs.remove(LogConfig.LeaderThrottledReplicasListProp) != null
-          || configs.remove(LogConfig.FollowerThrottledReplicasListProp) != null){
+          | configs.remove(LogConfig.FollowerThrottledReplicasListProp) != null){
           AdminUtils.changeTopicConfig(zkUtils, topic, configs)
           changed = true
         }
@@ -315,6 +318,10 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
     }
   }
 
+  /**
+    * Limit the throttle on currently moving replicas. Note that this command can use used to alter the throttle, but
+    * it may not alter all limits originally set, if some of the brokers have completed their rebalance.
+    */
   def maybeLimit(throttle: Long) {
     if (throttle >= 0) {
       val existingBrokers = existingAssignment().values.flatten.toSeq
@@ -323,13 +330,15 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
 
       for (id <- brokers) {
         val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Broker, id.toString)
-        configs.put(DynamicConfig.Broker.ThrottledReplicationRateLimitProp, throttle.toString)
+        configs.put(DynamicConfig.Broker.ThrottledLeaderReplicationRateProp, throttle.toString)
+        configs.put(DynamicConfig.Broker.ThrottledFollowerReplicationRateProp, throttle.toString)
         AdminUtils.changeBrokerConfig(zkUtils, Seq(id), configs)
       }
       println(s"The throttle limit was set to $throttle B/s")
     }
   }
 
+  /** Set throttles to replicas that are moving. Note: this method should only be used when the assignment is initiated. */
   private[admin] def assignThrottledReplicas(allExisting: Map[TopicAndPartition, Seq[Int]], allProposed: Map[TopicAndPartition, Seq[Int]], admin: AdminUtilities = AdminUtils): Unit = {
     for (topic <- allProposed.keySet.map(_.topic).toSeq) {
       val (existing, proposed) = filterBy(topic, allExisting, allProposed)
@@ -340,9 +349,10 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
       //Apply a follower throttle to all "move destinations".
       val follower = format(postRebalanceReplicasThatMoved(existing, proposed))
 
-      admin.changeTopicConfig(zkUtils, topic, propsWith(
-        (LeaderThrottledReplicasListProp, leader),
-        (FollowerThrottledReplicasListProp, follower)))
+      val configs = admin.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
+      configs.put(LeaderThrottledReplicasListProp, leader)
+      configs.put(FollowerThrottledReplicasListProp, follower)
+      admin.changeTopicConfig(zkUtils, topic, configs)
 
       debug(s"Updated leader-throttled replicas for topic $topic with: $leader")
       debug(s"Updated follower-throttled replicas for topic $topic with: $follower")
@@ -350,7 +360,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
   }
 
   private def postRebalanceReplicasThatMoved(existing: Map[TopicAndPartition, Seq[Int]], proposed: Map[TopicAndPartition, Seq[Int]]): Map[TopicAndPartition, Seq[Int]] = {
-    //For each partition in the proposed list, filter out any replicas that exist now (i.e. not moving)
+    //For each partition in the proposed list, filter out any replicas that exist now (i.e. are in the proposed list and hence are not moving)
     existing.map { case (tp, current) =>
       tp -> (proposed(tp).toSet -- current).toSeq
     }

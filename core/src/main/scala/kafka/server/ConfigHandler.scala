@@ -153,11 +153,17 @@ class UserConfigHandler(private val quotaManagers: QuotaManagers) extends QuotaC
   * This implementation reports the overrides to the respective ReplicationQuotaManager objects
   */
 class BrokerConfigHandler(private val brokerConfig: KafkaConfig, private val quotaManagers: QuotaManagers) extends ConfigHandler with Logging {
+
   def processConfigChanges(brokerId: String, properties: Properties) {
+    def getOrDefault(prop: String): Long = {
+      if (properties.containsKey(prop))
+        properties.getProperty(prop).toLong
+      else
+        DefaultThrottledReplicationRate
+    }
     if (brokerConfig.brokerId == brokerId.trim.toInt) {
-      val limit = if (properties.containsKey(ThrottledReplicationRateLimitProp)) properties.getProperty(ThrottledReplicationRateLimitProp).toLong else DefaultThrottledReplicationRateLimit
-      quotaManagers.leader.updateQuota(upperBound(limit))
-      quotaManagers.follower.updateQuota(upperBound(limit))
+      quotaManagers.leader.updateQuota(upperBound(getOrDefault(ThrottledLeaderReplicationRateProp)))
+      quotaManagers.follower.updateQuota(upperBound(getOrDefault(ThrottledFollowerReplicationRateProp)))
     }
   }
 }
