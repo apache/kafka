@@ -874,10 +874,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void unsubscribe() {
         acquire();
         try {
-            // make sure the offsets of topic partitions the consumer is unsubscribing from
-            // are committed since there will be no following rebalance
-            this.coordinator.maybeAutoCommitOffsetsNow();
-
             log.debug("Unsubscribed all topics or patterns and assigned partitions");
             this.subscriptions.unsubscribe();
             this.coordinator.maybeLeaveGroup();
