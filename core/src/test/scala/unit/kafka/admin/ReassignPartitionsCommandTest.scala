@@ -20,12 +20,13 @@ import java.util.Properties
 
 import kafka.common.TopicAndPartition
 import kafka.log.LogConfig._
-import kafka.utils.{Logging, TestUtils, ZkUtils}
+import kafka.utils.{CoreUtils, Logging, TestUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
-import org.junit.Test
+import org.junit.{Before, Test}
 import org.junit.Assert.assertEquals
 
 class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
+  var calls = 0
 
   @Test
   def testRackAwareReassign() {
@@ -67,10 +68,12 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
       override def changeTopicConfig(zkUtils: ZkUtils, topic: String, configChange: Properties): Unit = {
         assertEquals("0:102", configChange.get(FollowerThrottledReplicasListProp)) //Should only be follower-throttle the moving replica
         assertEquals("0:100,0:101", configChange.get(LeaderThrottledReplicasListProp)) //Should leader-throttle all existing (pre move) replicas
+        calls += 1
       }
     }
 
     assigner.assignThrottledReplicas(existing, proposed, mock)
+    assertEquals(1, calls)
   }
 
   @Test
@@ -87,11 +90,13 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
       override def changeTopicConfig(zkUtils: ZkUtils, topic: String, configChange: Properties): Unit = {
         assertEquals("0:102,1:102", configChange.get(FollowerThrottledReplicasListProp)) //Should only be follower-throttle the moving replica
         assertEquals("0:100,0:101,1:100,1:101", configChange.get(LeaderThrottledReplicasListProp)) //Should leader-throttle all existing (pre move) replicas
+        calls += 1
       }
     }
 
     //When
     assigner.assignThrottledReplicas(existing, proposed, mock)
+    assertEquals(1, calls)
   }
 
   @Test
@@ -108,18 +113,20 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
       override def changeTopicConfig(zkUtils: ZkUtils, topic: String, configChange: Properties): Unit = {
         topic match {
           case "topic1" =>
-            assertEquals("0:102", configChange.get(FollowerThrottledReplicasListProp))
             assertEquals("0:100,0:101", configChange.get(LeaderThrottledReplicasListProp))
+            assertEquals("0:102", configChange.get(FollowerThrottledReplicasListProp))
           case "topic2" =>
-            assertEquals("0:100", configChange.get(FollowerThrottledReplicasListProp))
             assertEquals("0:101,0:102", configChange.get(LeaderThrottledReplicasListProp))
+            assertEquals("0:100", configChange.get(FollowerThrottledReplicasListProp))
           case _ => fail("Unexpected topic $topic")
         }
+        calls += 1
       }
     }
 
     //When
     assigner.assignThrottledReplicas(existing, proposed, mock)
+    assertEquals(2, calls)
   }
 
   @Test
@@ -152,13 +159,14 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
             assertEquals("0:101,0:102,1:101,1:102", configChange.get(LeaderThrottledReplicasListProp))
           case _ => fail()
         }
+        calls += 1
       }
     }
 
     //When
     assigner.assignThrottledReplicas(existing, proposed, mock)
+    assertEquals(2, calls)
   }
-
 
   @Test
   def shouldFindTwoMovingReplicasInSamePartition() {
@@ -174,10 +182,44 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
       override def changeTopicConfig(zkUtils: ZkUtils, topic: String, configChange: Properties) = {
         assertEquals("0:104,0:105", configChange.get(FollowerThrottledReplicasListProp)) //Should only be follower-throttle the moving replicas
         assertEquals("0:100,0:101,0:102,0:103", configChange.get(LeaderThrottledReplicasListProp)) //Should leader-throttle all existing (pre move) replicas
+        calls += 1
       }
     }
 
     //When
     assigner.assignThrottledReplicas(existing, proposed, mock)
+    assertEquals(1, calls)
+  }
+
+  @Test
+  def shouldNotOverwriteEntityConfigsWhenUpdatingThrottledReplicas(): Unit = {
+    val control = TopicAndPartition("topic1", 1) -> Seq(100, 102)
+    val assigner = new ReassignPartitionsCommand(null, null)
+    val existing = Map(TopicAndPartition("topic1", 0) -> Seq(100, 101), control)
+    val proposed = Map(TopicAndPartition("topic1", 0) -> Seq(101, 102), control)
+
+    //Given partition there are existing properties
+    val existingProperties = CoreUtils.propsWith("some-key", "some-value")
+
+    //Then the dummy property should still be there
+    val mock = new TestAdminUtils {
+      override def changeTopicConfig(zkUtils: ZkUtils, topic: String, configChange: Properties): Unit = {
+        assertEquals("some-value", configChange.getProperty("some-key"))
+        calls += 1
+      }
+
+      override def fetchEntityConfig(zkUtils: ZkUtils, entityType: String, entityName: String): Properties = {
+        existingProperties
+      }
+    }
+
+    //When
+    assigner.assignThrottledReplicas(existing, proposed, mock)
+    assertEquals(1, calls)
+  }
+
+  @Before
+  def setup(): Unit = {
+    calls = 0
   }
 }

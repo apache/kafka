@@ -124,8 +124,8 @@ object LogConfig {
   val MessageFormatVersionProp = "message.format.version"
   val MessageTimestampTypeProp = "message.timestamp.type"
   val MessageTimestampDifferenceMaxMsProp = "message.timestamp.difference.max.ms"
-  val LeaderThrottledReplicasListProp = "quota.leader.replication.throttled.replicas"
-  val FollowerThrottledReplicasListProp = "quota.follower.replication.throttled.replicas"
+  val LeaderThrottledReplicasListProp = "leader.replication.throttled.replicas"
+  val FollowerThrottledReplicasListProp = "follower.replication.throttled.replicas"
 
   val SegmentSizeDoc = "This configuration controls the segment file size for " +
     "the log. Retention and cleaning is always done a file at a time so a larger " +
@@ -196,10 +196,10 @@ object LogConfig {
   val MessageTimestampDifferenceMaxMsDoc = "The maximum difference allowed between the timestamp when a broker receives " +
     "a message and the timestamp specified in the message. If message.timestamp.type=CreateTime, a message will be rejected " +
     "if the difference in timestamp exceeds this threshold. This configuration is ignored if message.timestamp.type=LogAppendTime."
-  val LeaderThrottledReplicasListDoc = "A list of replicas for which log replication should be throttled on the leader. The list should describe a set of " +
-    "replicas in the form [PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:..."
-  val FollowerThrottledReplicasListDoc = "A list of replicas for which log replication should be throttled on the follower. The list should describe a set of " +
-    "replicas in the form [PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:..."
+  val LeaderThrottledReplicasListDoc = "A list of replicas for which log replication should be throttled on the leader side. The list should describe a set of " +
+    "replicas in the form [PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:... or alternatively the wildcard '*' can be used to throttle all replicas for this topic."
+  val FollowerThrottledReplicasListDoc = "A list of replicas for which log replication should be throttled on the follower side. The list should describe a set of " +
+    "replicas in the form [PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:... or alternatively the wildcard '*' can be used to throttle all replicas for this topic."
 
   private class LogConfigDef extends ConfigDef {
 
