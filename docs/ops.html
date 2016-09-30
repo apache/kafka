@@ -143,7 +143,7 @@ my-group        my-topic                       1   0               0            
 </pre>
 
 
-Note, however, after 0.9.0, the kafka.tools.ConsumerOffsetChecker tool is deprecated and you should use the kafka.admin.ConsumerGroupCommand (or the bin/kafka-consumer-groups.sh script) to manage consumer groups, including consumers created with the <a href="http://kafka.apache.org/documentation.html#newconsumerapi">new consumer API</a>.
+NOTE: Since 0.9.0.0, the kafka.tools.ConsumerOffsetChecker tool has been deprecated. You should use the kafka.admin.ConsumerGroupCommand (or the bin/kafka-consumer-groups.sh script) to manage consumer groups, including consumers created with the <a href="http://kafka.apache.org/documentation.html#newconsumerapi">new consumer API</a>.
 
 <h4><a id="basic_ops_consumer_group" href="#basic_ops_consumer_group">Managing Consumer Groups</a></h4>
 
@@ -183,7 +183,7 @@ The process of migrating data is manually initiated but fully automated. Under t
 <p>
 The partition reassignment tool can be used to move partitions across brokers. An ideal partition distribution would ensure even data load and partition sizes across all brokers. The partition reassignment tool does not have the capability to automatically study the data distribution in a Kafka cluster and move partitions around to attain an even load distribution. As such, the admin has to figure out which topics or partitions should be moved around.
 <p>
-The partition reassignment tool can run in 3 mutually exclusive modes -
+The partition reassignment tool can run in 3 mutually exclusive modes:
 <ul>
 <li>--generate: In this mode, given a list of topics and a list of brokers, the tool generates a candidate reassignment to move all partitions of the specified topics to the new brokers. This option merely provides a convenient way to generate a partition reassignment plan given a list of topics and target brokers.</li>
 <li>--execute: In this mode, the tool kicks off the reassignment of partitions based on the user provided reassignment plan. (using the --reassignment-json-file option). This can either be a custom reassignment plan hand crafted by the admin or provided by using the --generate option</li>
@@ -900,9 +900,9 @@ The following metrics are available on producer/consumer/connector instances.  F
   </tbody>
 </table>
 
-<h4><a id="new_producer_monitoring" href="#new_producer_monitoring">New producer monitoring</a></h4>
+<h4><a id="producer_monitoring" href="#producer_monitoring">Producer monitoring</a></h4>
 
-The following metrics are available on new producer instances.
+The following metrics are available on producer instances.
 
 <table class="data-table">
 <tbody><tr>

@@ -70,9 +70,14 @@ Below is the configuration of the Java producer:
 
 <h3><a id="consumerconfigs" href="#consumerconfigs">3.3 Consumer Configs</a></h3>
 
-We introduce both the old 0.8 consumer configs and the new consumer configs respectively below.
+In 0.9.0.0 we introduced the new Java consumer as a replacement for the older Scala-based simple and high-level consumers.
+The configs for both new and old consumers are described below.
 
-<h4><a id="oldconsumerconfigs" href="#oldconsumerconfigs">3.3.1 Old Consumer Configs</a></h4>
+<h4><a id="newconsumerconfigs" href="#newconsumerconfigs">3.3.1 New Consumer Configs</a></h4>
+Below is the configuration for the new consumer:
+<!--#include virtual="generated/consumer_config.html" -->
+
+<h4><a id="oldconsumerconfigs" href="#oldconsumerconfigs">3.3.2 Old Consumer Configs</a></h4>
 
 The essential old consumer configurations are the following:
 <ul>
@@ -238,10 +243,6 @@ The essential old consumer configurations are the following:
 
 
 <p>More details about consumer configuration can be found in the scala class <code>kafka.consumer.ConsumerConfig</code>.</p>
-
-<h4><a id="newconsumerconfigs" href="#newconsumerconfigs">3.3.2 New Consumer Configs</a></h4>
-Since 0.9.0.0 we have been working on a replacement for our existing simple and high-level consumers. The code is considered beta quality. Below is the configuration for the new consumer:
-<!--#include virtual="generated/consumer_config.html" -->
 
 <h3><a id="connectconfigs" href="#connectconfigs">3.4 Kafka Connect Configs</a></h3>
 Below is the configuration of the Kafka Connect framework.
