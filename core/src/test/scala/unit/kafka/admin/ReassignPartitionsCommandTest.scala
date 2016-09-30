@@ -113,11 +113,11 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
       override def changeTopicConfig(zkUtils: ZkUtils, topic: String, configChange: Properties): Unit = {
         topic match {
           case "topic1" =>
-            assertEquals("0:102", configChange.get(FollowerThrottledReplicasListProp))
             assertEquals("0:100,0:101", configChange.get(LeaderThrottledReplicasListProp))
+            assertEquals("0:102", configChange.get(FollowerThrottledReplicasListProp))
           case "topic2" =>
-            assertEquals("0:100", configChange.get(FollowerThrottledReplicasListProp))
             assertEquals("0:101,0:102", configChange.get(LeaderThrottledReplicasListProp))
+            assertEquals("0:100", configChange.get(FollowerThrottledReplicasListProp))
           case _ => fail("Unexpected topic $topic")
         }
         calls += 1

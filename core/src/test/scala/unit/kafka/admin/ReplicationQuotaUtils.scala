@@ -22,15 +22,15 @@ object ReplicationQuotaUtils {
 
   def checkThrottleConfigRemovedFromZK(topic: String, servers: Seq[KafkaServer]): Boolean = {
     TestUtils.waitUntilTrue(() => {
-      val brokerReset = servers.forall { server =>
+      val hasRateProp = servers.forall { server =>
         val brokerConfig = AdminUtils.fetchEntityConfig(server.zkUtils, ConfigType.Broker, server.config.brokerId.toString)
-        ! (brokerConfig.contains(DynamicConfig.Broker.ThrottledLeaderReplicationRateProp)
-          && brokerConfig.contains(DynamicConfig.Broker.ThrottledFollowerReplicationRateProp))
+        (brokerConfig.contains(DynamicConfig.Broker.ThrottledLeaderReplicationRateProp)
+          || brokerConfig.contains(DynamicConfig.Broker.ThrottledFollowerReplicationRateProp))
       }
       val topicConfig = AdminUtils.fetchEntityConfig(servers(0).zkUtils, ConfigType.Topic, topic)
-      val topicReset = !(topicConfig.contains(LogConfig.LeaderThrottledReplicasListProp)
-        && topicConfig.contains(LogConfig.FollowerThrottledReplicasListProp))
-      brokerReset && topicReset
+      val hasReplicasProp = (topicConfig.contains(LogConfig.LeaderThrottledReplicasListProp)
+        || topicConfig.contains(LogConfig.FollowerThrottledReplicasListProp))
+      !hasRateProp &&  !hasReplicasProp
     }, "Throttle limit/replicas was not unset")
   }
 
