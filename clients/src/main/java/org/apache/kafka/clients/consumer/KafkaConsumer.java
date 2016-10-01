@@ -67,7 +67,7 @@ import java.util.regex.Pattern;
 /**
  * A client that consumes records from a Kafka cluster.
  * <p>
- * This client transparently handles the failure of Kafka brokers, and transparently adapt as topic partitions
+ * This client transparently handles the failure of Kafka brokers, and transparently adapts as topic partitions
  * it fetches migrate within the cluster. This client also interacts with the broker to allow groups of
  * consumers to load balance consumption using <a href="#consumergroups">consumer groups</a>.
  * <p>
@@ -165,7 +165,7 @@ import java.util.regex.Pattern;
  * <p>
  * For use cases where message processing time varies unpredictably, neither of these options may be sufficient.
  * The recommended way to handle these cases is to move message processing to another thread, which allows
- * the consumer to continue calling {@link #poll(long) poll} the processor is still working. Some care must be taken
+ * the consumer to continue calling {@link #poll(long) poll} while the processor is still working. Some care must be taken
  * to ensure that committed offsets do not get ahead of the actual position. Typically, you must disable automatic
  * commits and manually commit processed offsets for records only after the thread has finished handling them
  * (depending on the delivery semantics you need). Note also that you will need to {@link #pause(Collection) pause}
