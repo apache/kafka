@@ -38,13 +38,8 @@ import org.junit.{After, Assert, Before, Test}
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.Buffer
-import scala.concurrent.{Await, Future}
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration._
-import scala.util.{Failure, Success}
 
 import org.apache.kafka.common.KafkaException
-import java.util.HashMap
 import kafka.admin.AdminUtils
 
 class AuthorizerIntegrationTest extends BaseRequestTest {
@@ -60,7 +55,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   val correlationId = 0
   val clientId = "client-Id"
   val tp = new TopicPartition(topic, part)
-
   val topicAndPartition = new TopicAndPartition(topic, part)
   val group = "my-group"
   val topicResource = new Resource(Topic, topic)
@@ -157,6 +151,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
     for (i <- 0 until producerCount)
       producers += TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
+        maxBlockMs = 3000,
         acks = 1)
     for (i <- 0 until consumerCount)
       consumers += TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group, securityProtocol = SecurityProtocol.PLAINTEXT)
@@ -412,20 +407,18 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     consumeRecords(this.consumers.head)
   }
 
-  @Test
+  @Test(expected = classOf[KafkaException])
   def testConsumeWithoutTopicDescribeAccess() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
     sendRecords(1, tp)
     removeAllAcls()
 
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
-    try {
-      this.consumers.head.assign(List(tp).asJava)
-      consumeRecords(this.consumers.head)
-      Assert.fail("should have thrown exception")
-    } catch {
-      case e: KafkaException => //expected
-    }
+    this.consumers.head.assign(List(tp).asJava)
+
+    // the consumer should raise an exception if it receives UNKNOWN_TOPIC_OR_PARTITION
+    // from the ListOffsets response when looking up the initial position.
+    consumeRecords(this.consumers.head)
   }
 
   @Test
@@ -503,7 +496,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     } catch {
       case e: TopicAuthorizationException => //expected
     } 
-
   }
 
   @Test
@@ -511,7 +503,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
     sendRecords(1, tp)
 
-    //create a unmatched topic
+    // create an unmatched topic
     val unmatchedTopic = "unmatched"
     TestUtils.createTopic(zkUtils, unmatchedTopic, 1, 1, this.servers)
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)),  new Resource(Topic, unmatchedTopic))
@@ -786,7 +778,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     TestUtils.waitAndVerifyAcls(servers.head.apis.authorizer.get.getAcls(resource) -- acls, servers.head.apis.authorizer.get, resource)
   }
 
-
   private def consumeRecords(consumer: Consumer[Array[Byte], Array[Byte]],
                              numRecords: Int = 1,
                              startingOffset: Int = 0,
@@ -794,13 +785,11 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
                              part: Int = part) {
     val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
 
-    val future = Future {
-      while (records.size < numRecords) 
-        for (record <- consumer.poll(50).asScala)
-          records.add(record)
-      records
-    }
-    val result = Await.result(future, 10 seconds)
+    TestUtils.waitUntilTrue(() => {
+      for (record <- consumer.poll(50).asScala)
+        records.add(record)
+      records.size == numRecords
+    }, "Failed to receive all expected records from the consumer")
 
     for (i <- 0 until numRecords) {
       val record = records.get(i)

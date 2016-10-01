@@ -79,7 +79,6 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
       servers.head.groupCoordinator.offsetsTopicConfigs)
   }
 
-  //extracted method to allow for different params in some specific tests
   def createNewProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
       TestUtils.createNewProducer(brokerList,
                                   securityProtocol = this.securityProtocol,
@@ -88,7 +87,6 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
                                   props = Some(producerConfig))
   }
   
-  //extracted method to allow for different params in some specific tests
   def createNewConsumer: KafkaConsumer[Array[Byte], Array[Byte]] = {
       TestUtils.createNewConsumer(brokerList,
                                   securityProtocol = this.securityProtocol,
@@ -100,21 +98,7 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
   @After
   override def tearDown() {
     producers.foreach(_.close())
-    
-    consumers.foreach { consumer => 
-      breakable {
-        while(true) {
-          try {
-            consumer.close
-            break
-          } catch {
-            //short wait to make sure that woken up consumer can be closed without spurious ConcurrentModificationException
-            case e: ConcurrentModificationException => Thread.sleep(100L)
-          }
-        }
-      }
-    }
-    
+    consumers.foreach(_.close())
     super.tearDown()
   }
 

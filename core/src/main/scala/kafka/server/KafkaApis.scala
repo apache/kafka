@@ -215,7 +215,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, controlledShutdownResponse)))
   }
 
-
   /**
    * Handle an offset commit request
    */
@@ -237,7 +236,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case (topicPartition, _) => {
           val authorizedForDescribe = authorize(request.session, Describe, new Resource(auth.Topic, topicPartition.topic))
           val exists = metadataCache.contains(topicPartition.topic)
-          if (!authorizedForDescribe && exists) 
+          if (!authorizedForDescribe && exists)
               debug(s"Offset commit request with correlation id ${header.correlationId} from client ${header.clientId} " +
                 s"on partition $topicPartition failing due to user not having DESCRIBE authorization, but returning UNKNOWN_TOPIC_OR_PARTITION")
           authorizedForDescribe && exists
@@ -254,7 +253,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           unauthorizedForReadTopics.mapValues(_ => new JShort(Errors.TOPIC_AUTHORIZATION_FAILED.code)) ++
           nonExistingOrUnauthorizedForDescribeTopics.mapValues(_ => new JShort(Errors.UNKNOWN_TOPIC_OR_PARTITION.code))
 
-        if (logger.isDebugEnabled()) //optimizing code as it's a loop
+        if (isDebugEnabled)
           combinedCommitStatus.foreach { case (topicPartition, errorCode) =>
             if (errorCode != Errors.NONE.code) {
               debug(s"Offset commit request with correlation id ${header.correlationId} from client ${header.clientId} " +

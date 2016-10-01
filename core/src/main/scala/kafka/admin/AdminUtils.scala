@@ -325,7 +325,7 @@ object AdminUtils extends Logging with AdminUtilities {
           case e2: Throwable => throw new AdminOperationException(e2)
         }
       } else {
-        throw new UnknownTopicOrPartitionException("topic %s to delete does not exist".format(topic))
+        throw new UnknownTopicOrPartitionException(s"Topic `$topic` to delete does not exist")
       }
     }
 
