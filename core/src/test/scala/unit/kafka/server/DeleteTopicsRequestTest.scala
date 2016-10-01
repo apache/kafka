@@ -58,7 +58,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
 
     // Basic
     validateErrorDeleteTopicRequests(new DeleteTopicsRequest(Set("invalid-topic").asJava, timeout),
-      Map("invalid-topic" -> Errors.INVALID_TOPIC_EXCEPTION))
+      Map("invalid-topic" -> Errors.UNKNOWN_TOPIC_OR_PARTITION))
 
     // Partial
     TestUtils.createTopic(zkUtils, "partial-topic-1", 1, 1, servers)
@@ -67,7 +67,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
       "partial-invalid-topic").asJava, timeout),
       Map(
         "partial-topic-1" -> Errors.NONE,
-        "partial-invalid-topic" -> Errors.INVALID_TOPIC_EXCEPTION
+        "partial-invalid-topic" -> Errors.UNKNOWN_TOPIC_OR_PARTITION
       )
     )
 

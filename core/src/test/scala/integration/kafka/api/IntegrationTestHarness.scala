@@ -29,6 +29,8 @@ import kafka.integration.KafkaServerTestHarness
 import org.junit.{After, Before}
 
 import scala.collection.mutable.Buffer
+import scala.util.control.Breaks.{breakable, break}
+import java.util.ConcurrentModificationException
 
 /**
  * A helper class for writing integration tests that involve producers, consumers, and servers
@@ -64,17 +66,9 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
     consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
     consumerConfig.putAll(consumerSecurityProps)
     for (i <- 0 until producerCount)
-      producers += TestUtils.createNewProducer(brokerList,
-                                               securityProtocol = this.securityProtocol,
-                                               trustStoreFile = this.trustStoreFile,
-                                               saslProperties = this.saslProperties,
-                                               props = Some(producerConfig))
+      producers += createNewProducer
     for (i <- 0 until consumerCount) {
-      consumers += TestUtils.createNewConsumer(brokerList,
-                                               securityProtocol = this.securityProtocol,
-                                               trustStoreFile = this.trustStoreFile,
-                                               saslProperties = this.saslProperties,
-                                               props = Some(consumerConfig))
+      consumers += createNewConsumer
     }
 
     // create the consumer offset topic
@@ -85,10 +79,42 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
       servers.head.groupCoordinator.offsetsTopicConfigs)
   }
 
+  //extracted method to allow for different params in some specific tests
+  def createNewProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
+      TestUtils.createNewProducer(brokerList,
+                                  securityProtocol = this.securityProtocol,
+                                  trustStoreFile = this.trustStoreFile,
+                                  saslProperties = this.saslProperties,
+                                  props = Some(producerConfig))
+  }
+  
+  //extracted method to allow for different params in some specific tests
+  def createNewConsumer: KafkaConsumer[Array[Byte], Array[Byte]] = {
+      TestUtils.createNewConsumer(brokerList,
+                                  securityProtocol = this.securityProtocol,
+                                  trustStoreFile = this.trustStoreFile,
+                                  saslProperties = this.saslProperties,
+                                  props = Some(consumerConfig))
+  }
+
   @After
   override def tearDown() {
     producers.foreach(_.close())
-    consumers.foreach(_.close())
+    
+    consumers.foreach { consumer => 
+      breakable {
+        while(true) {
+          try {
+            consumer.close
+            break
+          } catch {
+            //short wait to make sure that woken up consumer can be closed without spurious ConcurrentModificationException
+            case e: ConcurrentModificationException => Thread.sleep(100L)
+          }
+        }
+      }
+    }
+    
     super.tearDown()
   }
 

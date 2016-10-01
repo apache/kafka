@@ -26,7 +26,7 @@ import kafka.utils.ZkUtils._
 import java.util.Random
 import java.util.Properties
 import org.apache.kafka.common.Node
-import org.apache.kafka.common.errors.{ReplicaNotAvailableException, InvalidTopicException, LeaderNotAvailableException, InvalidPartitionsException, InvalidReplicationFactorException, TopicExistsException, InvalidReplicaAssignmentException}
+import org.apache.kafka.common.errors.{ReplicaNotAvailableException, UnknownTopicOrPartitionException, InvalidTopicException, LeaderNotAvailableException, InvalidPartitionsException, InvalidReplicationFactorException, TopicExistsException, InvalidReplicaAssignmentException}
 import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 import org.apache.kafka.common.requests.MetadataResponse
 
@@ -325,7 +325,7 @@ object AdminUtils extends Logging with AdminUtilities {
           case e2: Throwable => throw new AdminOperationException(e2)
         }
       } else {
-        throw new InvalidTopicException("topic %s to delete does not exist".format(topic))
+        throw new UnknownTopicOrPartitionException("topic %s to delete does not exist".format(topic))
       }
     }
 
