@@ -26,7 +26,7 @@ import org.junit.Test
 import java.util.Properties
 
 import kafka.common.{TopicAlreadyMarkedForDeletionException, TopicAndPartition}
-import org.apache.kafka.common.errors.InvalidTopicException
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 
 class DeleteTopicTest extends ZooKeeperTestHarness {
 
@@ -206,9 +206,9 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     // start topic deletion
     try {
       AdminUtils.deleteTopic(zkUtils, "test2")
-      fail("Expected InvalidTopicException")
+      fail("Expected UnknownTopicOrPartitionException")
     } catch {
-      case e: InvalidTopicException => // expected exception
+      case e: UnknownTopicOrPartitionException => // expected exception
     }
     // verify delete topic path for test2 is removed from zookeeper
     TestUtils.verifyTopicDeletion(zkUtils, "test2", 1, servers)
