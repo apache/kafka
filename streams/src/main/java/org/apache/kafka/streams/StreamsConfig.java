@@ -407,7 +407,7 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     private Map<String, Object> getClientPropsWithPrefix(final String prefix, final Set<String> configNames) {
-        final Map<String, Object> props = clientProps(configNames, originals(), Collections.<String, Object>emptyMap());
+        final Map<String, Object> props = clientProps(configNames, originals());
         props.putAll(this.originalsWithPrefix(prefix));
         return props;
     }
@@ -437,18 +437,15 @@ public class StreamsConfig extends AbstractConfig {
      *
      * @param configNames The given set of configuration names.
      * @param originals The original configs to be filtered.
-     * @param overrides The default overridden values.
      * @return client config with any overrides
      */
-    private Map<String, Object> clientProps(Set<String> configNames, Map<String, Object> originals, Map<String, Object> overrides) {
+    private Map<String, Object> clientProps(Set<String> configNames, Map<String, Object> originals) {
         // iterate all client config names, filter out non-client configs from the original
         // property map and use the overridden values when they are not specified by users
         Map<String, Object> parsed = new HashMap<>();
         for (String configName: configNames) {
             if (originals.containsKey(configName)) {
                 parsed.put(configName, originals.get(configName));
-            } else if (overrides.containsKey(configName)) {
-                parsed.put(configName, overrides.get(configName));
             }
         }
 
