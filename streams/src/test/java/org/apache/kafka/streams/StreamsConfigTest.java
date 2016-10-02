@@ -133,6 +133,30 @@ public class StreamsConfigTest {
         assertEquals(1, consumerConfigs.get(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG));
     }
 
+    @Test
+    public void shouldSupportPrefixedPropertiesThatAreNotPartOfConsumerConfig() throws Exception {
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        props.put(consumerPrefix("interceptor.statsd.host"), "host");
+        final Map<String, Object> consumerConfigs = streamsConfig.getConsumerConfigs(null, "groupId", "clientId");
+        assertEquals("host", consumerConfigs.get("interceptor.statsd.host"));
+    }
+
+    @Test
+    public void shouldSupportPrefixedPropertiesThatAreNotPartOfRestoreConsumerConfig() throws Exception {
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        props.put(consumerPrefix("interceptor.statsd.host"), "host");
+        final Map<String, Object> consumerConfigs = streamsConfig.getRestoreConsumerConfigs("clientId");
+        assertEquals("host", consumerConfigs.get("interceptor.statsd.host"));
+    }
+
+    @Test
+    public void shouldSupportPrefixedPropertiesThatAreNotPartOfProducerConfig() throws Exception {
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        props.put(producerPrefix("interceptor.statsd.host"), "host");
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs("clientId");
+        assertEquals("host", producerConfigs.get("interceptor.statsd.host"));
+    }
+
 
     @Test
     public void shouldSupportPrefixedProducerConfigs() throws Exception {
