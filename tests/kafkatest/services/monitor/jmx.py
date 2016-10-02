@@ -21,9 +21,9 @@ class JmxMixin(object):
     - this is not a service in its own right.
     - we assume the service using JmxMixin also uses KafkaPathResolverMixin
     """
-    def __init__(self, num_nodes, jmx_object_names=None, jmx_attributes=[]):
+    def __init__(self, num_nodes, jmx_object_names=None, jmx_attributes=None):
         self.jmx_object_names = jmx_object_names
-        self.jmx_attributes = jmx_attributes
+        self.jmx_attributes = jmx_attributes or []
         self.jmx_port = 9192
 
         self.started = [False] * num_nodes

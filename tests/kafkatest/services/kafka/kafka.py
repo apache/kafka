@@ -68,14 +68,14 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
                  client_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI,
                  authorizer_class_name=None, topics=None, version=TRUNK, jmx_object_names=None,
-                 jmx_attributes=[], zk_connect_timeout=5000, zk_session_timeout=6000):
+                 jmx_attributes=None, zk_connect_timeout=5000, zk_session_timeout=6000):
         """
         :type context
         :type zk: ZookeeperService
         :type topics: dict
         """
         Service.__init__(self, context, num_nodes)
-        JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes)
+        JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes or [])
 
         self.zk = zk
 
