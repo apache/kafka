@@ -277,10 +277,10 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     servers.foreach(_.shutdown())
   }
 
-  private def createTestTopicAndCluster(topic: String): Seq[KafkaServer] = {
+  private def createTestTopicAndCluster(topic: String, deleteTopicEnabled: String = "true"): Seq[KafkaServer] = {
 
     val brokerConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false)
-    brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", "true")
+    brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", deleteTopicEnabled)
     )
     createTestTopicAndCluster(topic,brokerConfigs)
   }
@@ -306,5 +306,28 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
       counter += 1
       (key, count)
     }
+  }
+
+  @Test
+  def testDeleteWhenDeleteTopicIsDisabled() {
+    val topicAndPartition = TopicAndPartition("test", 0)
+    val topic = topicAndPartition.topic
+
+    // creating a cluster with "delete.topic.enable" = "false"
+    val servers = createTestTopicAndCluster(topic, "false")
+
+    // mark the topic for deletion
+    AdminUtils.deleteTopic(zkUtils, "test")
+    TestUtils.waitUntilTrue(() => !zkUtils.pathExists(getDeleteTopicPath(topic)),
+      "Admin path /admin/delete_topic/%s path not deleted even if deleteTopic is disabled".format(topic))
+    // verify that topic test is untouched
+    TestUtils.waitUntilTrue(() => servers.forall(_.getLogManager().getLog(topicAndPartition).isDefined),
+      "Replicas for topic test not created")
+    // test the topic path exists
+    assertTrue("Topic test mistakenly deleted", zkUtils.pathExists(getTopicPath(topic)))
+    // topic test should have a leader
+    val leaderIdOpt = TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0, 1000)
+    assertTrue("Leader should exist for topic test", leaderIdOpt.isDefined)
+    servers.foreach(_.shutdown())
   }
 }

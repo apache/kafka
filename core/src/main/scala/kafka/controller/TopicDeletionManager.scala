@@ -80,21 +80,22 @@ class TopicDeletionManager(controller: KafkaController,
   val partitionStateMachine = controller.partitionStateMachine
   val replicaStateMachine = controller.replicaStateMachine
   val deleteLock = new ReentrantLock()
-  val topicsIneligibleForDeletion: mutable.Set[String] = mutable.Set.empty[String] ++
-    (initialTopicsIneligibleForDeletion & initialTopicsToBeDeleted)
   val deleteTopicsCond = deleteLock.newCondition()
   val deleteTopicStateChanged: AtomicBoolean = new AtomicBoolean(false)
   var deleteTopicsThread: DeleteTopicsThread = null
   val isDeleteTopicEnabled = controller.config.deleteTopicEnable
-  val topicsToBeDeleted: mutable.Set[String] = mutable.Set.empty[String]
-  if(isDeleteTopicEnabled) {
-    topicsToBeDeleted ++= initialTopicsToBeDeleted
+  val topicsToBeDeleted: mutable.Set[String] = if (isDeleteTopicEnabled) {
+    mutable.Set.empty[String] ++ initialTopicsToBeDeleted
   } else {
     // if delete topic is disabled clean the topic entries under /admin/delete_topics
-    for(topic <- initialTopicsToBeDeleted) {
-      cleanZkStateForDeleteTopic(topic)
+    val zkUtils = controllerContext.zkUtils
+    for (topic <- initialTopicsToBeDeleted) {
+      zkUtils.zkClient.delete(getDeleteTopicPath(topic))
     }
+    mutable.Set.empty[String]
   }
+  val topicsIneligibleForDeletion: mutable.Set[String] = mutable.Set.empty[String] ++
+    (initialTopicsIneligibleForDeletion & topicsToBeDeleted)
   val partitionsToBeDeleted: mutable.Set[TopicAndPartition] = topicsToBeDeleted.flatMap(controllerContext.partitionsForTopic)
 
   /**
@@ -223,14 +224,6 @@ class TopicDeletionManager(controller: KafkaController,
       false
   }
 
-  def cleanZkStateForDeleteTopic(topic : String): Unit = {
-    val zkUtils = controllerContext.zkUtils
-    zkUtils.zkClient.deleteRecursive(getTopicPath(topic))
-    zkUtils.zkClient.deleteRecursive(getEntityConfigPath(ConfigType.Topic, topic))
-    zkUtils.zkClient.delete(getDeleteTopicPath(topic))
-    controllerContext.removeTopic(topic)
-  }
-
   /**
    * Invoked by the delete-topic-thread to wait until events that either trigger, restart or halt topic deletion occur.
    * controllerLock should be acquired before invoking this API
@@ -305,7 +298,11 @@ class TopicDeletionManager(controller: KafkaController,
     partitionStateMachine.handleStateChanges(partitionsForDeletedTopic, NonExistentPartition)
     topicsToBeDeleted -= topic
     partitionsToBeDeleted.retain(_.topic != topic)
-    cleanZkStateForDeleteTopic(topic)
+    val zkUtils = controllerContext.zkUtils
+    zkUtils.zkClient.deleteRecursive(getTopicPath(topic))
+    zkUtils.zkClient.deleteRecursive(getEntityConfigPath(ConfigType.Topic, topic))
+    zkUtils.zkClient.delete(getDeleteTopicPath(topic))
+    controllerContext.removeTopic(topic)
   }
 
   /**
