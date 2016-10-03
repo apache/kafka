@@ -44,6 +44,7 @@ import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.FetchResponse.PartitionData;
 import org.apache.kafka.common.requests.GroupCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatResponse;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.ListOffsetResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
@@ -66,9 +67,11 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
@@ -337,12 +340,14 @@ public class KafkaConsumerTest {
         int autoCommitIntervalMs = 10000;
 
         Time time = new MockTime();
-        MockClient client = new MockClient(time);
         Cluster cluster = TestUtils.singletonCluster(topic, 1);
         Node node = cluster.nodes().get(0);
-        client.setNode(node);
+
         Metadata metadata = new Metadata(0, Long.MAX_VALUE);
         metadata.update(cluster, time.milliseconds());
+
+        MockClient client = new MockClient(time);
+        client.setNode(node);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
@@ -376,12 +381,14 @@ public class KafkaConsumerTest {
         int autoCommitIntervalMs = 10000;
 
         Time time = new MockTime();
-        MockClient client = new MockClient(time);
         Cluster cluster = TestUtils.singletonCluster(topic, 1);
         Node node = cluster.nodes().get(0);
-        client.setNode(node);
+
         Metadata metadata = new Metadata(0, Long.MAX_VALUE);
         metadata.update(cluster, time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
@@ -415,12 +422,14 @@ public class KafkaConsumerTest {
         int autoCommitIntervalMs = 1000;
 
         Time time = new MockTime();
-        MockClient client = new MockClient(time);
         Cluster cluster = TestUtils.singletonCluster(topic, 1);
         Node node = cluster.nodes().get(0);
-        client.setNode(node);
+
         Metadata metadata = new Metadata(0, Long.MAX_VALUE);
         metadata.update(cluster, time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
@@ -449,12 +458,14 @@ public class KafkaConsumerTest {
         int autoCommitIntervalMs = 1000;
 
         Time time = new MockTime();
-        MockClient client = new MockClient(time);
         Cluster cluster = TestUtils.singletonCluster(topic, 1);
         Node node = cluster.nodes().get(0);
-        client.setNode(node);
+
         Metadata metadata = new Metadata(0, Long.MAX_VALUE);
         metadata.update(cluster, time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
@@ -495,12 +506,14 @@ public class KafkaConsumerTest {
         int autoCommitIntervalMs = 1000;
 
         Time time = new MockTime();
-        MockClient client = new MockClient(time);
         Cluster cluster = TestUtils.singletonCluster(topic, 1);
         Node node = cluster.nodes().get(0);
-        client.setNode(node);
+
         Metadata metadata = new Metadata(0, Long.MAX_VALUE);
         metadata.update(cluster, time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
@@ -528,6 +541,91 @@ public class KafkaConsumerTest {
     }
 
     @Test
+    public void testRegexSubscription() {
+        int rebalanceTimeoutMs = 60000;
+        int sessionTimeoutMs = 30000;
+        int heartbeatIntervalMs = 3000;
+        int autoCommitIntervalMs = 1000;
+
+        String unmatchedTopic = "unmatched";
+
+        Time time = new MockTime();
+
+        Map<String, Integer> topicMetadata = new HashMap<>();
+        topicMetadata.put(topic, 1);
+        topicMetadata.put(unmatchedTopic, 1);
+
+        Cluster cluster = TestUtils.clusterWith(1, topicMetadata);
+        Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+        Node node = cluster.nodes().get(0);
+
+        MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
+        PartitionAssignor assignor = new RoundRobinAssignor();
+
+        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
+                rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, true, autoCommitIntervalMs);
+
+
+        prepareRebalance(client, node, singleton(topic), assignor, singletonList(tp0), null);
+
+        consumer.subscribe(Pattern.compile(topic), getConsumerRebalanceListener(consumer));
+
+        client.prepareMetadataUpdate(cluster);
+
+        consumer.poll(0);
+        assertEquals(singleton(topic), consumer.subscription());
+        assertEquals(singleton(tp0), consumer.assignment());
+    }
+
+    @Test
+    public void testChangingRegexSubscription() {
+        int rebalanceTimeoutMs = 60000;
+        int sessionTimeoutMs = 30000;
+        int heartbeatIntervalMs = 3000;
+        int autoCommitIntervalMs = 1000;
+        PartitionAssignor assignor = new RoundRobinAssignor();
+
+        String otherTopic = "other";
+        TopicPartition otherTopicPartition = new TopicPartition(otherTopic, 0);
+
+        Time time = new MockTime();
+
+        Map<String, Integer> topicMetadata = new HashMap<>();
+        topicMetadata.put(topic, 1);
+        topicMetadata.put(otherTopic, 1);
+
+        Cluster cluster = TestUtils.clusterWith(1, topicMetadata);
+        Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+        Node node = cluster.nodes().get(0);
+
+        MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
+
+        metadata.update(cluster, time.milliseconds());
+
+        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
+                rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, false, autoCommitIntervalMs);
+
+        Node coordinator = prepareRebalance(client, node, singleton(topic), assignor, singletonList(tp0), null);
+        consumer.subscribe(Pattern.compile(topic), getConsumerRebalanceListener(consumer));
+
+        client.prepareMetadataUpdate(cluster);
+
+        consumer.poll(0);
+        assertEquals(singleton(topic), consumer.subscription());
+
+        consumer.subscribe(Pattern.compile(otherTopic), getConsumerRebalanceListener(consumer));
+
+        client.prepareMetadataUpdate(cluster);
+
+        prepareRebalance(client, node, singleton(otherTopic), assignor, singletonList(otherTopicPartition), coordinator);
+        consumer.poll(0);
+
+        assertEquals(singleton(otherTopic), consumer.subscription());
+    }
+
+    @Test
     public void testWakeupWithFetchDataAvailable() {
         int rebalanceTimeoutMs = 60000;
         int sessionTimeoutMs = 30000;
@@ -538,12 +636,14 @@ public class KafkaConsumerTest {
         int autoCommitIntervalMs = 1000;
 
         Time time = new MockTime();
-        MockClient client = new MockClient(time);
         Cluster cluster = TestUtils.singletonCluster(topic, 1);
         Node node = cluster.nodes().get(0);
-        client.setNode(node);
+
         Metadata metadata = new Metadata(0, Long.MAX_VALUE);
         metadata.update(cluster, time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
@@ -585,12 +685,14 @@ public class KafkaConsumerTest {
         int autoCommitIntervalMs = 1000;
 
         Time time = new MockTime();
-        MockClient client = new MockClient(time);
         Cluster cluster = TestUtils.singletonCluster(singletonMap(topic, 1));
         Node node = cluster.nodes().get(0);
-        client.setNode(node);
+
         Metadata metadata = new Metadata(0, Long.MAX_VALUE);
         metadata.update(cluster, time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
         PartitionAssignor assignor = new RangeAssignor();
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
@@ -627,16 +729,18 @@ public class KafkaConsumerTest {
         int autoCommitIntervalMs = 1000;
 
         Time time = new MockTime();
-        MockClient client = new MockClient(time);
         Map<String, Integer> tpCounts = new HashMap<>();
         tpCounts.put(topic, 1);
         tpCounts.put(topic2, 1);
         tpCounts.put(topic3, 1);
         Cluster cluster = TestUtils.singletonCluster(tpCounts);
         Node node = cluster.nodes().get(0);
-        client.setNode(node);
+
         Metadata metadata = new Metadata(0, Long.MAX_VALUE);
         metadata.update(cluster, time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
         PartitionAssignor assignor = new RangeAssignor();
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
@@ -745,15 +849,17 @@ public class KafkaConsumerTest {
         int autoCommitIntervalMs = 1000;
 
         Time time = new MockTime();
-        MockClient client = new MockClient(time);
         Map<String, Integer> tpCounts = new HashMap<>();
         tpCounts.put(topic, 1);
         tpCounts.put(topic2, 1);
         Cluster cluster = TestUtils.singletonCluster(tpCounts);
         Node node = cluster.nodes().get(0);
-        client.setNode(node);
+
         Metadata metadata = new Metadata(0, Long.MAX_VALUE);
         metadata.update(cluster, time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
         PartitionAssignor assignor = new RangeAssignor();
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
@@ -810,15 +916,17 @@ public class KafkaConsumerTest {
         int autoCommitIntervalMs = 1000;
 
         Time time = new MockTime();
-        MockClient client = new MockClient(time);
         Map<String, Integer> tpCounts = new HashMap<>();
         tpCounts.put(topic, 1);
         tpCounts.put(topic2, 1);
         Cluster cluster = TestUtils.singletonCluster(tpCounts);
         Node node = cluster.nodes().get(0);
-        client.setNode(node);
+
         Metadata metadata = new Metadata(0, Long.MAX_VALUE);
         metadata.update(cluster, time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
         PartitionAssignor assignor = new RangeAssignor();
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
@@ -872,15 +980,17 @@ public class KafkaConsumerTest {
         int autoCommitIntervalMs = 1000;
 
         Time time = new MockTime();
-        MockClient client = new MockClient(time);
         Map<String, Integer> tpCounts = new HashMap<>();
         tpCounts.put(topic, 1);
         tpCounts.put(topic2, 1);
         Cluster cluster = TestUtils.singletonCluster(tpCounts);
         Node node = cluster.nodes().get(0);
-        client.setNode(node);
+
         Metadata metadata = new Metadata(0, Long.MAX_VALUE);
         metadata.update(cluster, time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
         PartitionAssignor assignor = new RangeAssignor();
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
@@ -971,6 +1081,29 @@ public class KafkaConsumerTest {
                     consumer.seek(partition, 0);
             }
         };
+    }
+
+    private Node prepareRebalance(MockClient client, Node node, final Set<String> subscribedTopics, PartitionAssignor assignor, List<TopicPartition> partitions, Node coordinator) {
+        if (coordinator == null) {
+            // lookup coordinator
+            client.prepareResponseFrom(new GroupCoordinatorResponse(Errors.NONE.code(), node).toStruct(), node);
+            coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        }
+
+        // join group
+        client.prepareResponseFrom(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(ClientRequest request) {
+                JoinGroupRequest joinGroupRequest = new JoinGroupRequest(request.request().body());
+                PartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(joinGroupRequest.groupProtocols().get(0).metadata());
+                return subscribedTopics.equals(new HashSet<>(subscription.topics()));
+            }
+        }, joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE.code()), coordinator);
+
+        // sync group
+        client.prepareResponseFrom(syncGroupResponse(partitions, Errors.NONE.code()), coordinator);
+
+        return coordinator;
     }
 
     private Node prepareRebalance(MockClient client, Node node, PartitionAssignor assignor, List<TopicPartition> partitions, Node coordinator) {
