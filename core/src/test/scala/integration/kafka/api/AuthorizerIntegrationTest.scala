@@ -568,10 +568,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       assertEquals(Set(topic).asJava, consumer.subscription)
 
       // now authorize the user for the internal topic and verify that we can subscribe
-      addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)),  new Resource(Topic, kafka.common.Topic.GroupMetadataTopicName))
+      addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), Resource(Topic, kafka.common.Topic.GroupMetadataTopicName))
       consumer.subscribe(Pattern.compile(kafka.common.Topic.GroupMetadataTopicName), new NoOpConsumerRebalanceListener)
       consumer.poll(0)
-      assertEquals(Set(kafka.common.Topic.GroupMetadataTopicName), consumer.subscription().asScala)
+      assertEquals(Set(kafka.common.Topic.GroupMetadataTopicName), consumer.subscription.asScala)
     } finally consumer.close()
   }
 
