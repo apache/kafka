@@ -76,8 +76,8 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
         logger.debug(s"Removing $prop from broker ${kafkaConfig.brokerId} for topic $topic")
       }
     }
-    updateThrottledList(LogConfig.LeaderThrottledReplicasListProp, quotas.leader)
-    updateThrottledList(LogConfig.FollowerThrottledReplicasListProp, quotas.follower)
+    updateThrottledList(LogConfig.LeaderReplicationThrottledReplicasProp, quotas.leader)
+    updateThrottledList(LogConfig.FollowerReplicationThrottledReplicasProp, quotas.follower)
   }
 
   def parseThrottledPartitions(topicConfig: Properties, brokerId: Int, prop: String): Seq[Int] = {
@@ -159,11 +159,11 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig, private val quo
       if (properties.containsKey(prop))
         properties.getProperty(prop).toLong
       else
-        DefaultThrottledReplicationRate
+        DefaultReplicationThrottledRate
     }
     if (brokerConfig.brokerId == brokerId.trim.toInt) {
-      quotaManagers.leader.updateQuota(upperBound(getOrDefault(ThrottledLeaderReplicationRateProp)))
-      quotaManagers.follower.updateQuota(upperBound(getOrDefault(ThrottledFollowerReplicationRateProp)))
+      quotaManagers.leader.updateQuota(upperBound(getOrDefault(LeaderReplicationThrottledRateProp)))
+      quotaManagers.follower.updateQuota(upperBound(getOrDefault(FollowerReplicationThrottledRateProp)))
     }
   }
 }

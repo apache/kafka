@@ -54,12 +54,12 @@ class DynamicConfigTest {
   @Test(expected = classOf[ConfigException])
   def shouldFailLeaderConfigsWithInvalidValues() {
     AdminUtils.changeBrokerConfig(zkUtils, Seq(0),
-      propsWith(DynamicConfig.Broker.ThrottledLeaderReplicationRateProp, "-100"))
+      propsWith(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "-100"))
   }
 
   @Test(expected = classOf[ConfigException])
   def shouldFailFollowerConfigsWithInvalidValues() {
     AdminUtils.changeBrokerConfig(zkUtils, Seq(0),
-      propsWith(DynamicConfig.Broker.ThrottledFollowerReplicationRateProp, "-100"))
+      propsWith(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "-100"))
   }
 }
