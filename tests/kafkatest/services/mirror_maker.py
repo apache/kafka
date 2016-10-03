@@ -72,7 +72,7 @@ class MirrorMaker(KafkaPathResolverMixin, Service):
         }
 
     def __init__(self, context, num_nodes, source, target, whitelist=None, blacklist=None, num_streams=1,
-                 new_consumer=False, consumer_timeout_ms=None, offsets_storage="kafka",
+                 new_consumer=True, consumer_timeout_ms=None, offsets_storage="kafka",
                  offset_commit_interval_ms=60000, log_level="DEBUG", producer_interceptor_classes=None):
         """
         MirrorMaker mirrors messages from one or more source clusters to a single destination cluster.

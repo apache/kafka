@@ -48,7 +48,7 @@ class MessageFormatChangeTest(ProduceConsumeValidateTest):
                                            message_validator=is_int,
                                            version=KafkaVersion(producer_version))
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka,
-                                        self.topic, consumer_timeout_ms=30000,
+                                        self.topic, new_consumer=False, consumer_timeout_ms=30000,
                                         message_validator=is_int, version=KafkaVersion(consumer_version))
         self.consumer.group_id = group
         self.run_produce_consume_validate(lambda: wait_until(
