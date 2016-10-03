@@ -84,8 +84,8 @@ object ReassignPartitionsCommand extends Logging {
       for (brokerId <- zkUtils.getAllBrokersInCluster().map(_.id)) {
         val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Broker, brokerId.toString)
         // bitwise OR as we don't want to short-circuit
-        if (configs.remove(DynamicConfig.Broker.ThrottledLeaderReplicationRateProp) != null
-          | configs.remove(DynamicConfig.Broker.ThrottledFollowerReplicationRateProp) != null){
+        if (configs.remove(DynamicConfig.Broker.LeaderReplicationThrottledRateProp) != null
+          | configs.remove(DynamicConfig.Broker.FollowerReplicationThrottledRateProp) != null){
           AdminUtils.changeBrokerConfig(zkUtils, Seq(brokerId), configs)
           changed = true
         }
@@ -96,8 +96,8 @@ object ReassignPartitionsCommand extends Logging {
       for (topic <- topics) {
         val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
         // bitwise OR as we don't want to short-circuit
-        if (configs.remove(LogConfig.LeaderThrottledReplicasListProp) != null
-          | configs.remove(LogConfig.FollowerThrottledReplicasListProp) != null){
+        if (configs.remove(LogConfig.LeaderReplicationThrottledReplicasProp) != null
+          | configs.remove(LogConfig.FollowerReplicationThrottledReplicasProp) != null){
           AdminUtils.changeTopicConfig(zkUtils, topic, configs)
           changed = true
         }
@@ -330,8 +330,8 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
 
       for (id <- brokers) {
         val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Broker, id.toString)
-        configs.put(DynamicConfig.Broker.ThrottledLeaderReplicationRateProp, throttle.toString)
-        configs.put(DynamicConfig.Broker.ThrottledFollowerReplicationRateProp, throttle.toString)
+        configs.put(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, throttle.toString)
+        configs.put(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, throttle.toString)
         AdminUtils.changeBrokerConfig(zkUtils, Seq(id), configs)
       }
       println(s"The throttle limit was set to $throttle B/s")
@@ -350,8 +350,8 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
       val follower = format(postRebalanceReplicasThatMoved(existing, proposed))
 
       val configs = admin.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
-      configs.put(LeaderThrottledReplicasListProp, leader)
-      configs.put(FollowerThrottledReplicasListProp, follower)
+      configs.put(LeaderReplicationThrottledReplicasProp, leader)
+      configs.put(FollowerReplicationThrottledReplicasProp, follower)
       admin.changeTopicConfig(zkUtils, topic, configs)
 
       debug(s"Updated leader-throttled replicas for topic $topic with: $leader")

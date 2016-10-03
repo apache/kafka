@@ -392,8 +392,8 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
       val props = new Properties()
       props.setProperty(LogConfig.MaxMessageBytesProp, messageSize.toString)
       props.setProperty(LogConfig.RetentionMsProp, retentionMs.toString)
-      props.setProperty(LogConfig.LeaderThrottledReplicasListProp, throttledLeaders)
-      props.setProperty(LogConfig.FollowerThrottledReplicasListProp, throttledFollowers)
+      props.setProperty(LogConfig.LeaderReplicationThrottledReplicasProp, throttledLeaders)
+      props.setProperty(LogConfig.FollowerReplicationThrottledReplicasProp, throttledFollowers)
       props
     }
 
@@ -411,8 +411,8 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
           assertTrue(log.isDefined)
           assertEquals(retentionMs, log.get.config.retentionMs)
           assertEquals(messageSize, log.get.config.maxMessageSize)
-          checkList(log.get.config.leaderThrottledReplicasList, throttledLeaders)
-          checkList(log.get.config.followerThrottledReplicasList, throttledFollowers)
+          checkList(log.get.config.LeaderReplicationThrottledReplicas, throttledLeaders)
+          checkList(log.get.config.FollowerReplicationThrottledReplicas, throttledFollowers)
           assertEquals(quotaManagerIsThrottled, server.quotaManagers.leader.isThrottled(TopicAndPartition(topic, part)))
         }
       }
@@ -450,7 +450,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
       checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1", quotaManagerIsThrottled = true)
 
       //Now ensure updating to "" removes the throttled replica list also
-      AdminUtils.changeTopicConfig(server.zkUtils, topic, propsWith((LogConfig.FollowerThrottledReplicasListProp, ""), (LogConfig.LeaderThrottledReplicasListProp, "")))
+      AdminUtils.changeTopicConfig(server.zkUtils, topic, propsWith((LogConfig.FollowerReplicationThrottledReplicasProp, ""), (LogConfig.LeaderReplicationThrottledReplicasProp, "")))
       checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, "", "",  quotaManagerIsThrottled = false)
 
     } finally {
@@ -478,27 +478,27 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
       // Set the limit & check it is applied to the log
       changeBrokerConfig(zkUtils, brokerIds, propsWith(
-        (ThrottledLeaderReplicationRateProp, limit.toString),
-        (ThrottledFollowerReplicationRateProp, limit.toString)))
+        (LeaderReplicationThrottledRateProp, limit.toString),
+        (FollowerReplicationThrottledRateProp, limit.toString)))
       checkConfig(limit)
 
       // Now double the config values for the topic and check that it is applied
       val newLimit = 2 * limit
       changeBrokerConfig(zkUtils, brokerIds,  propsWith(
-        (ThrottledLeaderReplicationRateProp, newLimit.toString),
-        (ThrottledFollowerReplicationRateProp, newLimit.toString)))
+        (LeaderReplicationThrottledRateProp, newLimit.toString),
+        (FollowerReplicationThrottledRateProp, newLimit.toString)))
       checkConfig(newLimit)
 
       // Verify that the same config can be read from ZK
       for (brokerId <- brokerIds) {
         val configInZk = AdminUtils.fetchEntityConfig(servers(brokerId).zkUtils, ConfigType.Broker, brokerId.toString)
-        assertEquals(newLimit, configInZk.getProperty(ThrottledLeaderReplicationRateProp).toInt)
-        assertEquals(newLimit, configInZk.getProperty(ThrottledFollowerReplicationRateProp).toInt)
+        assertEquals(newLimit, configInZk.getProperty(LeaderReplicationThrottledRateProp).toInt)
+        assertEquals(newLimit, configInZk.getProperty(FollowerReplicationThrottledRateProp).toInt)
       }
 
       //Now delete the config
       changeBrokerConfig(servers(0).zkUtils, brokerIds, new Properties)
-      checkConfig(DefaultThrottledReplicationRate)
+      checkConfig(DefaultReplicationThrottledRate)
 
     } finally {
       servers.foreach(_.shutdown())

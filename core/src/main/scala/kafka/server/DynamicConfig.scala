@@ -33,25 +33,25 @@ object DynamicConfig {
 
   object Broker {
     //Properties
-    val ThrottledLeaderReplicationRateProp = "leader.replication.throttled.rate"
-    val ThrottledFollowerReplicationRateProp = "follower.replication.throttled.rate"
+    val LeaderReplicationThrottledRateProp = "leader.replication.throttled.rate"
+    val FollowerReplicationThrottledRateProp = "follower.replication.throttled.rate"
 
     //Defaults
-    val DefaultThrottledReplicationRate = ReplicationQuotaManagerConfig.QuotaBytesPerSecondDefault
+    val DefaultReplicationThrottledRate = ReplicationQuotaManagerConfig.QuotaBytesPerSecondDefault
 
     //Documentation
-    val ThrottledLeaderReplicationRateDoc = "A long representing the upper bound (bytes/sec) on replication traffic for leaders enumerated in the " +
-      s"property ${LogConfig.LeaderThrottledReplicasListProp} (for each topic). This property can be only set dynamically. It is suggested that the " +
+    val LeaderReplicationThrottledRateDoc = "A long representing the upper bound (bytes/sec) on replication traffic for leaders enumerated in the " +
+      s"property ${LogConfig.LeaderReplicationThrottledReplicasProp} (for each topic). This property can be only set dynamically. It is suggested that the " +
       s"limit be kept above 1MB/s for accurate behaviour."
-    val ThrottledFollowerReplicationRateDoc = "A long representing the upper bound (bytes/sec) on replication traffic for followers enumerated in the " +
-      s"property ${LogConfig.FollowerThrottledReplicasListProp} (for each topic). This property can be only set dynamically. It is suggested that the " +
+    val FollowerReplicationThrottledRateDoc = "A long representing the upper bound (bytes/sec) on replication traffic for followers enumerated in the " +
+      s"property ${LogConfig.FollowerReplicationThrottledReplicasProp} (for each topic). This property can be only set dynamically. It is suggested that the " +
       s"limit be kept above 1MB/s for accurate behaviour."
 
     //Definitions
     private val brokerConfigDef = new ConfigDef()
       //round minimum value down, to make it easier for users.
-      .define(ThrottledLeaderReplicationRateProp, LONG, DefaultThrottledReplicationRate, atLeast(0), MEDIUM, ThrottledLeaderReplicationRateDoc)
-      .define(ThrottledFollowerReplicationRateProp, LONG, DefaultThrottledReplicationRate, atLeast(0), MEDIUM, ThrottledFollowerReplicationRateDoc)
+      .define(LeaderReplicationThrottledRateProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, LeaderReplicationThrottledRateDoc)
+      .define(FollowerReplicationThrottledRateProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, FollowerReplicationThrottledRateDoc)
 
     def names = brokerConfigDef.names
 
