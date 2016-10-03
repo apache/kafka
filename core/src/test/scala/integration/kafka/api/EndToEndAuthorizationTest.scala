@@ -240,7 +240,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       fail("exception expected")
     } catch {
       case e: TopicAuthorizationException =>
-      assertEquals(Set(topic).asJava, e.unauthorizedTopics())
+        assertEquals(Set(topic).asJava, e.unauthorizedTopics())
     }
   }
   
@@ -261,7 +261,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     noConsumeWithoutDescribeAclSetup
     consumers.head.subscribe(List(topic).asJava)
     // this should timeout since the consumer will not be able to fetch any metadata for the topic
-    consumeRecords(this.consumers.head, timeout=3000)
+    consumeRecords(this.consumers.head, timeout = 3000)
   }
   
   private def noConsumeWithoutDescribeAclSetup {

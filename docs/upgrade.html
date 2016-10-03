@@ -67,7 +67,7 @@ Note: Because new protocols are introduced, it is important to upgrade your Kafk
     <li> When using an Authorizer and a user doesn't have <b>Describe</b> authorization on a topic, the broker will no
          longer return TOPIC_AUTHORIZATION_FAILED errors to requests since this leaks topic names. Instead, the UNKNOWN_TOPIC_OR_PARTITION
          error code will be returned. This may cause unexpected timeouts or delays when using the producer and consumer since
-         Kafka clients will typically retry silently on unknown topic errors. You should consult the client logs if you
+         Kafka clients will typically retry automatically on unknown topic errors. You should consult the client logs if you
          suspect this could be happening.</li>
 </ul>
 
