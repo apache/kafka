@@ -253,7 +253,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testAuthorization() {
+  def testAuthorizationWithTopicExisting() {
     val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
       ApiKeys.METADATA -> createMetadataRequest,
       ApiKeys.PRODUCE -> createProduceRequest,
@@ -277,15 +277,25 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     for ((key, request) <- requestKeyToRequest) {
       removeAllAcls
       val resources = RequestKeysToAcls(key).map(_._1.resourceType).toSet
-      sendRequestAndVerifyResponseErrorCode(key, request, resources, isAuthorized = false)
-      for ((resource, acls) <- RequestKeysToAcls(key))
+      sendRequestAndVerifyResponseErrorCode(key, request, resources, isAuthorized = false, isAuthorizedTopicDescribe = false)
+
+      val resourceToAcls = RequestKeysToAcls(key)
+      resourceToAcls.get(topicResource).map { acls =>
+        val describeAcls = TopicDescribeAcl(topicResource)
+        val isAuthorized =  describeAcls == acls
+        addAndVerifyAcls(describeAcls, topicResource)
+        sendRequestAndVerifyResponseErrorCode(key, request, resources, isAuthorized = isAuthorized, isAuthorizedTopicDescribe = true)
+        removeAllAcls
+      }
+
+      for ((resource, acls) <- resourceToAcls)
         addAndVerifyAcls(acls, resource)
-      sendRequestAndVerifyResponseErrorCode(key, request, resources, isAuthorized = true)
+      sendRequestAndVerifyResponseErrorCode(key, request, resources, isAuthorized = true, isAuthorizedTopicDescribe = false)
     }
   }
 
   /*
-   * checking that whether the topic exists or not, when unauthorized, FETCH and PRODUCE do not leak the topic name
+   * even if the topic doesn't exist, request APIs should not leak the topic name
    */
   @Test
   def testAuthorizationWithTopicNotExisting() {
@@ -293,20 +303,33 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     TestUtils.verifyTopicDeletion(zkUtils, topic, 1, servers)
     AdminUtils.deleteTopic(zkUtils, deleteTopic)
     TestUtils.verifyTopicDeletion(zkUtils, deleteTopic, 1, servers)
-    
+
     val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
       ApiKeys.PRODUCE -> createProduceRequest,
       ApiKeys.FETCH -> createFetchRequest,
+      ApiKeys.LIST_OFFSETS -> createListOffsetsRequest,
+      ApiKeys.OFFSET_COMMIT -> createOffsetCommitRequest,
+      ApiKeys.OFFSET_FETCH -> createOffsetFetchRequest,
       ApiKeys.DELETE_TOPICS -> deleteTopicsRequest
     )
 
     for ((key, request) <- requestKeyToRequest) {
       removeAllAcls
       val resources = RequestKeysToAcls(key).map(_._1.resourceType).toSet
-      sendRequestAndVerifyResponseErrorCode(key, request, resources, isAuthorized = false, topicExists = false)
-      for ((resource, acls) <- RequestKeysToAcls(key))
+      sendRequestAndVerifyResponseErrorCode(key, request, resources, isAuthorized = false, isAuthorizedTopicDescribe = false, topicExists = false)
+
+      val resourceToAcls = RequestKeysToAcls(key)
+      resourceToAcls.get(topicResource).map { acls =>
+        val describeAcls = TopicDescribeAcl(topicResource)
+        val isAuthorized =  describeAcls == acls
+        addAndVerifyAcls(describeAcls, topicResource)
+        sendRequestAndVerifyResponseErrorCode(key, request, resources, isAuthorized = isAuthorized, isAuthorizedTopicDescribe = true, topicExists = false)
+        removeAllAcls
+      }
+
+      for ((resource, acls) <- resourceToAcls)
         addAndVerifyAcls(acls, resource)
-      sendRequestAndVerifyResponseErrorCode(key, request, resources, isAuthorized = true, topicExists = false)
+      sendRequestAndVerifyResponseErrorCode(key, request, resources, isAuthorized = true, isAuthorizedTopicDescribe = false, topicExists = false)
     }
   }
 
@@ -495,7 +518,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       Assert.fail("Expected TopicAuthorizationException")
     } catch {
       case e: TopicAuthorizationException => //expected
-    } 
+    }
   }
 
   @Test
@@ -516,11 +539,12 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     consumer.subscribe(Pattern.compile(topicPattern), new NoOpConsumerRebalanceListener)
     consumeRecords(consumer)
 
-    // set the subscription pattern to an internal topic that the consumer has no read permission for, but since
-    // `exclude.internal.topics` is true by default, the subscription should be empty and no authorization exception
-    // should be thrown
+    // set the subscription pattern to an internal topic that the consumer has read permission to. Since
+    // internal topics are not included, we should not be assigned any partitions from this topic
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)),  new Resource(Topic, kafka.common.Topic.GroupMetadataTopicName))
     consumer.subscribe(Pattern.compile(kafka.common.Topic.GroupMetadataTopicName), new NoOpConsumerRebalanceListener)
-    assertTrue(consumer.poll(50).isEmpty)
+    consumer.poll(0)
+    assertTrue(consumer.assignment().isEmpty)
   }
 
   @Test
@@ -539,7 +563,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     try {
       consumer.subscribe(Pattern.compile(".*"), new NoOpConsumerRebalanceListener)
       consumeRecords(consumer)
-      assertEquals(Set[String](topic).asJava, consumer.subscription)
+      assertEquals(Set(topic).asJava, consumer.subscription)
     } finally consumer.close()
   }
 
@@ -733,27 +757,35 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
                                             request: AbstractRequest,
                                             resources: Set[ResourceType],
                                             isAuthorized: Boolean,
+                                            isAuthorizedTopicDescribe: Boolean,
                                             topicExists: Boolean = true): AbstractRequestResponse = {
     val resp = send(request, apiKey)
     val response = RequestKeyToResponseDeserializer(apiKey).getMethod("parse", classOf[ByteBuffer]).invoke(null, resp).asInstanceOf[AbstractRequestResponse]
-    val errorCode = RequestKeyToErrorCode(apiKey).asInstanceOf[(AbstractRequestResponse) => Short](response)
+    val error = Errors.forCode(RequestKeyToErrorCode(apiKey).asInstanceOf[(AbstractRequestResponse) => Short](response))
 
-    val possibleErrorCodes = resources.flatMap { resourceType =>
-      if (resourceType == Topic)
-          // When completely unauthorized topic resources must return an UNKNOWN_TOPIC_OR_PARTITION to prevent leaking topic names
-          Seq(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
-      else
-          Seq(resourceType.errorCode)
+    val authorizationErrorCodes = resources.flatMap { resourceType =>
+      if (resourceType == Topic) {
+        if (isAuthorized)
+          Set(Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.forCode(Topic.errorCode))
+        else if (!isAuthorizedTopicDescribe)
+          Set(Errors.UNKNOWN_TOPIC_OR_PARTITION)
+        else
+          Set(Errors.forCode(Topic.errorCode))
+      } else {
+        Set(Errors.forCode(resourceType.errorCode))
+      }
     }
 
     if (topicExists)
       if (isAuthorized)
-        assertFalse(s"${apiKey} should be allowed. Found error code $errorCode", possibleErrorCodes.contains(errorCode))
+        assertFalse(s"${apiKey} should be allowed. Found unexpected authorization error $error", authorizationErrorCodes.contains(error))
       else
-        assertTrue(s"${apiKey} should be forbidden. Found error code $errorCode but expected one of ${possibleErrorCodes.mkString(",")} ", possibleErrorCodes.contains(errorCode))
+        assertTrue(s"${apiKey} should be forbidden. Found error $error but expected one of $authorizationErrorCodes", authorizationErrorCodes.contains(error))
+    else if (resources == Set(Topic))
+      assertEquals(s"${apiKey} had an unexpected error", Errors.UNKNOWN_TOPIC_OR_PARTITION, error)
     else
-      assertEquals(s"${apiKey} - Found error code $errorCode", Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), errorCode) 
-      
+      assertNotEquals(s"${apiKey} had an unexpected error", Errors.TOPIC_AUTHORIZATION_FAILED, error)
+
     response
   }
 
