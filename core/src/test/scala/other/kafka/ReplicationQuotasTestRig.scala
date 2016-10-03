@@ -36,61 +36,94 @@ import org.jfree.data.xy.{XYSeries, XYSeriesCollection}
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq, mutable}
 
-object ReplicationQuotasPerformance {
+object ReplicationQuotasTestRig {
+  val debugLogging = false
   new File("Experiments").mkdir()
   private val dir = "Experiments/Run" + System.currentTimeMillis().toString.substring(8)
   new File(dir).mkdir()
-  private val log = new File(dir, "Log.txt")
-  private var showGraphsOnExperimentCompletion = false
+
 
   def main(args: Array[String]): Unit = {
-    if (args.length > 0 && args(0) == "graph") showGraphsOnExperimentCompletion = true
+    val displayChartsOnScreen = if (args.length > 0 && args(0) == "graph") true else false
+    val journal = new Journal()
 
-    val configs = Seq(
-      new Config("Experiment1", brokers = 5, partitions = 5, throttle = 1000 * 1000, msgCount = 100, msgSize = 100 * 1000),
-      new Config("Experiment2", brokers = 5, partitions = 50, throttle = 10 * 1000 * 1000, msgCount = 10 * 100, msgSize = 100 * 1000),
-      new Config("Experiment3", brokers = 50, partitions = 50, throttle = 2 * 1000 * 1000, msgCount = 10 * 100, msgSize = 100 * 1000),
-      new Config("Experiment4", brokers = 25, partitions = 100, throttle = 4 * 1000 * 1000, msgCount = 1 * 1000, msgSize = 100 * 1000),
-      new Config("Experiment5", brokers = 5, partitions = 50, throttle = 50 * 1000 * 1000, msgCount = 1 * 1000, msgSize = 100 * 1000)
+    val experiments = Seq(
+//      new Config("Experiment1", brokers = 5, partitions = 20, throttle = 1000 * 1000, msgsPerPartition = 100, msgSize = 100 * 1000),
+//      new Config("Experiment2", brokers = 5, partitions = 50, throttle = 10 * 1000 * 1000, msgsPerPartition = 10 * 100, msgSize = 100 * 1000),
+//      new Config("Experiment3", brokers = 50, partitions = 50, throttle = 2 * 1000 * 1000, msgsPerPartition = 10 * 100, msgSize = 100 * 1000),
+//      new Config("Experiment4", brokers = 25, partitions = 100, throttle = 4 * 1000 * 1000, msgsPerPartition = 1 * 1000, msgSize = 100 * 1000),
+      new Config("Experiment5", brokers = 5, partitions = 50, throttle = 50 * 1000 * 1000, msgsPerPartition = 5 * 1000, msgSize = 100 * 1000)
     )
-    configs.foreach(run(_))
-    if(!showGraphsOnExperimentCompletion)
+    experiments.foreach(run(_, journal, displayChartsOnScreen))
+
+    if (!displayChartsOnScreen)
       System.exit(0)
   }
 
-  def run(config: Config) {
+  def run(config: Config, journal: Journal, displayChartsOnScreen: Boolean) {
     val experiment = new Experiment()
     try {
       experiment.setUp
-      experiment.run(config)
+      experiment.run(config, journal, displayChartsOnScreen)
+      journal.footer()
     }
-    catch {case e: Exception => e.printStackTrace()}
+    catch {
+      case e: Exception => e.printStackTrace()
+    }
     finally {
       experiment.tearDown
     }
   }
 
-  case class Config(name: String, brokers: Int, partitions: Int, throttle: Long, msgCount: Int, msgSize: Int) {
-    val targetBytesPerBrokerMB: Long = msgCount.toLong * msgSize.toLong * partitions.toLong / brokers.toLong / 1000000
-    appendToJournal
+  case class Config(name: String, brokers: Int, partitions: Int, throttle: Long, msgsPerPartition: Int, msgSize: Int) {
+    val targetBytesPerBrokerMB: Long = msgsPerPartition.toLong * msgSize.toLong * partitions.toLong / brokers.toLong / 1000000
+  }
 
-    def appendToJournal(): Unit = {
-      val stream = new FileOutputStream(
-        log,
-        true)
-      val message = s"\n\n$name " +
-        s"\n\t- BrokerCount: $brokers" +
-        s"\n\t- PartitionCount: $partitions" +
-        f"\n\t- Throttle: $throttle%,.0f MB/s" +
-        f"\n\t- MsgCount: $msgCount%,.0f " +
-        f"\n\t- MsgSize: $msgSize%,.0f " +
-        s"\n\t- TargetBytesPerBrokerMB: $targetBytesPerBrokerMB\n\n"
+  class Journal {
+    private val log = new File(dir, "Log.html")
+    header()
 
+    def appendToJournal(config: Config): Unit = {
+      val message = s"\n\n<h3>${config.name}</h3>" +
+        s"<p>- BrokerCount: ${config.brokers}" +
+        s"<p>- PartitionCount: ${config.partitions}" +
+        f"<p>- Throttle: ${config.throttle}%,.0f MB/s" +
+        f"<p>- MsgCount: ${config.msgsPerPartition}%,.0f " +
+        f"<p>- MsgSize: ${config.msgSize}%,.0f" +
+        s"<p>- TargetBytesPerBrokerMB: ${config.targetBytesPerBrokerMB}\n\n"
+      append(message)
+    }
+
+    def appendChart(path: String, first: Boolean): Unit = {
+      val message = new StringBuilder
+      if (first)
+        message.append("<p><p>")
+      message.append("<img src=\"" + path + "\" alt=\"Chart\" style=\"width:600px;height:400px;align=\"middle\"\">")
+      if (!first)
+        message.append("<p><p>")
+      append(message.toString())
+    }
+
+    def header(): Unit = {
+      val message = "<html><head><h1>Replication Quotas Test Rig</h1></head><body>"
+      append(message)
+    }
+
+    def footer(): Unit = {
+      val message = "</body></html>"
+      append(message)
+    }
+
+    def append(message: String): Unit = {
+      val stream = new FileOutputStream(log, true)
       new PrintWriter(stream) {
         append(message)
         close
       }
-      println(message)
+    }
+
+    def path(): String = {
+      log.getAbsolutePath
     }
   }
 
@@ -114,7 +147,7 @@ object ReplicationQuotasPerformance {
       super.tearDown()
     }
 
-    def run(config: Config) {
+    def run(config: Config, journal: Journal, displayChartsOnScreen: Boolean) {
       experimentName = config.name
       val brokers = (100 to 100 + config.brokers)
       var count = 0
@@ -131,7 +164,7 @@ object ReplicationQuotasPerformance {
 
       println("Writing Data")
       val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers), retries = 5, acks = 0)
-      (0 to config.msgCount).foreach { x =>
+      (0 to config.msgsPerPartition).foreach { x =>
         (0 to config.partitions).foreach { partition =>
           producer.send(new ProducerRecord(topicName, partition, null, new Array[Byte](config.msgSize)))
         }
@@ -144,9 +177,12 @@ object ReplicationQuotasPerformance {
       //Await completion
       waitForReassignmentToComplete()
 
-      renderChart(leaderRates, "Leader")
-      renderChart(followerRates, "Follower")
+      journal.appendToJournal(config)
+      renderChart(leaderRates, "Leader", journal, displayChartsOnScreen)
+      renderChart(followerRates, "Follower", journal, displayChartsOnScreen)
       logOutput(config, replicas, newAssignment)
+
+      println("Output can be found here: " + journal.path())
     }
 
     def logOutput(config: Config, replicas: Map[Int, Seq[Int]], newAssignment: Map[TopicAndPartition, Seq[Int]]): Unit = {
@@ -167,7 +203,7 @@ object ReplicationQuotasPerformance {
       println(s"numBrokers: ${config.brokers}")
       println(s"numPartitions: ${config.partitions}")
       println(s"throttle: ${config.throttle}")
-      println(s"numMessages: ${config.msgCount}")
+      println(s"numMessages: ${config.msgsPerPartition}")
       println(s"msgSize: ${config.msgSize}")
       println(s"We will write ${config.targetBytesPerBrokerMB / 1000000}MB of data per broker")
       println(s"Worst case duration is ${config.targetBytesPerBrokerMB / config.throttle}")
@@ -189,11 +225,12 @@ object ReplicationQuotasPerformance {
       }, s"Znode ${ZkUtils.ReassignPartitionsPath} wasn't deleted", Int.MaxValue, pause = 1000L)
     }
 
-    def renderChart(data: mutable.Map[Int, Array[Double]], name: String): Unit = {
+    def renderChart(data: mutable.Map[Int, Array[Double]], name: String, journal: Journal, displayChartsOnScreen: Boolean): Unit = {
       val dataset = new XYSeriesCollection
 
       data.foreach { case (broker, values) =>
-        println("Found values for broker " + broker + " = " + values.map(_.toString).toSeq)
+        if(debugLogging)
+          println("Found values for broker " + broker + " = " + values.map(_.toString).toSeq)
         val series = new XYSeries("Broker:" + broker)
         var x = 0
         values.foreach { value =>
@@ -211,9 +248,11 @@ object ReplicationQuotasPerformance {
         , PlotOrientation.VERTICAL, false, true, false
       )
 
-      saveToFile(chart.createBufferedImage(1000, 700), experimentName + "-" + name)
+      val file = new File(dir, experimentName + "-" + name + ".png")
+      ImageIO.write(chart.createBufferedImage(1000, 700), "png", file)
+      journal.appendChart(file.getAbsolutePath, name.eq("Leader"))
 
-      if(showGraphsOnExperimentCompletion) {
+      if (displayChartsOnScreen) {
         val frame = new ChartFrame(
           experimentName,
           chart
@@ -223,11 +262,6 @@ object ReplicationQuotasPerformance {
       }
 
       println(s"Chart generated for $name")
-    }
-
-    def saveToFile(img: BufferedImage, name: String) {
-      val out = new File(dir, name + ".png")
-      ImageIO.write(img, "png", out)
     }
 
     def record(rates: mutable.Map[Int, Array[Double]], brokerId: Int, currentRate: Double) = {
@@ -269,5 +303,6 @@ object ReplicationQuotasPerformance {
       s"""{"topics": [$topicStr],"version":1}"""
     }
   }
+
 }
 
