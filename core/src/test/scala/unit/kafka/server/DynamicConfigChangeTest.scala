@@ -203,11 +203,11 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val props: Properties = new Properties()
 
     //Given
-    props.put(LeaderThrottledReplicasListProp, "0:101,0:102,1:101,1:102")
+    props.put(LeaderReplicationThrottledReplicasProp, "0:101,0:102,1:101,1:102")
 
     //When/Then
-    assertEquals(Seq(0,1), configHandler.parseThrottledPartitions(props, 102, LeaderThrottledReplicasListProp))
-    assertEquals(Seq(), configHandler.parseThrottledPartitions(props, 103, LeaderThrottledReplicasListProp))
+    assertEquals(Seq(0,1), configHandler.parseThrottledPartitions(props, 102, LeaderReplicationThrottledReplicasProp))
+    assertEquals(Seq(), configHandler.parseThrottledPartitions(props, 103, LeaderReplicationThrottledReplicasProp))
   }
 
   @Test
@@ -216,10 +216,10 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val props: Properties = new Properties()
 
     //Given
-    props.put(LeaderThrottledReplicasListProp, "*")
+    props.put(LeaderReplicationThrottledReplicasProp, "*")
 
     //When
-    val result = configHandler.parseThrottledPartitions(props, 102, LeaderThrottledReplicasListProp)
+    val result = configHandler.parseThrottledPartitions(props, 102, LeaderReplicationThrottledReplicasProp)
 
     //Then
     assertEquals(AllReplicas, result)
@@ -231,10 +231,10 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val props: Properties = new Properties()
 
     //Given
-    props.put(FollowerThrottledReplicasListProp, "")
+    props.put(FollowerReplicationThrottledReplicasProp, "")
 
     //When
-    val result = configHandler.parseThrottledPartitions(props, 102, FollowerThrottledReplicasListProp)
+    val result = configHandler.parseThrottledPartitions(props, 102, FollowerReplicationThrottledReplicasProp)
 
     //Then
     assertEquals(Seq(), result)
@@ -251,6 +251,6 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   }
 
   def parse(configHandler: TopicConfigHandler, value: String): Seq[Int] = {
-    configHandler.parseThrottledPartitions(CoreUtils.propsWith(LeaderThrottledReplicasListProp, value), 102, LeaderThrottledReplicasListProp)
+    configHandler.parseThrottledPartitions(CoreUtils.propsWith(LeaderReplicationThrottledReplicasProp, value), 102, LeaderReplicationThrottledReplicasProp)
   }
 }

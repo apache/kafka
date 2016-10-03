@@ -66,8 +66,8 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
 
     val mock = new TestAdminUtils {
       override def changeTopicConfig(zkUtils: ZkUtils, topic: String, configChange: Properties): Unit = {
-        assertEquals("0:102", configChange.get(FollowerThrottledReplicasListProp)) //Should only be follower-throttle the moving replica
-        assertEquals("0:100,0:101", configChange.get(LeaderThrottledReplicasListProp)) //Should leader-throttle all existing (pre move) replicas
+        assertEquals("0:102", configChange.get(FollowerReplicationThrottledReplicasProp)) //Should only be follower-throttle the moving replica
+        assertEquals("0:100,0:101", configChange.get(LeaderReplicationThrottledReplicasProp)) //Should leader-throttle all existing (pre move) replicas
         calls += 1
       }
     }
@@ -88,8 +88,8 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
     // Then
     val mock = new TestAdminUtils {
       override def changeTopicConfig(zkUtils: ZkUtils, topic: String, configChange: Properties): Unit = {
-        assertEquals("0:102,1:102", configChange.get(FollowerThrottledReplicasListProp)) //Should only be follower-throttle the moving replica
-        assertEquals("0:100,0:101,1:100,1:101", configChange.get(LeaderThrottledReplicasListProp)) //Should leader-throttle all existing (pre move) replicas
+        assertEquals("0:102,1:102", configChange.get(FollowerReplicationThrottledReplicasProp)) //Should only be follower-throttle the moving replica
+        assertEquals("0:100,0:101,1:100,1:101", configChange.get(LeaderReplicationThrottledReplicasProp)) //Should leader-throttle all existing (pre move) replicas
         calls += 1
       }
     }
@@ -113,11 +113,11 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
       override def changeTopicConfig(zkUtils: ZkUtils, topic: String, configChange: Properties): Unit = {
         topic match {
           case "topic1" =>
-            assertEquals("0:100,0:101", configChange.get(LeaderThrottledReplicasListProp))
-            assertEquals("0:102", configChange.get(FollowerThrottledReplicasListProp))
+            assertEquals("0:100,0:101", configChange.get(LeaderReplicationThrottledReplicasProp))
+            assertEquals("0:102", configChange.get(FollowerReplicationThrottledReplicasProp))
           case "topic2" =>
-            assertEquals("0:101,0:102", configChange.get(LeaderThrottledReplicasListProp))
-            assertEquals("0:100", configChange.get(FollowerThrottledReplicasListProp))
+            assertEquals("0:101,0:102", configChange.get(LeaderReplicationThrottledReplicasProp))
+            assertEquals("0:100", configChange.get(FollowerReplicationThrottledReplicasProp))
           case _ => fail("Unexpected topic $topic")
         }
         calls += 1
@@ -152,11 +152,11 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
       override def changeTopicConfig(zkUtils: ZkUtils, topic: String, configChange: Properties): Unit = {
         topic match {
           case "topic1" =>
-            assertEquals("0:102,1:102", configChange.get(FollowerThrottledReplicasListProp))
-            assertEquals("0:100,0:101,1:100,1:101", configChange.get(LeaderThrottledReplicasListProp))
+            assertEquals("0:102,1:102", configChange.get(FollowerReplicationThrottledReplicasProp))
+            assertEquals("0:100,0:101,1:100,1:101", configChange.get(LeaderReplicationThrottledReplicasProp))
           case "topic2" =>
-            assertEquals("0:100,1:100", configChange.get(FollowerThrottledReplicasListProp))
-            assertEquals("0:101,0:102,1:101,1:102", configChange.get(LeaderThrottledReplicasListProp))
+            assertEquals("0:100,1:100", configChange.get(FollowerReplicationThrottledReplicasProp))
+            assertEquals("0:101,0:102,1:101,1:102", configChange.get(LeaderReplicationThrottledReplicasProp))
           case _ => fail()
         }
         calls += 1
@@ -180,8 +180,8 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
     // Then
     val mock = new TestAdminUtils {
       override def changeTopicConfig(zkUtils: ZkUtils, topic: String, configChange: Properties) = {
-        assertEquals("0:104,0:105", configChange.get(FollowerThrottledReplicasListProp)) //Should only be follower-throttle the moving replicas
-        assertEquals("0:100,0:101,0:102,0:103", configChange.get(LeaderThrottledReplicasListProp)) //Should leader-throttle all existing (pre move) replicas
+        assertEquals("0:104,0:105", configChange.get(FollowerReplicationThrottledReplicasProp)) //Should only be follower-throttle the moving replicas
+        assertEquals("0:100,0:101,0:102,0:103", configChange.get(LeaderReplicationThrottledReplicasProp)) //Should leader-throttle all existing (pre move) replicas
         calls += 1
       }
     }

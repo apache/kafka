@@ -54,8 +54,8 @@ object Defaults {
   val MessageFormatVersion = kafka.server.Defaults.LogMessageFormatVersion
   val MessageTimestampType = kafka.server.Defaults.LogMessageTimestampType
   val MessageTimestampDifferenceMaxMs = kafka.server.Defaults.LogMessageTimestampDifferenceMaxMs
-  val LeaderThrottledReplicasList = Collections.emptyList[String]()
-  val FollowerThrottledReplicasList = Collections.emptyList[String]()
+  val LeaderReplicationThrottledReplicas = Collections.emptyList[String]()
+  val FollowerReplicationThrottledReplicas = Collections.emptyList[String]()
 }
 
 case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfig.configDef, props, false) {
@@ -86,8 +86,8 @@ case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfi
   val messageFormatVersion = ApiVersion(getString(LogConfig.MessageFormatVersionProp))
   val messageTimestampType = TimestampType.forName(getString(LogConfig.MessageTimestampTypeProp))
   val messageTimestampDifferenceMaxMs = getLong(LogConfig.MessageTimestampDifferenceMaxMsProp).longValue
-  val leaderThrottledReplicasList = getList(LogConfig.LeaderThrottledReplicasListProp)
-  val followerThrottledReplicasList = getList(LogConfig.FollowerThrottledReplicasListProp)
+  val LeaderReplicationThrottledReplicas = getList(LogConfig.LeaderReplicationThrottledReplicasProp)
+  val FollowerReplicationThrottledReplicas = getList(LogConfig.FollowerReplicationThrottledReplicasProp)
 
   def randomSegmentJitter: Long =
     if (segmentJitterMs == 0) 0 else Utils.abs(scala.util.Random.nextInt()) % math.min(segmentJitterMs, segmentMs)
@@ -124,8 +124,8 @@ object LogConfig {
   val MessageFormatVersionProp = "message.format.version"
   val MessageTimestampTypeProp = "message.timestamp.type"
   val MessageTimestampDifferenceMaxMsProp = "message.timestamp.difference.max.ms"
-  val LeaderThrottledReplicasListProp = "leader.replication.throttled.replicas"
-  val FollowerThrottledReplicasListProp = "follower.replication.throttled.replicas"
+  val LeaderReplicationThrottledReplicasProp = "leader.replication.throttled.replicas"
+  val FollowerReplicationThrottledReplicasProp = "follower.replication.throttled.replicas"
 
   val SegmentSizeDoc = "This configuration controls the segment file size for " +
     "the log. Retention and cleaning is always done a file at a time so a larger " +
@@ -196,9 +196,9 @@ object LogConfig {
   val MessageTimestampDifferenceMaxMsDoc = "The maximum difference allowed between the timestamp when a broker receives " +
     "a message and the timestamp specified in the message. If message.timestamp.type=CreateTime, a message will be rejected " +
     "if the difference in timestamp exceeds this threshold. This configuration is ignored if message.timestamp.type=LogAppendTime."
-  val LeaderThrottledReplicasListDoc = "A list of replicas for which log replication should be throttled on the leader side. The list should describe a set of " +
+  val LeaderReplicationThrottledReplicasDoc = "A list of replicas for which log replication should be throttled on the leader side. The list should describe a set of " +
     "replicas in the form [PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:... or alternatively the wildcard '*' can be used to throttle all replicas for this topic."
-  val FollowerThrottledReplicasListDoc = "A list of replicas for which log replication should be throttled on the follower side. The list should describe a set of " +
+  val FollowerReplicationThrottledReplicasDoc = "A list of replicas for which log replication should be throttled on the follower side. The list should describe a set of " +
     "replicas in the form [PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:... or alternatively the wildcard '*' can be used to throttle all replicas for this topic."
 
   private class LogConfigDef extends ConfigDef {
@@ -289,10 +289,10 @@ object LogConfig {
         KafkaConfig.LogMessageTimestampTypeProp)
       .define(MessageTimestampDifferenceMaxMsProp, LONG, Defaults.MessageTimestampDifferenceMaxMs,
         atLeast(0), MEDIUM, MessageTimestampDifferenceMaxMsDoc, KafkaConfig.LogMessageTimestampDifferenceMaxMsProp)
-      .define(LeaderThrottledReplicasListProp, LIST, Defaults.LeaderThrottledReplicasList, ThrottledReplicaListValidator, MEDIUM,
-        LeaderThrottledReplicasListDoc, LeaderThrottledReplicasListProp)
-      .define(FollowerThrottledReplicasListProp, LIST, Defaults.FollowerThrottledReplicasList, ThrottledReplicaListValidator, MEDIUM,
-        FollowerThrottledReplicasListDoc, FollowerThrottledReplicasListProp)
+      .define(LeaderReplicationThrottledReplicasProp, LIST, Defaults.LeaderReplicationThrottledReplicas, ThrottledReplicaListValidator, MEDIUM,
+        LeaderReplicationThrottledReplicasDoc, LeaderReplicationThrottledReplicasProp)
+      .define(FollowerReplicationThrottledReplicasProp, LIST, Defaults.FollowerReplicationThrottledReplicas, ThrottledReplicaListValidator, MEDIUM,
+        FollowerReplicationThrottledReplicasDoc, FollowerReplicationThrottledReplicasProp)
   }
 
   def apply(): LogConfig = LogConfig(new Properties())
