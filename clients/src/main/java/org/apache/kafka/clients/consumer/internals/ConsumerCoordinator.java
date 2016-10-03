@@ -675,7 +675,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     return;
                 } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                     log.debug("Offset commit for group {} failed on partition {}: {}", groupId, tp, error.message());
-                    future.raise(new KafkaException("Partition " + tp + " may not exist or user may not have Describe access to topic: " + error.message()));
+                    future.raise(new KafkaException("Partition " + tp + " may not exist or user may not have Describe access to topic"));
                     return;
                 } else {
                     log.error("Group {} failed to commit partition {} at offset {}: {}", groupId, tp, offset, error.message());
@@ -739,7 +739,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         coordinatorDead();
                         future.raise(error);
                     } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
-                        future.raise(new KafkaException("Partition " + tp + " may not exist or user may not have Describe access to topic: " + error.message()));
+                        future.raise(new KafkaException("Partition " + tp + " may not exist or user may not have Describe access to topic"));
                     } else {
                         future.raise(new KafkaException("Unexpected error in fetch offset response: " + error.message()));
                     }
