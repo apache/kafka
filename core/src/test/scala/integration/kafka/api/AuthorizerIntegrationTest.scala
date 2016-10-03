@@ -544,11 +544,12 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)),  new Resource(Topic, kafka.common.Topic.GroupMetadataTopicName))
     consumer.subscribe(Pattern.compile(kafka.common.Topic.GroupMetadataTopicName), new NoOpConsumerRebalanceListener)
     consumer.poll(0)
+    assertTrue(consumer.subscription().isEmpty)
     assertTrue(consumer.assignment().isEmpty)
   }
 
   @Test
-  def testPatternSubscriptionMatchingInternalTopicWithNoPermission() {
+  def testPatternSubscriptionMatchingInternalTopic() {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
     sendRecords(1, tp)
     removeAllAcls()
@@ -561,9 +562,16 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val consumer = TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group,
       securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(consumerConfig))
     try {
+      // ensure that internal topics are not included if no permission
       consumer.subscribe(Pattern.compile(".*"), new NoOpConsumerRebalanceListener)
       consumeRecords(consumer)
       assertEquals(Set(topic).asJava, consumer.subscription)
+
+      // now authorize the user for the internal topic and verify that we can subscribe
+      addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)),  new Resource(Topic, kafka.common.Topic.GroupMetadataTopicName))
+      consumer.subscribe(Pattern.compile(kafka.common.Topic.GroupMetadataTopicName), new NoOpConsumerRebalanceListener)
+      consumer.poll(0)
+      assertEquals(Set(kafka.common.Topic.GroupMetadataTopicName), consumer.subscription().asScala)
     } finally consumer.close()
   }
 
