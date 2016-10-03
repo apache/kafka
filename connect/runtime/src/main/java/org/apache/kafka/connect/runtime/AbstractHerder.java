@@ -40,6 +40,7 @@ import org.apache.kafka.connect.tools.VerifiableSinkConnector;
 import org.apache.kafka.connect.tools.VerifiableSourceConnector;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.ReflectionsUtil;
+import org.eclipse.jetty.util.log.Log;
 import org.reflections.Reflections;
 import org.reflections.util.ClasspathHelper;
 import org.reflections.util.ConfigurationBuilder;
@@ -272,8 +273,10 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             }
             ReflectionsUtil.registerUrlTypes();
             ConfigurationBuilder builder = new ConfigurationBuilder().setUrls(ClasspathHelper.forJavaClassPath());
-            Reflections reflections = new Reflections(builder);
 
+            builder.getUrls().remove(ReflectionsUtil.stringtoURL("/"));
+
+            Reflections reflections = new Reflections(builder);
             Set<Class<? extends Connector>> connectorClasses = reflections.getSubTypesOf(Connector.class);
             connectorClasses.removeAll(EXCLUDES);
             List<ConnectorPluginInfo> connectorPlugins = new LinkedList<>();

@@ -19,6 +19,7 @@ import org.reflections.vfs.Vfs.Dir;
 import org.reflections.vfs.Vfs.File;
 import org.reflections.vfs.Vfs.UrlType;
 
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Arrays;
 import java.util.Collections;
@@ -42,6 +43,14 @@ public class ReflectionsUtil {
         Vfs.setDefaultURLTypes(urlTypes);
     }
 
+    public static URL stringtoURL(String path) {
+        try{
+            return new java.io.File(path).toURI().toURL();
+        } catch (MalformedURLException e) {
+            return null;
+        }
+
+    }
     private static class EmptyUrlType implements UrlType {
 
         private final List<String> endings;
