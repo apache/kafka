@@ -80,6 +80,36 @@ class CleanerTest extends JUnitSuite {
     assertEquals(shouldRemain, keysInLog(log))
   }
 
+  /**
+   * Test log cleaning with logs containing messages larger than default message size
+   */
+  @Test
+  def testLargeMessage() {
+    val largeMessageSize = 1024 * 1024
+    // Create cleaner with very small default max message size
+    val cleaner = makeCleaner(Int.MaxValue, maxMessageSize=1024)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, largeMessageSize * 16: java.lang.Integer)
+    logProps.put(LogConfig.MaxMessageBytesProp, largeMessageSize * 2: java.lang.Integer)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    while(log.numberOfSegments < 2)
+      log.append(message(log.logEndOffset.toInt, Array.fill(largeMessageSize)(0: Byte)))
+    val keysFound = keysInLog(log)
+    assertEquals(0L until log.logEndOffset, keysFound)
+
+    // pretend we have the following keys
+    val keys = immutable.ListSet(1, 3, 5, 7, 9)
+    val map = new FakeOffsetMap(Int.MaxValue)
+    keys.foreach(k => map.put(key(k), Long.MaxValue))
+
+    // clean the log
+    cleaner.cleanSegments(log, Seq(log.logSegments.head), map, 0L)
+    val shouldRemain = keysInLog(log).filter(!keys.contains(_))
+    assertEquals(shouldRemain, keysInLog(log))
+  }
+
   @Test
   def testCleaningWithDeletes(): Unit = {
     val cleaner = makeCleaner(Int.MaxValue)
@@ -598,11 +628,11 @@ class CleanerTest extends JUnitSuite {
 
   def noOpCheckDone(topicAndPartition: TopicAndPartition) { /* do nothing */  }
 
-  def makeCleaner(capacity: Int, checkDone: (TopicAndPartition) => Unit = noOpCheckDone) =
+  def makeCleaner(capacity: Int, checkDone: (TopicAndPartition) => Unit = noOpCheckDone, maxMessageSize: Int = 64*1024) =
     new Cleaner(id = 0, 
                 offsetMap = new FakeOffsetMap(capacity), 
-                ioBufferSize = 64*1024, 
-                maxIoBufferSize = 64*1024,
+                ioBufferSize = maxMessageSize,
+                maxIoBufferSize = maxMessageSize,
                 dupBufferLoadFactor = 0.75,
                 throttler = throttler, 
                 time = time,
@@ -615,9 +645,12 @@ class CleanerTest extends JUnitSuite {
   
   def key(id: Int) = ByteBuffer.wrap(id.toString.getBytes)
   
-  def message(key: Int, value: Int) = 
+  def message(key: Int, value: Int): ByteBufferMessageSet =
+    message(key, value.toString.getBytes)
+
+  def message(key: Int, value: Array[Byte]) =
     new ByteBufferMessageSet(new Message(key = key.toString.getBytes,
-                                         bytes = value.toString.getBytes,
+                                         bytes = value,
                                          timestamp = Message.NoTimestamp,
                                          magicValue = Message.MagicValue_V1))
 
