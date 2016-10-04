@@ -425,6 +425,16 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
   def checkWriteFullyToWithMessageSet(messageSet: ByteBufferMessageSet) {
     checkWriteWithMessageSet(messageSet, messageSet.writeFullyTo)
   }
+
+  @Test
+  def testWriteFullyTo() {
+    checkWriteFullyToWithMessageSet(createMessageSet(Array[Message]()))
+    checkWriteFullyToWithMessageSet(createMessageSet(messages))
+  }
+
+  def checkWriteFullyToWithMessageSet(messageSet: ByteBufferMessageSet) {
+    checkWriteWithMessageSet(messageSet, messageSet.writeFullyTo)
+  }
   
   /* check that offsets are assigned based on byte offset from the given base offset */
   def checkOffsets(messages: ByteBufferMessageSet, baseOffset: Long) {
