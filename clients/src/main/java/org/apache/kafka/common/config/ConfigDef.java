@@ -913,12 +913,11 @@ public class ConfigDef {
                 if (key.hasDefault()) {
                     if (key.defaultValue == null)
                         return "null";
-                    else if (key.type == Type.STRING && key.defaultValue.toString().isEmpty())
+                    String defaultValueStr = convertToString(key.defaultValue, key.type);
+                    if (defaultValueStr.isEmpty())
                         return "\"\"";
-                    else if (key.type == Type.LIST && key.defaultValue instanceof List)
-                        return ((List) key.defaultValue).isEmpty() ? "\"\"" : Utils.join((List) key.defaultValue, ",");
                     else
-                        return key.defaultValue.toString();
+                        return defaultValueStr;
                 } else
                     return "";
             case "Valid Values":
