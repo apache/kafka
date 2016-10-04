@@ -138,17 +138,7 @@ object ReplicationQuotasTestRig {
       waitForReassignmentToComplete()
       println(s"Reassignment took ${(System.currentTimeMillis() - start)/1000}s")
 
-      //Validate that offsetts are correct in all brokers
-      for(broker <- servers){
-        (0 until config.partitions).foreach{ partitionId =>
-          val offset = broker.getLogManager.getLog(TopicAndPartition(topicName, partitionId)).map(_.logEndOffset).getOrElse(-1L)
-          if(offset >= 0){
-            if(offset != config.msgsPerPartition){
-              throw new RuntimeException(s"Run failed as offsets did not match for partition $partitionId on broker ${broker.config.brokerId}. Expected ${config.msgsPerPartition} but was $offset.")
-            }
-          }
-        }
-      }
+      validateAllOffsetsMatch(config)
 
       journal.appendToJournal(config)
       renderChart(leaderRates, "Leader", journal, displayChartsOnScreen)
@@ -157,6 +147,18 @@ object ReplicationQuotasTestRig {
 
       println("Output can be found here: " + journal.path())
     }
+
+    def validateAllOffsetsMatch(config: ExperimentDef): Unit = {
+      //Validate that offsets are correct in all brokers
+      for (broker <- servers) {
+        (0 until config.partitions).foreach { partitionId =>
+          val offset = broker.getLogManager.getLog(TopicAndPartition(topicName, partitionId)).map(_.logEndOffset).getOrElse(-1L)
+          if (offset >= 0 && offset != config.msgsPerPartition) {
+            throw new RuntimeException(s"Run failed as offsets did not match for partition $partitionId on broker ${broker.config.brokerId}. Expected ${config.msgsPerPartition} but was $offset.")
+          }
+      }
+    }
+  }
 
     def logOutput(config: ExperimentDef, replicas: Map[Int, Seq[Int]], newAssignment: Map[TopicAndPartition, Seq[Int]]): Unit = {
       val actual = zkUtils.getPartitionAssignmentForTopics(Seq(topicName))(topicName)
