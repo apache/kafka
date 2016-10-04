@@ -1024,7 +1024,9 @@ public class ConfigDef {
         if (def.defaultValue != null) {
             b.append("  * Default: ").append(getConfigValue(def, "Default")).append("\n");
         }
-        b.append("  * Valid Values: ").append(getConfigValue(def, "Valid Values")).append("\n");
+        if (def.validator != null) {
+            b.append("  * Valid Values: ").append(getConfigValue(def, "Valid Values")).append("\n");
+        }
         b.append("  * Importance: ").append(getConfigValue(def, "Importance")).append("\n");
     }
 

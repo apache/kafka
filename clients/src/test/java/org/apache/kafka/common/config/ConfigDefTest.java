@@ -370,7 +370,7 @@ public class ConfigDefTest {
         final ConfigDef def = new ConfigDef()
                 .define("opt1", Type.STRING, "a", ValidString.in("a", "b", "c"), Importance.HIGH, "docs1")
                 .define("opt2", Type.INT, Importance.MEDIUM, "docs2")
-                .define("opt3", Type.LIST, Collections.emptyList(), Importance.LOW, "docs3");
+                .define("opt3", Type.LIST, Arrays.asList("a", "b"), Importance.LOW, "docs3");
 
         final String expectedRst = "" +
                 "``opt2``\n" +
@@ -378,7 +378,6 @@ public class ConfigDefTest {
                 "\n" +
                 "  * Type: int\n" +
                 "  * Default: \n" +
-                "  * Valid Values: \n" +
                 "  * Importance: medium\n" +
                 "\n" +
                 "``opt1``\n" +
@@ -393,8 +392,7 @@ public class ConfigDefTest {
                 "  docs3\n" +
                 "\n" +
                 "  * Type: list\n" +
-                "  * Default: \n" +
-                "  * Valid Values: \n" +
+                "  * Default: a,b\n" +
                 "  * Importance: low\n" +
                 "\n";
 
@@ -420,7 +418,6 @@ public class ConfigDefTest {
                 "\n" +
                 "  * Type: string\n" +
                 "  * Default: foo\n" +
-                "  * Valid Values: \n" +
                 "  * Importance: high\n" +
                 "\n" +
                 "Group One\n" +
@@ -439,7 +436,6 @@ public class ConfigDefTest {
                 "\n" +
                 "  * Type: int\n" +
                 "  * Default: \n" +
-                "  * Valid Values: \n" +
                 "  * Importance: medium\n" +
                 "  * Dependents: ``opt1.of.group1``\n" +
                 "\n" +
@@ -451,7 +447,6 @@ public class ConfigDefTest {
                 "\n" +
                 "  * Type: boolean\n" +
                 "  * Default: false\n" +
-                "  * Valid Values: \n" +
                 "  * Importance: high\n" +
                 "\n" +
                 "``opt2.of.group2``\n" +
@@ -459,7 +454,6 @@ public class ConfigDefTest {
                 "\n" +
                 "  * Type: boolean\n" +
                 "  * Default: false\n" +
-                "  * Valid Values: \n" +
                 "  * Importance: high\n" +
                 "\n";
 
