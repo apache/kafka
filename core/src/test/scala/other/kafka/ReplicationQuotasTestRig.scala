@@ -122,18 +122,33 @@ object ReplicationQuotasTestRig {
 
       println("Writing Data")
       val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers), retries = 5, acks = 0)
-      (0 to config.msgsPerPartition).foreach { x =>
-        (0 to config.partitions).foreach { partition =>
+      (0 until config.msgsPerPartition).foreach { x =>
+        (0 until config.partitions).foreach { partition =>
           producer.send(new ProducerRecord(topicName, partition, null, new Array[Byte](config.msgSize)))
         }
       }
 
       println("Starting Reassignment")
       val newAssignment = ReassignPartitionsCommand.generateAssignment(zkUtils, brokers, json(topicName), true)._1
+
+      val start = System.currentTimeMillis()
       ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), config.throttle)
 
       //Await completion
       waitForReassignmentToComplete()
+      println(s"Reassignment took ${(System.currentTimeMillis() - start)/1000}s")
+
+      //Validate that offsetts are correct in all brokers
+      for(broker <- servers){
+        (0 until config.partitions).foreach{ partitionId =>
+          val offset = broker.getLogManager.getLog(TopicAndPartition(topicName, partitionId)).map(_.logEndOffset).getOrElse(-1L)
+          if(offset >= 0){
+            if(offset != config.msgsPerPartition){
+              throw new RuntimeException(s"Run failed as offsets did not match for partition $partitionId on broker ${broker.config.brokerId}. Expected ${config.msgsPerPartition} but was $offset.")
+            }
+          }
+        }
+      }
 
       journal.appendToJournal(config)
       renderChart(leaderRates, "Leader", journal, displayChartsOnScreen)
