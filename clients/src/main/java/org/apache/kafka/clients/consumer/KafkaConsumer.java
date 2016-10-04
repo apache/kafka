@@ -855,6 +855,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * </ul>
      *
      * @param pattern Pattern to subscribe to
+     * @param listener Non-null listener instance to get notifications on partition assignment/revocation for the
+     *                 subscribed topics
      * @throws IllegalArgumentException If pattern is null
      */
     @Override
@@ -867,6 +869,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.subscriptions.subscribe(pattern, listener);
             this.metadata.needMetadataForAllTopics(true);
             this.metadata.requestUpdate();
+            this.coordinator.updatePatternSubscription(metadata.fetch());
         } finally {
             release();
         }
