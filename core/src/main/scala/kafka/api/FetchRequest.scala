@@ -65,8 +65,14 @@ object FetchRequest {
     FetchRequest(versionId, correlationId, clientId, replicaId, maxWait, minBytes, maxBytes, Vector(pairs:_*))
   }
 
-  def shuffle(requestInfo: Seq[(TopicAndPartition, PartitionFetchInfo)]): Seq[(TopicAndPartition, PartitionFetchInfo)] =
-    random.shuffle(requestInfo)
+  def shuffle(requestInfo: Seq[(TopicAndPartition, PartitionFetchInfo)]): Seq[(TopicAndPartition, PartitionFetchInfo)] = {
+    val groupedByTopic = requestInfo.groupBy { case (tp, _) => tp.topic }.map { case (topic, values) =>
+      topic -> random.shuffle(values)
+    }
+    random.shuffle(groupedByTopic.toSeq).flatMap { case (topic, partitions) =>
+      partitions.map { case (tp, fetchInfo) => tp -> fetchInfo }
+    }
+  }
 
   def batchByTopic[T](s: Seq[(TopicAndPartition, T)]): Seq[(String, Seq[(Int, T)])] = {
     val result = new ArrayBuffer[(String, ArrayBuffer[(Int, T)])]
