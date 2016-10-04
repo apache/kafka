@@ -916,7 +916,7 @@ public class ConfigDef {
                     else if (key.type == Type.STRING && key.defaultValue.toString().isEmpty())
                         return "\"\"";
                     else if (key.type == Type.LIST && key.defaultValue instanceof List)
-                        return Utils.join((List) key.defaultValue, ",");
+                        return ((List) key.defaultValue).isEmpty() ? "\"\"" : Utils.join((List) key.defaultValue, ",");
                     else
                         return key.defaultValue.toString();
                 } else
