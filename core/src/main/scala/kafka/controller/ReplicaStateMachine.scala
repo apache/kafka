@@ -68,7 +68,9 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
     // set started flag
     hasStarted.set(true)
     // move all Online replicas to Online
-    handleStateChanges(controllerContext.allLiveReplicas(), OnlineReplica)
+    inLock(controllerContext.controllerLock) {
+      handleStateChanges(controllerContext.allLiveReplicas(), OnlineReplica)
+    }
 
     info("Started replica state machine with initial state -> " + replicaState.toString())
   }
