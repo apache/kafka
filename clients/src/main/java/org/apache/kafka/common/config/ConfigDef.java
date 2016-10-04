@@ -1021,7 +1021,7 @@ public class ConfigDef {
             b.append("  ").append(docLine).append("\n\n");
         }
         b.append("  * Type: ").append(getConfigValue(def, "Type")).append("\n");
-        if (def.defaultValue != null) {
+        if (def.hasDefault()) {
             b.append("  * Default: ").append(getConfigValue(def, "Default")).append("\n");
         }
         if (def.validator != null) {

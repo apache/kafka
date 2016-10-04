@@ -377,7 +377,6 @@ public class ConfigDefTest {
                 "  docs2\n" +
                 "\n" +
                 "  * Type: int\n" +
-                "  * Default: \n" +
                 "  * Importance: medium\n" +
                 "\n" +
                 "``opt1``\n" +
@@ -435,7 +434,6 @@ public class ConfigDefTest {
                 "  Doc doc doc.\n" +
                 "\n" +
                 "  * Type: int\n" +
-                "  * Default: \n" +
                 "  * Importance: medium\n" +
                 "  * Dependents: ``opt1.of.group1``\n" +
                 "\n" +
