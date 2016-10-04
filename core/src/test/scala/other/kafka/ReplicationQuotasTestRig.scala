@@ -54,11 +54,11 @@ object ReplicationQuotasTestRig {
     val journal = new Journal()
 
     val experiments = Seq(
-      new ExperimentDef("Experiment1", brokers = 5, partitions = 20, throttle = 1000 * 1000, msgsPerPartition = 100, msgSize = 100 * 1000),            //200MB total data written
-      new ExperimentDef("Experiment2", brokers = 5, partitions = 50, throttle = 10 * 1000 * 1000, msgsPerPartition = 10 * 100, msgSize = 100 * 1000),  //5GB total data written
-      new ExperimentDef("Experiment3", brokers = 50, partitions = 50, throttle = 2 * 1000 * 1000, msgsPerPartition = 10 * 100, msgSize = 100 * 1000),  //5GB total data written
-      new ExperimentDef("Experiment4", brokers = 25, partitions = 100, throttle = 4 * 1000 * 1000, msgsPerPartition = 1 * 1000, msgSize = 100 * 1000), //10GB total data written
-      new ExperimentDef("Experiment5", brokers = 5, partitions = 50, throttle = 50 * 1000 * 1000, msgsPerPartition = 4 * 1000, msgSize = 100 * 1000)   //20GB total data written
+      new ExperimentDef("Experiment1", brokers = 5, partitions = 20, throttle = 1000 * 1000, msgsPerPartition = 100, msgSize = 100 * 1000),           //200MB total data written
+      new ExperimentDef("Experiment2", brokers = 5, partitions = 50, throttle = 10 * 1000 * 1000, msgsPerPartition = 10 * 100, msgSize = 100 * 1000), //5GB total data written
+      new ExperimentDef("Experiment3", brokers = 50, partitions = 50, throttle = 2 * 1000 * 1000, msgsPerPartition = 10 * 100, msgSize = 100 * 1000), //5GB total data written
+      new ExperimentDef("Experiment4", brokers = 25, partitions = 100, throttle = 4 * 1000 * 1000, msgsPerPartition = 1 * 1000, msgSize = 100 * 1000),//10GB total data written
+      new ExperimentDef("Experiment5", brokers = 5, partitions = 50, throttle = 50 * 1000 * 1000, msgsPerPartition = 4 * 1000, msgSize = 100 * 1000)  //20GB total data written
     )
     experiments.foreach(run(_, journal, displayChartsOnScreen))
 
@@ -267,7 +267,6 @@ object ReplicationQuotasTestRig {
     }
   }
 
-
   class Journal {
     private val log = new File(dir, "Log.html")
     header()
@@ -313,5 +312,6 @@ object ReplicationQuotasTestRig {
       log.getAbsolutePath
     }
   }
+
 }
 
