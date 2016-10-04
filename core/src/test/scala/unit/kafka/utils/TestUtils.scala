@@ -784,7 +784,7 @@ object TestUtils extends Logging {
    * @return The leader of the partition.
    */
   def waitUntilMetadataIsPropagated(servers: Seq[KafkaServer], topic: String, partition: Int,
-                                    timeout: Long = 90000): Int = {  //DO NOT COMMIT THIS CHANGE
+                                    timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
     var leader: Int = -1
     TestUtils.waitUntilTrue(() =>
       servers.foldLeft(true) {
