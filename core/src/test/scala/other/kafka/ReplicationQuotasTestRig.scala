@@ -17,7 +17,6 @@
 
 package other.kafka
 
-import java.awt.image.BufferedImage
 import java.io.{File, FileOutputStream, PrintWriter}
 import javax.imageio.ImageIO
 
@@ -36,6 +35,13 @@ import org.jfree.data.xy.{XYSeries, XYSeriesCollection}
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq, mutable}
 
+/**
+  * Test rig for measuring throttling performance. Configure the parameters for a set of experiments, then execute them
+  * and view the html output file, with charts, that are produced. You can also render the charts to the screen if
+  * you wish.
+  *
+  * Currently you'll need about 40GB of disk space to run these experiments (data written x2)
+  */
 object ReplicationQuotasTestRig {
   val debugLogging = false
   new File("Experiments").mkdir()
@@ -48,11 +54,11 @@ object ReplicationQuotasTestRig {
     val journal = new Journal()
 
     val experiments = Seq(
-//      new Config("Experiment1", brokers = 5, partitions = 20, throttle = 1000 * 1000, msgsPerPartition = 100, msgSize = 100 * 1000),
-//      new Config("Experiment2", brokers = 5, partitions = 50, throttle = 10 * 1000 * 1000, msgsPerPartition = 10 * 100, msgSize = 100 * 1000),
-//      new Config("Experiment3", brokers = 50, partitions = 50, throttle = 2 * 1000 * 1000, msgsPerPartition = 10 * 100, msgSize = 100 * 1000),
-//      new Config("Experiment4", brokers = 25, partitions = 100, throttle = 4 * 1000 * 1000, msgsPerPartition = 1 * 1000, msgSize = 100 * 1000),
-      new Config("Experiment5", brokers = 5, partitions = 50, throttle = 50 * 1000 * 1000, msgsPerPartition = 5 * 1000, msgSize = 100 * 1000)
+      new Config("Experiment1", brokers = 5, partitions = 20, throttle = 1000 * 1000, msgsPerPartition = 100, msgSize = 100 * 1000),            //200MB total data written
+      new Config("Experiment2", brokers = 5, partitions = 50, throttle = 10 * 1000 * 1000, msgsPerPartition = 10 * 100, msgSize = 100 * 1000),  //5GB total data written
+      new Config("Experiment3", brokers = 50, partitions = 50, throttle = 2 * 1000 * 1000, msgsPerPartition = 10 * 100, msgSize = 100 * 1000),  //5GB total data written
+      new Config("Experiment4", brokers = 25, partitions = 100, throttle = 4 * 1000 * 1000, msgsPerPartition = 1 * 1000, msgSize = 100 * 1000), //10GB total data written
+      new Config("Experiment5", brokers = 5, partitions = 50, throttle = 50 * 1000 * 1000, msgsPerPartition = 4 * 1000, msgSize = 100 * 1000)   //20GB total data written
     )
     experiments.foreach(run(_, journal, displayChartsOnScreen))
 
@@ -220,16 +226,15 @@ object ReplicationQuotasTestRig {
     def waitForReassignmentToComplete() {
       waitUntilTrue(() => {
         printRateMetrics()
-        val success = !zkUtils.pathExists(ReassignPartitionsPath)
-        success
-      }, s"Znode ${ZkUtils.ReassignPartitionsPath} wasn't deleted", Int.MaxValue, pause = 1000L)
+        !zkUtils.pathExists(ReassignPartitionsPath)
+      }, s"Znode ${ZkUtils.ReassignPartitionsPath} wasn't deleted", 60 * 60 * 1000, pause = 1000L)
     }
 
     def renderChart(data: mutable.Map[Int, Array[Double]], name: String, journal: Journal, displayChartsOnScreen: Boolean): Unit = {
       val dataset = new XYSeriesCollection
 
       data.foreach { case (broker, values) =>
-        if(debugLogging)
+        if (debugLogging)
           println("Found values for broker " + broker + " = " + values.map(_.toString).toSeq)
         val series = new XYSeries("Broker:" + broker)
         var x = 0
@@ -271,12 +276,11 @@ object ReplicationQuotasTestRig {
     }
 
     def printRateMetrics() {
-      //    println("Printing rates on servers "+ servers)
       for (broker <- servers) {
         val leaderRate: Double = measuredRate(broker, QuotaType.LeaderReplication)
 
         if (broker.config.brokerId == 100)
-          warn("waiting... Leader rate on 101 is " + leaderRate)
+          info("waiting... Leader rate on 101 is " + leaderRate)
 
         record(leaderRates, broker.config.brokerId, leaderRate)
         if (leaderRate > 0)
