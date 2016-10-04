@@ -66,8 +66,8 @@ Note: Because new protocols are introduced, it is important to upgrade your Kafk
     <li> The new Java Consumer now allows users to search offsets by timestamp on partitions. </li>
     <li> When using an Authorizer and a user hasn't got <b>Describe</b> authorization on a topic, the broker will no longer return TOPIC_AUTHORIZATION_FAILED errors  
          but just UNKNOWN_TOPIC_OR_PARTITION errors, to avoid leaking topic names.</li>
-    <li> Fetch responses have a size limit by default (50 MB for consumers and 10 MB for replication). Note that this is not an absolute maximum as explained in the
-         next point. </li>
+    <li> Fetch responses have a size limit by default (50 MB for consumers and 10 MB for replication). The existing per partition limits also apply (1 MB for consumers
+         and replication). Note that neither of these limits is an absolute maximum as explained in the next point. </li>
     <li> Consumers and replicas can make progress if a message larger than the response/partition size limit is found. More concretely, if the first message in the
          first non-empty partition of the fetch is larger than either or both limits, the message will still be returned. </li>
     <li> Overloaded constructors were added to <code>kafka.api.FetchRequest</code> and <code>kafka.javaapi.FetchRequest</code> to allow the caller to specify the
