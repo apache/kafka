@@ -99,9 +99,11 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
       if !cached_addresses.has_key?(vm.name)
         state_id = vm.state.id
         if state_id != :not_created && state_id != :stopped && vm.communicate.ready?
-          vm.communicate.execute("/sbin/ifconfig eth0 | grep 'inet addr' | tail -n 1 | egrep -o '[0-9\.]+' | head -n 1 2>&1") do |type, contents|
-            cached_addresses[vm.name] = contents.split("\n").first[/(\d+\.\d+\.\d+\.\d+)/, 1]
+          contents = ''
+          vm.communicate.execute("/sbin/ifconfig eth0 | grep 'inet addr' | tail -n 1 | egrep -o '[0-9\.]+' | head -n 1 2>&1") do |type, data|
+            contents << data
           end
+          cached_addresses[vm.name] = contents.split("\n").first[/(\d+\.\d+\.\d+\.\d+)/, 1]
         else
           cached_addresses[vm.name] = nil
         end
