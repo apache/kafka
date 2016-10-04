@@ -369,7 +369,8 @@ public class ConfigDefTest {
     public void toRst() {
         final ConfigDef def = new ConfigDef()
                 .define("opt1", Type.STRING, "a", ValidString.in("a", "b", "c"), Importance.HIGH, "docs1")
-                .define("opt2", Type.INT, Importance.MEDIUM, "docs2");
+                .define("opt2", Type.INT, Importance.MEDIUM, "docs2")
+                .define("opt3", Type.LIST, Collections.emptyList(), Importance.LOW, "docs3");
 
         final String expectedRst = "" +
                 "``opt2``\n" +
@@ -387,6 +388,14 @@ public class ConfigDefTest {
                 "  * Default: a\n" +
                 "  * Valid Values: [a, b, c]\n" +
                 "  * Importance: high\n" +
+                "\n" +
+                "``opt3``\n" +
+                "  docs3\n" +
+                "\n" +
+                "  * Type: list\n" +
+                "  * Default: \n" +
+                "  * Valid Values: \n" +
+                "  * Importance: low\n" +
                 "\n";
 
         assertEquals(expectedRst, def.toRst());
