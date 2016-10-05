@@ -4,9 +4,9 @@
  * copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance with the License.  You may obtain a
  * copy of the License at
- *
+ * <p>
  * http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
  * Unless required by applicable law or agreed to in writing, software distributed under the License
  * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
  * or implied. See the License for the specific language governing permissions and limitations under
@@ -26,7 +26,9 @@ import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.WindowStore;
 
 import java.util.Collections;
 import java.util.Objects;
@@ -58,10 +60,18 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
                                final String storeName) {
         Objects.requireNonNull(reducer, "reducer can't be null");
         Objects.requireNonNull(storeName, "storeName can't be null");
+        return reduce(reducer, keyValueStore(valSerde, storeName));
+    }
+
+    @Override
+    public KTable<K, V> reduce(Reducer<V> reducer,
+                               StateStoreSupplier<KeyValueStore> storeSupplier) {
+        Objects.requireNonNull(reducer, "reducer can't be null");
+        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
         return doAggregate(
-            new KStreamReduce<K, V>(storeName, reducer),
-            REDUCE_NAME,
-            keyValueStore(valSerde, storeName));
+                new KStreamReduce<K, V>(storeSupplier.name(), reducer),
+                REDUCE_NAME,
+                storeSupplier);
     }
 
 
@@ -73,10 +83,21 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
         Objects.requireNonNull(reducer, "reducer can't be null");
         Objects.requireNonNull(windows, "windows can't be null");
         Objects.requireNonNull(storeName, "storeName can't be null");
+        return reduce(reducer, windows, windowedStore(valSerde, windows, storeName));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <W extends Window> KTable<Windowed<K>, V> reduce(Reducer<V> reducer,
+                                                            Windows<W> windows,
+                                                            StateStoreSupplier<WindowStore> storeSupplier) {
+        Objects.requireNonNull(reducer, "reducer can't be null");
+        Objects.requireNonNull(windows, "windows can't be null");
+        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
         return (KTable<Windowed<K>, V>) doAggregate(
-            new KStreamWindowReduce<K, V, W>(windows, storeName, reducer),
-            REDUCE_NAME,
-            windowedStore(valSerde, windows, storeName)
+                new KStreamWindowReduce<K, V, W>(windows, storeSupplier.name(), reducer),
+                REDUCE_NAME,
+                storeSupplier
         );
     }
 
@@ -88,10 +109,21 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
         Objects.requireNonNull(storeName, "storeName can't be null");
+        return aggregate(initializer, aggregator, aggValueSerde, keyValueStore(aggValueSerde, storeName));
+    }
+
+    @Override
+    public <T> KTable<K, T> aggregate(Initializer<T> initializer,
+                                      Aggregator<K, V, T> aggregator,
+                                      Serde<T> aggValueSerde,
+                                      StateStoreSupplier<KeyValueStore> storeSupplier) {
+        Objects.requireNonNull(initializer, "initializer can't be null");
+        Objects.requireNonNull(aggregator, "aggregator can't be null");
+        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
         return doAggregate(
-            new KStreamAggregate<>(storeName, initializer, aggregator),
-            AGGREGATE_NAME,
-            keyValueStore(aggValueSerde, storeName));
+                new KStreamAggregate<>(storeSupplier.name(), initializer, aggregator),
+                AGGREGATE_NAME,
+                storeSupplier);
     }
 
     @SuppressWarnings("unchecked")
@@ -105,10 +137,23 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
         Objects.requireNonNull(aggregator, "aggregator can't be null");
         Objects.requireNonNull(windows, "windows can't be null");
         Objects.requireNonNull(storeName, "storeName can't be null");
+        return aggregate(initializer, aggregator, aggValueSerde, windowedStore(aggValueSerde, windows, storeName));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <W extends Window, T> KTable<Windowed<K>, T> aggregate(Initializer<T> initializer,
+                                                                  Aggregator<K, V, T> aggregator,
+                                                                  Windows<W> windows, Serde<T> aggValueSerde,
+                                                                  StateStoreSupplier<KeyValueStore> storeSupplier) {
+        Objects.requireNonNull(initializer, "initializer can't be null");
+        Objects.requireNonNull(aggregator, "aggregator can't be null");
+        Objects.requireNonNull(windows, "windows can't be null");
+        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
         return (KTable<Windowed<K>, T>) doAggregate(
-            new KStreamWindowAggregate<>(windows, storeName, initializer, aggregator),
-            AGGREGATE_NAME,
-            windowedStore(aggValueSerde, windows, storeName)
+                new KStreamWindowAggregate<>(windows, storeSupplier.name(), initializer, aggregator),
+                AGGREGATE_NAME,
+                storeSupplier
         );
     }
 
@@ -166,9 +211,9 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
     }
 
     private <T> KTable<K, T> doAggregate(
-        final KStreamAggProcessorSupplier<K, ?, V, T> aggregateSupplier,
-        final String functionName,
-        final StateStoreSupplier storeSupplier) {
+            final KStreamAggProcessorSupplier<K, ?, V, T> aggregateSupplier,
+            final String functionName,
+            final StateStoreSupplier storeSupplier) {
 
         final String aggFunctionName = topology.newName(functionName);
 
@@ -178,11 +223,11 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
         topology.addStateStore(storeSupplier, aggFunctionName);
 
         return new KTableImpl<>(topology,
-                                aggFunctionName,
-                                aggregateSupplier,
-                                sourceName.equals(this.name) ? sourceNodes
-                                                             : Collections.singleton(sourceName),
-                                storeSupplier.name());
+                aggFunctionName,
+                aggregateSupplier,
+                sourceName.equals(this.name) ? sourceNodes
+                        : Collections.singleton(sourceName),
+                storeSupplier.name());
     }
 
     /**

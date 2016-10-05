@@ -22,6 +22,7 @@ import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
@@ -50,7 +51,8 @@ public class KGroupedTableImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullStoreNameOnAggregate() throws Exception {
-        groupedTable.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, MockAggregator.STRING_REMOVER, null);
+        String storeName = null;
+        groupedTable.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, MockAggregator.STRING_REMOVER, storeName);
     }
 
     @Test(expected = NullPointerException.class)
@@ -80,7 +82,14 @@ public class KGroupedTableImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullStoreNameOnReduce() throws Exception {
-        groupedTable.reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, null);
+        String storeName = null;
+        groupedTable.reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, storeName);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullStoreSupplierOnReduce() throws Exception {
+        StateStoreSupplier storeName = null;
+        groupedTable.reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, storeName);
     }
 
     @Test

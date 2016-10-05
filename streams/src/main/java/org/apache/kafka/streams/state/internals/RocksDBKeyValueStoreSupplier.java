@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -30,11 +30,10 @@ import java.util.Map;
  *
  * @param <K> the type of keys
  * @param <V> the type of values
- *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
 
-public class RocksDBKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K, V>  {
+public class RocksDBKeyValueStoreSupplier<K, V, T extends StateStore> extends AbstractStoreSupplier<K, V, T> {
 
     private final boolean enableCaching;
 
@@ -47,17 +46,17 @@ public class RocksDBKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K,
         this.enableCaching = enableCaching;
     }
 
-    public StateStore get() {
+    public T get() {
         if (!enableCaching) {
             RocksDBStore<K, V> store = new RocksDBStore<>(name, keySerde, valueSerde);
-            return new MeteredKeyValueStore<>(logged ? store.enableLogging() : store, "rocksdb-state", time);
+            return ((T) new MeteredKeyValueStore<>(logged ? store.enableLogging() : store, "rocksdb-state", time));
         }
 
         final RocksDBStore<Bytes, byte[]> store = new RocksDBStore<>(name, Serdes.Bytes(), Serdes.ByteArray());
-        return new CachingKeyValueStore<>(new MeteredKeyValueStore<>(logged ? store.enableLogging() : store,
-                                                                     "rocksdb-state",
-                                                                     time),
-                                          keySerde,
-                                          valueSerde);
+        return ((T) new CachingKeyValueStore<>(new MeteredKeyValueStore<>(logged ? store.enableLogging() : store,
+                "rocksdb-state",
+                time),
+                keySerde,
+                valueSerde));
     }
 }

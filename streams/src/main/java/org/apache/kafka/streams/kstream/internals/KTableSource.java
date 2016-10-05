@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -67,13 +67,17 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
     private class MaterializedKTableSourceProcessor extends AbstractProcessor<K, V> {
 
         private KeyValueStore<K, V> store;
+        private boolean cached = false;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
-            ((CachedStateStore) store).setFlushListener(new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
+            if (store instanceof CachedStateStore) {
+                cached = true;
+                ((CachedStateStore) store).setFlushListener(new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
+            }
         }
 
         @Override
@@ -81,8 +85,11 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
             // the keys should never be null
             if (key == null)
                 throw new StreamsException("Record key for the source KTable from store name " + storeName + " should not be null.");
-
+            V oldValue = sendOldValues ? store.get(key) : null;
             store.put(key, value);
+            if (!cached) {
+                context().forward(key, new Change<>(value, oldValue));
+            }
         }
     }
 }

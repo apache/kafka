@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -55,13 +55,17 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
     private class KTableAggregateProcessor extends AbstractProcessor<K, Change<V>> {
 
         private KeyValueStore<K, T> store;
+        private boolean cached = false;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
             store = (KeyValueStore<K, T>) context.getStateStore(storeName);
-            ((CachedStateStore) store).setFlushListener(new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
+            if (store instanceof CachedStateStore) {
+                cached = true;
+                ((CachedStateStore) store).setFlushListener(new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
+            }
         }
 
         /**
@@ -92,6 +96,12 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
 
             // update the store with the new value
             store.put(key, newAgg);
+            if (!cached) {
+                if (sendOldValues)
+                    context().forward(key, new Change<>(newAgg, oldAgg));
+                else
+                    context().forward(key, new Change<>(newAgg, null));
+            }
         }
 
     }

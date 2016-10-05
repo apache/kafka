@@ -53,13 +53,17 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
     private class KStreamAggregateProcessor extends AbstractProcessor<K, V> {
 
         private KeyValueStore<K, T> store;
+        private boolean cached = false;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
             store = (KeyValueStore<K, T>) context.getStateStore(storeName);
-            ((CachedStateStore) store).setFlushListener(new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
+            if (store instanceof CachedStateStore) {
+                cached = true;
+                ((CachedStateStore) store).setFlushListener(new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
+            }
         }
 
 
@@ -82,6 +86,12 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
 
             // update the store with the new value
             store.put(key, newAgg);
+            if (!cached) {
+                if (sendOldValues)
+                    context().forward(key, new Change<>(newAgg, oldAgg));
+                else
+                    context().forward(key, new Change<>(newAgg, null));
+            }
         }
     }
 

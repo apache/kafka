@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -45,7 +45,7 @@ import java.util.TreeMap;
  *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
-public class InMemoryKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K, V> {
+public class InMemoryKeyValueStoreSupplier<K, V, T extends StateStore> extends AbstractStoreSupplier<K, V, T> {
 
 
     public InMemoryKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, boolean logged, Map<String, String> logConfig) {
@@ -56,10 +56,10 @@ public class InMemoryKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K
         super(name, keySerde, valueSerde, time, logged, logConfig);
     }
 
-    public StateStore get() {
+    public T get() {
         MemoryStore<K, V> store = new MemoryStore<>(name, keySerde, valueSerde);
 
-        return new MeteredKeyValueStore<>(logged ? store.enableLogging() : store, "in-memory-state", time);
+        return ((T) new MeteredKeyValueStore<>(logged ? store.enableLogging() : store, "in-memory-state", time));
     }
 
     private static class MemoryStore<K, V> implements KeyValueStore<K, V> {
