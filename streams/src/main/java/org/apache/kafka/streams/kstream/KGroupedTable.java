@@ -42,11 +42,11 @@ public interface KGroupedTable<K, V> {
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
-     * @param adder         the instance of {@link Reducer} for addition
-     * @param subtractor    the instance of {@link Reducer} for subtraction
-     * @param storeName     the name of the underlying {@link KTable} state store
+     * @param adder      the instance of {@link Reducer} for addition
+     * @param subtractor the instance of {@link Reducer} for subtraction
+     * @param storeName  the name of the underlying {@link KTable} state store
      * @return a {@link KTable} with the same key and value types as this {@link KGroupedTable},
-     *         containing aggregated values for each key
+     * containing aggregated values for each key
      */
     KTable<K, V> reduce(Reducer<V> adder,
                         Reducer<V> subtractor,
@@ -63,7 +63,7 @@ public interface KGroupedTable<K, V> {
      * @param subtractor    the instance of {@link Reducer} for subtraction
      * @param storeSupplier user defined state store supplier {@link StateStoreSupplier}
      * @return a {@link KTable} with the same key and value types as this {@link KGroupedTable},
-     *         containing aggregated values for each key
+     * containing aggregated values for each key
      */
     KTable<K, V> reduce(Reducer<V> adder,
                         Reducer<V> subtractor,
@@ -84,7 +84,7 @@ public interface KGroupedTable<K, V> {
      * @param storeName     the name of the underlying {@link KTable} state store
      * @param <T>           the value type of the aggregated {@link KTable}
      * @return a {@link KTable} with same key and aggregated value type {@code T},
-     *         containing aggregated values for each key
+     * containing aggregated values for each key
      */
     <T> KTable<K, T> aggregate(Initializer<T> initializer,
                                Aggregator<K, V, T> adder,
@@ -100,13 +100,13 @@ public interface KGroupedTable<K, V> {
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
-     * @param initializer   the instance of {@link Initializer}
-     * @param adder         the instance of {@link Aggregator} for addition
-     * @param subtractor   the instance of {@link Aggregator} for subtraction
-     * @param storeName     the name of the underlying {@link KTable} state store
-     * @param <T>           the value type of the aggregated {@link KTable}
+     * @param initializer the instance of {@link Initializer}
+     * @param adder       the instance of {@link Aggregator} for addition
+     * @param subtractor  the instance of {@link Aggregator} for subtraction
+     * @param storeName   the name of the underlying {@link KTable} state store
+     * @param <T>         the value type of the aggregated {@link KTable}
      * @return a {@link KTable} with same key and aggregated value type {@code T},
-     *         containing aggregated values for each key
+     * containing aggregated values for each key
      */
     <T> KTable<K, T> aggregate(Initializer<T> initializer,
                                Aggregator<K, V, T> adder,
@@ -127,7 +127,7 @@ public interface KGroupedTable<K, V> {
      * @param storeSupplier user defined state store supplier {@link StateStoreSupplier}
      * @param <T>           the value type of the aggregated {@link KTable}
      * @return a {@link KTable} with same key and aggregated value type {@code T},
-     *         containing aggregated values for each key
+     * containing aggregated values for each key
      */
     <T> KTable<K, T> aggregate(Initializer<T> initializer,
                                Aggregator<K, V, T> adder,
@@ -141,9 +141,9 @@ public interface KGroupedTable<K, V> {
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
-     * @param storeName     the name of the underlying {@link KTable} state store
+     * @param storeName the name of the underlying {@link KTable} state store
      * @return a {@link KTable} with same key and {@link Long} value type as this {@link KGroupedTable},
-     *         containing the number of values for each key
+     * containing the number of values for each key
      */
     KTable<K, Long> count(String storeName);
 
