@@ -288,7 +288,9 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
 
     private[this] var operations = Vector[T]()
 
-    def watched: Int = synchronized(operations.size)
+    def watched: Int = synchronized {
+      operations.size
+    }
 
     // add the element to watch
     def watch(t: T) {
@@ -299,10 +301,12 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
 
     // traverse the list and try to complete some watched elements
     def tryCompleteWatched(): Int = {
-      // call tryComplete without holding the lock to avoid potential deadlocks
+      val ops = synchronized(operations)
       var completedAlready = 0
       var completedNow = 0
-      for (op <- synchronized(operations)) {
+
+      // call tryComplete without holding the lock to avoid potential deadlocks
+      for (op <- ops) {
         if (op.isCompleted)
           completedAlready += 1
         else if (op synchronized op.tryComplete())
