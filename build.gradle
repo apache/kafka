@@ -81,8 +81,8 @@ ext {
   shouldSign = !skipSigning && !version.endsWith("SNAPSHOT") && project.gradle.startParameter.taskNames.any { it.contains("upload") }
 
   mavenUrl = project.hasProperty('mavenUrl') ? project.mavenUrl : ''
-  mavenUsername = project.hasProperty('mavenUsername') ? project.mavenUsername : ''
-  mavenPassword = project.hasProperty('mavenPassword') ? project.mavenPassword : ''
+  mavenUsername = project.hasProperty('mavenUsername') ? project.mavenUsername : appianRepoDevUsername
+  mavenPassword = project.hasProperty('mavenPassword') ? project.mavenPassword : new String(appianRepoDevPassword.decodeBase64())
 
   userShowStandardStreams = project.hasProperty("showStandardStreams") ? showStandardStreams : null
 
