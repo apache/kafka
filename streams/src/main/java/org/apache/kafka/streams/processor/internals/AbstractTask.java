@@ -108,10 +108,13 @@ public abstract class AbstractTask {
 
     public abstract void commit();
 
+
+    public abstract void close();
+
     /**
      * @throws ProcessorStateException if there is an error while closing the state manager
      */
-    public void close() {
+    public void closeStateManager() {
         try {
             stateMgr.close(recordCollectorOffsets());
         } catch (IOException e) {

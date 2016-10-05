@@ -38,6 +38,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.processor.PartitionGrouper;
@@ -134,6 +135,10 @@ public class StreamThread extends Thread {
                 initialized.set(false);
                 commitAll();
                 lastCleanMs = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
+                closeAllTasks();
+                // flush any records produced on close
+                producer.flush();
+                closeAllStateManagers();
             } catch (Throwable t) {
                 rebalanceException = t;
                 throw t;
@@ -260,20 +265,16 @@ public class StreamThread extends Thread {
     private void shutdown() {
         log.info("stream-thread [{}] Shutting down", this.getName());
 
-        // Exceptions should not prevent this call from going through all shutdown steps
-        try {
-            commitAll();
-        } catch (Throwable e) {
-            // already logged in commitAll()
-        }
+        // Commit first as there may be cached records that have not been flushed yet.
+        commitQuietly();
+        // Close all processors in topology order
+        closeAllTasks();
+        // flush out any extra data sent during close
+        producer.flush();
+        // Close all task state managers
+        closeAllStateManagers();
 
-        // Close standby tasks before closing the restore consumer since closing standby tasks uses the restore consumer.
-        removeStandbyTasks();
-
-        // We need to first close the underlying clients before closing the state
-        // manager, for example we need to make sure producer's record sends
-        // have all been acked before the state manager records
-        // changelog sent offsets
+        // close all embedded clients
         try {
             producer.close();
         } catch (Throwable e) {
@@ -290,9 +291,38 @@ public class StreamThread extends Thread {
             log.error("stream-thread [{}] Failed to close restore consumer: ", this.getName(), e);
         }
 
+        // remove all tasks
         removeStreamTasks();
+        removeStandbyTasks();
 
         log.info("stream-thread [{}] Stream thread shutdown complete", this.getName());
+    }
+
+    private void closeAllStateManagers() {
+        for (final StreamTask task : activeTasks.values()) {
+            closeOneStateManager(task);
+        }
+
+        for (final StandbyTask task : standbyTasks.values()) {
+            closeOneStateManager(task);
+        }
+    }
+
+    private void closeOneStateManager(final AbstractTask task) {
+        try {
+            task.closeStateManager();
+        } catch (final ProcessorStateException e) {
+            log.error(String.format("stream-thread [%s] Failed to close state manager for %s %s: ", this.getName(), task.getClass().getSimpleName(), task.id()), e);
+        }
+    }
+
+    private void commitQuietly() {
+        // Exceptions should not prevent this call from going through all shutdown steps
+        try {
+            commitAll();
+        } catch (Throwable e) {
+            // already logged in commitAll()
+        }
     }
 
     /**
@@ -593,9 +623,6 @@ public class StreamThread extends Thread {
 
     private void removeStreamTasks() {
         try {
-            for (StreamTask task : activeTasks.values()) {
-                closeOne(task);
-            }
             prevTasks.clear();
             prevTasks.addAll(activeTasks.keySet());
 
@@ -701,12 +728,18 @@ public class StreamThread extends Thread {
         return sb.toString();
     }
 
+    private void closeAllTasks() {
+        for (StreamTask task : activeTasks.values()) {
+            closeOne(task);
+        }
+
+        for (StandbyTask task : standbyTasks.values()) {
+            closeOne(task);
+        }
+    }
 
     private void removeStandbyTasks() {
         try {
-            for (StandbyTask task : standbyTasks.values()) {
-                closeOne(task);
-            }
             standbyTasks.clear();
             standbyTasksByPartition.clear();
             standbyRecords.clear();

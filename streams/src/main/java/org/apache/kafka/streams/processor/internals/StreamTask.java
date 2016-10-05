@@ -333,10 +333,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
             }
         }
 
-        super.close();
-
-        if (exception != null)
+        if (exception != null) {
             throw exception;
+        }
     }
 
     @Override
