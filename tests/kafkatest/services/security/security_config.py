@@ -86,7 +86,6 @@ class SslStores(object):
             raise subprocess.CalledProcessError(proc.returncode, cmd)
 
 
-
 class SecurityConfig(TemplateRenderer):
 
     PLAINTEXT = 'PLAINTEXT'
