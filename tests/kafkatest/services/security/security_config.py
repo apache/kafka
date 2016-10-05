@@ -35,6 +35,8 @@ class SslStores(object):
         self.key_passwd = "test-key-passwd"
         # Allow upto one hour of clock skew between host and VMs
         self.startdate = "-1H"
+        # Reference to rmtree
+        self.rmtree = rmtree
 
     def generate_ca(self):
         """
