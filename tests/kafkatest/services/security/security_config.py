@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import atexit
 import os
 import subprocess
 from tempfile import mkdtemp
@@ -24,19 +25,20 @@ import itertools
 class SslStores(object):
     def __init__(self):
         self.ca_dir = mkdtemp(dir="/tmp")
-        self.ca_crt_path = os.path.joins(self.ca_dir, "test.ca.crt")
-        self.ca_jks_path = os.path.joins(self.ca_dir, "test.ca.jks")
+        self.ca_crt_path = os.path.join(self.ca_dir, "test.ca.crt")
+        self.ca_jks_path = os.path.join(self.ca_dir, "test.ca.jks")
         self.ca_passwd = "test-ca-passwd"
 
         self.truststore_dir = mkdtemp(dir="/tmp")
-        self.truststore_path = os.path.joins(self.truststore_dir, "test.truststore.jks")
+        self.truststore_path = os.path.join(self.truststore_dir, "test.truststore.jks")
         self.truststore_passwd = "test-ts-passwd"
         self.keystore_passwd = "test-ks-passwd"
         self.key_passwd = "test-key-passwd"
         # Allow upto one hour of clock skew between host and VMs
         self.startdate = "-1H"
-        # Reference to rmtree
-        self.rmtree = rmtree
+        # Register rmtree to run on exit
+        atexit.register(rmtree, self.ca_dir)
+        atexit.register(rmtree, self.truststore_dir)
 
     def generate_ca(self):
         """
@@ -83,9 +85,6 @@ class SslStores(object):
         if proc.returncode != 0:
             raise subprocess.CalledProcessError(proc.returncode, cmd)
 
-    def __del__(self):
-        self.rmtree(self.ca_dir)
-        self.rmtree(self.truststore_dir)
 
 
 class SecurityConfig(TemplateRenderer):
