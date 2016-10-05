@@ -23,6 +23,7 @@ import itertools
 
 class SslStores(object):
     def __init__(self):
+        self.rmtree = rmtree
         self.ca_dir = mkdtemp(dir="/tmp")
         self.ca_crt_path = os.path.joins(self.ca_dir, "test.ca.crt")
         self.ca_jks_path = os.path.joins(self.ca_dir, "test.ca.jks")
@@ -82,8 +83,8 @@ class SslStores(object):
             raise subprocess.CalledProcessError(proc.returncode, cmd)
 
     def __del__(self):
-        rmtree(self.ca_dir)
-        rmtree(self.truststore_dir)
+        self.rmtree(self.ca_dir)
+        self.rmtree(self.truststore_dir)
 
 
 class SecurityConfig(TemplateRenderer):
