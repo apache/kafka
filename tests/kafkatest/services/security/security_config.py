@@ -23,7 +23,6 @@ import itertools
 
 class SslStores(object):
     def __init__(self):
-        self.rmtree = rmtree
         self.ca_dir = mkdtemp(dir="/tmp")
         self.ca_crt_path = os.path.joins(self.ca_dir, "test.ca.crt")
         self.ca_jks_path = os.path.joins(self.ca_dir, "test.ca.jks")
