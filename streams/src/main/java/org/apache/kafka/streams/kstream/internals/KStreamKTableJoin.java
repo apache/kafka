@@ -48,19 +48,19 @@ class KStreamKTableJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
         private final KTableValueGetter<K, V2> valueGetter;
 
-        public KStreamKTableLeftJoinProcessor(KTableValueGetter<K, V2> valueGetter) {
+        public KStreamKTableLeftJoinProcessor(final KTableValueGetter<K, V2> valueGetter) {
             this.valueGetter = valueGetter;
         }
 
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
             valueGetter.init(context);
         }
 
         @Override
         public void process(final K key, final V1 value) {
-            // if the key is null, we do not need proceed joining
+            // if the key or value is null, we do not need proceed joining
             // the record with the table
             if (key != null && value != null) {
                 context().forward(key, joiner.apply(value, valueGetter.get(key)));

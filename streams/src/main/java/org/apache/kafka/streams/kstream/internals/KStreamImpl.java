@@ -64,6 +64,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     public static final String JOINOTHER_NAME = "KSTREAM-JOINOTHER-";
 
+    public static final String JOIN_NAME = "KSTREAM-JOIN-";
+
     public static final String LEFTJOIN_NAME = "KSTREAM-LEFTJOIN-";
 
     private static final String MAP_NAME = "KSTREAM-MAP-";
@@ -125,7 +127,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public <K1> KStream<K1, V> selectKey(final KeyValueMapper<K, V, K1> mapper) {
         Objects.requireNonNull(mapper, "mapper can't be null");
         return new KStreamImpl<>(topology, internalSelectKey(mapper), sourceNodes, true);
@@ -550,56 +551,44 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         if (repartitionRequired) {
             final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(keySerde,
                 valueSerde, null);
-            return thisStreamRepartitioned.doStreamTableJoin(other, joiner);
+            return thisStreamRepartitioned.doStreamTableJoin(other, joiner, false);
         } else {
-            return doStreamTableJoin(other, joiner);
+            return doStreamTableJoin(other, joiner, false);
         }
     }
 
     private <V1, R> KStream<K, R> doStreamTableJoin(final KTable<K, V1> other,
-                                                    final ValueJoiner<V, V1, R> joiner) {
+                                                    final ValueJoiner<V, V1, R> joiner,
+                                                    final boolean leftJoin) {
         final Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
 
-        final String name = topology.newName(LEFTJOIN_NAME);
+        final String name = topology.newName(leftJoin ? LEFTJOIN_NAME : JOIN_NAME);
 
-        topology.addProcessor(name, new KStreamKTableJoin<>((KTableImpl<K, ?, V1>) other, joiner, false), this.name);
+        topology.addProcessor(name, new KStreamKTableJoin<>((KTableImpl<K, ?, V1>) other, joiner, leftJoin), this.name);
         topology.connectProcessors(this.name, ((KTableImpl<K, ?, V1>) other).name);
 
         return new KStreamImpl<>(topology, name, allSourceNodes, false);
     }
 
     @Override
-    public <V1, R> KStream<K, R> leftJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner) {
+    public <V1, R> KStream<K, R> leftJoin(final KTable<K, V1> other, final ValueJoiner<V, V1, R> joiner) {
         return leftJoin(other, joiner, null, null);
     }
 
-    public <V1, R> KStream<K, R> leftJoin(KTable<K, V1> other,
-                                          ValueJoiner<V, V1, R> joiner,
-                                          Serde<K> keySerde,
-                                          Serde<V> valueSerde) {
+    public <V1, R> KStream<K, R> leftJoin(final KTable<K, V1> other,
+                                          final ValueJoiner<V, V1, R> joiner,
+                                          final Serde<K> keySerde,
+                                          final Serde<V> valueSerde) {
         Objects.requireNonNull(other, "other KTable can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
 
         if (repartitionRequired) {
-            KStreamImpl<K, V> thisStreamRepartitioned = this.repartitionForJoin(keySerde,
+            final KStreamImpl<K, V> thisStreamRepartitioned = this.repartitionForJoin(keySerde,
                                                                                 valueSerde, null);
-            return thisStreamRepartitioned.doStreamTableLeftJoin(other, joiner);
+            return thisStreamRepartitioned.doStreamTableJoin(other, joiner, true);
         } else {
-            return doStreamTableLeftJoin(other, joiner);
+            return doStreamTableJoin(other, joiner, true);
         }
-    }
-
-    private <V1, R> KStream<K, R> doStreamTableLeftJoin(final KTable<K, V1> other,
-                                                        final ValueJoiner<V, V1, R> joiner) {
-        final Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
-
-        final String name = topology.newName(LEFTJOIN_NAME);
-
-        topology.addProcessor(name, new KStreamKTableJoin<>((KTableImpl<K, ?, V1>) other, joiner, true), this.name);
-        topology.connectProcessorAndStateStores(name, ((KTableImpl<K, ?, V1>) other).valueGetterSupplier().storeNames());
-        topology.connectProcessors(this.name, ((KTableImpl<K, ?, V1>) other).name);
-
-        return new KStreamImpl<>(topology, name, allSourceNodes, false);
     }
 
     @Override
@@ -609,8 +598,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public <K1> KGroupedStream<K1, V> groupBy(KeyValueMapper<K, V, K1> selector,
-                                                   Serde<K1> keySerde,
-                                                   Serde<V> valSerde) {
+                                              Serde<K1> keySerde,
+                                              Serde<V> valSerde) {
 
         Objects.requireNonNull(selector, "selector can't be null");
         String selectName = internalSelectKey(selector);

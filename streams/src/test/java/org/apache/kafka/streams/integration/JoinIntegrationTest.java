@@ -79,7 +79,6 @@ public class JoinIntegrationTest {
     private KTable<Long, String> leftTable;
     private KTable<Long, String> rightTable;
 
-    private final long anyUniqueKey = 0L;
     private final List<Input<String>> input = Arrays.asList(
         new Input<>(INPUT_TOPIC_1, (String) null),
         new Input<>(INPUT_TOPIC_2, (String) null),
@@ -161,7 +160,7 @@ public class JoinIntegrationTest {
         CLUSTER.deleteTopic(INPUT_TOPIC_2);
         CLUSTER.deleteTopic(OUTPUT_TOPIC);
 
-        TestUtils.waitForCondition(topicsGotDeleted, 300, "Topics not deleted after 120 seconds.");
+        TestUtils.waitForCondition(topicsGotDeleted, 120000, "Topics not deleted after 120 seconds.");
     }
 
     private void checkResult(final String outputTopic, final List<String> expectedResult) throws Exception {
@@ -423,6 +422,8 @@ public class JoinIntegrationTest {
     private final class Input<V> {
         String topic;
         KeyValue<Long, V> record;
+
+        private final long anyUniqueKey = 0L;
 
         Input(final String topic, final V value) {
             this.topic = topic;
