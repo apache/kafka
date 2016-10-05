@@ -14,12 +14,43 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.test;
 
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.KeyValueIterator;
 
-public interface PeekingWindowIterator<V> extends WindowStoreIterator<V> {
+import java.util.Iterator;
 
-    KeyValue<Long, V> peekNext();
+public class KeyValueIteratorStub<K, V> implements KeyValueIterator<K, V> {
+
+    private final Iterator<KeyValue<K, V>> iterator;
+
+    public KeyValueIteratorStub(final Iterator<KeyValue<K, V>> iterator) {
+        this.iterator = iterator;
+    }
+
+    @Override
+    public void close() {
+        //no-op
+    }
+
+    @Override
+    public K peekNextKey() {
+        return null;
+    }
+
+    @Override
+    public boolean hasNext() {
+        return iterator.hasNext();
+    }
+
+    @Override
+    public KeyValue<K, V> next() {
+        return iterator.next();
+    }
+
+    @Override
+    public void remove() {
+
+    }
 }

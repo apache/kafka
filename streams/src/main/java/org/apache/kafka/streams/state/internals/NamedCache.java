@@ -106,6 +106,7 @@ class NamedCache {
         }
 
         final List<ThreadCache.DirtyEntry> entries  = new ArrayList<>();
+        final List<Bytes> deleted = new ArrayList<>();
         for (Bytes key : dirtyKeys) {
             final LRUNode node = getInternal(key);
             if (node == null) {
@@ -113,9 +114,15 @@ class NamedCache {
             }
             entries.add(new ThreadCache.DirtyEntry(key, node.entry.value, node.entry));
             node.entry.markClean();
+            if (node.entry.value == null) {
+                deleted.add(node.key);
+            }
         }
         listener.apply(entries);
         dirtyKeys.clear();
+        for (Bytes key : deleted) {
+            delete(key);
+        }
     }
 
 
@@ -206,6 +213,12 @@ class NamedCache {
         }
         remove(eldest);
         cache.remove(eldest.key);
+
+        // could have been deleted from the cache during flush
+        // so there would be double counting
+        if (currentSizeBytes + eldest.size() == 0) {
+            currentSizeBytes = 0;
+        }
     }
 
     synchronized LRUCacheEntry putIfAbsent(final Bytes key, final LRUCacheEntry value) {
@@ -249,7 +262,6 @@ class NamedCache {
         copy.addAll(keySet);
         return copy.iterator();
     }
-    
 
     synchronized Iterator<Bytes> allKeys() {
         return keySetIterator(cache.navigableKeySet());

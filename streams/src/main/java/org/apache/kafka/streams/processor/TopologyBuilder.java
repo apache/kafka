@@ -29,9 +29,9 @@ import org.apache.kafka.streams.processor.internals.QuickUnion;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor.SubscriptionUpdates;
-import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.apache.kafka.streams.state.internals.WindowStoreSupplier;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -905,11 +905,11 @@ public class TopologyBuilder {
     }
 
     private InternalTopicConfig createInternalTopicConfig(final StateStoreSupplier supplier, final String name) {
-        if (!(supplier instanceof RocksDBWindowStoreSupplier)) {
+        if (!(supplier instanceof WindowStoreSupplier)) {
             return new InternalTopicConfig(name, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), supplier.logConfig());
         }
 
-        final RocksDBWindowStoreSupplier windowStoreSupplier = (RocksDBWindowStoreSupplier) supplier;
+        final WindowStoreSupplier windowStoreSupplier = (WindowStoreSupplier) supplier;
         final InternalTopicConfig config = new InternalTopicConfig(name,
                                                                    Utils.mkSet(InternalTopicConfig.CleanupPolicy.compact,
                                                                                InternalTopicConfig.CleanupPolicy.delete),

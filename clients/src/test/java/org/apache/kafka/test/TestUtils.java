@@ -35,6 +35,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -308,5 +309,13 @@ public class TestUtils {
         } catch (Exception e) {
             fail(clusterId + " cannot be converted back to UUID.");
         }
+    }
+
+    public static <T> List<T> toList(final Iterator<T> iterator) {
+        final List<T> results = new ArrayList<>();
+        while(iterator.hasNext()) {
+            results.add(iterator.next());
+        }
+        return results;
     }
 }

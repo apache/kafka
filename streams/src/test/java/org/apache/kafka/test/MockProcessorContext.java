@@ -21,6 +21,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -95,6 +96,9 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
     }
 
     public void setTime(long timestamp) {
+        if (recordContext != null) {
+            recordContext = new ProcessorRecordContext(timestamp, recordContext.offset(), recordContext.partition(), recordContext.topic());
+        }
         this.timestamp = timestamp;
     }
 
@@ -157,7 +161,7 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
 
     @Override
     public void schedule(long interval) {
-        throw new UnsupportedOperationException("schedule() not supported.");
+//        throw new UnsupportedOperationException("schedule() not supported.");
     }
 
     @Override

@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.SessionStore;
 
 /**
  * {@link KGroupedStream} is an abstraction of a <i>grouped record stream</i> of key-value pairs
@@ -97,6 +98,42 @@ public interface KGroupedStream<K, V> {
     <W extends Window> KTable<Windowed<K>, V> reduce(Reducer<V> reducer,
                                                      Windows<W> windows,
                                                      final StateStoreSupplier<WindowStore> storeSupplier);
+
+    /**
+     * Combine values of this stream by key into {@link SessionWindows}.
+     * The resulting {@link KTable} will be materialized in a local state
+     * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
+     * will be automatically created in Kafka for failure recovery, where "applicationID"
+     * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
+     *
+     * @param reducer           the instance of {@link Reducer}
+     * @param sessionWindows    the specification of the aggregation {@link SessionWindows}
+     * @param storeName         the name of the state store created from this operation
+     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
+     *         where each table contains records with unmodified keys and values
+     *         that represent the latest (rolling) aggregate for each key within that window
+     */
+    KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
+                                  final SessionWindows sessionWindows,
+                                  final String storeName);
+
+    /**
+     * Combine values of this stream by key into {@link SessionWindows}
+     * The resulting {@link KTable} will be materialized in a local state
+     * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
+     * will be automatically created in Kafka for failure recovery, where "applicationID"
+     * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
+     *
+     * @param reducer           the instance of {@link Reducer}
+     * @param sessionWindows    the specification of the aggregation {@link SessionWindows}
+     * @param storeSupplier     user defined state store supplier {@link StateStoreSupplier}
+     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
+     *         where each table contains records with unmodified keys and values
+     *         that represent the latest (rolling) aggregate for each key within that window
+     */
+    KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
+                                  final SessionWindows sessionWindows,
+                                  final StateStoreSupplier<SessionStore> storeSupplier);
 
 
     /**
@@ -179,6 +216,59 @@ public interface KGroupedStream<K, V> {
                                                            final StateStoreSupplier<WindowStore> storeSupplier);
 
     /**
+     * Aggregate values of this stream by key into {@link SessionWindows}
+     * The resulting {@link KTable} will be materialized in a local state
+     * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
+     * will be automatically created in Kafka for failure recovery, where "applicationID"
+     * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
+     *
+     * @param initializer    the instance of {@link Initializer}
+     * @param aggregator     the instance of {@link Aggregator}
+     * @param sessionMerger  the instance of {@link SessionMerger}
+     * @param sessionWindows the specification of the aggregation {@link SessionWindows}
+     * @param aggValueSerde aggregate value serdes for materializing the aggregated table,
+     *                      if not specified the default serdes defined in the configs will be used
+     * @param <T>           the value type of the resulting {@link KTable}
+     * @param storeName     the name of the state store created from this operation
+     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
+     *         where each table contains records with unmodified keys and values with type {@code T}
+     *         that represent the latest (rolling) aggregate for each key within that window
+     */
+    <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
+                                         final Aggregator<K, V, T> aggregator,
+                                         final SessionMerger<K, T> sessionMerger,
+                                         final SessionWindows sessionWindows,
+                                         final Serde<T> aggValueSerde,
+                                         final String storeName);
+
+    /**
+     * Aggregate values of this stream by key into {@link SessionWindows}.
+     * The resulting {@link KTable} will be materialized in a local state
+     * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
+     * will be automatically created in Kafka for failure recovery, where "applicationID"
+     * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
+     *
+     * @param initializer    the instance of {@link Initializer}
+     * @param aggregator     the instance of {@link Aggregator}
+     * @param sessionMerger  the instance of {@link SessionMerger}
+     * @param sessionWindows the specification of the aggregation {@link SessionWindows}
+     * @param aggValueSerde  aggregate value serdes for materializing the aggregated table,
+     *                       if not specified the default serdes defined in the configs will be used
+     * @param storeSupplier  user defined state store supplier {@link StateStoreSupplier}
+     * @param <T>           the value type of the resulting {@link KTable}
+     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
+     *         where each table contains records with unmodified keys and values with type {@code T}
+     *         that represent the latest (rolling) aggregate for each key within that window
+     */
+    <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
+                                         final Aggregator<K, V, T> aggregator,
+                                         final SessionMerger<K, T> sessionMerger,
+                                         final SessionWindows sessionWindows,
+                                         final Serde<T> aggValueSerde,
+                                         final StateStoreSupplier<SessionStore> storeSupplier);
+
+
+    /**
      * Count number of records of this stream by key into a new instance of a {@link KTable}.
      * The resulting {@link KTable} will be materialized in a local state
      * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
@@ -231,4 +321,34 @@ public interface KGroupedStream<K, V> {
     <W extends Window> KTable<Windowed<K>, Long> count(Windows<W> windows,
                                                        final StateStoreSupplier<WindowStore> storeSupplier);
 
+    /**
+     * Count number of records of this stream by key into {@link SessionWindows}
+     * The resulting {@link KTable} will be materialized in a local state
+     * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
+     * will be automatically created in Kafka for failure recovery, where "applicationID"
+     * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
+     *
+     * @param sessionWindows the specification of the aggregation {@link SessionWindows}
+     * @param storeName      the name of the state store created from this operation.
+     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
+     *         where each table contains records with unmodified keys and values
+     *         that represent the latest (rolling) count (i.e., number of records) for each key within that window
+     */
+    KTable<Windowed<K>, Long> count(final SessionWindows sessionWindows, final String storeName);
+
+    /**
+     * Count number of records of this stream by key into {@link SessionWindows}.
+     * The resulting {@link KTable} will be materialized in a local state
+     * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
+     * will be automatically created in Kafka for failure recovery, where "applicationID"
+     * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
+     *
+     * @param sessionWindows the specification of the aggregation {@link SessionWindows}
+     * @param storeSupplier  user defined state store supplier {@link StateStoreSupplier}
+     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
+     *         where each table contains records with unmodified keys and values
+     *         that represent the latest (rolling) count (i.e., number of records) for each key within that window
+     */
+    KTable<Windowed<K>, Long> count(final SessionWindows sessionWindows,
+                                    final StateStoreSupplier<SessionStore> storeSupplier);
 }

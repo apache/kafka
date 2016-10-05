@@ -87,7 +87,7 @@ public abstract class AbstractStream<K> {
                                                                                      final String storeName) {
         Objects.requireNonNull(storeName, "storeName can't be null");
         return storeFactory(keySerde, aggValSerde, storeName)
-                .windowed(windows.size(), windows.maintainMs(), windows.segments, false)
+                .windowed(windows.size(), windows.maintainMs(), windows.segments, false, false)
                 .build();
     }
     @SuppressWarnings("unchecked")

@@ -25,12 +25,16 @@ import org.apache.kafka.streams.state.internals.CachedStateStore;
 class TupleForwarder<K, V> {
     private final boolean cached;
     private final ProcessorContext context;
+    private final boolean sendOldValues;
+
     @SuppressWarnings("unchecked")
     public TupleForwarder(final StateStore store,
                           final ProcessorContext context,
-                          final ForwardingCacheFlushListener flushListener) {
+                          final ForwardingCacheFlushListener flushListener,
+                          final boolean sendOldValues) {
         this.cached = store instanceof CachedStateStore;
         this.context = context;
+        this.sendOldValues = sendOldValues;
         if (this.cached) {
             ((CachedStateStore) store).setFlushListener(flushListener);
         }
@@ -38,8 +42,7 @@ class TupleForwarder<K, V> {
 
     public void maybeForward(final K key,
                              final V newValue,
-                             final V oldValue,
-                             final boolean sendOldValues) {
+                             final V oldValue) {
         if (!cached) {
             if (sendOldValues) {
                 context.forward(key, new Change<>(newValue, oldValue));

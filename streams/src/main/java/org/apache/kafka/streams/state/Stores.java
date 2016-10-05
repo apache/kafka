@@ -18,10 +18,12 @@ package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryLRUCacheStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDBSessionStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -105,14 +107,16 @@ public class Stores {
                                     private int numSegments = 0;
                                     private long retentionPeriod = 0L;
                                     private boolean retainDuplicates = false;
+                                    private boolean sessionWindows;
                                     private boolean logged = true;
 
                                     @Override
-                                    public PersistentKeyValueFactory<K, V> windowed(final long windowSize, long retentionPeriod, int numSegments, boolean retainDuplicates) {
+                                    public PersistentKeyValueFactory<K, V> windowed(final long windowSize, final long retentionPeriod, final int numSegments, final boolean retainDuplicates, final boolean sessionWindows) {
                                         this.windowSize = windowSize;
                                         this.numSegments = numSegments;
                                         this.retentionPeriod = retentionPeriod;
                                         this.retainDuplicates = retainDuplicates;
+                                        this.sessionWindows = sessionWindows;
 
                                         return this;
                                     }
@@ -140,7 +144,9 @@ public class Stores {
                                     @Override
                                     public StateStoreSupplier build() {
                                         log.trace("Creating RocksDb Store name={} numSegments={} logged={}", name, numSegments, logged);
-                                        if (numSegments > 0) {
+                                        if (sessionWindows) {
+                                            return new RocksDBSessionStoreSupplier<>(name, retentionPeriod, numSegments, keySerde, valueSerde, logged, logConfig, cachingEnabled);
+                                        } else if (numSegments > 0) {
                                             return new RocksDBWindowStoreSupplier<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, windowSize, logged, logConfig, cachingEnabled);
                                         }
                                         return new RocksDBKeyValueStoreSupplier<>(name, keySerde, valueSerde, logged, logConfig, cachingEnabled);
@@ -381,13 +387,13 @@ public class Stores {
 
         /**
          * Set the persistent store as a windowed key-value store
-         *
-         * @param windowSize size of the windows
+         *  @param windowSize size of the windows
          * @param retentionPeriod the maximum period of time in milli-second to keep each window in this store
          * @param numSegments the maximum number of segments for rolling the windowed store
          * @param retainDuplicates whether or not to retain duplicate data within the window
+         * @param sessionWindows should this be used for {@link SessionWindows}
          */
-        PersistentKeyValueFactory<K, V> windowed(final long windowSize, long retentionPeriod, int numSegments, boolean retainDuplicates);
+        PersistentKeyValueFactory<K, V> windowed(final long windowSize, long retentionPeriod, int numSegments, boolean retainDuplicates, final boolean sessionWindows);
 
         /**
          * Indicates that a changelog should be created for the store. The changelog will be created
