@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import atexit
 import os
 import subprocess
 from tempfile import mkdtemp
@@ -23,20 +24,19 @@ import itertools
 
 class SslStores(object):
     def __init__(self):
-        self.ca_crt_path = "/tmp/test.ca.crt"
-        self.ca_jks_path = "/tmp/test.ca.jks"
+        self.ca_and_truststore_dir = mkdtemp(dir="/tmp")
+        self.ca_crt_path = os.path.join(self.ca_and_truststore_dir, "test.ca.crt")
+        self.ca_jks_path = os.path.join(self.ca_and_truststore_dir, "test.ca.jks")
         self.ca_passwd = "test-ca-passwd"
 
-        self.truststore_path = "/tmp/test.truststore.jks"
+        self.truststore_path = os.path.join(self.ca_and_truststore_dir, "test.truststore.jks")
         self.truststore_passwd = "test-ts-passwd"
         self.keystore_passwd = "test-ks-passwd"
         self.key_passwd = "test-key-passwd"
         # Allow upto one hour of clock skew between host and VMs
         self.startdate = "-1H"
-
-        for file in [self.ca_crt_path, self.ca_jks_path, self.truststore_path]:
-            if os.path.exists(file):
-                os.remove(file)
+        # Register rmtree to run on exit
+        atexit.register(rmtree, self.ca_and_truststore_dir)
 
     def generate_ca(self):
         """
@@ -64,11 +64,11 @@ class SslStores(object):
         csr_path = os.path.join(ks_dir, "test.kafka.csr")
         crt_path = os.path.join(ks_dir, "test.kafka.crt")
 
-	self.runcmd("keytool -genkeypair -alias kafka -keyalg RSA -keysize 2048 -keystore %s -storepass %s -keypass %s -dname CN=systemtest -ext SAN=DNS:%s -startdate %s" % (ks_path, self.keystore_passwd, self.key_passwd, self.hostname(node), self.startdate))
-	self.runcmd("keytool -certreq -keystore %s -storepass %s -keypass %s -alias kafka -file %s" % (ks_path, self.keystore_passwd, self.key_passwd, csr_path))
-	self.runcmd("keytool -gencert -keystore %s -storepass %s -alias ca -infile %s -outfile %s -dname CN=systemtest -ext SAN=DNS:%s -startdate %s" % (self.ca_jks_path, self.ca_passwd, csr_path, crt_path, self.hostname(node), self.startdate))
-	self.runcmd("keytool -importcert -keystore %s -storepass %s -alias ca -file %s -noprompt" % (ks_path, self.keystore_passwd, self.ca_crt_path))
-	self.runcmd("keytool -importcert -keystore %s -storepass %s -keypass %s -alias kafka -file %s -noprompt" % (ks_path, self.keystore_passwd, self.key_passwd, crt_path))
+        self.runcmd("keytool -genkeypair -alias kafka -keyalg RSA -keysize 2048 -keystore %s -storepass %s -keypass %s -dname CN=systemtest -ext SAN=DNS:%s -startdate %s" % (ks_path, self.keystore_passwd, self.key_passwd, self.hostname(node), self.startdate))
+        self.runcmd("keytool -certreq -keystore %s -storepass %s -keypass %s -alias kafka -file %s" % (ks_path, self.keystore_passwd, self.key_passwd, csr_path))
+        self.runcmd("keytool -gencert -keystore %s -storepass %s -alias ca -infile %s -outfile %s -dname CN=systemtest -ext SAN=DNS:%s -startdate %s" % (self.ca_jks_path, self.ca_passwd, csr_path, crt_path, self.hostname(node), self.startdate))
+        self.runcmd("keytool -importcert -keystore %s -storepass %s -alias ca -file %s -noprompt" % (ks_path, self.keystore_passwd, self.ca_crt_path))
+        self.runcmd("keytool -importcert -keystore %s -storepass %s -keypass %s -alias kafka -file %s -noprompt" % (ks_path, self.keystore_passwd, self.key_passwd, crt_path))
         node.account.scp_to(ks_path, SecurityConfig.KEYSTORE_PATH)
         rmtree(ks_dir)
 
