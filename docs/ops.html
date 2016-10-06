@@ -695,12 +695,12 @@ We do graphing and alerting on the following metrics:
     </tr>
     <tr>
       <td>Requests waiting in the producer purgatory</td>
-      <td>kafka.server:type=ProducerRequestPurgatory,name=PurgatorySize</td>
+      <td>kafka.server:type=DelayedOperationPurgatory,name=PurgatorySize,delayedOperation=Produce</td>
       <td>non-zero if ack=-1 is used</td>
     </tr>
     <tr>
       <td>Requests waiting in the fetch purgatory</td>
-      <td>kafka.server:type=FetchRequestPurgatory,name=PurgatorySize</td>
+      <td>kafka.server:type=DelayedOperationPurgatory,name=PurgatorySize,delayedOperation=Fetch</td>
       <td>size depends on fetch.wait.max.ms in the consumer</td>
     </tr>
     <tr>
