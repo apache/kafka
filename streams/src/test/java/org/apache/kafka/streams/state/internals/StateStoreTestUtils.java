@@ -35,7 +35,7 @@ import java.util.Collections;
 public class StateStoreTestUtils {
 
     public static <K, V> KeyValueStore<K, V> newKeyValueStore(String name, Class<K> keyType, Class<V> valueType) {
-        final InMemoryKeyValueStoreSupplier<K, V> supplier = new InMemoryKeyValueStoreSupplier<>(name,
+        final InMemoryKeyValueStoreSupplier<K, V, KeyValueStore> supplier = new InMemoryKeyValueStoreSupplier<>(name,
                                                                                                  null,
                                                                                                  null,
                                                                                                  new MockTime(),
