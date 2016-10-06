@@ -38,7 +38,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.processor.PartitionGrouper;
@@ -133,12 +132,8 @@ public class StreamThread extends Thread {
         public void onPartitionsRevoked(Collection<TopicPartition> assignment) {
             try {
                 initialized.set(false);
-                commitAll();
                 lastCleanMs = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
-                closeAllTasks();
-                // flush any records produced on close
-                producer.flush();
-                closeAllStateManagers();
+                shutdownTasksAndState(true);
             } catch (Throwable t) {
                 rebalanceException = t;
                 throw t;
@@ -264,15 +259,8 @@ public class StreamThread extends Thread {
 
     private void shutdown() {
         log.info("stream-thread [{}] Shutting down", this.getName());
+        shutdownTasksAndState(false);
 
-        // Commit first as there may be cached records that have not been flushed yet.
-        commitQuietly();
-        // Close all processors in topology order
-        closeAllTasks();
-        // flush out any extra data sent during close
-        producer.flush();
-        // Close all task state managers
-        closeAllStateManagers();
 
         // close all embedded clients
         try {
@@ -298,31 +286,71 @@ public class StreamThread extends Thread {
         log.info("stream-thread [{}] Stream thread shutdown complete", this.getName());
     }
 
-    private void closeAllStateManagers() {
-        for (final StreamTask task : activeTasks.values()) {
-            closeOneStateManager(task);
-        }
+    private void shutdownTasksAndState(final boolean rethrowExceptions) {
+        // Commit first as there may be cached records that have not been flushed yet.
+        commitOffsets(rethrowExceptions);
+        // Close all processors in topology order
+        closeAllTasks();
+        // flush state
+        flushAllState(rethrowExceptions);
+        // flush out any extra data sent during close
+        producer.flush();
+        // Close all task state managers
+        closeAllStateManagers(rethrowExceptions);
+    }
 
-        for (final StandbyTask task : standbyTasks.values()) {
-            closeOneStateManager(task);
+    interface AbstractTaskAction {
+        void apply(final AbstractTask task);
+    }
+
+    private void performOnAllTasks(final AbstractTaskAction action,
+                                   final String exceptionMessage,
+                                   final boolean throwExceptions) {
+        final List<AbstractTask> allTasks = new ArrayList<AbstractTask>(activeTasks.values());
+        allTasks.addAll(standbyTasks.values());
+        for (final AbstractTask task : allTasks) {
+            try {
+                action.apply(task);
+            } catch (KafkaException e) {
+                log.error(String.format("stream-thread [%s] Failed to %s for %s %s: ",
+                                        StreamThread.this.getName(),
+                                        exceptionMessage,
+                                        task.getClass().getSimpleName(),
+                                        task.id()),
+                          e);
+                if (throwExceptions) {
+                    throw e;
+                }
+            }
         }
     }
 
-    private void closeOneStateManager(final AbstractTask task) {
-        try {
-            task.closeStateManager();
-        } catch (final ProcessorStateException e) {
-            log.error(String.format("stream-thread [%s] Failed to close state manager for %s %s: ", this.getName(), task.getClass().getSimpleName(), task.id()), e);
-        }
+    private void closeAllStateManagers(final boolean throwExceptions) {
+        performOnAllTasks(new AbstractTaskAction() {
+            @Override
+            public void apply(final AbstractTask task) {
+                    task.closeStateManager();
+            }
+        }, "close state manager", throwExceptions);
     }
 
-    private void commitQuietly() {
+    private void commitOffsets(final boolean throwExceptions) {
         // Exceptions should not prevent this call from going through all shutdown steps
-        try {
-            commitAll();
-        } catch (Throwable e) {
-            // already logged in commitAll()
-        }
+        performOnAllTasks(new AbstractTaskAction() {
+            @Override
+            public void apply(final AbstractTask task) {
+                task.commitOffsets();
+            }
+        }, "commit consumer offsets", throwExceptions);
+    }
+
+    private void flushAllState(final boolean throwExceptions) {
+        performOnAllTasks(new AbstractTaskAction() {
+            @Override
+            public void apply(final AbstractTask task) {
+                task.flushState();
+            }
+        }, "flush state", throwExceptions);
     }
 
     /**
@@ -634,16 +662,6 @@ public class StreamThread extends Thread {
         }
     }
 
-    private void closeOne(AbstractTask task) {
-        log.info("stream-thread [{}] Removing a task {}", this.getName(), task.id());
-        try {
-            task.close();
-        } catch (StreamsException e) {
-            log.error(String.format("stream-thread [%s] Failed to close a %s %s: ", this.getName(), task.getClass().getSimpleName(), task.id()), e);
-        }
-        sensors.taskDestructionSensor.record();
-    }
-
     protected StandbyTask createStandbyTask(TaskId id, Collection<TopicPartition> partitions) {
         sensors.taskCreationSensor.record();
 
@@ -729,13 +747,14 @@ public class StreamThread extends Thread {
     }
 
     private void closeAllTasks() {
-        for (StreamTask task : activeTasks.values()) {
-            closeOne(task);
-        }
-
-        for (StandbyTask task : standbyTasks.values()) {
-            closeOne(task);
-        }
+        performOnAllTasks(new AbstractTaskAction() {
+            @Override
+            public void apply(final AbstractTask task) {
+                log.info("stream-thread [{}] Removing a task {}", StreamThread.this.getName(), task.id());
+                task.close();
+                sensors.taskDestructionSensor.record();
+            }
+        }, "close", false);
     }
 
     private void removeStandbyTasks() {

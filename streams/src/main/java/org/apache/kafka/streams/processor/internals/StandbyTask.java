@@ -103,6 +103,11 @@ public class StandbyTask extends AbstractTask {
         //no-op
     }
 
+    @Override
+    public void commitOffsets() {
+        // no-op
+    }
+
     /**
      * Produces a string representation contain useful information about a StreamTask.
      * This is useful in debugging scenarios.

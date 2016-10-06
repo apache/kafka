@@ -326,18 +326,17 @@ public class ProcessorStateManager {
     }
 
     /**
-     * @throws IOException if any error happens when flushing or closing the state stores
+     * @throws IOException if any error happens when closing the state stores
      */
     public void close(Map<TopicPartition, Long> ackedOffsets) throws IOException {
         try {
-            // attempting to flush and close the stores, just in case they
+            // attempting to close the stores, just in case they
             // are not closed by a ProcessorNode yet
             if (!stores.isEmpty()) {
                 log.debug("task [{}] Closing stores.", taskId);
                 for (Map.Entry<String, StateStore> entry : stores.entrySet()) {
                     log.debug("task [{}} Closing storage engine {}", taskId, entry.getKey());
                     try {
-                        entry.getValue().flush();
                         entry.getValue().close();
                     } catch (Exception e) {
                         throw new ProcessorStateException(String.format("task [%s] Failed to close state store %s", taskId, entry.getKey()), e);
