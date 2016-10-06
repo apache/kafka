@@ -143,6 +143,12 @@ public class StreamThreadTest {
         }
 
         @Override
+        public void commitOffsets() {
+            super.commitOffsets();
+            committed = true;
+        }
+
+        @Override
         protected void initializeOffsetLimits() {
             // do nothing
         }

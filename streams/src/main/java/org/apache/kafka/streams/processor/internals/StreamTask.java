@@ -269,6 +269,14 @@ public class StreamTask extends AbstractTask implements Punctuator {
         recordCollector.flush();
 
         // 3) commit consumed offsets if it is dirty already
+        commitOffsets();
+    }
+
+    /**
+     * commit consumed offsets if needed
+     */
+    @Override
+    public void commitOffsets() {
         if (commitOffsetNeeded) {
             Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
             for (Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
@@ -333,10 +341,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
             }
         }
 
-        super.close();
-
-        if (exception != null)
+        if (exception != null) {
             throw exception;
+        }
     }
 
     @Override
