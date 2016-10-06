@@ -44,7 +44,11 @@ public class JaasUtils {
      * @return JAAS configuration object
      */
     public static String jaasConfig(String loginContextName, String key) throws IOException {
-        AppConfigurationEntry[] configurationEntries = Configuration.getConfiguration().getAppConfigurationEntry(loginContextName);
+        return jaasConfig(Configuration.getConfiguration(), loginContextName, key);
+    }
+
+    public static String jaasConfig(Configuration jaasConfig, String loginContextName, String key) throws IOException {
+        AppConfigurationEntry[] configurationEntries = jaasConfig.getAppConfigurationEntry(loginContextName);
         if (configurationEntries == null) {
             String errorMessage = "Could not find a '" + loginContextName + "' entry in this configuration.";
             throw new IOException(errorMessage);

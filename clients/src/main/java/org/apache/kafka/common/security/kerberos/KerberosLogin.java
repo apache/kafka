@@ -92,14 +92,14 @@ public class KerberosLogin extends AbstractLogin {
      * @throws javax.security.auth.login.LoginException
      *               Thrown if authentication fails.
      */
-    public void configure(Map<String, ?> configs, final String loginContextName) {
-        super.configure(configs, loginContextName);
+    public void configure(Map<String, ?> configs, Configuration jaasConfig, final String loginContextName) {
+        super.configure(configs, jaasConfig, loginContextName);
         this.loginContextName = loginContextName;
         this.ticketRenewWindowFactor = (Double) configs.get(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR);
         this.ticketRenewJitter = (Double) configs.get(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER);
         this.minTimeBeforeRelogin = (Long) configs.get(SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN);
         this.kinitCmd = (String) configs.get(SaslConfigs.SASL_KERBEROS_KINIT_CMD);
-        this.serviceName = getServiceName(configs, loginContextName);
+        this.serviceName = getServiceName(jaasConfig, configs, loginContextName);
     }
 
     @Override
@@ -110,7 +110,7 @@ public class KerberosLogin extends AbstractLogin {
         subject = loginContext.getSubject();
         isKrbTicket = !subject.getPrivateCredentials(KerberosTicket.class).isEmpty();
 
-        AppConfigurationEntry[] entries = Configuration.getConfiguration().getAppConfigurationEntry(loginContextName);
+        AppConfigurationEntry[] entries = jaasConfig().getAppConfigurationEntry(loginContextName);
         if (entries.length == 0) {
             isUsingTicketCache = false;
             principal = null;
@@ -290,10 +290,10 @@ public class KerberosLogin extends AbstractLogin {
         return serviceName;
     }
 
-    private String getServiceName(Map<String, ?> configs, String loginContext) {
+    private String getServiceName(Configuration jaasConfig, Map<String, ?> configs, String loginContext) {
         String jaasServiceName;
         try {
-            jaasServiceName = JaasUtils.jaasConfig(loginContext, JaasUtils.SERVICE_NAME);
+            jaasServiceName = JaasUtils.jaasConfig(jaasConfig, loginContext, JaasUtils.SERVICE_NAME);
         } catch (IOException e) {
             throw new KafkaException("Jaas configuration not found", e);
         }
