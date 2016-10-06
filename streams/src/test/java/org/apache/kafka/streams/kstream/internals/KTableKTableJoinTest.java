@@ -127,7 +127,7 @@ public class KTableKTableJoinTest {
         processor.checkAndClearProcessResult("0:XX0+Y0", "1:XX1+Y1");
         checkJoinedValues(getter, kv(0, "XX0+Y0"), kv(1, "XX1+Y1"));
 
-        // push all items to the other stream. this should produce two items.
+        // push all items to the other stream. this should produce four items.
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.process(topic2, expectedKeys[i], "YY" + expectedKeys[i]);
         }

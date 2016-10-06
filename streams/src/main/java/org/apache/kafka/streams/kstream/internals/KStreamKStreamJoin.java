@@ -62,6 +62,12 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
         @Override
         public void process(final K key, final V1 value) {
+            // we do join iff keys are equal, thus, if key is null we cannot join and just ignore the record
+            //
+            // we also ignore the record if value is null, because in a key-value data model a null-value indicates
+            // an empty message (ie, there is nothing to be joined) -- this contrast SQL NULL semantics
+            // furthermore, on left/outer joins 'null' in ValueJoiner#apply() indicates a missing record --
+            // thus, to be consistent and to avoid ambiguous null semantics, null values are ignored
             if (key == null || value == null) {
                 return;
             }

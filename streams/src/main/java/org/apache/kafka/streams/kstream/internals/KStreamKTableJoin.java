@@ -27,53 +27,27 @@ class KStreamKTableJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
     private final KTableValueGetterSupplier<K, V2> valueGetterSupplier;
     private final ValueJoiner<V1, V2, R> joiner;
-    private final boolean left;
+    private final boolean leftJoin;
 
-    KStreamKTableJoin(final KTableImpl<K, ?, V2> table, final ValueJoiner<V1, V2, R> joiner, final boolean left) {
+    KStreamKTableJoin(final KTableImpl<K, ?, V2> table, final ValueJoiner<V1, V2, R> joiner, final boolean leftJoin) {
         valueGetterSupplier = table.valueGetterSupplier();
         this.joiner = joiner;
-        this.left = left;
+        this.leftJoin = leftJoin;
     }
 
     @Override
     public Processor<K, V1> get() {
-        if (!left) {
-            return new KStreamKTableJoinProcessor(valueGetterSupplier.get());
-        } else {
-            return new KStreamKTableLeftJoinProcessor(valueGetterSupplier.get());
-        }
-    }
-
-    private class KStreamKTableLeftJoinProcessor extends AbstractProcessor<K, V1> {
-
-        private final KTableValueGetter<K, V2> valueGetter;
-
-        public KStreamKTableLeftJoinProcessor(final KTableValueGetter<K, V2> valueGetter) {
-            this.valueGetter = valueGetter;
-        }
-
-        @Override
-        public void init(final ProcessorContext context) {
-            super.init(context);
-            valueGetter.init(context);
-        }
-
-        @Override
-        public void process(final K key, final V1 value) {
-            // if the key or value is null, we do not need proceed joining
-            // the record with the table
-            if (key != null && value != null) {
-                context().forward(key, joiner.apply(value, valueGetter.get(key)));
-            }
-        }
+        return new KStreamKTableJoinProcessor(valueGetterSupplier.get(), leftJoin);
     }
 
     private class KStreamKTableJoinProcessor extends AbstractProcessor<K, V1> {
 
         private final KTableValueGetter<K, V2> valueGetter;
+        private final boolean leftJoin;
 
-        KStreamKTableJoinProcessor(final KTableValueGetter<K, V2> valueGetter) {
+        KStreamKTableJoinProcessor(final KTableValueGetter<K, V2> valueGetter, final boolean leftJoin) {
             this.valueGetter = valueGetter;
+            this.leftJoin = leftJoin;
         }
 
         @Override
@@ -84,11 +58,15 @@ class KStreamKTableJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
         @Override
         public void process(final K key, final V1 value) {
-            // if the key is null, we do not need proceed joining
-            // the record with the table
+            // we do join iff keys are equal, thus, if key is null we cannot join and just ignore the record
+            //
+            // we also ignore the record if value is null, because in a key-value data model a null-value indicates
+            // an empty message (ie, there is nothing to be joined) -- this contrast SQL NULL semantics
+            // furthermore, on left/outer joins 'null' in ValueJoiner#apply() indicates a missing record --
+            // thus, to be consistent and to avoid ambiguous null semantics, null values are ignored
             if (key != null && value != null) {
                 final V2 value2 = valueGetter.get(key);
-                if (value2 != null) {
+                if (leftJoin || value2 != null) {
                     context().forward(key, joiner.apply(value, value2));
                 }
             }
