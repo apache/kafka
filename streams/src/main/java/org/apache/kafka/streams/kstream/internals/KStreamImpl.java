@@ -512,7 +512,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         stream.topology.addSink(sinkName, repartitionTopic, keySerializer,
                          valSerializer, filterName);
-        stream.topology.addSource(sourceName, keyDeserializer, valDeserializer,
+
+        //TODO add reset strategy to repartitioned source as well?
+        stream.topology.addSource(sourceName, null, keyDeserializer, valDeserializer,
                            repartitionTopic);
 
         return sourceName;

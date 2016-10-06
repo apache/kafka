@@ -232,6 +232,7 @@ public class StreamThread extends Thread {
                 closeNonAssignedSuspendedStandbyTasks();
                 closeNonAssignedSuspendedTasks();
                 addStreamTasks(assignment);
+                maybeSetConsumerOffsets(assignment);
                 addStandbyTasks();
                 lastCleanMs = time.milliseconds(); // start the cleaning cycle
                 streamsMetadataState.onChange(partitionAssignor.getPartitionsByHostState(), partitionAssignor.clusterMetadata());
@@ -719,6 +720,36 @@ public class StreamThread extends Thread {
         if (now > lastCleanMs + cleanTimeMs) {
             stateDirectory.cleanRemovedTasks();
             lastCleanMs = now;
+        }
+    }
+
+
+    /**
+     * @param assignment The Topics and partitions assigned to this stream thread
+     */
+    protected void maybeSetConsumerOffsets(Collection<TopicPartition> assignment) {
+        Set<TopicPartition> earliestTopicPartitions = new HashSet<>();
+        Set<TopicPartition> latestTopicPartitions = new HashSet<>();
+
+        Pattern earliestOffsetTopicPattern = builder.earliestResetTopicsPattern();
+        Pattern latestOffsetTopicPattern = builder.latestResetTopicsPattern();
+
+        for (TopicPartition topicPartition : assignment) {
+            if (earliestOffsetTopicPattern.matcher(topicPartition.topic()).matches()) {
+                earliestTopicPartitions.add(topicPartition);
+            } else if (latestOffsetTopicPattern.matcher(topicPartition.topic()).matches()) {
+                latestTopicPartitions.add(topicPartition);
+            }
+        }
+
+        if (!earliestTopicPartitions.isEmpty()) {
+            log.info(String.format("stream-thread [%s] setting these topics to consume from earliest offset %s", this.getName(), earliestTopicPartitions));
+            consumer.seekToBeginning(earliestTopicPartitions);
+        }
+
+        if (!latestTopicPartitions.isEmpty()) {
+            log.info(String.format("stream-thread [%s] setting these topics to consume from latest offset %s", this.getName(), latestTopicPartitions));
+            consumer.seekToEnd(latestTopicPartitions);
         }
     }
 
