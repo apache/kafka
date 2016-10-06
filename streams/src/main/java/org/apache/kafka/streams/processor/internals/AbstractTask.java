@@ -108,10 +108,15 @@ public abstract class AbstractTask {
 
     public abstract void commit();
 
+
+    public abstract void close();
+
+    public abstract void commitOffsets();
+
     /**
      * @throws ProcessorStateException if there is an error while closing the state manager
      */
-    public void close() {
+    void closeStateManager() {
         try {
             stateMgr.close(recordCollectorOffsets());
         } catch (IOException e) {
@@ -167,5 +172,12 @@ public abstract class AbstractTask {
 
         sb.append("\n");
         return sb.toString();
+    }
+
+    /**
+     * Flush all state stores owned by this task
+     */
+    public void flushState() {
+        stateMgr.flush((InternalProcessorContext) this.context());
     }
 }

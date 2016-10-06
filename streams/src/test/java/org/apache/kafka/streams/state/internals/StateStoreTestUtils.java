@@ -16,18 +16,15 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.NoOpRecordCollector;
 
 import java.util.Collections;
 
@@ -47,32 +44,6 @@ public class StateStoreTestUtils {
                 new NoOpRecordCollector()), stateStore);
         return (KeyValueStore<K, V>) stateStore;
 
-    }
-
-    static class NoOpRecordCollector extends RecordCollector {
-        public NoOpRecordCollector() {
-            super(null, "StateStoreTestUtils");
-        }
-
-        @Override
-        public <K, V> void send(final ProducerRecord<K, V> record, final Serializer<K> keySerializer, final Serializer<V> valueSerializer) {
-            // no-op
-        }
-
-        @Override
-        public <K, V> void send(final ProducerRecord<K, V> record, final Serializer<K> keySerializer, final Serializer<V> valueSerializer, final StreamPartitioner<K, V> partitioner) {
-            // no-op
-        }
-
-        @Override
-        public void flush() {
-            //no-op
-        }
-
-        @Override
-        public void close() {
-            //no-op
-        }
     }
 
     static class NoOpReadOnlyStore<K, V>
