@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 
+import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -59,6 +60,7 @@ public class MockClient implements KafkaClient {
     }
 
     private final Time time;
+    private final Metadata metadata;
     private int correlation = 0;
     private Node node = null;
     private final Set<String> ready = new HashSet<>();
@@ -66,9 +68,16 @@ public class MockClient implements KafkaClient {
     private final Queue<ClientRequest> requests = new ArrayDeque<>();
     private final Queue<ClientResponse> responses = new ArrayDeque<>();
     private final Queue<FutureResponse> futureResponses = new ArrayDeque<>();
+    private final Queue<Cluster> metadataUpdates = new ArrayDeque<>();
 
     public MockClient(Time time) {
         this.time = time;
+        this.metadata = null;
+    }
+
+    public MockClient(Time time, Metadata metadata) {
+        this.time = time;
+        this.metadata = metadata;
     }
 
     @Override
@@ -148,6 +157,14 @@ public class MockClient implements KafkaClient {
     @Override
     public List<ClientResponse> poll(long timeoutMs, long now) {
         List<ClientResponse> copy = new ArrayList<>(this.responses);
+
+        if (metadata != null && metadata.updateRequested()) {
+            Cluster cluster = metadataUpdates.poll();
+            if (cluster == null)
+                metadata.update(metadata.fetch(), time.milliseconds());
+            else
+                metadata.update(cluster, time.milliseconds());
+        }
 
         while (!this.responses.isEmpty()) {
             ClientResponse response = this.responses.poll();
@@ -231,6 +248,19 @@ public class MockClient implements KafkaClient {
 
     public void prepareResponseFrom(RequestMatcher matcher, Struct body, Node node, boolean disconnected) {
         futureResponses.add(new FutureResponse(body, disconnected, matcher, node));
+    }
+
+    public void reset() {
+        ready.clear();
+        blackedOut.clear();
+        requests.clear();
+        responses.clear();
+        futureResponses.clear();
+        metadataUpdates.clear();
+    }
+
+    public void prepareMetadataUpdate(Cluster cluster) {
+        metadataUpdates.add(cluster);
     }
 
     public void setNode(Node node) {

@@ -143,14 +143,18 @@ my-group        my-topic                       1   0               0            
 </pre>
 
 
-Note, however, after 0.9.0, the kafka.tools.ConsumerOffsetChecker tool is deprecated and you should use the kafka.admin.ConsumerGroupCommand (or the bin/kafka-consumer-groups.sh script) to manage consumer groups, including consumers created with the <a href="http://kafka.apache.org/documentation.html#newconsumerapi">new consumer API</a>.
+NOTE: Since 0.9.0.0, the kafka.tools.ConsumerOffsetChecker tool has been deprecated. You should use the kafka.admin.ConsumerGroupCommand (or the bin/kafka-consumer-groups.sh script) to manage consumer groups, including consumers created with the <a href="http://kafka.apache.org/documentation.html#newconsumerapi">new consumer API</a>.
 
 <h4><a id="basic_ops_consumer_group" href="#basic_ops_consumer_group">Managing Consumer Groups</a></h4>
 
-With the ConsumerGroupCommand tool, we can list, delete, or describe consumer groups. For example, to list all consumer groups across all topics:
+With the ConsumerGroupCommand tool, we can list, describe, or delete consumer groups. Note that deletion is only available when the group metadata is stored in
+ZooKeeper. When using the <a href="http://kafka.apache.org/documentation.html#newconsumerapi">new consumer API</a> (where
+the broker handles coordination of partition handling and rebalance), the group is deleted when the last committed offset for that group expires.
+
+For example, to list all consumer groups across all topics:
 
 <pre>
- &gt; bin/kafka-consumer-groups.sh --zookeeper localhost:2181 --list
+ &gt; bin/kafka-consumer-groups.sh --bootstrap-server broker1:9092 --list
 
 test-consumer-group
 </pre>
@@ -158,17 +162,17 @@ test-consumer-group
 To view offsets as in the previous example with the ConsumerOffsetChecker, we "describe" the consumer group like this:
 
 <pre>
- &gt; bin/kafka-consumer-groups.sh --zookeeper localhost:2181 --describe --group test-consumer-group
+ &gt; bin/kafka-consumer-groups.sh --bootstrap-server broker1:9092 --describe --group test-consumer-group
 
 GROUP                          TOPIC                          PARTITION  CURRENT-OFFSET  LOG-END-OFFSET  LAG             OWNER
-test-consumer-group            test-foo                       0          1               3               2               test-consumer-group_postamac.local-1456198719410-29ccd54f-0
+test-consumer-group            test-foo                       0          1               3               2               consumer-1_/127.0.0.1
 </pre>
 
-
-When you're using the <a href="http://kafka.apache.org/documentation.html#newconsumerapi">new consumer API</a> where the broker handles coordination of partition handling and rebalance, you can manage the groups with the "--new-consumer" flags:
+If you are using the old high-level consumer and storing the group metadata in ZooKeeper (i.e. <code>offsets.storage=zookeeper</code>), pass
+<code>--zookeeper</code> instead of <code>bootstrap-server</code>:
 
 <pre>
- &gt; bin/kafka-consumer-groups.sh --new-consumer --bootstrap-server broker1:9092 --list
+ &gt; bin/kafka-consumer-groups.sh --zookeeper localhost:2181 --list
 </pre>
 
 <h4><a id="basic_ops_cluster_expansion" href="#basic_ops_cluster_expansion">Expanding your cluster</a></h4>
@@ -179,7 +183,7 @@ The process of migrating data is manually initiated but fully automated. Under t
 <p>
 The partition reassignment tool can be used to move partitions across brokers. An ideal partition distribution would ensure even data load and partition sizes across all brokers. The partition reassignment tool does not have the capability to automatically study the data distribution in a Kafka cluster and move partitions around to attain an even load distribution. As such, the admin has to figure out which topics or partitions should be moved around.
 <p>
-The partition reassignment tool can run in 3 mutually exclusive modes -
+The partition reassignment tool can run in 3 mutually exclusive modes:
 <ul>
 <li>--generate: In this mode, given a list of topics and a list of brokers, the tool generates a candidate reassignment to move all partitions of the specified topics to the new brokers. This option merely provides a convenient way to generate a partition reassignment plan given a list of topics and target brokers.</li>
 <li>--execute: In this mode, the tool kicks off the reassignment of partitions based on the user provided reassignment plan. (using the --reassignment-json-file option). This can either be a custom reassignment plan hand crafted by the admin or provided by using the --generate option</li>
@@ -896,9 +900,9 @@ The following metrics are available on producer/consumer/connector instances.  F
   </tbody>
 </table>
 
-<h4><a id="new_producer_monitoring" href="#new_producer_monitoring">New producer monitoring</a></h4>
+<h4><a id="producer_monitoring" href="#producer_monitoring">Producer monitoring</a></h4>
 
-The following metrics are available on new producer instances.
+The following metrics are available on producer instances.
 
 <table class="data-table">
 <tbody><tr>

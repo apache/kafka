@@ -1125,7 +1125,6 @@ object TestUtils extends Logging {
     assertTrue(s"$message failed with exception(s) $exceptions", exceptions.isEmpty)
 
   }
-
 }
 
 class IntEncoder(props: VerifiableProperties = null) extends Encoder[Int] {

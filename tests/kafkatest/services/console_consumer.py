@@ -22,7 +22,7 @@ from ducktape.utils.util import wait_until
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.monitor.jmx import JmxMixin
-from kafkatest.version import TRUNK, LATEST_0_8_2, LATEST_0_9, V_0_10_0_0
+from kafkatest.version import TRUNK, LATEST_0_8_2, LATEST_0_9, LATEST_0_10_0, V_0_10_0_0
 
 """
 0.8.2.1 ConsoleConsumer options
@@ -89,7 +89,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
 
     def __init__(self, context, num_nodes, kafka, topic, group_id="test-consumer-group", new_consumer=False,
                  message_validator=None, from_beginning=True, consumer_timeout_ms=None, version=TRUNK,
-                 client_id="console-consumer", print_key=False, jmx_object_names=None, jmx_attributes=[],
+                 client_id="console-consumer", print_key=False, jmx_object_names=None, jmx_attributes=None,
                  enable_systest_events=False, stop_timeout_sec=15):
         """
         Args:
@@ -110,7 +110,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             stop_timeout_sec            After stopping a node, wait up to stop_timeout_sec for the node to stop,
                                         and the corresponding background thread to finish successfully.
         """
-        JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes)
+        JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes or [])
         BackgroundThreadService.__init__(self, context, num_nodes)
         self.kafka = kafka
         self.new_consumer = new_consumer
@@ -176,7 +176,9 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
               "--topic %(topic)s --consumer.config %(config_file)s" % args
 
         if self.new_consumer:
-            cmd += " --new-consumer --bootstrap-server %(broker_list)s" % args
+            if node.version <= LATEST_0_10_0:
+                cmd += " --new-consumer"
+            cmd += " --bootstrap-server %(broker_list)s" % args
         else:
             cmd += " --zookeeper %(zk_connect)s" % args
         if self.from_beginning:

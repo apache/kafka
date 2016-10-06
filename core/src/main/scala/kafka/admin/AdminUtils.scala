@@ -20,13 +20,13 @@ package kafka.admin
 import kafka.common._
 import kafka.cluster.Broker
 import kafka.log.LogConfig
-import kafka.server.{KafkaConfig, ConfigType}
+import kafka.server.{DynamicConfig, ConfigType}
 import kafka.utils._
 import kafka.utils.ZkUtils._
 import java.util.Random
 import java.util.Properties
 import org.apache.kafka.common.Node
-import org.apache.kafka.common.errors.{ReplicaNotAvailableException, InvalidTopicException, LeaderNotAvailableException, InvalidPartitionsException, InvalidReplicationFactorException, TopicExistsException, InvalidReplicaAssignmentException}
+import org.apache.kafka.common.errors.{ReplicaNotAvailableException, UnknownTopicOrPartitionException, InvalidTopicException, LeaderNotAvailableException, InvalidPartitionsException, InvalidReplicationFactorException, TopicExistsException, InvalidReplicaAssignmentException}
 import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 import org.apache.kafka.common.requests.MetadataResponse
 
@@ -325,7 +325,7 @@ object AdminUtils extends Logging with AdminUtilities {
           case e2: Throwable => throw new AdminOperationException(e2)
         }
       } else {
-        throw new InvalidTopicException("topic %s to delete does not exist".format(topic))
+        throw new UnknownTopicOrPartitionException(s"Topic `$topic` to delete does not exist")
       }
     }
 
@@ -488,6 +488,7 @@ object AdminUtils extends Logging with AdminUtilities {
    *
    */
   def changeClientIdConfig(zkUtils: ZkUtils, clientId: String, configs: Properties) {
+    DynamicConfig.Client.validate(configs)
     changeEntityConfig(zkUtils, ConfigType.Client, clientId, configs)
   }
 
@@ -503,6 +504,7 @@ object AdminUtils extends Logging with AdminUtilities {
    *
    */
   def changeUserOrUserClientIdConfig(zkUtils: ZkUtils, sanitizedEntityName: String, configs: Properties) {
+    DynamicConfig.Client.validate(configs)
     changeEntityConfig(zkUtils, ConfigType.User, sanitizedEntityName, configs)
   }
 
@@ -532,7 +534,7 @@ object AdminUtils extends Logging with AdminUtilities {
     * @param configs: The config to change, as properties
     */
   def changeBrokerConfig(zkUtils: ZkUtils, brokers: Seq[Int], configs: Properties): Unit = {
-    KafkaConfig.validateNames(configs)
+    DynamicConfig.Broker.validate(configs)
     brokers.foreach { broker =>
       changeEntityConfig(zkUtils, ConfigType.Broker, broker.toString, configs)
     }

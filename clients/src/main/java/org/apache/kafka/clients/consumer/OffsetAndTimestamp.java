@@ -14,12 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.record;
+package org.apache.kafka.clients.consumer;
 
-import java.util.Objects;
+import org.apache.kafka.common.utils.Utils;
 
 /**
  * A container class for offset and timestamp.
+ *
+ * Both offset and timestamp are non-negative.
  */
 public final class OffsetAndTimestamp {
     private final long timestamp;
@@ -40,12 +42,12 @@ public final class OffsetAndTimestamp {
 
     @Override
     public String toString() {
-        return "{Timestamp = " + timestamp + ", Offset = " + offset + "}";
+        return "{timestamp=" + timestamp + ", offset=" + offset + "}";
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(timestamp, offset);
+        return 31 * Utils.longHashcode(timestamp) + Utils.longHashcode(offset);
     }
 
     @Override

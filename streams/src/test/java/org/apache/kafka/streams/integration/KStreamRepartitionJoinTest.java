@@ -222,6 +222,7 @@ public class KStreamRepartitionJoinTest {
         };
 
         final String output = "join-rhs-stream-mapped-" + testNo;
+        CLUSTER.createTopic(output);
         streamTwo
             .join(streamOne.map(keyMapper),
                 joiner,
@@ -241,6 +242,7 @@ public class KStreamRepartitionJoinTest {
 
 
         final String outputTopic = "left-join-" + testNo;
+        CLUSTER.createTopic(outputTopic);
         map1.leftJoin(map2,
             valueJoiner,
             getJoinWindow(),
@@ -275,6 +277,7 @@ public class KStreamRepartitionJoinTest {
         };
 
         final String topic = "map-join-join-" + testNo;
+        CLUSTER.createTopic(topic);
         join.map(kvMapper)
             .join(streamFour.map(kvMapper),
                 joiner,

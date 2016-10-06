@@ -401,7 +401,7 @@ private[log] class Cleaner(val id: Int,
         val retainDeletes = old.largestTimestamp > deleteHorizonMs
         info("Cleaning segment %s in log %s (largest timestamp %s) into %s, %s deletes."
             .format(old.baseOffset, log.name, new Date(old.largestTimestamp), cleaned.baseOffset, if(retainDeletes) "retaining" else "discarding"))
-        cleanInto(log.topicAndPartition, old, cleaned, map, retainDeletes, log.config.messageFormatVersion.messageFormatVersion)
+        cleanInto(log.topicAndPartition, old, cleaned, map, retainDeletes, log.config.messageFormatVersion.messageFormatVersion, log.config.maxMessageSize)
       }
 
       // trim excess index
@@ -434,18 +434,21 @@ private[log] class Cleaner(val id: Int,
    * Clean the given source log segment into the destination segment using the key=>offset mapping
    * provided
    *
+   * @param topicAndPartition The topic and partition of the log segment to clean
    * @param source The dirty log segment
    * @param dest The cleaned log segment
    * @param map The key=>offset mapping
    * @param retainDeletes Should delete tombstones be retained while cleaning this segment
-   * @param messageFormatVersion the message format version to use after compaction
+   * @param messageFormatVersion The message format version to use after compaction
+   * @param maxLogMessageSize The maximum message size of the corresponding topic
    */
   private[log] def cleanInto(topicAndPartition: TopicAndPartition,
                              source: LogSegment,
                              dest: LogSegment,
                              map: OffsetMap,
                              retainDeletes: Boolean,
-                             messageFormatVersion: Byte) {
+                             messageFormatVersion: Byte,
+                             maxLogMessageSize: Int) {
     var position = 0
     while (position < source.log.sizeInBytes) {
       checkDone(topicAndPartition)
@@ -508,7 +511,7 @@ private[log] class Cleaner(val id: Int,
       
       // if we read bytes but didn't get even one complete message, our I/O buffer is too small, grow it and try again
       if (readBuffer.limit > 0 && messagesRead == 0)
-        growBuffers()
+        growBuffers(maxLogMessageSize)
     }
     restoreBuffers()
   }
@@ -577,10 +580,11 @@ private[log] class Cleaner(val id: Int,
   /**
    * Double the I/O buffer capacity
    */
-  def growBuffers() {
-    if(readBuffer.capacity >= maxIoBufferSize || writeBuffer.capacity >= maxIoBufferSize)
-      throw new IllegalStateException("This log contains a message larger than maximum allowable size of %s.".format(maxIoBufferSize))
-    val newSize = math.min(this.readBuffer.capacity * 2, maxIoBufferSize)
+  def growBuffers(maxLogMessageSize: Int) {
+    val maxBufferSize = math.max(maxLogMessageSize, maxIoBufferSize)
+    if(readBuffer.capacity >= maxBufferSize || writeBuffer.capacity >= maxBufferSize)
+      throw new IllegalStateException("This log contains a message larger than maximum allowable size of %s.".format(maxBufferSize))
+    val newSize = math.min(this.readBuffer.capacity * 2, maxBufferSize)
     info("Growing cleaner I/O buffers from " + readBuffer.capacity + "bytes to " + newSize + " bytes.")
     this.readBuffer = ByteBuffer.allocate(newSize)
     this.writeBuffer = ByteBuffer.allocate(newSize)
@@ -650,7 +654,7 @@ private[log] class Cleaner(val id: Int,
     for (segment <- dirty if !full) {
       checkDone(log.topicAndPartition)
 
-      full = buildOffsetMapForSegment(log.topicAndPartition, segment, map, start)
+      full = buildOffsetMapForSegment(log.topicAndPartition, segment, map, start, log.config.maxMessageSize)
       if (full)
         debug("Offset map is full, %d segments fully mapped, segment with base offset %d is partially mapped".format(dirty.indexOf(segment), segment.baseOffset))
     }
@@ -665,7 +669,7 @@ private[log] class Cleaner(val id: Int,
    *
    * @return If the map was filled whilst loading from this segment
    */
-  private def buildOffsetMapForSegment(topicAndPartition: TopicAndPartition, segment: LogSegment, map: OffsetMap, start: Long): Boolean = {
+  private def buildOffsetMapForSegment(topicAndPartition: TopicAndPartition, segment: LogSegment, map: OffsetMap, start: Long, maxLogMessageSize: Int): Boolean = {
     var position = segment.index.lookup(start).position
     val maxDesiredMapSize = (map.slots * this.dupBufferLoadFactor).toInt
     while (position < segment.log.sizeInBytes) {
@@ -689,7 +693,7 @@ private[log] class Cleaner(val id: Int,
 
       // if we didn't read even one complete message, our read buffer may be too small
       if(position == startPosition)
-        growBuffers()
+        growBuffers(maxLogMessageSize)
     }
     restoreBuffers()
     return false

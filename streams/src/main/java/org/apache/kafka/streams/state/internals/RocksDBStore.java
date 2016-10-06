@@ -41,12 +41,16 @@ import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
 import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Set;
 
 /**
  * A persistent key-value store based on RocksDB.
@@ -62,6 +66,7 @@ import java.util.NoSuchElementException;
  */
 public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
+    private static final Logger log = LoggerFactory.getLogger(RocksDBStore.class);
     private static final int TTL_NOT_USED = -1;
 
     // TODO: these values should be configurable
@@ -76,8 +81,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     private final String name;
     private final String parentDir;
+    private final Set<KeyValueIterator> openIterators = new HashSet<>();
 
-    protected File dbDir;
+    File dbDir;
     private StateSerdes<K, V> serdes;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
@@ -313,7 +319,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     public synchronized KeyValueIterator<K, V> range(K from, K to) {
         validateStoreOpen();
         // query rocksdb
-        return new RocksDBRangeIterator<>(db.newIterator(), serdes, from, to);
+        final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(db.newIterator(), serdes, from, to);
+        openIterators.add(rocksDBRangeIterator);
+        return rocksDBRangeIterator;
     }
 
     @Override
@@ -322,7 +330,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         // query rocksdb
         RocksIterator innerIter = db.newIterator();
         innerIter.seekToFirst();
-        return new RocksDbIterator<>(innerIter, serdes);
+        final RocksDbIterator rocksDbIterator = new RocksDbIterator(innerIter, serdes);
+        openIterators.add(rocksDbIterator);
+        return rocksDbIterator;
     }
 
     /**
@@ -384,6 +394,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             return;
         }
         open = false;
+        closeOpenIterators();
         flush();
         options.close();
         wOptions.close();
@@ -396,27 +407,37 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         db = null;
     }
 
+    private void closeOpenIterators() {
+        for (KeyValueIterator iterator : new HashSet<>(openIterators)) {
+            iterator.close();
+        }
+        openIterators.clear();
+    }
 
 
-    public static class RocksDbIterator<K, V> implements KeyValueIterator<K, V> {
+    class RocksDbIterator implements KeyValueIterator<K, V> {
         private final RocksIterator iter;
         private final StateSerdes<K, V> serdes;
+        private boolean open = true;
 
-        public RocksDbIterator(RocksIterator iter, StateSerdes<K, V> serdes) {
+        RocksDbIterator(RocksIterator iter, StateSerdes<K, V> serdes) {
             this.iter = iter;
             this.serdes = serdes;
         }
 
-        public byte[] peekRawKey() {
+        byte[] peekRawKey() {
             return iter.key();
         }
 
-        protected KeyValue<K, V> getKeyValue() {
+        private KeyValue<K, V> getKeyValue() {
             return new KeyValue<>(serdes.keyFrom(iter.key()), serdes.valueFrom(iter.value()));
         }
 
         @Override
-        public boolean hasNext() {
+        public synchronized boolean hasNext() {
+            if (!open) {
+                throw new InvalidStateStoreException("store %s has closed");
+            }
             return iter.isValid();
         }
 
@@ -424,7 +445,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
          * @throws NoSuchElementException if no next element exist
          */
         @Override
-        public KeyValue<K, V> next() {
+        public synchronized KeyValue<K, V> next() {
             if (!hasNext())
                 throw new NoSuchElementException();
 
@@ -442,27 +463,29 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         }
 
         @Override
-        public void close() {
+        public synchronized void close() {
+            open = false;
+            openIterators.remove(this);
             iter.close();
         }
 
     }
 
-    private static class RocksDBRangeIterator<K, V> extends RocksDbIterator<K, V> {
+    private class RocksDBRangeIterator extends RocksDbIterator {
         // RocksDB's JNI interface does not expose getters/setters that allow the
         // comparator to be pluggable, and the default is lexicographic, so it's
         // safe to just force lexicographic comparator here for now.
         private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
         private byte[] rawToKey;
 
-        public RocksDBRangeIterator(RocksIterator iter, StateSerdes<K, V> serdes, K from, K to) {
+        RocksDBRangeIterator(RocksIterator iter, StateSerdes<K, V> serdes, K from, K to) {
             super(iter, serdes);
             iter.seek(serdes.rawKey(from));
             this.rawToKey = serdes.rawKey(to);
         }
 
         @Override
-        public boolean hasNext() {
+        public synchronized boolean hasNext() {
             return super.hasNext() && comparator.compare(super.peekRawKey(), this.rawToKey) <= 0;
         }
     }

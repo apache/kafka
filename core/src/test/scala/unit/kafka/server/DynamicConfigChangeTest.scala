@@ -60,8 +60,9 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     assertTrue("Should contain a ConfigHandler for " + rootEntityType ,
                this.servers.head.dynamicConfigHandlers.contains(rootEntityType))
     val props = new Properties()
-    props.put(QuotaConfigOverride.ProducerOverride, "1000")
-    props.put(QuotaConfigOverride.ConsumerOverride, "2000")
+    props.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "1000")
+    props.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "2000")
+
     val quotaManagers = servers.head.apis.quotas
     rootEntityType match {
       case ConfigType.Client => AdminUtils.changeClientIdConfig(zkUtils, configEntityName, props)
@@ -202,11 +203,11 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val props: Properties = new Properties()
 
     //Given
-    props.put(ThrottledReplicasListProp, "0:101,0:102,1:101,1:102")
+    props.put(LeaderReplicationThrottledReplicasProp, "0:101,0:102,1:101,1:102")
 
     //When/Then
-    assertEquals(Seq(0,1), configHandler.parseThrottledPartitions(props, 102))
-    assertEquals(Seq(), configHandler.parseThrottledPartitions(props, 103))
+    assertEquals(Seq(0,1), configHandler.parseThrottledPartitions(props, 102, LeaderReplicationThrottledReplicasProp))
+    assertEquals(Seq(), configHandler.parseThrottledPartitions(props, 103, LeaderReplicationThrottledReplicasProp))
   }
 
   @Test
@@ -215,10 +216,10 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val props: Properties = new Properties()
 
     //Given
-    props.put(ThrottledReplicasListProp, "*")
+    props.put(LeaderReplicationThrottledReplicasProp, "*")
 
     //When
-    val result = configHandler.parseThrottledPartitions(props, 102)
+    val result = configHandler.parseThrottledPartitions(props, 102, LeaderReplicationThrottledReplicasProp)
 
     //Then
     assertEquals(AllReplicas, result)
@@ -230,12 +231,26 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val props: Properties = new Properties()
 
     //Given
-    props.put(ThrottledReplicasListProp, "")
+    props.put(FollowerReplicationThrottledReplicasProp, "")
 
     //When
-    val result = configHandler.parseThrottledPartitions(props, 102)
+    val result = configHandler.parseThrottledPartitions(props, 102, FollowerReplicationThrottledReplicasProp)
 
     //Then
     assertEquals(Seq(), result)
+  }
+
+  @Test
+  def shouldParseRegardlessOfWhitespaceAroundValues() {
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
+    assertEquals(AllReplicas, parse(configHandler, "* "))
+    assertEquals(Seq(), parse(configHandler, " "))
+    assertEquals(Seq(6), parse(configHandler, "6:102"))
+    assertEquals(Seq(6), parse(configHandler, "6:102 "))
+    assertEquals(Seq(6), parse(configHandler, " 6:102"))
+  }
+
+  def parse(configHandler: TopicConfigHandler, value: String): Seq[Int] = {
+    configHandler.parseThrottledPartitions(CoreUtils.propsWith(LeaderReplicationThrottledReplicasProp, value), 102, LeaderReplicationThrottledReplicasProp)
   }
 }

@@ -155,4 +155,8 @@ class AdminManager(val config: KafkaConfig,
       topicPurgatory.tryCompleteElseWatch(delayedDelete, delayedDeleteKeys)
     }
   }
+
+  def shutdown() {
+    topicPurgatory.shutdown()
+  }
 }

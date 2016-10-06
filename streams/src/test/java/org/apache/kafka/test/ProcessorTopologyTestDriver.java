@@ -158,7 +158,7 @@ public class ProcessorTopologyTestDriver {
         producer = new MockProducer<byte[], byte[]>(true, bytesSerializer, bytesSerializer) {
             @Override
             public List<PartitionInfo> partitionsFor(String topic) {
-                return Collections.emptyList();
+                return Collections.singletonList(new PartitionInfo(topic, 0, null, null, null));
             }
         };
         restoreStateConsumer = createRestoreConsumer(id, storeNames);

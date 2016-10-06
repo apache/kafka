@@ -31,6 +31,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.MetricName;
@@ -239,8 +240,10 @@ public class Sender implements Runnable {
      * Start closing the sender (won't actually complete until all data is sent out)
      */
     public void initiateClose() {
-        this.running = false;
+        // Ensure accumulator is closed first to guarantee that no more appends are accepted after
+        // breaking from the sender loop. Otherwise, we may miss some callbacks when shutting down.
         this.accumulator.close();
+        this.running = false;
         this.wakeup();
     }
 
@@ -320,8 +323,13 @@ public class Sender implements Runnable {
             if (error != Errors.NONE)
                 this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
         }
-        if (error.exception() instanceof InvalidMetadataException)
+        if (error.exception() instanceof InvalidMetadataException) {
+            if (error.exception() instanceof UnknownTopicOrPartitionException)
+                log.warn("Received unknown topic or partition error in produce request on partition {}. The " +
+                        "topic/partition may not exist or the user may not have Describe access to it", batch.topicPartition);
             metadata.requestUpdate();
+        }
+
         // Unmute the completed partition.
         if (guaranteeMessageOrder)
             this.accumulator.unmutePartition(batch.topicPartition);

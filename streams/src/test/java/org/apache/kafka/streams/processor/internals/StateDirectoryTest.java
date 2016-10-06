@@ -166,4 +166,14 @@ public class StateDirectoryTest {
         assertTrue(dirs.contains(taskDir2));
     }
 
+    @Test
+    public void shouldCreateDirectoriesIfParentDoesntExist() throws Exception {
+        final File tempDir = TestUtils.tempDirectory();
+        final File stateDir = new File(new File(tempDir, "foo"), "state-dir");
+        final StateDirectory stateDirectory = new StateDirectory(applicationId, stateDir.getPath());
+        final File taskDir = stateDirectory.directoryForTask(new TaskId(0, 0));
+        assertTrue(stateDir.exists());
+        assertTrue(taskDir.exists());
+    }
+
 }
