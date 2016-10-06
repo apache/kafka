@@ -49,14 +49,14 @@ public class RocksDBKeyValueStoreSupplier<K, V, T extends StateStore> extends Ab
     public T get() {
         if (!enableCaching) {
             RocksDBStore<K, V> store = new RocksDBStore<>(name, keySerde, valueSerde);
-            return ((T) new MeteredKeyValueStore<>(logged ? store.enableLogging() : store, "rocksdb-state", time));
+            return (T) new MeteredKeyValueStore<>(logged ? store.enableLogging() : store, "rocksdb-state", time);
         }
 
         final RocksDBStore<Bytes, byte[]> store = new RocksDBStore<>(name, Serdes.Bytes(), Serdes.ByteArray());
-        return ((T) new CachingKeyValueStore<>(new MeteredKeyValueStore<>(logged ? store.enableLogging() : store,
+        return (T) new CachingKeyValueStore<>(new MeteredKeyValueStore<>(logged ? store.enableLogging() : store,
                 "rocksdb-state",
                 time),
                 keySerde,
-                valueSerde));
+                valueSerde);
     }
 }

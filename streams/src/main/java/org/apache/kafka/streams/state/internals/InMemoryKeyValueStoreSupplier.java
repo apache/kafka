@@ -59,7 +59,7 @@ public class InMemoryKeyValueStoreSupplier<K, V, T extends StateStore> extends A
     public T get() {
         MemoryStore<K, V> store = new MemoryStore<>(name, keySerde, valueSerde);
 
-        return ((T) new MeteredKeyValueStore<>(logged ? store.enableLogging() : store, "in-memory-state", time));
+        return (T) new MeteredKeyValueStore<>(logged ? store.enableLogging() : store, "in-memory-state", time);
     }
 
     private static class MemoryStore<K, V> implements KeyValueStore<K, V> {

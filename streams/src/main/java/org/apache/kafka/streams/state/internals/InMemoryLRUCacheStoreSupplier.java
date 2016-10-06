@@ -44,7 +44,7 @@ public class InMemoryLRUCacheStoreSupplier<K, V, T extends StateStore> extends A
 
     public T get() {
         MemoryNavigableLRUCache<K, V> cache = new MemoryNavigableLRUCache<>(name, capacity, keySerde, valueSerde);
-        return ((T) new MeteredKeyValueStore<>(logged ? cache.enableLogging() : cache, "in-memory-lru-state", time));
+        return (T) new MeteredKeyValueStore<>(logged ? cache.enableLogging() : cache, "in-memory-lru-state", time);
     }
 
 }
