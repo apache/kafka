@@ -226,7 +226,7 @@ function bring_up_aws {
 
         if [[ ! -z "$worker_machines" ]]; then
             echo "Bringing up test worker machines in parallel"
-            vagrant_batch_command "vagrant up --provider=aws" "$worker_machines" "$max_parallel" "$debug"
+            vagrant_batch_command "vagrant up $debug --provider=aws" "$worker_machines" "$max_parallel"
             vagrant hostmanager
         fi
     else
