@@ -54,6 +54,7 @@ class OfflinePartitionLeaderSelector(controllerContext: ControllerContext, confi
     controllerContext.partitionReplicaAssignment.get(topicAndPartition) match {
       case Some(assignedReplicas) =>
         val liveAssignedReplicas = assignedReplicas.filter(r => controllerContext.liveBrokerIds.contains(r))
+        val candidates = liveAssignedReplicas.filter( _ != config.leaderIneligibleBrokerId )
         val liveBrokersInIsr = currentLeaderAndIsr.isr.filter(r => controllerContext.liveBrokerIds.contains(r))
         val currentLeaderEpoch = currentLeaderAndIsr.leaderEpoch
         val currentLeaderIsrZkPathVersion = currentLeaderAndIsr.zkVersion
@@ -69,23 +70,30 @@ class OfflinePartitionLeaderSelector(controllerContext: ControllerContext, confi
             }
             debug("No broker in ISR is alive for %s. Pick the leader from the alive assigned replicas: %s"
               .format(topicAndPartition, liveAssignedReplicas.mkString(",")))
-            if (liveAssignedReplicas.isEmpty) {
+            if (candidates.isEmpty) {
               throw new NoReplicaOnlineException(("No replica for partition " +
                 "%s is alive. Live brokers are: [%s],".format(topicAndPartition, controllerContext.liveBrokerIds)) +
                 " Assigned replicas are: [%s]".format(assignedReplicas))
             } else {
               ControllerStats.uncleanLeaderElectionRate.mark()
-              val newLeader = liveAssignedReplicas.head
+              val newLeader = candidates.head
               warn("No broker in ISR is alive for %s. Elect leader %d from live brokers %s. There's potential data loss."
                 .format(topicAndPartition, newLeader, liveAssignedReplicas.mkString(",")))
               new LeaderAndIsr(newLeader, currentLeaderEpoch + 1, List(newLeader), currentLeaderIsrZkPathVersion + 1)
             }
           } else {
-            val liveReplicasInIsr = liveAssignedReplicas.filter(r => liveBrokersInIsr.contains(r))
-            val newLeader = liveReplicasInIsr.head
-            debug("Some broker in ISR is alive for %s. Select %d from ISR %s to be the leader."
-              .format(topicAndPartition, newLeader, liveBrokersInIsr.mkString(",")))
-            new LeaderAndIsr(newLeader, currentLeaderEpoch + 1, liveBrokersInIsr.toList, currentLeaderIsrZkPathVersion + 1)
+            val liveReplicasInIsr = candidates.filter(r => liveBrokersInIsr.contains(r))
+            if (liveReplicasInIsr.isEmpty) {
+              throw new NoReplicaOnlineException(("No replica for partition " +
+                "%s is alive. Live brokers are: [%s],".format(topicAndPartition, controllerContext.liveBrokerIds)) +
+                " Assigned replicas are: [%s]".format(assignedReplicas) +
+                " Ineligible replicas are: [%s]".format(config.leaderIneligibleBrokerId))
+            } else {
+              val newLeader = liveReplicasInIsr.head
+              debug("Some broker in ISR is alive for %s. Select %d from ISR %s to be the leader."
+                .format(topicAndPartition, newLeader, liveBrokersInIsr.mkString(",")))
+              new LeaderAndIsr(newLeader, currentLeaderEpoch + 1, liveBrokersInIsr.toList, currentLeaderIsrZkPathVersion + 1)
+            }
           }
         info("Selected new leader and ISR %s for offline partition %s".format(newLeaderAndIsr.toString(), topicAndPartition))
         (newLeaderAndIsr, liveAssignedReplicas)
@@ -112,12 +120,12 @@ class ReassignedPartitionLeaderSelector(controllerContext: ControllerContext) ex
     val currentLeaderIsrZkPathVersion = currentLeaderAndIsr.zkVersion
     val aliveReassignedInSyncReplicas = reassignedInSyncReplicas.filter(r => controllerContext.liveBrokerIds.contains(r) &&
                                                                              currentLeaderAndIsr.isr.contains(r))
-    val newLeaderOpt = aliveReassignedInSyncReplicas.headOption
+    val newLeaderOpt = aliveReassignedInSyncReplicas.filter(_ != controllerContext.leaderIneligibleBrokerId).headOption
     newLeaderOpt match {
       case Some(newLeader) => (new LeaderAndIsr(newLeader, currentLeaderEpoch + 1, currentLeaderAndIsr.isr,
         currentLeaderIsrZkPathVersion + 1), reassignedInSyncReplicas)
       case None =>
-        reassignedInSyncReplicas.size match {
+        reassignedInSyncReplicas.filter(_ != controllerContext.leaderIneligibleBrokerId).size match {
           case 0 =>
             throw new NoReplicaOnlineException("List of reassigned replicas for partition " +
               " %s is empty. Current leader and ISR: [%s]".format(topicAndPartition, currentLeaderAndIsr))
@@ -140,7 +148,14 @@ with Logging {
 
   def selectLeader(topicAndPartition: TopicAndPartition, currentLeaderAndIsr: LeaderAndIsr): (LeaderAndIsr, Seq[Int]) = {
     val assignedReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition)
-    val preferredReplica = assignedReplicas.head
+    val candidates = assignedReplicas.filter(_ != controllerContext.leaderIneligibleBrokerId)
+    if (candidates.isEmpty) {
+      throw new NoReplicaOnlineException(("No replica for partition " +
+        "%s is alive. Live brokers are: [%s],".format(topicAndPartition, controllerContext.liveBrokerIds)) +
+        " Assigned replicas are: [%s]".format(assignedReplicas) +
+        " Ineligible replicas are: [%s]".format(controllerContext.leaderIneligibleBrokerId))
+    }
+    val preferredReplica = candidates.head
     // check if preferred replica is the current leader
     val currentLeader = controllerContext.partitionLeadershipInfo(topicAndPartition).leaderAndIsr.leader
     if (currentLeader == preferredReplica) {
@@ -182,7 +197,9 @@ class ControlledShutdownLeaderSelector(controllerContext: ControllerContext)
     val liveOrShuttingDownBrokerIds = controllerContext.liveOrShuttingDownBrokerIds
     val liveAssignedReplicas = assignedReplicas.filter(r => liveOrShuttingDownBrokerIds.contains(r))
 
-    val newIsr = currentLeaderAndIsr.isr.filter(brokerId => !controllerContext.shuttingDownBrokerIds.contains(brokerId))
+    val newIsr = currentLeaderAndIsr.isr.filter(brokerId => !controllerContext.shuttingDownBrokerIds.contains(brokerId) &&
+      brokerId != controllerContext.leaderIneligibleBrokerId)
+
     liveAssignedReplicas.find(newIsr.contains) match {
       case Some(newLeader) =>
         debug("Partition %s : current leader = %d, new leader = %d".format(topicAndPartition, currentLeader, newLeader))

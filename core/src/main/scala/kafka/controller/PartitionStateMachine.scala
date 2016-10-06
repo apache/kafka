@@ -284,7 +284,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       case _ =>
         debug("Live assigned replicas for partition %s are: [%s]".format(topicAndPartition, liveAssignedReplicas))
         // make the first replica in the list of assigned replicas, the leader
-        val leader = liveAssignedReplicas.head
+        val leader = liveAssignedReplicas.filter(brokerId => brokerId != controllerContext.leaderIneligibleBrokerId).head
         val leaderIsrAndControllerEpoch = new LeaderIsrAndControllerEpoch(new LeaderAndIsr(leader, liveAssignedReplicas.toList),
           controller.epoch)
         debug("Initializing leader and isr for partition %s to %s".format(topicAndPartition, leaderIsrAndControllerEpoch))
