@@ -85,13 +85,18 @@ object JaasTestUtils {
   private val ZkModule = "org.apache.zookeeper.server.auth.DigestLoginModule"
 
   private val KafkaServerContextName = "KafkaServer"
-  private val KafkaServerPrincipal = "kafka/localhost@EXAMPLE.COM"
+  val KafkaServerPrincipalUnqualifiedName = "kafka"
+  private val KafkaServerPrincipal = KafkaServerPrincipalUnqualifiedName + "/localhost@EXAMPLE.COM"
   private val KafkaClientContextName = "KafkaClient"
-  private val KafkaClientPrincipal = "client@EXAMPLE.COM"
+  val KafkaClientPrincipalUnqualifiedName = "client"
+  private val KafkaClientPrincipal = KafkaClientPrincipalUnqualifiedName + "@EXAMPLE.COM"
+  val KafkaClientPrincipalUnqualifiedName2 = "client2"
   
-  private val KafkaPlainUser = "testuser"
+  val KafkaPlainUser = "testuser"
   private val KafkaPlainPassword = "testuser-secret"
-  private val KafkaPlainAdmin = "admin"
+  val KafkaPlainUser2 = "testuser2"
+  val KafkaPlainPassword2 = "testuser2-secret"
+  val KafkaPlainAdmin = "admin"
   private val KafkaPlainAdminPassword = "admin-secret"
 
   def writeZkFile(): String = {
@@ -137,7 +142,7 @@ object JaasTestUtils {
           KafkaPlainAdmin,
           KafkaPlainAdminPassword,
           debug = false,
-          Map(KafkaPlainAdmin -> KafkaPlainAdminPassword, KafkaPlainUser -> KafkaPlainPassword)).toJaasModule
+          Map(KafkaPlainAdmin -> KafkaPlainAdminPassword, KafkaPlainUser -> KafkaPlainPassword, KafkaPlainUser2 -> KafkaPlainPassword2)).toJaasModule
       case mechanism => throw new IllegalArgumentException("Unsupported server mechanism " + mechanism)
     }
     new JaasSection(KafkaServerContextName, modules)
