@@ -52,7 +52,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
     @SuppressWarnings("unchecked")
     private <K, V> KeyValueStore<K, V> createStore(final ProcessorContext context, final Class<K> keyClass, final Class<V> valueClass, final boolean useContextSerdes, final boolean enableCaching) {
 
-        Stores.PersistentKeyValueFactory<?, ?> factory = null;
+        Stores.PersistentKeyValueFactory<?, ?> factory;
         if (useContextSerdes) {
             factory = Stores
                     .create("my-store")

@@ -297,7 +297,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
           brokerRequestBatch.addLeaderAndIsrRequestForBrokers(liveAssignedReplicas, topicAndPartition.topic,
             topicAndPartition.partition, leaderIsrAndControllerEpoch, replicaAssignment)
         } catch {
-          case e: ZkNodeExistsException =>
+          case _: ZkNodeExistsException =>
             // read the controller epoch
             val leaderIsrAndEpoch = ReplicationUtils.getLeaderIsrAndEpochForPartition(zkUtils, topicAndPartition.topic,
               topicAndPartition.partition).get
@@ -357,7 +357,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       brokerRequestBatch.addLeaderAndIsrRequestForBrokers(replicasForThisPartition, topic, partition,
         newLeaderIsrAndControllerEpoch, replicas)
     } catch {
-      case lenne: LeaderElectionNotNeededException => // swallow
+      case _: LeaderElectionNotNeededException => // swallow
       case nroe: NoReplicaOnlineException => throw nroe
       case sce: Throwable =>
         val failMsg = "encountered error while electing leader for partition %s due to: %s.".format(topicAndPartition, sce.getMessage)

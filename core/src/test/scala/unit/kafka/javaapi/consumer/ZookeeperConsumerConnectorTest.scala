@@ -75,7 +75,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
       zkConsumerConnector1.createMessageStreams(toJavaMap(Map(topic -> numNodes*numParts/2)), new StringDecoder(), new StringDecoder())
       fail("Should fail with MessageStreamsExistException")
     } catch {
-      case e: MessageStreamsExistException => // expected
+      case _: MessageStreamsExistException => // expected
     }
     zkConsumerConnector1.shutdown
     info("all consumer connectors stopped")

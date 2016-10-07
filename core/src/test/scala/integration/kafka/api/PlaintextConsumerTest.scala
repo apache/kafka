@@ -782,7 +782,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // create a group of consumers, subscribe the consumers to all the topics and start polling
     // for the topic partition assignment
-    val (rrConsumers, consumerPollers) = createConsumerGroupAndWaitForAssignment(10, List(topic1, topic2), subscriptions)
+    val (_, consumerPollers) = createConsumerGroupAndWaitForAssignment(10, List(topic1, topic2), subscriptions)
     try {
       validateGroupAssignment(consumerPollers, subscriptions, s"Did not get valid initial assignment for partitions ${subscriptions.asJava}")
 
@@ -862,10 +862,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       testProducer.send(null, null)
       fail("Should not allow sending a null record")
     } catch {
-      case e: Throwable => {
+      case _: Throwable =>
         assertEquals("Interceptor should be notified about exception", 1, MockProducerInterceptor.ON_ERROR_COUNT.intValue())
         assertEquals("Interceptor should not receive metadata with an exception when record is null", 0, MockProducerInterceptor.ON_ERROR_WITH_METADATA_COUNT.intValue())
-      }
     }
 
     // create consumer with interceptor
@@ -1335,7 +1334,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
                                               subscriptions: Set[TopicPartition]): (Buffer[KafkaConsumer[Array[Byte], Array[Byte]]], Buffer[ConsumerAssignmentPoller]) = {
     assertTrue(consumerCount <= subscriptions.size)
     val consumerGroup = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
-    for (i <- 0 until consumerCount)
+    for (_ <- 0 until consumerCount)
       consumerGroup += new KafkaConsumer[Array[Byte], Array[Byte]](this.consumerConfig)
     consumers ++= consumerGroup
 
@@ -1364,7 +1363,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
                                                    topicsToSubscribe: List[String],
                                                    subscriptions: Set[TopicPartition]): Unit = {
     assertTrue(consumerGroup.size + numOfConsumersToAdd <= subscriptions.size)
-    for (i <- 0 until numOfConsumersToAdd) {
+    for (_ <- 0 until numOfConsumersToAdd) {
       val newConsumer = new KafkaConsumer[Array[Byte], Array[Byte]](this.consumerConfig)
       consumerGroup += newConsumer
       consumerPollers += subscribeConsumerAndStartPolling(newConsumer, topicsToSubscribe)

@@ -303,7 +303,7 @@ class KafkaConfigTest {
       KafkaConfig.fromProps(props)
       true
     } catch {
-      case e: IllegalArgumentException => false
+      case _: IllegalArgumentException => false
     }
   }
 
@@ -561,8 +561,7 @@ class KafkaConfigTest {
         case KafkaConfig.SaslKerberosTicketRenewJitterProp =>
         case KafkaConfig.SaslKerberosMinTimeBeforeReloginProp =>
         case KafkaConfig.SaslKerberosPrincipalToLocalRulesProp => // ignore string
-
-        case nonNegativeIntProperty => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
+        case _ => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
       }
     })
   }

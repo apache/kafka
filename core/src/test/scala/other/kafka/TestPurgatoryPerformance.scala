@@ -104,7 +104,7 @@ object TestPurgatoryPerformance {
     val latch = new CountDownLatch(numRequests)
     val start = System.currentTimeMillis
     val rand = new Random()
-    val keys = (0 until numKeys).map(i => "fakeKey%d".format(rand.nextInt(numPossibleKeys)))
+    val keys = (0 until numKeys).map(_ => "fakeKey%d".format(rand.nextInt(numPossibleKeys)))
     @volatile var requestArrivalTime = start
     @volatile var end = 0L
     val generator = new Runnable {

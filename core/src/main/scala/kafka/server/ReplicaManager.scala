@@ -694,7 +694,7 @@ class ReplicaManager(val config: KafkaConfig,
           }
         }
 
-        val partitionsTobeLeader = partitionState.filter { case (partition, stateInfo) =>
+        val partitionsTobeLeader = partitionState.filter { case (_, stateInfo) =>
           stateInfo.leader == config.brokerId
         }
         val partitionsToBeFollower = partitionState -- partitionsTobeLeader.keys
@@ -830,7 +830,7 @@ class ReplicaManager(val config: KafkaConfig,
         val newLeaderBrokerId = partitionStateInfo.leader
         metadataCache.getAliveBrokers.find(_.id == newLeaderBrokerId) match {
           // Only change partition state when the leader is available
-          case Some(leaderBroker) =>
+          case Some(_) =>
             if (partition.makeFollower(controllerId, partitionStateInfo, correlationId))
               partitionsToMakeFollower += partition
             else

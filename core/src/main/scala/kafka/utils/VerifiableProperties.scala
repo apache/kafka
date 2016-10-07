@@ -181,7 +181,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
   /**
    * Get a Map[String, String] from a property list in the form k1:v2, k2:v2, ...
    */
-  def getMap(name: String, valid: String => Boolean = s => true): Map[String, String] = {
+  def getMap(name: String, valid: String => Boolean = _ => true): Map[String, String] = {
     try {
       val m = CoreUtils.parseCsvMap(getString(name, ""))
       m.foreach {
@@ -208,7 +208,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
       CompressionCodec.getCompressionCodec(prop.toInt)
     }
     catch {
-      case nfe: NumberFormatException =>
+      case _: NumberFormatException =>
         CompressionCodec.getCompressionCodec(prop)
     }
   }

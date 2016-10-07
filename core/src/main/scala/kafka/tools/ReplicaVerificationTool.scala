@@ -107,7 +107,7 @@ object ReplicaVerificationTool extends Logging {
       Pattern.compile(regex)
     }
     catch {
-      case e: PatternSyntaxException =>
+      case _: PatternSyntaxException =>
         throw new RuntimeException(regex + " is an invalid regex.")
     }
 
@@ -236,8 +236,8 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
   }
 
   private def offsetResponseStringWithError(offsetResponse: OffsetResponse): String = {
-    offsetResponse.partitionErrorAndOffsets.filter {
-      case (topicAndPartition, partitionOffsetsResponse) => partitionOffsetsResponse.error != Errors.NONE.code
+    offsetResponse.partitionErrorAndOffsets.filter { case (_, partitionOffsetsResponse) =>
+      partitionOffsetsResponse.error != Errors.NONE.code
     }.mkString
   }
 

@@ -111,7 +111,7 @@ class OffsetCheckpoint(val file: File) extends Logging {
             throw new IOException("Unrecognized version of the highwatermark checkpoint file: " + version)
         }
       } catch {
-        case e: NumberFormatException => throw malformedLineException(line)
+        case _: NumberFormatException => throw malformedLineException(line)
       } finally {
         reader.close()
       }

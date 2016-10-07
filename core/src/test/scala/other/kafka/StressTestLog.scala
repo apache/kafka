@@ -106,7 +106,7 @@ object StressTestLog {
           case _ =>
         }
       } catch {
-        case e: OffsetOutOfRangeException => // this is okay
+        case _: OffsetOutOfRangeException => // this is okay
       }
     }
   }

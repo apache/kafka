@@ -138,7 +138,7 @@ class LogSegmentTest {
   def testTruncate() {
     val seg = createSegment(40)
     var offset = 40
-    for(i <- 0 until 30) {
+    for (_ <- 0 until 30) {
       val ms1 = messages(offset, "hello")
       seg.append(offset, Message.NoTimestamp, -1L, ms1)
       val ms2 = messages(offset + 1, "hello")
@@ -160,7 +160,7 @@ class LogSegmentTest {
     val numMessages = 30
     val seg = createSegment(40, 2 * messages(0, "hello").sizeInBytes - 1)
     var offset = 40
-    for (i <- 0 until numMessages) {
+    for (_ <- 0 until numMessages) {
       seg.append(offset, offset, offset, messages(offset, "hello"))
       offset += 1
     }
@@ -279,7 +279,7 @@ class LogSegmentTest {
   @Test
   def testRecoveryWithCorruptMessage() {
     val messagesAppended = 20
-    for(iteration <- 0 until 10) {
+    for (_ <- 0 until 10) {
       val seg = createSegment(0)
       for(i <- 0 until messagesAppended)
         seg.append(i, Message.NoTimestamp, -1L, messages(i, i.toString))

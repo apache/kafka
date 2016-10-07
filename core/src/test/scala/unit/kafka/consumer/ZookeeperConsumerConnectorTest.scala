@@ -81,13 +81,12 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
 
     // no messages to consume, we should hit timeout;
     // also the iterator should support re-entrant, so loop it twice
-    for (i <- 0 until 2) {
+    for (_ <- 0 until 2) {
       try {
         getMessages(topicMessageStreams0, nMessages * 2)
         fail("should get an exception")
       } catch {
-        case e: ConsumerTimeoutException => // this is ok
-        case e: Throwable => throw e
+        case _: ConsumerTimeoutException => // this is ok
       }
     }
 
@@ -167,7 +166,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
       zkConsumerConnector3.createMessageStreams(new mutable.HashMap[String, Int]())
       fail("Should fail with MessageStreamsExistException")
     } catch {
-      case e: MessageStreamsExistException => // expected
+      case _: MessageStreamsExistException => // expected
     }
 
     zkConsumerConnector1.shutdown
@@ -307,7 +306,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
     for ((topic, messageStreams) <- topicMessageStreams) {
       for (messageStream <- messageStreams) {
         val iterator = messageStream.iterator
-        for (i <- 0 until nMessages * 2) {
+        for (_ <- 0 until nMessages * 2) {
           assertTrue(iterator.hasNext())
           val message = iterator.next().message
           receivedMessages ::= message

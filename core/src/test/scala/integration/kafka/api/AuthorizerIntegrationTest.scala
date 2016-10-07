@@ -149,11 +149,11 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, ClusterAction)), Resource.ClusterResource)
 
-    for (i <- 0 until producerCount)
+    for (_ <- 0 until producerCount)
       producers += TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
         maxBlockMs = 3000,
         acks = 1)
-    for (i <- 0 until consumerCount)
+    for (_ <- 0 until consumerCount)
       consumers += TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group, securityProtocol = SecurityProtocol.PLAINTEXT)
 
     // create the consumer offset topic
@@ -339,7 +339,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       sendRecords(numRecords, tp)
       fail("should have thrown exception")
     } catch {
-      case e: TimeoutException => //expected
+      case _: TimeoutException => //expected
     }
   }
 
@@ -517,7 +517,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       consumeRecords(consumer)
       Assert.fail("Expected TopicAuthorizationException")
     } catch {
-      case e: TopicAuthorizationException => //expected
+      case _: TopicAuthorizationException => //expected
     }
   }
 
@@ -595,7 +595,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       consumeRecords(consumer)
       Assert.fail("Expected TopicAuthorizationException")
     } catch {
-      case e: TopicAuthorizationException => //expected
+      case _: TopicAuthorizationException => //expected
     } finally consumer.close()
   }
 

@@ -48,7 +48,7 @@ class FetcherTest extends KafkaServerTestHarness {
 
     fetcher = new ConsumerFetcherManager("consumer1", new ConsumerConfig(TestUtils.createConsumerProperties("", "", "")), zkUtils)
     fetcher.stopConnections()
-    val topicInfos = configs.map(c =>
+    val topicInfos = configs.map(_ =>
       new PartitionTopicInfo(topic,
         0,
         queue,

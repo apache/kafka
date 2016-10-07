@@ -121,7 +121,7 @@ object ClientUtils extends Logging{
            debug("Created channel to broker %s:%d.".format(channel.host, channel.port))
            true
          } catch {
-           case e: Exception =>
+           case _: Exception =>
              if (channel != null) channel.disconnect()
              channel = null
              info("Error while creating channel to %s:%d.".format(broker.host, broker.port))
@@ -164,7 +164,7 @@ object ClientUtils extends Logging{
            }
          }
          catch {
-           case ioe: IOException =>
+           case _: IOException =>
              info("Failed to fetch consumer metadata from %s:%d.".format(queryChannel.host, queryChannel.port))
              queryChannel.disconnect()
          }
@@ -187,7 +187,7 @@ object ClientUtils extends Logging{
            queryChannel.disconnect()
          }
          catch {
-           case ioe: IOException => // offsets manager may have moved
+           case _: IOException => // offsets manager may have moved
              info("Error while connecting to %s.".format(connectString))
              if (offsetManagerChannel != null) offsetManagerChannel.disconnect()
              Thread.sleep(retryBackOffMs)

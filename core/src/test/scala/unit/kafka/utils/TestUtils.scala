@@ -822,14 +822,14 @@ object TestUtils extends Logging {
   def writeNonsenseToFile(fileName: File, position: Long, size: Int) {
     val file = new RandomAccessFile(fileName, "rw")
     file.seek(position)
-    for(i <- 0 until size)
+    for (_ <- 0 until size)
       file.writeByte(random.nextInt(255))
     file.close()
   }
 
   def appendNonsenseToFile(fileName: File, size: Int) {
     val file = new FileOutputStream(fileName, true)
-    for(i <- 0 until size)
+    for (_ <- 0 until size)
       file.write(random.nextInt(255))
     file.close()
   }
@@ -1117,7 +1117,7 @@ object TestUtils extends Logging {
           }
       }
     } catch {
-      case ie: InterruptedException => failWithTimeout()
+      case _: InterruptedException => failWithTimeout()
       case e: Throwable => exceptions += e
     } finally {
       threadPool.shutdownNow()

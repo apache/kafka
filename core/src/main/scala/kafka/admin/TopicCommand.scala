@@ -176,11 +176,11 @@ object TopicCommand extends Logging {
           println("Note: This will have no impact if delete.topic.enable is not set to true.")
         }
       } catch {
-        case e: ZkNodeExistsException =>
+        case _: ZkNodeExistsException =>
           println("Topic %s is already marked for deletion.".format(topic))
         case e: AdminOperationException =>
           throw e
-        case e: Throwable =>
+        case _: Throwable =>
           throw new AdminOperationException("Error while deleting topic %s".format(topic))
       }
     }
