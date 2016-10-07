@@ -74,7 +74,7 @@ public class MultiSend implements Send {
             throw new KafkaException("This operation cannot be completed on a complete request.");
 
         int totalWrittenPerCall = 0;
-        boolean sendComplete = false;
+        boolean sendComplete;
         do {
             long written = current.writeTo(channel);
             totalWritten += written;
