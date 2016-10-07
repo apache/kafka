@@ -141,6 +141,31 @@ public class StreamsConfig extends AbstractConfig {
     public static final String CACHE_MAX_BYTES_BUFFERING_CONFIG = "cache.max.bytes.buffering";
     public static final String CACHE_MAX_BYTES_BUFFERING_DOC = "Maximum number of memory bytes to be used for buffering across all threads";
 
+    public static final String SECURITY_PROTOCOL_CONFIG = CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
+    public static final String SECURITY_PROTOCOL_DOC = CommonClientConfigs.SECURITY_PROTOCOL_DOC;
+    public static final String DEFAULT_SECURITY_PROTOCOL = CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL;
+
+    public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
+    public static final String CONNECTIONS_MAX_IDLE_MS_DOC = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC;
+
+    public static final String RETRY_BACKOFF_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
+    public static final String RETRY_BACKOFF_MS_DOC = CommonClientConfigs.RETRY_BACKOFF_MS_DOC;
+
+    public static final String METADATA_MAX_AGE_CONFIG = CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
+    public static final String METADATA_MAX_AGE_DOC = CommonClientConfigs.METADATA_MAX_AGE_DOC;
+
+    public static final String RECONNECT_BACKOFF_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG;
+    public static final String RECONNECT_BACKOFF_MS_DOC = CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC;
+
+    public static final String SEND_BUFFER_CONFIG = CommonClientConfigs.SEND_BUFFER_CONFIG;
+    public static final String SEND_BUFFER_DOC = CommonClientConfigs.SEND_BUFFER_DOC;
+
+    public static final String RECEIVE_BUFFER_CONFIG = CommonClientConfigs.RECEIVE_BUFFER_CONFIG;
+    public static final String RECEIVE_BUFFER_DOC = CommonClientConfigs.RECEIVE_BUFFER_DOC;
+
+    public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
+    public static final String REQUEST_TIMEOUT_MS_DOC = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
+
     static {
         CONFIG = new ConfigDef().define(APPLICATION_ID_CONFIG,      // required with no default value
                                         Type.STRING,
@@ -257,7 +282,53 @@ public class StreamsConfig extends AbstractConfig {
                                         10 * 1024 * 1024L,
                                         atLeast(0),
                                         Importance.LOW,
-                                        CACHE_MAX_BYTES_BUFFERING_DOC);
+                                        CACHE_MAX_BYTES_BUFFERING_DOC)
+                                .define(SECURITY_PROTOCOL_CONFIG,
+                                        Type.STRING,
+                                        DEFAULT_SECURITY_PROTOCOL,
+                                        Importance.MEDIUM,
+                                        SECURITY_PROTOCOL_DOC)
+                                .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
+                                        ConfigDef.Type.LONG,
+                                        9 * 60 * 1000,
+                                        ConfigDef.Importance.MEDIUM,
+                                        CONNECTIONS_MAX_IDLE_MS_DOC)
+                                .define(RETRY_BACKOFF_MS_CONFIG,
+                                        ConfigDef.Type.LONG,
+                                        100L,
+                                        atLeast(0L),
+                                        ConfigDef.Importance.LOW,
+                                        RETRY_BACKOFF_MS_DOC)
+                                .define(METADATA_MAX_AGE_CONFIG,
+                                        ConfigDef.Type.LONG,
+                                        5 * 60 * 1000,
+                                        atLeast(0),
+                                        ConfigDef.Importance.LOW,
+                                        METADATA_MAX_AGE_DOC)
+                                .define(RECONNECT_BACKOFF_MS_CONFIG,
+                                        ConfigDef.Type.LONG,
+                                        50L,
+                                        atLeast(0L),
+                                        ConfigDef.Importance.LOW,
+                                        RECONNECT_BACKOFF_MS_DOC)
+                                .define(SEND_BUFFER_CONFIG,
+                                        ConfigDef.Type.INT,
+                                        128 * 1024,
+                                        atLeast(0),
+                                        ConfigDef.Importance.MEDIUM,
+                                        SEND_BUFFER_DOC)
+                                .define(RECEIVE_BUFFER_CONFIG,
+                                        ConfigDef.Type.INT,
+                                        32 * 1024,
+                                        atLeast(0),
+                                        ConfigDef.Importance.MEDIUM,
+                                        RECEIVE_BUFFER_DOC)
+                                .define(REQUEST_TIMEOUT_MS_CONFIG,
+                                        ConfigDef.Type.INT,
+                                        40 * 1000,
+                                        atLeast(0),
+                                        ConfigDef.Importance.MEDIUM,
+                                        REQUEST_TIMEOUT_MS_DOC);
     }
 
     // this is the list of configs for underlying clients

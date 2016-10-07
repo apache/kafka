@@ -39,6 +39,7 @@ import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -133,7 +134,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             final String[] hostPort = userEndPoint.split(":");
             if (hostPort.length != 2) {
                 throw new ConfigException(String.format("stream-thread [%s] Config %s isn't in the correct format. Expected a host:port pair" +
-                                                       " but received %s",
+                                " but received %s",
                         streamThread.getName(), StreamsConfig.APPLICATION_SERVER_CONFIG, userEndPoint));
             } else {
                 try {
@@ -147,16 +148,12 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         }
 
-        if (configs.containsKey(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG)) {
-            internalTopicManager = new InternalTopicManager(
-                    (String) configs.get(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG),
-                    configs.containsKey(StreamsConfig.REPLICATION_FACTOR_CONFIG) ? (Integer) configs.get(StreamsConfig.REPLICATION_FACTOR_CONFIG) : 1,
-                    configs.containsKey(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG) ?
-                            (Long) configs.get(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG)
-                            : WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT);
-        } else {
-            log.info("stream-thread [{}] Config '{}' isn't supplied and hence no internal topics will be created.",  streamThread.getName(), StreamsConfig.ZOOKEEPER_CONNECT_CONFIG);
-        }
+        internalTopicManager = new InternalTopicManager(
+                new StreamsKafkaClient(this.streamThread.config),
+                configs.containsKey(StreamsConfig.REPLICATION_FACTOR_CONFIG) ? (Integer) configs.get(StreamsConfig.REPLICATION_FACTOR_CONFIG) : 1,
+                configs.containsKey(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG) ?
+                        (Long) configs.get(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG)
+                        : WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT);
     }
 
     @Override
@@ -202,6 +199,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         if (internalTopicManager != null) {
             log.debug("stream-thread [{}] Starting to validate internal topics in partition assignor.", streamThread.getName());
 
+            Map<InternalTopicConfig, Integer> topics = new HashMap<>();
             for (Map.Entry<InternalTopicConfig, Set<TaskId>> entry : topicToTaskIds.entrySet()) {
                 InternalTopicConfig topic = entry.getKey();
                 int numPartitions = 0;
@@ -218,15 +216,14 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                         numPartitions = task.partition;
                     }
                 }
+                topics.put(topic, numPartitions);
+            }
 
-                internalTopicManager.makeReady(topic, numPartitions);
+            internalTopicManager.makeReady(topics);
 
-                // wait until the topic metadata has been propagated to all brokers
-                List<PartitionInfo> partitions;
-                do {
-                    partitions = streamThread.restoreConsumer.partitionsFor(topic.name());
-                } while (partitions == null || partitions.size() != numPartitions);
-
+            for (Map.Entry<InternalTopicConfig, Set<TaskId>> entry : topicToTaskIds.entrySet()) {
+                InternalTopicConfig topic = entry.getKey();
+                List<PartitionInfo> partitions = streamThread.restoreConsumer.partitionsFor(topic.name());
                 for (PartitionInfo partition : partitions)
                     partitionInfos.put(new TopicPartition(partition.topic(), partition.partition()), partition);
             }
@@ -241,8 +238,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 }
             }
             if (!missingTopics.isEmpty()) {
-                log.warn("stream-thread [{}] Topic {} do not exists but couldn't created as the config '{}' isn't supplied",
-                        streamThread.getName(), missingTopics, StreamsConfig.ZOOKEEPER_CONNECT_CONFIG);
+                log.warn("stream-thread [{}] Topic {} do not exists but couldn't created.",
+                        streamThread.getName(), missingTopics);
 
             }
         }
@@ -347,7 +344,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                     internalSourceTopicToTaskIds.put(internalTopic, Collections.singleton(new TaskId(entry.getKey(), numPartitions)));
                     for (int partition = 0; partition < numPartitions; partition++) {
                         internalPartitionInfos.put(new TopicPartition(internalTopic.name(), partition),
-                                                   new PartitionInfo(internalTopic.name(), partition, null, new Node[0], new Node[0]));
+                                new PartitionInfo(internalTopic.name(), partition, null, new Node[0], new Node[0]));
                     }
                 }
             }
@@ -356,7 +353,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         Collection<Set<String>> copartitionTopicGroups = streamThread.builder.copartitionGroups();
         ensureCopartitioning(copartitionTopicGroups, internalSourceTopicGroups,
-                             metadata.withPartitions(internalPartitionInfos));
+                metadata.withPartitions(internalPartitionInfos));
 
 
         internalPartitionInfos = prepareTopic(internalSourceTopicToTaskIds, false);
@@ -460,10 +457,10 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
 
                 assignmentSuppliers.add(new AssignmentSupplier(consumer,
-                                                               active,
-                                                               standby,
-                                                               endPointMap,
-                                                               activePartitions));
+                        active,
+                        standby,
+                        endPointMap,
+                        activePartitions));
 
                 i++;
             }
@@ -502,8 +499,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         Assignment get() {
             return new Assignment(activePartitions, new AssignmentInfo(active,
-                                                                       standby,
-                                                                       endPointMap).encode());
+                    standby,
+                    endPointMap).encode());
         }
     }
 
@@ -533,7 +530,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             } else {
                 TaskAssignmentException ex = new TaskAssignmentException(
                         String.format("stream-thread [%s] failed to find a task id for the partition=%s" +
-                        ", partitions=%d, assignmentInfo=%s", streamThread.getName(), partition.toString(), partitions.size(), info.toString())
+                                ", partitions=%d, assignmentInfo=%s", streamThread.getName(), partition.toString(), partitions.size(), info.toString())
                 );
                 log.error(ex.getMessage(), ex);
                 throw ex;
@@ -548,10 +545,10 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             for (Set<TopicPartition> value : values) {
                 for (TopicPartition topicPartition : value) {
                     topicToPartitionInfo.put(topicPartition, new PartitionInfo(topicPartition.topic(),
-                                                                               topicPartition.partition(),
-                                                                               null,
-                                                                               new Node[0],
-                                                                               new Node[0]));
+                            topicPartition.partition(),
+                            null,
+                            new Node[0],
+                            new Node[0]));
                 }
             }
             metadataWithInternalTopics = Cluster.empty().withPartitions(topicToPartitionInfo);
@@ -619,7 +616,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         for (InternalTopicConfig topic : internalTopics.values()) {
             if (copartitionGroup.contains(topic.name())) {
                 internalSourceTopicToTaskIds
-                    .put(topic, Collections.singleton(new TaskId(-1, numPartitions)));
+                        .put(topic, Collections.singleton(new TaskId(-1, numPartitions)));
             }
         }
     }
@@ -671,4 +668,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
     }
 
+    public void close() throws IOException {
+        internalTopicManager.close();
+    }
 }
