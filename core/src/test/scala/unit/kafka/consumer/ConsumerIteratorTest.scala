@@ -101,7 +101,7 @@ class ConsumerIteratorTest extends KafkaServerTestHarness {
       new FailDecoder(),
       clientId = "")
 
-    val receivedMessages = (0 until 5).map{ i =>
+    (0 until 5).foreach { i =>
       assertTrue(iter.hasNext)
       val message = iter.next
       assertEquals(message.offset, i + consumedOffset)

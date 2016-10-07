@@ -105,8 +105,4 @@ class LogConfigTest {
     })
   }
 
-  private def randFrom[T](choices: T*): T = {
-    import scala.util.Random
-    choices(Random.nextInt(choices.size))
-  }
 }

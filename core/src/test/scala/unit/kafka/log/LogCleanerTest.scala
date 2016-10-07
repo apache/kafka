@@ -281,7 +281,6 @@ class LogCleanerTest extends JUnitSuite {
 
     val expectedCleanSize = segs.take(2).map(_.size).sum
     val expectedCleanableSize = segs.slice(2, 4).map(_.size).sum
-    val expectedUncleanableSize = segs.drop(4).map(_.size).sum
 
     assertEquals("Uncleanable bytes of LogToClean should equal size of all segments prior the one containing first dirty",
       logToClean.cleanBytes, expectedCleanSize)

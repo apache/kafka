@@ -164,7 +164,6 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   @Test
   def testAddPartitionDuringDeleteTopic() {
     val topic = "test"
-    val topicAndPartition = TopicAndPartition(topic, 0)
     val servers = createTestTopicAndCluster(topic)
     // start topic deletion
     AdminUtils.deleteTopic(zkUtils, topic)

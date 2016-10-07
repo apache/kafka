@@ -83,7 +83,6 @@ public class SenderTest {
                             MAX_RETRIES,
                             metrics,
                             time,
-                            CLIENT_ID,
                             REQUEST_TIMEOUT);
 
         metadata.update(cluster, time.milliseconds());
@@ -143,7 +142,6 @@ public class SenderTest {
                                        maxRetries,
                                        m,
                                        time,
-                                       "clientId",
                                        REQUEST_TIMEOUT);
             // do a successful retry
             Future<RecordMetadata> future = accumulator.append(tp, 0L, "key".getBytes(), "value".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
@@ -196,7 +194,6 @@ public class SenderTest {
                 maxRetries,
                 m,
                 time,
-                "clientId",
                 REQUEST_TIMEOUT);
 
             // Create a two broker cluster, with partition 0 on broker 0 and partition 1 on broker 1

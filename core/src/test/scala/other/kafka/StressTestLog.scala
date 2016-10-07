@@ -69,7 +69,6 @@ object StressTestLog {
   abstract class WorkerThread extends Thread {
     override def run() {
       try {
-        var offset = 0
         while(running.get)
           work()
       } catch {

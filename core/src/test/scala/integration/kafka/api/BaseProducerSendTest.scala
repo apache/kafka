@@ -389,7 +389,6 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     // create topic
     val leaders = TestUtils.createTopic(zkUtils, topic, 2, 2, servers)
     val leader0 = leaders(0)
-    val leader1 = leaders(1)
 
     // create record
     val record0 = new ProducerRecord[Array[Byte], Array[Byte]](topic, 0, null, "value".getBytes)

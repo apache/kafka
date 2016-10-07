@@ -32,9 +32,6 @@ object ReplayLogProducer extends Logging {
   def main(args: Array[String]) {
     val config = new Config(args)
 
-    val executor = Executors.newFixedThreadPool(config.numThreads)
-    val allDone = new CountDownLatch(config.numThreads)
-
     // if there is no group specified then avoid polluting zookeeper with persistent group data, this is a hack
     ZkUtils.maybeDeletePath(config.zkConnect, "/consumers/" + GroupId)
     Thread.sleep(500)
