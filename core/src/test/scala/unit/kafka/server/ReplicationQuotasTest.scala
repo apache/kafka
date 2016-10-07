@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.util
 import java.util.Properties
 
 import kafka.admin.AdminUtils
@@ -24,8 +25,9 @@ import kafka.admin.AdminUtils._
 import kafka.log.LogConfig._
 import kafka.server.KafkaConfig.fromProps
 import kafka.server.QuotaType._
-import kafka.utils.TestUtils._
 import kafka.utils.CoreUtils._
+import kafka.utils.TestUtils
+import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
@@ -103,7 +105,6 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     var throttle: Long = msgCount * msg.length / expectedDuration
     if (!leaderThrottle) throttle = throttle * 3 //Follower throttle needs to replicate 3x as fast to get the same duration as there are three replicas to replicate for each of the two follower brokers
 
-    //Set the throttle limit on all 8 brokers, but only assign throttled replicas to the six leaders, or two followers
     (100 to 107).foreach { brokerId =>
       changeBrokerConfig(zkUtils, Seq(brokerId),
         propsWith(
@@ -113,10 +114,13 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     }
 
     //Either throttle the six leaders or the two followers
-    if (leaderThrottle)
-      changeTopicConfig(zkUtils, topic, propsWith(LeaderReplicationThrottledReplicasProp, "0:100,1:101,2:102,3:103,4:104,5:105" ))
-    else
+    if (leaderThrottle) {
+      changeTopicConfig(zkUtils, topic, propsWith(LeaderReplicationThrottledReplicasProp, "0:100,1:101,2:102,3:103,4:104,5:105"))
+      waitForThrottledReplicasToChange(Map(0 -> 100, 1 -> 101, 2 -> 102, 3 -> 103, 4 -> 104, 5 -> 105), true)
+    }
+    else {
       changeTopicConfig(zkUtils, topic, propsWith(FollowerReplicationThrottledReplicasProp, "0:106,1:106,2:106,3:107,4:107,5:107"))
+    }
 
     //Add data equally to each partition
     producer = createNewProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 1)
@@ -195,6 +199,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     //Set the throttle to only limit leader
     changeBrokerConfig(zkUtils, Seq(100), propsWith(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, throttle.toString))
     changeTopicConfig(zkUtils, topic, propsWith(LeaderReplicationThrottledReplicasProp, "0:100"))
+    waitForThrottledReplicasToChange(Map(0 -> 100), true)
 
     //Add data
     addData(msgCount, msg)
@@ -241,5 +246,21 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
   private def measuredRate(broker: KafkaServer, repType: QuotaType): Double = {
     val metricName = broker.metrics.metricName("byte-rate", repType.toString)
     broker.metrics.metrics.asScala(metricName).value
+  }
+
+  def waitForThrottledReplicasToChange(brokerIds: Map[Int, Int], leader: Boolean) = {
+    TestUtils.waitUntilTrue(() => {
+      brokerIds.forall { case (partition, broker) =>
+        val log = brokerFor(broker).logManager.getLog(TopicAndPartition(topic, partition))
+        log match {
+          case Some(log) =>
+            val replicas = if (leader)
+              log.config.LeaderReplicationThrottledReplicas
+            else log.config.FollowerReplicationThrottledReplicas
+            !replicas.isEmpty
+          case None => false
+        }
+      }
+    }, "Throttle was not updated in all brokers")
   }
 }
