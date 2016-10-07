@@ -113,9 +113,9 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     ), servers = servers)
 
     //Given throttle set so replication will take a certain number of secs
-    val initialThrottle: Long = 1000 * 1000
+    val initialThrottle: Long = 10 * 1000 * 1000
     val expectedDurationSecs = 5
-    val numMessages: Int = 50
+    val numMessages: Int = 500
     val msgSize: Int = 100 * 1000
     produceMessages(servers, topicName, numMessages, acks = 0, msgSize)
     assertEquals(expectedDurationSecs, numMessages * msgSize / initialThrottle)

@@ -31,8 +31,11 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.MockStateStoreSupplier;
+import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -408,7 +411,7 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
-    public void testClose() throws IOException {
+    public void testFlushAndClose() throws IOException {
         final TaskId taskId = new TaskId(0, 1);
         File checkpointFile = new File(stateDirectory.directoryForTask(taskId), ProcessorStateManager.CHECKPOINT_FILE_NAME);
         // write an empty checkpoint file
@@ -445,6 +448,7 @@ public class ProcessorStateManagerTest {
             stateMgr.register(nonPersistentStore, true, nonPersistentStore.stateRestoreCallback);
         } finally {
             // close the state manager with the ack'ed offsets
+            stateMgr.flush(new MockProcessorContext(StateSerdes.withBuiltinTypes("foo", String.class, String.class), new NoOpRecordCollector()));
             stateMgr.close(ackedOffsets);
         }
 

@@ -98,6 +98,16 @@ public class StandbyTask extends AbstractTask {
         initializeOffsetLimits();
     }
 
+    @Override
+    public void close() {
+        //no-op
+    }
+
+    @Override
+    public void commitOffsets() {
+        // no-op
+    }
+
     /**
      * Produces a string representation contain useful information about a StreamTask.
      * This is useful in debugging scenarios.
