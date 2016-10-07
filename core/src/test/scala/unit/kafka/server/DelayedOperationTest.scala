@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import kafka.utils.SystemTime
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
 
@@ -54,16 +55,16 @@ class DelayedOperationTest {
   @Test
   def testRequestExpiry() {
     val expiration = 20L
-    val start = System.currentTimeMillis
+    val start = SystemTime.hiResClockMs
     val r1 = new MockDelayedOperation(expiration)
     val r2 = new MockDelayedOperation(200000L)
     assertFalse("r1 not satisfied and hence watched", purgatory.tryCompleteElseWatch(r1, Array("test1")))
     assertFalse("r2 not satisfied and hence watched", purgatory.tryCompleteElseWatch(r2, Array("test2")))
     r1.awaitExpiration()
-    val elapsed = System.currentTimeMillis - start
+    val elapsed = SystemTime.hiResClockMs - start
     assertTrue("r1 completed due to expiration", r1.isCompleted())
     assertFalse("r2 hasn't completed", r2.isCompleted())
-    assertTrue("Time for expiration %d should at least %d".format(elapsed, expiration), elapsed >= expiration)
+    assertTrue(s"Time for expiration $elapsed should at least $expiration", elapsed >= expiration)
   }
 
   @Test
