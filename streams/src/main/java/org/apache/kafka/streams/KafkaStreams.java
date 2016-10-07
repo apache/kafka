@@ -25,7 +25,6 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopologyBuilder;
@@ -271,18 +270,13 @@ public class KafkaStreams {
         final String appId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         final String stateDir = config.getString(StreamsConfig.STATE_DIR_CONFIG);
 
-        final StateDirectory stateDirectory = new StateDirectory(appId, stateDir);
-
         final String localApplicationDir = stateDir + File.separator + appId;
-
-        log.debug("Clean up local Kafka Streams data in {}", localApplicationDir);
         log.debug("Removing local Kafka Streams application data in {} for application {}",
             localApplicationDir,
             appId);
 
-        for (final File taskDir : stateDirectory.listTaskDirectories()) {
-            Utils.delete(taskDir);
-        }
+        final StateDirectory stateDirectory = new StateDirectory(appId, stateDir);
+        stateDirectory.cleanRemovedTasks();
     }
 
     /**
