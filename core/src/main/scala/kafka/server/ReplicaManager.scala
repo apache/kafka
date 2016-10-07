@@ -656,11 +656,9 @@ class ReplicaManager(val config: KafkaConfig,
     replicaStateChangeLock synchronized {
       val responseMap = new mutable.HashMap[TopicPartition, Short]
       if (leaderAndISRRequest.controllerEpoch < controllerEpoch) {
-        leaderAndISRRequest.partitionStates.asScala.foreach { case (topicPartition, stateInfo) =>
         stateChangeLogger.warn(("Broker %d ignoring LeaderAndIsr request from controller %d with correlation id %d since " +
           "its controller epoch %d is old. Latest known controller epoch is %d").format(localBrokerId, leaderAndISRRequest.controllerId,
           correlationId, leaderAndISRRequest.controllerEpoch, controllerEpoch))
-        }
         BecomeLeaderOrFollowerResult(responseMap, Errors.STALE_CONTROLLER_EPOCH.code)
       } else {
         val controllerId = leaderAndISRRequest.controllerId
