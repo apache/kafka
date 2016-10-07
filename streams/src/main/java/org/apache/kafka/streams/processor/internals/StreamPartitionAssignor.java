@@ -77,6 +77,39 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
     }
 
+    private static class ClientMetadata {
+        public final HostInfo hostInfo;
+        public final Set<String> consumers;
+        public final ClientState<TaskId> state;
+
+        public ClientMetadata(String endPoint) {
+
+            // get the host info if possible
+            if (endPoint != null) {
+                final String[] hostPort = endPoint.split(":");
+                hostInfo = new HostInfo(hostPort[0], Integer.valueOf(hostPort[1]));
+            } else {
+                hostInfo = null;
+            }
+
+            // initialize the consumer memberIds
+            consumers = new HashSet<>();
+
+            // initialize the client state
+            state = new ClientState<>();
+        }
+
+        public void addConsumer(String consumerMemberId, SubscriptionInfo info) {
+
+            consumers.add(consumerMemberId);
+
+            state.prevActiveTasks.addAll(info.prevTasks);
+            state.prevAssignedTasks.addAll(info.prevTasks);
+            state.prevAssignedTasks.addAll(info.standbyTasks);
+            state.capacity = state.capacity + 1d;
+        }
+    }
+
     private static final Comparator<TopicPartition> PARTITION_COMPARATOR = new Comparator<TopicPartition>() {
         @Override
         public int compare(TopicPartition p1, TopicPartition p2) {
@@ -250,50 +283,50 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         return partitionInfos;
     }
 
+    /*
+     * This assigns tasks to consumer clients in two steps.
+     *
+     * 1. using TaskAssignor to assign tasks to consumer clients.
+     *    - Assign a task to a client which was running it previously.
+     *      If there is no such client, assign a task to a client which has its valid local state.
+     *    - A client may have more than one stream threads.
+     *      The assignor tries to assign tasks to a client proportionally to the number of threads.
+     *    - We try not to assign the same set of tasks to two different clients
+     *    We do the assignment in one-pass. The result may not satisfy above all.
+     *
+     * 2. within each client, tasks are assigned to consumer clients in round-robin manner.
+     */
     @Override
     public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
-        // This assigns tasks to consumer clients in two steps.
-        // 1. using TaskAssignor to assign tasks to consumer clients.
-        //    - Assign a task to a client which was running it previously.
-        //      If there is no such client, assign a task to a client which has its valid local state.
-        //    - A client may have more than one stream threads.
-        //      The assignor tries to assign tasks to a client proportionally to the number of threads.
-        //    - We try not to assign the same set of tasks to two different clients
-        //    We do the assignment in one-pass. The result may not satisfy above all.
-        // 2. within each client, tasks are assigned to consumer clients in round-robin manner.
+
+
         Map<UUID, Set<String>> consumersByClient = new HashMap<>();
         Map<UUID, ClientState<TaskId>> states = new HashMap<>();
         Map<UUID, HostInfo> consumerEndPointMap = new HashMap<>();
-        // decode subscription info
+
+        // construct the client metadata from the decoded subscription info
+        Map<UUID, ClientMetadata> clientsMetadata = new HashMap<>();
+
         for (Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
             String consumerId = entry.getKey();
             Subscription subscription = entry.getValue();
 
-
             SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
-            if (info.userEndPoint != null) {
-                final String[] hostPort = info.userEndPoint.split(":");
-                consumerEndPointMap.put(info.processId, new HostInfo(hostPort[0], Integer.valueOf(hostPort[1])));
-            }
-            Set<String> consumers = consumersByClient.get(info.processId);
-            if (consumers == null) {
-                consumers = new HashSet<>();
-                consumersByClient.put(info.processId, consumers);
-            }
-            consumers.add(consumerId);
 
-            ClientState<TaskId> state = states.get(info.processId);
-            if (state == null) {
-                state = new ClientState<>();
-                states.put(info.processId, state);
+            // create the new client metadata if necessary
+            ClientMetadata clientMetadata = clientsMetadata.get(info.processId);
+
+            if (clientMetadata == null) {
+                clientMetadata = new ClientMetadata(info.userEndPoint);
+                clientsMetadata.put(info.processId, clientMetadata);
             }
 
-            state.prevActiveTasks.addAll(info.prevTasks);
-            state.prevAssignedTasks.addAll(info.prevTasks);
-            state.prevAssignedTasks.addAll(info.standbyTasks);
-            state.capacity = state.capacity + 1d;
+            // add the consumer to the client
+            clientMetadata.addConsumer(consumerId, info);
         }
 
+        // parse the topology to determine the internal topics, making sure they are created
+        // with the right number of partitions
 
         this.topicGroups = streamThread.builder.topicGroups();
 
