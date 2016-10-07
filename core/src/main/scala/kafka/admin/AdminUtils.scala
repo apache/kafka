@@ -608,7 +608,7 @@ object AdminUtils extends Logging with AdminUtilities {
   def fetchAllChildEntityConfigs(zkUtils: ZkUtils, rootEntityType: String, childEntityType: String): Map[String, Properties] = {
     def entityPaths(zkUtils: ZkUtils, rootPath: Option[String]): Seq[String] = {
       val root = rootPath match {
-        case Some(path) => rootEntityType + '/' + rootPath
+        case Some(path) => rootEntityType + '/' + path
         case None => rootEntityType
       }
       val entityNames = zkUtils.getAllEntitiesWithConfig(root)
