@@ -25,18 +25,20 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
-import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
+import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
+import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.StreamsMetadata;
 import org.apache.kafka.streams.state.internals.QueryableStoreProvider;
-import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.internals.StateStoreProvider;
 import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -46,9 +48,6 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Kafka Streams allows for performing continuous computation on input coming from one or more input topics and
@@ -110,7 +109,7 @@ public class KafkaStreams {
     // of the co-location of stream thread's consumers. It is for internal
     // usage only and should not be exposed to users at all.
     private final UUID processId;
-    private StreamsMetadataState streamsMetadataState;
+    private final StreamsMetadataState streamsMetadataState;
 
     private final StreamsConfig config;
 
@@ -146,7 +145,7 @@ public class KafkaStreams {
         // create the metrics
         final Time time = new SystemTime();
 
-        this.processId = UUID.randomUUID();
+        processId = UUID.randomUUID();
 
         this.config = config;
 
@@ -167,24 +166,24 @@ public class KafkaStreams {
             .timeWindow(config.getLong(StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
                 TimeUnit.MILLISECONDS);
 
-        this.metrics = new Metrics(metricConfig, reporters, time);
+        metrics = new Metrics(metricConfig, reporters, time);
 
-        this.threads = new StreamThread[config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG)];
+        threads = new StreamThread[config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG)];
         final ArrayList<StateStoreProvider> storeProviders = new ArrayList<>();
         streamsMetadataState = new StreamsMetadataState(builder);
-        for (int i = 0; i < this.threads.length; i++) {
-            this.threads[i] = new StreamThread(builder,
-                                               config,
-                                               clientSupplier,
-                                               applicationId,
-                                               clientId,
-                                               processId,
-                                               metrics,
-                                               time,
-                                               streamsMetadataState);
+        for (int i = 0; i < threads.length; i++) {
+            threads[i] = new StreamThread(builder,
+                config,
+                clientSupplier,
+                applicationId,
+                clientId,
+                processId,
+                metrics,
+                time,
+                streamsMetadataState);
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
         }
-        this.queryableStoreProvider = new QueryableStoreProvider(storeProviders);
+        queryableStoreProvider = new QueryableStoreProvider(storeProviders);
     }
 
     /**
@@ -195,14 +194,14 @@ public class KafkaStreams {
     public synchronized void start() {
         log.debug("Starting Kafka Stream process");
 
-        if (this.state == CREATED) {
-            for (final StreamThread thread : this.threads)
+        if (state == CREATED) {
+            for (final StreamThread thread : threads)
                 thread.start();
 
-            this.state = RUNNING;
+            state = RUNNING;
 
             log.info("Started Kafka Stream process");
-        } else if (this.state == RUNNING) {
+        } else if (state == RUNNING) {
             throw new IllegalStateException("This process was already started.");
         } else {
             throw new IllegalStateException("Cannot restart after closing.");
@@ -218,12 +217,12 @@ public class KafkaStreams {
     public synchronized void close() {
         log.debug("Stopping Kafka Stream process");
 
-        if (this.state == RUNNING) {
+        if (state == RUNNING) {
             // signal the threads to stop and wait
-            for (final StreamThread thread : this.threads)
+            for (final StreamThread thread : threads)
                 thread.close();
 
-            for (final StreamThread thread : this.threads) {
+            for (final StreamThread thread : threads) {
                 try {
                     thread.join();
                 } catch (final InterruptedException ex) {
@@ -232,9 +231,9 @@ public class KafkaStreams {
             }
         }
 
-        if (this.state != STOPPED) {
-            this.metrics.close();
-            this.state = STOPPED;
+        if (state != STOPPED) {
+            metrics.close();
+            state = STOPPED;
             log.info("Stopped Kafka Stream process");
         }
 
@@ -247,9 +246,9 @@ public class KafkaStreams {
      * @return A string representation of the Kafka Streams instance.
      */
     public String toString() {
-        StringBuilder sb = new StringBuilder("KafkaStreams processID:" + this.processId + "\n");
-        for (int i = 0; i < this.threads.length; i++) {
-            sb.append("\t" + this.threads[i].toString());
+        final StringBuilder sb = new StringBuilder("KafkaStreams processID:" + processId + "\n");
+        for (final StreamThread thread : threads) {
+            sb.append("\t").append(thread.toString());
         }
         sb.append("\n");
 
@@ -264,19 +263,20 @@ public class KafkaStreams {
      * @throws IllegalStateException if instance is currently running
      */
     public void cleanUp() {
-        if (this.state == RUNNING) {
+        if (state == RUNNING) {
             throw new IllegalStateException("Cannot clean up while running.");
         }
 
-        final String localApplicationDir = this.config.getString(StreamsConfig.STATE_DIR_CONFIG)
-            + File.separator
-            + this.config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+        final String appId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+        final String stateDir = config.getString(StreamsConfig.STATE_DIR_CONFIG);
 
-        log.debug("Clean up local Kafka Streams data in {}", localApplicationDir);
+        final String localApplicationDir = stateDir + File.separator + appId;
         log.debug("Removing local Kafka Streams application data in {} for application {}",
             localApplicationDir,
-            this.config.getString(StreamsConfig.APPLICATION_ID_CONFIG));
-        Utils.delete(new File(localApplicationDir));
+            appId);
+
+        final StateDirectory stateDirectory = new StateDirectory(appId, stateDir);
+        stateDirectory.cleanRemovedTasks();
     }
 
     /**
@@ -285,7 +285,7 @@ public class KafkaStreams {
      * @param eh the object to use as this thread's uncaught exception handler. If null then this thread has no explicit handler.
      */
     public void setUncaughtExceptionHandler(final Thread.UncaughtExceptionHandler eh) {
-        for (final StreamThread thread : this.threads)
+        for (final StreamThread thread : threads)
             thread.setUncaughtExceptionHandler(eh);
     }
 
