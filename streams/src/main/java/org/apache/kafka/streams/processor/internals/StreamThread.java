@@ -297,6 +297,15 @@ public class StreamThread extends Thread {
         producer.flush();
         // Close all task state managers
         closeAllStateManagers(rethrowExceptions);
+        try {
+            // un-assign the change log partitions
+            restoreConsumer.assign(Collections.<TopicPartition>emptyList());
+        } catch (Exception e) {
+            log.error(String.format("stream-thread [%s] Failed to un-assign change log partitions: ", this.getName()), e);
+            if (rethrowExceptions) {
+                throw e;
+            }
+        }
     }
 
     interface AbstractTaskAction {
@@ -758,17 +767,9 @@ public class StreamThread extends Thread {
     }
 
     private void removeStandbyTasks() {
-        try {
-            standbyTasks.clear();
-            standbyTasksByPartition.clear();
-            standbyRecords.clear();
-
-            // un-assign the change log partitions
-            restoreConsumer.assign(Collections.<TopicPartition>emptyList());
-
-        } catch (Exception e) {
-            log.error(String.format("stream-thread [%s] Failed to remove standby tasks: ", this.getName()), e);
-        }
+        standbyTasks.clear();
+        standbyTasksByPartition.clear();
+        standbyRecords.clear();
     }
 
     private class StreamsMetricsImpl implements StreamsMetrics, ThreadCacheMetrics {
