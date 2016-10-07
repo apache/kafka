@@ -984,7 +984,7 @@ object TestUtils extends Logging {
 
     var messages: List[String] = Nil
     val shouldGetAllMessages = nMessagesPerThread < 0
-    for ((topic, messageStreams) <- topicMessageStreams) {
+    for (messageStreams <- topicMessageStreams.values) {
       for (messageStream <- messageStreams) {
         val iterator = messageStream.iterator()
         try {

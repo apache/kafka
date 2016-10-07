@@ -303,7 +303,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
       zkConsumerConnector.createMessageStreams(Map(topic -> 1), new StringDecoder(), new StringDecoder())
 
     var receivedMessages: List[String] = Nil
-    for ((topic, messageStreams) <- topicMessageStreams) {
+    for (messageStreams <- topicMessageStreams.values) {
       for (messageStream <- messageStreams) {
         val iterator = messageStream.iterator
         for (_ <- 0 until nMessages * 2) {

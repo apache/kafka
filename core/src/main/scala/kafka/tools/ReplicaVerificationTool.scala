@@ -151,14 +151,13 @@ object ReplicaVerificationTool extends Logging {
           topicPartitionReplicaList.groupBy(replica => new TopicAndPartition(replica.topic, replica.partitionId))
           .map { case (topicAndPartition, replicaSet) => topicAndPartition -> replicaSet.size }
     debug("Expected replicas per topic partition: " + expectedReplicasPerTopicAndPartition)
-    val leadersPerBroker: Map[Int, Seq[TopicAndPartition]] = filteredTopicMetadata.flatMap(
-      topicMetadataResponse =>
-        topicMetadataResponse.partitionsMetadata.map(
-          partitionMetadata =>
-            (new TopicAndPartition(topicMetadataResponse.topic, partitionMetadata.partitionId), partitionMetadata.leader.get.id))
-    ).groupBy(_._2)
-     .mapValues(topicAndPartitionAndLeaderIds => topicAndPartitionAndLeaderIds.map {
-        case(topicAndPartition, leaderId) => topicAndPartition })
+    val leadersPerBroker: Map[Int, Seq[TopicAndPartition]] = filteredTopicMetadata.flatMap { topicMetadataResponse =>
+      topicMetadataResponse.partitionsMetadata.map { partitionMetadata =>
+        (new TopicAndPartition(topicMetadataResponse.topic, partitionMetadata.partitionId), partitionMetadata.leader.get.id)
+      }
+    }.groupBy(_._2).mapValues(topicAndPartitionAndLeaderIds => topicAndPartitionAndLeaderIds.map { case (topicAndPartition, _) =>
+       topicAndPartition
+     })
     debug("Leaders per broker: " + leadersPerBroker)
 
     val replicaBuffer = new ReplicaBuffer(expectedReplicasPerTopicAndPartition,

@@ -223,20 +223,20 @@ class ReplicaManager(val config: KafkaConfig,
       deletePartition.toString, topic, partitionId))
     val errorCode = Errors.NONE.code
     getPartition(topic, partitionId) match {
-      case Some(partition) =>
-        if(deletePartition) {
+      case Some(_) =>
+        if (deletePartition) {
           val removedPartition = allPartitions.remove((topic, partitionId))
           if (removedPartition != null) {
             removedPartition.delete() // this will delete the local log
             val topicHasPartitions = allPartitions.keys.exists { case (t, _) => topic == t }
             if (!topicHasPartitions)
-                BrokerTopicStats.removeMetrics(topic)
+              BrokerTopicStats.removeMetrics(topic)
           }
         }
       case None =>
         // Delete log and corresponding folders in case replica manager doesn't hold them anymore.
         // This could happen when topic is being deleted while broker is down and recovers.
-        if(deletePartition) {
+        if (deletePartition) {
           val topicAndPartition = TopicAndPartition(topic, partitionId)
 
           if(logManager.getLog(topicAndPartition).isDefined) {
@@ -358,10 +358,9 @@ class ReplicaManager(val config: KafkaConfig,
     } else {
       // If required.acks is outside accepted range, something is wrong with the client
       // Just return an error and don't handle the request at all
-      val responseStatus = messagesPerPartition.map {
-        case (topicAndPartition, messageSet) =>
-          topicAndPartition -> new PartitionResponse(Errors.INVALID_REQUIRED_ACKS.code,
-            LogAppendInfo.UnknownLogAppendInfo.firstOffset, Message.NoTimestamp)
+      val responseStatus = messagesPerPartition.map { case (topicAndPartition, _) =>
+        topicAndPartition -> new PartitionResponse(Errors.INVALID_REQUIRED_ACKS.code,
+          LogAppendInfo.UnknownLogAppendInfo.firstOffset, Message.NoTimestamp)
       }
       responseCallback(responseStatus)
     }

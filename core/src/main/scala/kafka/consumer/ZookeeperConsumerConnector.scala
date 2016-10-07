@@ -322,8 +322,8 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   def commitOffsets(isAutoCommit: Boolean) {
 
     val offsetsToCommit =
-      immutable.Map(topicRegistry.flatMap { case (topic, partitionTopicInfos) =>
-        partitionTopicInfos.map { case (partition, info) =>
+      immutable.Map(topicRegistry.values.flatMap { partitionTopicInfos =>
+        partitionTopicInfos.values.map { info =>
           TopicAndPartition(info.topic, info.partitionId) -> OffsetAndMetadata(info.getConsumeOffset())
         }
       }.toSeq: _*)
@@ -442,7 +442,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
             trace("Offset fetch response: %s.".format(offsetFetchResponse))
 
             val (leaderChanged, loadInProgress) =
-              offsetFetchResponse.requestInfo.foldLeft(false, false) { case(folded, (topicPartition, offsetMetadataAndError)) =>
+              offsetFetchResponse.requestInfo.values.foldLeft(false, false) { case (folded, offsetMetadataAndError) =>
                 (folded._1 || (offsetMetadataAndError.error == Errors.NOT_COORDINATOR_FOR_GROUP.code),
                  folded._2 || (offsetMetadataAndError.error == Errors.GROUP_LOAD_IN_PROGRESS.code))
               }

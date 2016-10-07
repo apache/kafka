@@ -238,7 +238,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
    * zookeeper
    */
   private def initializePartitionState() {
-    for((topicPartition, replicaAssignment) <- controllerContext.partitionReplicaAssignment) {
+    for (topicPartition <- controllerContext.partitionReplicaAssignment.keys) {
       // check if leader and isr path exists for partition. If not, then it is in NEW state
       controllerContext.partitionLeadershipInfo.get(topicPartition) match {
         case Some(currentLeaderIsrAndEpoch) =>

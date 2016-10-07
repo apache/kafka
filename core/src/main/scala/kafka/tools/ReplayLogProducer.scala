@@ -48,7 +48,7 @@ object ReplayLogProducer extends Logging {
     val consumerConnector: ConsumerConnector = Consumer.create(consumerConfig)
     val topicMessageStreams = consumerConnector.createMessageStreams(Predef.Map(config.inputTopic -> config.numThreads))
     var threadList = List[ZKConsumerThread]()
-    for ((topic, streamList) <- topicMessageStreams)
+    for (streamList <- topicMessageStreams.values)
       for (stream <- streamList)
         threadList ::= new ZKConsumerThread(config, stream)
 
