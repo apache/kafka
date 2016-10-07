@@ -309,7 +309,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testDeleteWhenDeleteTopicIsDisabled() {
+  def testDisableDeleteTopic() {
     val topicAndPartition = TopicAndPartition("test", 0)
     val topic = topicAndPartition.topic
 
@@ -321,12 +321,11 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     TestUtils.waitUntilTrue(() => !zkUtils.pathExists(getDeleteTopicPath(topic)),
       "Admin path /admin/delete_topic/%s path not deleted even if deleteTopic is disabled".format(topic))
     // verify that topic test is untouched
-    TestUtils.waitUntilTrue(() => servers.forall(_.getLogManager().getLog(topicAndPartition).isDefined),
-      "Replicas for topic test not created")
+    assertTrue(servers.forall(_.getLogManager().getLog(topicAndPartition).isDefined))
     // test the topic path exists
-    assertTrue("Topic test mistakenly deleted", zkUtils.pathExists(getTopicPath(topic)))
+    assertTrue("Topic path disappeared", zkUtils.pathExists(getTopicPath(topic)))
     // topic test should have a leader
-    val leaderIdOpt = TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0, 1000)
+    val leaderIdOpt = zkUtils.getLeaderForPartition(topic, 0)
     assertTrue("Leader should exist for topic test", leaderIdOpt.isDefined)
     servers.foreach(_.shutdown())
   }
