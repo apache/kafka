@@ -20,24 +20,25 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
+import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KGroupedStream;
+import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.ForeachAction;
-import org.apache.kafka.streams.kstream.TransformerSupplier;
-import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
-import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
+import org.apache.kafka.streams.kstream.TransformerSupplier;
+import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.Stores;
+
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.PrintStream;
@@ -124,7 +125,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public <K1> KStream<K1, V> selectKey(final KeyValueMapper<K, V, K1> mapper) {
         Objects.requireNonNull(mapper, "mapper can't be null");
         return new KStreamImpl<>(topology, internalSelectKey(mapper), sourceNodes, true);
@@ -242,7 +242,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public KStream<K, V>[] branch(Predicate<K, V>... predicates) {
         if (predicates.length == 0) {
             throw new IllegalArgumentException("you must provide at least one predicate");
@@ -334,7 +333,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         to(keySerde, valSerde, null, topic);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void to(Serde<K> keySerde, Serde<V> valSerde, StreamPartitioner<K, V> partitioner, String topic) {
         Objects.requireNonNull(topic, "topic can't be null");
@@ -423,7 +421,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return join(other, joiner, windows, null, null, null, true);
     }
 
-    @SuppressWarnings("unchecked")
     private <V1, R> KStream<K, R> join(
             KStream<K, V1> other,
             ValueJoiner<V, V1, R> joiner,
@@ -525,7 +522,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return sourceName;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <V1, R> KStream<K, R> leftJoin(
             KStream<K, V1> other,
@@ -553,7 +549,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return leftJoin(other, joiner, windows, null, null, null);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <V1, R> KStream<K, R> leftJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner) {
         return leftJoin(other, joiner, null, null);
@@ -584,6 +579,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         String name = topology.newName(LEFTJOIN_NAME);
 
         topology.addProcessor(name, new KStreamKTableLeftJoin<>((KTableImpl<K, ?, V1>) other, joiner), this.name);
+        topology.connectProcessorAndStateStores(name, other.getStoreName());
         topology.connectProcessors(this.name, ((KTableImpl<K, ?, V1>) other).name);
 
         return new KStreamImpl<>(topology, name, allSourceNodes, false);
@@ -703,8 +699,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             topology.addProcessor(joinThisName, joinThis, thisWindowStreamName);
             topology.addProcessor(joinOtherName, joinOther, otherWindowStreamName);
             topology.addProcessor(joinMergeName, joinMerge, joinThisName, joinOtherName);
-            topology.addStateStore(thisWindow, thisWindowStreamName, otherWindowStreamName);
-            topology.addStateStore(otherWindow, thisWindowStreamName, otherWindowStreamName);
+            topology.addStateStore(thisWindow, thisWindowStreamName, joinOtherName);
+            topology.addStateStore(otherWindow, otherWindowStreamName, joinThisName);
 
             Set<String> allSourceNodes = new HashSet<>(((AbstractStream) lhs).sourceNodes);
             allSourceNodes.addAll(((KStreamImpl<K1, V2>) other).sourceNodes);
