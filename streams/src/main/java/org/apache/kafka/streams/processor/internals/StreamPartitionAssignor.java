@@ -126,7 +126,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     private StreamThread streamThread;
 
     private int numStandbyReplicas;
-    private Map<Integer, TopologyBuilder.TopicsInfo> topicGroups;
     private Map<TopicPartition, Set<TaskId>> partitionToTaskIds;
     private Map<InternalTopicConfig, Set<TaskId>> stateChangelogTopicToTaskIds;
     private Map<InternalTopicConfig, Set<TaskId>> internalSourceTopicToTaskIds;
@@ -222,35 +221,22 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
     /**
      * Internal helper function that creates a Kafka topic
-     * @param topicToTaskIds Map that contains the topic names to be created
+     * @param topicPartitions Map that contains the topic names to be created with the number of partitions
      * @param postPartitionPhase If true, the computation for calculating the number of partitions
      *                           is slightly different. Set to true after the initial topic-to-partition
      *                           assignment.
      * @return
      */
-    private Map<TopicPartition, PartitionInfo> prepareTopic(Map<InternalTopicConfig, Set<TaskId>> topicToTaskIds,
+    private Map<TopicPartition, PartitionInfo> prepareTopic(Map<String, Integer> topicPartitions,
                                                             boolean postPartitionPhase) {
         Map<TopicPartition, PartitionInfo> partitionInfos = new HashMap<>();
         // if ZK is specified, prepare the internal source topic before calling partition grouper
         if (internalTopicManager != null) {
             log.debug("stream-thread [{}] Starting to validate internal topics in partition assignor.", streamThread.getName());
 
-            for (Map.Entry<InternalTopicConfig, Set<TaskId>> entry : topicToTaskIds.entrySet()) {
-                InternalTopicConfig topic = entry.getKey();
-                int numPartitions = 0;
-                if (postPartitionPhase) {
-                    // the expected number of partitions is the max value of TaskId.partition + 1
-                    for (TaskId task : entry.getValue()) {
-                        if (numPartitions < task.partition + 1)
-                            numPartitions = task.partition + 1;
-                    }
-                } else {
-                    // should have size 1 only
-                    numPartitions = -1;
-                    for (TaskId task : entry.getValue()) {
-                        numPartitions = task.partition;
-                    }
-                }
+            for (Map.Entry<String, Integer> entry : topicPartitions.entrySet()) {
+                String topic = entry.getKey();
+                Integer numPartitions = entry.getValue();
 
                 internalTopicManager.makeReady(topic, numPartitions);
 
@@ -325,83 +311,95 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             clientMetadata.addConsumer(consumerId, info);
         }
 
-        // parse the topology to determine the internal topics, making sure they are created
-        // with the right number of partitions
-
-        this.topicGroups = streamThread.builder.topicGroups();
-
-        // ensure the co-partitioning topics within the group have the same number of partitions,
-        // and enforce the number of partitions for those internal topics.
-        internalSourceTopicToTaskIds = new HashMap<>();
-        Map<Integer, Set<String>> sourceTopicGroups = new HashMap<>();
-        Map<Integer, Collection<InternalTopicConfig>> internalSourceTopicGroups = new HashMap<>();
+        // parse the topology to determine the repartition source topics,
+        // making sure they are created with the number of partitions as
+        // the maximum of the depending sub-topologies source topics' number of partitions
+        Map<Integer, TopologyBuilder.TopicsInfo> topicGroups = streamThread.builder.topicGroups();
+        Map<InternalTopicConfig, Integer> allRepartitionTopicsNumPartitions = new HashMap<>();
         for (Map.Entry<Integer, TopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
-            sourceTopicGroups.put(entry.getKey(), entry.getValue().sourceTopics);
-            internalSourceTopicGroups.put(entry.getKey(), entry.getValue().interSourceTopics.values());
-        }
-
-
-        // for all internal source topics
-        // set the number of partitions to the maximum of the depending sub-topologies source topics
-        Map<TopicPartition, PartitionInfo> internalPartitionInfos = new HashMap<>();
-        Map<String, InternalTopicConfig> allInternalTopics = new HashMap<>();
-        for (Map.Entry<Integer, TopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
-            Map<String, InternalTopicConfig> internalTopics = entry.getValue().interSourceTopics;
-            allInternalTopics.putAll(internalTopics);
-            for (InternalTopicConfig internalTopic : internalTopics.values()) {
-                Set<TaskId> tasks = internalSourceTopicToTaskIds.get(internalTopic);
-
-                if (tasks == null) {
-                    int numPartitions = -1;
-                    for (Map.Entry<Integer, TopologyBuilder.TopicsInfo> other : topicGroups.entrySet()) {
-                        Set<String> otherSinkTopics = other.getValue().sinkTopics;
-
-                        if (otherSinkTopics.contains(internalTopic.name())) {
-                            for (String topic : other.getValue().sourceTopics) {
-                                Integer partitions = null;
-                                // It is possible the sourceTopic is another internal topic, i.e,
-                                // map().join().join(map())
-                                if (allInternalTopics.containsKey(topic)) {
-                                    Set<TaskId> taskIds = internalSourceTopicToTaskIds.get(allInternalTopics.get(topic));
-                                    if (taskIds != null) {
-                                        for (TaskId taskId : taskIds) {
-                                            partitions = taskId.partition;
-                                        }
-                                    }
-                                } else {
-                                    partitions = metadata.partitionCountForTopic(topic);
-                                }
-                                if (partitions != null && partitions > numPartitions) {
-                                    numPartitions = partitions;
-                                }
-                            }
-                        }
-                    }
-                    internalSourceTopicToTaskIds.put(internalTopic, Collections.singleton(new TaskId(entry.getKey(), numPartitions)));
-                    for (int partition = 0; partition < numPartitions; partition++) {
-                        internalPartitionInfos.put(new TopicPartition(internalTopic.name(), partition),
-                                                   new PartitionInfo(internalTopic.name(), partition, null, new Node[0], new Node[0]));
-                    }
-                }
+            for (InternalTopicConfig topic: entry.getValue().repartitionSourceTopics.values()) {
+                allRepartitionTopicsNumPartitions.put(topic, -1);
             }
         }
 
+        boolean numPartitionsNeeded;
+        do {
+            numPartitionsNeeded = false;
 
-        Collection<Set<String>> copartitionTopicGroups = streamThread.builder.copartitionGroups();
-        ensureCopartitioning(copartitionTopicGroups, internalSourceTopicGroups,
-                             metadata.withPartitions(internalPartitionInfos));
+            for (Map.Entry<Integer, TopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
+                for (InternalTopicConfig topic : entry.getValue().repartitionSourceTopics.values()) {
+                    Integer numPartitions = allRepartitionTopicsNumPartitions.get(topic);
 
+                    // try set the number of partitions for this repartition topic if it is not set yet
+                    if (numPartitions == -1) {
+                        for (Map.Entry<Integer, TopologyBuilder.TopicsInfo> other : topicGroups.entrySet()) {
+                            Set<String> otherSinkTopics = other.getValue().sinkTopics;
 
-        internalPartitionInfos = prepareTopic(internalSourceTopicToTaskIds, false);
-        internalSourceTopicToTaskIds.clear();
+                            if (otherSinkTopics.contains(topic.name())) {
+                                // if this topic is one of the sink topics of this topology,
+                                // use the maximum of all its source topic partitions as the number of partitions
+                                for (String sourceTopicName : other.getValue().sourceTopics) {
+                                    Integer numPartitionsCandidate;
+                                    // It is possible the sourceTopic is another internal topic, i.e,
+                                    // map().join().join(map())
+                                    if (allRepartitionTopicsNumPartitions.containsKey(sourceTopicName)) {
+                                        numPartitionsCandidate = allRepartitionTopicsNumPartitions.get(sourceTopicName);
+                                    } else {
+                                        numPartitionsCandidate = metadata.partitionCountForTopic(sourceTopicName);
+                                    }
+
+                                    if (numPartitionsCandidate != null && numPartitionsCandidate > numPartitions) {
+                                        numPartitions = numPartitionsCandidate;
+                                    }
+                                }
+                            }
+                        }
+
+                        // if we still have not find the right number of partitions,
+                        // another iteration is needed
+                        if (numPartitions == -1)
+                            numPartitionsNeeded = true;
+                        else
+                            allRepartitionTopicsNumPartitions.put(topicName, numPartitions);
+                    }
+                }
+            }
+        } while (numPartitionsNeeded);
+
+        // augment the metadata with the newly computer number of partitions for all the
+        // repartition source topics
+        Map<TopicPartition, PartitionInfo> allRepartitionTopicPartitions = new HashMap<>();
+        for (Map.Entry<String, Integer> entry : allRepartitionTopicsNumPartitions.entrySet()) {
+            String topic = entry.getKey();
+            Integer numPartitions = entry.getValue();
+
+            for (int partition = 0; partition < numPartitions; partition++) {
+                allRepartitionTopicPartitions.put(new TopicPartition(topic, partition),
+                        new PartitionInfo(topic, partition, null, new Node[0], new Node[0]));
+            }
+        }
+
+        // ensure the co-partitioning topics within the group have the same number of partitions,
+        // and enforce the number of partitions for those repartition topics to be the same if they
+        // are co-partitioned as well.
+        ensureCopartitioning(streamThread.builder.copartitionGroups(), allRepartitionTopicsNumPartitions, metadata);
+
+        // make sure the repartition source topics exist with the right number of partitions,
+        // create these topics if necessary
+        allRepartitionTopicPartitions = prepareTopic(allRepartitionTopicsNumPartitions, false);
 
         metadataWithInternalTopics = metadata;
         if (internalTopicManager != null)
-            metadataWithInternalTopics = metadata.withPartitions(internalPartitionInfos);
+            metadataWithInternalTopics = metadata.withPartitions(allRepartitionTopicPartitions);
 
         // get the tasks as partition groups from the partition grouper
+        Map<Integer, Set<String>> sourceTopicsByGroup = new HashMap<>();
+        for (Map.Entry<Integer, TopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
+            sourceTopicsByGroup.put(entry.getKey(), entry.getValue().sourceTopics);
+        }
+
         Map<TaskId, Set<TopicPartition>> partitionsForTask = streamThread.partitionGrouper.partitionGroups(
-                sourceTopicGroups, metadataWithInternalTopics);
+                sourceTopicsByGroup, metadataWithInternalTopics);
 
         // add tasks to state change log topic subscribers
         stateChangelogTopicToTaskIds = new HashMap<>();
@@ -417,7 +415,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 tasks.add(task);
             }
 
-            final Map<String, InternalTopicConfig> interSourceTopics = topicGroups.get(task.topicGroupId).interSourceTopics;
+            final Map<String, InternalTopicConfig> interSourceTopics = topicGroups.get(task.topicGroupId).repartitionSourceTopics;
             for (InternalTopicConfig topic : interSourceTopics.values()) {
                 Set<TaskId> tasks = internalSourceTopicToTaskIds.get(topic);
                 if (tasks == null) {
@@ -605,54 +603,51 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         return metadataWithInternalTopics;
     }
 
-    private void ensureCopartitioning(Collection<Set<String>> copartitionGroups, Map<Integer, Collection<InternalTopicConfig>> internalTopicGroups, Cluster metadata) {
-        Map<String, InternalTopicConfig> internalTopics = new HashMap<>();
-        for (Collection<InternalTopicConfig> topics : internalTopicGroups.values()) {
-            for (InternalTopicConfig topic : topics) {
-                internalTopics.put(topic.name(), topic);
-            }
-        }
-
+    private void ensureCopartitioning(Collection<Set<String>> copartitionGroups,
+                                      Map<String, Integer> allRepartitionTopicsNumPartitions,
+                                      Cluster metadata) {
         for (Set<String> copartitionGroup : copartitionGroups) {
-            ensureCopartitioning(copartitionGroup, internalTopics, metadata);
+            ensureCopartitioning(copartitionGroup, allRepartitionTopicsNumPartitions, metadata);
         }
     }
 
-    private void ensureCopartitioning(Set<String> copartitionGroup, Map<String, InternalTopicConfig> internalTopics, Cluster metadata) {
+    private void ensureCopartitioning(Set<String> copartitionGroup, Map<String, Integer> allRepartitionTopicsNumPartitions, Cluster metadata) {
         int numPartitions = -1;
 
         for (String topic : copartitionGroup) {
-            if (!internalTopics.containsKey(topic)) {
-                List<PartitionInfo> infos = metadata.partitionsForTopic(topic);
+            if (!allRepartitionTopicsNumPartitions.containsKey(topic)) {
+                Integer partitions = metadata.partitionCountForTopic(topic);
 
-                if (infos == null)
-                    throw new TopologyBuilderException(String.format("stream-thread [%s] External source topic not found: %s", streamThread.getName(), topic));
+                if (partitions == null)
+                    throw new TopologyBuilderException(String.format("stream-thread [%s] Topic not found: %s", streamThread.getName(), topic));
 
                 if (numPartitions == -1) {
-                    numPartitions = infos.size();
-                } else if (numPartitions != infos.size()) {
+                    numPartitions = partitions;
+                } else if (numPartitions != partitions) {
                     String[] topics = copartitionGroup.toArray(new String[copartitionGroup.size()]);
                     Arrays.sort(topics);
-                    throw new TopologyBuilderException(String.format("stream-thread [%s] Topics not copartitioned: [%s]", streamThread.getName(), Utils.mkString(Arrays.asList(topics), ",")));
+                    throw new TopologyBuilderException(String.format("stream-thread [%s] Topics not co-partitioned: [%s]", streamThread.getName(), Utils.mkString(Arrays.asList(topics), ",")));
                 }
             }
         }
 
+        // if all topics for this copartition group is repartition topics,
+        // then set the number of partitions to be the maximum of the number of partitions.
         if (numPartitions == -1) {
-            for (InternalTopicConfig topic : internalTopics.values()) {
-                if (copartitionGroup.contains(topic.name())) {
-                    Integer partitions = metadata.partitionCountForTopic(topic.name());
+            for (String topic : allRepartitionTopicsNumPartitions.keySet()) {
+                if (copartitionGroup.contains(topic)) {
+                    Integer partitions = metadata.partitionCountForTopic(topic);
                     if (partitions != null && partitions > numPartitions) {
                         numPartitions = partitions;
                     }
                 }
             }
         }
-        // enforce co-partitioning restrictions to internal topics reusing internalSourceTopicToTaskIds
-        for (InternalTopicConfig topic : internalTopics.values()) {
-            if (copartitionGroup.contains(topic.name())) {
-                internalSourceTopicToTaskIds
-                    .put(topic, Collections.singleton(new TaskId(-1, numPartitions)));
+
+        // enforce co-partitioning restrictions to repartition topics by updating their number of partitions
+        for (String topic : allRepartitionTopicsNumPartitions.keySet()) {
+            if (copartitionGroup.contains(topic)) {
+                allRepartitionTopicsNumPartitions.put(topic, numPartitions);
             }
         }
     }
