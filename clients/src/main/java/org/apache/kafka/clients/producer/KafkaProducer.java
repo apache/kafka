@@ -31,6 +31,7 @@ import org.apache.kafka.clients.producer.internals.RecordAccumulator;
 import org.apache.kafka.clients.producer.internals.Sender;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -443,7 +444,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         TopicPartition tp = null;
         try {
             // first make sure the metadata for the topic is available
-            ClusterAndWaitTime clusterAndWaitTime = waitOnMetadata(record.topic(), this.maxBlockTimeMs);
+            ClusterAndWaitTime clusterAndWaitTime = waitOnMetadata(record.topic(), record.partition(), this.maxBlockTimeMs);
             long remainingWaitMs = Math.max(0, this.maxBlockTimeMs - clusterAndWaitTime.waitedOnMetadataMs);
             Cluster cluster = clusterAndWaitTime.cluster;
             byte[] serializedKey;
@@ -518,17 +519,23 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @param maxWaitMs The maximum time in ms for waiting on the metadata
      * @return The cluster containing topic metadata and the amount of time we waited in ms
      */
-    private ClusterAndWaitTime waitOnMetadata(String topic, long maxWaitMs) throws InterruptedException {
+    private ClusterAndWaitTime waitOnMetadata(String topic, Integer partition, long maxWaitMs) throws InterruptedException {
         // add topic to metadata topic list if it is not there already and reset expiry
         this.metadata.add(topic);
         Cluster cluster = metadata.fetch();
-        if (cluster.partitionsForTopic(topic) != null)
+        List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
+        // Return cached metadata if we have it and
+        // if the record's partition is either undefined or within the known partition range
+        if (partitions != null && (partition == null || partition.compareTo(partitions.size()) < 0))
             return new ClusterAndWaitTime(cluster, 0);
 
         long begin = time.milliseconds();
         long remainingWaitMs = maxWaitMs;
         long elapsed = 0;
-        while (cluster.partitionsForTopic(topic) == null) {
+        // Resetting partitions to null here allows us to issue a single metadata update in case the cached metadata is stale.
+        // Otherwise we issue metadata requests until we either get metadata or we timeout.
+        partitions = null;
+        while (partitions == null) {
             log.trace("Requesting metadata update for topic {}.", topic);
             int version = metadata.requestUpdate();
             sender.wakeup();
@@ -539,6 +546,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
             }
             cluster = metadata.fetch();
+            partitions = cluster.partitionsForTopic(topic);
             elapsed = time.milliseconds() - begin;
             if (elapsed >= maxWaitMs)
                 throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
@@ -611,13 +619,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     @Override
     public List<PartitionInfo> partitionsFor(String topic) {
-        Cluster cluster;
         try {
-            cluster = waitOnMetadata(topic, this.maxBlockTimeMs).cluster;
+            return waitOnMetadata(topic, null, this.maxBlockTimeMs).cluster.partitionsForTopic(topic);
         } catch (InterruptedException e) {
             throw new InterruptException(e);
         }
-        return cluster.partitionsForTopic(topic);
     }
 
     /**
@@ -734,11 +740,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private int partition(ProducerRecord<K, V> record, byte[] serializedKey, byte[] serializedValue, Cluster cluster) {
         Integer partition = record.partition();
         if (partition != null) {
-            List<PartitionInfo> partitions = cluster.partitionsForTopic(record.topic());
-            int lastPartition = partitions.size() - 1;
+            int lastPartition = cluster.partitionsForTopic(record.topic()).size() - 1;
             // they have given us a partition, use it
             if (partition < 0 || partition > lastPartition) {
-                throw new IllegalArgumentException(String.format("Invalid partition given with record: %d is not in the range [0...%d].", partition, lastPartition));
+                throw new UnknownTopicOrPartitionException(
+                        String.format("Invalid partition given with record: %d is not in the range [0...%d].", partition, lastPartition));
             }
             return partition;
         }
