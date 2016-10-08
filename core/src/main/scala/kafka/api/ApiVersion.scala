@@ -57,7 +57,7 @@ object ApiVersion {
     "0.10.1-IV0" -> KAFKA_0_10_1_IV0,
     // 0.10.1-IV1 is introduced for KIP-74(fetch response size limit).
     "0.10.1-IV1" -> KAFKA_0_10_1_IV1,
-    // introduced ListGroupRequest v1 in KIP-79
+    // introduced ListOffsetRequest v1 in KIP-79
     "0.10.1-IV2" -> KAFKA_0_10_1_IV2,
     "0.10.1" -> KAFKA_0_10_1_IV2
 
