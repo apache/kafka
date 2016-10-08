@@ -648,6 +648,8 @@ public class FetcherTest {
 
     @Test
     public void testGetOffsetsForTimes() {
+        // Empty map
+        assertTrue(fetcher.getOffsetsByTimes(new HashMap<TopicPartition, Long>(), 100L).isEmpty());
         // Error code none with unknown offset
         testGetOffsetsForTimesWithError(Errors.NONE, Errors.NONE, -1L, 100L, null, 100L);
         // Error code none with known offset
