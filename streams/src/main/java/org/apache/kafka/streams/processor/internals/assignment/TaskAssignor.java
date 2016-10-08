@@ -88,11 +88,11 @@ public class TaskAssignor<C, T extends Comparable<T>> {
         this.taskPairs = new HashSet<>(this.maxNumTaskPairs);
     }
 
-    public void assignTasks() {
+    private void assignTasks() {
         assignTasks(true);
     }
 
-    public void assignStandbyTasks(int numStandbyReplicas) {
+    private void assignStandbyTasks(int numStandbyReplicas) {
         int numReplicas = Math.min(numStandbyReplicas, states.size() - 1);
         for (int i = 0; i < numReplicas; i++) {
             assignTasks(false);
@@ -195,10 +195,10 @@ public class TaskAssignor<C, T extends Comparable<T>> {
     }
 
     private static class TaskPair<T> {
-        public final T task1;
-        public final T task2;
+        final T task1;
+        final T task2;
 
-        public TaskPair(T task1, T task2) {
+        TaskPair(T task1, T task2) {
             this.task1 = task1;
             this.task2 = task2;
         }
