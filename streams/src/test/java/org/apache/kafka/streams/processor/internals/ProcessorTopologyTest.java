@@ -241,27 +241,27 @@ public class ProcessorTopologyTest {
     }
 
     protected TopologyBuilder createSimpleTopology(int partition) {
-        return new TopologyBuilder().addSource("source", null, STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
+        return new TopologyBuilder().addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
                                     .addProcessor("processor", define(new ForwardingProcessor()), "source")
                                     .addSink("sink", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor");
     }
 
     protected TopologyBuilder createMultiplexingTopology() {
-        return new TopologyBuilder().addSource("source", null, STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
+        return new TopologyBuilder().addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
                                     .addProcessor("processor", define(new MultiplexingProcessor(2)), "source")
                                     .addSink("sink1", OUTPUT_TOPIC_1, "processor")
                                     .addSink("sink2", OUTPUT_TOPIC_2, "processor");
     }
 
     protected TopologyBuilder createMultiplexByNameTopology() {
-        return new TopologyBuilder().addSource("source", null, STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
+        return new TopologyBuilder().addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
             .addProcessor("processor", define(new MultiplexByNameProcessor(2)), "source")
             .addSink("sink0", OUTPUT_TOPIC_1, "processor")
             .addSink("sink1", OUTPUT_TOPIC_2, "processor");
     }
 
     protected TopologyBuilder createStatefulTopology(String storeName) {
-        return new TopologyBuilder().addSource("source", null, STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
+        return new TopologyBuilder().addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
                                     .addProcessor("processor", define(new StatefulProcessor(storeName)), "source")
                                     .addStateStore(
                                             Stores.create(storeName).withStringKeys().withStringValues().inMemory().build(),
@@ -272,10 +272,10 @@ public class ProcessorTopologyTest {
 
 
     protected TopologyBuilder createSimpleMultiSourceTopology(int partition) {
-        return new TopologyBuilder().addSource("source-1", null, STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
+        return new TopologyBuilder().addSource("source-1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
                 .addProcessor("processor-1", define(new ForwardingProcessor()), "source-1")
                 .addSink("sink-1", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor-1")
-                .addSource("source-2", null, STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_2)
+                .addSource("source-2", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_2)
                 .addProcessor("processor-2", define(new ForwardingProcessor()), "source-2")
                 .addSink("sink-2", OUTPUT_TOPIC_2, constantPartitioner(partition), "processor-2");
     }

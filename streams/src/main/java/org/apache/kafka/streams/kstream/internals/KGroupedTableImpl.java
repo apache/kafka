@@ -68,7 +68,6 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         return aggregate(initializer, adder, subtractor, keyValueStore(keySerde, aggValueSerde, storeName));
     }
 
-
     @Override
     public <T> KTable<K, T> aggregate(Initializer<T> initializer,
                                       Aggregator<? super K, ? super V, T> adder,
@@ -112,9 +111,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         topology.addSink(sinkName, topic, keySerializer, changedValueSerializer, this.name);
 
         // read the intermediate topic
-
-        //TODO Do we override aggregate to allow setting offset reset?
-        topology.addSource(sourceName, null, keyDeserializer, changedValueDeserializer, topic);
+        topology.addSource(sourceName, keyDeserializer, changedValueDeserializer, topic);
 
         // aggregate the values with the aggregator and local store
         topology.addProcessor(funcName, aggregateSupplier, sourceName);
