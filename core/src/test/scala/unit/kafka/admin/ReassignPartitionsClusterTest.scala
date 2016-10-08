@@ -22,8 +22,7 @@ import kafka.zk.ZooKeeperTestHarness
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Before, Test}
 import kafka.admin.ReplicationQuotaUtils._
-
-import scala.collection.{Map, Seq}
+import scala.collection.Map
 import scala.collection.Seq
 
 class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
@@ -56,7 +55,8 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     createTopic(zkUtils, topicName, Map(partition -> Seq(100)), servers = servers)
 
     //When we move the replica on 100 to broker 101
-    executeAssignment(zkUtils, s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[101]}]}""", noThrottle)
+    val topicJson: String = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[101]}]}"""
+    ReassignPartitionsCommand.executeAssignment(zkUtils, topicJson, noThrottle)
     waitForReassignmentToComplete()
 
     //Then the replica should be on 101
@@ -76,7 +76,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //When rebalancing
     val newAssignment = generateAssignment(zkUtils, brokers, json(topicName), true)._1
-    executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), noThrottle)
+    ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), noThrottle)
     waitForReassignmentToComplete()
 
     //Then the replicas should span all three brokers
@@ -97,7 +97,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
     //When rebalancing
     val newAssignment = generateAssignment(zkUtils, Array(100, 101), json(topicName), true)._1
-    executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), noThrottle)
+    ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), noThrottle)
     waitForReassignmentToComplete()
 
     //Then replicas should only span the first two brokers
@@ -153,21 +153,21 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     ), servers = servers)
 
     //Given throttle set so replication will take a certain number of secs
-    val initialThrottle: Long =  10 * 1000 * 1000
+    val initialThrottle =  Throttle(10 * 1000 * 1000, zkUpdateDelay)
     val expectedDurationSecs = 5
     val numMessages: Int = 500
     val msgSize: Int = 100 * 1000
     produceMessages(servers, topicName, numMessages, acks = 0, msgSize)
-    assertEquals(expectedDurationSecs, numMessages * msgSize / initialThrottle)
+    assertEquals(expectedDurationSecs, numMessages * msgSize / initialThrottle.value)
 
     //Start rebalance which will move replica on 100 -> replica on 102
     val newAssignment = generateAssignment(zkUtils, Array(101, 102), json(topicName), true)._1
 
     val start = System.currentTimeMillis()
-    executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), Throttle(initialThrottle, zkUpdateDelay))
+    ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), initialThrottle)
 
     //Check throttle config. Should be throttling replica 0 on 100 and 102 only.
-    checkThrottleConfigAddedToZK(initialThrottle, servers, topicName, "0:100,0:101", "0:102")
+    checkThrottleConfigAddedToZK(initialThrottle.value, servers, topicName, "0:100,0:101", "0:102")
 
     //Await completion
     waitForReassignmentToComplete()
@@ -178,8 +178,10 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     assertEquals(Seq(101, 102), actual.values.flatten.toSeq.distinct.sorted)
 
     //Then command should have taken longer than the throttle rate
-    assertTrue(s"Expected replication to be > ${expectedDurationSecs * 0.9 * 1000} but was $took", took > expectedDurationSecs * 0.9 * 1000)
-    assertTrue(s"Expected replication to be < ${expectedDurationSecs * 2 * 1000} but was $took", took < expectedDurationSecs * 2 * 1000)
+    assertTrue(s"Expected replication to be > ${expectedDurationSecs * 0.9 * 1000} but was $took",
+      took > expectedDurationSecs * 0.9 * 1000)
+    assertTrue(s"Expected replication to be < ${expectedDurationSecs * 2 * 1000} but was $took",
+      took < expectedDurationSecs * 2 * 1000)
   }
 
 
@@ -214,7 +216,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       TopicAndPartition("topic1", 2) -> Seq(103, 104), //didn't move
       TopicAndPartition("topic2", 2) -> Seq(103, 104)  //didn't move
     )
-    executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), Throttle(throttle))
+    ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), Throttle(throttle))
 
     //Check throttle config. Should be throttling specific replicas for each topic.
     checkThrottleConfigAddedToZK(throttle, servers, "topic1",
@@ -243,7 +245,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     //Start rebalance
     val newAssignment = generateAssignment(zkUtils, Array(101, 102), json(topicName), true)._1
 
-    executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), Throttle(initialThrottle))
+    ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), Throttle(initialThrottle))
 
     //Check throttle config
     checkThrottleConfigAddedToZK(initialThrottle, servers, topicName, "0:100,0:101", "0:102")
@@ -257,7 +259,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     //Now re-run the same assignment with a larger throttle, which should only act to increase the throttle and make progress
     val newThrottle = initialThrottle * 1000
 
-    executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), Throttle(newThrottle))
+    ReassignPartitionsCommand.executeAssignment(zkUtils, ZkUtils.formatAsReassignmentJson(newAssignment), Throttle(newThrottle))
 
     //Check throttle was changed
     checkThrottleConfigAddedToZK(newThrottle, servers, topicName, "0:100,0:101", "0:102")
@@ -283,7 +285,8 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     createTopic(zkUtils, topicName, Map(0 -> Seq(100)), servers = servers)
 
     //When we execute an assignment that includes an invalid partition (1:101 in this case)
-    executeAssignment(zkUtils, s"""{"version":1,"partitions":[{"topic":"$topicName","partition":1,"replicas":[101]}]}""", noThrottle)
+    val topicJson = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":1,"replicas":[101]}]}"""
+    ReassignPartitionsCommand.executeAssignment(zkUtils, topicJson, noThrottle)
   }
 
   @Test
