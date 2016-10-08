@@ -327,6 +327,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // making sure they are created with the number of partitions as
         // the maximum of the depending sub-topologies source topics' number of partitions
         Map<Integer, TopologyBuilder.TopicsInfo> topicGroups = streamThread.builder.topicGroups();
+
         Map<String, InternalTopicMetadata> repartitionTopicMetadata = new HashMap<>();
         for (Map.Entry<Integer, TopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
             for (InternalTopicConfig topic: entry.getValue().repartitionSourceTopics.values()) {
@@ -432,7 +433,23 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
 
         // also make sure the changelog topics are already created
-        prepareTopic(stateChangelogTopicToTaskIds,  /* compactTopic */ true);
+
+        Map<String, InternalTopicMetadata> changelogTopicMetadata = new HashMap<>();
+        for (Map.Entry<InternalTopicConfig, Set<TaskId>> entry : stateChangelogTopicToTaskIds.entrySet()) {
+            // the expected number of partitions is the max value of TaskId.partition + 1
+            int numPartitions = -1;
+            for (TaskId task : entry.getValue()) {
+                if (numPartitions < task.partition + 1)
+                    numPartitions = task.partition + 1;
+            }
+
+            InternalTopicMetadata topicMetadata = new InternalTopicMetadata(entry.getKey());
+            topicMetadata.numPartitions = numPartitions;
+
+            changelogTopicMetadata.put(entry.getKey().name(), topicMetadata);
+        }
+
+        prepareTopic(changelogTopicMetadata,  /* compactTopic */ true);
 
 
         // ---------------- Step Two ---------------- //
