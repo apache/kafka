@@ -66,7 +66,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         public final TaskId taskId;
         public final TopicPartition partition;
 
-        public AssignedPartition(TaskId taskId, TopicPartition partition) {
+        AssignedPartition(TaskId taskId, TopicPartition partition) {
             this.taskId = taskId;
             this.partition = partition;
         }
@@ -78,11 +78,11 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     }
 
     private static class ClientMetadata {
-        public final HostInfo hostInfo;
-        public final Set<String> consumers;
-        public final ClientState<TaskId> state;
+        final HostInfo hostInfo;
+        final Set<String> consumers;
+        final ClientState<TaskId> state;
 
-        public ClientMetadata(String endPoint) {
+        ClientMetadata(String endPoint) {
 
             // get the host info if possible
             if (endPoint != null) {
@@ -99,7 +99,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             state = new ClientState<>();
         }
 
-        public void addConsumer(String consumerMemberId, SubscriptionInfo info) {
+        void addConsumer(String consumerMemberId, SubscriptionInfo info) {
 
             consumers.add(consumerMemberId);
 
@@ -107,6 +107,17 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             state.prevAssignedTasks.addAll(info.prevTasks);
             state.prevAssignedTasks.addAll(info.standbyTasks);
             state.capacity = state.capacity + 1d;
+        }
+    }
+
+    private static class InternalTopicMetadata {
+        public final InternalTopicConfig config;
+
+        public int numPartitions;
+
+        InternalTopicMetadata(InternalTopicConfig config) {
+            this.config = config;
+            this.numPartitions = -1;
         }
     }
 
@@ -225,18 +236,19 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
      * @param postPartitionPhase If true, the computation for calculating the number of partitions
      *                           is slightly different. Set to true after the initial topic-to-partition
      *                           assignment.
-     * @return
      */
-    private Map<TopicPartition, PartitionInfo> prepareTopic(Map<String, Integer> topicPartitions,
-                                                            boolean postPartitionPhase) {
+    private void prepareTopic(Map<String, InternalTopicMetadata> topicPartitions, boolean postPartitionPhase) {
         Map<TopicPartition, PartitionInfo> partitionInfos = new HashMap<>();
         // if ZK is specified, prepare the internal source topic before calling partition grouper
         if (internalTopicManager != null) {
             log.debug("stream-thread [{}] Starting to validate internal topics in partition assignor.", streamThread.getName());
 
-            for (Map.Entry<String, Integer> entry : topicPartitions.entrySet()) {
-                String topic = entry.getKey();
-                Integer numPartitions = entry.getValue();
+            for (Map.Entry<String, InternalTopicMetadata> entry : topicPartitions.entrySet()) {
+                InternalTopicConfig topic = entry.getValue().config;
+                Integer numPartitions = entry.getValue().numPartitions;
+
+                if (numPartitions < 0)
+                    throw new TopologyBuilderException(String.format("stream-thread [%s] Topic %s number of partitions not defined", streamThread.getName(), topic));
 
                 internalTopicManager.makeReady(topic, numPartitions);
 
@@ -245,34 +257,37 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 do {
                     partitions = streamThread.restoreConsumer.partitionsFor(topic.name());
                 } while (partitions == null || partitions.size() != numPartitions);
-
-                for (PartitionInfo partition : partitions)
-                    partitionInfos.put(new TopicPartition(partition.topic(), partition.partition()), partition);
             }
 
             log.info("stream-thread [{}] Completed validating internal topics in partition assignor", streamThread.getName());
         } else {
             List<String> missingTopics = new ArrayList<>();
-            for (InternalTopicConfig topic : topicToTaskIds.keySet()) {
-                List<PartitionInfo> partitions = streamThread.restoreConsumer.partitionsFor(topic.name());
+            for (String topic : topicPartitions.keySet()) {
+                List<PartitionInfo> partitions = streamThread.restoreConsumer.partitionsFor(topic);
                 if (partitions == null) {
-                    missingTopics.add(topic.name());
+                    missingTopics.add(topic);
                 }
             }
+
             if (!missingTopics.isEmpty()) {
                 log.warn("stream-thread [{}] Topic {} do not exists but couldn't created as the config '{}' isn't supplied",
                         streamThread.getName(), missingTopics, StreamsConfig.ZOOKEEPER_CONNECT_CONFIG);
 
             }
         }
-
-        return partitionInfos;
     }
 
     /*
-     * This assigns tasks to consumer clients in two steps.
+     * This assigns tasks to consumer clients in the following steps.
      *
-     * 1. using TaskAssignor to assign tasks to consumer clients.
+     * 0. check all repartition source topics and use internal topic manager to make sure
+     *    they have been created with the right number of partitions.
+     *
+     * 1. using user customized partition grouper to generate tasks along with their
+     *    assigned partitions; also make sure that the task's corresponding changelog topics
+     *    have been created with the right number of partitions.
+     *
+     * 2. using TaskAssignor to assign tasks to consumer clients.
      *    - Assign a task to a client which was running it previously.
      *      If there is no such client, assign a task to a client which has its valid local state.
      *    - A client may have more than one stream threads.
@@ -280,15 +295,10 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
      *    - We try not to assign the same set of tasks to two different clients
      *    We do the assignment in one-pass. The result may not satisfy above all.
      *
-     * 2. within each client, tasks are assigned to consumer clients in round-robin manner.
+     * 3. within each client, tasks are assigned to consumer clients in round-robin manner.
      */
     @Override
     public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
-
-
-        Map<UUID, Set<String>> consumersByClient = new HashMap<>();
-        Map<UUID, ClientState<TaskId>> states = new HashMap<>();
-        Map<UUID, HostInfo> consumerEndPointMap = new HashMap<>();
 
         // construct the client metadata from the decoded subscription info
         Map<UUID, ClientMetadata> clientsMetadata = new HashMap<>();
@@ -311,14 +321,16 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             clientMetadata.addConsumer(consumerId, info);
         }
 
+        // ---------------- Step Zero ---------------- //
+
         // parse the topology to determine the repartition source topics,
         // making sure they are created with the number of partitions as
         // the maximum of the depending sub-topologies source topics' number of partitions
         Map<Integer, TopologyBuilder.TopicsInfo> topicGroups = streamThread.builder.topicGroups();
-        Map<InternalTopicConfig, Integer> allRepartitionTopicsNumPartitions = new HashMap<>();
+        Map<String, InternalTopicMetadata> repartitionTopicMetadata = new HashMap<>();
         for (Map.Entry<Integer, TopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
             for (InternalTopicConfig topic: entry.getValue().repartitionSourceTopics.values()) {
-                allRepartitionTopicsNumPartitions.put(topic, -1);
+                repartitionTopicMetadata.put(topic.name(), new InternalTopicMetadata(topic));
             }
         }
 
@@ -327,23 +339,23 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             numPartitionsNeeded = false;
 
             for (Map.Entry<Integer, TopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
-                for (InternalTopicConfig topic : entry.getValue().repartitionSourceTopics.values()) {
-                    Integer numPartitions = allRepartitionTopicsNumPartitions.get(topic);
+                for (String topicName : entry.getValue().repartitionSourceTopics.keySet()) {
+                    int numPartitions = repartitionTopicMetadata.get(topicName).numPartitions;
 
                     // try set the number of partitions for this repartition topic if it is not set yet
                     if (numPartitions == -1) {
                         for (Map.Entry<Integer, TopologyBuilder.TopicsInfo> other : topicGroups.entrySet()) {
                             Set<String> otherSinkTopics = other.getValue().sinkTopics;
 
-                            if (otherSinkTopics.contains(topic.name())) {
+                            if (otherSinkTopics.contains(topicName)) {
                                 // if this topic is one of the sink topics of this topology,
                                 // use the maximum of all its source topic partitions as the number of partitions
                                 for (String sourceTopicName : other.getValue().sourceTopics) {
                                     Integer numPartitionsCandidate;
                                     // It is possible the sourceTopic is another internal topic, i.e,
                                     // map().join().join(map())
-                                    if (allRepartitionTopicsNumPartitions.containsKey(sourceTopicName)) {
-                                        numPartitionsCandidate = allRepartitionTopicsNumPartitions.get(sourceTopicName);
+                                    if (repartitionTopicMetadata.containsKey(sourceTopicName)) {
+                                        numPartitionsCandidate = repartitionTopicMetadata.get(sourceTopicName).numPartitions;
                                     } else {
                                         numPartitionsCandidate = metadata.partitionCountForTopic(sourceTopicName);
                                     }
@@ -360,7 +372,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                         if (numPartitions == -1)
                             numPartitionsNeeded = true;
                         else
-                            allRepartitionTopicsNumPartitions.put(topicName, numPartitions);
+                            repartitionTopicMetadata.get(topicName).numPartitions = numPartitions;
                     }
                 }
             }
@@ -369,9 +381,9 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // augment the metadata with the newly computer number of partitions for all the
         // repartition source topics
         Map<TopicPartition, PartitionInfo> allRepartitionTopicPartitions = new HashMap<>();
-        for (Map.Entry<String, Integer> entry : allRepartitionTopicsNumPartitions.entrySet()) {
+        for (Map.Entry<String, InternalTopicMetadata> entry : repartitionTopicMetadata.entrySet()) {
             String topic = entry.getKey();
-            Integer numPartitions = entry.getValue();
+            Integer numPartitions = entry.getValue().numPartitions;
 
             for (int partition = 0; partition < numPartitions; partition++) {
                 allRepartitionTopicPartitions.put(new TopicPartition(topic, partition),
@@ -382,15 +394,18 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // ensure the co-partitioning topics within the group have the same number of partitions,
         // and enforce the number of partitions for those repartition topics to be the same if they
         // are co-partitioned as well.
-        ensureCopartitioning(streamThread.builder.copartitionGroups(), allRepartitionTopicsNumPartitions, metadata);
+        ensureCopartitioning(streamThread.builder.copartitionGroups(), repartitionTopicMetadata, metadata);
 
         // make sure the repartition source topics exist with the right number of partitions,
         // create these topics if necessary
-        allRepartitionTopicPartitions = prepareTopic(allRepartitionTopicsNumPartitions, false);
+        prepareTopic(repartitionTopicMetadata, false);
 
         metadataWithInternalTopics = metadata;
         if (internalTopicManager != null)
             metadataWithInternalTopics = metadata.withPartitions(allRepartitionTopicPartitions);
+
+
+        // ---------------- Step One ---------------- //
 
         // get the tasks as partition groups from the partition grouper
         Map<Integer, Set<String>> sourceTopicsByGroup = new HashMap<>();
@@ -414,28 +429,31 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
                 tasks.add(task);
             }
-
-            final Map<String, InternalTopicConfig> interSourceTopics = topicGroups.get(task.topicGroupId).repartitionSourceTopics;
-            for (InternalTopicConfig topic : interSourceTopics.values()) {
-                Set<TaskId> tasks = internalSourceTopicToTaskIds.get(topic);
-                if (tasks == null) {
-                    tasks = new HashSet<>();
-                    internalSourceTopicToTaskIds.put(topic, tasks);
-                }
-
-                tasks.add(task);
-            }
         }
 
+        // also make sure the changelog topics are already created
+        prepareTopic(stateChangelogTopicToTaskIds,  /* compactTopic */ true);
+
+
+        // ---------------- Step Two ---------------- //
+
         // assign tasks to clients
+        Map<UUID, ClientState<TaskId>> states = new HashMap<>();
+        for (Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
+            states.put(entry.getKey(), entry.getValue().state);
+        }
+
         states = TaskAssignor.assign(states, partitionsForTask.keySet(), numStandbyReplicas, streamThread.getName());
 
+        // ---------------- Step Three ---------------- //
+
+        // within the client, distribute tasks to its owned consumers
         final List<AssignmentSupplier> assignmentSuppliers = new ArrayList<>();
 
         final Map<HostInfo, Set<TopicPartition>> endPointMap = new HashMap<>();
-        for (Map.Entry<UUID, Set<String>> entry : consumersByClient.entrySet()) {
+        for (Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
             UUID processId = entry.getKey();
-            Set<String> consumers = entry.getValue();
+            Set<String> consumers = entry.getValue().consumers;
             ClientState<TaskId> state = states.get(processId);
 
             ArrayList<TaskId> taskIds = new ArrayList<>(state.assignedTasks.size());
@@ -449,7 +467,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
 
             final int numConsumers = consumers.size();
-
 
             int i = 0;
             for (String consumer : consumers) {
@@ -479,7 +496,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 for (AssignedPartition partition : assignedPartitions) {
                     active.add(partition.taskId);
                     activePartitions.add(partition.partition);
-                    HostInfo hostInfo = consumerEndPointMap.get(processId);
+                    HostInfo hostInfo = entry.getValue().hostInfo;
                     if (hostInfo != null) {
                         if (!endPointMap.containsKey(hostInfo)) {
                             endPointMap.put(hostInfo, new HashSet<TopicPartition>());
@@ -488,7 +505,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                         topicPartitions.add(partition.partition);
                     }
                 }
-
 
                 assignmentSuppliers.add(new AssignmentSupplier(consumer,
                                                                active,
@@ -500,11 +516,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
         }
 
-        // if ZK is specified, validate the internal topics again
-        prepareTopic(internalSourceTopicToTaskIds,  /* compactTopic */ true);
-        // change log topics should be compacted
-        prepareTopic(stateChangelogTopicToTaskIds,  /* compactTopic */ true);
-
+        // finally, encode the assignment before sending back to coordinator
         Map<String, Assignment> assignment = new HashMap<>();
         for (AssignmentSupplier assignmentSupplier : assignmentSuppliers) {
             assignment.put(assignmentSupplier.consumer, assignmentSupplier.get());
@@ -604,14 +616,16 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     }
 
     private void ensureCopartitioning(Collection<Set<String>> copartitionGroups,
-                                      Map<String, Integer> allRepartitionTopicsNumPartitions,
+                                      Map<String, InternalTopicMetadata> allRepartitionTopicsNumPartitions,
                                       Cluster metadata) {
         for (Set<String> copartitionGroup : copartitionGroups) {
             ensureCopartitioning(copartitionGroup, allRepartitionTopicsNumPartitions, metadata);
         }
     }
 
-    private void ensureCopartitioning(Set<String> copartitionGroup, Map<String, Integer> allRepartitionTopicsNumPartitions, Cluster metadata) {
+    private void ensureCopartitioning(Set<String> copartitionGroup,
+                                      Map<String, InternalTopicMetadata> allRepartitionTopicsNumPartitions,
+                                      Cluster metadata) {
         int numPartitions = -1;
 
         for (String topic : copartitionGroup) {
@@ -647,7 +661,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // enforce co-partitioning restrictions to repartition topics by updating their number of partitions
         for (String topic : allRepartitionTopicsNumPartitions.keySet()) {
             if (copartitionGroup.contains(topic)) {
-                allRepartitionTopicsNumPartitions.put(topic, numPartitions);
+                allRepartitionTopicsNumPartitions.get(topic).numPartitions = numPartitions;
             }
         }
     }
