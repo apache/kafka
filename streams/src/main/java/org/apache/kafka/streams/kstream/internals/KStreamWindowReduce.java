@@ -143,12 +143,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
                 if (forwardImmediately) {
                     W window = matchedWindows.get(windowStartMs);
                     Windowed<K> windowedKey = new Windowed<K>(key, window);
-
-                    if (sendOldValues) {
-                        context.forward(key, new Change<>(windowedKey, value));
-                    } else {
-                        context.forward(key, new Change<>(windowedKey, null));
-                    }
+                    context.forward(windowedKey, new Change<>(value, null));
                 }
             }
         }
