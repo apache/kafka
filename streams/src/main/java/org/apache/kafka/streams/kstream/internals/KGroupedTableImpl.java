@@ -49,14 +49,18 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     protected final Serde<K> keySerde;
     protected final Serde<V> valSerde;
 
+    private final boolean forwardImmediately;
+
     public KGroupedTableImpl(KStreamBuilder topology,
                              String name,
                              String sourceName,
                              Serde<K> keySerde,
-                             Serde<V> valSerde) {
+                             Serde<V> valSerde,
+                             final boolean forwardImmediately) {
         super(topology, name, Collections.singleton(sourceName));
         this.keySerde = keySerde;
         this.valSerde = valSerde;
+        this.forwardImmediately = forwardImmediately;
     }
 
     @Override
@@ -120,7 +124,13 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         topology.addStateStore(aggregateStore, funcName);
 
         // return the KTable representation with the intermediate topic as the sources
-        return new KTableImpl<>(topology, funcName, aggregateSupplier, Collections.singleton(sourceName), storeName);
+        KTableImpl<K, V, T> ktable = new KTableImpl<>(topology, funcName, aggregateSupplier, Collections.singleton(sourceName), storeName);
+
+        if (forwardImmediately) {
+            ktable.enableForwardImmediately();
+        }
+
+        return ktable;
     }
 
     @Override

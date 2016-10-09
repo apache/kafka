@@ -32,6 +32,7 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
     private final Reducer<V> removeReducer;
 
     private boolean sendOldValues = false;
+    private boolean forwardImmediately = false;
 
     public KTableReduce(String storeName, Reducer<V> addReducer, Reducer<V> removeReducer) {
         this.storeName = storeName;
@@ -45,12 +46,18 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
     }
 
     @Override
+    public void enableForwardImmediately() {
+        forwardImmediately = true;
+    }
+
+    @Override
     public Processor<K, Change<V>> get() {
         return new KTableReduceProcessor();
     }
 
     private class KTableReduceProcessor extends AbstractProcessor<K, Change<V>> {
 
+        private ProcessorContext context;
         private KeyValueStore<K, V> store;
 
         @SuppressWarnings("unchecked")
@@ -58,8 +65,12 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
         public void init(ProcessorContext context) {
             super.init(context);
 
+            this.context = context;
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
-            ((CachedStateStore) store).setFlushListener(new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
+
+            if (!forwardImmediately) {
+                ((CachedStateStore) store).setFlushListener(new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
+            }
         }
 
         /**
@@ -91,6 +102,13 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
             // update the store with the new value
             store.put(key, newAgg);
 
+            if (forwardImmediately) {
+                if (sendOldValues) {
+                    context.forward(key, new Change<>(newAgg, oldAgg));
+                } else {
+                    context.forward(key, new Change<>(newAgg, null));
+                }
+            }
         }
     }
 

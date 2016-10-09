@@ -591,13 +591,26 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public <K1> KGroupedStream<K1, V> groupBy(KeyValueMapper<K, V, K1> selector) {
-        return groupBy(selector, null, null);
+        return groupBy(selector, null, null, false);
+    }
+
+    @Override
+    public <K1> KGroupedStream<K1, V> groupBy(KeyValueMapper<K, V, K1> selector, boolean forwardImmediately) {
+        return groupBy(selector, null, null, forwardImmediately);
+    }
+
+    @Override
+    public <K1> KGroupedStream<K1, V> groupBy(KeyValueMapper<K, V, K1> selector,
+                                              Serde<K1> keySerde,
+                                              Serde<V> valSerde) {
+        return groupBy(selector, keySerde, valSerde, false);
     }
 
     @Override
     public <K1> KGroupedStream<K1, V> groupBy(KeyValueMapper<K, V, K1> selector,
                                                    Serde<K1> keySerde,
-                                                   Serde<V> valSerde) {
+                                                   Serde<V> valSerde,
+                                                   boolean forwardImmediately) {
 
         Objects.requireNonNull(selector, "selector can't be null");
         String selectName = internalSelectKey(selector);
@@ -605,23 +618,38 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                         selectName,
                                         sourceNodes,
                                         keySerde,
-                                        valSerde, true);
+                                        valSerde,
+                                        true,
+                                        forwardImmediately);
     }
 
     @Override
     public KGroupedStream<K, V> groupByKey() {
-        return groupByKey(null, null);
+        return groupByKey(null, null, false);
+    }
+
+    @Override
+    public KGroupedStream<K, V> groupByKey(boolean forwardImmediately) {
+        return groupByKey(null, null, forwardImmediately);
     }
 
     @Override
     public KGroupedStream<K, V> groupByKey(Serde<K> keySerde,
                                            Serde<V> valSerde) {
+        return groupByKey(keySerde, valSerde, false);
+    }
+
+    @Override
+    public KGroupedStream<K, V> groupByKey(Serde<K> keySerde,
+                                           Serde<V> valSerde,
+                                           boolean forwardImmediately) {
         return new KGroupedStreamImpl<>(topology,
                                         this.name,
                                         sourceNodes,
                                         keySerde,
                                         valSerde,
-                                        this.repartitionRequired);
+                                        this.repartitionRequired,
+                                        forwardImmediately);
     }
 
 

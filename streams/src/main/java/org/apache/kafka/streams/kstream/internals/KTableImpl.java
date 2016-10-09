@@ -85,6 +85,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     private final String storeName;
 
     private boolean sendOldValues = false;
+    private boolean forwardImmediately = false;
 
 
     public KTableImpl(KStreamBuilder topology,
@@ -360,6 +361,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
                                                   Serde<K1> keySerde,
                                                   Serde<V1> valueSerde) {
+        return groupBy(selector, keySerde, valueSerde, false);
+    }
+
+    @Override
+    public <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
+                                                  Serde<K1> keySerde,
+                                                  Serde<V1> valueSerde,
+                                                  boolean forwardImmediately) {
 
         Objects.requireNonNull(selector, "selector can't be null");
         String selectName = topology.newName(SELECT_NAME);
@@ -370,12 +379,21 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         topology.addProcessor(selectName, selectSupplier, this.name);
         this.enableSendingOldValues();
 
-        return new KGroupedTableImpl<>(topology, selectName, this.name, keySerde, valueSerde);
+        if (forwardImmediately) {
+            enableForwardImmediately();
+        }
+
+        return new KGroupedTableImpl<>(topology, selectName, this.name, keySerde, valueSerde, forwardImmediately);
     }
 
     @Override
     public <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<K, V, KeyValue<K1, V1>> selector) {
-        return this.groupBy(selector, null, null);
+        return this.groupBy(selector, null, null, false);
+    }
+
+    @Override
+    public <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<K, V, KeyValue<K1, V1>> selector, boolean forwardImmediately) {
+        return this.groupBy(selector, null, null, forwardImmediately);
     }
 
     @SuppressWarnings("unchecked")
@@ -408,6 +426,25 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                 ((KTableProcessorSupplier<K, S, V>) processorSupplier).enableSendingOldValues();
             }
             sendOldValues = true;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public void enableForwardImmediately() {
+        if (!forwardImmediately) {
+            if (processorSupplier instanceof KTableSource) {
+                KTableSource<K, ?> source = (KTableSource<K, V>) processorSupplier;
+                if (!source.isMaterialized()) {
+                    throw new StreamsException("Source is not materialized");
+                }
+                source.enableForwardImmediately();
+            } else if (processorSupplier instanceof KStreamAggProcessorSupplier) {
+                ((KStreamAggProcessorSupplier<?, K, S, V>) processorSupplier).enableForwardImmediately();
+            } else {
+                ((KTableProcessorSupplier<K, S, V>) processorSupplier).enableForwardImmediately();
+            }
+
+            forwardImmediately = true;
         }
     }
 

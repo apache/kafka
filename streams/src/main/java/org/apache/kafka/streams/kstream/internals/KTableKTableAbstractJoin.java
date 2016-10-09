@@ -46,4 +46,8 @@ abstract class KTableKTableAbstractJoin<K, R, V1, V2> implements KTableProcessor
         sendOldValues = true;
     }
 
+    @Override
+    public final void enableForwardImmediately() {
+        // joins always forward records immediately
+    }
 }

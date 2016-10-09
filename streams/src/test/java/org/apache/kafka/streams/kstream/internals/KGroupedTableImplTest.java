@@ -119,4 +119,30 @@ public class KGroupedTableImplTest {
         assertEquals(Integer.valueOf(6), results.get("B"));
 
     }
+
+    @Test
+    public void shouldReduceWithForwardImmediately() throws Exception {
+        final KStreamBuilder builder = new KStreamBuilder();
+        final String topic = "input";
+        final KTable<String, Integer> reduced = builder.table(Serdes.String(), Serdes.Integer(), topic, "store")
+                .groupBy(MockKeyValueMapper.<String, Integer>NoOpKeyValueMapper(), true)
+                .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR, "reduced");
+
+        final Map<String, Integer> results = new HashMap<>();
+        reduced.foreach(new ForeachAction<String, Integer>() {
+            @Override
+            public void apply(final String key, final Integer value) {
+                results.put(key, value);
+            }
+        });
+
+
+        final KStreamTestDriver driver = new KStreamTestDriver(builder, TestUtils.tempDirectory(), Serdes.String(), Serdes.Integer());
+        driver.setTime(10L);
+        driver.process(topic, "A", 1);
+        driver.process(topic, "A", 2);
+        driver.process(topic, "A", 5);
+
+        assertEquals(Integer.valueOf(5), results.get("A"));
+    }
 }

@@ -59,6 +59,11 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
         sendOldValues = true;
     }
 
+    @Override
+    public void enableForwardImmediately() {
+        // this processor always forwards immediately
+    }
+
     private V1 computeValue(V value) {
         V1 newValue = null;
 

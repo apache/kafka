@@ -34,6 +34,7 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
     private final Aggregator<K, V, T> remove;
 
     private boolean sendOldValues = false;
+    private boolean forwardImmediately = false;
 
     public KTableAggregate(String storeName, Initializer<T> initializer, Aggregator<K, V, T> add, Aggregator<K, V, T> remove) {
         this.storeName = storeName;
@@ -48,20 +49,31 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
     }
 
     @Override
+    public void enableForwardImmediately() {
+        forwardImmediately = true;
+    }
+
+    @Override
     public Processor<K, Change<V>> get() {
         return new KTableAggregateProcessor();
     }
 
     private class KTableAggregateProcessor extends AbstractProcessor<K, Change<V>> {
 
+        private ProcessorContext context;
         private KeyValueStore<K, T> store;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
+
+            this.context = context;
             store = (KeyValueStore<K, T>) context.getStateStore(storeName);
-            ((CachedStateStore) store).setFlushListener(new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
+
+            if (!forwardImmediately) {
+                ((CachedStateStore) store).setFlushListener(new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
+            }
         }
 
         /**
@@ -92,6 +104,14 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
 
             // update the store with the new value
             store.put(key, newAgg);
+
+            if (forwardImmediately) {
+                if (sendOldValues) {
+                    context.forward(key, new Change<>(newAgg, oldAgg));
+                } else {
+                    context.forward(key, new Change<>(newAgg, null));
+                }
+            }
         }
 
     }

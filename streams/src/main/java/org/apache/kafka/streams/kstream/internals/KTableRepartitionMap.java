@@ -65,6 +65,11 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
         throw new IllegalStateException("KTableRepartitionMap should always require sending old values.");
     }
 
+    @Override
+    public void enableForwardImmediately() {
+        // this processor always forwards immediately
+    }
+
     private class KTableMapProcessor extends AbstractProcessor<K, Change<V>> {
 
         /**

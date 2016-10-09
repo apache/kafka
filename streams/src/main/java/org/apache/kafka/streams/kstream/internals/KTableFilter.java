@@ -61,6 +61,11 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
         sendOldValues = true;
     }
 
+    @Override
+    public void enableForwardImmediately() {
+        // this processor always forwards immediately
+    }
+
     private V computeValue(K key, V value) {
         V newValue = null;
 

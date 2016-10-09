@@ -31,6 +31,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
 
     private boolean materialized = false;
     private boolean sendOldValues = false;
+    private boolean forwardImmediately = false;
 
     public KTableSource(String storeName) {
         this.storeName = storeName;
@@ -53,6 +54,10 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
         sendOldValues = true;
     }
 
+    public void enableForwardImmediately() {
+        forwardImmediately = true;
+    }
+
     private class KTableSourceProcessor extends AbstractProcessor<K, V> {
         @Override
         public void process(K key, V value) {
@@ -67,13 +72,18 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
     private class MaterializedKTableSourceProcessor extends AbstractProcessor<K, V> {
 
         private KeyValueStore<K, V> store;
+        private ProcessorContext context;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
+            this.context = context;
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
-            ((CachedStateStore) store).setFlushListener(new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
+
+            if (!forwardImmediately) {
+                ((CachedStateStore) store).setFlushListener(new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
+            }
         }
 
         @Override
@@ -82,7 +92,21 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
             if (key == null)
                 throw new StreamsException("Record key for the source KTable from store name " + storeName + " should not be null.");
 
+            V oldValue = null;
+
+            if (forwardImmediately && sendOldValues) {
+                oldValue = store.get(key);
+            }
+
             store.put(key, value);
+
+            if (forwardImmediately) {
+                if (sendOldValues) {
+                    context.forward(key, new Change<>(value, oldValue));
+                } else {
+                    context.forward(key, new Change<>(value, null));
+                }
+            }
         }
     }
 }
