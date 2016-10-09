@@ -146,12 +146,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
                 if (forwardImmediately) {
                     W window = matchedWindows.get(windowStartMs);
                     Windowed<K> windowedKey = new Windowed<K>(key, window);
-
-                    if (sendOldValues) {
-                        context.forward(windowedKey, new Change<>(newAgg, oldAgg));
-                    } else {
-                        context.forward(windowedKey, new Change<>(newAgg, null));
-                    }
+                    context.forward(windowedKey, new Change<>(newAgg, null));
                 }
             }
         }
