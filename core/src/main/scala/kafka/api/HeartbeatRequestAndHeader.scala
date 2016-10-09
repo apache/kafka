@@ -19,7 +19,6 @@ import kafka.common.ErrorMapping
 import org.apache.kafka.common.requests.{HeartbeatResponse, HeartbeatRequest}
 import kafka.api.ApiUtils._
 import kafka.network.RequestChannel.Response
-import scala.Some
 
 object HeartbeatRequestAndHeader {
   def readFrom(buffer: ByteBuffer): HeartbeatRequestAndHeader = {

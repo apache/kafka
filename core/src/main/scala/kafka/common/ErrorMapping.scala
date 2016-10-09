@@ -19,7 +19,6 @@ package kafka.common
 
 import kafka.message.InvalidMessageException
 import java.nio.ByteBuffer
-import scala.Predef._
 
 /**
  * A bi-directional mapping between error codes and exceptions

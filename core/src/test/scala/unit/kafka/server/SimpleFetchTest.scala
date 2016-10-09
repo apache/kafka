@@ -24,8 +24,6 @@ import kafka.message.{ByteBufferMessageSet, Message}
 import kafka.network.RequestChannel
 import kafka.utils.{ZkUtils, Time, TestUtils, MockTime}
 
-import scala.Some
-
 import org.easymock.EasyMock
 import org.I0Itec.zkclient.ZkClient
 import org.scalatest.junit.JUnit3Suite
