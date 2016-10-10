@@ -26,7 +26,8 @@ import kafka.log.LogConfig
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer._
-import org.apache.kafka.common.errors.{InvalidTopicException, NotEnoughReplicasAfterAppendException, NotEnoughReplicasException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.KafkaException
+import org.apache.kafka.common.errors._
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -175,34 +176,24 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   }
 
   /**
-   *  The send call with invalid partition id should throw KafkaException caused by IllegalArgumentException
-   */
+    * Send with invalid partition id should throw KafkaException when partition is higher than the
+    * upper bound of partitions and IllegalArgumentException when partition is negative
+    */
   @Test
   def testInvalidPartition() {
-    // create topic
+    // create topic with partition range [0...0]
     TestUtils.createTopic(zkUtils, topic1, 1, numServers, servers)
 
     // create a record with incorrect partition id (higher than the number of partitions), send should fail
     val higherRecord = new ProducerRecord[Array[Byte],Array[Byte]](topic1, new Integer(1), "key".getBytes, "value".getBytes)
-    val thrown1 = intercept[ExecutionException] {
-      producer1.send(higherRecord).get
+    intercept[KafkaException] {
+      producer1.send(higherRecord)
     }
-    assertTrue("Unexpected exception while sending to an invalid partition " + thrown1.getCause, thrown1.getCause.isInstanceOf[UnknownTopicOrPartitionException])
-    val thrown2 = intercept[ExecutionException] {
-      producer2.send(higherRecord).get
-    }
-    assertTrue("Unexpected exception while sending to an invalid partition " + thrown2.getCause, thrown2.getCause.isInstanceOf[UnknownTopicOrPartitionException])
-    val thrown3 = intercept[ExecutionException] {
-      producer3.send(higherRecord).get
-    }
-    assertTrue("Unexpected exception while sending to an invalid partition " + thrown3.getCause, thrown3.getCause.isInstanceOf[UnknownTopicOrPartitionException])
-
     // create a record with incorrect partition id (lower than 0), send should fail
     val lowerRecord = new ProducerRecord[Array[Byte],Array[Byte]](topic1, new Integer(-1), "key".getBytes, "value".getBytes)
-    val thrown = intercept[ExecutionException] {
-      producer1.send(lowerRecord).get
+    intercept[IllegalArgumentException] {
+      producer1.send(lowerRecord)
     }
-    assertTrue("Unexpected exception while sending to an invalid partition " + thrown.getCause, thrown.getCause.isInstanceOf[UnknownTopicOrPartitionException])
   }
 
   /**

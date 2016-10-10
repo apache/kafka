@@ -23,7 +23,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.network.Selectable;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.test.MockMetricsReporter;
@@ -45,12 +44,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
 @PowerMockIgnore("javax.management.*")
@@ -260,52 +253,4 @@ public class KafkaProducerTest {
         PowerMock.verify(metadata);
     }
 
-    @PrepareOnlyThisForTest(Metadata.class)
-    @Test
-    public void testSendOnInvalidPartitions() throws Exception {
-        Properties props = new Properties();
-        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
-        Metadata metadata = PowerMock.createNiceMock(Metadata.class);
-        MemberModifier.field(KafkaProducer.class, "metadata").set(producer, metadata);
-
-        String topic = "topic";
-        // Create a record with a partition lower than 0
-        ProducerRecord<String, String> lowInvalidRecord = new ProducerRecord<>(topic, -1, null, "value");
-        // Create a record with a partition above the current partition range
-        ProducerRecord<String, String> highInvalidRecord = new ProducerRecord<>(topic, 1, null, "value");
-        final Cluster currentCluster = new Cluster(
-                "dummy",
-                Collections.singletonList(new Node(0, "host1", 1000)),
-                Arrays.asList(new PartitionInfo(topic, 0, null, null, null)),
-                Collections.<String>emptySet(),
-                Collections.<String>emptySet());
-
-        // Expect exactly one fetch if topic metadata is available but the partition number is lower than the range lower limit
-        PowerMock.reset(metadata);
-        EasyMock.expect(metadata.fetch()).andReturn(currentCluster).once();
-        PowerMock.replay(metadata);
-        Future<RecordMetadata> future = producer.send(lowInvalidRecord, null);
-        completedWithError(future, Errors.UNKNOWN_TOPIC_OR_PARTITION);
-        PowerMock.verify(metadata);
-
-        // Expect exactly two fetches if topic metadata is available but the partition number is higher than the range upper limit
-        PowerMock.reset(metadata);
-        EasyMock.expect(metadata.fetch()).andReturn(currentCluster).once();
-        EasyMock.expect(metadata.fetch()).andReturn(currentCluster).once();
-        PowerMock.replay(metadata);
-        future = producer.send(highInvalidRecord, null);
-        completedWithError(future, Errors.UNKNOWN_TOPIC_OR_PARTITION);
-        PowerMock.verify(metadata);
-    }
-
-    private void completedWithError(Future<RecordMetadata> future, Errors error) throws Exception {
-        assertTrue("Request should be completed", future.isDone());
-        try {
-            future.get();
-            fail("Should have thrown an exception.");
-        } catch (ExecutionException e) {
-            assertEquals(error.exception().getClass(), e.getCause().getClass());
-        }
-    }
 }

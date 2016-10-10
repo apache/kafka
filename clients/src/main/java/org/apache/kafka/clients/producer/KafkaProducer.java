@@ -12,29 +12,16 @@
  */
 package org.apache.kafka.clients.producer;
 
-import java.net.InetSocketAddress;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
-
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
+import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.clients.producer.internals.RecordAccumulator;
 import org.apache.kafka.clients.producer.internals.Sender;
-import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
@@ -44,14 +31,14 @@ import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.network.ChannelBuilder;
+import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.Records;
@@ -63,6 +50,17 @@ import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.InetSocketAddress;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * A Kafka client that publishes records to the Kafka cluster.
@@ -428,6 +426,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws InterruptException If the thread is interrupted while blocked
      * @throws SerializationException If the key or value are not valid objects given the configured serializers
      * @throws TimeoutException if the time taken for fetching metadata or allocating memory for the record has surpassed <code>max.block.ms</code>.
+     * @throws KafkaException If the record's partition is beyond the topic's current partition range.
+     * @throws IllegalArgumentException If the record's partition is negative.
      *
      */
     @Override
@@ -516,26 +516,32 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     /**
      * Wait for cluster metadata including partitions for the given topic to be available.
      * @param topic The topic we want metadata for
+     * @param partition A specific partition expected to exist in metadata, or null if there's no preference
      * @param maxWaitMs The maximum time in ms for waiting on the metadata
      * @return The cluster containing topic metadata and the amount of time we waited in ms
      */
     private ClusterAndWaitTime waitOnMetadata(String topic, Integer partition, long maxWaitMs) throws InterruptedException {
+        if (partition != null && partition < 0) {
+            throw new IllegalArgumentException(
+                    String.format("Invalid partition given with record: %d. Partition number should always greater than 0.", partition));
+        }
+
         // add topic to metadata topic list if it is not there already and reset expiry
         this.metadata.add(topic);
         Cluster cluster = metadata.fetch();
         List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
-        // Return cached metadata if we have it and
-        // if the record's partition is either undefined or within the known partition range
-        if (partitions != null && (partition == null || partition.compareTo(partitions.size()) < 0))
+        // Return cached metadata if we have it, and if the record's partition is either undefined
+        // or within the known partition range
+        if (partitions != null && (partition == null || partition < partitions.size()))
             return new ClusterAndWaitTime(cluster, 0);
 
         long begin = time.milliseconds();
         long remainingWaitMs = maxWaitMs;
-        long elapsed = 0;
-        // Resetting partitions to null here allows us to issue a single metadata update in case the cached metadata is stale.
-        // Otherwise we issue metadata requests until we either get metadata or we timeout.
-        partitions = null;
-        while (partitions == null) {
+        long elapsed;
+        // If no metadata was available, issue metadata update requests until we get successful response or we timeout.
+        // If a cached copy of metadata was present but the requested partition was out of bounds, issue a single
+        // request to try to refresh metadata, in case a partition expansion has taken place.
+        do {
             log.trace("Requesting metadata update for topic {}.", topic);
             int version = metadata.requestUpdate();
             sender.wakeup();
@@ -546,14 +552,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
             }
             cluster = metadata.fetch();
-            partitions = cluster.partitionsForTopic(topic);
             elapsed = time.milliseconds() - begin;
             if (elapsed >= maxWaitMs)
                 throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
             if (cluster.unauthorizedTopics().contains(topic))
                 throw new TopicAuthorizationException(topic);
             remainingWaitMs = maxWaitMs - elapsed;
-        }
+        } while (cluster.partitionCountForTopic(topic) == null);
         return new ClusterAndWaitTime(cluster, elapsed);
     }
 
@@ -742,8 +747,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         if (partition != null) {
             int lastPartition = cluster.partitionsForTopic(record.topic()).size() - 1;
             // they have given us a partition, use it
-            if (partition < 0 || partition > lastPartition) {
-                throw new UnknownTopicOrPartitionException(
+            if (partition > lastPartition) {
+                throw new KafkaException(
                         String.format("Invalid partition given with record: %d is not in the range [0...%d].", partition, lastPartition));
             }
             return partition;
