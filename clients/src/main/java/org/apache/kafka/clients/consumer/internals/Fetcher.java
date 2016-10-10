@@ -362,6 +362,9 @@ public class Fetcher<K, V> {
 
     public Map<TopicPartition, OffsetAndTimestamp> getOffsetsByTimes(Map<TopicPartition, Long> timestampsToSearch,
                                                                      long timeout) {
+        if (timestampsToSearch.isEmpty())
+            return Collections.emptyMap();
+
         long startMs = time.milliseconds();
         long remaining = timeout;
         do {

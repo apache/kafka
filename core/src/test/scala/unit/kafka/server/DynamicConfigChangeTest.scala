@@ -129,6 +129,37 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   }
 
   @Test
+  def testQuotaInitialization() {
+    val server = servers.head
+    val clientIdProps = new Properties()
+    server.shutdown()
+    clientIdProps.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "1000")
+    clientIdProps.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "2000")
+    val userProps = new Properties()
+    userProps.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "10000")
+    userProps.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "20000")
+    val userClientIdProps = new Properties()
+    userClientIdProps.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "100000")
+    userClientIdProps.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "200000")
+
+    AdminUtils.changeClientIdConfig(zkUtils, "overriddenClientId", clientIdProps)
+    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, "overriddenUser", userProps)
+    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, "ANONYMOUS/clients/overriddenUserClientId", userClientIdProps)
+
+    // Remove config change znodes to force quota initialization only through loading of user/client quotas
+    zkUtils.getChildren(ZkUtils.EntityConfigChangesPath).foreach { p => zkUtils.deletePath(ZkUtils.EntityConfigChangesPath + "/" + p) }
+    server.startup()
+    val quotaManagers = server.apis.quotas
+
+    assertEquals(Quota.upperBound(1000),  quotaManagers.produce.quota("someuser", "overriddenClientId"))
+    assertEquals(Quota.upperBound(2000),  quotaManagers.fetch.quota("someuser", "overriddenClientId"))
+    assertEquals(Quota.upperBound(10000),  quotaManagers.produce.quota("overriddenUser", "someclientId"))
+    assertEquals(Quota.upperBound(20000),  quotaManagers.fetch.quota("overriddenUser", "someclientId"))
+    assertEquals(Quota.upperBound(100000),  quotaManagers.produce.quota("ANONYMOUS", "overriddenUserClientId"))
+    assertEquals(Quota.upperBound(200000),  quotaManagers.fetch.quota("ANONYMOUS", "overriddenUserClientId"))
+  }
+
+  @Test
   def testConfigChangeOnNonExistingTopic() {
     val topic = TestUtils.tempTopic
     try {
