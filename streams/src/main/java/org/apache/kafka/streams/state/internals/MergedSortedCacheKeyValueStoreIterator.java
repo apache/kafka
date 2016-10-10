@@ -46,7 +46,22 @@ class MergedSortedCacheKeyValueStoreIterator<K, V> implements KeyValueIterator<K
 
     @Override
     public boolean hasNext() {
+        while (cacheIterator.hasNext() && isDeletedCacheEntry(cacheIterator.peekNext())) {
+            if (storeIterator.hasNext()) {
+                final byte[] storeKey = storeIterator.peekNextKey().get();
+                // advance the store iterator if the key is the same as the deleted cache key
+                if (comparator.compare(storeKey, cacheIterator.peekNext().key) == 0) {
+                    storeIterator.next();
+                }
+            }
+            // skip over items deleted from cache
+            cacheIterator.next();
+        }
         return cacheIterator.hasNext() || storeIterator.hasNext();
+    }
+
+    private boolean isDeletedCacheEntry(final KeyValue<byte[], LRUCacheEntry> nextFromCache) {
+        return  nextFromCache.value.value == null;
     }
 
 
