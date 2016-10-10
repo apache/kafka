@@ -312,10 +312,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   def testDisableDeleteTopic() {
     val topicAndPartition = TopicAndPartition("test", 0)
     val topic = topicAndPartition.topic
-
-    // creating a cluster with "delete.topic.enable" = "false"
-    val servers = createTestTopicAndCluster(topic, false)
-
+    val servers = createTestTopicAndCluster(topic, deleteTopicEnabled = false)
     // mark the topic for deletion
     AdminUtils.deleteTopic(zkUtils, "test")
     TestUtils.waitUntilTrue(() => !zkUtils.pathExists(getDeleteTopicPath(topic)),
