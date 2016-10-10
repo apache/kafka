@@ -67,7 +67,7 @@ test
 
 <h4><a id="quickstart_send" href="#quickstart_send">Step 4: Send some messages</a></h4>
 
-<p>Kafka comes with a command line client that will take input from a file or from standard input and send it out as messages to the Kafka cluster. By default each line will be sent as a separate message.</p>
+<p>Kafka comes with a command line client that will take input from a file or from standard input and send it out as messages to the Kafka cluster. By default, each line will be sent as a separate message.</p>
 <p>
 Run the producer and then type a few messages into the console to send to the server.</p>
 
@@ -119,7 +119,7 @@ config/server-2.properties:
     listeners=PLAINTEXT://:9094
     log.dir=/tmp/kafka-logs-2
 </pre>
-<p>The <code>broker.id</code> property is the unique and permanent name of each node in the cluster. We have to override the port and log directory only because we are running these all on the same machine and we want to keep the brokers from all trying to register on the same port or overwrite each others data.</p>
+<p>The <code>broker.id</code> property is the unique and permanent name of each node in the cluster. We have to override the port and log directory only because we are running these all on the same machine and we want to keep the brokers from all trying to register on the same port or overwrite each other's data.</p>
 <p>
 We already have Zookeeper and our single node started, so we just need to start the two new nodes:
 </p>
@@ -197,7 +197,7 @@ java.exe    java  -Xmx1G -Xms1G -server -XX:+UseG1GC ... build\libs\kafka_2.10-0
 Topic:my-replicated-topic	PartitionCount:1	ReplicationFactor:3	Configs:
 	Topic: my-replicated-topic	Partition: 0	Leader: 2	Replicas: 1,2,0	Isr: 2,0
 </pre>
-<p>But the messages are still be available for consumption even though the leader that took the writes originally is down:</p>
+<p>But the messages are still available for consumption even though the leader that took the writes originally is down:</p>
 <pre>
 &gt; <b>bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --from-beginning --topic my-replicated-topic</b>
 ...
@@ -305,7 +305,7 @@ unbounded input data, it will periodically output its current state and results 
 because it cannot know when it has processed "all" the input data.
 </p>
 <p>
-We will now prepare input data to a Kafka topic, which will subsequently processed by a Kafka Streams application.
+We will now prepare input data to a Kafka topic, which will subsequently be processed by a Kafka Streams application.
 </p>
 
 <!--

@@ -17,9 +17,9 @@
 <h3> Kafka is <i>a distributed streaming platform</i>. What exactly does that mean?</h3>
 <p>We think of a streaming platform as having three key capabilities:</p>
 <ol>
-	<li>It let's you publish and subscribe to streams of records. In this respect it is similar to a message queue or enterprise messaging system.
-	<li>It let's you store streams of records in a fault-tolerant way.
-	<li>It let's you process streams of records as they occur.
+	<li>It lets you publish and subscribe to streams of records. In this respect it is similar to a message queue or enterprise messaging system.
+	<li>It lets you store streams of records in a fault-tolerant way.
+	<li>It lets you process streams of records as they occur.
 </ol>
 <p>What is Kafka good for?</p>
 <p>It gets used for two broad classes of application:</p>
@@ -56,7 +56,7 @@ In Kafka the communication between the clients and the servers is done with a si
 <p> Each partition is an ordered, immutable sequence of records that is continually appended to&mdash;a structured commit log. The records in the partitions are each assigned a sequential id number called the <i>offset</i> that uniquely identifies each record within the partition.
 </p>
 <p>
-The Kafka cluster retains all published records&mdash;whether or not they have been consumed&mdash;using a configurable retention period. For example if the retention policy is set to two days, then for the two days after a record is published, it is available for consumption, after which it will be discarded to free up space. Kafka's performance is effectively constant with respect to data size so storing data for a long time is not a problem.
+The Kafka cluster retains all published records&mdash;whether or not they have been consumed&mdash;using a configurable retention period. For example, if the retention policy is set to two days, then for the two days after a record is published, it is available for consumption, after which it will be discarded to free up space. Kafka's performance is effectively constant with respect to data size so storing data for a long time is not a problem.
 </p>
 <img class="centered" src="images/log_consumer.png" style="width:400px">
 <p>
@@ -124,7 +124,7 @@ More details on these guarantees are given in the design section of the document
 How does Kafka's notion of streams compare to a traditional enterprise messaging system?
 </p>
 <p>
-Messaging traditionally has two models: <a href="http://en.wikipedia.org/wiki/Message_queue">queuing</a> and <a href="http://en.wikipedia.org/wiki/Publish%E2%80%93subscribe_pattern">publish-subscribe</a>. In a queue, a pool of consumers may read from a server and each record goes to one of them; in publish-subscribe the record is broadcast to all consumers. Each of these two models has a strength and a weakness. The strength of queuing is that it allows you to divide up the processing of data over multiple consumer instances, which lets you scale your processing. Unfortunately queues aren't multi-subscriber&mdash;once one process reads the data it's gone. Publish-subscribe allows you broadcast data to multiple processes, but has no way of scaling processing since every message goes to every subscriber.
+Messaging traditionally has two models: <a href="http://en.wikipedia.org/wiki/Message_queue">queuing</a> and <a href="http://en.wikipedia.org/wiki/Publish%E2%80%93subscribe_pattern">publish-subscribe</a>. In a queue, a pool of consumers may read from a server and each record goes to one of them; in publish-subscribe the record is broadcast to all consumers. Each of these two models has a strength and a weakness. The strength of queuing is that it allows you to divide up the processing of data over multiple consumer instances, which lets you scale your processing. Unfortunately, queues aren't multi-subscriber&mdash;once one process reads the data it's gone. Publish-subscribe allows you broadcast data to multiple processes, but has no way of scaling processing since every message goes to every subscriber.
 </p>
 <p>
 The consumer group concept in Kafka generalizes these two concepts. As with a queue the consumer group allows you to divide up processing over a collection of processes (the members of the consumer group). As with publish-subscribe, Kafka allows you to broadcast messages to multiple consumer groups.
@@ -164,7 +164,7 @@ It isn't enough to just read, write, and store streams of data, the purpose is t
 In Kafka a stream processor is anything that takes continual streams of  data from input topics, performs some processing on this input, and produces continual streams of data to output topics.
 </p>
 <p>
-For example a retail application might take in input streams of sales and shipments, and output a stream of reorders and price adjustments computed off this data.
+For example, a retail application might take in input streams of sales and shipments, and output a stream of reorders and price adjustments computed off this data.
 </p>
 <p>
 It is possible to do simple processing directly using the producer and consumer APIs. However for more complex transformations Kafka provides a fully integrated <a href="/documentation.html#streams">Streams API</a>. This allows building applications that do non-trivial processing that compute aggregations off of streams or join streams together.
