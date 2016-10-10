@@ -999,7 +999,7 @@ public class ConfigDef {
                     if (++j == def.dependents.size())
                         b.append("``");
                     else
-                        b.append("``,");
+                        b.append("``, ");
                 }
                 b.append("\n");
             }
