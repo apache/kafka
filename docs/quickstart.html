@@ -97,12 +97,8 @@ All of the command line tools have additional options; running the command with 
 
 <p>So far we have been running against a single broker, but that's no fun. For Kafka, a single broker is just a cluster of size one, so nothing much changes other than starting a few more broker instances. But just to get feel for it, let's expand our cluster to three nodes (still all on our local machine).</p>
 <p>
-<<<<<<< HEAD
 First we make a config file for each of the brokers (on Windows use the <code>copy</code> command instead):
-=======
-First we make a config file for each of the brokers:
 </p>
->>>>>>> fixing formating issues in docs. missing headers and lots of paragraph misformatting
 <pre>
 &gt; <b>cp config/server.properties config/server-1.properties</b>
 &gt; <b>cp config/server.properties config/server-2.properties</b>
@@ -187,7 +183,6 @@ my test message 2
 &gt; <b>kill -9 7564</b>
 </pre>
 
-<<<<<<< HEAD
 On Windows use:
 <pre>
 &gt; <b>wmic process get processid,caption,commandline | find "java.exe" | find "server-1.properties"</b>
@@ -195,10 +190,8 @@ java.exe    java  -Xmx1G -Xms1G -server -XX:+UseG1GC ... build\libs\kafka_2.10-0
 &gt; <b>taskkill /pid 644 /f</b>
 </pre>
 
-Leadership has switched to one of the slaves and node 1 is no longer in the in-sync replica set:
-=======
 <p>Leadership has switched to one of the slaves and node 1 is no longer in the in-sync replica set:</p>
->>>>>>> fixing formating issues in docs. missing headers and lots of paragraph misformatting
+
 <pre>
 &gt; <b>bin/kafka-topics.sh --describe --zookeeper localhost:2181 --topic my-replicated-topic</b>
 Topic:my-replicated-topic	PartitionCount:1	ReplicationFactor:3	Configs:
