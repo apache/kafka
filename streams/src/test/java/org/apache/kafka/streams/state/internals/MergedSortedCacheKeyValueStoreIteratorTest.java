@@ -117,7 +117,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
     @Test
     public void shouldSkipAllDeletedFromCache() throws Exception {
         final byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}};
-        for (int i = 0; i < bytes.length; i += 2) {
+        for (int i = 0; i < bytes.length; i ++) {
             store.put(Bytes.wrap(bytes[i]), bytes[i]);
             cache.put(namespace, bytes[i], new LRUCacheEntry(bytes[i]));
         }
@@ -126,6 +126,16 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
         cache.put(namespace, bytes[3], new LRUCacheEntry(null));
         cache.put(namespace, bytes[8], new LRUCacheEntry(null));
         cache.put(namespace, bytes[11], new LRUCacheEntry(null));
+
+        final MergedSortedCacheKeyValueStoreIterator<byte[], byte[]> iterator = createIterator();
+        assertArrayEquals(bytes[0], iterator.next().key);
+        assertArrayEquals(bytes[4], iterator.next().key);
+        assertArrayEquals(bytes[5], iterator.next().key);
+        assertArrayEquals(bytes[6], iterator.next().key);
+        assertArrayEquals(bytes[7], iterator.next().key);
+        assertArrayEquals(bytes[9], iterator.next().key);
+        assertArrayEquals(bytes[10], iterator.next().key);
+        assertFalse(iterator.hasNext());
 
     }
 
