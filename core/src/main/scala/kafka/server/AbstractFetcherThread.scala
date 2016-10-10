@@ -119,7 +119,7 @@ abstract class AbstractFetcherThread(name: String,
     } catch {
       case t: Throwable =>
         if (isRunning.get) {
-          warn(s"Error in fetch $fetchRequest", t)
+          warn(s" fetch $fetchRequest", t)
           inLock(partitionMapLock) {
             partitionStates.partitionSet.asScala.foreach(updatePartitionsWithError)
             // there is an error occurred while fetching partitions, sleep a while

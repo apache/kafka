@@ -134,6 +134,10 @@ public class Struct {
         return (Integer) get(name);
     }
 
+    public Long getUnsignedInt(String name) {
+        return (Long) get(name);
+    }
+
     public Long getLong(Field field) {
         return (Long) get(field);
     }
@@ -280,6 +284,16 @@ public class Struct {
      */
     public void validate() {
         this.schema.validate(this);
+    }
+
+    /**
+     * Create a byte buffer containing the serialized form of the values in this struct. This method can choose to break
+     * the struct into multiple ByteBuffers if need be.
+     */
+    public ByteBuffer[] toBytes() {
+        ByteBuffer buffer = ByteBuffer.allocate(sizeOf());
+        writeTo(buffer);
+        return new ByteBuffer[] {buffer};
     }
 
     @Override

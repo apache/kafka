@@ -49,6 +49,7 @@ import org.apache.kafka.common.requests.SaslHandshakeResponse
 
 import scala.collection._
 import scala.collection.JavaConverters._
+import scala.util.Random
 
 /**
  * Logic to handle the various Kafka requests
@@ -67,6 +68,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val quotas: QuotaManagers,
                 val clusterId: String,
                 time: Time) extends Logging {
+
+  val random = new Random()
 
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
 
@@ -100,6 +103,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.CREATE_TOPICS => handleCreateTopicsRequest(request)
         case ApiKeys.DELETE_TOPICS => handleDeleteTopicsRequest(request)
         case ApiKeys.DELETE_RECORDS => handleDeleteRecordsRequest(request)
+        case ApiKeys.INIT_PRODUCER_ID => handleInitPIDRequest(request)
         case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
     } catch {
@@ -1306,6 +1310,18 @@ class KafkaApis(val requestChannel: RequestChannel,
         authorizedForDeleteTopics.mapValues(_.toLong),
         sendResponseCallback)
     }
+
+  def handleInitPIDRequest(request: RequestChannel.Request): Unit = {
+    val initPidRequest = request.body.asInstanceOf[InitPIDRequest]
+    if (initPidRequest.appId != null)
+      throw new UnsupportedOperationException
+
+    val pid = math.abs(random.nextLong())
+    val epoch: Short = 0
+    val responseBody = new InitPIDResponse(Errors.NONE, pid, epoch)
+
+    trace(s"Generated new PID $pid from InitPIDRequest from client ${request.header.clientId}")
+    requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
   }
 
   def authorizeClusterAction(request: RequestChannel.Request): Unit = {

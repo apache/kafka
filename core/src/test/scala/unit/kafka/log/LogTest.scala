@@ -120,6 +120,70 @@ class LogTest extends JUnitSuite {
     assertEquals("Appending an empty message set should not roll log even if sufficient time has passed.", numSegments, log.numberOfSegments)
   }
 
+  @Test(expected = classOf[InvalidSequenceNumberException])
+  def testNonSequentialAppend(): Unit = {
+    val logProps = new Properties()
+
+    // create a log
+    val log = new Log(logDir,
+      LogConfig(logProps),
+      recoveryPoint = 0L,
+      scheduler = time.scheduler,
+      time = time)
+
+    val pid = 1L
+    val epoch: Short = 0
+
+    val records = TestUtils.records(List(("key".getBytes, "value".getBytes, 1L)), pid = pid, epoch = epoch, sequence = 0)
+    log.append(records, assignOffsets = true)
+
+    val nextRecords = TestUtils.records(List(("key".getBytes, "value".getBytes, 1L)), pid = pid, epoch = epoch, sequence = 2)
+    log.append(nextRecords, assignOffsets = true)
+  }
+
+  @Test(expected = classOf[DuplicateSequenceNumberException])
+  def testDuplicateAppend(): Unit = {
+    val logProps = new Properties()
+
+    // create a log
+    val log = new Log(logDir,
+      LogConfig(logProps),
+      recoveryPoint = 0L,
+      scheduler = time.scheduler,
+      time = time)
+
+    val pid = 1L
+    val epoch: Short = 0
+
+    val records = TestUtils.records(List(("key".getBytes, "value".getBytes, 1L)), pid = pid, epoch = epoch, sequence = 0)
+    log.append(records, assignOffsets = true)
+
+    val nextRecords = TestUtils.records(List(("key".getBytes, "value".getBytes, 1L)), pid = pid, epoch = epoch, sequence = 0)
+    log.append(nextRecords, assignOffsets = true)
+  }
+
+  @Test(expected = classOf[ProducerFencedException])
+  def testOldProducerEpoch(): Unit = {
+    val logProps = new Properties()
+
+    // create a log
+    val log = new Log(logDir,
+      LogConfig(logProps),
+      recoveryPoint = 0L,
+      scheduler = time.scheduler,
+      time = time)
+
+    val pid = 1L
+    val newEpoch: Short = 1
+    val oldEpoch: Short = 0
+
+    val records = TestUtils.records(List(("key".getBytes, "value".getBytes, 1L)), pid = pid, epoch = newEpoch, sequence = 0)
+    log.append(records, assignOffsets = true)
+
+    val nextRecords = TestUtils.records(List(("key".getBytes, "value".getBytes, 1L)), pid = pid, epoch = oldEpoch, sequence = 0)
+    log.append(nextRecords, assignOffsets = true)
+  }
+
   /**
    * Test for jitter s for time based log roll. This test appends messages then changes the time
    * using the mock clock to force the log to roll and checks the number of segments.
