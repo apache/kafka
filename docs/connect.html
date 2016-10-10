@@ -101,11 +101,11 @@ For any other options, you should consult the documentation for the connector.
 
 <h4><a id="connect_rest" href="#connect_rest">REST API</a></h4>
 
-Since Kafka Connect is intended to be run as a service, it also provides a REST API for managing connectors. By default this service runs on port 8083. The following are the currently supported endpoints:
+Since Kafka Connect is intended to be run as a service, it also provides a REST API for managing connectors. By default, this service runs on port 8083. The following are the currently supported endpoints:
 
 <ul>
     <li><code>GET /connectors</code> - return a list of active connectors</li>
-    <li><code>POST /connectors</code> - create a new connector; the request body should be a JSON object containing a string <code>name</code> field and a object <code>config</code> field with the connector configuration parameters</li>
+    <li><code>POST /connectors</code> - create a new connector; the request body should be a JSON object containing a string <code>name</code> field and an object <code>config</code> field with the connector configuration parameters</li>
     <li><code>GET /connectors/{name}</code> - get information about a specific connector</li>
     <li><code>GET /connectors/{name}/config</code> - get the configuration parameters for a specific connector</li>
     <li><code>PUT /connectors/{name}/config</code> - update the configuration parameters for a specific connector</li>
