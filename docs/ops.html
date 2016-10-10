@@ -495,7 +495,7 @@ producer.purgatory.purge.interval.requests=100
 
 Our client configuration varies a fair amount between different use cases.
 
-<h3><a id="java" href="#java">Java Version</a></h3>
+<h3><a id="java" href="#java">6.4 Java Version</a></h3>
 
 From a security perspective, we recommend you use the latest released version of JDK 1.8 as older freely available versions have disclosed security vulnerabilities.
 
@@ -518,7 +518,7 @@ For reference, here are the stats on one of LinkedIn's busiest clusters (at peak
 
 The tuning looks fairly aggressive, but all of the brokers in that cluster have a 90% GC pause time of about 21ms, and they're doing less than 1 young GC per second.
 
-<h3><a id="hwandos" href="#hwandos">6.4 Hardware and OS</a></h3>
+<h3><a id="hwandos" href="#hwandos">6.5 Hardware and OS</a></h3>
 We are using dual quad-core Intel Xeon machines with 24GB of memory.
 <p>
 You need sufficient memory to buffer active readers and writers. You can do a back-of-the-envelope estimate of memory needs by assuming you want to be able to buffer for 30 seconds and compute your memory need as write_throughput*30.
