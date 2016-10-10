@@ -90,7 +90,9 @@ class TopicDeletionManager(controller: KafkaController,
     // if delete topic is disabled clean the topic entries under /admin/delete_topics
     val zkUtils = controllerContext.zkUtils
     for (topic <- initialTopicsToBeDeleted) {
-      zkUtils.zkClient.delete(getDeleteTopicPath(topic))
+      val deleteTopicPath = getDeleteTopicPath(topic)
+      info("Removing " + deleteTopicPath + " since delete topic is disabled")
+      zkUtils.zkClient.delete(deleteTopicPath)
     }
     mutable.Set.empty[String]
   }

@@ -277,10 +277,10 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     servers.foreach(_.shutdown())
   }
 
-  private def createTestTopicAndCluster(topic: String, deleteTopicEnabled: String = "true"): Seq[KafkaServer] = {
+  private def createTestTopicAndCluster(topic: String, deleteTopicEnabled: Boolean = true): Seq[KafkaServer] = {
 
     val brokerConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false)
-    brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", deleteTopicEnabled)
+    brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", deleteTopicEnabled.toString)
     )
     createTestTopicAndCluster(topic,brokerConfigs)
   }
@@ -314,7 +314,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     val topic = topicAndPartition.topic
 
     // creating a cluster with "delete.topic.enable" = "false"
-    val servers = createTestTopicAndCluster(topic, "false")
+    val servers = createTestTopicAndCluster(topic, false)
 
     // mark the topic for deletion
     AdminUtils.deleteTopic(zkUtils, "test")
