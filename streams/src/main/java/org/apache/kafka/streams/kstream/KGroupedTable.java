@@ -147,4 +147,17 @@ public interface KGroupedTable<K, V> {
      */
     KTable<K, Long> count(String storeName);
 
+    /**
+     * Count number of records of this stream by the selected key into a new instance of {@link KTable}.
+     * The resulting {@link KTable} will be materialized in a local state
+     * store given by state store supplier. Also a changelog topic named "${applicationId}-${storeName}-changelog"
+     * will be automatically created in Kafka for failure recovery, where "applicationID"
+     * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
+     *
+     * @param storeSupplier user defined state store supplier {@link StateStoreSupplier}
+     * @return a {@link KTable} with same key and {@link Long} value type as this {@link KGroupedTable},
+     * containing the number of values for each key
+     */
+    KTable<K, Long> count(final StateStoreSupplier<KeyValueStore> storeSupplier);
+
 }

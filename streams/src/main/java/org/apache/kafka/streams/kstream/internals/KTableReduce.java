@@ -23,7 +23,6 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.internals.CachedStateStore;
 
 public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
 
@@ -52,17 +51,14 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
     private class KTableReduceProcessor extends AbstractProcessor<K, Change<V>> {
 
         private KeyValueStore<K, V> store;
-        private boolean cached = false;
+        private Forwarder<K, V> forwarder;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
-            if (store instanceof CachedStateStore) {
-                cached = true;
-                ((CachedStateStore) store).setFlushListener(new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
-            }
+            forwarder = new Forwarder<K, V>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
         }
 
         /**
@@ -93,12 +89,7 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
 
             // update the store with the new value
             store.put(key, newAgg);
-            if (!cached) {
-                if (sendOldValues)
-                    context().forward(key, new Change<>(newAgg, oldAgg));
-                else
-                    context().forward(key, new Change<>(newAgg, null));
-            }
+            forwarder.maybeForward(key, newAgg, oldAgg, sendOldValues);
         }
     }
 

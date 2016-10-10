@@ -21,16 +21,15 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.kstream.Aggregator;
-import org.apache.kafka.streams.kstream.Initializer;
-import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
-import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Initializer;
+import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.Stores;
 
 import java.util.Collections;
 import java.util.Objects;
@@ -71,7 +70,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         Objects.requireNonNull(adder, "adder can't be null");
         Objects.requireNonNull(subtractor, "subtractor can't be null");
         Objects.requireNonNull(storeName, "storeName can't be null");
-        return aggregate(initializer, adder, subtractor, keyValueStore(aggValueSerde, storeName));
+        return aggregate(initializer, adder, subtractor, keyValueStore(keySerde, aggValueSerde, storeName));
     }
 
 
@@ -135,7 +134,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         Objects.requireNonNull(adder, "adder can't be null");
         Objects.requireNonNull(subtractor, "subtractor can't be null");
         Objects.requireNonNull(storeName, "storeName can't be null");
-        return reduce(adder, subtractor, keyValueStore(valSerde, storeName));
+        return reduce(adder, subtractor, keyValueStore(keySerde, valSerde, storeName));
     }
 
     @Override
@@ -151,6 +150,11 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
     @Override
     public KTable<K, Long> count(String storeName) {
+        return count(keyValueStore(keySerde, Serdes.Long(), storeName));
+    }
+
+    @Override
+    public KTable<K, Long> count(StateStoreSupplier<KeyValueStore> storeSupplier) {
         return this.aggregate(
                 new Initializer<Long>() {
                     @Override
@@ -169,21 +173,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                         return aggregate - 1L;
                     }
                 },
-                Serdes.Long(), storeName);
+                storeSupplier);
     }
-
-    private <T> StateStoreSupplier keyValueStore(final Serde<T> aggValueSerde, final String name) {
-        return storeFactory(aggValueSerde, name).build();
-    }
-
-    private <T> Stores.PersistentKeyValueFactory<K, T> storeFactory(final Serde<T> aggValueSerde,
-                                                                    final String storeName) {
-        return Stores.create(storeName)
-                .withKeys(keySerde)
-                .withValues(aggValueSerde)
-                .persistent()
-                .enableCaching();
-    }
-
 
 }

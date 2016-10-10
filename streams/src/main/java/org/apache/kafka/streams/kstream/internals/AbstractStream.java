@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,8 +17,15 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.Window;
+import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.WindowStore;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -63,5 +70,32 @@ public abstract class AbstractStream<K> {
             }
         };
     }
+
+    protected <T> StateStoreSupplier<KeyValueStore> keyValueStore(final Serde<K> keySerde,
+                                                                  final Serde<T> aggValueSerde,
+                                                                  final String name) {
+        return storeFactory(keySerde, aggValueSerde, name).build();
+    }
+
+
+    protected <W extends Window, T, K> StateStoreSupplier<WindowStore> windowedStore(final Serde<K> keySerde,
+                                                                                     final Serde<T> aggValSerde,
+                                                                                     final Windows<W> windows,
+                                                                                     final String storeName) {
+        return storeFactory(keySerde, aggValSerde, storeName)
+                .windowed(windows.size(), windows.maintainMs(), windows.segments, false)
+                .build();
+    }
+
+    protected <T, K> Stores.PersistentKeyValueFactory<K, T> storeFactory(final Serde<K> keySerde,
+                                                                         final Serde<T> aggValueSerde,
+                                                                         final String storeName) {
+        return Stores.create(storeName)
+                .withKeys(keySerde)
+                .withValues(aggValueSerde)
+                .persistent()
+                .enableCaching();
+    }
+
 
 }

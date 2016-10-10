@@ -187,8 +187,7 @@ public interface KGroupedStream<K, V> {
     <W extends Window, T> KTable<Windowed<K>, T> aggregate(Initializer<T> initializer,
                                                            Aggregator<K, V, T> aggregator,
                                                            Windows<W> windows,
-                                                           Serde<T> aggValueSerde,
-                                                           final StateStoreSupplier<KeyValueStore> storeSupplier);
+                                                           final StateStoreSupplier<WindowStore> storeSupplier);
 
     /**
      * Count number of records of this stream by key into a new instance of a {@link KTable}.
@@ -217,5 +216,21 @@ public interface KGroupedStream<K, V> {
      * that represent the latest (rolling) count (i.e., number of records) for each key within that window
      */
     <W extends Window> KTable<Windowed<K>, Long> count(Windows<W> windows, final String storeName);
+
+    /**
+     * Count number of records of this stream by key on a window basis into a new instance of windowed {@link KTable}.
+     * The resulting {@link KTable} will be materialized in a local state
+     * store given by state store supplier. Also a changelog topic named "${applicationId}-${storeName}-changelog"
+     * will be automatically created in Kafka for failure recovery, where "applicationID"
+     * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
+     *
+     * @param windows       the specification of the aggregation {@link Windows}
+     * @param storeSupplier user defined state store supplier {@link StateStoreSupplier}
+     * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
+     * where each table contains records with unmodified keys and values
+     * that represent the latest (rolling) count (i.e., number of records) for each key within that window
+     */
+    <W extends Window> KTable<Windowed<K>, Long> count(Windows<W> windows,
+                                                       final StateStoreSupplier<WindowStore> storeSupplier);
 
 }
