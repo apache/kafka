@@ -102,10 +102,11 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
 
     public void poll(long timeout) {
         // poll for io until the timeout expires
-        long now = time.milliseconds();
-        long deadline = now + timeout;
+        final long start = time.milliseconds();
+        long now = start;
+        long remaining;
 
-        while (now <= deadline) {
+        do {
             if (coordinatorUnknown()) {
                 ensureCoordinatorReady();
                 now = time.milliseconds();
@@ -118,12 +119,17 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
 
             pollHeartbeat(now);
 
+            long elapsed = now - start;
+            remaining = timeout - elapsed;
+
             // Note that because the network client is shared with the background heartbeat thread,
             // we do not want to block in poll longer than the time to the next heartbeat.
-            long remaining = Math.max(0, deadline - now);
-            client.poll(Math.min(remaining, timeToNextHeartbeat(now)));
+            client.poll(Math.min(Math.max(0, remaining), timeToNextHeartbeat(now)));
+
             now = time.milliseconds();
-        }
+            elapsed = now - start;
+            remaining = timeout - elapsed;
+        } while (remaining > 0);
     }
 
     @Override
