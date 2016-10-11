@@ -103,7 +103,11 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     public void poll(long timeout) {
         // poll for io until the timeout expires
         long now = time.milliseconds();
-        long deadline = now + timeout;
+        final long deadline;
+        if (timeout > Long.MAX_VALUE - now)
+            deadline = Long.MAX_VALUE;
+        else
+            deadline = now + timeout;
 
         while (now <= deadline) {
             if (coordinatorUnknown()) {
