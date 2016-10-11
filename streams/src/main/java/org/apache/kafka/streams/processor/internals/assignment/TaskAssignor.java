@@ -40,16 +40,16 @@ public class TaskAssignor<C, T extends Comparable<T>> {
         }
 
         TaskAssignor<C, T> assignor = new TaskAssignor<>(states, tasks, seed);
-        log.info("stream-thread [{}] Assigning tasks to clients: {}, prevAssignmentBalanced: {}, " +
-            "prevClientsUnchanged: {}, tasks: {}, replicas: {}",
-            streamThreadId, states, assignor.prevAssignmentBalanced, assignor.prevClientsUnchanged,
-            tasks, numStandbyReplicas);
+        log.info("stream-thread [{}] Assigning tasks\n{}\nto clients\n{}\nprevAssignmentBalanced: {}, " +
+            "prevClientsUnchanged: {}, number of replicas: {}",
+            streamThreadId, tasks, states,
+            assignor.prevAssignmentBalanced, assignor.prevClientsUnchanged, numStandbyReplicas);
 
         assignor.assignTasks();
         if (numStandbyReplicas > 0)
             assignor.assignStandbyTasks(numStandbyReplicas);
 
-        log.info("stream-thread [{}] Assigned with: {}", streamThreadId, assignor.states);
+        log.info("stream-thread [{}] Task assignment result: {}", streamThreadId, assignor.states);
         return assignor.states;
     }
 
