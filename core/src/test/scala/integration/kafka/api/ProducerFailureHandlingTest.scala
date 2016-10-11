@@ -189,10 +189,9 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     intercept[KafkaException] {
       producer1.send(higherRecord)
     }
-    // create a record with incorrect partition id (lower than 0), send should fail
-    val lowerRecord = new ProducerRecord[Array[Byte], Array[Byte]](topic1, -1, "key".getBytes, "value".getBytes)
+    // create a record with incorrect partition id (lower than 0), record instantiation should fail
     intercept[IllegalArgumentException] {
-      producer1.send(lowerRecord)
+      new ProducerRecord[Array[Byte], Array[Byte]](topic1, -1, "key".getBytes, "value".getBytes)
     }
   }
 

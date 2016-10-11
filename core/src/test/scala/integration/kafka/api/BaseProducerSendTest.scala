@@ -20,13 +20,16 @@ package kafka.api
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 
+import kafka.admin.AdminUtils
 import kafka.consumer.SimpleConsumer
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
 import kafka.message.Message
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
+import kafka.utils.TestUtils._
 import org.apache.kafka.clients.producer._
+import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.record.TimestampType
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -295,6 +298,98 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       for (i <- 0 until numRecords) {
         assertEquals(new Message(bytes = ("value" + (i + 1)).getBytes, now, Message.MagicValue_V1), messageSet1(i).message)
         assertEquals(i.toLong, messageSet1(i).offset)
+      }
+    } finally {
+      producer.close()
+    }
+  }
+
+  /**
+   * testSendBeforeAndAfterPartitionExpansion checks the partitioning behavior before and after partitions are added
+   *
+   * The specified partition-ids should be respected
+   */
+  @Test
+  def testSendBeforeAndAfterPartitionExpansion() {
+    val producer = createProducer(brokerList)
+
+    try {
+      // create topic
+      val leaders = TestUtils.createTopic(zkUtils, topic, 1, 2, servers)
+      val partition0 = 0
+
+      // make sure leaders exist
+      var leader0 = leaders(partition0)
+      assertTrue("Leader for topic \"topic\" partition 0 should exist", leader0.isDefined)
+
+      var responses0 =
+        for (i <- 1 to numRecords)
+        yield producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, partition0, null, ("value" + i).getBytes))
+      var futures0 = responses0.toList
+      futures0.foreach(_.get)
+      for (future <- futures0)
+        assertTrue("Request should have completed", future.isDone)
+
+      // make sure all of them end up in the same partition with increasing offset values
+      for ((future, offset) <- futures0 zip (0 until numRecords)) {
+        assertEquals(offset.toLong, future.get.offset)
+        assertEquals(topic, future.get.topic)
+        assertEquals(partition0, future.get.partition)
+      }
+
+      // Trying to send a record to a partition beyond topic's partition range before adding the partition should fail.
+      val partition1 = 1
+      try {
+        producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, partition1, null, "value".getBytes))
+        fail("Should not allow sending a record without topic")
+      } catch {
+        case ke: KafkaException => // this is ok
+        case e: Throwable => fail("Only expecting KafkaException", e)
+      }
+
+      AdminUtils.addPartitions(zkUtils, topic, 2)
+      // wait until leader is elected
+      leader0 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0)
+      val leader1 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 1)
+      val leader0FromZk = zkUtils.getLeaderForPartition(topic, 0).get
+      val leader1FromZk = zkUtils.getLeaderForPartition(topic, 1).get
+      assertEquals(leader0.get, leader0FromZk)
+      assertEquals(leader1.get, leader1FromZk)
+
+      // read metadata from a broker and verify the new topic partitions exist
+      TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
+      TestUtils.waitUntilMetadataIsPropagated(servers, topic, 1)
+
+      // send records to the newly added partition after confirming that metadata have been updated.
+      val responses1 =
+        for (i <- 1 to numRecords)
+        yield producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, partition1, null, ("value" + i).getBytes))
+      val futures1 = responses1.toList
+      futures1.foreach(_.get)
+      for (future <- futures1)
+        assertTrue("Request should have completed", future.isDone)
+
+      // make sure all of them end up in the same partition with increasing offset values
+      for ((future, offset) <- futures1 zip (0 until numRecords)) {
+        assertEquals(offset.toLong, future.get.offset)
+        assertEquals(topic, future.get.topic)
+        assertEquals(partition1, future.get.partition)
+      }
+
+      // as well as the old partition
+      responses0 =
+        for (i <- 1 to numRecords)
+        yield producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, partition0, null, ("value" + i).getBytes))
+      futures0 = responses0.toList
+      futures0.foreach(_.get)
+      for (future <- futures0)
+        assertTrue("Request should have completed", future.isDone)
+
+      // make sure all of them end up in the same partition with increasing offset values starting where previous
+      for ((future, offset) <- futures0 zip (numRecords until 2 * numRecords)) {
+        assertEquals(offset.toLong, future.get.offset)
+        assertEquals(topic, future.get.topic)
+        assertEquals(partition0, future.get.partition)
       }
     } finally {
       producer.close()
