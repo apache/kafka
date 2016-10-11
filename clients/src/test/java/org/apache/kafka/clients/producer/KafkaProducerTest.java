@@ -45,6 +45,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.junit.Assert.fail;
+
 @RunWith(PowerMockRunner.class)
 @PowerMockIgnore("javax.management.*")
 public class KafkaProducerTest {
@@ -67,7 +69,7 @@ public class KafkaProducerTest {
             Assert.assertEquals("Failed to construct kafka producer", e.getMessage());
             return;
         }
-        Assert.fail("should have caught an exception and returned");
+        fail("should have caught an exception and returned");
     }
 
     @Test
@@ -241,6 +243,22 @@ public class KafkaProducerTest {
         EasyMock.expect(metadata.fetch()).andThrow(new IllegalStateException("Unexpected call to metadata.fetch()")).anyTimes();
         PowerMock.replay(metadata);
         producer.send(initialRecord, null);
+        PowerMock.verify(metadata);
+
+        // Expect exactly two fetches if topic metadata is available but metadata response still returns
+        // the same partition size (either because metadata are still stale at the broker too or because
+        // there weren't any partitions added in the first place).
+        PowerMock.reset(metadata);
+        EasyMock.expect(metadata.fetch()).andReturn(initialCluster).once();
+        EasyMock.expect(metadata.fetch()).andReturn(initialCluster).once();
+        EasyMock.expect(metadata.fetch()).andThrow(new IllegalStateException("Unexpected call to metadata.fetch()")).anyTimes();
+        PowerMock.replay(metadata);
+        try {
+            producer.send(extendedRecord, null);
+            fail("Expected KafkaException to be raised");
+        } catch (KafkaException e) {
+            // expected
+        }
         PowerMock.verify(metadata);
 
         // Expect exactly two fetches if topic metadata is available but outdated for the given record
