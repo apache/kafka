@@ -30,13 +30,12 @@ import static org.junit.Assert.assertFalse;
 public class MergedSortedCacheKeyValueStoreIteratorTest {
 
     private final String namespace = "one";
-    private StateSerdes<byte[], byte[]> serdes;
+    private final StateSerdes<byte[], byte[]> serdes =  new StateSerdes<>(namespace, Serdes.ByteArray(), Serdes.ByteArray());
     private KeyValueStore<Bytes, byte[]> store;
     private ThreadCache cache;
 
     @Before
     public void setUp() throws Exception {
-        serdes = new StateSerdes<>(namespace, Serdes.ByteArray(), Serdes.ByteArray());
         store = new InMemoryKeyValueStore<>(namespace);
         cache = new ThreadCache(10000L);
     }
@@ -77,7 +76,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
     }
 
     @Test
-    public void shouldSkipLowerDeletedCachedValue() throws Exception {
+    public void shouldSkipSmallerDeletedCachedValue() throws Exception {
         final byte[][] bytes = {{0}, {1}};
         cache.put(namespace, bytes[0], new LRUCacheEntry(null));
         store.put(Bytes.wrap(bytes[1]), bytes[1]);
@@ -117,7 +116,7 @@ public class MergedSortedCacheKeyValueStoreIteratorTest {
     @Test
     public void shouldSkipAllDeletedFromCache() throws Exception {
         final byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}};
-        for (int i = 0; i < bytes.length; i ++) {
+        for (int i = 0; i < bytes.length; i++) {
             store.put(Bytes.wrap(bytes[i]), bytes[i]);
             cache.put(namespace, bytes[i], new LRUCacheEntry(bytes[i]));
         }
