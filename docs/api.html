@@ -20,7 +20,7 @@ Kafka includes four core apis:
   <li>The <a href="#producerapi">Producer</a> API allows applications to send streams of data to topics in the Kafka cluster.
   <li>The <a href="#consumerapi">Consumer</a> API allows applications to read streams of data from topics in the Kafka cluster.
   <li>The <a href="#streamsapi">Streams</a> API allows transforming streams of data from input topics to output topics.
-  <li>The <a href="#producerapi">Connect</a> API allows implementing connectors that continually pull from some source system or application into Kafka or push from Kafka into some sink system or application.
+  <li>The <a href="#connectapi">Connect</a> API allows implementing connectors that continually pull from some source system or application into Kafka or push from Kafka into some sink system or application.
 </ol>
 
 Kafka exposes all its functionality over a language independent protocol which has clients available in many programming languages. However only the Java clients are maintained as part of the main Kafka project, the others are available as independent open source projects. A list of non-Java clients is available <a href="https://cwiki.apache.org/confluence/display/KAFKA/Clients">here</a>.
@@ -58,7 +58,7 @@ To use the consumer, you can use the following maven dependency:
 	&lt;/dependency&gt;
 </pre>
 
-<h3><a id="streamsapi" href="#streamsapi">Streams API</a></h3>
+<h3><a id="streamsapi" href="#streamsapi">2.3 Streams API</a></h3>
 
 The <a href="#streamsapi">Streams</a> API allows transforming streams of data from input topics to output topics.
 <p>
@@ -77,7 +77,7 @@ To use Kafka Streams you can use the following maven dependency:
 	&lt;/dependency&gt;
 </pre>
 
-<h3><a id="connectapi" href="#connectapi">Connect API</a></h3>
+<h3><a id="connectapi" href="#connectapi">2.4 Connect API</a></h3>
 
 The Connect API allows implementing connectors that continually pull from some source data system into Kafka or push from Kafka into some sink data system.
 <p>
@@ -86,7 +86,7 @@ Many users of Connect won't need to use this API directly, though, they can use 
 Those who want to implement custom connectors can see the <a href="/0100/javadoc/index.html?org/apache/kafka/connect" title="Kafka 0.10.0 Javadoc">javadoc</a>.
 <p>
 
-<h3><a id="legacyapis" href="#streamsapi">Legacy APIs</a></h3>
+<h3><a id="legacyapis" href="#streamsapi">2.5 Legacy APIs</a></h3>
 
 <p>
 A more limited legacy producer and consumer api is also included in Kafka. These old Scala APIs are deprecated and only still available for compatibility purposes. Information on them can be found here <a href="/081/documentation.html#producerapi"  title="Kafka 0.8.1 Docs">
