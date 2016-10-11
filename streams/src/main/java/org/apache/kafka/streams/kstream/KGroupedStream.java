@@ -176,8 +176,6 @@ public interface KGroupedStream<K, V> {
      * @param initializer   the instance of {@link Initializer}
      * @param aggregator    the instance of {@link Aggregator}
      * @param windows       the specification of the aggregation {@link Windows}
-     * @param aggValueSerde aggregate value serdes for materializing the aggregated table,
-     *                      if not specified the default serdes defined in the configs will be used
      * @param <T>           the value type of the resulting {@link KTable}
      * @param storeSupplier user defined state store supplier {@link StateStoreSupplier}
      * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
