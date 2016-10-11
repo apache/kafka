@@ -404,11 +404,11 @@ public class ConfigDefTest {
                 .define("opt1.of.group1", Type.STRING, "a", ValidString.in("a", "b", "c"), Importance.HIGH, "Doc doc.",
                         "Group One", 0, Width.NONE, "..", Collections.<String>emptyList())
                 .define("opt2.of.group1", Type.INT, ConfigDef.NO_DEFAULT_VALUE, Importance.MEDIUM, "Doc doc doc.",
-                        "Group One", 1, Width.NONE, "..", Collections.singletonList("opt1.of.group1"))
+                        "Group One", 1, Width.NONE, "..", Arrays.asList("some.option1", "some.option2"))
                 .define("opt2.of.group2", Type.BOOLEAN, false, Importance.HIGH, "Doc doc doc doc.",
                         "Group Two", 1, Width.NONE, "..", Collections.<String>emptyList())
                 .define("opt1.of.group2", Type.BOOLEAN, false, Importance.HIGH, "Doc doc doc doc doc.",
-                        "Group Two", 0, Width.NONE, "..", Collections.<String>emptyList())
+                        "Group Two", 0, Width.NONE, "..", Collections.singletonList("some.option"))
                 .define("poor.opt", Type.STRING, "foo", Importance.HIGH, "Doc doc doc doc.");
 
         final String expectedRst = "" +
@@ -435,7 +435,7 @@ public class ConfigDefTest {
                 "\n" +
                 "  * Type: int\n" +
                 "  * Importance: medium\n" +
-                "  * Dependents: ``opt1.of.group1``\n" +
+                "  * Dependents: ``some.option1``, ``some.option2``\n" +
                 "\n" +
                 "Group Two\n" +
                 "^^^^^^^^^\n" +
@@ -446,6 +446,7 @@ public class ConfigDefTest {
                 "  * Type: boolean\n" +
                 "  * Default: false\n" +
                 "  * Importance: high\n" +
+                "  * Dependents: ``some.option``\n" +
                 "\n" +
                 "``opt2.of.group2``\n" +
                 "  Doc doc doc doc.\n" +
