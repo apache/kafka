@@ -427,7 +427,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws SerializationException If the key or value are not valid objects given the configured serializers
      * @throws TimeoutException if the time taken for fetching metadata or allocating memory for the record has surpassed <code>max.block.ms</code>.
      * @throws KafkaException If the record's partition is beyond the topic's current partition range.
-     * @throws IllegalArgumentException If the record's partition is negative.
      *
      */
     @Override
@@ -521,26 +520,22 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @return The cluster containing topic metadata and the amount of time we waited in ms
      */
     private ClusterAndWaitTime waitOnMetadata(String topic, Integer partition, long maxWaitMs) throws InterruptedException {
-        if (partition != null && partition < 0) {
-            throw new IllegalArgumentException(
-                    String.format("Invalid partition given with record: %d. Partition number should always greater than 0.", partition));
-        }
-
         // add topic to metadata topic list if it is not there already and reset expiry
         this.metadata.add(topic);
         Cluster cluster = metadata.fetch();
-        List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
+        Integer partitionsCount = cluster.partitionCountForTopic(topic);
         // Return cached metadata if we have it, and if the record's partition is either undefined
         // or within the known partition range
-        if (partitions != null && (partition == null || partition < partitions.size()))
+        if (partitionsCount != null && (partition == null || partition < partitionsCount))
             return new ClusterAndWaitTime(cluster, 0);
 
         long begin = time.milliseconds();
         long remainingWaitMs = maxWaitMs;
         long elapsed;
-        // If no metadata was available, issue metadata update requests until we get successful response or we timeout.
-        // If a cached copy of metadata was present but the requested partition was out of bounds, issue a single
-        // request to try to refresh metadata, in case a partition expansion has taken place.
+        // Issue metadata requests until we have metadata for the topic or maxWaitTimeMs is exceeded.
+        // In case we already have cached metadata for the topic, but the requested partition is greater
+        // than expected, issue an update request only once. This is necessary in case the metadata
+        // is stale and the number of partitions for this topic has increased in the meantime.
         do {
             log.trace("Requesting metadata update for topic {}.", topic);
             int version = metadata.requestUpdate();
@@ -558,7 +553,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             if (cluster.unauthorizedTopics().contains(topic))
                 throw new TopicAuthorizationException(topic);
             remainingWaitMs = maxWaitMs - elapsed;
-        } while (cluster.partitionCountForTopic(topic) == null);
+            partitionsCount = cluster.partitionCountForTopic(topic);
+        } while (partitionsCount == null);
+
+        if (partition != null && partition >= partitionsCount) {
+            throw new KafkaException(
+                    String.format("Invalid partition given with record: %d is not in the range [0...%d).", partition, partitionsCount));
+        }
+
         return new ClusterAndWaitTime(cluster, elapsed);
     }
 
@@ -744,17 +746,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     private int partition(ProducerRecord<K, V> record, byte[] serializedKey, byte[] serializedValue, Cluster cluster) {
         Integer partition = record.partition();
-        if (partition != null) {
-            int lastPartition = cluster.partitionsForTopic(record.topic()).size() - 1;
-            // they have given us a partition, use it
-            if (partition > lastPartition) {
-                throw new KafkaException(
-                        String.format("Invalid partition given with record: %d is not in the range [0...%d].", partition, lastPartition));
-            }
-            return partition;
-        }
-        return this.partitioner.partition(record.topic(), record.key(), serializedKey, record.value(), serializedValue,
-            cluster);
+        return partition != null ?
+                partition :
+                this.partitioner.partition(
+                        record.topic(), record.key(), serializedKey, record.value(), serializedValue, cluster);
     }
 
     private static class ClusterAndWaitTime {

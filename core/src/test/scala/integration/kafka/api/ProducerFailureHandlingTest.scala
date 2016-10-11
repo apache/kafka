@@ -181,16 +181,16 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     */
   @Test
   def testInvalidPartition() {
-    // create topic with partition range [0...0]
+    // create topic with a single partition
     TestUtils.createTopic(zkUtils, topic1, 1, numServers, servers)
 
     // create a record with incorrect partition id (higher than the number of partitions), send should fail
-    val higherRecord = new ProducerRecord[Array[Byte],Array[Byte]](topic1, new Integer(1), "key".getBytes, "value".getBytes)
+    val higherRecord = new ProducerRecord[Array[Byte], Array[Byte]](topic1, 1, "key".getBytes, "value".getBytes)
     intercept[KafkaException] {
       producer1.send(higherRecord)
     }
     // create a record with incorrect partition id (lower than 0), send should fail
-    val lowerRecord = new ProducerRecord[Array[Byte],Array[Byte]](topic1, new Integer(-1), "key".getBytes, "value".getBytes)
+    val lowerRecord = new ProducerRecord[Array[Byte], Array[Byte]](topic1, -1, "key".getBytes, "value".getBytes)
     intercept[IllegalArgumentException] {
       producer1.send(lowerRecord)
     }
