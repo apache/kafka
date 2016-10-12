@@ -112,8 +112,8 @@ object SimpleConsumerShell extends Logging {
     val maxWaitMs = options.valueOf(maxWaitMsOpt).intValue()
     val maxMessages = options.valueOf(maxMessagesOpt).intValue
 
-    val skipMessageOnError = if (options.has(skipMessageOnErrorOpt)) true else false
-    val printOffsets = if(options.has(printOffsetOpt)) true else false
+    val skipMessageOnError = options.has(skipMessageOnErrorOpt)
+    val printOffsets = options.has(printOffsetOpt)
     val noWaitAtEndOfLog = options.has(noWaitAtEndOfLogOpt)
 
     val messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt))
