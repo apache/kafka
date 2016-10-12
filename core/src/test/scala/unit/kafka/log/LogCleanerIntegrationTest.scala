@@ -115,7 +115,6 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
       (log, messages)
     }
 
-
     val (log, _) = runCleanerAndCheckCompacted(100)
     // should delete old segments
     log.logSegments.foreach(_.lastModified = time.milliseconds - (2 * retentionMs))
@@ -131,7 +130,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     assertEquals("Contents of the map shouldn't change", messages.toMap, read.toMap)
   }
 
-  // returns (value, ByteBufferMessag eSet)
+  // returns (value, ByteBufferMessageSet)
   private def createLargeSingleMessageSet(key: Int, messageFormatVersion: Byte): (String, ByteBufferMessageSet) = {
     def messageValue(length: Int): String = {
       val random = new Random(0)

@@ -17,7 +17,7 @@
 
 package kafka.message
 
-import kafka.utils.{CoreUtils, IteratorTemplate, Logging}
+import kafka.utils.{CoreUtils, IteratorTemplate, Logging, Throttler}
 import kafka.common.{KafkaException, LongRef}
 import java.nio.ByteBuffer
 import java.nio.channels._
@@ -49,29 +49,10 @@ object ByteBufferMessageSet {
         case Some(ts) => MagicAndTimestamp(messages.head.magic, ts)
         case None => MessageSet.magicAndLargestTimestamp(messages)
       }
-      var offset = -1L
-      val messageWriter = new MessageWriter(math.min(math.max(MessageSet.messageSetSize(messages) / 2, 1024), 1 << 16))
-      messageWriter.write(codec = compressionCodec, timestamp = magicAndTimestamp.timestamp, timestampType = timestampType, magicValue = magicAndTimestamp.magic) { outputStream =>
-        val output = new DataOutputStream(CompressionFactory(compressionCodec, magicAndTimestamp.magic, outputStream))
-        try {
-          for (message <- messages) {
-            offset = offsetAssigner.nextAbsoluteOffset()
-            if (message.magic != magicAndTimestamp.magic)
-              throw new IllegalArgumentException("Messages in the message set must have same magic value")
-            // Use inner offset if magic value is greater than 0
-            if (magicAndTimestamp.magic > Message.MagicValue_V0)
-              output.writeLong(offsetAssigner.toInnerOffset(offset))
-            else
-              output.writeLong(offset)
-            output.writeInt(message.size)
-            output.write(message.buffer.array, message.buffer.arrayOffset, message.buffer.limit)
-          }
-        } finally {
-          output.close()
-        }
-      }
+      val (messageWriter, lastOffset) = writeCompressedMessages(compressionCodec, offsetAssigner, magicAndTimestamp,
+        timestampType, messages)
       val buffer = ByteBuffer.allocate(messageWriter.size + MessageSet.LogOverhead)
-      writeMessage(buffer, messageWriter, offset)
+      writeMessage(buffer, messageWriter, lastOffset)
       buffer.rewind()
       buffer
     }
@@ -165,6 +146,74 @@ object ByteBufferMessageSet {
     }
   }
 
+  private def writeCompressedMessages(codec: CompressionCodec,
+                                      offsetAssigner: OffsetAssigner,
+                                      magicAndTimestamp: MagicAndTimestamp,
+                                      timestampType: TimestampType,
+                                      messages: Seq[Message]): (MessageWriter, Long) = {
+    require(codec != NoCompressionCodec, s"compressionCodec must not be $NoCompressionCodec")
+    require(messages.nonEmpty, "cannot write empty compressed message set")
+
+    var offset = -1L
+    val magic = magicAndTimestamp.magic
+    val messageWriter = new MessageWriter(math.min(math.max(MessageSet.messageSetSize(messages) / 2, 1024), 1 << 16))
+    messageWriter.write(
+      codec = codec,
+      timestamp = magicAndTimestamp.timestamp,
+      timestampType = timestampType,
+      magicValue = magic) { outputStream =>
+
+      val output = new DataOutputStream(CompressionFactory(codec, magic, outputStream))
+      try {
+        for (message <- messages) {
+          offset = offsetAssigner.nextAbsoluteOffset()
+
+          if (message.magic != magicAndTimestamp.magic)
+            throw new IllegalArgumentException("Messages in the message set must have same magic value")
+
+          // Use inner offset if magic value is greater than 0
+          val innerOffset = if (magicAndTimestamp.magic > Message.MagicValue_V0)
+            offsetAssigner.toInnerOffset(offset)
+          else
+            offset
+
+          output.writeLong(innerOffset)
+          output.writeInt(message.size)
+          output.write(message.buffer.array, message.buffer.arrayOffset, message.buffer.limit)
+        }
+      } finally {
+        output.close()
+      }
+    }
+
+    (messageWriter, offset)
+  }
+
+  private[kafka] def writeCompressedMessages(buffer: ByteBuffer,
+                                             codec: CompressionCodec,
+                                             messageAndOffsets: Seq[MessageAndOffset]): Int = {
+    require(codec != NoCompressionCodec, s"compressionCodec must not be $NoCompressionCodec")
+    require(messageAndOffsets.nonEmpty, "cannot write empty compressed message set")
+
+    val messages = messageAndOffsets.map(_.message)
+    val magicAndTimestamp = MessageSet.magicAndLargestTimestamp(messages)
+
+    // ensure that we use the magic from the first message in the set when writing the wrapper
+    // message in order to fix message sets corrupted by KAFKA-4298
+    val magic = magicAndTimestamp.magic
+
+    val firstMessageAndOffset = messageAndOffsets.head
+    val firstAbsoluteOffset = firstMessageAndOffset.offset
+    val offsetAssigner = OffsetAssigner(firstAbsoluteOffset, magic, messageAndOffsets)
+    val timestampType = firstMessageAndOffset.message.timestampType
+
+    val (messageWriter, offset) = writeCompressedMessages(codec, offsetAssigner, magicAndTimestamp,
+      timestampType, messages)
+
+    writeMessage(buffer, messageWriter, offset)
+    messageWriter.size + MessageSet.LogOverhead
+  }
+
   private[kafka] def writeMessage(buffer: ByteBuffer, message: Message, offset: Long) {
     buffer.putLong(offset)
     buffer.putInt(message.size)
@@ -183,6 +232,15 @@ private object OffsetAssigner {
 
   def apply(offsetCounter: LongRef, size: Int): OffsetAssigner =
     new OffsetAssigner(offsetCounter.value to offsetCounter.addAndGet(size))
+
+  def apply(baseOffset: Long, magic: Byte, messageAndOffsets: Seq[MessageAndOffset]): OffsetAssigner =
+    new OffsetAssigner(messageAndOffsets.map { messageAndOffset =>
+      if (magic > Message.MagicValue_V0)
+        // The offset of the messages are absolute offset, compute the inner offset.
+        messageAndOffset.offset - baseOffset
+      else
+        messageAndOffset.offset
+    })
 
 }
 
@@ -387,6 +445,82 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
       }
 
     }
+  }
+
+  case class FilterResult(messagesRead: Int,
+                          bytesRead: Int,
+                          messagesRetained: Int,
+                          bytesRetained: Int,
+                          maxTimestamp: Long,
+                          offsetOfMaxTimestamp: Long)
+
+  def filterInto(buffer: ByteBuffer,
+                 filter: MessageAndOffset => Boolean): FilterResult = {
+    var maxTimestamp = Message.NoTimestamp
+    var offsetOfMaxTimestamp = -1L
+    var messagesRead = 0
+    var bytesRead = 0
+    var messagesRetained = 0
+    var bytesRetained = 0
+
+    for (shallowMessageAndOffset <- shallowIterator) {
+      val shallowMessage = shallowMessageAndOffset.message
+      val shallowOffset = shallowMessageAndOffset.offset
+      val size = MessageSet.entrySize(shallowMessageAndOffset.message)
+
+      messagesRead += 1
+      bytesRead += size
+
+      if (shallowMessageAndOffset.message.compressionCodec == NoCompressionCodec) {
+        if (filter(shallowMessageAndOffset)) {
+          ByteBufferMessageSet.writeMessage(buffer, shallowMessage, shallowOffset)
+          messagesRetained += 1
+          bytesRetained += size
+
+          if (shallowMessage.timestamp > maxTimestamp) {
+            maxTimestamp = shallowMessage.timestamp
+            offsetOfMaxTimestamp = shallowOffset
+          }
+        }
+        messagesRead += 1
+      } else {
+        // We use the absolute offset to decide whether to retain the message or not (this is handled by the
+        // deep iterator). Because of KAFKA-4298, we have to allow for the possibility that a previous version
+        // corrupted the log by writing a compressed message set with a wrapper magic value not matching the magic
+        // of the inner messages. This will be fixed as we recopy the messages to the destination segment.
+
+        var writeOriginalMessageSet = true
+        val retainedMessages = new scala.collection.mutable.ArrayBuffer[MessageAndOffset]
+        val shallowMagic = shallowMessage.magic
+
+        for (deepMessageAndOffset <- ByteBufferMessageSet.deepIterator(shallowMessageAndOffset)) {
+          messagesRead += 1
+          if (filter(deepMessageAndOffset)) {
+            // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
+            // the corrupted entry with correct data.
+            if (shallowMagic != deepMessageAndOffset.message.magic)
+              writeOriginalMessageSet = false
+
+            retainedMessages += deepMessageAndOffset
+            // We need the max timestamp and last offset for time index
+            if (deepMessageAndOffset.message.timestamp > maxTimestamp)
+              maxTimestamp = deepMessageAndOffset.message.timestamp
+          }
+          else writeOriginalMessageSet = false
+        }
+        offsetOfMaxTimestamp = if (retainedMessages.nonEmpty) retainedMessages.last.offset else -1L
+        // There are no messages compacted out and no message format conversion, write the original message set back
+        if (writeOriginalMessageSet)
+          ByteBufferMessageSet.writeMessage(buffer, shallowMessage, shallowOffset)
+        else if (retainedMessages.nonEmpty) {
+          val compressedSize = ByteBufferMessageSet.writeCompressedMessages(buffer, shallowMessage.compressionCodec, retainedMessages)
+          messagesRetained += 1
+          bytesRetained += compressedSize
+        }
+      }
+    }
+
+    FilterResult(messagesRead, bytesRead, messagesRetained, bytesRetained, maxTimestamp, offsetOfMaxTimestamp)
   }
 
   /**
