@@ -268,7 +268,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       val now = System.currentTimeMillis()
       val futures = (1 to numRecords).map { i =>
         producer.send(new ProducerRecord(topic, partition, now, null, ("value" + i).getBytes))
-      }.map(_.get(30, TimeUnit.SECONDS)).toList
+      }.map(_.get(30, TimeUnit.SECONDS))
 
       // make sure all of them end up in the same partition with increasing offset values
       for ((recordMetadata, offset) <- futures zip (0 until numRecords)) {
@@ -313,7 +313,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
     var futures0 = (1 to numRecords).map { i =>
       producer.send(new ProducerRecord(topic, partition0, null, ("value" + i).getBytes))
-    }.map(_.get(30, TimeUnit.SECONDS)).toList
+    }.map(_.get(30, TimeUnit.SECONDS))
 
     // make sure all of them end up in the same partition with increasing offset values
     for ((recordMetadata, offset) <- futures0 zip (0 until numRecords)) {
@@ -340,7 +340,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     // send records to the newly added partition after confirming that metadata have been updated.
     val futures1 = (1 to numRecords).map { i =>
       producer.send(new ProducerRecord(topic, partition1, null, ("value" + i).getBytes))
-    }.map(_.get(30, TimeUnit.SECONDS)).toList
+    }.map(_.get(30, TimeUnit.SECONDS))
 
     // make sure all of them end up in the same partition with increasing offset values
     for ((recordMetadata, offset) <- futures1 zip (0 until numRecords)) {
@@ -351,7 +351,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
     futures0 = (1 to numRecords).map { i =>
       producer.send(new ProducerRecord(topic, partition0, null, ("value" + i).getBytes))
-    }.map(_.get(30, TimeUnit.SECONDS)).toList
+    }.map(_.get(30, TimeUnit.SECONDS))
 
     // make sure all of them end up in the same partition with increasing offset values starting where previous
     for ((recordMetadata, offset) <- futures0 zip (numRecords until 2 * numRecords)) {
