@@ -222,7 +222,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         }
 
         int retryCount = 0;
-        int maxRetry = 240; // max two minutes (500ms * 240) (before we reach the end of records)
+        int maxRetry = 360; // max three minutes (500ms * 360) (before we reach the end of records)
 
         while (true) {
             ConsumerRecords<byte[], byte[]> records = consumer.poll(500);
@@ -240,8 +240,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
                             if (value != null && value == END) {
                                 keys.remove(key);
                                 if (keys.isEmpty()) {
-                                    // we reached the end of records, set retry to 60 (max 30 seconds)
-                                    maxRetry = 60;
+                                    // we reached the end of records, set retry to 120 (max 60 seconds)
+                                    maxRetry = 120;
                                 }
                             } else {
                                 recordsProcessed++;
