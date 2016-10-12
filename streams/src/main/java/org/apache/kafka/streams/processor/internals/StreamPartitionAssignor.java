@@ -261,9 +261,85 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         //    - We try not to assign the same set of tasks to two different clients
         //    We do the assignment in one-pass. The result may not satisfy above all.
         // 2. within each client, tasks are assigned to consumer clients in round-robin manner.
+        this.topicGroups = streamThread.builder.topicGroups();
+
+        // ensure the co-partitioning topics within the group have the same number of partitions,
+        // and enforce the number of partitions for those internal topics.
+        internalSourceTopicToTaskIds = new HashMap<>();
+        Map<Integer, Set<String>> sourceTopicGroups = new HashMap<>();
+        Map<Integer, Collection<InternalTopicConfig>> internalSourceTopicGroups = new HashMap<>();
+        for (Map.Entry<Integer, TopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
+            sourceTopicGroups.put(entry.getKey(), entry.getValue().sourceTopics);
+            internalSourceTopicGroups.put(entry.getKey(), entry.getValue().interSourceTopics.values());
+        }
+
+        // for all internal source topics
+        // set the number of partitions to the maximum of the depending sub-topologies source topics
+        Map<TopicPartition, PartitionInfo> internalPartitionInfos = new HashMap<>();
+        Map<String, InternalTopicConfig> allInternalTopics = new HashMap<>();
+        for (Map.Entry<Integer, TopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
+            Map<String, InternalTopicConfig> internalTopics = entry.getValue().interSourceTopics;
+            allInternalTopics.putAll(internalTopics);
+            for (InternalTopicConfig internalTopic : internalTopics.values()) {
+                Set<TaskId> tasks = internalSourceTopicToTaskIds.get(internalTopic);
+
+                if (tasks == null) {
+                    int numPartitions = calculateNumPartitions(metadata, allInternalTopics, internalTopic);
+                    internalSourceTopicToTaskIds.put(internalTopic, Collections.singleton(new TaskId(entry.getKey(), numPartitions)));
+                    for (int partition = 0; partition < numPartitions; partition++) {
+                        internalPartitionInfos.put(new TopicPartition(internalTopic.name(), partition),
+                                new PartitionInfo(internalTopic.name(), partition, null, new Node[0], new Node[0]));
+                    }
+                }
+            }
+        }
+
+        Collection<Set<String>> copartitionTopicGroups = streamThread.builder.copartitionGroups();
+        ensureCopartitioning(copartitionTopicGroups, internalSourceTopicGroups,
+                metadata.withPartitions(internalPartitionInfos));
+
+        internalPartitionInfos = prepareTopic(internalSourceTopicToTaskIds, false);
+        internalSourceTopicToTaskIds.clear();
+
+        metadataWithInternalTopics = metadata;
+        if (internalTopicManager != null)
+            metadataWithInternalTopics = metadata.withPartitions(internalPartitionInfos);
+
+        // get the tasks as partition groups from the partition grouper
+        Map<TaskId, Set<TopicPartition>> partitionsForTask = streamThread.partitionGrouper.partitionGroups(
+                sourceTopicGroups, metadataWithInternalTopics);
+
+        // add tasks to state change log topic subscribers
+        stateChangelogTopicToTaskIds = new HashMap<>();
+        for (TaskId task : partitionsForTask.keySet()) {
+            addTasksToStateChangeLogTopic(task, stateChangelogTopicToTaskIds, topicGroups.get(task.topicGroupId).stateChangelogTopics);
+            addTasksToStateChangeLogTopic(task, internalSourceTopicToTaskIds, topicGroups.get(task.topicGroupId).interSourceTopics);
+        }
+
+        // assign tasks to clients
+        List<AssignmentSupplier> assignmentSuppliers = getAssignmentSuppliers(
+                subscriptions, partitionsForTask, numStandbyReplicas, streamThread);
+
+        // if ZK is specified, validate the internal topics again
+        prepareTopic(internalSourceTopicToTaskIds,  /* compactTopic */ true);
+        // change log topics should be compacted
+        prepareTopic(stateChangelogTopicToTaskIds,  /* compactTopic */ true);
+
+        Map<String, Assignment> assignment = new HashMap<>();
+        for (AssignmentSupplier assignmentSupplier : assignmentSuppliers) {
+            assignment.put(assignmentSupplier.consumer, assignmentSupplier.get());
+        }
+        return assignment;
+    }
+
+    private List<AssignmentSupplier> getAssignmentSuppliers(Map<String, Subscription> subscriptions,
+                                                            Map<TaskId, Set<TopicPartition>> partitionsForTask,
+                                                            int numStandbyReplicas,
+                                                            StreamThread streamThread) {
         Map<UUID, Set<String>> consumersByClient = new HashMap<>();
-        Map<UUID, ClientState<TaskId>> states = new HashMap<>();
         Map<UUID, HostInfo> consumerEndPointMap = new HashMap<>();
+        Map<UUID, ClientState<TaskId>> states = new HashMap<>();
+
         // decode subscription info
         for (Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
             String consumerId = entry.getKey();
@@ -294,109 +370,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             state.capacity = state.capacity + 1d;
         }
 
-
-        this.topicGroups = streamThread.builder.topicGroups();
-
-        // ensure the co-partitioning topics within the group have the same number of partitions,
-        // and enforce the number of partitions for those internal topics.
-        internalSourceTopicToTaskIds = new HashMap<>();
-        Map<Integer, Set<String>> sourceTopicGroups = new HashMap<>();
-        Map<Integer, Collection<InternalTopicConfig>> internalSourceTopicGroups = new HashMap<>();
-        for (Map.Entry<Integer, TopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
-            sourceTopicGroups.put(entry.getKey(), entry.getValue().sourceTopics);
-            internalSourceTopicGroups.put(entry.getKey(), entry.getValue().interSourceTopics.values());
-        }
-
-
-        // for all internal source topics
-        // set the number of partitions to the maximum of the depending sub-topologies source topics
-        Map<TopicPartition, PartitionInfo> internalPartitionInfos = new HashMap<>();
-        Map<String, InternalTopicConfig> allInternalTopics = new HashMap<>();
-        for (Map.Entry<Integer, TopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
-            Map<String, InternalTopicConfig> internalTopics = entry.getValue().interSourceTopics;
-            allInternalTopics.putAll(internalTopics);
-            for (InternalTopicConfig internalTopic : internalTopics.values()) {
-                Set<TaskId> tasks = internalSourceTopicToTaskIds.get(internalTopic);
-
-                if (tasks == null) {
-                    int numPartitions = -1;
-                    for (Map.Entry<Integer, TopologyBuilder.TopicsInfo> other : topicGroups.entrySet()) {
-                        Set<String> otherSinkTopics = other.getValue().sinkTopics;
-
-                        if (otherSinkTopics.contains(internalTopic.name())) {
-                            for (String topic : other.getValue().sourceTopics) {
-                                Integer partitions = null;
-                                // It is possible the sourceTopic is another internal topic, i.e,
-                                // map().join().join(map())
-                                if (allInternalTopics.containsKey(topic)) {
-                                    Set<TaskId> taskIds = internalSourceTopicToTaskIds.get(allInternalTopics.get(topic));
-                                    if (taskIds != null) {
-                                        for (TaskId taskId : taskIds) {
-                                            partitions = taskId.partition;
-                                        }
-                                    }
-                                } else {
-                                    partitions = metadata.partitionCountForTopic(topic);
-                                }
-                                if (partitions != null && partitions > numPartitions) {
-                                    numPartitions = partitions;
-                                }
-                            }
-                        }
-                    }
-                    internalSourceTopicToTaskIds.put(internalTopic, Collections.singleton(new TaskId(entry.getKey(), numPartitions)));
-                    for (int partition = 0; partition < numPartitions; partition++) {
-                        internalPartitionInfos.put(new TopicPartition(internalTopic.name(), partition),
-                                                   new PartitionInfo(internalTopic.name(), partition, null, new Node[0], new Node[0]));
-                    }
-                }
-            }
-        }
-
-
-        Collection<Set<String>> copartitionTopicGroups = streamThread.builder.copartitionGroups();
-        ensureCopartitioning(copartitionTopicGroups, internalSourceTopicGroups,
-                             metadata.withPartitions(internalPartitionInfos));
-
-
-        internalPartitionInfos = prepareTopic(internalSourceTopicToTaskIds, false);
-        internalSourceTopicToTaskIds.clear();
-
-        metadataWithInternalTopics = metadata;
-        if (internalTopicManager != null)
-            metadataWithInternalTopics = metadata.withPartitions(internalPartitionInfos);
-
-        // get the tasks as partition groups from the partition grouper
-        Map<TaskId, Set<TopicPartition>> partitionsForTask = streamThread.partitionGrouper.partitionGroups(
-                sourceTopicGroups, metadataWithInternalTopics);
-
-        // add tasks to state change log topic subscribers
-        stateChangelogTopicToTaskIds = new HashMap<>();
-        for (TaskId task : partitionsForTask.keySet()) {
-            final Map<String, InternalTopicConfig> stateChangelogTopics = topicGroups.get(task.topicGroupId).stateChangelogTopics;
-            for (InternalTopicConfig topic : stateChangelogTopics.values()) {
-                Set<TaskId> tasks = stateChangelogTopicToTaskIds.get(topic);
-                if (tasks == null) {
-                    tasks = new HashSet<>();
-                    stateChangelogTopicToTaskIds.put(topic, tasks);
-                }
-
-                tasks.add(task);
-            }
-
-            final Map<String, InternalTopicConfig> interSourceTopics = topicGroups.get(task.topicGroupId).interSourceTopics;
-            for (InternalTopicConfig topic : interSourceTopics.values()) {
-                Set<TaskId> tasks = internalSourceTopicToTaskIds.get(topic);
-                if (tasks == null) {
-                    tasks = new HashSet<>();
-                    internalSourceTopicToTaskIds.put(topic, tasks);
-                }
-
-                tasks.add(task);
-            }
-        }
-
-        // assign tasks to clients
+        // get assignment suppliers
         states = TaskAssignor.assign(states, partitionsForTask.keySet(), numStandbyReplicas, streamThread.getName());
 
         final List<AssignmentSupplier> assignmentSuppliers = new ArrayList<>();
@@ -469,19 +443,52 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
         }
 
-        // if ZK is specified, validate the internal topics again
-        prepareTopic(internalSourceTopicToTaskIds,  /* compactTopic */ true);
-        // change log topics should be compacted
-        prepareTopic(stateChangelogTopicToTaskIds,  /* compactTopic */ true);
-
-        Map<String, Assignment> assignment = new HashMap<>();
-        for (AssignmentSupplier assignmentSupplier : assignmentSuppliers) {
-            assignment.put(assignmentSupplier.consumer, assignmentSupplier.get());
-        }
-        return assignment;
+        return assignmentSuppliers;
     }
 
-    class AssignmentSupplier {
+    private int calculateNumPartitions(Cluster metadata, Map<String, InternalTopicConfig> allInternalTopics, InternalTopicConfig internalTopic) {
+        int numPartitions = -1;
+        for (Map.Entry<Integer, TopologyBuilder.TopicsInfo> other : topicGroups.entrySet()) {
+            Set<String> otherSinkTopics = other.getValue().sinkTopics;
+
+            if (otherSinkTopics.contains(internalTopic.name())) {
+                for (String topic : other.getValue().sourceTopics) {
+                    Integer partitions = null;
+                    // It is possible the sourceTopic is another internal topic, i.e,
+                    // map().join().join(map())
+                    if (allInternalTopics.containsKey(topic)) {
+                        Set<TaskId> taskIds = internalSourceTopicToTaskIds.get(allInternalTopics.get(topic));
+                        if (taskIds != null) {
+                            for (TaskId taskId : taskIds) {
+                                partitions = taskId.partition;
+                            }
+                        }
+                    } else {
+                        partitions = metadata.partitionCountForTopic(topic);
+                    }
+                    if (partitions != null && partitions > numPartitions) {
+                        numPartitions = partitions;
+                    }
+                }
+            }
+        }
+        return numPartitions;
+    }
+
+    private void addTasksToStateChangeLogTopic(TaskId task, Map<InternalTopicConfig,
+            Set<TaskId>> sourceTopicToTaskIds, Map<String, InternalTopicConfig> sourceTopics) {
+        for (InternalTopicConfig topic : sourceTopics.values()) {
+            Set<TaskId> tasks = sourceTopicToTaskIds.get(topic);
+            if (tasks == null) {
+                tasks = new HashSet<>();
+                sourceTopicToTaskIds.put(topic, tasks);
+            }
+
+            tasks.add(task);
+        }
+    }
+
+    static class AssignmentSupplier {
         private final String consumer;
         private final List<TaskId> active;
         private final Map<TaskId, Set<TopicPartition>> standby;
