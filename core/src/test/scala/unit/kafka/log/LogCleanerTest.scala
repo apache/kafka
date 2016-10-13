@@ -36,7 +36,7 @@ import scala.collection._
 /**
  * Unit tests for the log cleaning logic
  */
-class CleanerTest extends JUnitSuite {
+class LogCleanerTest extends JUnitSuite {
   
   val tmpdir = TestUtils.tempDir()
   val dir = TestUtils.randomPartitionLogDir(tmpdir)
@@ -136,6 +136,34 @@ class CleanerTest extends JUnitSuite {
     val keys = keysInLog(log).toSet
     assertTrue("None of the keys we deleted should still exist.", 
                (0 until leo.toInt by 2).forall(!keys.contains(_)))
+  }
+
+  def testLogCleanerStats(): Unit = {
+    // because loadFactor is 0.75, this means we can fit 2 messages in the map
+    val cleaner = makeCleaner(2)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    log.append(message(0,0)) // offset 0
+    log.append(message(1,1)) // offset 1
+    log.append(message(0,0)) // offset 2
+    log.append(message(1,1)) // offset 3
+    log.append(message(0,0)) // offset 4
+    // roll the segment, so we can clean the messages already appended
+    log.roll()
+
+    val initialLogSize = log.size
+
+    val (stats, endOffset) = cleaner.clean(LogToClean(TopicAndPartition("test", 0), log, 2, log.activeSegment.baseOffset))
+    assertEquals(5, endOffset)
+    assertEquals(5, stats.messagesRead)
+    assertEquals(initialLogSize, stats.bytesRead)
+    assertEquals(2, stats.messagesWritten)
+    assertEquals(log.size, stats.bytesWritten)
+    assertEquals(0, stats.invalidMessagesRead)
+    assertTrue(stats.endTime >= stats.startTime)
   }
 
   @Test
@@ -283,11 +311,11 @@ class CleanerTest extends JUnitSuite {
       log.append(message(log.logEndOffset.toInt, log.logEndOffset.toInt))
 
     val expectedSizeAfterCleaning = log.size - sizeWithUnkeyedMessages
-    cleaner.clean(LogToClean(TopicAndPartition("test", 0), log, 0, log.activeSegment.baseOffset))
+    val (stats, _) = cleaner.clean(LogToClean(TopicAndPartition("test", 0), log, 0, log.activeSegment.baseOffset))
 
     assertEquals("Log should only contain keyed messages after cleaning.", 0, unkeyedMessageCountInLog(log))
     assertEquals("Log should only contain keyed messages after cleaning.", expectedSizeAfterCleaning, log.size)
-    assertEquals("Cleaner should have seen %d invalid messages.", numInvalidMessages, cleaner.stats.invalidMessagesRead)
+    assertEquals("Cleaner should have seen %d invalid messages.", numInvalidMessages, stats.invalidMessagesRead)
   }
   
   /* extract all the keys from a log */
