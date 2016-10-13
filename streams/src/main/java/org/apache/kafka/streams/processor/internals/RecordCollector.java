@@ -100,7 +100,7 @@ public class RecordCollector {
                 if (attempt == MAX_SEND_ATTEMPTS) {
                     throw new StreamsException(String.format("%s Failed to send record to topic %s after %d attempts", logPrefix, topic, attempt));
                 }
-                log.warn(String.format("%s Timeout exception caught when sending record to topic %s attempt %s", logPrefix, topic, attempt));
+                log.warn("{} Timeout exception caught when sending record to topic {} attempt {}", logPrefix, topic, attempt);
                 Utils.sleep(SEND_RETRY_BACKOFF);
             }
 

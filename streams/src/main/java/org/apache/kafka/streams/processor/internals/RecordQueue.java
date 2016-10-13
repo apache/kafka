@@ -104,7 +104,7 @@ public class RecordQueue {
                                                                          rawRecord.serializedValueSize(), key, value);
             long timestamp = timestampExtractor.extract(record);
 
-            log.trace("source node {} Extracted timestamp {} for record {} when adding to buffered queue", source.name(), timestamp, record);
+            log.trace("Source node {} extracted timestamp {} for record {} when adding to buffered queue", source.name(), timestamp, record);
 
             // validate that timestamp must be non-negative
             if (timestamp < 0)

@@ -246,7 +246,7 @@ public class StreamThread extends Thread {
         } catch (Exception e) {
             // we have caught all Kafka related exceptions, and other runtime exceptions
             // should be due to user application errors
-            log.error(String.format("%s Streams application error during processing: ", logPrefix),  e);
+            log.error(logPrefix + " Streams application error during processing: ",  e);
             throw e;
         } finally {
             shutdown();
@@ -272,17 +272,17 @@ public class StreamThread extends Thread {
         try {
             producer.close();
         } catch (Throwable e) {
-            log.error("{} Failed to close producer: ", logPrefix, e);
+            log.error(logPrefix + " Failed to close producer: ", e);
         }
         try {
             consumer.close();
         } catch (Throwable e) {
-            log.error("{} Failed to close consumer: ", logPrefix, e);
+            log.error(logPrefix + " Failed to close consumer: ", e);
         }
         try {
             restoreConsumer.close();
         } catch (Throwable e) {
-            log.error("{} Failed to close restore consumer: ", logPrefix, e);
+            log.error(logPrefix + " Failed to close restore consumer: ", e);
         }
 
         // remove all tasks
@@ -307,7 +307,7 @@ public class StreamThread extends Thread {
             // un-assign the change log partitions
             restoreConsumer.assign(Collections.<TopicPartition>emptyList());
         } catch (Exception e) {
-            log.error(String.format("%s Failed to un-assign change log partitions: ", logPrefix), e);
+            log.error(logPrefix + " Failed to un-assign change log partitions: ", e);
             if (rethrowExceptions) {
                 throw e;
             }
@@ -407,7 +407,7 @@ public class StreamThread extends Thread {
                 ConsumerRecords<byte[], byte[]> records = consumer.poll(longPoll ? this.pollTimeMs : 0);
 
                 if (rebalanceException != null)
-                    throw new StreamsException(String.format("%s Failed to rebalance", logPrefix), rebalanceException);
+                    throw new StreamsException(logPrefix + " Failed to rebalance", rebalanceException);
 
                 if (!records.isEmpty()) {
                     for (TopicPartition partition : records.partitions()) {
@@ -491,7 +491,7 @@ public class StreamThread extends Thread {
                     StandbyTask task = standbyTasksByPartition.get(partition);
 
                     if (task == null) {
-                        throw new StreamsException(String.format("%s missing standby task for partition %s", logPrefix, partition));
+                        throw new StreamsException(logPrefix + " Missing standby task for partition " + partition);
                     }
 
                     List<ConsumerRecord<byte[], byte[]>> remaining = task.update(partition, records.records(partition));
@@ -576,10 +576,10 @@ public class StreamThread extends Thread {
             task.commit();
         } catch (CommitFailedException e) {
             // commit failed. Just log it.
-            log.warn(String.format("%s Failed to commit %s state: ", logPrefix, task.getClass().getSimpleName()), e);
+            log.warn(String.format("%s Failed to commit %s %s state: ", logPrefix, task.getClass().getSimpleName(), task.id()), e);
         } catch (KafkaException e) {
             // commit failed due to an unexpected exception. Log it and rethrow the exception.
-            log.error(String.format("%s Failed to commit %s state: ", logPrefix, task.getClass().getSimpleName()), e);
+            log.error(String.format("%s Failed to commit %s %s state: ", logPrefix, task.getClass().getSimpleName(), task.id()), e);
             throw e;
         }
 
@@ -635,8 +635,7 @@ public class StreamThread extends Thread {
 
     private void addStreamTasks(Collection<TopicPartition> assignment) {
         if (partitionAssignor == null)
-            throw new IllegalStateException(String.format("%s Partition assignor has not been initialized while adding stream tasks: this should not happen.",
-                    logPrefix));
+            throw new IllegalStateException(logPrefix + " Partition assignor has not been initialized while adding stream tasks: this should not happen.");
 
         HashMap<TaskId, Set<TopicPartition>> partitionsForTask = new HashMap<>();
 
@@ -686,8 +685,7 @@ public class StreamThread extends Thread {
 
     private void addStandbyTasks() {
         if (partitionAssignor == null)
-            throw new IllegalStateException(String.format("%s Partition assignor has not been initialized while adding standby tasks: this should not happen.",
-                    logPrefix));
+            throw new IllegalStateException(logPrefix + " Partition assignor has not been initialized while adding standby tasks: this should not happen.");
 
         Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
 
@@ -734,7 +732,7 @@ public class StreamThread extends Thread {
             activeTasksByPartition.clear();
 
         } catch (Exception e) {
-            log.error(String.format("%s Failed to remove stream tasks: ", logPrefix), e);
+            log.error(logPrefix + " Failed to remove stream tasks: ", e);
         }
     }
 
