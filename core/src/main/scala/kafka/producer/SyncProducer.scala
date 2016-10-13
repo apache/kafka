@@ -107,7 +107,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
     val aggregateTimer = producerRequestStats.getProducerRequestAllBrokersStats.requestTimer
     aggregateTimer.time {
       specificTimer.time {
-        response = doSend(producerRequest, producerRequest.requiredAcks == 0)
+        response = doSend(producerRequest, producerRequest.requiredAcks != 0)
       }
     }
     if(producerRequest.requiredAcks != 0) {
