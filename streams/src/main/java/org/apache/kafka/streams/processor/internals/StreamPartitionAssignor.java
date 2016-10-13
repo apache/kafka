@@ -332,6 +332,14 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         return assignment;
     }
 
+    /**
+     * Digests the subscription information to build the list of task assignment suppliers.
+     * @param subscriptions List of subscriptions
+     * @param partitionsForTask Partitions for each task
+     * @param numStandbyReplicas Number of standby replicas
+     * @param streamThread Stream thread
+     * @return List of assignment suppliers
+     */
     private List<AssignmentSupplier> getAssignmentSuppliers(Map<String, Subscription> subscriptions,
                                                             Map<TaskId, Set<TopicPartition>> partitionsForTask,
                                                             int numStandbyReplicas,
@@ -446,6 +454,13 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         return assignmentSuppliers;
     }
 
+    /**
+     * Calculates the number of partitions for a topic.
+     * @param metadata Cluster metadata
+     * @param allInternalTopics List of internal topics
+     * @param internalTopic Topic
+     * @return Number of partitions
+     */
     private int calculateNumPartitions(Cluster metadata, Map<String, InternalTopicConfig> allInternalTopics, InternalTopicConfig internalTopic) {
         int numPartitions = -1;
         for (Map.Entry<Integer, TopologyBuilder.TopicsInfo> other : topicGroups.entrySet()) {
@@ -475,6 +490,12 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         return numPartitions;
     }
 
+    /**
+     * Adds a task to a topic/tasks map for a list of topics.
+     * @param task Task
+     * @param sourceTopicToTaskIds Source topic to task map
+     * @param sourceTopics Source topics
+     */
     private void addTasksToStateChangeLogTopic(TaskId task, Map<InternalTopicConfig,
             Set<TaskId>> sourceTopicToTaskIds, Map<String, InternalTopicConfig> sourceTopics) {
         for (InternalTopicConfig topic : sourceTopics.values()) {
@@ -488,7 +509,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
     }
 
-    static class AssignmentSupplier {
+    class AssignmentSupplier {
         private final String consumer;
         private final List<TaskId> active;
         private final Map<TaskId, Set<TopicPartition>> standby;
