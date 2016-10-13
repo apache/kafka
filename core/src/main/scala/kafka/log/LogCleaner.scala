@@ -532,15 +532,16 @@ private[log] class Cleaner(val id: Int,
       messageWriter.write(codec = compressionCodec, timestamp = magicAndTimestamp.timestamp, timestampType = timestampType, magicValue = messageFormatVersion) { outputStream =>
         val output = new DataOutputStream(CompressionFactory(compressionCodec, messageFormatVersion, outputStream))
         try {
-          for (messageOffset <- messageAndOffsets) {
-            val message = messageOffset.message
-            offset = messageOffset.offset
-            if (messageFormatVersion > Message.MagicValue_V0) {
+          for (messageAndOffset <- messageAndOffsets) {
+            offset = messageAndOffset.offset
+            val innerOffset = if (messageFormatVersion > Message.MagicValue_V0)
               // The offset of the messages are absolute offset, compute the inner offset.
-              val innerOffset = messageOffset.offset - firstAbsoluteOffset
-              output.writeLong(innerOffset)
-            } else
-              output.writeLong(offset)
+              messageAndOffset.offset - firstAbsoluteOffset
+            else
+              offset
+
+            val message = messageAndOffset.message.toFormatVersion(messageFormatVersion)
+            output.writeLong(innerOffset)
             output.writeInt(message.size)
             output.write(message.buffer.array, message.buffer.arrayOffset, message.buffer.limit)
           }
