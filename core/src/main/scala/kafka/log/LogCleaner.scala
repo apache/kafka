@@ -465,7 +465,7 @@ private[log] class Cleaner(val id: Int,
         val size = MessageSet.entrySize(shallowMessageAndOffset.message)
 
         stats.readMessage(size)
-        if (shallowMessageAndOffset.message.compressionCodec == NoCompressionCodec) {
+        if (shallowMessage.compressionCodec == NoCompressionCodec) {
           if (shouldRetainMessage(source, map, retainDeletes, shallowMessageAndOffset)) {
             ByteBufferMessageSet.writeMessage(writeBuffer, shallowMessage, shallowOffset)
             stats.recopyMessage(size)
