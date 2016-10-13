@@ -401,7 +401,7 @@ private[log] class Cleaner(val id: Int,
         val retainDeletes = old.largestTimestamp > deleteHorizonMs
         info("Cleaning segment %s in log %s (largest timestamp %s) into %s, %s deletes."
             .format(old.baseOffset, log.name, new Date(old.largestTimestamp), cleaned.baseOffset, if(retainDeletes) "retaining" else "discarding"))
-        cleanInto(log.topicAndPartition, old, cleaned, map, retainDeletes, log.config.messageFormatVersion.messageFormatVersion, log.config.maxMessageSize)
+        cleanInto(log.topicAndPartition, old, cleaned, map, retainDeletes, log.config.maxMessageSize)
       }
 
       // trim excess index
@@ -439,7 +439,6 @@ private[log] class Cleaner(val id: Int,
    * @param dest The cleaned log segment
    * @param map The key=>offset mapping
    * @param retainDeletes Should delete tombstones be retained while cleaning this segment
-   * @param messageFormatVersion The message format version to use after compaction
    * @param maxLogMessageSize The maximum message size of the corresponding topic
    */
   private[log] def cleanInto(topicAndPartition: TopicAndPartition,
@@ -447,7 +446,6 @@ private[log] class Cleaner(val id: Int,
                              dest: LogSegment,
                              map: OffsetMap,
                              retainDeletes: Boolean,
-                             messageFormatVersion: Byte,
                              maxLogMessageSize: Int) {
     var position = 0
     while (position < source.log.sizeInBytes) {
@@ -495,7 +493,7 @@ private[log] class Cleaner(val id: Int,
           if (writeOriginalMessageSet)
             ByteBufferMessageSet.writeMessage(writeBuffer, entry.message, entry.offset)
           else
-            compressMessages(writeBuffer, entry.message.compressionCodec, messageFormatVersion, retainedMessages)
+            compressMessages(writeBuffer, entry.message.compressionCodec, retainedMessages)
         }
       }
 
@@ -518,29 +516,29 @@ private[log] class Cleaner(val id: Int,
 
   private def compressMessages(buffer: ByteBuffer,
                                compressionCodec: CompressionCodec,
-                               messageFormatVersion: Byte,
                                messageAndOffsets: Seq[MessageAndOffset]) {
     require(compressionCodec != NoCompressionCodec, s"compressionCodec must not be $NoCompressionCodec")
     if (messageAndOffsets.nonEmpty) {
       val messages = messageAndOffsets.map(_.message)
       val magicAndTimestamp = MessageSet.magicAndLargestTimestamp(messages)
+      val magic = magicAndTimestamp.magic
       val firstMessageOffset = messageAndOffsets.head
       val firstAbsoluteOffset = firstMessageOffset.offset
       var offset = -1L
       val timestampType = firstMessageOffset.message.timestampType
       val messageWriter = new MessageWriter(math.min(math.max(MessageSet.messageSetSize(messages) / 2, 1024), 1 << 16))
-      messageWriter.write(codec = compressionCodec, timestamp = magicAndTimestamp.timestamp, timestampType = timestampType, magicValue = messageFormatVersion) { outputStream =>
-        val output = new DataOutputStream(CompressionFactory(compressionCodec, messageFormatVersion, outputStream))
+      messageWriter.write(codec = compressionCodec, timestamp = magicAndTimestamp.timestamp, timestampType = timestampType, magicValue = magic) { outputStream =>
+        val output = new DataOutputStream(CompressionFactory(compressionCodec, magic, outputStream))
         try {
           for (messageAndOffset <- messageAndOffsets) {
             offset = messageAndOffset.offset
-            val innerOffset = if (messageFormatVersion > Message.MagicValue_V0)
+            val innerOffset = if (magic > Message.MagicValue_V0)
               // The offset of the messages are absolute offset, compute the inner offset.
               messageAndOffset.offset - firstAbsoluteOffset
             else
               offset
 
-            val message = messageAndOffset.message.toFormatVersion(messageFormatVersion)
+            val message = messageAndOffset.message
             output.writeLong(innerOffset)
             output.writeInt(message.size)
             output.write(message.buffer.array, message.buffer.arrayOffset, message.buffer.limit)

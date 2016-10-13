@@ -192,7 +192,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
   }
 
   @Test
-  def testLogCleanerMessageFormatConversion(): Unit = {
+  def testCleaningNestedMessagesWithMultipleVersions(): Unit = {
     val maxMessageSize = 192
     cleaner = makeCleaner(parts = 3, maxMessageSize = maxMessageSize)
 
