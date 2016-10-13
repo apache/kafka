@@ -75,12 +75,12 @@ public class DefaultPartitionGrouper implements PartitionGrouper {
     protected int maxNumPartitions(Cluster metadata, Set<String> topics) {
         int maxNumPartitions = 0;
         for (String topic : topics) {
-            List<PartitionInfo> infos = metadata.partitionsForTopic(topic);
+            List<PartitionInfo> partitions = metadata.partitionsForTopic(topic);
 
-            if (infos == null)
+            if (partitions == null)
                 throw new StreamsException("Topic not found during partition assignment: " + topic);
 
-            int numPartitions = infos.size();
+            int numPartitions = partitions.size();
             if (numPartitions > maxNumPartitions)
                 maxNumPartitions = numPartitions;
         }
