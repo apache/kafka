@@ -236,7 +236,7 @@ class LogCleaner(val config: CleanerConfig,
           // there's a log, clean it
           var endOffset = cleanable.firstDirtyOffset
           try {
-            val (cleanerStats, nextDirtyOffset) = cleaner.clean(cleanable)
+            val (nextDirtyOffset, cleanerStats) = cleaner.clean(cleanable)
             recordStats(cleaner.id, cleanable.log.name, cleanable.firstDirtyOffset, endOffset, cleanerStats)
             endOffset = nextDirtyOffset
           } catch {
@@ -328,9 +328,9 @@ private[log] class Cleaner(val id: Int,
    *
    * @param cleanable The log to be cleaned
    *
-   * @return The first offset not cleaned
+   * @return The first offset not cleaned and the statistics for this round of cleaning
    */
-  private[log] def clean(cleanable: LogToClean): (CleanerStats, Long) = {
+  private[log] def clean(cleanable: LogToClean): (Long, CleanerStats) = {
     val stats = new CleanerStats()
 
     info("Beginning cleaning of log %s.".format(cleanable.log.name))
@@ -365,7 +365,7 @@ private[log] class Cleaner(val id: Int,
     
     stats.allDone()
 
-    (stats, endOffset)
+    (endOffset, stats)
   }
 
   /**
@@ -375,6 +375,7 @@ private[log] class Cleaner(val id: Int,
    * @param segments The group of segments being cleaned
    * @param map The offset map to use for cleaning segments
    * @param deleteHorizonMs The time to retain delete tombstones
+   * @param stats Collector for cleaning statistics
    */
   private[log] def cleanSegments(log: Log,
                                  segments: Seq[LogSegment], 
@@ -438,6 +439,7 @@ private[log] class Cleaner(val id: Int,
    * @param map The key=>offset mapping
    * @param retainDeletes Should delete tombstones be retained while cleaning this segment
    * @param maxLogMessageSize The maximum message size of the corresponding topic
+   * @param stats Collector for cleaning statistics
    */
   private[log] def cleanInto(topicAndPartition: TopicAndPartition,
                              source: LogSegment,
@@ -658,6 +660,7 @@ private[log] class Cleaner(val id: Int,
    * @param start The offset at which dirty messages begin
    * @param end The ending offset for the map that is being built
    * @param map The map in which to store the mappings
+   * @param stats Collector for cleaning statistics
    */
   private[log] def buildOffsetMap(log: Log, start: Long, end: Long, map: OffsetMap, stats: CleanerStats = new CleanerStats()) {
     map.clear()
@@ -682,6 +685,7 @@ private[log] class Cleaner(val id: Int,
    *
    * @param segment The segment to index
    * @param map The map in which to store the key=>offset mapping
+   * @param stats Collector for cleaning statistics
    *
    * @return If the map was filled whilst loading from this segment
    */
