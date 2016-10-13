@@ -17,7 +17,7 @@
 
 package kafka.log
 
-import java.io.File
+import java.io.{DataOutputStream, File}
 import java.nio._
 import java.nio.file.Paths
 import java.util.Properties
@@ -25,6 +25,7 @@ import java.util.Properties
 import kafka.common._
 import kafka.message._
 import kafka.utils._
+import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit.{After, Test}
@@ -140,7 +141,7 @@ class CleanerTest extends JUnitSuite {
   @Test
   def testPartialSegmentClean(): Unit = {
     // because loadFactor is 0.75, this means we can fit 2 messages in the map
-    var cleaner = makeCleaner(2)
+    val cleaner = makeCleaner(2)
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
 
@@ -610,9 +611,73 @@ class CleanerTest extends JUnitSuite {
     assertEquals(-1, map.get(key(4)))
   }
 
+  @Test
+  def testCleanCorruptMessageSet() {
+    // This test verifies that messages corrupted by KAFKA-4298 are fixed by the cleaner
+
+    val log = makeLog()
+    val cleaner = makeCleaner(10)
+
+    val kvs1 = (0 until 2) zip (0 until 2)
+    val kvs2 = (3 until 5) zip (3 until 5)
+
+    writeInvalidCleanedMessage(log, 25, kvs1 ++ kvs1) // one compressed entry with dups
+    writeInvalidCleanedMessage(log, 50, kvs2) // and one without (should still be fixed by the cleaner)
+
+    log.roll()
+
+    cleaner.clean(LogToClean(TopicAndPartition("test", 0), log, 0, log.activeSegment.baseOffset))
+
+    for (segment <- log.logSegments; shallowMessage <- segment.log.iterator; deepMessage <- ByteBufferMessageSet.deepIterator(shallowMessage))
+      assertEquals(shallowMessage.message.magic, deepMessage.message.magic)
+  }
+
+
   private def writeToLog(log: Log, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
     for(((key, value), offset) <- keysAndValues.zip(offsetSeq))
       yield log.append(messageWithOffset(key, value, offset), assignOffsets = false).firstOffset
+  }
+
+  private def writeInvalidCleanedMessage(log: Log,
+                                         offset: Long,
+                                         keysAndValues: Iterable[(Int, Int)]) = {
+    // this function replicates the old versions of the cleaner which under some circumstances
+    // would write invalid compressed message sets with the outer magic set to 1 and the inner
+    // magic set to 0
+
+    val messages = keysAndValues.map(kv =>
+      new Message(key = kv._1.toString.getBytes,
+        bytes = kv._2.toString.getBytes,
+        timestamp = Message.NoTimestamp,
+        magicValue = Message.MagicValue_V0))
+
+    val messageWriter = new MessageWriter(math.min(math.max(MessageSet.messageSetSize(messages) / 2, 1024), 1 << 16))
+    val codec = SnappyCompressionCodec
+    var lastOffset = offset
+
+    messageWriter.write(
+      codec = codec,
+      timestamp = Message.NoTimestamp,
+      timestampType = TimestampType.CREATE_TIME,
+      magicValue = Message.MagicValue_V1) { outputStream =>
+
+      val output = new DataOutputStream(CompressionFactory(codec, Message.MagicValue_V1, outputStream))
+      try {
+        for (message <- messages) {
+          lastOffset += 1
+          val innerOffset = lastOffset - offset
+          output.writeLong(innerOffset)
+          output.writeInt(message.size)
+          output.write(message.buffer.array, message.buffer.arrayOffset, message.buffer.limit)
+        }
+      } finally {
+        output.close()
+      }
+    }
+    val buffer = ByteBuffer.allocate(messageWriter.size + MessageSet.LogOverhead)
+    ByteBufferMessageSet.writeMessage(buffer, messageWriter, lastOffset)
+    buffer.rewind()
+    log.append(new ByteBufferMessageSet(buffer), assignOffsets = false)
   }
 
   private def messageWithOffset(key: Int, value: Int, offset: Long) =

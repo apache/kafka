@@ -78,7 +78,7 @@ object ByteBufferMessageSet {
   }
 
   /** Deep iterator that decompresses the message sets and adjusts timestamp and offset if needed. */
-  def deepIterator(wrapperMessageAndOffset: MessageAndOffset): Iterator[MessageAndOffset] = {
+  def deepIterator(wrapperMessageAndOffset: MessageAndOffset, ignorePartiallyConverted: Boolean = false): Iterator[MessageAndOffset] = {
 
     import Message._
 
@@ -139,11 +139,15 @@ object ByteBufferMessageSet {
         val newMessage = new Message(buffer, wrapperMessageTimestampOpt, wrapperMessageTimestampTypeOpt)
 
         // Inner message and wrapper message must have same magic value
-        if (newMessage.magic != wrapperMessage.magic)
-          throw new IllegalStateException(s"Compressed message has magic value ${wrapperMessage.magic} " +
-            s"but inner message has magic value ${newMessage.magic}")
+        if (newMessage.magic != wrapperMessage.magic) {
+          // The old LogCleaner had a bug which could cause compressed messages sets for magic=0
+          // to be placed in a wrapped message with magic=1.
+          if (!ignorePartiallyConverted || newMessage.magic != MagicValue_V0 || wrapperMessage.magic != MagicValue_V1)
+            throw new IllegalStateException(s"Compressed message has magic value ${wrapperMessage.magic} " +
+              s"but inner message has magic value ${newMessage.magic}")
+        }
         lastInnerOffset = innerOffset
-        new MessageAndOffset(newMessage, innerOffset)
+        MessageAndOffset(newMessage, innerOffset)
       }
 
       override def makeNext(): MessageAndOffset = {
@@ -153,7 +157,7 @@ object ByteBufferMessageSet {
             if (wrapperMessage.magic > MagicValue_V0) {
               val relativeOffset = offset - lastInnerOffset
               val absoluteOffset = wrapperMessageOffset + relativeOffset
-              new MessageAndOffset(message, absoluteOffset)
+              MessageAndOffset(message, absoluteOffset)
             } else {
               nextMessage
             }
@@ -327,11 +331,14 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
   /** default iterator that iterates over decompressed messages */
   override def iterator: Iterator[MessageAndOffset] = internalIterator()
 
+  def iterator(ignorePartiallyConverted: Boolean): Iterator[MessageAndOffset] =
+    internalIterator(ignorePartiallyConverted = ignorePartiallyConverted)
+
   /** iterator over compressed messages without decompressing */
-  def shallowIterator: Iterator[MessageAndOffset] = internalIterator(true)
+  def shallowIterator: Iterator[MessageAndOffset] = internalIterator(isShallow = true)
 
   /** When flag isShallow is set to be true, we do a shallow iteration: just traverse the first level of messages. **/
-  private def internalIterator(isShallow: Boolean = false): Iterator[MessageAndOffset] = {
+  private def internalIterator(isShallow: Boolean = false, ignorePartiallyConverted: Boolean = false): Iterator[MessageAndOffset] = {
     new IteratorTemplate[MessageAndOffset] {
       var topIter = buffer.slice()
       var innerIter: Iterator[MessageAndOffset] = null
@@ -357,14 +364,14 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
         topIter.position(topIter.position + size)
         val newMessage = new Message(message)
         if(isShallow) {
-          new MessageAndOffset(newMessage, offset)
+          MessageAndOffset(newMessage, offset)
         } else {
           newMessage.compressionCodec match {
             case NoCompressionCodec =>
               innerIter = null
-              new MessageAndOffset(newMessage, offset)
+              MessageAndOffset(newMessage, offset)
             case _ =>
-              innerIter = ByteBufferMessageSet.deepIterator(new MessageAndOffset(newMessage, offset))
+              innerIter = ByteBufferMessageSet.deepIterator(MessageAndOffset(newMessage, offset), ignorePartiallyConverted)
               if(!innerIter.hasNext)
                 innerIter = null
               makeNext()

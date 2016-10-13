@@ -459,41 +459,56 @@ private[log] class Cleaner(val id: Int,
       throttler.maybeThrottle(messages.sizeInBytes)
       // check each message to see if it is to be retained
       var messagesRead = 0
-      for (entry <- messages.shallowIterator) {
-        val size = MessageSet.entrySize(entry.message)
+      for (shallowMessageAndOffset <- messages.shallowIterator) {
+        val shallowMessage = shallowMessageAndOffset.message
+        val shallowOffset = shallowMessageAndOffset.offset
+        val size = MessageSet.entrySize(shallowMessageAndOffset.message)
+
         stats.readMessage(size)
-        if (entry.message.compressionCodec == NoCompressionCodec) {
-          if (shouldRetainMessage(source, map, retainDeletes, entry)) {
-            ByteBufferMessageSet.writeMessage(writeBuffer, entry.message, entry.offset)
+        if (shallowMessageAndOffset.message.compressionCodec == NoCompressionCodec) {
+          if (shouldRetainMessage(source, map, retainDeletes, shallowMessageAndOffset)) {
+            ByteBufferMessageSet.writeMessage(writeBuffer, shallowMessage, shallowOffset)
             stats.recopyMessage(size)
-            if (entry.message.timestamp > maxTimestamp) {
-              maxTimestamp = entry.message.timestamp
-              offsetOfMaxTimestamp = entry.offset
+            if (shallowMessage.timestamp > maxTimestamp) {
+              maxTimestamp = shallowMessage.timestamp
+              offsetOfMaxTimestamp = shallowOffset
             }
           }
           messagesRead += 1
         } else {
-          // We use the absolute offset to decide whether to retain the message or not. This is handled by the
-          // deep iterator.
-          val messages = ByteBufferMessageSet.deepIterator(entry)
+          // We use the absolute offset to decide whether to retain the message or not (this is handled by the
+          // deep iterator). Because of KAFKA-4298, we have to allow for the possibility that a previous version
+          // corrupted the log by writing a compressed message set with a wrapper magic value not matching the magic
+          // of the inner messages, so we tell deepIterator to skip this validation so that we can fix the log.
+
+          val messages = ByteBufferMessageSet.deepIterator(shallowMessageAndOffset, ignorePartiallyConverted = true)
           var writeOriginalMessageSet = true
           val retainedMessages = new mutable.ArrayBuffer[MessageAndOffset]
+          val shallowMagic = shallowMessage.magic
+
           messages.foreach { messageAndOffset =>
             messagesRead += 1
             if (shouldRetainMessage(source, map, retainDeletes, messageAndOffset)) {
+
+              // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
+              // the corrupted entry with correct data.
+              if (shallowMagic != messageAndOffset.message.magic)
+                writeOriginalMessageSet = false
+
               retainedMessages += messageAndOffset
               // We need the max timestamp and last offset for time index
               if (messageAndOffset.message.timestamp > maxTimestamp)
                 maxTimestamp = messageAndOffset.message.timestamp
+            } else {
+              writeOriginalMessageSet = false
             }
-            else writeOriginalMessageSet = false
           }
           offsetOfMaxTimestamp = if (retainedMessages.nonEmpty) retainedMessages.last.offset else -1L
           // There are no messages compacted out and no message format conversion, write the original message set back
           if (writeOriginalMessageSet)
-            ByteBufferMessageSet.writeMessage(writeBuffer, entry.message, entry.offset)
+            ByteBufferMessageSet.writeMessage(writeBuffer, shallowMessage, shallowOffset)
           else
-            compressMessages(writeBuffer, entry.message.compressionCodec, retainedMessages)
+            compressMessages(writeBuffer, shallowMessage.compressionCodec, retainedMessages)
         }
       }
 
@@ -677,7 +692,7 @@ private[log] class Cleaner(val id: Int,
       val messages = new ByteBufferMessageSet(segment.log.readInto(readBuffer, position))
       throttler.maybeThrottle(messages.sizeInBytes)
       val startPosition = position
-      for (entry <- messages) {
+      for (entry <- messages.iterator(ignorePartiallyConverted = true)) {
         val message = entry.message
         if (message.hasKey && entry.offset >= start) {
           if (map.size < maxDesiredMapSize)
