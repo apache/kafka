@@ -19,10 +19,11 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.kstream.internals.KStreamImpl;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
+import org.apache.kafka.streams.kstream.internals.KStreamImpl;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Test;
 
@@ -150,4 +151,35 @@ public class KStreamBuilderTest {
         new KStreamBuilder().stream(Serdes.String(), Serdes.String(), null, null);
     }
 
+    @Test
+    public void testThatNotMaterializedKTableDoesNotCauseNullPointerExceptionOnStoreAssignment() {
+        MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+
+        KStreamBuilder builder = new KStreamBuilder();
+
+        KTable<String, String> table1 = builder.table(Serdes.String(), Serdes.String(), "topic1", "store1");
+        KTable<String, String> table2 = builder.table(Serdes.String(), Serdes.String(), "topic2", "store2");
+        KTable<String, String> table3 = table1.join(table2, new ValueJoiner<String, String, String>() {
+            @Override
+            public String apply(String value1, String value2) {
+                return value1 + "-" + value2;
+            }
+        });
+        KStream<String, String> stream1 = builder.stream(Serdes.String(), Serdes.String(), "topic3");
+        stream1.leftJoin(table3, new ValueJoiner<String, String, String>() {
+            @Override
+            public String apply(String value1, String value2) {
+                return value1 + "-" + value2;
+            }
+        }).process(processorSupplier);
+
+        driver = new KStreamTestDriver(builder, TestUtils.tempDirectory());
+        driver.setTime(0L);
+
+        driver.process("topic1", "A", "1");
+        driver.process("topic2", "A", "2");
+        driver.process("topic3", "A", "3");
+
+        processorSupplier.checkAndClearProcessResult("A:3-1-2");
+    }
 }
