@@ -31,7 +31,6 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
@@ -80,19 +79,15 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
     }
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
 
         streamsConfiguration = StreamsTestUtils.getStreamsConfig(CLUSTER.bootstrapServers(),
                 STRING_SERDE_CLASSNAME,
                 STRING_SERDE_CLASSNAME);
-    }
 
-    @After
-    public void tearDown() throws Exception {
         // Remove any state from previous test runs
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
-
 
     @Test
     public void shouldOnlyReadRecordsWhereEarliestSpecified() throws  Exception {

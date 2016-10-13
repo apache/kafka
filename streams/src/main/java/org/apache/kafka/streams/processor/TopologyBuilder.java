@@ -382,7 +382,7 @@ public class TopologyBuilder {
      *
      * @param name the unique name of the source used to reference this node when
      * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
-     *@param keyDeserializer the {@link Deserializer key deserializer} used when consuming records; may be null if the source
+     * @param keyDeserializer the {@link Deserializer key deserializer} used when consuming records; may be null if the source
      * should use the {@link org.apache.kafka.streams.StreamsConfig#KEY_SERDE_CLASS_CONFIG default key deserializer} specified in the
      * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
      * @param valDeserializer the {@link Deserializer value deserializer} used when consuming records; may be null if the source
@@ -403,12 +403,12 @@ public class TopologyBuilder {
      * @param name the unique name of the source used to reference this node when
      * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
      * @param offsetReset the offset reset to use for this stream acceptable values are earliest or latest
-     *@param keyDeserializer the {@link Deserializer key deserializer} used when consuming records; may be null if the source
+     * @param keyDeserializer the {@link Deserializer key deserializer} used when consuming records; may be null if the source
      * should use the {@link org.apache.kafka.streams.StreamsConfig#KEY_SERDE_CLASS_CONFIG default key deserializer} specified in the
      * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
      * @param valDeserializer the {@link Deserializer value deserializer} used when consuming records; may be null if the source
- * should use the {@link org.apache.kafka.streams.StreamsConfig#VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
- * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
+     * should use the {@link org.apache.kafka.streams.StreamsConfig#VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
      * @param topics the name of one or more Kafka topics that this source is to consume    @return this builder instance so methods can be chained together; never null
      * @throws TopologyBuilderException if processor is already added or if topics have already been registered by another source
      */
@@ -459,7 +459,7 @@ public class TopologyBuilder {
      *
      * @param name the unique name of the source used to reference this node when
      * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
-     *@param keyDeserializer the {@link Deserializer key deserializer} used when consuming records; may be null if the source
+     * @param keyDeserializer the {@link Deserializer key deserializer} used when consuming records; may be null if the source
      * should use the {@link org.apache.kafka.streams.StreamsConfig#KEY_SERDE_CLASS_CONFIG default key deserializer} specified in the
      * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
      * @param valDeserializer the {@link Deserializer value deserializer} used when consuming records; may be null if the source
@@ -484,12 +484,12 @@ public class TopologyBuilder {
      * @param name the unique name of the source used to reference this node when
      * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
      * @param offsetReset  the offset reset to use for this stream acceptable values are earliest or latest
-     *@param keyDeserializer the {@link Deserializer key deserializer} used when consuming records; may be null if the source
+     * @param keyDeserializer the {@link Deserializer key deserializer} used when consuming records; may be null if the source
      * should use the {@link org.apache.kafka.streams.StreamsConfig#KEY_SERDE_CLASS_CONFIG default key deserializer} specified in the
      * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
      * @param valDeserializer the {@link Deserializer value deserializer} used when consuming records; may be null if the source
- * should use the {@link org.apache.kafka.streams.StreamsConfig#VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
- * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
+     * should use the {@link org.apache.kafka.streams.StreamsConfig#VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
      * @param topicPattern regular expression pattern to match Kafka topics that this source is to consume    @return this builder instance so methods can be chained together; never null
      * @throws TopologyBuilderException if processor is already added or if topics have already been registered by name
      */

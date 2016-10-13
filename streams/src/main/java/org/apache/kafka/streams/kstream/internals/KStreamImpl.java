@@ -487,7 +487,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             .singleton(repartitionedSourceName), false);
     }
 
-    //TODO add reset strategy to repartitioned source as well?
     static <K1, V1> String createReparitionedSource(AbstractStream<K1> stream,
                                                     Serde<K1> keySerde,
                                                     Serde<V1> valSerde,
@@ -513,8 +512,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         stream.topology.addSink(sinkName, repartitionTopic, keySerializer,
                          valSerializer, filterName);
-
-
         stream.topology.addSource(sourceName, keyDeserializer, valDeserializer,
                            repartitionTopic);
 
