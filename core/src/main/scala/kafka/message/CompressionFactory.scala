@@ -19,10 +19,9 @@ package kafka.message
 
 import java.io.OutputStream
 import java.util.zip.GZIPOutputStream
-import java.util.zip.GZIPInputStream
 import java.io.InputStream
 
-import org.apache.kafka.common.record.{KafkaLZ4BlockInputStream, KafkaLZ4BlockOutputStream}
+import org.apache.kafka.common.record.{KafkaGZIPInputStream, KafkaLZ4BlockInputStream, KafkaLZ4BlockOutputStream}
 
 object CompressionFactory {
   
@@ -42,8 +41,8 @@ object CompressionFactory {
   
   def apply(compressionCodec: CompressionCodec, messageVersion: Byte, stream: InputStream): InputStream = {
     compressionCodec match {
-      case DefaultCompressionCodec => new GZIPInputStream(stream)
-      case GZIPCompressionCodec => new GZIPInputStream(stream)
+      case DefaultCompressionCodec => new KafkaGZIPInputStream(stream)
+      case GZIPCompressionCodec => new KafkaGZIPInputStream(stream)
       case SnappyCompressionCodec => 
         import org.xerial.snappy.SnappyInputStream
         new SnappyInputStream(stream)

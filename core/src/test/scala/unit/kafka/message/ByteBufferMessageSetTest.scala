@@ -422,6 +422,22 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
     checkWriteFullyToWithMessageSet(createMessageSet(messages))
   }
 
+  @Test
+  def testIterationOverCompressedSet(): Unit = {
+    val messageCount = 100
+    val messages = (1 to messageCount).map(m => {
+      new Message(s"message num $m".getBytes)
+    })
+    var messageSet = new ByteBufferMessageSet(GZIPCompressionCodec, messages:_*)
+    assertEquals(messageCount, messageSet.size)
+    messageSet = new ByteBufferMessageSet(LZ4CompressionCodec, messages:_*)
+    assertEquals(messageCount, messageSet.size)
+    messageSet = new ByteBufferMessageSet(SnappyCompressionCodec, messages:_*)
+    assertEquals(messageCount, messageSet.size)
+    messageSet = new ByteBufferMessageSet(NoCompressionCodec, messages:_*)
+    assertEquals(messageCount, messageSet.size)
+  }
+
   def checkWriteFullyToWithMessageSet(messageSet: ByteBufferMessageSet) {
     checkWriteWithMessageSet(messageSet, messageSet.writeFullyTo)
   }
