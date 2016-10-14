@@ -73,15 +73,15 @@ public abstract class AbstractStream<K> {
     }
 
     @SuppressWarnings("unchecked")
-    public <T> StateStoreSupplier<KeyValueStore> keyValueStore(final Serde<K> keySerde,
+    public static <T, K>  StateStoreSupplier<KeyValueStore> keyValueStore(final Serde<K> keySerde,
                                                                   final Serde<T> aggValueSerde,
                                                                   final String storeName) {
         Objects.requireNonNull(storeName, "storeName can't be null");
-        return storeFactory(keySerde, aggValueSerde, name).build();
+        return storeFactory(keySerde, aggValueSerde, storeName).build();
     }
 
     @SuppressWarnings("unchecked")
-    public <W extends Window, T, K> StateStoreSupplier<WindowStore> windowedStore(final Serde<K> keySerde,
+    public static  <W extends Window, T, K> StateStoreSupplier<WindowStore> windowedStore(final Serde<K> keySerde,
                                                                                      final Serde<T> aggValSerde,
                                                                                      final Windows<W> windows,
                                                                                      final String storeName) {
@@ -91,7 +91,7 @@ public abstract class AbstractStream<K> {
                 .build();
     }
     @SuppressWarnings("unchecked")
-    public <T, K> Stores.PersistentKeyValueFactory<K, T> storeFactory(final Serde<K> keySerde,
+    public static  <T, K> Stores.PersistentKeyValueFactory<K, T> storeFactory(final Serde<K> keySerde,
                                                                          final Serde<T> aggValueSerde,
                                                                          final String storeName) {
         return Stores.create(storeName)
