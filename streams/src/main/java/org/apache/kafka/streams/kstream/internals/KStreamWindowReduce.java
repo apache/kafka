@@ -57,14 +57,14 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
     private class KStreamWindowReduceProcessor extends AbstractProcessor<K, V> {
 
         private WindowStore<K, V> windowStore;
-        private Forwarder<K, V> forwarder;
+        private TupleForwarder<Windowed<K>, V> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
             windowStore = (WindowStore<K, V>) context.getStateStore(storeName);
-            forwarder = new Forwarder<>(windowStore, context, new ForwardingCacheFlushListener<Windowed<K>, V>(context, sendOldValues));
+            tupleForwarder = new TupleForwarder<>(windowStore, context, new ForwardingCacheFlushListener<Windowed<K>, V>(context, sendOldValues));
         }
 
         @Override
@@ -108,7 +108,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
 
                         // update the store with the new value
                         windowStore.put(key, newAgg, window.start());
-                        forwarder.maybeForward(new Windowed<>(key, window), newAgg, oldAgg, sendOldValues);
+                        tupleForwarder.checkForNonFlushForward(new Windowed<>(key, window), newAgg, oldAgg, sendOldValues);
                         matchedWindows.remove(entry.key);
                     }
                 }
@@ -117,7 +117,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
             // create the new window for the rest of unmatched window that do not exist yet
             for (long windowStartMs : matchedWindows.keySet()) {
                 windowStore.put(key, value, windowStartMs);
-                forwarder.maybeForward(new Windowed<>(key, matchedWindows.get(windowStartMs)), new Change<>(value, null));
+                tupleForwarder.checkForNonFlushForward(new Windowed<>(key, matchedWindows.get(windowStartMs)), value, null, false);
             }
         }
     }

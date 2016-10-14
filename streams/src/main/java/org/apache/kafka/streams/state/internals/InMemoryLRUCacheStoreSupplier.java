@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Map;
 
@@ -29,7 +30,7 @@ import java.util.Map;
  * @param <V> The value type
  *
  */
-public class InMemoryLRUCacheStoreSupplier<K, V, T extends StateStore> extends AbstractStoreSupplier<K, V, T> {
+public class InMemoryLRUCacheStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, KeyValueStore> {
 
     private final int capacity;
 
@@ -42,9 +43,9 @@ public class InMemoryLRUCacheStoreSupplier<K, V, T extends StateStore> extends A
         this.capacity = capacity;
     }
 
-    public T get() {
+    public KeyValueStore get() {
         MemoryNavigableLRUCache<K, V> cache = new MemoryNavigableLRUCache<>(name, capacity, keySerde, valueSerde);
-        return (T) new MeteredKeyValueStore<>(logged ? cache.enableLogging() : cache, "in-memory-lru-state", time);
+        return new MeteredKeyValueStore<>(logged ? cache.enableLogging() : cache, "in-memory-lru-state", time);
     }
 
 }

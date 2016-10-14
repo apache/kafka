@@ -65,11 +65,6 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                       Aggregator<K, V, T> subtractor,
                                       Serde<T> aggValueSerde,
                                       String storeName) {
-
-        Objects.requireNonNull(initializer, "initializer can't be null");
-        Objects.requireNonNull(adder, "adder can't be null");
-        Objects.requireNonNull(subtractor, "subtractor can't be null");
-        Objects.requireNonNull(storeName, "storeName can't be null");
         return aggregate(initializer, adder, subtractor, keyValueStore(keySerde, aggValueSerde, storeName));
     }
 
@@ -79,10 +74,6 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                       Aggregator<K, V, T> adder,
                                       Aggregator<K, V, T> subtractor,
                                       String storeName) {
-        Objects.requireNonNull(initializer, "initializer can't be null");
-        Objects.requireNonNull(adder, "adder can't be null");
-        Objects.requireNonNull(subtractor, "subtractor can't be null");
-        Objects.requireNonNull(storeName, "storeName can't be null");
         return aggregate(initializer, adder, subtractor, null, storeName);
     }
 
@@ -91,6 +82,10 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                       Aggregator<K, V, T> adder,
                                       Aggregator<K, V, T> subtractor,
                                       StateStoreSupplier<KeyValueStore> storeSupplier) {
+        Objects.requireNonNull(initializer, "initializer can't be null");
+        Objects.requireNonNull(adder, "adder can't be null");
+        Objects.requireNonNull(subtractor, "subtractor can't be null");
+        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
         ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(storeSupplier.name(), initializer, adder, subtractor);
         return doAggregate(aggregateSupplier, AGGREGATE_NAME, storeSupplier);
     }
@@ -131,9 +126,6 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     public KTable<K, V> reduce(Reducer<V> adder,
                                Reducer<V> subtractor,
                                String storeName) {
-        Objects.requireNonNull(adder, "adder can't be null");
-        Objects.requireNonNull(subtractor, "subtractor can't be null");
-        Objects.requireNonNull(storeName, "storeName can't be null");
         return reduce(adder, subtractor, keyValueStore(keySerde, valSerde, storeName));
     }
 

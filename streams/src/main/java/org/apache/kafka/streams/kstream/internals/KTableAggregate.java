@@ -54,14 +54,14 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
     private class KTableAggregateProcessor extends AbstractProcessor<K, Change<V>> {
 
         private KeyValueStore<K, T> store;
-        private Forwarder<K, T> forwarder;
+        private TupleForwarder<K, T> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
             store = (KeyValueStore<K, T>) context.getStateStore(storeName);
-            forwarder = new Forwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
+            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
         }
 
         /**
@@ -92,7 +92,7 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
 
             // update the store with the new value
             store.put(key, newAgg);
-            forwarder.maybeForward(key, newAgg, oldAgg, sendOldValues);
+            tupleForwarder.checkForNonFlushForward(key, newAgg, oldAgg, sendOldValues);
         }
 
     }

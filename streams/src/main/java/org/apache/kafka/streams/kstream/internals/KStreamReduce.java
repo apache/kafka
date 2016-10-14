@@ -48,7 +48,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
     private class KStreamReduceProcessor extends AbstractProcessor<K, V> {
 
         private KeyValueStore<K, V> store;
-        private Forwarder<K, V> forwarder;
+        private TupleForwarder<K, V> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
@@ -56,7 +56,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
             super.init(context);
 
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
-            forwarder = new Forwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
+            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
         }
 
 
@@ -79,7 +79,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
             }
             // update the store with the new value
             store.put(key, newAgg);
-            forwarder.maybeForward(key, newAgg, oldAgg, sendOldValues);
+            tupleForwarder.checkForNonFlushForward(key, newAgg, oldAgg, sendOldValues);
         }
     }
 

@@ -60,7 +60,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
     private class KStreamWindowAggregateProcessor extends AbstractProcessor<K, V> {
 
         private WindowStore<K, T> windowStore;
-        private Forwarder<K, T> forwarder;
+        private TupleForwarder<Windowed<K>, T> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
@@ -68,7 +68,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
             super.init(context);
 
             windowStore = (WindowStore<K, T>) context.getStateStore(storeName);
-            forwarder = new Forwarder<>(windowStore, context, new ForwardingCacheFlushListener<Windowed<K>, V>(context, sendOldValues));
+            tupleForwarder = new TupleForwarder<>(windowStore, context, new ForwardingCacheFlushListener<Windowed<K>, V>(context, sendOldValues));
         }
 
         @Override
@@ -110,7 +110,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
                         // update the store with the new value
                         windowStore.put(key, newAgg, window.start());
-                        forwarder.maybeForward(new Windowed<>(key, window), newAgg, oldAgg, sendOldValues);
+                        tupleForwarder.checkForNonFlushForward(new Windowed<>(key, window), newAgg, oldAgg, sendOldValues);
                         matchedWindows.remove(entry.key);
                     }
                 }
@@ -121,7 +121,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
                 T oldAgg = initializer.apply();
                 T newAgg = aggregator.apply(key, value, oldAgg);
                 windowStore.put(key, newAgg, windowStartMs);
-                forwarder.maybeForward(new Windowed<>(key, matchedWindows.get(windowStartMs)), newAgg, oldAgg, sendOldValues);
+                tupleForwarder.checkForNonFlushForward(new Windowed<>(key, matchedWindows.get(windowStartMs)), newAgg, oldAgg, sendOldValues);
             }
         }
     }

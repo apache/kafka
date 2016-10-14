@@ -4,9 +4,9 @@
  * copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance with the License.  You may obtain a
  * copy of the License at
- * <p>
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License
  * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
  * or implied. See the License for the specific language governing permissions and limitations under
@@ -24,13 +24,13 @@ import org.apache.kafka.streams.state.WindowStore;
 /**
  * {@link KGroupedStream} is an abstraction of a <i>grouped record stream</i> of key-value pairs
  * usually grouped on a different key than the original stream key
- * <p>
+ *
  * <p>
  * It is an intermediate representation of a {@link KStream} before an
  * aggregation is applied to the new partitions resulting in a new {@link KTable}.
- *
  * @param <K> Type of keys
  * @param <V> Type of values
+ *
  * @see KStream
  */
 @InterfaceStability.Unstable
@@ -44,8 +44,9 @@ public interface KGroupedStream<K, V> {
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
-     * @param reducer   the instance of {@link Reducer}
-     * @param storeName the name of the underlying {@link KTable} state store
+     * @param reducer           the instance of {@link Reducer}
+     * @param storeName         the name of the underlying {@link KTable} state store
+     *
      * @return a {@link KTable} that contains records with unmodified keys and values that represent the latest (rolling) aggregate for each key
      */
     KTable<K, V> reduce(Reducer<V> reducer,
@@ -53,16 +54,14 @@ public interface KGroupedStream<K, V> {
 
     /**
      * Combine values of this stream by the grouped key into a new instance of ever-updating
-     * {@link KTable}. The resulting {@link KTable} will be materialized in a local state
-     * store given by state store supplier. Also a changelog topic named "${applicationId}-${storeName}-changelog"
-     * will be automatically created in Kafka for failure recovery, where "applicationID"
-     * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
+     * {@link KTable}. The resulting {@link KTable} will be materialized in a state
+     * store provided by the {@link StateStoreSupplier}.
      *
      * @param reducer       the instance of {@link Reducer}
      * @param storeSupplier user defined state store supplier {@link StateStoreSupplier}
      * @return a {@link KTable} that contains records with unmodified keys and values that represent the latest (rolling) aggregate for each key
      */
-    KTable<K, V> reduce(Reducer<V> reducer,
+    KTable<K, V> reduce(final Reducer<V> reducer,
                         final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
@@ -72,12 +71,12 @@ public interface KGroupedStream<K, V> {
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
-     * @param reducer   the instance of {@link Reducer}
-     * @param windows   the specification of the aggregation {@link Windows}
-     * @param storeName the name of the state store created from this operation
+     * @param reducer           the instance of {@link Reducer}
+     * @param windows           the specification of the aggregation {@link Windows}
+     * @param storeName         the name of the state store created from this operation
      * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
-     * where each table contains records with unmodified keys and values
-     * that represent the latest (rolling) aggregate for each key within that window
+     *         where each table contains records with unmodified keys and values
+     *         that represent the latest (rolling) aggregate for each key within that window
      */
     <W extends Window> KTable<Windowed<K>, V> reduce(Reducer<V> reducer,
                                                      Windows<W> windows,
@@ -85,17 +84,15 @@ public interface KGroupedStream<K, V> {
 
     /**
      * Combine values of this stream by key on a window basis into a new instance of windowed {@link KTable}.
-     * The resulting {@link KTable} will be materialized in a local state
-     * store given by state store supplier. Also a changelog topic named "${applicationId}-${storeName}-changelog"
-     * will be automatically created in Kafka for failure recovery, where "applicationID"
-     * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
+     * The resulting {@link KTable} will be materialized in a state
+     * store provided by the {@link StateStoreSupplier}.
      *
      * @param reducer       the instance of {@link Reducer}
      * @param windows       the specification of the aggregation {@link Windows}
      * @param storeSupplier user defined state store supplier {@link StateStoreSupplier}
      * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
-     * where each table contains records with unmodified keys and values
-     * that represent the latest (rolling) aggregate for each key within that window
+     *         where each table contains records with unmodified keys and values
+     *         that represent the latest (rolling) aggregate for each key within that window
      */
     <W extends Window> KTable<Windowed<K>, V> reduce(Reducer<V> reducer,
                                                      Windows<W> windows,
@@ -115,6 +112,7 @@ public interface KGroupedStream<K, V> {
      *                      if not specified the default serdes defined in the configs will be used
      * @param storeName     the name of the state store created from this operation
      * @param <T>           the value type of the resulting {@link KTable}
+     *
      * @return a {@link KTable} that represents the latest (rolling) aggregate for each key
      */
     <T> KTable<K, T> aggregate(Initializer<T> initializer,
@@ -124,22 +122,17 @@ public interface KGroupedStream<K, V> {
 
     /**
      * Aggregate values of this stream by key into a new instance of a {@link KTable}.
-     * The resulting {@link KTable} will be materialized in a local state
-     * store given by state store supplier. Also a changelog topic named "${applicationId}-${storeName}-changelog"
-     * will be automatically created in Kafka for failure recovery, where "applicationID"
-     * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
+     * The resulting {@link KTable} will be materialized in a state
+     * store provided by the {@link StateStoreSupplier}.
      *
      * @param initializer   the instance of {@link Initializer}
      * @param aggregator    the instance of {@link Aggregator}
-     * @param aggValueSerde aggregate value serdes for materializing the aggregated table,
-     *                      if not specified the default serdes defined in the configs will be used
      * @param storeSupplier user defined state store supplier {@link StateStoreSupplier}
      * @param <T>           the value type of the resulting {@link KTable}
      * @return a {@link KTable} that represents the latest (rolling) aggregate for each key
      */
     <T> KTable<K, T> aggregate(Initializer<T> initializer,
                                Aggregator<K, V, T> aggregator,
-                               Serde<T> aggValueSerde,
                                final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
@@ -157,8 +150,8 @@ public interface KGroupedStream<K, V> {
      * @param <T>           the value type of the resulting {@link KTable}
      * @param storeName     the name of the state store created from this operation
      * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
-     * where each table contains records with unmodified keys and values with type {@code T}
-     * that represent the latest (rolling) aggregate for each key within that window
+     *         where each table contains records with unmodified keys and values with type {@code T}
+     *         that represent the latest (rolling) aggregate for each key within that window
      */
     <W extends Window, T> KTable<Windowed<K>, T> aggregate(Initializer<T> initializer,
                                                            Aggregator<K, V, T> aggregator,
@@ -168,10 +161,8 @@ public interface KGroupedStream<K, V> {
 
     /**
      * Aggregate values of this stream by key on a window basis into a new instance of windowed {@link KTable}.
-     * The resulting {@link KTable} will be materialized in a local state
-     * store given by state store supplier. Also a changelog topic named "${applicationId}-${storeName}-changelog"
-     * will be automatically created in Kafka for failure recovery, where "applicationID"
-     * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
+     * The resulting {@link KTable} will be materialized in a state
+     * store provided by the {@link StateStoreSupplier}.
      *
      * @param initializer   the instance of {@link Initializer}
      * @param aggregator    the instance of {@link Aggregator}
@@ -179,8 +170,8 @@ public interface KGroupedStream<K, V> {
      * @param <T>           the value type of the resulting {@link KTable}
      * @param storeSupplier user defined state store supplier {@link StateStoreSupplier}
      * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
-     * where each table contains records with unmodified keys and values with type {@code T}
-     * that represent the latest (rolling) aggregate for each key within that window
+     *         where each table contains records with unmodified keys and values with type {@code T}
+     *         that represent the latest (rolling) aggregate for each key within that window
      */
     <W extends Window, T> KTable<Windowed<K>, T> aggregate(Initializer<T> initializer,
                                                            Aggregator<K, V, T> aggregator,
@@ -194,11 +185,22 @@ public interface KGroupedStream<K, V> {
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
-     * @param storeName the name of the underlying {@link KTable} state store
+     * @param storeName  the name of the underlying {@link KTable} state store
+     *
      * @return a {@link KTable} that contains records with unmodified keys and values that represent the latest (rolling) count (i.e., number of records) for each key
      */
     KTable<K, Long> count(final String storeName);
 
+    /**
+     * Count number of records of this stream by key into a new instance of a {@link KTable}.
+     * The resulting {@link KTable} will be materialized in a state
+     * store provided by the {@link StateStoreSupplier}.
+     *
+     * @param storeSupplier  user defined state store supplier {@link StateStoreSupplier}
+     *
+     * @return a {@link KTable} that contains records with unmodified keys and values that represent the latest (rolling) count (i.e., number of records) for each key
+     */
+    KTable<K, Long> count(final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
      * Count number of records of this stream by key on a window basis into a new instance of windowed {@link KTable}.
@@ -210,23 +212,21 @@ public interface KGroupedStream<K, V> {
      * @param windows   the specification of the aggregation {@link Windows}
      * @param storeName the name of the state store created from this operation
      * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
-     * where each table contains records with unmodified keys and values
-     * that represent the latest (rolling) count (i.e., number of records) for each key within that window
+     *         where each table contains records with unmodified keys and values
+     *         that represent the latest (rolling) count (i.e., number of records) for each key within that window
      */
     <W extends Window> KTable<Windowed<K>, Long> count(Windows<W> windows, final String storeName);
 
     /**
      * Count number of records of this stream by key on a window basis into a new instance of windowed {@link KTable}.
-     * The resulting {@link KTable} will be materialized in a local state
-     * store given by state store supplier. Also a changelog topic named "${applicationId}-${storeName}-changelog"
-     * will be automatically created in Kafka for failure recovery, where "applicationID"
-     * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
+     * The resulting {@link KTable} will be materialized in a state
+     * store provided by the {@link StateStoreSupplier}.
      *
      * @param windows       the specification of the aggregation {@link Windows}
      * @param storeSupplier user defined state store supplier {@link StateStoreSupplier}
      * @return a windowed {@link KTable} which can be treated as a list of {@code KTable}s
-     * where each table contains records with unmodified keys and values
-     * that represent the latest (rolling) count (i.e., number of records) for each key within that window
+     *         where each table contains records with unmodified keys and values
+     *         that represent the latest (rolling) count (i.e., number of records) for each key within that window
      */
     <W extends Window> KTable<Windowed<K>, Long> count(Windows<W> windows,
                                                        final StateStoreSupplier<WindowStore> storeSupplier);

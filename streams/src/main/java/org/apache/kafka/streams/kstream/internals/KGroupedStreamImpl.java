@@ -76,8 +76,8 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
 
     @SuppressWarnings("unchecked")
     @Override
-    public <W extends Window> KTable<Windowed<K>, V> reduce(Reducer<V> reducer,
-                                                            Windows<W> windows,
+    public <W extends Window> KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
+                                                            final Windows<W> windows,
                                                             final String storeName) {
         Objects.requireNonNull(reducer, "reducer can't be null");
         Objects.requireNonNull(windows, "windows can't be null");
@@ -87,8 +87,8 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
 
     @SuppressWarnings("unchecked")
     @Override
-    public <W extends Window> KTable<Windowed<K>, V> reduce(Reducer<V> reducer,
-                                                            Windows<W> windows,
+    public <W extends Window> KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
+                                                            final Windows<W> windows,
                                                             final StateStoreSupplier<WindowStore> storeSupplier) {
         Objects.requireNonNull(reducer, "reducer can't be null");
         Objects.requireNonNull(windows, "windows can't be null");
@@ -108,13 +108,12 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
         Objects.requireNonNull(storeName, "storeName can't be null");
-        return aggregate(initializer, aggregator, aggValueSerde, keyValueStore(keySerde, aggValueSerde, storeName));
+        return aggregate(initializer, aggregator, keyValueStore(keySerde, aggValueSerde, storeName));
     }
 
     @Override
-    public <T> KTable<K, T> aggregate(Initializer<T> initializer,
-                                      Aggregator<K, V, T> aggregator,
-                                      Serde<T> aggValueSerde,
+    public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
+                                      final Aggregator<K, V, T> aggregator,
                                       final StateStoreSupplier<KeyValueStore> storeSupplier) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
@@ -158,6 +157,11 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
 
     @Override
     public KTable<K, Long> count(final String storeName) {
+        return count( keyValueStore(keySerde, Serdes.Long(), storeName));
+    }
+
+    @Override
+    public KTable<K, Long> count(final StateStoreSupplier<KeyValueStore> storeSupplier) {
         return aggregate(new Initializer<Long>() {
             @Override
             public Long apply() {
@@ -168,7 +172,7 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
             public Long apply(K aggKey, V value, Long aggregate) {
                 return aggregate + 1;
             }
-        }, Serdes.Long(), storeName);
+        }, storeSupplier);
     }
 
     @Override

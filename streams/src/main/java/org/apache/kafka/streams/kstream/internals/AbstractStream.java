@@ -28,6 +28,7 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 public abstract class AbstractStream<K> {
@@ -71,23 +72,26 @@ public abstract class AbstractStream<K> {
         };
     }
 
-    protected <T> StateStoreSupplier<KeyValueStore> keyValueStore(final Serde<K> keySerde,
+    @SuppressWarnings("unchecked")
+    public <T> StateStoreSupplier<KeyValueStore> keyValueStore(final Serde<K> keySerde,
                                                                   final Serde<T> aggValueSerde,
-                                                                  final String name) {
+                                                                  final String storeName) {
+        Objects.requireNonNull(storeName, "storeName can't be null");
         return storeFactory(keySerde, aggValueSerde, name).build();
     }
 
-
-    protected <W extends Window, T, K> StateStoreSupplier<WindowStore> windowedStore(final Serde<K> keySerde,
+    @SuppressWarnings("unchecked")
+    public <W extends Window, T, K> StateStoreSupplier<WindowStore> windowedStore(final Serde<K> keySerde,
                                                                                      final Serde<T> aggValSerde,
                                                                                      final Windows<W> windows,
                                                                                      final String storeName) {
+        Objects.requireNonNull(storeName, "storeName can't be null");
         return storeFactory(keySerde, aggValSerde, storeName)
                 .windowed(windows.size(), windows.maintainMs(), windows.segments, false)
                 .build();
     }
-
-    protected <T, K> Stores.PersistentKeyValueFactory<K, T> storeFactory(final Serde<K> keySerde,
+    @SuppressWarnings("unchecked")
+    public <T, K> Stores.PersistentKeyValueFactory<K, T> storeFactory(final Serde<K> keySerde,
                                                                          final Serde<T> aggValueSerde,
                                                                          final String storeName) {
         return Stores.create(storeName)

@@ -45,7 +45,7 @@ import java.util.TreeMap;
  *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
-public class InMemoryKeyValueStoreSupplier<K, V, T extends StateStore> extends AbstractStoreSupplier<K, V, T> {
+public class InMemoryKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, KeyValueStore> {
 
 
     public InMemoryKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, boolean logged, Map<String, String> logConfig) {
@@ -56,10 +56,10 @@ public class InMemoryKeyValueStoreSupplier<K, V, T extends StateStore> extends A
         super(name, keySerde, valueSerde, time, logged, logConfig);
     }
 
-    public T get() {
+    public KeyValueStore get() {
         MemoryStore<K, V> store = new MemoryStore<>(name, keySerde, valueSerde);
 
-        return (T) new MeteredKeyValueStore<>(logged ? store.enableLogging() : store, "in-memory-state", time);
+        return  new MeteredKeyValueStore<>(logged ? store.enableLogging() : store, "in-memory-state", time);
     }
 
     private static class MemoryStore<K, V> implements KeyValueStore<K, V> {
