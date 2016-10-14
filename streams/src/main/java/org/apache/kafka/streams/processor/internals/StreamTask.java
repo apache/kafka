@@ -143,7 +143,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
     public void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records) {
         int queueSize = partitionGroup.addRawRecords(partition, records);
 
-        log.info("{} Added records into the buffered queue of partition {}, new queue size is {}", logPrefix, partition, queueSize);
+        log.trace("{} Added records into the buffered queue of partition {}, new queue size is {}", logPrefix, partition, queueSize);
 
         // if after adding these records, its partition queue's buffered size has been
         // increased beyond the threshold, we can then pause the consumption for this partition

@@ -246,7 +246,7 @@ public class StreamThread extends Thread {
         } catch (Exception e) {
             // we have caught all Kafka related exceptions, and other runtime exceptions
             // should be due to user application errors
-            log.error(logPrefix + " Streams application error during processing: ",  e);
+            log.error("{} Streams application error during processing: ", logPrefix, e);
             throw e;
         } finally {
             shutdown();
@@ -272,17 +272,17 @@ public class StreamThread extends Thread {
         try {
             producer.close();
         } catch (Throwable e) {
-            log.error(logPrefix + " Failed to close producer: ", e);
+            log.error("{} Failed to close producer: ", logPrefix, e);
         }
         try {
             consumer.close();
         } catch (Throwable e) {
-            log.error(logPrefix + " Failed to close consumer: ", e);
+            log.error("{} Failed to close consumer: ", logPrefix, e);
         }
         try {
             restoreConsumer.close();
         } catch (Throwable e) {
-            log.error(logPrefix + " Failed to close restore consumer: ", e);
+            log.error("{} Failed to close restore consumer: ", logPrefix, e);
         }
 
         // remove all tasks
@@ -307,7 +307,7 @@ public class StreamThread extends Thread {
             // un-assign the change log partitions
             restoreConsumer.assign(Collections.<TopicPartition>emptyList());
         } catch (Exception e) {
-            log.error(logPrefix + " Failed to un-assign change log partitions: ", e);
+            log.error("{} Failed to un-assign change log partitions: ", logPrefix, e);
             if (rethrowExceptions) {
                 throw e;
             }
@@ -327,12 +327,12 @@ public class StreamThread extends Thread {
             try {
                 action.apply(task);
             } catch (KafkaException e) {
-                log.error(String.format("%s Failed to %s for %s %s: ",
-                                        StreamThread.this.logPrefix,
-                                        exceptionMessage,
-                                        task.getClass().getSimpleName(),
-                                        task.id()),
-                          e);
+                log.error("{} Failed while executing {} {} duet to {}: ",
+                        StreamThread.this.logPrefix,
+                        task.getClass().getSimpleName(),
+                        task.id(),
+                        exceptionMessage,
+                        e);
                 if (throwExceptions) {
                     throw e;
                 }
@@ -521,7 +521,7 @@ public class StreamThread extends Thread {
                 sensors.punctuateTimeSensor.record(computeLatency());
 
         } catch (KafkaException e) {
-            log.error(String.format("%s Failed to punctuate active task %s: ", logPrefix, task.id()), e);
+            log.error("{} Failed to punctuate active task {}: ", logPrefix, task.id(), e);
             throw e;
         }
     }
@@ -576,10 +576,10 @@ public class StreamThread extends Thread {
             task.commit();
         } catch (CommitFailedException e) {
             // commit failed. Just log it.
-            log.warn(String.format("%s Failed to commit %s %s state: ", logPrefix, task.getClass().getSimpleName(), task.id()), e);
+            log.warn("{} Failed to commit {} {} state: ", logPrefix, task.getClass().getSimpleName(), task.id(), e);
         } catch (KafkaException e) {
             // commit failed due to an unexpected exception. Log it and rethrow the exception.
-            log.error(String.format("%s Failed to commit %s %s state: ", logPrefix, task.getClass().getSimpleName(), task.id()), e);
+            log.error("{} Failed to commit {} {} state: ", logPrefix, task.getClass().getSimpleName(), task.id(), e);
             throw e;
         }
 
@@ -663,7 +663,7 @@ public class StreamThread extends Thread {
                 for (TopicPartition partition : partitions)
                     activeTasksByPartition.put(partition, task);
             } catch (StreamsException e) {
-                log.error(String.format("%s Failed to create an active task %s: ", logPrefix, taskId), e);
+                log.error("{} Failed to create an active task %s: ", logPrefix, taskId, e);
                 throw e;
             }
         }
@@ -732,7 +732,7 @@ public class StreamThread extends Thread {
             activeTasksByPartition.clear();
 
         } catch (Exception e) {
-            log.error(logPrefix + " Failed to remove stream tasks: ", e);
+            log.error("{} Failed to remove stream tasks: ", logPrefix, e);
         }
     }
 
