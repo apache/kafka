@@ -23,8 +23,6 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
-import java.util.ArrayList;
-
 class KTableKTableJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, V2> {
 
     KTableKTableJoin(KTableImpl<K, ?, V1> table1, KTableImpl<K, ?, V2> table2, ValueJoiner<V1, V2, R> joiner) {
@@ -38,26 +36,18 @@ class KTableKTableJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, 
 
     @Override
     public KTableValueGetterSupplier<K, R> view() {
-        return new KTableValueGetterSupplier<K, R>() {
+        return new KTableKTableJoinValueGetterSupplier(valueGetterSupplier1, valueGetterSupplier2);
+    }
 
-            public KTableValueGetter<K, R> get() {
-                return new KTableKTableJoinValueGetter(valueGetterSupplier1.get(), valueGetterSupplier2.get());
-            }
+    private class KTableKTableJoinValueGetterSupplier extends AbstractKTableKTableJoinValueGetterSupplier<K, R, V1, V2> {
 
-            @Override
-            public String[] storeNames() {
-                final String[] storeNames1 = valueGetterSupplier1.storeNames();
-                final String[] storeNames2 = valueGetterSupplier2.storeNames();
-                final ArrayList<String> stores = new ArrayList<>(storeNames1.length + storeNames2.length);
-                for (final String storeName : storeNames1) {
-                    stores.add(storeName);
-                }
-                for (final String storeName : storeNames2) {
-                    stores.add(storeName);
-                }
-                return stores.toArray(new String[stores.size()]);
-            }
-        };
+        public KTableKTableJoinValueGetterSupplier(KTableValueGetterSupplier<K, V1> valueGetterSupplier1, KTableValueGetterSupplier<K, V2> valueGetterSupplier2) {
+            super(valueGetterSupplier1, valueGetterSupplier2);
+        }
+
+        public KTableValueGetter<K, R> get() {
+            return new KTableKTableJoinValueGetter(valueGetterSupplier1.get(), valueGetterSupplier2.get());
+        }
     }
 
     private class KTableKTableJoinProcessor extends AbstractProcessor<K, Change<V1>> {

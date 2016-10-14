@@ -48,6 +48,7 @@ public class ProcessorContextImpl implements InternalProcessorContext, RecordCol
     private RecordContext recordContext;
     private ProcessorNode currentNode;
 
+    @SuppressWarnings("unchecked")
     public ProcessorContextImpl(TaskId id,
                                 StreamTask task,
                                 StreamsConfig config,
@@ -193,6 +194,7 @@ public class ProcessorContextImpl implements InternalProcessorContext, RecordCol
         return recordContext.timestamp();
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(K key, V value) {
         ProcessorNode previousNode = currentNode;
@@ -206,6 +208,7 @@ public class ProcessorContextImpl implements InternalProcessorContext, RecordCol
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(K key, V value, int childIndex) {
         ProcessorNode previousNode = currentNode;
@@ -218,6 +221,7 @@ public class ProcessorContextImpl implements InternalProcessorContext, RecordCol
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(K key, V value, String childName) {
         for (ProcessorNode child : (List<ProcessorNode<K, V>>) currentNode.children()) {

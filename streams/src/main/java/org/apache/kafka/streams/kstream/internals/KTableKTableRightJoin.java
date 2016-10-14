@@ -23,8 +23,6 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
-import java.util.ArrayList;
-
 class KTableKTableRightJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, V2> {
 
 
@@ -39,26 +37,18 @@ class KTableKTableRightJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
 
     @Override
     public KTableValueGetterSupplier<K, R> view() {
-        return new KTableValueGetterSupplier<K, R>() {
+        return new KTableKTableRightJoinValueGetterSupplier(valueGetterSupplier1, valueGetterSupplier2);
+    }
 
-            public KTableValueGetter<K, R> get() {
-                return new KTableKTableRightJoinValueGetter(valueGetterSupplier1.get(), valueGetterSupplier2.get());
-            }
+    private class KTableKTableRightJoinValueGetterSupplier extends AbstractKTableKTableJoinValueGetterSupplier<K, R, V1, V2> {
 
-            @Override
-            public String[] storeNames() {
-                final String[] storeNames1 = valueGetterSupplier1.storeNames();
-                final String[] storeNames2 = valueGetterSupplier2.storeNames();
-                final ArrayList<String> stores = new ArrayList<>(storeNames1.length + storeNames2.length);
-                for (final String storeName : storeNames1) {
-                    stores.add(storeName);
-                }
-                for (final String storeName : storeNames2) {
-                    stores.add(storeName);
-                }
-                return stores.toArray(new String[stores.size()]);
-            }
-        };
+        public KTableKTableRightJoinValueGetterSupplier(KTableValueGetterSupplier<K, V1> valueGetterSupplier1, KTableValueGetterSupplier<K, V2> valueGetterSupplier2) {
+            super(valueGetterSupplier1, valueGetterSupplier2);
+        }
+
+        public KTableValueGetter<K, R> get() {
+            return new KTableKTableRightJoinValueGetter(valueGetterSupplier1.get(), valueGetterSupplier2.get());
+        }
     }
 
     private class KTableKTableRightJoinProcessor extends AbstractProcessor<K, Change<V1>> {

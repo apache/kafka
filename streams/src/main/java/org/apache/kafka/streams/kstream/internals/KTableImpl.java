@@ -22,10 +22,10 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.ForeachAction;
-import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
@@ -279,6 +279,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return toStream().selectKey(mapper);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <V1, R> KTable<K, R> join(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner) {
         Objects.requireNonNull(other, "other can't be null");
@@ -306,6 +307,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return new KTableImpl<>(topology, joinMergeName, joinMerge, allSourceNodes, null);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <V1, R> KTable<K, R> outerJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner) {
         Objects.requireNonNull(other, "other can't be null");
@@ -333,6 +335,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return new KTableImpl<>(topology, joinMergeName, joinMerge, allSourceNodes, null);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <V1, R> KTable<K, R> leftJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner) {
         Objects.requireNonNull(other, "other can't be null");
@@ -381,6 +384,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return this.groupBy(selector, null, null);
     }
 
+    @SuppressWarnings("unchecked")
     KTableValueGetterSupplier<K, V> valueGetterSupplier() {
         if (processorSupplier instanceof KTableSource) {
             KTableSource<K, V> source = (KTableSource<K, V>) processorSupplier;
@@ -395,6 +399,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         }
     }
 
+    @SuppressWarnings("unchecked")
     void enableSendingOldValues() {
         if (!sendOldValues) {
             if (processorSupplier instanceof KTableSource) {
