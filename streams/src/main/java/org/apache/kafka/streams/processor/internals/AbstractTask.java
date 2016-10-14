@@ -69,7 +69,7 @@ public abstract class AbstractTask {
             this.stateMgr = new ProcessorStateManager(applicationId, id, partitions, restoreConsumer, isStandby, stateDirectory, topology.sourceStoreToSourceTopic(), topology.storeToProcessorNodeMap());
 
         } catch (IOException e) {
-            throw new ProcessorStateException("Error while creating the state manager", e);
+            throw new ProcessorStateException(String.format("task [%s] Error while creating the state manager", id), e);
         }
     }
 
@@ -108,7 +108,6 @@ public abstract class AbstractTask {
 
     public abstract void commit();
 
-
     public abstract void close();
 
     public abstract void commitOffsets();
@@ -134,11 +133,11 @@ public abstract class AbstractTask {
                 OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
                 stateMgr.putOffsetLimit(partition, metadata != null ? metadata.offset() : 0L);
             } catch (AuthorizationException e) {
-                throw new ProcessorStateException(String.format("AuthorizationException when initializing offsets for %s", partition), e);
+                throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partition), e);
             } catch (WakeupException e) {
                 throw e;
             } catch (KafkaException e) {
-                throw new ProcessorStateException(String.format("Failed to initialize offsets for %s", partition), e);
+                throw new ProcessorStateException(String.format("task [%s] Failed to initialize offsets for %s", id, partition), e);
             }
         }
     }

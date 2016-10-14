@@ -52,6 +52,7 @@ public class ProcessorStateManager {
     public static final String STATE_CHANGELOG_TOPIC_SUFFIX = "-changelog";
     public static final String CHECKPOINT_FILE_NAME = ".checkpoint";
 
+    private final String logPrefix;
     private final String applicationId;
     private final int defaultPartition;
     private final Map<String, TopicPartition> partitionForTopic;
@@ -94,8 +95,10 @@ public class ProcessorStateManager {
         this.baseDir  = stateDirectory.directoryForTask(taskId);
         this.sourceStoreToSourceTopic = sourceStoreToSourceTopic;
 
+        this.logPrefix = String.format("task [%s]", taskId);
+
         if (!stateDirectory.lock(taskId, 5)) {
-            throw new IOException(String.format("task [%s] Failed to lock the state directory: %s", taskId, baseDir.getCanonicalPath()));
+            throw new IOException(String.format("%s Failed to lock the state directory: %s", logPrefix, baseDir.getCanonicalPath()));
         }
 
         // load the checkpoint information
@@ -121,13 +124,14 @@ public class ProcessorStateManager {
      * @throws StreamsException if the store's change log does not contain the partition
      */
     public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback stateRestoreCallback) {
+        log.debug("{} Registering state store {} to its state manager", logPrefix, store.name());
 
         if (store.name().equals(CHECKPOINT_FILE_NAME)) {
-            throw new IllegalArgumentException(String.format("task [%s] Illegal store name: %s", taskId, CHECKPOINT_FILE_NAME));
+            throw new IllegalArgumentException(String.format("%s Illegal store name: %s", logPrefix, CHECKPOINT_FILE_NAME));
         }
 
         if (this.stores.containsKey(store.name())) {
-            throw new IllegalArgumentException(String.format("task [%s] Store %s has already been registered.", taskId, store.name()));
+            throw new IllegalArgumentException(String.format("%s Store %s has already been registered.", logPrefix, store.name()));
         }
 
         if (loggingEnabled) {
@@ -160,16 +164,16 @@ public class ProcessorStateManager {
                 // ignore
             }
 
-            List<PartitionInfo> partitionInfos = null;
+            List<PartitionInfo> partitions;
             try {
-                partitionInfos = restoreConsumer.partitionsFor(topic);
+                partitions = restoreConsumer.partitionsFor(topic);
             } catch (TimeoutException e) {
-                throw new StreamsException(String.format("task [%s] Could not find partition info for topic: %s", taskId, topic));
+                throw new StreamsException(String.format("%s Could not find partition info for topic: %s", logPrefix, topic));
             }
-            if (partitionInfos == null) {
-                throw new StreamsException(String.format("task [%s] Could not find partition info for topic: %s", taskId, topic));
+            if (partitions == null) {
+                throw new StreamsException(String.format("%s Could not find partition info for topic: %s", logPrefix, topic));
             }
-            for (PartitionInfo partitionInfo : partitionInfos) {
+            for (PartitionInfo partitionInfo : partitions) {
                 if (partitionInfo.partition() == partition) {
                     partitionNotFound = false;
                     break;
@@ -178,14 +182,19 @@ public class ProcessorStateManager {
         } while (partitionNotFound && System.currentTimeMillis() < startTime + waitTime);
 
         if (partitionNotFound) {
-            throw new StreamsException(String.format("task [%s] Store %s's change log (%s) does not contain partition %s", taskId, store.name(), topic, partition));
+            throw new StreamsException(String.format("%s Store %s's change log (%s) does not contain partition %s",
+                    logPrefix, store.name(), topic, partition));
         }
 
         if (isStandby) {
             if (store.persistent()) {
+                log.trace("{} Preparing standby replica of persistent state store {} with changelog topic {}", logPrefix, store.name(), topic);
+
                 restoreCallbacks.put(topic, stateRestoreCallback);
             }
         } else {
+            log.trace("{} Restoring state store {} from changelog topic {}", logPrefix, store.name(), topic);
+
             restoreActiveState(topic, stateRestoreCallback);
         }
 
@@ -197,7 +206,7 @@ public class ProcessorStateManager {
 
         // subscribe to the store's partition
         if (!restoreConsumer.subscription().isEmpty()) {
-            throw new IllegalStateException(String.format("task [%s] Restore consumer should have not subscribed to any partitions beforehand", taskId));
+            throw new IllegalStateException(String.format("%s Restore consumer should have not subscribed to any partitions beforehand", logPrefix));
         }
         TopicPartition storePartition = new TopicPartition(topicName, getPartition(topicName));
         restoreConsumer.assign(Collections.singletonList(storePartition));
@@ -233,7 +242,7 @@ public class ProcessorStateManager {
                 } else if (restoreConsumer.position(storePartition) > endOffset) {
                     // For a logging enabled changelog (no offset limit),
                     // the log end offset should not change while restoring since it is only written by this thread.
-                    throw new IllegalStateException(String.format("task [%s] Log end offset should not change while restoring", taskId));
+                    throw new IllegalStateException(String.format("%s Log end offset should not change while restoring", logPrefix));
                 }
             }
 
@@ -278,7 +287,7 @@ public class ProcessorStateManager {
                 try {
                     restoreCallback.restore(record.key(), record.value());
                 } catch (Exception e) {
-                    throw new ProcessorStateException(String.format("task [%s] exception caught while trying to restore state from %s", taskId, storePartition), e);
+                    throw new ProcessorStateException(String.format("%s exception caught while trying to restore state from %s", logPrefix, storePartition), e);
                 }
                 lastOffset = record.offset();
             } else {
@@ -310,7 +319,7 @@ public class ProcessorStateManager {
 
     public void flush(final InternalProcessorContext context) {
         if (!this.stores.isEmpty()) {
-            log.debug("task [{}] Flushing stores.", taskId);
+            log.debug("{} Flushing all stores registered in the state manager", logPrefix);
             for (StateStore store : this.stores.values()) {
                 final ProcessorNode processorNode = stateStoreProcessorNodeMap.get(store);
                 if (processorNode != null) {
@@ -319,7 +328,7 @@ public class ProcessorStateManager {
                 try {
                     store.flush();
                 } catch (Exception e) {
-                    throw new ProcessorStateException(String.format("task [%s] Failed to flush state store %s", taskId, store.name()), e);
+                    throw new ProcessorStateException(String.format("%s Failed to flush state store %s", logPrefix, store.name()), e);
                 }
             }
         }
@@ -333,13 +342,13 @@ public class ProcessorStateManager {
             // attempting to close the stores, just in case they
             // are not closed by a ProcessorNode yet
             if (!stores.isEmpty()) {
-                log.debug("task [{}] Closing stores.", taskId);
+                log.debug("{} Closing its state manager and all the registered state stores", logPrefix);
                 for (Map.Entry<String, StateStore> entry : stores.entrySet()) {
-                    log.debug("task [{}} Closing storage engine {}", taskId, entry.getKey());
+                    log.debug("{} Closing storage engine {}", logPrefix, entry.getKey());
                     try {
                         entry.getValue().close();
                     } catch (Exception e) {
-                        throw new ProcessorStateException(String.format("task [%s] Failed to close state store %s", taskId, entry.getKey()), e);
+                        throw new ProcessorStateException(String.format("%s Failed to close state store %s", logPrefix, entry.getKey()), e);
                     }
                 }
 
