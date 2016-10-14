@@ -17,6 +17,7 @@
 
 package kafka.message
 
+import java.io.DataOutputStream
 import java.nio._
 
 import kafka.common.LongRef
@@ -364,6 +365,19 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
     checkOffsets(compressedMessagesWithOffset, offset)
   }
 
+  @Test(expected = classOf[InvalidMessageException])
+  def testInvalidInnerMagicVersion(): Unit = {
+    val offset = 1234567
+    val messages = messageSetWithInvalidInnerMagic(SnappyCompressionCodec, offset)
+    messages.validateMessagesAndAssignOffsets(offsetCounter = new LongRef(offset),
+      now = System.currentTimeMillis(),
+      sourceCodec = SnappyCompressionCodec,
+      targetCodec = SnappyCompressionCodec,
+      messageTimestampType = TimestampType.CREATE_TIME,
+      messageTimestampDiffMaxMs = 5000L).validatedMessages
+  }
+
+
   @Test
   def testOffsetAssignmentAfterMessageFormatConversion() {
     // Check up conversion
@@ -460,4 +474,42 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
         new Message("beautiful".getBytes, timestamp = timestamp, magicValue = Message.MagicValue_V1))
     }
   }
+
+  private def messageSetWithInvalidInnerMagic(codec: CompressionCodec,
+                                              initialOffset: Long): ByteBufferMessageSet = {
+    val messages = (0 until 20).map(id =>
+      new Message(key = id.toString.getBytes,
+        bytes = id.toString.getBytes,
+        timestamp = Message.NoTimestamp,
+        magicValue = Message.MagicValue_V0))
+
+    val messageWriter = new MessageWriter(math.min(math.max(MessageSet.messageSetSize(messages) / 2, 1024), 1 << 16))
+    var lastOffset = initialOffset
+
+    messageWriter.write(
+      codec = codec,
+      timestamp = System.currentTimeMillis(),
+      timestampType = TimestampType.CREATE_TIME,
+      magicValue = Message.MagicValue_V1) { outputStream =>
+
+      val output = new DataOutputStream(CompressionFactory(codec, Message.MagicValue_V1, outputStream))
+      try {
+        for (message <- messages) {
+          val innerOffset = lastOffset - initialOffset
+          output.writeLong(innerOffset)
+          output.writeInt(message.size)
+          output.write(message.buffer.array, message.buffer.arrayOffset, message.buffer.limit)
+          lastOffset += 1
+        }
+      } finally {
+        output.close()
+      }
+    }
+    val buffer = ByteBuffer.allocate(messageWriter.size + MessageSet.LogOverhead)
+    ByteBufferMessageSet.writeMessage(buffer, messageWriter, lastOffset - 1)
+    buffer.rewind()
+
+    new ByteBufferMessageSet(buffer)
+  }
+
 }
