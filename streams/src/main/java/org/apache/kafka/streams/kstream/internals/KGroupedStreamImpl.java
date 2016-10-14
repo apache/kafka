@@ -157,7 +157,7 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
 
     @Override
     public KTable<K, Long> count(final String storeName) {
-        return count( keyValueStore(keySerde, Serdes.Long(), storeName));
+        return count(keyValueStore(keySerde, Serdes.Long(), storeName));
     }
 
     @Override
