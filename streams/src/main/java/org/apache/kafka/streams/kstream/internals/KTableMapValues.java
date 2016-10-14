@@ -50,6 +50,10 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
                 return new KTableMapValuesValueGetter(parentValueGetterSupplier.get());
             }
 
+            @Override
+            public String[] storeNames() {
+                return parentValueGetterSupplier.storeNames();
+            }
         };
     }
 

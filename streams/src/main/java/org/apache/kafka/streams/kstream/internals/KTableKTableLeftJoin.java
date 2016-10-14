@@ -23,6 +23,8 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
+import java.util.ArrayList;
+
 class KTableKTableLeftJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, V2> {
 
     KTableKTableLeftJoin(KTableImpl<K, ?, V1> table1, KTableImpl<K, ?, V2> table2, ValueJoiner<V1, V2, R> joiner) {
@@ -42,6 +44,19 @@ class KTableKTableLeftJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, 
                 return new KTableKTableLeftJoinValueGetter(valueGetterSupplier1.get(), valueGetterSupplier2.get());
             }
 
+            @Override
+            public String[] storeNames() {
+                final String[] storeNames1 = valueGetterSupplier1.storeNames();
+                final String[] storeNames2 = valueGetterSupplier2.storeNames();
+                final ArrayList<String> stores = new ArrayList<>(storeNames1.length + storeNames2.length);
+                for (final String storeName : storeNames1) {
+                    stores.add(storeName);
+                }
+                for (final String storeName : storeNames2) {
+                    stores.add(storeName);
+                }
+                return stores.toArray(new String[stores.size()]);
+            }
         };
     }
 
