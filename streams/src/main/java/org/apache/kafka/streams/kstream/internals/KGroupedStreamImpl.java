@@ -40,17 +40,20 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
     private final Serde<K> keySerde;
     private final Serde<V> valSerde;
     private final boolean repartitionRequired;
+    private final boolean forwardImmediately;
 
     public KGroupedStreamImpl(final KStreamBuilder topology,
                               final String name,
                               final Set<String> sourceNodes,
                               final Serde<K> keySerde,
                               final Serde<V> valSerde,
-                              final boolean repartitionRequired) {
+                              final boolean repartitionRequired,
+                              final boolean forwardImmediately) {
         super(topology, name, sourceNodes);
         this.keySerde = keySerde;
         this.valSerde = valSerde;
         this.repartitionRequired = repartitionRequired;
+        this.forwardImmediately = forwardImmediately;
     }
 
     @Override
@@ -177,12 +180,19 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
         topology.addProcessor(aggFunctionName, aggregateSupplier, sourceName);
         topology.addStateStore(storeSupplier, aggFunctionName);
 
-        return new KTableImpl<>(topology,
+        KTableImpl<K, V, T> ktable =
+                new KTableImpl<>(topology,
                                 aggFunctionName,
                                 aggregateSupplier,
                                 sourceName.equals(this.name) ? sourceNodes
                                                              : Collections.singleton(sourceName),
                                 storeSupplier.name());
+
+        if (forwardImmediately) {
+            ktable.enableForwardImmediately();
+        }
+
+        return ktable;
     }
 
     /**

@@ -46,6 +46,11 @@ class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
         parent2.enableSendingOldValues();
     }
 
+    @Override
+    public void enableForwardImmediately() {
+        // joins always forward records immediately
+    }
+
     private class KTableKTableJoinMergeProcessor<K, V> extends AbstractProcessor<K, Change<V>> {
         @Override
         public void process(K key, Change<V> value) {

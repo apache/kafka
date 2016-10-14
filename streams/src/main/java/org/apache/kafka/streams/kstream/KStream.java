@@ -596,6 +596,41 @@ public interface KStream<K, V> {
                                             Serde<V> valSerde);
 
     /**
+     * Group the records of this {@link KStream} using the provided {@link KeyValueMapper} and
+     * default serializers and deserializers. If a record key is null it will not included in
+     * the resulting {@link KGroupedStream}
+     *
+     * @param selector             select the grouping key and value to be aggregated
+     * @param forwardImmediately   <code>true</code> if records should be forwarded immediately during downstream
+     *                             aggregation instead of waiting for state store flush
+     * @param <K1>                 the key type of the {@link KGroupedStream}
+     *
+     * @return a {@link KGroupedStream} that contains the grouped records of the original {@link KStream}
+     */
+    <K1> KGroupedStream<K1, V> groupBy(KeyValueMapper<K, V, K1> selector,
+                                       boolean forwardImmediately);
+
+    /**
+     * Group the records of this {@link KStream} using the provided {@link KeyValueMapper}.
+     * If a record key is null it will not included in the resulting {@link KGroupedStream}
+     *
+     * @param selector             select the grouping key and value to be aggregated
+     * @param keySerde             key serdes for materializing this stream,
+     *                             if not specified the default serdes defined in the configs will be used
+     * @param valSerde             value serdes for materializing this stream,
+     *                             if not specified the default serdes defined in the configs will be used
+     * @param forwardImmediately   <code>true</code> if records should be forwarded immediately during downstream
+     *                             aggregation instead of waiting for state store flush
+     * @param <K1>          the key type of the {@link KGroupedStream}
+     *
+     * @return a {@link KGroupedStream} that contains the grouped records of the original {@link KStream}
+     */
+    <K1> KGroupedStream<K1, V> groupBy(KeyValueMapper<K, V, K1> selector,
+                                       Serde<K1> keySerde,
+                                       Serde<V> valSerde,
+                                       boolean forwardImmediately);
+
+    /**
      * Group the records with the same key into a {@link KGroupedStream} while preserving the
      * original values. If a record key is null it will not included in the resulting
      * {@link KGroupedStream}
@@ -617,4 +652,30 @@ public interface KStream<K, V> {
     KGroupedStream<K, V> groupByKey(Serde<K> keySerde,
                                     Serde<V> valSerde);
 
+    /**
+     * Group the records with the same key into a {@link KGroupedStream} while preserving the
+     * original values. If a record key is null it will not included in the resulting
+     * @param forwardImmediately   <code>true</code> if records should be forwarded immediately during downstream
+     *                             aggregation instead of waiting for state store flush
+     * {@link KGroupedStream}
+     * Default Serdes will be used
+     * @return a {@link KGroupedStream}
+     */
+    KGroupedStream<K, V> groupByKey(boolean forwardImmediately);
+
+    /**
+     * Group the records with the same key into a {@link KGroupedStream} while preserving the
+     * original values. If a record key is null it will not included in the resulting
+     * {@link KGroupedStream}
+     * @param keySerde             key serdes for materializing this stream,
+     *                             if not specified the default serdes defined in the configs will be used
+     * @param valSerde             value serdes for materializing this stream,
+     *                             if not specified the default serdes defined in the configs will be used
+     * @param forwardImmediately   <code>true</code> if records should be forwarded immediately during downstream
+     *                             aggregation instead of waiting for state store flush
+     * @return a {@link KGroupedStream}
+     */
+    KGroupedStream<K, V> groupByKey(Serde<K> keySerde,
+                                    Serde<V> valSerde,
+                                    boolean forwardImmediately);
 }

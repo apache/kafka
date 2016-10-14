@@ -378,6 +378,37 @@ public interface KTable<K, V> {
     <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<K, V, KeyValue<K1, V1>> selector);
 
     /**
+     * Group the records of this {@link KTable} using the provided {@link KeyValueMapper} and default serializers and deserializers.
+     *
+     * @param selector             select the grouping key and value to be aggregated
+     * @param forwardImmediately   <code>true</code> if records should be forwarded immediately during downstream
+     *                             aggregation instead of waiting for state store flush
+     * @param <K1>                 the key type of the {@link KGroupedTable}
+     * @param <V1>                 the value type of the {@link KGroupedTable}
+     *
+     * @return a {@link KGroupedTable} that contains the re-partitioned records of this {@link KTable}
+     */
+    <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<K, V, KeyValue<K1, V1>> selector, boolean forwardImmediately);
+
+    /**
+     * Group the records of this {@link KTable} using the provided {@link KeyValueMapper}.
+     *
+     * @param selector             select the grouping key and value to be aggregated
+     * @param keySerde             key serdes for materializing this stream,
+     *                             if not specified the default serdes defined in the configs will be used
+     * @param valueSerde           value serdes for materializing this stream,
+     *                             if not specified the default serdes defined in the configs will be used
+     * @param forwardImmediately   <code>true</code> if records should be forwarded immediately during downstream
+     *                             aggregation instead of waiting for state store flush
+     *
+     * @param <K1>          the key type of the {@link KGroupedTable}
+     * @param <V1>          the value type of the {@link KGroupedTable}
+     *
+     * @return a {@link KGroupedTable} that contains the re-partitioned records of this {@link KTable}
+     */
+    <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<K, V, KeyValue<K1, V1>> selector, Serde<K1> keySerde, Serde<V1> valueSerde, boolean forwardImmediately);
+
+    /**
      * Perform an action on each element of {@link KTable}.
      * Note that this is a terminal operation that returns void.
      *

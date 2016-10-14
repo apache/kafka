@@ -30,6 +30,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
     private final Reducer<V> reducer;
 
     private boolean sendOldValues = false;
+    private boolean forwardImmediately = false;
 
     public KStreamReduce(String storeName, Reducer<V> reducer) {
         this.storeName = storeName;
@@ -46,8 +47,14 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
         sendOldValues = true;
     }
 
+    @Override
+    public void enableForwardImmediately() {
+        forwardImmediately = true;
+    }
+
     private class KStreamReduceProcessor extends AbstractProcessor<K, V> {
 
+        private ProcessorContext context;
         private KeyValueStore<K, V> store;
 
         @SuppressWarnings("unchecked")
@@ -55,8 +62,12 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
         public void init(ProcessorContext context) {
             super.init(context);
 
+            this.context = context;
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
-            ((CachedStateStore) store).setFlushListener(new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
+
+            if (!forwardImmediately) {
+                ((CachedStateStore) store).setFlushListener(new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
+            }
         }
 
 
@@ -81,6 +92,13 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
             // update the store with the new value
             store.put(key, newAgg);
 
+            if (forwardImmediately) {
+                if (sendOldValues) {
+                    context.forward(key, new Change<>(newAgg, oldAgg));
+                } else {
+                    context.forward(key, new Change<>(newAgg, null));
+                }
+            }
         }
     }
 

@@ -320,4 +320,39 @@ public class KTableAggregateTest {
                  "1:2"
                  ), proc.processed);
     }
+
+    @Test
+    public void testAggForwardImmediate() throws Exception {
+        final KStreamBuilder builder = new KStreamBuilder();
+        final String topic1 = "topic1";
+        final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
+
+        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
+        KTable<String, String> table2 = table1.groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper(),
+                stringSerde,
+                stringSerde,
+                true
+        )
+            .aggregate(MockInitializer.STRING_INIT,
+                MockAggregator.STRING_ADDER,
+                MockAggregator.STRING_REMOVER,
+                stringSerde,
+                "topic1-Canonized");
+
+        table2.toStream().process(proc);
+
+        driver = new KStreamTestDriver(builder, stateDir);
+
+        driver.process(topic1, "A", "1");
+        driver.process(topic1, "A", "2");
+        driver.process(topic1, "A", "3");
+
+        assertEquals(Utils.mkList(
+            "A:0+1",
+            "A:0+1-1",
+            "A:0+1-1+2",
+            "A:0+1-1+2-2",
+            "A:0+1-1+2-2+3"
+        ), proc.processed);
+    }
 }

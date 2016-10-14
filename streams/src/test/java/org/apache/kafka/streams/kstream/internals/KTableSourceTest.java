@@ -82,6 +82,27 @@ public class KTableSourceTest {
     }
 
     @Test
+    public void testKTableForwardImmediately() {
+        final KStreamBuilder builder = new KStreamBuilder();
+
+        String topic1 = "topic1";
+
+        KTableImpl<String, String, Integer> table1 = (KTableImpl<String, String, Integer>) builder.table(stringSerde, intSerde, topic1, "anyStoreName");
+        table1.enableForwardImmediately();
+
+        MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
+        table1.toStream().process(proc1);
+
+        driver = new KStreamTestDriver(builder, stateDir);
+        driver.process(topic1, "A", 1);
+        driver.process(topic1, "B", 2);
+        driver.process(topic1, "C", 3);
+        driver.process(topic1, "D", 4);
+
+        assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4"), proc1.processed);
+    }
+
+    @Test
     public void testValueGetter() throws IOException {
         final KStreamBuilder builder = new KStreamBuilder();
 

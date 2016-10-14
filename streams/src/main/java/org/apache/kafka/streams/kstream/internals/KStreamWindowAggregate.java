@@ -40,6 +40,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
     private final Aggregator<K, V, T> aggregator;
 
     private boolean sendOldValues = false;
+    private boolean forwardImmediately = false;
 
     public KStreamWindowAggregate(Windows<W> windows, String storeName, Initializer<T> initializer, Aggregator<K, V, T> aggregator) {
         this.windows = windows;
@@ -58,8 +59,14 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
         sendOldValues = true;
     }
 
+    @Override
+    public void enableForwardImmediately() {
+        forwardImmediately = true;
+    }
+
     private class KStreamWindowAggregateProcessor extends AbstractProcessor<K, V> {
 
+        private ProcessorContext context;
         private WindowStore<K, T> windowStore;
 
         @SuppressWarnings("unchecked")
@@ -67,8 +74,12 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
         public void init(ProcessorContext context) {
             super.init(context);
 
+            this.context = context;
             windowStore = (WindowStore<K, T>) context.getStateStore(storeName);
-            ((CachedStateStore) windowStore).setFlushListener(new ForwardingCacheFlushListener<Windowed<K>, V>(context, sendOldValues));
+
+            if (!forwardImmediately) {
+                ((CachedStateStore) windowStore).setFlushListener(new ForwardingCacheFlushListener<Windowed<K>, V>(context, sendOldValues));
+            }
         }
 
         @Override
@@ -111,6 +122,16 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
                         // update the store with the new value
                         windowStore.put(key, newAgg, window.start());
 
+                        if (forwardImmediately) {
+                            Windowed<K> windowedKey = new Windowed<K>(key, window);
+
+                            if (sendOldValues) {
+                                context.forward(windowedKey, new Change<>(newAgg, oldAgg));
+                            } else {
+                                context.forward(windowedKey, new Change<>(newAgg, null));
+                            }
+                        }
+
                         matchedWindows.remove(entry.key);
                     }
                 }
@@ -121,6 +142,12 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
                 T oldAgg = initializer.apply();
                 T newAgg = aggregator.apply(key, value, oldAgg);
                 windowStore.put(key, newAgg, windowStartMs);
+
+                if (forwardImmediately) {
+                    W window = matchedWindows.get(windowStartMs);
+                    Windowed<K> windowedKey = new Windowed<K>(key, window);
+                    context.forward(windowedKey, new Change<>(newAgg, null));
+                }
             }
         }
     }

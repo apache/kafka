@@ -38,6 +38,7 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
     private final Reducer<V> reducer;
 
     private boolean sendOldValues = false;
+    private boolean forwardImmediately = false;
 
     public KStreamWindowReduce(Windows<W> windows, String storeName, Reducer<V> reducer) {
         this.windows = windows;
@@ -55,16 +56,27 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
         sendOldValues = true;
     }
 
+    @Override
+    public void enableForwardImmediately() {
+        forwardImmediately = true;
+    }
+
     private class KStreamWindowReduceProcessor extends AbstractProcessor<K, V> {
 
+        private ProcessorContext context;
         private WindowStore<K, V> windowStore;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
+
+            this.context = context;
             windowStore = (WindowStore<K, V>) context.getStateStore(storeName);
-            ((CachedStateStore) windowStore).setFlushListener(new ForwardingCacheFlushListener<Windowed<K>, V>(context, sendOldValues));
+
+            if (!forwardImmediately) {
+                ((CachedStateStore) windowStore).setFlushListener(new ForwardingCacheFlushListener<Windowed<K>, V>(context, sendOldValues));
+            }
         }
 
         @Override
@@ -109,6 +121,16 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
                         // update the store with the new value
                         windowStore.put(key, newAgg, window.start());
 
+                        if (forwardImmediately) {
+                            Windowed<K> windowedKey = new Windowed<K>(key, window);
+
+                            if (sendOldValues) {
+                                context.forward(windowedKey, new Change<>(newAgg, oldAgg));
+                            } else {
+                                context.forward(windowedKey, new Change<>(newAgg, null));
+                            }
+                        }
+
                         matchedWindows.remove(entry.key);
                     }
                 }
@@ -117,6 +139,12 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
             // create the new window for the rest of unmatched window that do not exist yet
             for (long windowStartMs : matchedWindows.keySet()) {
                 windowStore.put(key, value, windowStartMs);
+
+                if (forwardImmediately) {
+                    W window = matchedWindows.get(windowStartMs);
+                    Windowed<K> windowedKey = new Windowed<K>(key, window);
+                    context.forward(windowedKey, new Change<>(value, null));
+                }
             }
         }
     }

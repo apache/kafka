@@ -24,5 +24,7 @@ public interface KStreamAggProcessorSupplier<K, RK, V, T> extends ProcessorSuppl
     KTableValueGetterSupplier<RK, T> view();
 
     void enableSendingOldValues();
+
+    void enableForwardImmediately();
 }
 
