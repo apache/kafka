@@ -134,13 +134,15 @@ final class InFlightRequests {
      */
     public List<String> getNodesWithTimedOutRequests(long now, int requestTimeout) {
         List<String> nodeIds = new LinkedList<>();
-        for (String nodeId : requests.keySet()) {
-            if (inFlightRequestCount(nodeId) > 0) {
-                ClientRequest request = requests.get(nodeId).peekLast();
+        for (Map.Entry<String, Deque<ClientRequest>> requestEntry : requests.entrySet()) {
+            String nodeId = requestEntry.getKey();
+            Deque<ClientRequest> deque = requestEntry.getValue();
+
+            if (!deque.isEmpty()) {
+                ClientRequest request = deque.peekLast();
                 long timeSinceSend = now - request.sendTimeMs();
-                if (timeSinceSend > requestTimeout) {
+                if (timeSinceSend > requestTimeout)
                     nodeIds.add(nodeId);
-                }
             }
         }
 
