@@ -17,6 +17,7 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
@@ -41,7 +42,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.LogEntry;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.FetchRequest;
@@ -91,7 +91,6 @@ public class Fetcher<K, V> {
     private final FetchManagerMetrics sensors;
     private final SubscriptionState subscriptions;
     private final ConcurrentLinkedQueue<CompletedFetch> completedFetches;
-    private final AtomicInteger numInFlightFetches = new AtomicInteger(0);
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
 
@@ -137,15 +136,6 @@ public class Fetcher<K, V> {
         return !completedFetches.isEmpty();
     }
 
-    /**
-     * Check whether there are in-flight fetches. This is used to avoid unnecessary blocking in
-     * {@link ConsumerNetworkClient#poll(long)} if there are no fetches to wait for. This method is thread-safe.
-     * @return true if there are, false otherwise
-     */
-    public boolean hasInFlightFetches() {
-        return numInFlightFetches.get() > 0;
-    }
-
     private boolean matchesRequestedPartitions(FetchRequest request, FetchResponse response) {
         Set<TopicPartition> requestedPartitions = request.fetchData().keySet();
         Set<TopicPartition> fetchedPartitions = response.responseData().keySet();
@@ -161,13 +151,10 @@ public class Fetcher<K, V> {
             final FetchRequest request = fetchEntry.getValue();
             final Node fetchTarget = fetchEntry.getKey();
 
-            numInFlightFetches.incrementAndGet();
             client.send(fetchTarget, ApiKeys.FETCH, request)
                     .addListener(new RequestFutureListener<ClientResponse>() {
                         @Override
                         public void onSuccess(ClientResponse resp) {
-                            numInFlightFetches.decrementAndGet();
-
                             FetchResponse response = new FetchResponse(resp.responseBody());
                             if (!matchesRequestedPartitions(request, response)) {
                                 // obviously we expect the broker to always send us valid responses, so this check
@@ -194,7 +181,6 @@ public class Fetcher<K, V> {
 
                         @Override
                         public void onFailure(RuntimeException e) {
-                            numInFlightFetches.decrementAndGet();
                             log.debug("Fetch request to {} failed", fetchTarget, e);
                         }
                     });
