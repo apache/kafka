@@ -667,9 +667,9 @@ class CleanerTest extends JUnitSuite {
     val corruptedMessage = invalidCleanedMessage(offset, set)
     val records = MemoryRecords.readableRecords(corruptedMessage.buffer)
 
-    for (logEntry <- records.iterator().asScala) {
-      val offset = logEntry.offset()
-      val value = TestUtils.readString(logEntry.record().value()).toLong
+    for (logEntry <- records.iterator.asScala) {
+      val offset = logEntry.offset
+      val value = TestUtils.readString(logEntry.record.value).toLong
       assertEquals(offset, value)
     }
   }
