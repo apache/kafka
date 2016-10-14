@@ -186,4 +186,9 @@ public class NamedCacheTest {
         assertEquals(Bytes.wrap(new byte[]{2}), iterator.next());
         assertFalse(iterator.hasNext());
     }
+
+    @Test
+    public void shouldNotThrowNullPointerWhenCacheIsEmptyAndEvictionCalled() throws Exception {
+        cache.evict();
+    }
 }

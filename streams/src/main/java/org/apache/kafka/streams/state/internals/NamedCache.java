@@ -190,6 +190,9 @@ class NamedCache {
     }
 
     synchronized void evict() {
+        if (tail == null) {
+            return;
+        }
         final LRUNode eldest = tail;
         currentSizeBytes -= eldest.size();
         if (eldest.entry.isDirty()) {
