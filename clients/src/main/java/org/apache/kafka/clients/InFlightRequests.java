@@ -26,7 +26,7 @@ import java.util.Map;
 final class InFlightRequests {
 
     private final int maxInFlightRequestsPerConnection;
-    private final Map<String, Deque<ClientRequest>> requests = new HashMap<String, Deque<ClientRequest>>();
+    private final Map<String, Deque<ClientRequest>> requests = new HashMap<>();
 
     public InFlightRequests(int maxInFlightRequestsPerConnection) {
         this.maxInFlightRequestsPerConnection = maxInFlightRequestsPerConnection;
@@ -133,7 +133,7 @@ final class InFlightRequests {
      * @return list of nodes
      */
     public List<String> getNodesWithTimedOutRequests(long now, int requestTimeout) {
-        List<String> nodeIds = new LinkedList<String>();
+        List<String> nodeIds = new LinkedList<>();
         for (String nodeId : requests.keySet()) {
             if (inFlightRequestCount(nodeId) > 0) {
                 ClientRequest request = requests.get(nodeId).peekLast();
