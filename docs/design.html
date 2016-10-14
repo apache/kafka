@@ -464,7 +464,7 @@ situations where the upstream data source would not otherwise be replayable.
 
 Here is a high-level picture that shows the logical structure of a Kafka log with the offset for each message.
 <p>
-<img src="images/log_cleaner_anatomy.png">
+<img class="centered" src="images/log_cleaner_anatomy.png">
 <p>
 The head of the log is identical to a traditional Kafka log. It has dense, sequential offsets and retains all messages. Log compaction adds an option for handling the tail of the log. The picture above shows a log
 with a compacted tail. Note that the messages in the tail of the log retain the original offset assigned when they were first written&mdash;that never changes. Note also that all offsets remain valid positions in
@@ -478,7 +478,7 @@ marked as the "delete retention point" in the above diagram.
 The compaction is done in the background by periodically recopying log segments. Cleaning does not block reads and can be throttled to use no more than a configurable amount of I/O throughput to avoid impacting
 producers and consumers. The actual process of compacting a log segment looks something like this:
 <p>
-<img src="images/log_compaction.png">
+<img class="centered" src="images/log_compaction.png">
 <p>
 <h4><a id="design_compactionguarantees" href="#design_compactionguarantees">What guarantees does log compaction provide?</a></h4>
 
