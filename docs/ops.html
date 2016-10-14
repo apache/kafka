@@ -129,7 +129,10 @@ Here is an example showing how to mirror a single topic (named <i>my-topic</i>) 
 </pre>
 Note that we specify the list of topics with the <code>--whitelist</code> option. This option allows any regular expression using <a href="http://docs.oracle.com/javase/7/docs/api/java/util/regex/Pattern.html">Java-style regular expressions</a>. So you could mirror two topics named <i>A</i> and <i>B</i> using <code>--whitelist 'A|B'</code>. Or you could mirror <i>all</i> topics using <code>--whitelist '*'</code>. Make sure to quote any regular expression to ensure the shell doesn't try to expand it as a file path. For convenience we allow the use of ',' instead of '|' to specify a list of topics.
 <p>
-Sometimes it is easier to say what it is that you <i>don't</i> want. Instead of using <code>--whitelist</code> to say what you want to mirror you can use <code>--blacklist</code> to say what to exclude. This also takes a regular expression argument. However, <code>--blacklist</code> is not supported when using <code>--new.consumer</code>.
+Sometimes it is easier to say what it is that you <i>don't</i> want. Instead of using <code>--whitelist</code> to say what you want
+to mirror you can use <code>--blacklist</code> to say what to exclude. This also takes a regular expression argument.
+However, <code>--blacklist</code> is not supported when the new consumer has been enabled (i.e. when <code>bootstrap.servers</code>
+has been defined in the consumer configuration).
 <p>
 Combining mirroring with the configuration <code>auto.create.topics.enable=true</code> makes it possible to have a replica cluster that will automatically create and replicate all data in a source cluster even as new topics are added.
 
@@ -495,7 +498,7 @@ producer.purgatory.purge.interval.requests=100
 
 Our client configuration varies a fair amount between different use cases.
 
-<h3><a id="java" href="#java">Java Version</a></h3>
+<h3><a id="java" href="#java">6.4 Java Version</a></h3>
 
 From a security perspective, we recommend you use the latest released version of JDK 1.8 as older freely available versions have disclosed security vulnerabilities.
 
@@ -518,7 +521,7 @@ For reference, here are the stats on one of LinkedIn's busiest clusters (at peak
 
 The tuning looks fairly aggressive, but all of the brokers in that cluster have a 90% GC pause time of about 21ms, and they're doing less than 1 young GC per second.
 
-<h3><a id="hwandos" href="#hwandos">6.4 Hardware and OS</a></h3>
+<h3><a id="hwandos" href="#hwandos">6.5 Hardware and OS</a></h3>
 We are using dual quad-core Intel Xeon machines with 24GB of memory.
 <p>
 You need sufficient memory to buffer active readers and writers. You can do a back-of-the-envelope estimate of memory needs by assuming you want to be able to buffer for 30 seconds and compute your memory need as write_throughput*30.
@@ -555,7 +558,7 @@ Note that durability in Kafka does not require syncing data to disk, as a failed
 <p>
 We recommend using the default flush settings which disable application fsync entirely. This means relying on the background flush done by the OS and Kafka's own background flush. This provides the best of all worlds for most uses: no knobs to tune, great throughput and latency, and full recovery guarantees. We generally feel that the guarantees provided by replication are stronger than sync to local disk, however the paranoid still may prefer having both and application level fsync policies are still supported.
 <p>
-The drawback of using application level flush settings is that it is less efficient in it's disk usage pattern (it gives the OS less leeway to re-order writes) and it can introduce latency as fsync in most Linux filesystems blocks writes to the file whereas the background flushing does much more granular page-level locking.
+The drawback of using application level flush settings is that it is less efficient in its disk usage pattern (it gives the OS less leeway to re-order writes) and it can introduce latency as fsync in most Linux filesystems blocks writes to the file whereas the background flushing does much more granular page-level locking.
 <p>
 In general you don't need to do any low-level tuning of the filesystem, but in the next few sections we will go over some of this in case it is useful.
 
@@ -563,7 +566,9 @@ In general you don't need to do any low-level tuning of the filesystem, but in t
 
 In Linux, data written to the filesystem is maintained in <a href="http://en.wikipedia.org/wiki/Page_cache">pagecache</a> until it must be written out to disk (due to an application-level fsync or the OS's own flush policy). The flushing of data is done by a set of background threads called pdflush (or in post 2.6.32 kernels "flusher threads").
 <p>
-Pdflush has a configurable policy that controls how much dirty data can be maintained in cache and for how long before it must be written back to disk. This policy is described <a href="http://www.westnet.com/~gsmith/content/linux-pdflush.htm">here</a>. When Pdflush cannot keep up with the rate of data being written it will eventually cause the writing process to block incurring latency in the writes to slow down the accumulation of data.
+Pdflush has a configurable policy that controls how much dirty data can be maintained in cache and for how long before it must be written back to disk.
+This policy is described <a href="http://web.archive.org/web/20160518040713/http://www.westnet.com/~gsmith/content/linux-pdflush.htm">here</a>.
+When Pdflush cannot keep up with the rate of data being written it will eventually cause the writing process to block incurring latency in the writes to slow down the accumulation of data.
 <p>
 You can see the current state of OS memory usage by doing
 <pre>

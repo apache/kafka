@@ -31,7 +31,7 @@ It's worth noting that security is optional - non-secured clusters are supported
 The guides below explain how to configure and use the security features in both clients and brokers.
 
 <h3><a id="security_ssl" href="#security_ssl">7.2 Encryption and Authentication using SSL</a></h3>
-Apache Kafka allows clients to connect over SSL. By default SSL is disabled but can be turned on as needed.
+Apache Kafka allows clients to connect over SSL. By default, SSL is disabled but can be turned on as needed.
 
 <ol>
     <li><h4><a id="security_ssl_key" href="#security_ssl_key">Generate SSL key and certificate for each Kafka broker</a></h4>
@@ -425,7 +425,7 @@ Apache Kafka allows clients to connect over SSL. By default SSL is disabled but 
         <ul>
           <li>SASL/PLAIN should be used only with SSL as transport layer to ensure that clear passwords are not transmitted on the wire without encryption.</li>
           <li>The default implementation of SASL/PLAIN in Kafka specifies usernames and passwords in the JAAS configuration file as shown
-            <a href="#security_sasl_plain_brokerconfig">here</a>. To avoid storing passwords on disk, you can plugin your own implementation of
+            <a href="#security_sasl_plain_brokerconfig">here</a>. To avoid storing passwords on disk, you can plug in your own implementation of
             <code>javax.security.auth.spi.LoginModule</code> that provides usernames and passwords from an external source. The login module implementation should
             provide username as the public credential and password as the private credential of the <code>Subject</code>. The default implementation
             <code>org.apache.kafka.common.security.plain.PlainLoginModule</code> can be used as an example.</li>
@@ -616,7 +616,7 @@ Kafka Authorization management CLI can be found under bin directory with all the
     <li><b>Adding Acls</b><br>
 Suppose you want to add an acl "Principals User:Bob and User:Alice are allowed to perform Operation Read and Write on Topic Test-Topic from IP 198.51.100.0 and IP 198.51.100.1". You can do that by executing the CLI with following options:
         <pre>bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Bob --allow-principal User:Alice --allow-host 198.51.100.0 --allow-host 198.51.100.1 --operation Read --operation Write --topic Test-topic</pre>
-        By default all principals that don't have an explicit acl that allows access for an operation to a resource are denied. In rare cases where an allow acl is defined that allows access to all but some principal we will have to use the --deny-principal and --deny-host option. For example, if we want to allow all users to Read from Test-topic but only deny User:BadBob from IP 198.51.100.3 we can do so using following commands:
+        By default, all principals that don't have an explicit acl that allows access for an operation to a resource are denied. In rare cases where an allow acl is defined that allows access to all but some principal we will have to use the --deny-principal and --deny-host option. For example, if we want to allow all users to Read from Test-topic but only deny User:BadBob from IP 198.51.100.3 we can do so using following commands:
         <pre>bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:* --allow-host * --deny-principal User:BadBob --deny-host 198.51.100.3 --operation Read --topic Test-topic</pre>
         Note that ``--allow-host`` and ``deny-host`` only support IP addresses (hostnames are not supported).
         Above examples add acls to a topic by specifying --topic [topic-name] as the resource option. Similarly user can add acls to cluster by specifying --cluster and to a consumer group by specifying --group [group-name].</li>

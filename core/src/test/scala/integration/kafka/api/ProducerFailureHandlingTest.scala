@@ -24,9 +24,10 @@ import kafka.common.Topic
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
 import kafka.server.KafkaConfig
-import kafka.utils.{TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer._
-import org.apache.kafka.common.errors.{InvalidTopicException, NotEnoughReplicasAfterAppendException, NotEnoughReplicasException}
+import org.apache.kafka.common.KafkaException
+import org.apache.kafka.common.errors._
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -175,23 +176,18 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   }
 
   /**
-   *  The send call with invalid partition id should throw KafkaException caused by IllegalArgumentException
-   */
+    * Send with invalid partition id should throw KafkaException when partition is higher than the
+    * upper bound of partitions and IllegalArgumentException when partition is negative
+    */
   @Test
   def testInvalidPartition() {
-    // create topic
+    // create topic with a single partition
     TestUtils.createTopic(zkUtils, topic1, 1, numServers, servers)
 
-    // create a record with incorrect partition id, send should fail
-    val record = new ProducerRecord[Array[Byte],Array[Byte]](topic1, new Integer(1), "key".getBytes, "value".getBytes)
-    intercept[IllegalArgumentException] {
-      producer1.send(record)
-    }
-    intercept[IllegalArgumentException] {
-      producer2.send(record)
-    }
-    intercept[IllegalArgumentException] {
-      producer3.send(record)
+    // create a record with incorrect partition id (higher than the number of partitions), send should fail
+    val higherRecord = new ProducerRecord[Array[Byte], Array[Byte]](topic1, 1, "key".getBytes, "value".getBytes)
+    intercept[KafkaException] {
+      producer1.send(higherRecord)
     }
   }
 

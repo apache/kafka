@@ -228,6 +228,13 @@ public class ThreadCache {
             return nextEntry.key;
         }
 
+        KeyValue<byte[], LRUCacheEntry> peekNext() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            return nextEntry;
+        }
+
         @Override
         public boolean hasNext() {
             if (nextEntry != null) {
