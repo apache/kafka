@@ -54,12 +54,13 @@ public class RecordCollector {
 
     private final Producer<byte[], byte[]> producer;
     private final Map<TopicPartition, Long> offsets;
-    private String streamTaskId = null;
+    private final String logPrefix;
+
 
     public RecordCollector(Producer<byte[], byte[]> producer, String streamTaskId) {
         this.producer = producer;
         this.offsets = new HashMap<>();
-        this.streamTaskId = streamTaskId;
+        this.logPrefix = String.format("task [%s]", streamTaskId);
     }
 
     public <K, V> void send(ProducerRecord<K, V> record, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
@@ -90,17 +91,16 @@ public class RecordCollector {
                             TopicPartition tp = new TopicPartition(metadata.topic(), metadata.partition());
                             offsets.put(tp, metadata.offset());
                         } else {
-                            String prefix = String.format("task [%s]", streamTaskId);
-                            log.error(String.format("%s Error sending record to topic %s", prefix, topic), exception);
+                            log.error("{} Error sending record to topic {}", logPrefix, topic, exception);
                         }
                     }
                 });
                 return;
             } catch (TimeoutException e) {
                 if (attempt == MAX_SEND_ATTEMPTS) {
-                    throw new StreamsException(String.format("task [%s] failed to send record to topic %s after %d attempts", streamTaskId, topic, attempt));
+                    throw new StreamsException(String.format("%s Failed to send record to topic %s after %d attempts", logPrefix, topic, attempt));
                 }
-                log.warn(String.format("task [%s] timeout exception caught when sending record to topic %s attempt %s", streamTaskId, topic, attempt));
+                log.warn("{} Timeout exception caught when sending record to topic {} attempt {}", logPrefix, topic, attempt);
                 Utils.sleep(SEND_RETRY_BACKOFF);
             }
 
@@ -108,6 +108,7 @@ public class RecordCollector {
     }
 
     public void flush() {
+        log.debug("{} Flushing producer", logPrefix);
         this.producer.flush();
     }
 
