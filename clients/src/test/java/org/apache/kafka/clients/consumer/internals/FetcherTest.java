@@ -128,13 +128,11 @@ public class FetcherTest {
 
         // normal fetch
         fetcher.sendFetches();
-        assertTrue(fetcher.hasInFlightFetches());
         assertFalse(fetcher.hasCompletedFetches());
 
         client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NONE.code(), 100L, 0));
         consumerClient.poll(0);
         assertTrue(fetcher.hasCompletedFetches());
-        assertFalse(fetcher.hasInFlightFetches());
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetcher.fetchedRecords();
         assertTrue(partitionRecords.containsKey(tp));
@@ -155,13 +153,11 @@ public class FetcherTest {
         subscriptions.seek(tp, 0);
 
         fetcher.sendFetches();
-        assertTrue(fetcher.hasInFlightFetches());
         assertFalse(fetcher.hasCompletedFetches());
 
         client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NOT_LEADER_FOR_PARTITION.code(), 100L, 0));
         consumerClient.poll(0);
         assertTrue(fetcher.hasCompletedFetches());
-        assertFalse(fetcher.hasInFlightFetches());
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetcher.fetchedRecords();
         assertFalse(partitionRecords.containsKey(tp));
