@@ -25,7 +25,7 @@ import java.util.Properties
 import kafka.common._
 import kafka.message._
 import kafka.utils._
-import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.common.record.{MemoryRecords, TimestampType}
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit.{After, Test}
@@ -611,11 +611,18 @@ class CleanerTest extends JUnitSuite {
     assertEquals(-1, map.get(key(4)))
   }
 
+  /**
+   * This test verifies that messages corrupted by KAFKA-4298 are fixed by the cleaner
+   */
   @Test
   def testCleanCorruptMessageSet() {
-    // This test verifies that messages corrupted by KAFKA-4298 are fixed by the cleaner
+    val codec = SnappyCompressionCodec
 
-    val log = makeLog()
+    val logProps = new Properties()
+    logProps.put(LogConfig.CompressionTypeProp, codec.name)
+    val logConfig = LogConfig(logProps)
+
+    val log = makeLog(config = logConfig)
     val cleaner = makeCleaner(10)
 
     // messages are constructed so that the payload matches the expecting offset to
@@ -631,8 +638,8 @@ class CleanerTest extends JUnitSuite {
     val noDupSetOffset = 50
     val noDupSet = noDupSetKeys zip (noDupSetOffset until noDupSetOffset + noDupSetKeys.size)
 
-    writeInvalidCleanedMessage(log, dupSetOffset, dupSet)
-    writeInvalidCleanedMessage(log, noDupSetOffset, noDupSet)
+    log.append(invalidCleanedMessage(dupSetOffset, dupSet, codec), assignOffsets = false)
+    log.append(invalidCleanedMessage(noDupSetOffset, noDupSet, codec), assignOffsets = false)
 
     log.roll()
 
@@ -645,15 +652,36 @@ class CleanerTest extends JUnitSuite {
     }
   }
 
+  /**
+   * Verify that the client can handle corrupted messages. Located here for now since the client
+   * does not support writing messages with the old magic.
+   */
+  @Test
+  def testClientHandlingOfCorruptMessageSet(): Unit = {
+    import JavaConverters._
+
+    val keys = 1 until 10
+    val offset = 50
+    val set = keys zip (offset until offset + keys.size)
+
+    val corruptedMessage = invalidCleanedMessage(offset, set)
+    val records = MemoryRecords.readableRecords(corruptedMessage.buffer)
+
+    for (logEntry <- records.iterator().asScala) {
+      val offset = logEntry.offset()
+      val value = TestUtils.readString(logEntry.record().value()).toLong
+      assertEquals(offset, value)
+    }
+  }
 
   private def writeToLog(log: Log, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
     for(((key, value), offset) <- keysAndValues.zip(offsetSeq))
       yield log.append(messageWithOffset(key, value, offset), assignOffsets = false).firstOffset
   }
 
-  private def writeInvalidCleanedMessage(log: Log,
-                                         initialOffset: Long,
-                                         keysAndValues: Iterable[(Int, Int)]) {
+  private def invalidCleanedMessage(initialOffset: Long,
+                                    keysAndValues: Iterable[(Int, Int)],
+                                    codec: CompressionCodec = SnappyCompressionCodec): ByteBufferMessageSet = {
     // this function replicates the old versions of the cleaner which under some circumstances
     // would write invalid compressed message sets with the outer magic set to 1 and the inner
     // magic set to 0
@@ -665,7 +693,6 @@ class CleanerTest extends JUnitSuite {
         magicValue = Message.MagicValue_V0))
 
     val messageWriter = new MessageWriter(math.min(math.max(MessageSet.messageSetSize(messages) / 2, 1024), 1 << 16))
-    val codec = SnappyCompressionCodec
     var lastOffset = initialOffset
 
     messageWriter.write(
@@ -690,7 +717,8 @@ class CleanerTest extends JUnitSuite {
     val buffer = ByteBuffer.allocate(messageWriter.size + MessageSet.LogOverhead)
     ByteBufferMessageSet.writeMessage(buffer, messageWriter, lastOffset - 1)
     buffer.rewind()
-    log.append(new ByteBufferMessageSet(buffer), assignOffsets = false)
+
+    new ByteBufferMessageSet(buffer)
   }
 
   private def messageWithOffset(key: Int, value: Int, offset: Long) =

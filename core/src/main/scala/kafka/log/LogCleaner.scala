@@ -534,7 +534,11 @@ private[log] class Cleaner(val id: Int,
     if (messageAndOffsets.nonEmpty) {
       val messages = messageAndOffsets.map(_.message)
       val magicAndTimestamp = MessageSet.magicAndLargestTimestamp(messages)
+
+      // ensure that we use the magic from the first message in the set when writing the wrapper
+      // message in order to fix message sets corrupted by KAFKA-4298
       val magic = magicAndTimestamp.magic
+
       val firstMessageOffset = messageAndOffsets.head
       val firstAbsoluteOffset = firstMessageOffset.offset
       var offset = -1L
