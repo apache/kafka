@@ -618,18 +618,31 @@ class CleanerTest extends JUnitSuite {
     val log = makeLog()
     val cleaner = makeCleaner(10)
 
-    val kvs1 = (0 until 2) zip (0 until 2)
-    val kvs2 = (3 until 5) zip (3 until 5)
+    // messages are constructed so that the payload matches the expecting offset to
+    // make offset validation easier after cleaning
 
-    writeInvalidCleanedMessage(log, 25, kvs1 ++ kvs1) // one compressed entry with dups
-    writeInvalidCleanedMessage(log, 50, kvs2) // and one without (should still be fixed by the cleaner)
+    // one compressed log entry with duplicates
+    val dupSetKeys = (0 until 2) ++ (0 until 2)
+    val dupSetOffset = 25
+    val dupSet = dupSetKeys zip (dupSetOffset until dupSetOffset + dupSetKeys.size)
+
+    // and one without (should still be fixed by the cleaner)
+    val noDupSetKeys = 3 until 5
+    val noDupSetOffset = 50
+    val noDupSet = noDupSetKeys zip (noDupSetOffset until noDupSetOffset + noDupSetKeys.size)
+
+    writeInvalidCleanedMessage(log, dupSetOffset, dupSet)
+    writeInvalidCleanedMessage(log, noDupSetOffset, noDupSet)
 
     log.roll()
 
     cleaner.clean(LogToClean(TopicAndPartition("test", 0), log, 0, log.activeSegment.baseOffset))
 
-    for (segment <- log.logSegments; shallowMessage <- segment.log.iterator; deepMessage <- ByteBufferMessageSet.deepIterator(shallowMessage))
+    for (segment <- log.logSegments; shallowMessage <- segment.log.iterator; deepMessage <- ByteBufferMessageSet.deepIterator(shallowMessage)) {
       assertEquals(shallowMessage.message.magic, deepMessage.message.magic)
+      val value = TestUtils.readString(deepMessage.message.payload).toLong
+      assertEquals(deepMessage.offset, value)
+    }
   }
 
 
@@ -639,8 +652,8 @@ class CleanerTest extends JUnitSuite {
   }
 
   private def writeInvalidCleanedMessage(log: Log,
-                                         offset: Long,
-                                         keysAndValues: Iterable[(Int, Int)]) = {
+                                         initialOffset: Long,
+                                         keysAndValues: Iterable[(Int, Int)]) {
     // this function replicates the old versions of the cleaner which under some circumstances
     // would write invalid compressed message sets with the outer magic set to 1 and the inner
     // magic set to 0
@@ -653,7 +666,7 @@ class CleanerTest extends JUnitSuite {
 
     val messageWriter = new MessageWriter(math.min(math.max(MessageSet.messageSetSize(messages) / 2, 1024), 1 << 16))
     val codec = SnappyCompressionCodec
-    var lastOffset = offset
+    var lastOffset = initialOffset
 
     messageWriter.write(
       codec = codec,
@@ -664,18 +677,18 @@ class CleanerTest extends JUnitSuite {
       val output = new DataOutputStream(CompressionFactory(codec, Message.MagicValue_V1, outputStream))
       try {
         for (message <- messages) {
-          lastOffset += 1
-          val innerOffset = lastOffset - offset
+          val innerOffset = lastOffset - initialOffset
           output.writeLong(innerOffset)
           output.writeInt(message.size)
           output.write(message.buffer.array, message.buffer.arrayOffset, message.buffer.limit)
+          lastOffset += 1
         }
       } finally {
         output.close()
       }
     }
     val buffer = ByteBuffer.allocate(messageWriter.size + MessageSet.LogOverhead)
-    ByteBufferMessageSet.writeMessage(buffer, messageWriter, lastOffset)
+    ByteBufferMessageSet.writeMessage(buffer, messageWriter, lastOffset - 1)
     buffer.rewind()
     log.append(new ByteBufferMessageSet(buffer), assignOffsets = false)
   }

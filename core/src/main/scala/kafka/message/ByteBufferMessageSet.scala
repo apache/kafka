@@ -78,7 +78,7 @@ object ByteBufferMessageSet {
   }
 
   /** Deep iterator that decompresses the message sets and adjusts timestamp and offset if needed. */
-  def deepIterator(wrapperMessageAndOffset: MessageAndOffset, ignorePartiallyConverted: Boolean = false): Iterator[MessageAndOffset] = {
+  def deepIterator(wrapperMessageAndOffset: MessageAndOffset, ensureMatchingMagic: Boolean = false): Iterator[MessageAndOffset] = {
 
     import Message._
 
@@ -138,14 +138,13 @@ object ByteBufferMessageSet {
         // Override the timestamp if necessary
         val newMessage = new Message(buffer, wrapperMessageTimestampOpt, wrapperMessageTimestampTypeOpt)
 
-        // Inner message and wrapper message must have same magic value
-        if (newMessage.magic != wrapperMessage.magic) {
-          // The old LogCleaner had a bug which could cause compressed messages sets for magic=0
-          // to be placed in a wrapped message with magic=1.
-          if (!ignorePartiallyConverted || newMessage.magic != MagicValue_V0 || wrapperMessage.magic != MagicValue_V1)
-            throw new IllegalStateException(s"Compressed message has magic value ${wrapperMessage.magic} " +
-              s"but inner message has magic value ${newMessage.magic}")
-        }
+        // Due to KAFKA-4298, it is possible for the inner and outer magic values to differ. We ignore
+        // this and depend on the outer message in order to decide how to compute the respective offsets
+        // for the inner messages
+        if (ensureMatchingMagic && newMessage.magic != wrapperMessage.magic)
+          throw new InvalidMessageException(s"Compressed message has magic value ${wrapperMessage.magic} " +
+            s"but inner message has magic value ${newMessage.magic}")
+
         lastInnerOffset = innerOffset
         MessageAndOffset(newMessage, innerOffset)
       }
@@ -331,14 +330,11 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
   /** default iterator that iterates over decompressed messages */
   override def iterator: Iterator[MessageAndOffset] = internalIterator()
 
-  def iterator(ignorePartiallyConverted: Boolean): Iterator[MessageAndOffset] =
-    internalIterator(ignorePartiallyConverted = ignorePartiallyConverted)
-
   /** iterator over compressed messages without decompressing */
   def shallowIterator: Iterator[MessageAndOffset] = internalIterator(isShallow = true)
 
   /** When flag isShallow is set to be true, we do a shallow iteration: just traverse the first level of messages. **/
-  private def internalIterator(isShallow: Boolean = false, ignorePartiallyConverted: Boolean = false): Iterator[MessageAndOffset] = {
+  private def internalIterator(isShallow: Boolean = false, ensureMatchingMagic: Boolean = false): Iterator[MessageAndOffset] = {
     new IteratorTemplate[MessageAndOffset] {
       var topIter = buffer.slice()
       var innerIter: Iterator[MessageAndOffset] = null
@@ -371,7 +367,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
               innerIter = null
               MessageAndOffset(newMessage, offset)
             case _ =>
-              innerIter = ByteBufferMessageSet.deepIterator(MessageAndOffset(newMessage, offset), ignorePartiallyConverted)
+              innerIter = ByteBufferMessageSet.deepIterator(MessageAndOffset(newMessage, offset), ensureMatchingMagic)
               if(!innerIter.hasNext)
                 innerIter = null
               makeNext()
@@ -442,7 +438,8 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
       var offsetOfMaxTimestamp = -1L
       val expectedInnerOffset = new LongRef(0)
       val validatedMessages = new mutable.ArrayBuffer[Message]
-      this.internalIterator(isShallow = false).foreach { messageAndOffset =>
+
+      this.internalIterator(isShallow = false, ensureMatchingMagic = true).foreach { messageAndOffset =>
         val message = messageAndOffset.message
         validateMessageKey(message, compactedTopic)
 
