@@ -381,7 +381,7 @@ private[log] class Cleaner(val id: Int,
                                  segments: Seq[LogSegment], 
                                  map: OffsetMap, 
                                  deleteHorizonMs: Long,
-                                 stats: CleanerStats = new CleanerStats()) {
+                                 stats: CleanerStats) {
     // create a new segment with the suffix .cleaned appended to both the log and index name
     val logFile = new File(segments.head.log.file.getPath + Log.CleanedFileSuffix)
     logFile.delete()
@@ -662,7 +662,11 @@ private[log] class Cleaner(val id: Int,
    * @param map The map in which to store the mappings
    * @param stats Collector for cleaning statistics
    */
-  private[log] def buildOffsetMap(log: Log, start: Long, end: Long, map: OffsetMap, stats: CleanerStats = new CleanerStats()) {
+  private[log] def buildOffsetMap(log: Log,
+                                  start: Long,
+                                  end: Long,
+                                  map: OffsetMap,
+                                  stats: CleanerStats) {
     map.clear()
     val dirty = log.logSegments(start, end).toBuffer
     info("Building offset map for log %s for %d segments in offset range [%d, %d).".format(log.name, dirty.size, start, end))

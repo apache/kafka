@@ -76,9 +76,13 @@ class LogCleanerTest extends JUnitSuite {
     keys.foreach(k => map.put(key(k), Long.MaxValue))
 
     // clean the log
-    cleaner.cleanSegments(log, log.logSegments.take(3).toSeq, map, 0L)
+    val segments = log.logSegments.take(3).toSeq
+    val stats = new CleanerStats()
+    val expectedBytesRead = segments.map(_.size).sum
+    cleaner.cleanSegments(log, segments, map, 0L, stats)
     val shouldRemain = keysInLog(log).filter(!keys.contains(_))
     assertEquals(shouldRemain, keysInLog(log))
+    assertEquals(expectedBytesRead, stats.bytesRead)
   }
 
   /**
@@ -106,7 +110,8 @@ class LogCleanerTest extends JUnitSuite {
     keys.foreach(k => map.put(key(k), Long.MaxValue))
 
     // clean the log
-    cleaner.cleanSegments(log, Seq(log.logSegments.head), map, 0L)
+    val stats = new CleanerStats()
+    cleaner.cleanSegments(log, Seq(log.logSegments.head), map, 0L, stats)
     val shouldRemain = keysInLog(log).filter(!keys.contains(_))
     assertEquals(shouldRemain, keysInLog(log))
   }
@@ -352,7 +357,7 @@ class LogCleanerTest extends JUnitSuite {
     val map = new FakeOffsetMap(Int.MaxValue)
     keys.foreach(k => map.put(key(k), Long.MaxValue))
     intercept[LogCleaningAbortedException] {
-      cleaner.cleanSegments(log, log.logSegments.take(3).toSeq, map, 0L)
+      cleaner.cleanSegments(log, log.logSegments.take(3).toSeq, map, 0L, new CleanerStats())
     }
   }
 
@@ -472,9 +477,11 @@ class LogCleanerTest extends JUnitSuite {
     val cleaner = makeCleaner(Int.MaxValue)
     val start = 0
     val end = 500
-    val offsets = writeToLog(log, (start until end) zip (start until end))
+    writeToLog(log, (start until end) zip (start until end))
+
     def checkRange(map: FakeOffsetMap, start: Int, end: Int) {
-      cleaner.buildOffsetMap(log, start, end, map)
+      val stats = new CleanerStats()
+      cleaner.buildOffsetMap(log, start, end, map, stats)
       val endOffset = map.latestOffset + 1
       assertEquals("Last offset should be the end offset.", end, endOffset)
       assertEquals("Should have the expected number of messages in the map.", end-start, map.size)
@@ -482,7 +489,9 @@ class LogCleanerTest extends JUnitSuite {
         assertEquals("Should find all the keys", i.toLong, map.get(key(i)))
       assertEquals("Should not find a value too small", -1L, map.get(key(start - 1)))
       assertEquals("Should not find a value too large", -1L, map.get(key(end)))
+      assertEquals(end - start, stats.mapMessagesRead)
     }
+
     val segments = log.logSegments.toSeq
     checkRange(map, 0, segments(1).baseOffset.toInt)
     checkRange(map, segments(1).baseOffset.toInt, segments(3).baseOffset.toInt)
@@ -538,7 +547,7 @@ class LogCleanerTest extends JUnitSuite {
       offsetMap.put(key(k), Long.MaxValue)
      
     // clean the log
-    cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L)
+    cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, new CleanerStats())
     var cleanedKeys = keysInLog(log)
     
     // 1) Simulate recovery just after .cleaned file is created, before rename to .swap
@@ -550,7 +559,7 @@ class LogCleanerTest extends JUnitSuite {
     log = recoverAndCheck(config, allKeys)
     
     // clean again
-    cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L)
+    cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, new CleanerStats())
     cleanedKeys = keysInLog(log)
     
     // 2) Simulate recovery just after swap file is created, before old segment files are
@@ -568,7 +577,7 @@ class LogCleanerTest extends JUnitSuite {
     }
     for (k <- 1 until messageCount by 2)
       offsetMap.put(key(k), Long.MaxValue)    
-    cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L)
+    cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, new CleanerStats())
     cleanedKeys = keysInLog(log)
     
     // 3) Simulate recovery after swap file is created and old segments files are renamed
@@ -583,13 +592,12 @@ class LogCleanerTest extends JUnitSuite {
     }
     for (k <- 1 until messageCount by 2)
       offsetMap.put(key(k), Long.MaxValue)    
-    cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L)
+    cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, new CleanerStats())
     cleanedKeys = keysInLog(log)
     
     // 4) Simulate recovery after swap is complete, but async deletion
     //    is not yet complete. Clean operation is resumed during recovery.
     recoverAndCheck(config, cleanedKeys)
-    
   }
 
   @Test
@@ -605,8 +613,8 @@ class LogCleanerTest extends JUnitSuite {
     val start = 0
     val end = 2
     val offsetSeq = Seq(0L, 7206178L)
-    val offsets = writeToLog(log, (start until end) zip (start until end), offsetSeq)
-    cleaner.buildOffsetMap(log, start, end, map)
+    writeToLog(log, (start until end) zip (start until end), offsetSeq)
+    cleaner.buildOffsetMap(log, start, end, map, new CleanerStats())
     val endOffset = map.latestOffset
     assertEquals("Last offset should be the end offset.", 7206178L, endOffset)
     assertEquals("Should have the expected number of messages in the map.", end - start, map.size)
@@ -631,12 +639,14 @@ class LogCleanerTest extends JUnitSuite {
     log.append(message(4,4))
     log.roll()
 
-    cleaner.buildOffsetMap(log, 2, Int.MaxValue, map)
+    val stats = new CleanerStats()
+    cleaner.buildOffsetMap(log, 2, Int.MaxValue, map, stats)
     assertEquals(2, map.size)
     assertEquals(-1, map.get(key(0)))
     assertEquals(2, map.get(key(2)))
     assertEquals(3, map.get(key(3)))
     assertEquals(-1, map.get(key(4)))
+    assertEquals(4, stats.mapMessagesRead)
   }
 
   /**
