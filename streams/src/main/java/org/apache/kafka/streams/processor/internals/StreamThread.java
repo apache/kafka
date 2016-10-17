@@ -92,7 +92,11 @@ public class StreamThread extends Thread {
     private final Map<TaskId, StandbyTask> standbyTasks;
     private final Map<TopicPartition, StreamTask> activeTasksByPartition;
     private final Map<TopicPartition, StandbyTask> standbyTasksByPartition;
+    private final Map<TopicPartition, StreamTask> suspendedTasksByPartition;
+    private final Map<TopicPartition, StandbyTask> suspendedStandbyTasksByPartition;
     private final Set<TaskId> prevTasks;
+    private final Map<TaskId, StreamTask> suspendedTasks;
+    private final Map<TaskId, StandbyTask> suspendedStandbyTasks;
     private final Time time;
     private final long pollTimeMs;
     private final long cleanTimeMs;
@@ -140,16 +144,13 @@ public class StreamThread extends Thread {
 
                 initialized.set(false);
                 lastCleanMs = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
-                shutdownTasksAndState(true);
+                // suspend active tasks
+                suspendTasksAndState(true);
             } catch (Throwable t) {
                 rebalanceException = t;
                 throw t;
             } finally {
-                // TODO: right now upon partition revocation, we always remove all the tasks;
-                // this behavior can be optimized to only remove affected tasks in the future
                 streamsMetadataState.onChange(Collections.<HostInfo, Set<TopicPartition>>emptyMap(), partitionAssignor.clusterMetadata());
-                removeStreamTasks();
-                removeStandbyTasks();
             }
         }
     };
@@ -206,7 +207,11 @@ public class StreamThread extends Thread {
         this.standbyTasks = new HashMap<>();
         this.activeTasksByPartition = new HashMap<>();
         this.standbyTasksByPartition = new HashMap<>();
+        this.suspendedTasksByPartition = new HashMap<>();
+        this.suspendedStandbyTasksByPartition = new HashMap<>();
         this.prevTasks = new HashSet<>();
+        this.suspendedTasks = new HashMap<>();
+        this.suspendedStandbyTasks = new HashMap<>();
 
         // standby ktables
         this.standbyRecords = new HashMap<>();
@@ -312,6 +317,42 @@ public class StreamThread extends Thread {
                 throw e;
             }
         }
+    }
+
+    /**
+     * Similar to shutdownTasksAndState, however does not close the task managers,
+     * in the hope that soon the tasks will be assigned again
+     * @param rethrowExceptions
+     */
+    private void suspendTasksAndState(final boolean rethrowExceptions) {
+        log.debug("{} suspendTasksAndState: suspending all active tasks [{}] and standby tasks [{}]", logPrefix,
+            activeTasks.keySet(), standbyTasks.keySet());
+
+        // Commit first as there may be cached records that have not been flushed yet.
+        commitOffsets(rethrowExceptions);
+        // flush state
+        flushAllState(rethrowExceptions);
+        // flush out any extra data sent during close
+        producer.flush();
+        try {
+            // un-assign the change log partitions
+            restoreConsumer.assign(Collections.<TopicPartition>emptyList());
+        } catch (Exception e) {
+            log.error("{} Failed to un-assign change log partitions: ", logPrefix, e);
+            if (rethrowExceptions) {
+                throw e;
+            }
+        }
+        suspendedTasks.clear();
+        suspendedTasks.putAll(activeTasks);
+        suspendedStandbyTasks.putAll(standbyTasks);
+
+        suspendedTasksByPartition.clear();
+        suspendedTasksByPartition.putAll(activeTasksByPartition);
+        suspendedStandbyTasksByPartition.putAll(standbyTasksByPartition);
+
+        activeTasks.clear();
+        activeTasksByPartition.clear();
     }
 
     interface AbstractTaskAction {
@@ -657,7 +698,22 @@ public class StreamThread extends Thread {
             Set<TopicPartition> partitions = entry.getValue();
 
             try {
-                StreamTask task = createStreamTask(taskId, partitions);
+                StreamTask task = null;
+                boolean recycleTask = false;
+                // task ID and all partitions must match
+                if (suspendedTasks.containsKey(taskId)) {
+                    task = suspendedTasks.get(taskId);
+                    if (task.partitions.equals(partitions)) {
+                        recycleTask = true;
+                    }
+                }
+                if (recycleTask) {
+                    log.debug("{} recycling old task {}", logPrefix, taskId);
+                    suspendedTasks.remove(taskId);
+                } else {
+                    log.debug("{} creating new task {}", logPrefix, taskId);
+                    task = createStreamTask(taskId, partitions);
+                }
                 activeTasks.put(taskId, task);
 
                 for (TopicPartition partition : partitions)
@@ -667,6 +723,9 @@ public class StreamThread extends Thread {
                 throw e;
             }
         }
+
+        // finally destroy any remaining suspended tasks
+        removeSuspendedTasks();
     }
 
     private StandbyTask createStandbyTask(TaskId id, Collection<TopicPartition> partitions) {
@@ -693,7 +752,22 @@ public class StreamThread extends Thread {
         for (Map.Entry<TaskId, Set<TopicPartition>> entry : partitionAssignor.standbyTasks().entrySet()) {
             TaskId taskId = entry.getKey();
             Set<TopicPartition> partitions = entry.getValue();
-            StandbyTask task = createStandbyTask(taskId, partitions);
+            StandbyTask task = null;
+            boolean recycleTask = false;
+            // task ID and all partitions must match
+            if (suspendedStandbyTasks.containsKey(taskId)) {
+                task = suspendedStandbyTasks.get(taskId);
+                if (task.partitions.equals(partitions)) {
+                    recycleTask = true;
+                }
+            }
+            if (recycleTask) {
+                log.debug("{} recycling old standby task {}", logPrefix, taskId);
+                suspendedStandbyTasks.remove(taskId);
+            } else {
+                log.debug("{} creating new standby task {}", logPrefix, taskId);
+                task = createStandbyTask(taskId, partitions);
+            }
             if (task != null) {
                 standbyTasks.put(taskId, task);
                 for (TopicPartition partition : partitions) {
@@ -707,6 +781,8 @@ public class StreamThread extends Thread {
                 checkpointedOffsets.putAll(task.checkpointedOffsets());
             }
         }
+        // finally destroy any remaining suspended tasks
+        removeSuspendedStandbyTasks();
 
         restoreConsumer.assign(new ArrayList<>(checkpointedOffsets.keySet()));
 
@@ -742,6 +818,34 @@ public class StreamThread extends Thread {
         standbyTasks.clear();
         standbyTasksByPartition.clear();
         standbyRecords.clear();
+    }
+
+    private void removeSuspendedTasks() {
+        log.info("{} Removing all suspended tasks [{}]", logPrefix, suspendedTasks.keySet());
+        try {
+            // Close task and state manager
+            for (final AbstractTask task : suspendedTasks.values()) {
+                task.close();
+                task.closeStateManager();
+            }
+            suspendedTasks.clear();
+        } catch (Exception e) {
+            log.error("{} Failed to remove suspended tasks: ", logPrefix, e);
+        }
+    }
+
+    private void removeSuspendedStandbyTasks() {
+        log.info("{} Removing all suspended standby tasks [{}]", logPrefix, suspendedStandbyTasks.keySet());
+        try {
+            // Close task and state manager
+            for (final AbstractTask task : suspendedStandbyTasks.values()) {
+                task.close();
+                task.closeStateManager();
+            }
+            suspendedStandbyTasks.clear();
+        } catch (Exception e) {
+            log.error("{} Failed to remove suspended tasks: ", logPrefix, e);
+        }
     }
 
     private void closeAllTasks() {
