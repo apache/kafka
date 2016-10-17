@@ -174,7 +174,7 @@ class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(
     * is required during migration from zookeeper-based offset storage to kafka-based offset storage. With respect to any
     * given consumer group, it is safe to turn this off after all instances within that group have been migrated to
     * the new jar that commits offsets to the broker (instead of directly to ZooKeeper). */
-  val dualCommitEnabled = props.getBoolean("dual.commit.enabled", if (offsetsStorage == "kafka") true else false)
+  val dualCommitEnabled = props.getBoolean("dual.commit.enabled", offsetsStorage == "kafka")
 
   /* what to do if an offset is out of range.
      smallest : automatically reset the offset to the smallest offset
