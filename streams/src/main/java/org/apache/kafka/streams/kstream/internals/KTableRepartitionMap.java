@@ -56,7 +56,7 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
 
             @Override
             public String[] storeNames() {
-                return parentValueGetterSupplier.storeNames();
+                throw new StreamsException("Underlying state store not accessible due to repartitioning.");
             }
         };
     }
