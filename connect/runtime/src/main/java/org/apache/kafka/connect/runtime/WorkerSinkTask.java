@@ -142,9 +142,8 @@ class WorkerSinkTask extends WorkerTask {
             while (!isStopping())
                 iteration();
         } finally {
-            // Make sure any uncommitted data has been committed and the task has
-            // a chance to clean up its state
-            closePartitions();
+            // Make sure the task has a chance to clean up and any uncommitted offset state has been committed
+            commitOffsets(time.milliseconds(), true);
         }
     }
 
@@ -153,9 +152,10 @@ class WorkerSinkTask extends WorkerTask {
             long now = time.milliseconds();
 
             // Maybe commit
-            if (!committing && now >= nextCommit) {
+            if (!committing && (now >= nextCommit || context.isCommitRequested())) {
                 commitOffsets(now, false);
                 nextCommit += workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
+                context.clearCommitRequest();
             }
 
             // Check for timed out commits
@@ -255,10 +255,13 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     /**
-     * Starts an offset commit by flushing outstanding messages from the task and then starting
-     * the write commit.
+     * Starts an offset commit by flushing outstanding messages from the task and then starting the write commit.
      **/
     private void doCommit(Map<TopicPartition, OffsetAndMetadata> offsets, boolean closing, final int seqno) {
+        if (offsets.equals(lastCommittedOffsets)) {
+            log.info("{} Skipping offset commits, no change since last commit");
+            return;
+        }
         log.info("{} Committing offsets", this);
         if (closing) {
             doCommitSync(offsets, seqno);
@@ -282,29 +285,47 @@ class WorkerSinkTask extends WorkerTask {
         commitSeqno += 1;
         commitStarted = now;
 
-        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(currentOffsets);
-        try {
-            task.flush(offsets);
-        } catch (Throwable t) {
-            log.error("Commit of {} offsets failed due to exception while flushing:", this, t);
-            log.error("Rewinding offsets to last committed offsets");
-            for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : lastCommittedOffsets.entrySet()) {
-                log.debug("{} Rewinding topic partition {} to offset {}", id, entry.getKey(), entry.getValue().offset());
-                consumer.seek(entry.getKey(), entry.getValue().offset());
-            }
-            currentOffsets = new HashMap<>(lastCommittedOffsets);
-            onCommitCompleted(t, commitSeqno);
-            return;
-        } finally {
-            // Close the task if needed before committing the offsets. This is basically the last chance for
-            // the connector to actually flush data that has been written to it.
-            if (closing)
+        Map<TopicPartition, Long> commitableOffsets = task.commitableOffsets();
+        final Map<TopicPartition, OffsetAndMetadata> offsets;
+        if (commitableOffsets != null) {
+            if (closing) {
+                // Close currently assigned partitions before committing the offsets, gives tasks an opportunity to flush data.
                 task.close(currentOffsets.keySet());
+                commitableOffsets = task.commitableOffsets();
+            }
+            offsets = new HashMap<>(commitableOffsets.size());
+            for (Map.Entry<TopicPartition, Long> flushedOffsetEntry : commitableOffsets.entrySet()) {
+                // Exclude any topic-partition's not owned by this task.
+                if (currentOffsets.containsKey(flushedOffsetEntry.getKey())) {
+                    offsets.put(flushedOffsetEntry.getKey(), new OffsetAndMetadata(flushedOffsetEntry.getValue()));
+                }
+            }
+        } else {
+            offsets = new HashMap<>(currentOffsets);
+            try {
+                task.flush(offsets);
+            } catch (Throwable t) {
+                log.error("Commit of {} offsets failed due to exception while flushing: ", this, t);
+                log.error("Rewinding offsets to last committed offsets");
+                for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : lastCommittedOffsets.entrySet()) {
+                    log.debug("{} Rewinding topic partition {} to offset {}", id, entry.getKey(), entry.getValue().offset());
+                    consumer.seek(entry.getKey(), entry.getValue().offset());
+                }
+                currentOffsets = new HashMap<>(lastCommittedOffsets);
+                onCommitCompleted(t, commitSeqno);
+                offsets.clear();
+            } finally {
+                // Close the task if needed before committing the offsets. This is basically the last chance for
+                // the connector to actually flush data that has been written to it.
+                if (closing)
+                    task.close(currentOffsets.keySet());
+            }
         }
 
-        doCommit(offsets, closing, commitSeqno);
+        if (!offsets.isEmpty()) {
+            doCommit(offsets, closing, commitSeqno);
+        }
     }
-
 
     @Override
     public String toString() {
@@ -427,14 +448,6 @@ class WorkerSinkTask extends WorkerTask {
         context.clearOffsets();
     }
 
-    private void openPartitions(Collection<TopicPartition> partitions) {
-        task.open(partitions);
-    }
-
-    private void closePartitions() {
-        commitOffsets(time.milliseconds(), true);
-    }
-
     private class HandleRebalance implements ConsumerRebalanceListener {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
@@ -464,7 +477,7 @@ class WorkerSinkTask extends WorkerTask {
             // need to guard against invoking the user's callback method during that period.
             if (rebalanceException == null || rebalanceException instanceof WakeupException) {
                 try {
-                    openPartitions(partitions);
+                    task.open(partitions);
                     // Rewind should be applied only if openPartitions succeeds.
                     rewind();
                 } catch (RuntimeException e) {
@@ -477,8 +490,10 @@ class WorkerSinkTask extends WorkerTask {
 
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            assert currentOffsets.keySet().equals(partitions);
+
             try {
-                closePartitions();
+                commitOffsets(time.milliseconds(), true);
             } catch (RuntimeException e) {
                 // The consumer swallows exceptions raised in the rebalance listener, so we need to store
                 // exceptions and rethrow when poll() returns.
