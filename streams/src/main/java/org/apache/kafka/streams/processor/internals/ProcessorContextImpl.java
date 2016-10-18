@@ -18,11 +18,11 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
@@ -133,9 +133,9 @@ public class ProcessorContextImpl implements InternalProcessorContext, RecordCol
         if (node == null)
             throw new TopologyBuilderException("Accessing from an unknown node");
 
-        // TODO: restore this once we fix the ValueGetter initialization issue
-        //if (!node.stateStores.contains(name))
-        //    throw new TopologyBuilderException("Processor " + node.name() + " has no access to StateStore " + name);
+        if (!node.stateStores.contains(name)) {
+            throw new TopologyBuilderException("Processor " + node.name() + " has no access to StateStore " + name);
+        }
 
         return stateMgr.getStore(name);
     }

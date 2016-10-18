@@ -94,6 +94,10 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
                 return new KStreamAggregateValueGetter();
             }
 
+            @Override
+            public String[] storeNames() {
+                return new String[]{storeName};
+            }
         };
     }
 
