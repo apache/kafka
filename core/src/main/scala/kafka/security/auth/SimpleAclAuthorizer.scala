@@ -161,7 +161,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   private def aclMatch(session: Session, operations: Operation, resource: Resource, principal: KafkaPrincipal, host: String, permissionType: PermissionType, acls: Set[Acl]): Boolean = {
-    acls.find(acl =>
+    acls.find ( acl =>
       acl.permissionType == permissionType
         && (acl.principal == principal || acl.principal == Acl.WildCardPrincipal)
         && (operations == acl.operation || acl.operation == All)
