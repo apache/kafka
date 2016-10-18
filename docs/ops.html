@@ -349,7 +349,7 @@ Topic:foo	PartitionCount:1	ReplicationFactor:3	Configs:
 <h4><a id="rep-throttle" href="#rep-throttle">Limiting Bandwidth Usage during Data Migration</a></h4>
 Kafka lets you apply a throttle to replication traffic, setting an upper bound on the bandwidth used to move replicas from machine to machine. This is useful when rebalancing a cluster, bootstrapping a new broker or adding or removing brokers, as it limits the impact these data-intensive operations will have on users.
 <p></p>
-There are two interfaces that can be used to engage a throttle. The simplest, and safest, is to apply a throttle when invoking the kafka-reassign-partitions.sh, but kaka-configs.sh can also be used to view and alter the throttle values directly.
+There are two interfaces that can be used to engage a throttle. The simplest, and safest, is to apply a throttle when invoking the kafka-reassign-partitions.sh, but kafka-configs.sh can also be used to view and alter the throttle values directly.
 <p></p>
 So for example, if you were to execute a rebalance, with the below command, it would move partitions at no more than 50MB/s.
 <pre>$ bin/kafka-reassign-partitions.sh --zookeeper myhost:2181--execute --reassignment-json-file bigger-cluster.json —throttle 50000000</pre>
@@ -391,8 +391,8 @@ follower.replication.throttled.replicas</pre>
 <p>To view the throttle limit configuration:</p>
 
 <pre>$ bin/kafka-configs.sh --describe --zookeeper localhost:2181 --entity-type brokers
-Configs for brokers '2' are leader.replication.throttled.rate=1000000,follower.replication.throttled.rate=1000000
-Configs for brokers '1' are leader.replication.throttled.rate=1000000,follower.replication.throttled.rate=1000000</pre>
+Configs for brokers '2' are leader.replication.throttled.rate=700000000,follower.replication.throttled.rate=700000000
+Configs for brokers '1' are leader.replication.throttled.rate=700000000,follower.replication.throttled.rate=700000000</pre>
 
 <p>This shows the throttle applied to both leader and follower side of the replication protocol. By default both sides
     are assigned the same throttled throughput value. </p>
@@ -407,7 +407,7 @@ Configs for topic 'my-topic' are leader.replication.throttled.replicas=1:102,0:1
     follower throttle is applied to partition 1 on
     broker 101 and partition 0 on broker 102. </p>
 
-<p>By default kaka-reassign-partitions.sh will apply the leader throttle to all replicas that exist before the
+<p>By default kafka-reassign-partitions.sh will apply the leader throttle to all replicas that exist before the
     rebalance, any one of which might be leader.
     It will apply the follower throttle to all move destinations. So if there is a partition with replicas on brokers
     101,102, being reassigned to 102,103, a leader throttle,
@@ -422,7 +422,7 @@ Configs for topic 'my-topic' are leader.replication.throttled.replicas=1:102,0:1
 <p>Some care should be taken when using throttled replication. In particular:</p>
 
 <p><i>(1) Throttle Removal:</i></p>
-The throttle should be removed in a timely manner once reassignment completes (by running kaka-reassign-partitions
+The throttle should be removed in a timely manner once reassignment completes (by running kafka-reassign-partitions
 —verify).
 
 <p><i>(2) Ensuring Progress:</i></p>
@@ -449,7 +449,7 @@ The throttle should be removed in a timely manner once reassignment completes (b
 
 <p>Here, the admin should tune the throttle  and/or replica.fetch.response.max.bytes  appropriately to ensure the
     delay is never larger than replica.lag.time.max.ms (as it is possible for some partitions, particularly smaller
-    ones, to enter the ISR before the rebalance completes) or the outer throttle window:
+    ones, to enter the ISR before the rebalance completes) or the full throttle window:
     (replication.quota.window.size.seconds x replication.quota.window.num) or the connection timeout.
     <pre>replica.socket.timeout.ms.</pre></p>
 
