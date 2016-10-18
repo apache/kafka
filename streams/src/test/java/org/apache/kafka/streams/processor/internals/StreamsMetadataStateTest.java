@@ -42,6 +42,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -61,6 +62,8 @@ public class StreamsMetadataStateTest {
     private TopicPartition topic4P0;
     private List<PartitionInfo> partitionInfos;
     private Cluster cluster;
+    private final String globalTable = "global-table";;
+    private StreamPartitioner<String, Object> partitioner;
 
     @Before
     public void before() {
@@ -83,6 +86,8 @@ public class StreamsMetadataStateTest {
                 return value;
             }
         });
+
+        builder.globalTable("global-topic", "global-table");
 
         builder.setApplicationId("appId");
 
@@ -110,22 +115,28 @@ public class StreamsMetadataStateTest {
                 new PartitionInfo("topic-four", 0, null, null, null));
 
         cluster = new Cluster(null, Collections.<Node>emptyList(), partitionInfos, Collections.<String>emptySet(), Collections.<String>emptySet());
-        discovery = new StreamsMetadataState(builder);
+        discovery = new StreamsMetadataState(builder, hostOne);
         discovery.onChange(hostToPartitions, cluster);
+        partitioner = new StreamPartitioner<String, Object>() {
+            @Override
+            public Integer partition(final String key, final Object value, final int numPartitions) {
+                return 1;
+            }
+        };
     }
 
     @Test
     public void shouldNotThrowNPEWhenOnChangeNotCalled() throws Exception {
-        new StreamsMetadataState(builder).getAllMetadataForStore("store");
+        new StreamsMetadataState(builder, hostOne).getAllMetadataForStore("store");
     }
 
     @Test
     public void shouldGetAllStreamInstances() throws Exception {
-        final StreamsMetadata one = new StreamsMetadata(hostOne, Utils.mkSet("table-one", "table-two", "merged-table"),
+        final StreamsMetadata one = new StreamsMetadata(hostOne, Utils.mkSet(globalTable, "table-one", "table-two", "merged-table"),
                 Utils.mkSet(topic1P0, topic2P1, topic4P0));
-        final StreamsMetadata two = new StreamsMetadata(hostTwo, Utils.mkSet("table-two", "table-one", "merged-table"),
+        final StreamsMetadata two = new StreamsMetadata(hostTwo, Utils.mkSet(globalTable, "table-two", "table-one", "merged-table"),
                 Utils.mkSet(topic2P0, topic1P1));
-        final StreamsMetadata three = new StreamsMetadata(hostThree, Collections.singleton("table-three"),
+        final StreamsMetadata three = new StreamsMetadata(hostThree, Utils.mkSet(globalTable, "table-three"),
                 Collections.singleton(topic3P0));
 
         Collection<StreamsMetadata> actual = discovery.getAllMetadata();
@@ -150,7 +161,7 @@ public class StreamsMetadataStateTest {
 
         discovery.onChange(hostToPartitions, cluster.withPartitions(Collections.singletonMap(tp5, new PartitionInfo("topic-five", 1, null, null, null))));
 
-        final StreamsMetadata expected = new StreamsMetadata(hostFour, Collections.<String>emptySet(),
+        final StreamsMetadata expected = new StreamsMetadata(hostFour, Collections.singleton(globalTable),
                 Collections.singleton(tp5));
         final Collection<StreamsMetadata> actual = discovery.getAllMetadata();
         assertTrue("expected " + actual + " to contain " + expected, actual.contains(expected));
@@ -158,9 +169,9 @@ public class StreamsMetadataStateTest {
 
     @Test
     public void shouldGetInstancesForStoreName() throws Exception {
-        final StreamsMetadata one = new StreamsMetadata(hostOne, Utils.mkSet("table-one", "table-two", "merged-table"),
+        final StreamsMetadata one = new StreamsMetadata(hostOne, Utils.mkSet(globalTable, "table-one", "table-two", "merged-table"),
                 Utils.mkSet(topic1P0, topic2P1, topic4P0));
-        final StreamsMetadata two = new StreamsMetadata(hostTwo, Utils.mkSet("table-two", "table-one", "merged-table"),
+        final StreamsMetadata two = new StreamsMetadata(hostTwo, Utils.mkSet(globalTable, "table-two", "table-one", "merged-table"),
                 Utils.mkSet(topic2P0, topic1P1));
         final Collection<StreamsMetadata> actual = discovery.getAllMetadataForStore("table-one");
         assertEquals(2, actual.size());
@@ -186,7 +197,7 @@ public class StreamsMetadataStateTest {
 
         discovery.onChange(hostToPartitions, cluster.withPartitions(Collections.singletonMap(tp4, new PartitionInfo("topic-three", 1, null, null, null))));
 
-        final StreamsMetadata expected = new StreamsMetadata(hostThree, Collections.singleton("table-three"),
+        final StreamsMetadata expected = new StreamsMetadata(hostThree, Utils.mkSet(globalTable, "table-three"),
                 Collections.singleton(topic3P0));
 
         final StreamsMetadata actual = discovery.getMetadataWithKey("table-three", "the-key",
@@ -202,15 +213,10 @@ public class StreamsMetadataStateTest {
 
         discovery.onChange(hostToPartitions, cluster.withPartitions(Collections.singletonMap(tp4, new PartitionInfo("topic-three", 1, null, null, null))));
 
-        final StreamsMetadata expected = new StreamsMetadata(hostTwo, Utils.mkSet("table-two", "table-three", "merged-table"),
+        final StreamsMetadata expected = new StreamsMetadata(hostTwo, Utils.mkSet(globalTable, "table-two", "table-three", "merged-table"),
                 Utils.mkSet(topic2P0, tp4));
 
-        StreamsMetadata actual = discovery.getMetadataWithKey("table-three", "the-key", new StreamPartitioner<String, Object>() {
-            @Override
-            public Integer partition(final String key, final Object value, final int numPartitions) {
-                return 1;
-            }
-        });
+        StreamsMetadata actual = discovery.getMetadataWithKey("table-three", "the-key", partitioner);
         assertEquals(expected, actual);
     }
 
@@ -227,7 +233,7 @@ public class StreamsMetadataStateTest {
         hostToPartitions.put(hostTwo, Utils.mkSet(topic2P0, topic1P1, topic2P2));
         discovery.onChange(hostToPartitions, cluster.withPartitions(Collections.singletonMap(topic2P2, new PartitionInfo("topic-two", 2, null, null, null))));
 
-        final StreamsMetadata expected = new StreamsMetadata(hostTwo, Utils.mkSet("table-two", "table-one", "merged-table"),
+        final StreamsMetadata expected = new StreamsMetadata(hostTwo, Utils.mkSet("global-table", "table-two", "table-one", "merged-table"),
                 Utils.mkSet(topic2P0, topic1P1, topic2P2));
 
         final StreamsMetadata actual = discovery.getMetadataWithKey("merged-table", "123", new StreamPartitioner<String, Object>() {
@@ -268,6 +274,41 @@ public class StreamsMetadataStateTest {
     @Test(expected = NullPointerException.class)
     public void shouldThrowIfStreamPartitionerIsNull() throws Exception {
         discovery.getMetadataWithKey(null, "key", (StreamPartitioner) null);
+    }
+
+    @Test
+    public void shouldHaveGlobalStoreInAllMetadata() throws Exception {
+        final Collection<StreamsMetadata> metadata = discovery.getAllMetadataForStore(globalTable);
+        assertEquals(3, metadata.size());
+        for (StreamsMetadata streamsMetadata : metadata) {
+            assertTrue(streamsMetadata.stateStoreNames().contains(globalTable));
+        }
+    }
+
+    @Test
+    public void shouldGetMyMetadataForGlobalStoreWithKey() throws Exception {
+        final StreamsMetadata metadata = discovery.getMetadataWithKey(globalTable, "key", Serdes.String().serializer());
+        assertEquals(hostOne, metadata.hostInfo());
+    }
+
+    @Test
+    public void shouldGetAnyHostForGlobalStoreByKeyIfMyHostUnknown() throws Exception {
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST);
+        streamsMetadataState.onChange(hostToPartitions, cluster);
+        assertNotNull(streamsMetadataState.getMetadataWithKey(globalTable, "key", Serdes.String().serializer()));
+    }
+
+    @Test
+    public void shouldGetMyMetadataForGlobalStoreWithKeyAndPartitioner() throws Exception {
+        final StreamsMetadata metadata = discovery.getMetadataWithKey(globalTable, "key", partitioner);
+        assertEquals(hostOne, metadata.hostInfo());
+    }
+
+    @Test
+    public void shouldGetAnyHostForGlobalStoreByKeyAndPartitionerIfMyHostUnknown() throws Exception {
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST);
+        streamsMetadataState.onChange(hostToPartitions, cluster);
+        assertNotNull(streamsMetadataState.getMetadataWithKey(globalTable, "key", partitioner));
     }
 
 

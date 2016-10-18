@@ -57,11 +57,17 @@ import java.util.regex.Pattern;
  * instance that will then {@link org.apache.kafka.streams.KafkaStreams#start() begin consuming, processing, and producing records}.
  */
 public class TopologyBuilder {
+
+    private static final Logger log = LoggerFactory.getLogger(TopologyBuilder.class);
+
     // node factories in a topological order
     private final LinkedHashMap<String, NodeFactory> nodeFactories = new LinkedHashMap<>();
 
     // state factories
     private final Map<String, StateStoreFactory> stateFactories = new HashMap<>();
+
+    // global state factories
+    private final Map<String, StateStore> globalStateStores = new LinkedHashMap<>();
 
     // all topics subscribed from source processors (without application-id prefix for internal topics)
     private final Set<String> sourceTopicNames = new HashSet<>();
@@ -93,6 +99,9 @@ public class TopologyBuilder {
     // this is used in the extended KStreamBuilder.
     private final HashMap<String, String> sourceStoreToSourceTopic = new HashMap<>();
 
+    // all global topics
+    private final Set<String> globalTopics = new HashSet<>();
+
     private final QuickUnion<String> nodeGrouper = new QuickUnion<>();
 
     private SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
@@ -102,8 +111,6 @@ public class TopologyBuilder {
     private Pattern topicPattern = null;
 
     private Map<Integer, Set<String>> nodeGroups = null;
-
-    private static final Logger log = LoggerFactory.getLogger(TopologyBuilder.class);
 
     private static class StateStoreFactory {
         public final Set<String> users;
@@ -343,15 +350,7 @@ public class TopologyBuilder {
 
         for (String topic : topics) {
             Objects.requireNonNull(topic, "topic names cannot be null");
-            if (sourceTopicNames.contains(topic))
-                throw new TopologyBuilderException("Topic " + topic + " has already been registered by another source.");
-
-            for (Pattern pattern : nodeToSourcePatterns.values()) {
-                if (pattern.matcher(topic).matches()) {
-                    throw new TopologyBuilderException("Topic " + topic + " matches a Pattern already registered by another source.");
-                }
-            }
-
+            validateTopicNotAlreadyRegistered(topic);
             sourceTopicNames.add(topic);
         }
 
@@ -360,6 +359,98 @@ public class TopologyBuilder {
         nodeGrouper.add(name);
 
         return this;
+    }
+
+    /**
+     * Add a global store to the topology. This store can be accessed by any of the Processors
+     * in the topology.
+     *
+     * @param store  the instance of {@link StateStore}
+     * @return this builder instance so methods can be chained together; never null
+     */
+    public synchronized TopologyBuilder addGlobalStore(final StateStore store) {
+        Objects.requireNonNull(store, "store must not be null");
+        if (stateFactories.containsKey(store.name()) || globalStateStores.containsKey(store.name())) {
+            throw new TopologyBuilderException("StateStore " + store.name() + " is already added.");
+        }
+        globalStateStores.put(store.name(), store);
+        return this;
+    }
+
+    /**
+     * Adds a global {@link StateStore} to the topology. The {@link StateStore} sources its data
+     * from all partitions of the provided input topic. There will be exactly one instance of this
+     * {@link StateStore} per Kafka Streams instance.
+     * <p>
+     * A {@link SourceNode} with the provided sourceName will be added to consume the data arriving
+     * from the partitions of the input topic.
+     * <p>
+     * The provided {@link ProcessorSupplier} will be used to create an {@link ProcessorNode} that will
+     * receive all records forwarded from the {@link SourceNode}. This
+     * {@link ProcessorNode} should be used to keep the {@link StateStore} up-to-date.
+     *
+     * @param store                 the instance of {@link StateStore}
+     * @param sourceName            name of the {@link SourceNode} that will be automatically added
+     * @param keyDeserializer       the {@link Deserializer} to deserialize keys with
+     * @param valueDeserializer     the {@link Deserializer} to deserialize values with
+     * @param topic                 the topic to source the data from
+     * @param processorName         the name of the {@link ProcessorSupplier}
+     * @param stateUpdateSupplier   the instance of {@link ProcessorSupplier}
+     * @return
+     */
+    public synchronized TopologyBuilder addGlobalStore(final StateStore store,
+                                                       final String sourceName,
+                                                       final Deserializer keyDeserializer,
+                                                       final Deserializer valueDeserializer,
+                                                       final String topic,
+                                                       final String processorName,
+                                                       final ProcessorSupplier stateUpdateSupplier) {
+        Objects.requireNonNull(store, "store must not be null");
+        Objects.requireNonNull(sourceName, "sourceName must not be null");
+        Objects.requireNonNull(topic, "topic must not be null");
+        Objects.requireNonNull(stateUpdateSupplier, "supplier must not be null");
+        Objects.requireNonNull(processorName, "processorName must not be null");
+        if (nodeFactories.containsKey(sourceName)) {
+            throw new TopologyBuilderException("Processor " + sourceName + " is already added.");
+        }
+        if (nodeFactories.containsKey(processorName)) {
+            throw new TopologyBuilderException("Processor " + processorName + " is already added.");
+        }
+        if (stateFactories.containsKey(store.name()) || globalStateStores.containsKey(store.name())) {
+            throw new TopologyBuilderException("StateStore " + store.name() + " is already added.");
+        }
+
+        validateTopicNotAlreadyRegistered(topic);
+
+        globalTopics.add(topic);
+        final String[] topics = {topic};
+        nodeFactories.put(sourceName, new SourceNodeFactory(sourceName, topics, null, keyDeserializer, valueDeserializer));
+        nodeToSourceTopics.put(sourceName, topics.clone());
+        nodeGrouper.add(sourceName);
+
+        final String[] parents = {sourceName};
+        final ProcessorNodeFactory nodeFactory = new ProcessorNodeFactory(processorName, parents, stateUpdateSupplier);
+        nodeFactory.addStateStore(store.name());
+        nodeFactories.put(processorName, nodeFactory);
+        nodeGrouper.add(processorName);
+        nodeGrouper.unite(processorName, parents);
+
+        globalStateStores.put(store.name(), store);
+        connectSourceStoreAndTopic(store.name(), topic);
+        return this;
+
+    }
+
+    private void validateTopicNotAlreadyRegistered(final String topic) {
+        if (sourceTopicNames.contains(topic) || globalTopics.contains(topic)) {
+            throw new TopologyBuilderException("Topic " + topic + " has already been registered by another source.");
+        }
+
+        for (Pattern pattern : nodeToSourcePatterns.values()) {
+            if (pattern.matcher(topic).matches()) {
+                throw new TopologyBuilderException("Topic " + topic + " matches a Pattern already registered by another source.");
+            }
+        }
     }
 
     /**
@@ -549,7 +640,6 @@ public class TopologyBuilder {
         nodeGrouper.unite(name, parentNames);
         return this;
     }
-
     /**
      * Adds a state store
      *
@@ -573,7 +663,6 @@ public class TopologyBuilder {
 
         return this;
     }
-
 
     /**
      * Connects the processor and the state stores
@@ -759,10 +848,47 @@ public class TopologyBuilder {
         if (topicGroupId != null) {
             nodeGroup = nodeGroups().get(topicGroupId);
         } else {
-            // when nodeGroup is null, we build the full topology. this is used in some tests.
-            nodeGroup = null;
+            // when nodeGroup is null, we build the full topology minus the global groups
+            final Set<String> globalNodeGroups = globalNodeGroups();
+            final Collection<Set<String>> values = nodeGroups().values();
+            nodeGroup = new HashSet<>();
+            for (Set<String> value : values) {
+                nodeGroup.addAll(value);
+            }
+            nodeGroup.removeAll(globalNodeGroups);
+
+
         }
         return build(nodeGroup);
+    }
+
+    /**
+     * Builds the topology for any global state stores
+     * @return ProcessorTopology
+     */
+    public synchronized ProcessorTopology buildGlobalStateTopology() {
+        final Set<String> globalGroups = globalNodeGroups();
+        if (globalGroups.isEmpty()) {
+            return null;
+        }
+        return build(globalGroups);
+    }
+
+    private Set<String> globalNodeGroups() {
+        final Set<String> globalGroups = new HashSet<>();
+        for (final Map.Entry<Integer, Set<String>> nodeGroup : nodeGroups().entrySet()) {
+            final Set<String> nodes = nodeGroup.getValue();
+            for (String node : nodes) {
+                final NodeFactory nodeFactory = nodeFactories.get(node);
+                if (nodeFactory instanceof SourceNodeFactory) {
+                    final String[] topics = ((SourceNodeFactory) nodeFactory).getTopics();
+                    if (topics != null && topics.length == 1 && globalTopics.contains(topics[0])) {
+                        globalGroups.addAll(nodes);
+                    }
+                }
+            }
+        }
+        return globalGroups;
     }
 
     @SuppressWarnings("unchecked")
@@ -787,8 +913,7 @@ public class TopologyBuilder {
                     }
                     for (String stateStoreName : ((ProcessorNodeFactory) factory).stateStoreNames) {
                         if (!stateStoreMap.containsKey(stateStoreName)) {
-                            final StateStoreSupplier supplier = stateFactories.get(stateStoreName).supplier;
-                            final StateStore stateStore = supplier.get();
+                            final StateStore stateStore = getStateStore(stateStoreName);
                             stateStoreMap.put(stateStoreName, stateStore);
                             storeToProcessorNodeMap.put(stateStore, node);
                         }
@@ -823,9 +948,31 @@ public class TopologyBuilder {
             }
         }
 
-        return new ProcessorTopology(processorNodes, topicSourceMap, topicSinkMap, new ArrayList<>(stateStoreMap.values()), sourceStoreToSourceTopic, storeToProcessorNodeMap);
+        return new ProcessorTopology(processorNodes,
+                                     topicSourceMap,
+                                     topicSinkMap,
+                                     new ArrayList<>(stateStoreMap.values()),
+                                     sourceStoreToSourceTopic,
+                                     storeToProcessorNodeMap,
+                                     new ArrayList<>(globalStateStores.values()));
     }
-    
+
+    /**
+     * Get any global {@link StateStore}s that are part of the
+     * topology
+     * @return map containing all global {@link StateStore}s
+     */
+    public Map<String, StateStore> globalStateStores() {
+        return Collections.unmodifiableMap(globalStateStores);
+    }
+
+    private StateStore getStateStore(final String stateStoreName) {
+        if (stateFactories.containsKey(stateStoreName)) {
+            return stateFactories.get(stateStoreName).supplier.get();
+        }
+        return globalStateStores.get(stateStoreName);
+    }
+
     /**
      * Returns the map of topic groups keyed by the group id.
      * A topic group is a group of topics in the same task.
@@ -849,6 +996,10 @@ public class TopologyBuilder {
                 if (topics != null) {
                     // if some of the topics are internal, add them to the internal topics
                     for (String topic : topics) {
+                        // skip global topic as they don't need partition assignment
+                        if (globalTopics.contains(topic)) {
+                            continue;
+                        }
                         if (this.internalTopicNames.contains(topic)) {
                             // prefix the internal topic name with the application id
                             String internalTopic = decorateTopic(topic);
@@ -883,11 +1034,13 @@ public class TopologyBuilder {
                     }
                 }
             }
-            topicGroups.put(entry.getKey(), new TopicsInfo(
-                    Collections.unmodifiableSet(sinkTopics),
-                    Collections.unmodifiableSet(sourceTopics),
-                    Collections.unmodifiableMap(internalSourceTopics),
-                    Collections.unmodifiableMap(stateChangelogTopics)));
+            if (!sourceTopics.isEmpty()) {
+                topicGroups.put(entry.getKey(), new TopicsInfo(
+                        Collections.unmodifiableSet(sinkTopics),
+                        Collections.unmodifiableSet(sourceTopics),
+                        Collections.unmodifiableMap(internalSourceTopics),
+                        Collections.unmodifiableMap(stateChangelogTopics)));
+            }
         }
 
         return Collections.unmodifiableMap(topicGroups);

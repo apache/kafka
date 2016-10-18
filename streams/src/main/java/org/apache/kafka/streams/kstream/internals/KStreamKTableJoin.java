@@ -29,8 +29,8 @@ class KStreamKTableJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
     private final ValueJoiner<V1, V2, R> joiner;
     private final boolean leftJoin;
 
-    KStreamKTableJoin(final KTableImpl<K, ?, V2> table, final ValueJoiner<V1, V2, R> joiner, final boolean leftJoin) {
-        valueGetterSupplier = table.valueGetterSupplier();
+    KStreamKTableJoin(final KTableValueGetterSupplier<K, V2> valueGetterSupplier, final ValueJoiner<V1, V2, R> joiner, final boolean leftJoin) {
+        this.valueGetterSupplier = valueGetterSupplier;
         this.joiner = joiner;
         this.leftJoin = leftJoin;
     }

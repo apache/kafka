@@ -45,7 +45,7 @@ import java.util.Set;
 
 import static java.util.Collections.singleton;
 
-public class ProcessorStateManager {
+public class ProcessorStateManager implements StateManager {
 
     private static final Logger log = LoggerFactory.getLogger(ProcessorStateManager.class);
 
@@ -58,6 +58,7 @@ public class ProcessorStateManager {
     private final Map<String, TopicPartition> partitionForTopic;
     private final File baseDir;
     private final Map<String, StateStore> stores;
+    private final Map<String, StateStore> globalStores;
     private final Set<String> loggingEnabled;
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final Map<TopicPartition, Long> restoredOffsets;
@@ -86,6 +87,7 @@ public class ProcessorStateManager {
             this.partitionForTopic.put(source.topic(), source);
         }
         this.stores = new LinkedHashMap<>();
+        this.globalStores = new HashMap<>();
         this.loggingEnabled = new HashSet<>();
         this.restoreConsumer = restoreConsumer;
         this.restoredOffsets = new HashMap<>();
@@ -317,6 +319,7 @@ public class ProcessorStateManager {
         return stores.get(name);
     }
 
+    @Override
     public void flush(final InternalProcessorContext context) {
         if (!this.stores.isEmpty()) {
             log.debug("{} Flushing all stores registered in the state manager", logPrefix);
@@ -338,6 +341,7 @@ public class ProcessorStateManager {
     /**
      * @throws IOException if any error happens when closing the state stores
      */
+    @Override
     public void close(Map<TopicPartition, Long> ackedOffsets) throws IOException {
         try {
             // attempting to close the stores, just in case they
@@ -391,5 +395,15 @@ public class ProcessorStateManager {
         TopicPartition partition = partitionForTopic.get(topic);
 
         return partition == null ? defaultPartition : partition.partition();
+    }
+
+    void registerGlobalStateStores(final List<StateStore> stateStores) {
+        for (StateStore stateStore : stateStores) {
+            globalStores.put(stateStore.name(), stateStore);
+        }
+    }
+
+    public StateStore getGlobalStore(final String name) {
+        return globalStores.get(name);
     }
 }

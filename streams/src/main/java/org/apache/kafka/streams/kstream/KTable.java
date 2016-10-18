@@ -326,6 +326,23 @@ public interface KTable<K, V> {
     <V1, R> KTable<K, R> join(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner);
 
     /**
+     * Combine values of this stream with the elements of {@link GlobalKTable} of the same key using Inner Join.
+     *
+     * @param globalTable   the instance of {@link GlobalKTable} joined with this table
+     * @param keyMapper     the instance of {@link KeyValueMapper} to map keys of this table to keys of the globalTable
+     * @param joiner        the instance of {@link ValueJoiner}
+     * @param <K1>          the key type of the {@link GlobalKTable}
+     * @param <V1>          the value type of the {@link GlobalKTable}
+     * @param <R>           the value type of the new table
+     *
+     * @return a {@link KTable} that contains join-records for each key and values computed by the given {@link ValueJoiner},
+     *         one for each matched record-pair with the same key
+     */
+    <K1, V1, R> KTable<K, R> join(final GlobalKTable<K1, V1> globalTable,
+                                  final KeyValueMapper<K, V, K1> keyMapper,
+                                  final ValueJoiner<V, V1, R> joiner);
+
+    /**
      * Combine values of this stream with another {@link KTable} stream's elements of the same key using Outer Join.
      *
      * @param other         the instance of {@link KTable} joined with this stream
@@ -350,6 +367,24 @@ public interface KTable<K, V> {
      *         one for each matched record-pair with the same key
      */
     <V1, R> KTable<K, R> leftJoin(KTable<K, V1> other, ValueJoiner<V, V1, R> joiner);
+
+
+    /**
+     * Combine values of this stream with a {@link GlobalKTable}'s elements of the same key using Left Join.
+     *
+     * @param globalTable   the instance of {@link GlobalKTable} joined with this table
+     * @param keyMapper     the instance of {@link KeyValueMapper} to map keys of this table to keys of the globalTable
+     * @param joiner        the instance of {@link ValueJoiner}
+     * @param <K1>          the key type of the {@link GlobalKTable}
+     * @param <V1>          the value type of the {@link GlobalKTable}
+     * @param <R>           the value type of the new table
+     *
+     * @return a {@link KTable} that contains join-records for each key and values computed by the given {@link ValueJoiner},
+     *         one for each matched record-pair with the same key
+     */
+    <K1, V1, R> KTable<K, R> leftJoin(final GlobalKTable<K1, V1> globalTable,
+                                      final KeyValueMapper<K, V, K1> keyMapper,
+                                      final ValueJoiner<V, V1, R> joiner);
 
     /**
      * Group the records of this {@link KTable} using the provided {@link KeyValueMapper}.

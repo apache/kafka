@@ -43,6 +43,7 @@ public class MockKeyValueMapper {
         }
     }
 
+
     public static <K, V> KeyValueMapper<K, V, KeyValue<K, V>> NoOpKeyValueMapper() {
         return new NoOpKeyValueMapper<>();
     }

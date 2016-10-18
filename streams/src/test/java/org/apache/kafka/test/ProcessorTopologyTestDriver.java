@@ -33,6 +33,9 @@ import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
+import org.apache.kafka.streams.processor.internals.GlobalProcessorContext;
+import org.apache.kafka.streams.processor.internals.GlobalStateManagerImpl;
+import org.apache.kafka.streams.processor.internals.GlobalStateUpdateTask;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -43,6 +46,7 @@ import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -135,13 +139,16 @@ public class ProcessorTopologyTestDriver {
 
     private final TaskId id;
     private final ProcessorTopology topology;
-    private final StreamTask task;
     private final MockConsumer<byte[], byte[]> consumer;
     private final MockProducer<byte[], byte[]> producer;
     private final MockConsumer<byte[], byte[]> restoreStateConsumer;
     private final Map<String, TopicPartition> partitionsByTopic = new HashMap<>();
     private final Map<TopicPartition, AtomicLong> offsetsByTopicPartition = new HashMap<>();
     private final Map<String, Queue<ProducerRecord<byte[], byte[]>>> outputRecordsByTopic = new HashMap<>();
+    private final ProcessorTopology globalTopology;
+    private final Map<String, TopicPartition> globalPartitionsByTopic = new HashMap<>();
+    private StreamTask task;
+    private GlobalStateUpdateTask globalStateTask;
 
     /**
      * Create a new test driver instance.
@@ -152,6 +159,7 @@ public class ProcessorTopologyTestDriver {
     public ProcessorTopologyTestDriver(StreamsConfig config, TopologyBuilder builder, String... storeNames) {
         id = new TaskId(0, 0);
         topology = builder.setApplicationId("ProcessorTopologyTestDriver").build(null);
+        globalTopology  = builder.buildGlobalStateTopology();
 
         // Set up the consumer and producer ...
         consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
@@ -169,27 +177,53 @@ public class ProcessorTopologyTestDriver {
             partitionsByTopic.put(topic, tp);
             offsetsByTopicPartition.put(tp, new AtomicLong());
         }
+
+
+
         consumer.assign(offsetsByTopicPartition.keySet());
+        final StateDirectory stateDirectory = new StateDirectory(applicationId, TestUtils.tempDirectory().getPath());
 
-        task = new StreamTask(id,
-            applicationId,
-            partitionsByTopic.values(),
-            topology,
-            consumer,
-            producer,
-            restoreStateConsumer,
-            config,
-            new StreamsMetrics() {
-                @Override
-                public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {
-                    return null;
-                }
+        final StreamsMetrics metrics = new StreamsMetrics() {
+            @Override
+            public Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags) {
+                return null;
+            }
 
-                @Override
-                public void recordLatency(Sensor sensor, long startNs, long endNs) {
-                    // do nothing
-                }
-            }, new StateDirectory(applicationId, TestUtils.tempDirectory().getPath()), new ThreadCache(1024 * 1024));
+            @Override
+            public void recordLatency(Sensor sensor, long startNs, long endNs) {
+                // do nothing
+            }
+        };
+
+        if (globalTopology != null) {
+            final MockConsumer<byte[], byte[]> globalConsumer = createGlobalConsumer();
+            for (final String topicName : globalTopology.sourceTopics()) {
+                List<PartitionInfo> partitionInfos = new ArrayList<>();
+                partitionInfos.add(new PartitionInfo(topicName , 0, null, null, null));
+                globalConsumer.updatePartitions(topicName, partitionInfos);
+                final TopicPartition partition = new TopicPartition(topicName, 1);
+                globalConsumer.updateEndOffsets(Collections.singletonMap(partition, 0L));
+                globalPartitionsByTopic.put(topicName, partition);
+                offsetsByTopicPartition.put(partition, new AtomicLong());
+            }
+            final GlobalStateManagerImpl stateManager = new GlobalStateManagerImpl(globalTopology, globalConsumer, stateDirectory);
+            globalStateTask = new GlobalStateUpdateTask(globalTopology,
+                                                        new GlobalProcessorContext(config, stateManager, metrics, new ThreadCache(1024 * 1024)),
+                                                        stateManager);
+            globalStateTask.initialize();
+        }
+
+        if (!partitionsByTopic.isEmpty()) {
+            task = new StreamTask(id,
+                                  applicationId,
+                                  partitionsByTopic.values(),
+                                  topology,
+                                  consumer,
+                                  producer,
+                                  restoreStateConsumer,
+                                  config,
+                                  metrics, stateDirectory, new ThreadCache(1024 * 1024));
+        }
     }
 
     /**
@@ -201,26 +235,35 @@ public class ProcessorTopologyTestDriver {
      */
     public void process(String topicName, byte[] key, byte[] value) {
         TopicPartition tp = partitionsByTopic.get(topicName);
-        if (tp == null) {
-            throw new IllegalArgumentException("Unexpected topic: " + topicName);
-        }
-        // Add the record ...
-        long offset = offsetsByTopicPartition.get(tp).incrementAndGet();
-        task.addRecords(tp, records(new ConsumerRecord<byte[], byte[]>(tp.topic(), tp.partition(), offset, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, key, value)));
-        producer.clear();
-        // Process the record ...
-        task.process();
-        ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(0L, offset, tp.partition(), topicName));
-        task.commit();
-        // Capture all the records sent to the producer ...
-        for (ProducerRecord<byte[], byte[]> record : producer.history()) {
-            Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(record.topic());
-            if (outputRecords == null) {
-                outputRecords = new LinkedList<>();
-                outputRecordsByTopic.put(record.topic(), outputRecords);
+        if (tp != null) {
+            // Add the record ...
+            long offset = offsetsByTopicPartition.get(tp).incrementAndGet();
+            task.addRecords(tp, records(new ConsumerRecord<>(tp.topic(), tp.partition(), offset, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, key, value)));
+            producer.clear();
+            // Process the record ...
+            task.process();
+            ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(0L, offset, tp.partition(), topicName));
+            task.commit();
+            // Capture all the records sent to the producer ...
+            for (ProducerRecord<byte[], byte[]> record : producer.history()) {
+                Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(record.topic());
+                if (outputRecords == null) {
+                    outputRecords = new LinkedList<>();
+                    outputRecordsByTopic.put(record.topic(), outputRecords);
+                }
+                outputRecords.add(record);
             }
-            outputRecords.add(record);
+        } else {
+            final TopicPartition global = globalPartitionsByTopic.get(topicName);
+            if (global == null) {
+                throw new IllegalArgumentException("Unexpected topic: " + topicName);
+            }
+            final long offset = offsetsByTopicPartition.get(global).incrementAndGet();
+            globalStateTask.update(new ConsumerRecord<>(global.topic(), global.partition(), offset, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, key, value));
+            globalStateTask.flushState();
         }
+
+
     }
 
     /**
@@ -309,7 +352,16 @@ public class ProcessorTopologyTestDriver {
      * Close the driver, its topology, and all processors.
      */
     public void close() {
-        task.close();
+        if (task != null) {
+            task.close();
+        }
+        if (globalStateTask != null) {
+            try {
+                globalStateTask.close();
+            } catch (IOException e) {
+                // ignore
+            }
+        }
     }
 
     /**
@@ -349,6 +401,28 @@ public class ProcessorTopologyTestDriver {
             consumer.updatePartitions(topicName, partitionInfos);
             consumer.updateEndOffsets(Collections.singletonMap(new TopicPartition(topicName, id.partition), 0L));
         }
+        return consumer;
+    }
+
+    protected MockConsumer<byte[], byte[]> createGlobalConsumer() {
+        MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.LATEST) {
+            @Override
+            public synchronized void seekToEnd(Collection<TopicPartition> partitions) {
+                // do nothing ...
+            }
+
+            @Override
+            public synchronized void seekToBeginning(Collection<TopicPartition> partitions) {
+                // do nothing ...
+            }
+
+            @Override
+            public synchronized long position(TopicPartition partition) {
+                // do nothing ...
+                return 0L;
+            }
+        };
+
         return consumer;
     }
 }

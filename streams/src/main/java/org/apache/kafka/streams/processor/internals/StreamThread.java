@@ -203,7 +203,6 @@ public class StreamThread extends Thread {
     private final long commitTimeMs;
     private final StreamsMetricsImpl sensors;
     final StateDirectory stateDirectory;
-
     private StreamPartitionAssignor partitionAssignor = null;
     private boolean cleanRun = false;
     private long timerStartedMs;
@@ -276,7 +275,8 @@ public class StreamThread extends Thread {
                         UUID processId,
                         Metrics metrics,
                         Time time,
-                        StreamsMetadataState streamsMetadataState) {
+                        StreamsMetadataState streamsMetadataState,
+                        final long cacheSizeBytes) {
         super("StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement());
         this.applicationId = applicationId;
         String threadName = getName();
@@ -289,12 +289,7 @@ public class StreamThread extends Thread {
         this.partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
         this.streamsMetadataState = streamsMetadataState;
         threadClientId = clientId + "-" + threadName;
-        this.sensors = new StreamsMetricsImpl(metrics);
-        if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) < 0) {
-            log.warn("Negative cache size passed in thread [{}]. Reverting to cache size of 0 bytes.", threadName);
-        }
-        long cacheSizeBytes = Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
-            config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG));
+        this.sensors = new StreamsMetricsImpl(metrics, threadClientId);
         this.cache = new ThreadCache(threadClientId, cacheSizeBytes, this.sensors);
 
 
@@ -405,6 +400,8 @@ public class StreamThread extends Thread {
         // remove all tasks
         removeStreamTasks();
         removeStandbyTasks();
+
+        // clean up global tasks
 
         log.info("{} Stream thread shutdown complete", logPrefix);
         setState(State.NOT_RUNNING);
@@ -1026,7 +1023,7 @@ public class StreamThread extends Thread {
         return sb.toString();
     }
 
-    private class StreamsMetricsImpl implements StreamsMetrics, ThreadCacheMetrics {
+    static class StreamsMetricsImpl implements StreamsMetrics, ThreadCacheMetrics {
         final Metrics metrics;
         final String metricGrpName;
         final String sensorNamePrefix;
@@ -1040,7 +1037,7 @@ public class StreamThread extends Thread {
         final Sensor taskDestructionSensor;
         final Sensor skippedRecordsSensor;
 
-        public StreamsMetricsImpl(Metrics metrics) {
+        public StreamsMetricsImpl(final Metrics metrics, final String threadClientId) {
             this.metrics = metrics;
             this.metricGrpName = "stream-metrics";
             this.sensorNamePrefix = "thread." + threadClientId;
@@ -1078,7 +1075,7 @@ public class StreamThread extends Thread {
 
         @Override
         public void recordLatency(Sensor sensor, long startNs, long endNs) {
-            sensor.record(endNs - startNs, timerStartedMs);
+            sensor.record(endNs - startNs);
         }
 
         @Override

@@ -42,6 +42,7 @@ public class KStreamTestDriver {
 
     private final ProcessorTopology topology;
     private final MockProcessorContext context;
+    private final ProcessorTopology globalTopology;
     private ThreadCache cache;
     private static final long DEFAULT_CACHE_SIZE_BYTES = 1 * 1024 * 1024L;
     public final File stateDir;
@@ -74,13 +75,22 @@ public class KStreamTestDriver {
                              long cacheSize) {
         builder.setApplicationId("TestDriver");
         this.topology = builder.build(null);
+        this.globalTopology = builder.buildGlobalStateTopology();
         this.stateDir = stateDir;
         this.cache = new ThreadCache(cacheSize);
         this.context = new MockProcessorContext(this, stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
         this.context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
+        // init global topology first as it will add stores to the
+        // store map that are required for joins etc.
+        if (globalTopology != null) {
+            initTopology(globalTopology, globalTopology.globalStateStores());
+        }
+        initTopology(topology, topology.stateStores());
 
+    }
 
-        for (StateStore store : topology.stateStores()) {
+    private void initTopology(final ProcessorTopology topology, final List<StateStore> stores) {
+        for (StateStore store : stores) {
             store.init(context, store);
         }
 
@@ -92,8 +102,8 @@ public class KStreamTestDriver {
                 context.setCurrentNode(null);
             }
         }
-
     }
+
 
     public ProcessorContext context() {
         return context;
@@ -102,6 +112,9 @@ public class KStreamTestDriver {
     public void process(String topicName, Object key, Object value) {
         final ProcessorNode previous = currNode;
         currNode = topology.source(topicName);
+        if (currNode == null && globalTopology != null) {
+            currNode = globalTopology.source(topicName);
+        }
 
         // if currNode is null, check if this topic is a changelog topic;
         // if yes, skip
@@ -243,6 +256,17 @@ public class KStreamTestDriver {
 
     public void setCurrentNode(final ProcessorNode currentNode) {
         currNode = currentNode;
+    }
+
+    public StateStore globalStateStore(final String storeName) {
+        if (globalTopology != null) {
+            for (final StateStore store : globalTopology.globalStateStores()) {
+                if (store.name().equals(storeName)) {
+                    return store;
+                }
+            }
+        }
+        return null;
     }
 
 

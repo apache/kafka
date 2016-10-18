@@ -85,7 +85,8 @@ public class StreamTaskTest {
             Collections.<String, SinkNode>emptyMap(),
             Collections.<StateStore>emptyList(),
             Collections.<String, String>emptyMap(),
-            Collections.<StateStore, ProcessorNode>emptyMap());
+            Collections.<StateStore, ProcessorNode>emptyMap(),
+            Collections.<StateStore>emptyList());
     private File baseDir;
     private StateDirectory stateDirectory;
 
@@ -311,7 +312,8 @@ public class StreamTaskTest {
                                                                  Collections.<String, SinkNode>emptyMap(),
                                                                  Collections.<StateStore>emptyList(),
                                                                  Collections.<String, String>emptyMap(),
-                                                                 Collections.<StateStore, ProcessorNode>emptyMap());
+                                                                 Collections.<StateStore, ProcessorNode>emptyMap(),
+                                                                 Collections.<StateStore>emptyList());
         final StreamTask streamTask = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer, producer, restoreStateConsumer, config, null, stateDirectory, new ThreadCache(0));
         final int offset = 20;
         streamTask.addRecords(partition1, Collections.singletonList(
@@ -359,7 +361,8 @@ public class StreamTaskTest {
                                                                  Collections.<String, SinkNode>emptyMap(),
                                                                  Collections.<StateStore>emptyList(),
                                                                  Collections.<String, String>emptyMap(),
-                                                                 Collections.<StateStore, ProcessorNode>emptyMap());
+                                                                 Collections.<StateStore, ProcessorNode>emptyMap(),
+                                                                 Collections.<StateStore>emptyList());
         final StreamTask streamTask = new StreamTask(new TaskId(0, 0), "applicationId", partitions, topology, consumer, producer, restoreStateConsumer, config, null, stateDirectory, new ThreadCache(0));
 
         try {

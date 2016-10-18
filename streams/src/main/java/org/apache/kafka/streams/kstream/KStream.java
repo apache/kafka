@@ -1715,4 +1715,18 @@ public interface KStream<K, V> {
                                      final Serde<K> keySerde,
                                      final Serde<V> valSerde);
 
+    <K1, V1, R> KStream<K, R> leftJoin(GlobalKTable<K1, V1> replicatedTable, KeyValueMapper<K, V, K1> keyValueMapper, ValueJoiner<V, V1, R> valueJoiner);
+
+    /**
+     * Combine values of this stream with {@link KTable}'s elements of the same key using non-windowed Inner Join.
+     * If a record key or value is {@code null} it will not included in the resulting {@link KStream}
+     *
+     * @param table  the instance of {@link KTable} joined with this stream
+     * @param joiner the instance of {@link ValueJoiner}
+     * @param <V1>   the value type of the table
+     * @param <V2>   the value type of the new stream
+     * @return a {@link KStream} that contains join-records for each key and values computed by the given {@link ValueJoiner},
+     * one for each matched record-pair with the same key
+     */
+    <K1, V1, V2> KStream<K, V2> join(GlobalKTable<K1, V1> table, KeyValueMapper<K, V, K1> keyValueMapper, ValueJoiner<V, V1, V2> joiner);
 }

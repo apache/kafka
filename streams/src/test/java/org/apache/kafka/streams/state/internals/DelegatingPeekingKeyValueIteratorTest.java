@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.test.InMemoryKeyValueStore;
 import org.junit.Before;
 import org.junit.Test;
 

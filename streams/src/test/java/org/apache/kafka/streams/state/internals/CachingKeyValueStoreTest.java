@@ -24,6 +24,7 @@ import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.test.InMemoryKeyValueStore;
 import org.apache.kafka.test.MockProcessorContext;
 import org.junit.Before;
 import org.junit.Test;

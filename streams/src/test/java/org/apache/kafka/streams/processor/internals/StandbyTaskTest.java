@@ -82,7 +82,8 @@ public class StandbyTaskTest {
                     new MockStateStoreSupplier(storeName2, true).get()
             ),
             Collections.<String, String>emptyMap(),
-            Collections.<StateStore, ProcessorNode>emptyMap());
+            Collections.<StateStore, ProcessorNode>emptyMap(),
+            Collections.<StateStore>emptyList());
 
     private final TopicPartition ktable = new TopicPartition("ktable1", 0);
     private final Set<TopicPartition> ktablePartitions = Utils.mkSet(ktable);
@@ -98,7 +99,8 @@ public class StandbyTaskTest {
                 put("ktable1", ktable.topic());
             }
         },
-            Collections.<StateStore, ProcessorNode>emptyMap());
+            Collections.<StateStore, ProcessorNode>emptyMap(),
+            Collections.<StateStore>emptyList());
     private File baseDir;
     private StateDirectory stateDirectory;
 

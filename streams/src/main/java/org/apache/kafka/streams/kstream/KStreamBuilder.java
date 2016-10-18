@@ -17,13 +17,18 @@
 
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.kstream.internals.GlobalKTableImpl;
 import org.apache.kafka.streams.kstream.internals.KStreamImpl;
 import org.apache.kafka.streams.kstream.internals.KTableImpl;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
+import org.apache.kafka.streams.kstream.internals.KTableSourceValueGetterSupplier;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.TopologyBuilder;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
 
 import java.util.Collections;
@@ -167,6 +172,54 @@ public class KStreamBuilder extends TopologyBuilder {
     }
 
     /**
+     * Create a new  {@link GlobalKTable} instance for the specified topic.
+     * Record keys of the topic should never by null, otherwise an exception will be thrown at runtime.
+     * The resulting {@link GlobalKTable} will be materialized in a local state store with the given store name.
+     * However, no new changelog topic is created in this case since the underlying topic acts as one.
+     * @param keySerde   key serde used to send key-value pairs,
+     *                   if not specified the default key serde defined in the configuration will be used
+     * @param valSerde   value serde used to send key-value pairs,
+     *                   if not specified the default value serde defined in the configuration will be used
+     * @param topic      the topic name; cannot be null
+     * @param storeName  the state store name used if this KTable is materialized, can be null if materialization not expected
+     * @return a {@link GlobalKTable} for the specified topics
+     */
+    @SuppressWarnings("unchecked")
+    public <K, V> GlobalKTable<K, V> globalTable(final Serde<K> keySerde, final Serde<V> valSerde, final String topic, final String storeName) {
+        final String sourceName = newName(KStreamImpl.SOURCE_NAME);
+        final String processorName = newName(KTableImpl.SOURCE_NAME);
+        final KTableSource<K, V> tableSource = new KTableSource<>(storeName);
+
+
+        final Deserializer<K> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
+        final Deserializer<V> valueDeserializer = valSerde == null ? null : valSerde.deserializer();
+
+        StateStore store = new RocksDBKeyValueStoreSupplier<>(storeName,
+                                                                         keySerde,
+                                                                         valSerde,
+                                                                         false,
+                                                                         Collections.<String, String>emptyMap(),
+                                                                         true).get();
+
+        addGlobalStore(store, sourceName, keyDeserializer, valueDeserializer, topic, processorName, tableSource);
+        return new GlobalKTableImpl(new KTableSourceValueGetterSupplier<>(storeName), (ReadOnlyKeyValueStore<K, V>) store, this);
+    }
+
+    /**
+     * Create a new  {@link GlobalKTable} instance for the specified topic using the default key and value {@link Serde}s
+     * Record keys of the topic should never by null, otherwise an exception will be thrown at runtime.
+     * The resulting {@link GlobalKTable} will be materialized in a local state store with the given store name.
+     * However, no new changelog topic is created in this case since the underlying topic acts as one.
+     *
+     * @param topic      the topic name; cannot be null
+     * @param storeName  the state store name used if this KTable is materialized, can be null if materialization not expected
+     * @return a {@link GlobalKTable} for the specified topics
+     */
+    public <K, V> GlobalKTable<K, V> globalTable(final String topic, final String storeName) {
+        return globalTable(null, null, topic, storeName);
+    }
+
+    /**
      * Create a new instance of {@link KStream} by merging the given streams.
      * <p>
      * There are nor ordering guaranteed for records from different streams.
@@ -188,4 +241,6 @@ public class KStreamBuilder extends TopologyBuilder {
     public String newName(String prefix) {
         return prefix + String.format("%010d", index.getAndIncrement());
     }
+
+
 }

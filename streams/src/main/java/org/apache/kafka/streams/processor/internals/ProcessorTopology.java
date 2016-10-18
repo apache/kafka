@@ -31,19 +31,22 @@ public class ProcessorTopology {
     private final List<StateStore> stateStores;
     private final Map<String, String> sourceStoreToSourceTopic;
     private final Map<StateStore, ProcessorNode> storeToProcessorNodeMap;
+    private final List<StateStore> globalStateStores;
 
-    public ProcessorTopology(List<ProcessorNode> processorNodes,
-                             Map<String, SourceNode> sourceByTopics,
-                             Map<String, SinkNode> sinkByTopics,
-                             List<StateStore> stateStores,
-                             Map<String, String> sourceStoreToSourceTopic,
-                             Map<StateStore, ProcessorNode> storeToProcessorNodeMap) {
+    public ProcessorTopology(final List<ProcessorNode> processorNodes,
+                             final Map<String, SourceNode> sourceByTopics,
+                             final Map<String, SinkNode> sinkByTopics,
+                             final List<StateStore> stateStores,
+                             final Map<String, String> sourceStoreToSourceTopic,
+                             final Map<StateStore, ProcessorNode> storeToProcessorNodeMap,
+                             final List<StateStore> globalStateStores) {
         this.processorNodes = Collections.unmodifiableList(processorNodes);
         this.sourceByTopics = Collections.unmodifiableMap(sourceByTopics);
         this.sinkByTopics   = Collections.unmodifiableMap(sinkByTopics);
         this.stateStores = Collections.unmodifiableList(stateStores);
         this.sourceStoreToSourceTopic = sourceStoreToSourceTopic;
         this.storeToProcessorNodeMap = Collections.unmodifiableMap(storeToProcessorNodeMap);
+        this.globalStateStores = Collections.unmodifiableList(globalStateStores);
     }
 
     public Set<String> sourceTopics() {
@@ -86,6 +89,10 @@ public class ProcessorTopology {
         return storeToProcessorNodeMap;
     }
 
+    public List<StateStore> globalStateStores() {
+        return globalStateStores;
+    }
+
     private String childrenToString(List<ProcessorNode<?, ?>> children) {
         if (children == null || children.isEmpty()) {
             return "";
@@ -122,4 +129,5 @@ public class ProcessorTopology {
         }
         return sb.toString();
     }
+
 }
