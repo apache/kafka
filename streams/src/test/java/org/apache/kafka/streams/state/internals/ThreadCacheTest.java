@@ -389,6 +389,24 @@ public class ThreadCacheTest {
     }
 
     @Test
+    public void shouldEvictAfterPutAll() throws Exception {
+        final List<ThreadCache.DirtyEntry> received = new ArrayList<>();
+        final String namespace = "namespace";
+        final ThreadCache cache = new ThreadCache(1);
+        cache.addDirtyEntryFlushListener(namespace, new ThreadCache.DirtyEntryFlushListener() {
+            @Override
+            public void apply(final List<ThreadCache.DirtyEntry> dirty) {
+                received.addAll(dirty);
+            }
+        });
+
+        cache.putAll(namespace, Arrays.asList(KeyValue.pair(new byte[]{0}, dirtyEntry(new byte[]{5})),
+            KeyValue.pair(new byte[]{1}, dirtyEntry(new byte[]{6}))));
+
+        assertEquals(cache.evicts(), 2);
+    }
+
+    @Test
     public void shouldPutAll() throws Exception {
         final ThreadCache cache = new ThreadCache(100000);
 
@@ -420,6 +438,25 @@ public class ThreadCacheTest {
         assertNull(cache.putIfAbsent("n", key, dirtyEntry(value)));
         assertArrayEquals(value, cache.putIfAbsent("n", key, dirtyEntry(new byte[]{8})).value);
         assertArrayEquals(value, cache.get("n", key).value);
+    }
+
+    @Test
+    public void shouldEvictAfterPutIfAbsent() throws Exception {
+        final List<ThreadCache.DirtyEntry> received = new ArrayList<>();
+        final String namespace = "namespace";
+        final ThreadCache cache = new ThreadCache(1);
+        cache.addDirtyEntryFlushListener(namespace, new ThreadCache.DirtyEntryFlushListener() {
+            @Override
+            public void apply(final List<ThreadCache.DirtyEntry> dirty) {
+                received.addAll(dirty);
+            }
+        });
+
+        cache.putIfAbsent(namespace, new byte[]{0}, dirtyEntry(new byte[]{5}));
+        cache.putIfAbsent(namespace, new byte[]{1}, dirtyEntry(new byte[]{6}));
+        cache.putIfAbsent(namespace, new byte[]{1}, dirtyEntry(new byte[]{6}));
+
+        assertEquals(cache.evicts(), 3);
     }
 
     private LRUCacheEntry dirtyEntry(final byte[] key) {

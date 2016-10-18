@@ -122,11 +122,15 @@ public class ThreadCache {
     }
 
     public LRUCacheEntry putIfAbsent(final String namespace, byte[] key, LRUCacheEntry value) {
-        final LRUCacheEntry originalValue = get(namespace, key);
-        if (originalValue == null) {
-            put(namespace, key, value);
+        final NamedCache cache = getOrCreateCache(namespace);
+
+        final LRUCacheEntry result = cache.putIfAbsent(Bytes.wrap(key), value);
+        maybeEvict(namespace);
+
+        if (result == null) {
+            numPuts++;
         }
-        return originalValue;
+        return result;
     }
 
     public void putAll(final String namespace, final List<KeyValue<byte[], LRUCacheEntry>> entries) {
