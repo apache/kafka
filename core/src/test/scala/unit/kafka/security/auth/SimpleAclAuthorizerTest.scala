@@ -92,7 +92,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
 
     val acls = Set[Acl](acl1, acl2, acl3, acl4, acl5, acl6, acl7)
 
-    changeAclAndVerify(Set.empty[Acl], acls, Set.empty[Acl])
+    changeAclAndVerify(acls, acls, Set.empty[Acl])
 
     val host1Session = new Session(user1, host1)
     val host2Session = new Session(user1, host2)
@@ -125,7 +125,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     val denyAcl = new Acl(user, Deny, host.getHostAddress, All)
     val acls = Set[Acl](allowAll, denyAcl)
 
-    changeAclAndVerify(Set.empty[Acl], acls, Set.empty[Acl])
+    changeAclAndVerify(acls, acls, Set.empty[Acl])
 
     assertFalse("deny should take precedence over allow.", simpleAclAuthorizer.authorize(session, Read, resource))
   }
@@ -134,7 +134,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   def testAllowAllAccess() {
     val allowAllAcl = Acl.AllowAllAcl
 
-    changeAclAndVerify(Set.empty[Acl], Set[Acl](allowAllAcl), Set.empty[Acl])
+    changeAclAndVerify(Set[Acl](allowAllAcl), Set[Acl](allowAllAcl), Set.empty[Acl])
 
     val session = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "random"), InetAddress.getByName("192.0.4.4"))
     assertTrue("allow all acl should allow access to all.", simpleAclAuthorizer.authorize(session, Read, resource))
@@ -144,7 +144,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   def testSuperUserHasAccess() {
     val denyAllAcl = new Acl(Acl.WildCardPrincipal, Deny, WildCardHost, All)
 
-    changeAclAndVerify(Set.empty[Acl], Set[Acl](denyAllAcl), Set.empty[Acl])
+    changeAclAndVerify(Set[Acl](denyAllAcl), Set[Acl](denyAllAcl), Set.empty[Acl])
 
     val session1 = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "superuser1"), InetAddress.getByName("192.0.4.4"))
     val session2 = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "superuser2"), InetAddress.getByName("192.0.4.4"))
@@ -162,18 +162,18 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     val readAcl = new Acl(user1, Allow, host1.getHostAddress, Read)
     val wildCardResource = new Resource(resource.resourceType, Resource.WildCardResource)
 
-    val acls = changeAclAndVerify(Set.empty[Acl], Set[Acl](readAcl), Set.empty[Acl], wildCardResource)
+    changeAclAndVerify(Set[Acl](readAcl), Set[Acl](readAcl), Set.empty[Acl], wildCardResource)
 
     val host1Session = new Session(user1, host1)
     assertTrue("User1 should have Read access from host1", simpleAclAuthorizer.authorize(host1Session, Read, resource))
 
     //allow Write to specific topic.
     val writeAcl = new Acl(user1, Allow, host1.getHostAddress, Write)
-    changeAclAndVerify(Set.empty[Acl], Set[Acl](writeAcl), Set.empty[Acl])
+    changeAclAndVerify(Set[Acl](writeAcl), Set[Acl](writeAcl), Set.empty[Acl])
 
     //deny Write to wild card topic.
     val denyWriteOnWildCardResourceAcl = new Acl(user1, Deny, host1.getHostAddress, Write)
-    changeAclAndVerify(acls, Set[Acl](denyWriteOnWildCardResourceAcl), Set.empty[Acl], wildCardResource)
+    changeAclAndVerify(Set[Acl](readAcl) + denyWriteOnWildCardResourceAcl, Set[Acl](denyWriteOnWildCardResourceAcl), Set.empty[Acl], wildCardResource)
 
     assertFalse("User1 should not have Write access from host1", simpleAclAuthorizer.authorize(host1Session, Write, resource))
   }
@@ -198,19 +198,23 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   def testAclManagementAPIs() {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
     val user2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob")
+    val user3 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "joe")
     val host1 = "host1"
     val host2 = "host2"
+    val host3 = "host3"
 
     val acl1 = new Acl(user1, Allow, host1, Read)
     val acl2 = new Acl(user1, Allow, host1, Write)
     val acl3 = new Acl(user2, Allow, host2, Read)
     val acl4 = new Acl(user2, Allow, host2, Write)
+    var acls = Set[Acl](acl1, acl2, acl3, acl4)
 
-    var acls = changeAclAndVerify(Set.empty[Acl], Set[Acl](acl1, acl2, acl3, acl4), Set.empty[Acl])
+    changeAclAndVerify(acls, acls, Set.empty[Acl])
 
     //test addAcl is additive
     val acl5 = new Acl(user2, Allow, WildCardHost, Read)
-    acls = changeAclAndVerify(acls, Set[Acl](acl5), Set.empty[Acl])
+    acls = acls + acl5
+    changeAclAndVerify(acls, Set[Acl](acl5), Set.empty[Acl])
 
     //test get by principal name.
     TestUtils.waitUntilTrue(() => Map(resource -> Set(acl1, acl2)) == simpleAclAuthorizer.getAcls(user1), "changes not propagated in timeout period")
@@ -223,11 +227,12 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
       new Resource(Group, "test-ConsumerGroup") -> acls
     )
 
-    resourceToAcls foreach { case (key, value) => changeAclAndVerify(Set.empty[Acl], value, Set.empty[Acl], key) }
+    resourceToAcls foreach { case (key, value) => changeAclAndVerify(value, value, Set.empty[Acl], key) }
     TestUtils.waitUntilTrue(() => resourceToAcls + (resource -> acls) == simpleAclAuthorizer.getAcls(), "changes not propagated in timeout period.")
 
-    //test remove acl from existing acls.
-    acls = changeAclAndVerify(acls, Set.empty[Acl], Set(acl1, acl5))
+    //test remove acl from existing acls, note that acl3 will be removed too as it is more specific than acl5
+    acls = acls.diff(Set(acl1, acl3, acl5))
+    changeAclAndVerify(acls, Set.empty[Acl], Set(acl1, acl5))
 
     //test remove all acls for resource
     simpleAclAuthorizer.removeAcls(resource)
@@ -235,8 +240,23 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     assertTrue(!zkUtils.pathExists(simpleAclAuthorizer.toResourcePath(resource)))
 
     //test removing last acl also deletes zookeeper path
-    acls = changeAclAndVerify(Set.empty[Acl], Set(acl1), Set.empty[Acl])
-    changeAclAndVerify(acls, Set.empty[Acl], acls)
+    changeAclAndVerify(Set(acl1), Set(acl1), Set.empty[Acl])
+    changeAclAndVerify(Set.empty[Acl], Set.empty[Acl], Set(acl1))
+    assertTrue(!zkUtils.pathExists(simpleAclAuthorizer.toResourcePath(resource)))
+
+    //add back acls
+    acls = Set[Acl](acl1, acl2, acl3, acl4, acl5)
+    changeAclAndVerify(acls, acls, Set.empty[Acl])
+
+    //try to remove acls with a generic one that do not match
+    changeAclAndVerify(acls, Set.empty[Acl], Set(new Acl(user3, Allow, WildCardHost, All)))
+    changeAclAndVerify(acls, Set.empty[Acl], Set(new Acl(Acl.WildCardPrincipal, Deny, WildCardHost, All)))
+    changeAclAndVerify(acls, Set.empty[Acl], Set(new Acl(Acl.WildCardPrincipal, Allow, host3, All)))
+    changeAclAndVerify(acls, Set.empty[Acl], Set(new Acl(Acl.WildCardPrincipal, Allow, WildCardHost, Describe)))
+
+    //test removing specific acls through matching ones
+    changeAclAndVerify(Set(acl1), Set.empty[Acl], Set(new Acl(user1, Allow, WildCardHost, Write), new Acl(user2, Allow, WildCardHost, All)))
+    changeAclAndVerify(Set.empty[Acl], Set.empty[Acl], Set(Acl.AllowAllAcl))
     assertTrue(!zkUtils.pathExists(simpleAclAuthorizer.toResourcePath(resource)))
   }
 
@@ -360,21 +380,15 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     TestUtils.waitAndVerifyAcls(Set.empty[Acl], simpleAclAuthorizer2, resource)
   }
 
-  private def changeAclAndVerify(originalAcls: Set[Acl], addedAcls: Set[Acl], removedAcls: Set[Acl], resource: Resource = resource): Set[Acl] = {
-    var acls = originalAcls
-
+  private def changeAclAndVerify(expectedAcls: Set[Acl], addedAcls: Set[Acl], removedAcls: Set[Acl], resource: Resource = resource) {
     if(addedAcls.nonEmpty) {
       simpleAclAuthorizer.addAcls(addedAcls, resource)
-      acls ++= addedAcls
     }
 
     if(removedAcls.nonEmpty) {
       simpleAclAuthorizer.removeAcls(removedAcls, resource)
-      acls --=removedAcls
     }
 
-    TestUtils.waitAndVerifyAcls(acls, simpleAclAuthorizer, resource)
-
-    acls
+    TestUtils.waitAndVerifyAcls(expectedAcls, simpleAclAuthorizer, resource)
   }
 }
