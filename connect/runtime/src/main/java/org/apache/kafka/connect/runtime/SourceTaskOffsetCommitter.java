@@ -46,13 +46,22 @@ import java.util.concurrent.TimeUnit;
 class SourceTaskOffsetCommitter {
     private static final Logger log = LoggerFactory.getLogger(SourceTaskOffsetCommitter.class);
 
-    private WorkerConfig config;
-    private ScheduledExecutorService commitExecutorService = null;
-    private final ConcurrentMap<ConnectorTaskId, ScheduledFuture<?>> committers = new ConcurrentHashMap<>();
+    private final WorkerConfig config;
+    private final ScheduledExecutorService commitExecutorService;
+    private final ConcurrentMap<ConnectorTaskId, ScheduledFuture<?>> committers;
 
-    SourceTaskOffsetCommitter(WorkerConfig config) {
+    // visible for testing
+    SourceTaskOffsetCommitter(WorkerConfig config,
+                              ScheduledExecutorService commitExecutorService,
+                              ConcurrentMap<ConnectorTaskId, ScheduledFuture<?>> committers) {
         this.config = config;
-        commitExecutorService = Executors.newSingleThreadScheduledExecutor();
+        this.commitExecutorService = commitExecutorService;
+        this.committers = committers;
+    }
+
+    public SourceTaskOffsetCommitter(WorkerConfig config) {
+        this(config, Executors.newSingleThreadScheduledExecutor(),
+                new ConcurrentHashMap<ConnectorTaskId, ScheduledFuture<?>>());
     }
 
     public void close(long timeoutMs) {
@@ -71,7 +80,7 @@ class SourceTaskOffsetCommitter {
         ScheduledFuture<?> commitFuture = commitExecutorService.scheduleWithFixedDelay(new Runnable() {
             @Override
             public void run() {
-                commit(id, workerTask);
+                commit(workerTask);
             }
         }, 0, commitIntervalMs, TimeUnit.MILLISECONDS);
         committers.put(id, commitFuture);
@@ -94,7 +103,7 @@ class SourceTaskOffsetCommitter {
         }
     }
 
-    private boolean commit(ConnectorTaskId id, WorkerSourceTask workerTask) {
+    private boolean commit(WorkerSourceTask workerTask) {
         try {
             log.debug("Committing offsets for {}", workerTask);
             boolean success = workerTask.commitOffsets();
