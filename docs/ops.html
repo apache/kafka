@@ -439,33 +439,6 @@ The throttle should be removed in a timely manner once reassignment completes (b
     increase the
     throttle throughput as described above. </p>
 
-<p><i>(3) Avoiding long delays during replication:</i></p>
-<p>The throttled throughput should be large enough that replicas cannot be starved for extended periods. A good,
-    conservative rule of thumb is
-    to keep throttle above #brokers MB/s where #brokers is the number of brokers in your cluster.  </p>
-<p>Administrators wishing to use lower throttle values can tune the response size used for replication based on
-    the relation:</p>
-<pre></pre>Worst-Case-Delay = replica.fetch.response.max.bytes x #brokers / throttle</pre>
-
-<p>Here, the admin should tune the throttle  and/or replica.fetch.response.max.bytes  appropriately to ensure the
-    delay is never larger than replica.lag.time.max.ms (as it is possible for some partitions, particularly smaller
-    ones, to enter the ISR before the rebalance completes) or the full throttle window:
-    (replication.quota.window.size.seconds x replication.quota.window.num) or the connection timeout.
-    <pre>replica.socket.timeout.ms.</pre></p>
-
-<p>As the default for replica.fetch.response.max.bytes is 10MB and the delay should be less than 10s
-    (replica.lag.time.max.ms).
-    This leads to the rule of thumb that throttles should never be less than #brokers MB/s .</p>
-
-<p>
-To better understand the relation let's consider an example. Say we have a 5 node cluster, with default settings.
-    We set a throttle of 10MB/s, cluster-wide, and add a new broker. The bootstrapping broker would replicate from
-    the other 5 brokers with requests of size 10MB (default replica.fetch.response.max.bytes). The worst case payload,
-    arriving at the same time on the bootstrapping broker, is 50MB. In this case the follower throttle, on the
-    bootstrapping broker, would delay subsequent replication requests for (50MB / 10MB/s) = 5s, which is acceptable.
-    However if we set the throttle to 1MB/s the worst-case delay would be 50s which is not acceptable.</p>
-
-
 
 <h4><a id="quotas" href="#quotas">Setting quotas</a></h4>
 Quotas overrides and defaults may be configured at (user, client-id), user or client-id levels as described <a href="#design_quotas">here</a>.
