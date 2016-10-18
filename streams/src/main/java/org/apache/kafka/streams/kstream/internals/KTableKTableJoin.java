@@ -36,13 +36,18 @@ class KTableKTableJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, 
 
     @Override
     public KTableValueGetterSupplier<K, R> view() {
-        return new KTableValueGetterSupplier<K, R>() {
+        return new KTableKTableJoinValueGetterSupplier(valueGetterSupplier1, valueGetterSupplier2);
+    }
 
-            public KTableValueGetter<K, R> get() {
-                return new KTableKTableJoinValueGetter(valueGetterSupplier1.get(), valueGetterSupplier2.get());
-            }
+    private class KTableKTableJoinValueGetterSupplier extends AbstractKTableKTableJoinValueGetterSupplier<K, R, V1, V2> {
 
-        };
+        public KTableKTableJoinValueGetterSupplier(KTableValueGetterSupplier<K, V1> valueGetterSupplier1, KTableValueGetterSupplier<K, V2> valueGetterSupplier2) {
+            super(valueGetterSupplier1, valueGetterSupplier2);
+        }
+
+        public KTableValueGetter<K, R> get() {
+            return new KTableKTableJoinValueGetter(valueGetterSupplier1.get(), valueGetterSupplier2.get());
+        }
     }
 
     private class KTableKTableJoinProcessor extends AbstractProcessor<K, Change<V1>> {

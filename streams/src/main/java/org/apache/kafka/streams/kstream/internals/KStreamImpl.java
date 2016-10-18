@@ -584,6 +584,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         String name = topology.newName(LEFTJOIN_NAME);
 
         topology.addProcessor(name, new KStreamKTableLeftJoin<>((KTableImpl<K, ?, V1>) other, joiner), this.name);
+        topology.connectProcessorAndStateStores(name, ((KTableImpl<K, ?, V1>) other).valueGetterSupplier().storeNames());
         topology.connectProcessors(this.name, ((KTableImpl<K, ?, V1>) other).name);
 
         return new KStreamImpl<>(topology, name, allSourceNodes, false);
@@ -703,8 +704,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
             topology.addProcessor(joinThisName, joinThis, thisWindowStreamName);
             topology.addProcessor(joinOtherName, joinOther, otherWindowStreamName);
             topology.addProcessor(joinMergeName, joinMerge, joinThisName, joinOtherName);
-            topology.addStateStore(thisWindow, thisWindowStreamName, otherWindowStreamName);
-            topology.addStateStore(otherWindow, thisWindowStreamName, otherWindowStreamName);
+            topology.addStateStore(thisWindow, thisWindowStreamName, joinOtherName);
+            topology.addStateStore(otherWindow, otherWindowStreamName, joinThisName);
 
             Set<String> allSourceNodes = new HashSet<>(((AbstractStream) lhs).sourceNodes);
             allSourceNodes.addAll(((KStreamImpl<K1, V2>) other).sourceNodes);
