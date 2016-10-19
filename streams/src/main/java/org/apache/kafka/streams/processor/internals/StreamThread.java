@@ -674,6 +674,27 @@ public class StreamThread extends Thread {
         return new StreamTask(id, applicationId, partitions, topology, consumer, producer, restoreConsumer, config, sensors, stateDirectory, cache);
     }
 
+    private StreamTask findMatchingSuspendedTask(final TaskId taskId, final Set<TopicPartition> partitions) {
+        if (suspendedTasks.containsKey(taskId)) {
+            final StreamTask task = suspendedTasks.get(taskId);
+            if (task.partitions.equals(partitions)) {
+                return task;
+            }
+        }
+        return null;
+    }
+
+    private StandbyTask findMatchingSuspendedStandbyTask(final TaskId taskId, final Set<TopicPartition> partitions) {
+        if (suspendedStandbyTasks.containsKey(taskId)) {
+            final StandbyTask task = suspendedStandbyTasks.get(taskId);
+            if (task.partitions.equals(partitions)) {
+                return task;
+            }
+        }
+        return null;
+    }
+
+
     private void addStreamTasks(Collection<TopicPartition> assignment) {
         if (partitionAssignor == null)
             throw new IllegalStateException(logPrefix + " Partition assignor has not been initialized while adding stream tasks: this should not happen.");
@@ -698,16 +719,8 @@ public class StreamThread extends Thread {
             Set<TopicPartition> partitions = entry.getValue();
 
             try {
-                StreamTask task = null;
-                boolean recycleTask = false;
-                // task ID and all partitions must match
-                if (suspendedTasks.containsKey(taskId)) {
-                    task = suspendedTasks.get(taskId);
-                    if (task.partitions.equals(partitions)) {
-                        recycleTask = true;
-                    }
-                }
-                if (recycleTask) {
+                StreamTask task = findMatchingSuspendedTask(taskId, partitions);
+                if (task != null) {
                     log.debug("{} recycling old task {}", logPrefix, taskId);
                     suspendedTasks.remove(taskId);
                 } else {
@@ -752,16 +765,9 @@ public class StreamThread extends Thread {
         for (Map.Entry<TaskId, Set<TopicPartition>> entry : partitionAssignor.standbyTasks().entrySet()) {
             TaskId taskId = entry.getKey();
             Set<TopicPartition> partitions = entry.getValue();
-            StandbyTask task = null;
-            boolean recycleTask = false;
-            // task ID and all partitions must match
-            if (suspendedStandbyTasks.containsKey(taskId)) {
-                task = suspendedStandbyTasks.get(taskId);
-                if (task.partitions.equals(partitions)) {
-                    recycleTask = true;
-                }
-            }
-            if (recycleTask) {
+            StandbyTask task = findMatchingSuspendedStandbyTask(taskId, partitions);
+
+            if (task != null) {
                 log.debug("{} recycling old standby task {}", logPrefix, taskId);
                 suspendedStandbyTasks.remove(taskId);
             } else {
@@ -827,6 +833,8 @@ public class StreamThread extends Thread {
             for (final AbstractTask task : suspendedTasks.values()) {
                 task.close();
                 task.closeStateManager();
+                // flush out any extra data sent during close
+                producer.flush();
             }
             suspendedTasks.clear();
         } catch (Exception e) {
@@ -841,6 +849,8 @@ public class StreamThread extends Thread {
             for (final AbstractTask task : suspendedStandbyTasks.values()) {
                 task.close();
                 task.closeStateManager();
+                // flush out any extra data sent during close
+                producer.flush();
             }
             suspendedStandbyTasks.clear();
         } catch (Exception e) {
