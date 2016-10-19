@@ -297,6 +297,18 @@ public class StreamThread extends Thread {
         log.info("{} Stream thread shutdown complete", logPrefix);
     }
 
+    private void unAssignChangeLogPartitions(final boolean rethrowExceptions) {
+        try {
+            // un-assign the change log partitions
+            restoreConsumer.assign(Collections.<TopicPartition>emptyList());
+        } catch (Exception e) {
+            log.error("{} Failed to un-assign change log partitions: ", logPrefix, e);
+            if (rethrowExceptions) {
+                throw e;
+            }
+        }
+    }
+
     private void shutdownTasksAndState(final boolean rethrowExceptions) {
         // Commit first as there may be cached records that have not been flushed yet.
         commitOffsets(rethrowExceptions);
@@ -308,15 +320,8 @@ public class StreamThread extends Thread {
         producer.flush();
         // Close all task state managers
         closeAllStateManagers(rethrowExceptions);
-        try {
-            // un-assign the change log partitions
-            restoreConsumer.assign(Collections.<TopicPartition>emptyList());
-        } catch (Exception e) {
-            log.error("{} Failed to un-assign change log partitions: ", logPrefix, e);
-            if (rethrowExceptions) {
-                throw e;
-            }
-        }
+        // remove the changelog partitions from restore consumer
+        unAssignChangeLogPartitions(rethrowExceptions);
     }
 
     /**
@@ -334,15 +339,9 @@ public class StreamThread extends Thread {
         flushAllState(rethrowExceptions);
         // flush out any extra data sent during close
         producer.flush();
-        try {
-            // un-assign the change log partitions
-            restoreConsumer.assign(Collections.<TopicPartition>emptyList());
-        } catch (Exception e) {
-            log.error("{} Failed to un-assign change log partitions: ", logPrefix, e);
-            if (rethrowExceptions) {
-                throw e;
-            }
-        }
+        // remove the changelog partitions from restore consumer
+        unAssignChangeLogPartitions(rethrowExceptions);
+
         suspendedTasks.clear();
         suspendedTasks.putAll(activeTasks);
         suspendedStandbyTasks.putAll(standbyTasks);
