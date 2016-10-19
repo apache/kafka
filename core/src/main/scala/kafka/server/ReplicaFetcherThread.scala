@@ -289,7 +289,9 @@ class ReplicaFetcherThread(name: String,
     val quotaExceeded = quota.isQuotaExceeded
     partitionMap.foreach { case (topicPartition, partitionFetchState) =>
       val topicAndPartition = new TopicAndPartition(topicPartition.topic, topicPartition.partition)
-      if (partitionFetchState.isActive && !(quota.isThrottled(topicAndPartition) && quotaExceeded))
+      // We will not include a replica in the fetch request if it's being throttled and it's not fully caught up yet.
+      if (partitionFetchState.isActive &&
+          !(quota.isThrottled(topicAndPartition) && quotaExceeded && !fetcherLagStats.isReplicaInSync(topicAndPartition.topic, topicAndPartition.partition)))
         requestMap.put(topicPartition, new JFetchRequest.PartitionData(partitionFetchState.offset, fetchSize))
     }
 

@@ -48,13 +48,14 @@ class ReplicaManagerQuotasTest {
   @Test
   def shouldExcludeSubsequentThrottledPartitions(): Unit = {
     setUpMocks(fetchInfo)
+    val followerReplicaId = configs.last.brokerId
 
     val quota = mockQuota(1000000)
     expect(quota.isQuotaExceeded()).andReturn(false).once()
     expect(quota.isQuotaExceeded()).andReturn(true).once()
     replay(quota)
 
-    val fetch = replicaManager.readFromLocalLog(true, true, Int.MaxValue, false, fetchInfo, quota)
+    val fetch = replicaManager.readFromLocalLog(followerReplicaId, true, true, Int.MaxValue, false, fetchInfo, quota)
     assertEquals("Given two partitions, with only one throttled, we should get the first", 1,
       fetch.find(_._1 == topicAndPartition1).get._2.info.messageSet.size)
 
@@ -65,13 +66,14 @@ class ReplicaManagerQuotasTest {
   @Test
   def shouldGetNoMessagesIfQuotasExceededOnSubsequentPartitions(): Unit = {
     setUpMocks(fetchInfo)
+    val followerReplicaId = configs.last.brokerId
 
     val quota = mockQuota(1000000)
     expect(quota.isQuotaExceeded()).andReturn(true).once()
     expect(quota.isQuotaExceeded()).andReturn(true).once()
     replay(quota)
 
-    val fetch = replicaManager.readFromLocalLog(true, true, Int.MaxValue, false, fetchInfo, quota)
+    val fetch = replicaManager.readFromLocalLog(followerReplicaId, true, true, Int.MaxValue, false, fetchInfo, quota)
     assertEquals("Given two partitions, with both throttled, we should get no messages", 0,
       fetch.find(_._1 == topicAndPartition1).get._2.info.messageSet.size)
     assertEquals("Given two partitions, with both throttled, we should get no messages", 0,
@@ -81,20 +83,39 @@ class ReplicaManagerQuotasTest {
   @Test
   def shouldGetBothMessagesIfQuotasAllow(): Unit = {
     setUpMocks(fetchInfo)
+    val followerReplicaId = configs.last.brokerId
 
     val quota = mockQuota(1000000)
     expect(quota.isQuotaExceeded()).andReturn(false).once()
     expect(quota.isQuotaExceeded()).andReturn(false).once()
     replay(quota)
 
-    val fetch = replicaManager.readFromLocalLog(true, true, Int.MaxValue, false, fetchInfo, quota)
+    val fetch = replicaManager.readFromLocalLog(followerReplicaId, true, true, Int.MaxValue, false, fetchInfo, quota)
     assertEquals("Given two partitions, with both non-throttled, we should get both messages", 1,
       fetch.find(_._1 == topicAndPartition1).get._2.info.messageSet.size)
     assertEquals("Given two partitions, with both non-throttled, we should get both messages", 1,
       fetch.find(_._1 == topicAndPartition2).get._2.info.messageSet.size)
   }
 
-  def setUpMocks(fetchInfo: Seq[(TopicAndPartition, PartitionFetchInfo)], message: Message = this.message) {
+  @Test
+  def shouldIncludeInSyncThrottledReplicas(): Unit = {
+    setUpMocks(fetchInfo, bothReplicasInSync = true)
+    val followerReplicaId = configs.last.brokerId
+
+    val quota = mockQuota(1000000)
+    expect(quota.isQuotaExceeded()).andReturn(false).once()
+    expect(quota.isQuotaExceeded()).andReturn(true).once()
+    replay(quota)
+
+    val fetch = replicaManager.readFromLocalLog(followerReplicaId, true, true, Int.MaxValue, false, fetchInfo, quota)
+    assertEquals("Given two partitions, with only one throttled, we should get the first", 1,
+      fetch.find(_._1 == topicAndPartition1).get._2.info.messageSet.size)
+
+    assertEquals("But we should get the second too since it's throttled but in sync", 1,
+      fetch.find(_._1 == topicAndPartition2).get._2.info.messageSet.size)
+  }
+
+  def setUpMocks(fetchInfo: Seq[(TopicAndPartition, PartitionFetchInfo)], message: Message = this.message, bothReplicasInSync: Boolean = false) {
     val zkUtils = createNiceMock(classOf[ZkUtils])
     val scheduler = createNiceMock(classOf[KafkaScheduler])
 
@@ -131,12 +152,19 @@ class ReplicaManagerQuotasTest {
     //create the two replicas
     for ((p, _) <- fetchInfo) {
       val partition = replicaManager.getOrCreatePartition(p.topic, p.partition)
-      val replica = new Replica(configs.head.brokerId, partition, time, 0, Some(log))
-      replica.highWatermark = new LogOffsetMetadata(5)
-      partition.leaderReplicaIdOpt = Some(replica.brokerId)
-      val allReplicas = List(replica)
+      val leaderReplica = new Replica(configs.head.brokerId, partition, time, 0, Some(log))
+      leaderReplica.highWatermark = new LogOffsetMetadata(5)
+      partition.leaderReplicaIdOpt = Some(leaderReplica.brokerId)
+      val followerReplica = new Replica(configs.last.brokerId, partition, time, 0, Some(log))
+      val allReplicas = Set(leaderReplica, followerReplica)
       allReplicas.foreach(partition.addReplicaIfNotExists(_))
-      partition.inSyncReplicas = allReplicas.toSet
+      if (bothReplicasInSync) {
+        partition.inSyncReplicas = allReplicas
+        followerReplica.highWatermark = new LogOffsetMetadata(5)
+      } else {
+        partition.inSyncReplicas = Set(leaderReplica)
+        followerReplica.highWatermark = new LogOffsetMetadata(0)
+      }
     }
   }
 
