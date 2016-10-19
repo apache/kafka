@@ -36,7 +36,7 @@ package org.apache.kafka.clients.producer;
  * In either of the cases above, the timestamp that has actually been used will be returned to user in
  * {@link RecordMetadata}
  */
-public final class ProducerRecord<K, V> {
+public class ProducerRecord<K, V> {
 
     private final String topic;
     private final Integer partition;
