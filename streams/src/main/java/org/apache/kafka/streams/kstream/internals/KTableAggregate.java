@@ -106,6 +106,10 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
                 return new KTableAggregateValueGetter();
             }
 
+            @Override
+            public String[] storeNames() {
+                return new String[]{storeName};
+            }
         };
     }
 

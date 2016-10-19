@@ -131,6 +131,10 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
                 return new KStreamWindowReduceValueGetter();
             }
 
+            @Override
+            public String[] storeNames() {
+                return new String[]{storeName};
+            }
         };
     }
 

@@ -128,7 +128,7 @@ object ClientUtils extends Logging{
              false
          }
        }
-       connected = if (channel == null) false else true
+       connected = channel != null
      }
 
      channel

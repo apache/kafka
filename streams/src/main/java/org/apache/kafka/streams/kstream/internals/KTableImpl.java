@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
@@ -32,7 +33,6 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
 
 import java.io.FileNotFoundException;
@@ -301,6 +301,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         topology.addProcessor(joinThisName, joinThis, this.name);
         topology.addProcessor(joinOtherName, joinOther, ((KTableImpl) other).name);
         topology.addProcessor(joinMergeName, joinMerge, joinThisName, joinOtherName);
+        topology.connectProcessorAndStateStores(joinThisName, other.getStoreName());
+        topology.connectProcessorAndStateStores(joinOtherName, getStoreName());
 
         return new KTableImpl<>(topology, joinMergeName, joinMerge, allSourceNodes, null);
     }
@@ -327,6 +329,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         topology.addProcessor(joinThisName, joinThis, this.name);
         topology.addProcessor(joinOtherName, joinOther, ((KTableImpl) other).name);
         topology.addProcessor(joinMergeName, joinMerge, joinThisName, joinOtherName);
+        topology.connectProcessorAndStateStores(joinThisName, other.getStoreName());
+        topology.connectProcessorAndStateStores(joinOtherName, getStoreName());
 
         return new KTableImpl<>(topology, joinMergeName, joinMerge, allSourceNodes, null);
     }
@@ -352,6 +356,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         topology.addProcessor(joinThisName, joinThis, this.name);
         topology.addProcessor(joinOtherName, joinOther, ((KTableImpl) other).name);
         topology.addProcessor(joinMergeName, joinMerge, joinThisName, joinOtherName);
+        topology.connectProcessorAndStateStores(joinThisName, other.getStoreName());
+        topology.connectProcessorAndStateStores(joinOtherName, getStoreName());
 
         return new KTableImpl<>(topology, joinMergeName, joinMerge, allSourceNodes, null);
     }

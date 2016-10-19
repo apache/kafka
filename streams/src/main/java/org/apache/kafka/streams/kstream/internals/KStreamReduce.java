@@ -92,6 +92,10 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
                 return new KStreamReduceValueGetter();
             }
 
+            @Override
+            public String[] storeNames() {
+                return new String[]{storeName};
+            }
         };
     }
 
