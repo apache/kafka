@@ -57,8 +57,6 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
     @Override
     public KTable<K, V> reduce(final Reducer<V> reducer,
                                final String storeName) {
-        Objects.requireNonNull(reducer, "reducer can't be null");
-        Objects.requireNonNull(storeName, "storeName can't be null");
         return reduce(reducer, keyValueStore(keySerde, valSerde, storeName));
     }
 
@@ -79,9 +77,6 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
     public <W extends Window> KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                                             final Windows<W> windows,
                                                             final String storeName) {
-        Objects.requireNonNull(reducer, "reducer can't be null");
-        Objects.requireNonNull(windows, "windows can't be null");
-        Objects.requireNonNull(storeName, "storeName can't be null");
         return reduce(reducer, windows, windowedStore(keySerde, valSerde, windows, storeName));
     }
 
@@ -105,9 +100,6 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
                                       final Aggregator<K, V, T> aggregator,
                                       final Serde<T> aggValueSerde,
                                       final String storeName) {
-        Objects.requireNonNull(initializer, "initializer can't be null");
-        Objects.requireNonNull(aggregator, "aggregator can't be null");
-        Objects.requireNonNull(storeName, "storeName can't be null");
         return aggregate(initializer, aggregator, keyValueStore(keySerde, aggValueSerde, storeName));
     }
 
@@ -131,10 +123,6 @@ public class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGrou
                                                                   final Windows<W> windows,
                                                                   final Serde<T> aggValueSerde,
                                                                   final String storeName) {
-        Objects.requireNonNull(initializer, "initializer can't be null");
-        Objects.requireNonNull(aggregator, "aggregator can't be null");
-        Objects.requireNonNull(windows, "windows can't be null");
-        Objects.requireNonNull(storeName, "storeName can't be null");
         return aggregate(initializer, aggregator, windows, windowedStore(keySerde, aggValueSerde, windows, storeName));
     }
 

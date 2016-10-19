@@ -36,10 +36,10 @@ class TupleForwarder<K, V> {
         }
     }
 
-    public void checkForNonFlushForward(final K key,
-                                        final V newValue,
-                                        final V oldValue,
-                                        final boolean sendOldValues) {
+    public void maybeForward(final K key,
+                             final V newValue,
+                             final V oldValue,
+                             final boolean sendOldValues) {
         if (!cached) {
             if (sendOldValues) {
                 context.forward(key, new Change<>(newValue, oldValue));

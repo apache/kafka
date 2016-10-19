@@ -79,7 +79,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
             }
             // update the store with the new value
             store.put(key, newAgg);
-            tupleForwarder.checkForNonFlushForward(key, newAgg, oldAgg, sendOldValues);
+            tupleForwarder.maybeForward(key, newAgg, oldAgg, sendOldValues);
         }
     }
 

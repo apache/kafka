@@ -82,7 +82,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
 
             // update the store with the new value
             store.put(key, newAgg);
-            tupleForwarder.checkForNonFlushForward(key, newAgg, oldAgg, sendOldValues);
+            tupleForwarder.maybeForward(key, newAgg, oldAgg, sendOldValues);
         }
     }
 

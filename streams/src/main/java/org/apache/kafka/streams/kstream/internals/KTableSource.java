@@ -83,7 +83,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
                 throw new StreamsException("Record key for the source KTable from store name " + storeName + " should not be null.");
             V oldValue = store.get(key);
             store.put(key, value);
-            tupleForwarder.checkForNonFlushForward(key, value, oldValue, sendOldValues);
+            tupleForwarder.maybeForward(key, value, oldValue, sendOldValues);
         }
     }
 }
