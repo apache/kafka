@@ -44,7 +44,7 @@ public class ConnectSchema implements Schema {
     private static final Map<Class<?>, Type> JAVA_CLASS_SCHEMA_TYPES = new HashMap<>();
 
     static {
-        SCHEMA_TYPE_CLASSES.put(Type.INT8, Arrays.asList((Class) Byte.class));
+        SCHEMA_TYPE_CLASSES.put(Type.INT8, Arrays.asList((Class) Byte.class,(Class) Short.class));
         SCHEMA_TYPE_CLASSES.put(Type.INT16, Arrays.asList((Class) Short.class));
         SCHEMA_TYPE_CLASSES.put(Type.INT32, Arrays.asList((Class) Integer.class));
         SCHEMA_TYPE_CLASSES.put(Type.INT64, Arrays.asList((Class) Long.class));
