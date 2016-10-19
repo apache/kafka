@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
@@ -181,6 +182,11 @@ public class KStreamImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullFilePathOnWriteAsText() throws Exception {
         testStream.writeAsText(null);
+    }
+
+    @Test(expected = TopologyBuilderException.class)
+    public void shouldNotAllowEmptyFilePathOnWriteAsText() throws Exception {
+        testStream.writeAsText("\t    \t");
     }
 
     @Test(expected = NullPointerException.class)
