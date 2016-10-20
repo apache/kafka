@@ -315,18 +315,6 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  def isReplicaInSync(topic: String, partitionId: Int, replicaId: Int): Boolean =  {
-    val partitionOpt = getPartition(topic, partitionId)
-    val replicaOpt = partitionOpt match {
-      case None => None
-      case Some(partition) => partition.getReplica(replicaId)
-    }
-    if (replicaOpt.isDefined)
-      partitionOpt.get.inSyncReplicas.contains(replicaOpt.get)
-    else
-      false
-  }
-
   /**
    * Append messages to leader replicas of the partition, and wait for them to be replicated to other replicas;
    * the callback function will be triggered either when timeout or the required acks are satisfied
@@ -478,8 +466,14 @@ class ReplicaManager(val config: KafkaConfig,
     val fetchOnlyCommitted: Boolean = ! Request.isValidBrokerId(replicaId)
 
     // read from local logs
-    val logReadResults = readFromLocalLog(replicaId, fetchOnlyFromLeader, fetchOnlyCommitted, fetchMaxBytes, hardMaxBytesLimit,
-      fetchInfos, quota)
+    val logReadResults = readFromLocalLog(
+      replicaId = replicaId,
+      fetchOnlyFromLeader = fetchOnlyFromLeader,
+      readOnlyCommitted = fetchOnlyCommitted,
+      fetchMaxBytes = fetchMaxBytes,
+      hardMaxBytesLimit = hardMaxBytesLimit,
+      readPartitionInfo = fetchInfos,
+      quota = quota)
 
     // if the fetch comes from the follower,
     // update its corresponding log end offset
@@ -572,8 +566,8 @@ class ReplicaManager(val config: KafkaConfig,
             // Try the read first, this tells us whether we need all of adjustedFetchSize for this partition
             val fetch = log.read(offset, adjustedFetchSize, maxOffsetOpt, minOneMessage)
 
-            // If the partition is marked as throttled and is not caught up, and we are over-quota then exclude it
-            if (quota.isThrottled(tp) && quota.isQuotaExceeded && !isReplicaInSync(topic, partition, replicaId))
+            // If the partition is being throttled, simply return an empty set.
+            if (shouldLeaderThrottle(quota, tp, replicaId))
               FetchDataInfo(fetch.fetchOffsetMetadata, MessageSet.Empty)
             // For FetchRequest version 3, we replace incomplete message sets with an empty one as consumers can make
             // progress in such cases and don't need to report a `RecordTooLargeException`
@@ -618,6 +612,16 @@ class ReplicaManager(val config: KafkaConfig,
       result += (tp -> readResult)
     }
     result
+  }
+
+  /**
+   *  To avoid ISR thrashing, we only throttle a replica on the leader if it's in the throttled replica list,
+   *  the quota is exceeded and the replica is not in sync.
+   */
+  def shouldLeaderThrottle(quota: ReplicaQuota, topicPartition: TopicAndPartition, replicaId: Int): Boolean = {
+    val isReplicaInSync: Boolean = getPartition(topicPartition.topic, topicPartition.partition).flatMap { partition =>
+      partition.getReplica(replicaId).map(partition.inSyncReplicas.contains)}.getOrElse(false)
+    quota.isThrottled(topicPartition) && quota.isQuotaExceeded && !isReplicaInSync
   }
 
   def getMessageFormatVersion(topicAndPartition: TopicAndPartition): Option[Byte] =

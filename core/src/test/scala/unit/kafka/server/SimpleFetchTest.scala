@@ -149,9 +149,23 @@ class SimpleFetchTest {
     val initialAllTopicsCount = BrokerTopicStats.getBrokerAllTopicsStats().totalFetchRequestRate.count()
 
     assertEquals("Reading committed data should return messages only up to high watermark", messagesToHW,
-      replicaManager.readFromLocalLog(Request.OrdinaryConsumerId, true, true, Int.MaxValue, false, fetchInfo, UnboundedQuota).find(_._1 == topicAndPartition).get._2.info.messageSet.head.message)
+      replicaManager.readFromLocalLog(
+        replicaId = Request.OrdinaryConsumerId,
+        fetchOnlyFromLeader = true,
+        readOnlyCommitted = true,
+        fetchMaxBytes = Int.MaxValue,
+        hardMaxBytesLimit = false,
+        readPartitionInfo = fetchInfo,
+        quota = UnboundedQuota).find(_._1 == topicAndPartition).get._2.info.messageSet.head.message)
     assertEquals("Reading any data can return messages up to the end of the log", messagesToLEO,
-      replicaManager.readFromLocalLog(Request.OrdinaryConsumerId, true, false, Int.MaxValue, false, fetchInfo, UnboundedQuota).find(_._1 == topicAndPartition).get._2.info.messageSet.head.message)
+      replicaManager.readFromLocalLog(
+        replicaId = Request.OrdinaryConsumerId,
+        fetchOnlyFromLeader = true,
+        readOnlyCommitted = false,
+        fetchMaxBytes = Int.MaxValue,
+        hardMaxBytesLimit = false,
+        readPartitionInfo = fetchInfo,
+        quota = UnboundedQuota).find(_._1 == topicAndPartition).get._2.info.messageSet.head.message)
 
     assertEquals("Counts should increment after fetch", initialTopicCount+2, BrokerTopicStats.getBrokerTopicStats(topic).totalFetchRequestRate.count())
     assertEquals("Counts should increment after fetch", initialAllTopicsCount+2, BrokerTopicStats.getBrokerAllTopicsStats().totalFetchRequestRate.count())
