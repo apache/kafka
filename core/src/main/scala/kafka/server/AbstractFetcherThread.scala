@@ -304,6 +304,14 @@ class FetcherLagStats(metricId: ClientIdAndBroker) {
     stats.getAndMaybePut(new ClientIdTopicPartition(metricId.clientId, topic, partitionId))
   }
 
+  def isReplicaInSync(topic: String, partitionId: Int): Boolean = {
+    val fetcherLagMetrics = stats.get(new ClientIdTopicPartition(metricId.clientId, topic, partitionId))
+    if (fetcherLagMetrics != null)
+      fetcherLagMetrics.lag <= 0
+    else
+      false
+  }
+
   def unregister(topic: String, partitionId: Int) {
     val lagMetrics = stats.remove(new ClientIdTopicPartition(metricId.clientId, topic, partitionId))
     if (lagMetrics != null) lagMetrics.unregister()

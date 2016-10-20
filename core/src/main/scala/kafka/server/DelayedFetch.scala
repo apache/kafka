@@ -42,6 +42,7 @@ case class FetchMetadata(fetchMinBytes: Int,
                          fetchOnlyLeader: Boolean,
                          fetchOnlyCommitted: Boolean,
                          isFromFollower: Boolean,
+                         replicaId: Int,
                          fetchPartitionStatus: Seq[(TopicAndPartition, FetchPartitionStatus)]) {
 
   override def toString = "[minBytes: " + fetchMinBytes + ", " +
@@ -97,7 +98,11 @@ class DelayedFetch(delayMs: Long,
                 // Case C, this can happen when the fetch operation is falling behind the current segment
                 // or the partition has just rolled a new segment
                 debug("Satisfying fetch %s immediately since it is fetching older segments.".format(fetchMetadata))
-                if (!(quota.isThrottled(topicAndPartition) && quota.isQuotaExceeded()))
+                // We will not force complete the fetch request if a replica should be throttled.
+                if (!replicaManager.shouldLeaderThrottle(
+                       quota,
+                       topicAndPartition,
+                       fetchMetadata.replicaId))
                   return forceComplete()
               } else if (fetchOffset.messageOffset < endOffset.messageOffset) {
                 // we take the partition fetch size as upper bound when accumulating the bytes (skip if a throttled partition)
@@ -139,12 +144,13 @@ class DelayedFetch(delayMs: Long,
    */
   override def onComplete() {
     val logReadResults = replicaManager.readFromLocalLog(
-      fetchMetadata.fetchOnlyLeader,
-      fetchMetadata.fetchOnlyCommitted,
-      fetchMetadata.fetchMaxBytes,
-      fetchMetadata.hardMaxBytesLimit,
-      fetchMetadata.fetchPartitionStatus.map { case (tp, status) => tp -> status.fetchInfo },
-      quota
+      replicaId = fetchMetadata.replicaId,
+      fetchOnlyFromLeader = fetchMetadata.fetchOnlyLeader,
+      readOnlyCommitted = fetchMetadata.fetchOnlyCommitted,
+      fetchMaxBytes = fetchMetadata.fetchMaxBytes,
+      hardMaxBytesLimit = fetchMetadata.hardMaxBytesLimit,
+      readPartitionInfo = fetchMetadata.fetchPartitionStatus.map { case (tp, status) => tp -> status.fetchInfo },
+      quota = quota
     )
 
     val fetchPartitionData = logReadResults.map { case (tp, result) =>
