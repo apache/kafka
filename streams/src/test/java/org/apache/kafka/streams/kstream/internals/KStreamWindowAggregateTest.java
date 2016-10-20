@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -228,13 +228,7 @@ public class KStreamWindowAggregateTest {
                     "[A@0]:0+1+1"
             );
             proc2.checkAndClearProcessResult();
-            proc3.checkAndClearProcessResult(
-                    "[A@0]:null",
-                    "[B@0]:null",
-                    "[C@0]:null",
-                    "[D@0]:null",
-                    "[A@0]:null"
-            );
+            proc3.checkAndClearProcessResult();
 
             setRecordContext(5, topic1);
             driver.process(topic1, "A", "1");
@@ -260,13 +254,7 @@ public class KStreamWindowAggregateTest {
                     "[C@0]:0+3+3", "[C@5]:0+3"
             );
             proc2.checkAndClearProcessResult();
-            proc3.checkAndClearProcessResult(
-                    "[A@0]:null", "[A@5]:null",
-                    "[B@0]:null", "[B@5]:null",
-                    "[D@0]:null", "[D@5]:null",
-                    "[B@0]:null", "[B@5]:null",
-                    "[C@0]:null", "[C@5]:null"
-            );
+            proc3.checkAndClearProcessResult();
 
             setRecordContext(0, topic1);
             driver.process(topic2, "A", "a");

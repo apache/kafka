@@ -22,43 +22,39 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.WindowStoreIterator;
 
+class KStreamKTableJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
-class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
-
-    private final String otherWindowName;
-    private final long joinBeforeMs;
-    private final long joinAfterMs;
-
+    private final KTableValueGetterSupplier<K, V2> valueGetterSupplier;
     private final ValueJoiner<V1, V2, R> joiner;
-    private final boolean outer;
+    private final boolean leftJoin;
 
-    KStreamKStreamJoin(String otherWindowName, long joinBeforeMs, long joinAfterMs, ValueJoiner<V1, V2, R> joiner, boolean outer) {
-        this.otherWindowName = otherWindowName;
-        this.joinBeforeMs = joinBeforeMs;
-        this.joinAfterMs = joinAfterMs;
+    KStreamKTableJoin(final KTableImpl<K, ?, V2> table, final ValueJoiner<V1, V2, R> joiner, final boolean leftJoin) {
+        valueGetterSupplier = table.valueGetterSupplier();
         this.joiner = joiner;
-        this.outer = outer;
+        this.leftJoin = leftJoin;
     }
 
     @Override
     public Processor<K, V1> get() {
-        return new KStreamKStreamJoinProcessor();
+        return new KStreamKTableJoinProcessor(valueGetterSupplier.get(), leftJoin);
     }
 
-    private class KStreamKStreamJoinProcessor extends AbstractProcessor<K, V1> {
+    private class KStreamKTableJoinProcessor extends AbstractProcessor<K, V1> {
 
-        private WindowStore<K, V2> otherWindow;
+        private final KTableValueGetter<K, V2> valueGetter;
+        private final boolean leftJoin;
 
-        @Override
-        public void init(ProcessorContext context) {
-            super.init(context);
-
-            otherWindow = (WindowStore<K, V2>) context.getStateStore(otherWindowName);
+        KStreamKTableJoinProcessor(final KTableValueGetter<K, V2> valueGetter, final boolean leftJoin) {
+            this.valueGetter = valueGetter;
+            this.leftJoin = leftJoin;
         }
 
+        @Override
+        public void init(final ProcessorContext context) {
+            super.init(context);
+            valueGetter.init(context);
+        }
 
         @Override
         public void process(final K key, final V1 value) {
@@ -68,23 +64,10 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
             // an empty message (ie, there is nothing to be joined) -- this contrast SQL NULL semantics
             // furthermore, on left/outer joins 'null' in ValueJoiner#apply() indicates a missing record --
             // thus, to be consistent and to avoid ambiguous null semantics, null values are ignored
-            if (key == null || value == null) {
-                return;
-            }
-
-            boolean needOuterJoin = outer;
-
-            final long timeFrom = Math.max(0L, context().timestamp() - joinBeforeMs);
-            final long timeTo = Math.max(0L, context().timestamp() + joinAfterMs);
-
-            try (WindowStoreIterator<V2> iter = otherWindow.fetch(key, timeFrom, timeTo)) {
-                while (iter.hasNext()) {
-                    needOuterJoin = false;
-                    context().forward(key, joiner.apply(value, iter.next().value));
-                }
-
-                if (needOuterJoin) {
-                    context().forward(key, joiner.apply(value, null));
+            if (key != null && value != null) {
+                final V2 value2 = valueGetter.get(key);
+                if (leftJoin || value2 != null) {
+                    context().forward(key, joiner.apply(value, value2));
                 }
             }
         }

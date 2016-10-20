@@ -69,21 +69,25 @@ class KTableKTableOuterJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
          * @throws StreamsException if key is null
          */
         @Override
-        public void process(K key, Change<V1> change) {
+        public void process(final K key, final Change<V1> change) {
             // the keys should never be null
             if (key == null)
                 throw new StreamsException("Record key for KTable outer-join operator should not be null.");
 
             R newValue = null;
             R oldValue = null;
-            V2 value2 = valueGetter.get(key);
 
-            if (change.newValue != null || value2 != null)
+            final V2 value2 = valueGetter.get(key);
+            if (value2 == null && change.newValue == null && change.oldValue == null) {
+                return;
+            }
+
+            if (value2 != null || change.newValue != null) {
                 newValue = joiner.apply(change.newValue, value2);
+            }
 
-            if (sendOldValues) {
-                if (change.oldValue != null || value2 != null)
-                    oldValue = joiner.apply(change.oldValue, value2);
+            if (sendOldValues && (value2 != null || change.oldValue != null)) {
+                oldValue = joiner.apply(change.oldValue, value2);
             }
 
             context().forward(key, new Change<>(newValue, oldValue));
