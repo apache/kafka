@@ -190,6 +190,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
      */
     @Override
     public void writeAsText(String filePath, String streamName, Serde<K> keySerde, Serde<V> valSerde) {
+        Objects.requireNonNull(filePath, "filePath can't be null");
+        if (filePath.trim().isEmpty()) {
+            throw new TopologyBuilderException("filePath can't be an empty string");
+        }
         String name = topology.newName(PRINTING_NAME);
         streamName = (streamName == null) ? this.name : streamName;
         try {
@@ -295,6 +299,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return doJoin(other, joiner, true, false);
     }
 
+    @SuppressWarnings("unchecked")
     private <V1, R> KTable<K, R> doJoin(final KTable<K, V1> other, ValueJoiner<V, V1, R> joiner, final boolean leftOuter, final boolean rightOuter) {
         Objects.requireNonNull(other, "other can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
@@ -327,7 +332,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         }
 
         final KTableKTableJoinMerger<K, R> joinMerge = new KTableKTableJoinMerger<>(
-                new KTableImpl<K, V, R>(topology, joinThisName, joinThis, this.sourceNodes, this.storeName),
+            new KTableImpl<K, V, R>(topology, joinThisName, joinThis, sourceNodes, storeName),
                 new KTableImpl<K, V1, R>(topology, joinOtherName, joinOther, ((KTableImpl<K, ?, ?>) other).sourceNodes, other.getStoreName())
         );
 
@@ -338,7 +343,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         topology.connectProcessorAndStateStores(joinOtherName, valueGetterSupplier().storeNames());
 
         return new KTableImpl<>(topology, joinMergeName, joinMerge, allSourceNodes, null);
-
     }
 
     @Override
@@ -363,6 +367,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return this.groupBy(selector, null, null);
     }
 
+    @SuppressWarnings("unchecked")
     KTableValueGetterSupplier<K, V> valueGetterSupplier() {
         if (processorSupplier instanceof KTableSource) {
             KTableSource<K, V> source = (KTableSource<K, V>) processorSupplier;
@@ -377,6 +382,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         }
     }
 
+    @SuppressWarnings("unchecked")
     void enableSendingOldValues() {
         if (!sendOldValues) {
             if (processorSupplier instanceof KTableSource) {

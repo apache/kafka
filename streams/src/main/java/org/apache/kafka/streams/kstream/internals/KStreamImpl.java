@@ -127,6 +127,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public <K1> KStream<K1, V> selectKey(final KeyValueMapper<K, V, K1> mapper) {
         Objects.requireNonNull(mapper, "mapper can't be null");
         return new KStreamImpl<>(topology, internalSelectKey(mapper), sourceNodes, true);
@@ -209,6 +210,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     @Override
     public void writeAsText(String filePath, String streamName, Serde<K> keySerde, Serde<V> valSerde) {
         Objects.requireNonNull(filePath, "filePath can't be null");
+        if (filePath.trim().isEmpty()) {
+            throw new TopologyBuilderException("filePath can't be an empty string");
+        }
         String name = topology.newName(PRINTING_NAME);
         streamName = (streamName == null) ? this.name : streamName;
         try {
@@ -244,6 +248,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public KStream<K, V>[] branch(Predicate<K, V>... predicates) {
         if (predicates.length == 0) {
             throw new IllegalArgumentException("you must provide at least one predicate");
@@ -335,6 +340,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         to(keySerde, valSerde, null, topic);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public void to(Serde<K> keySerde, Serde<V> valSerde, StreamPartitioner<K, V> partitioner, String topic) {
         Objects.requireNonNull(topic, "topic can't be null");
@@ -506,6 +512,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return sourceName;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <V1, R> KStream<K, R> leftJoin(
         final KStream<K, V1> other,
@@ -533,6 +540,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         return leftJoin(other, joiner, windows, null, null, null);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <V1, R> KStream<K, R> join(final KTable<K, V1> other, final ValueJoiner<V, V1, R> joiner) {
         return join(other, joiner, null, null);
@@ -544,8 +552,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                       final ValueJoiner<V, V1, R> joiner,
                                       final Serde<K> keySerde,
                                       final Serde<V> valueSerde) {
-        Objects.requireNonNull(other, "other KTable can't be null");
-        Objects.requireNonNull(joiner, "joiner can't be null");
         if (repartitionRequired) {
             final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(keySerde,
                 valueSerde, null);
@@ -558,6 +564,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     private <V1, R> KStream<K, R> doStreamTableJoin(final KTable<K, V1> other,
                                                     final ValueJoiner<V, V1, R> joiner,
                                                     final boolean leftJoin) {
+        Objects.requireNonNull(other, "other KTable can't be null");
+        Objects.requireNonNull(joiner, "joiner can't be null");
+
         final Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
 
         final String name = topology.newName(leftJoin ? LEFTJOIN_NAME : JOIN_NAME);
@@ -578,9 +587,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                                           final ValueJoiner<V, V1, R> joiner,
                                           final Serde<K> keySerde,
                                           final Serde<V> valueSerde) {
-        Objects.requireNonNull(other, "other KTable can't be null");
-        Objects.requireNonNull(joiner, "joiner can't be null");
-
         if (repartitionRequired) {
             final KStreamImpl<K, V> thisStreamRepartitioned = this.repartitionForJoin(keySerde,
                                                                                 valueSerde, null);

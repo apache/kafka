@@ -71,49 +71,49 @@ public class KTableKTableJoinIntegrationTest {
     public static Object[] parameters() {
         return new Object[][]{
             {JoinType.INNER, JoinType.INNER, Arrays.asList(
-                new KeyValue<>("a", null),
-                new KeyValue<>("b", null),
-                new KeyValue<>("c", null),
-                new KeyValue<>("a", null),
-                new KeyValue<>("b", null),
-                new KeyValue<>("b", "B1-B2-B3"),
-                new KeyValue<>("c", null))
-            },
+//                new KeyValue<>("a", null),
+//                new KeyValue<>("b", null),
+//                new KeyValue<>("c", null),
+//                new KeyValue<>("a", null),
+//                new KeyValue<>("b", null),
+                new KeyValue<>("b", "B1-B2-B3")//,
+//                new KeyValue<>("c", null)
+            )},
             {JoinType.INNER, JoinType.LEFT, Arrays.asList(
-                new KeyValue<>("a", null),
-                new KeyValue<>("b", null),
-                new KeyValue<>("c", null),
-                new KeyValue<>("a", null),
-                new KeyValue<>("b", null),
-                new KeyValue<>("b", "B1-B2-B3"),
-                new KeyValue<>("c", null)
+//                new KeyValue<>("a", null),
+//                new KeyValue<>("b", null),
+//                new KeyValue<>("c", null),
+//                new KeyValue<>("a", null),
+//                new KeyValue<>("b", null),
+                new KeyValue<>("b", "B1-B2-B3")//,
+//                new KeyValue<>("c", null)
             )},
             {JoinType.INNER, JoinType.OUTER, Arrays.asList(
                 new KeyValue<>("a", "null-A3"),
                 new KeyValue<>("b", "null-B3"),
                 new KeyValue<>("c", "null-C3"),
-                new KeyValue<>("a", "null-A3"),
-                new KeyValue<>("b", "null-B3"),
-                new KeyValue<>("b", "B1-B2-B3"),
-                new KeyValue<>("c", "null-C3")
+//                new KeyValue<>("a", "null-A3"),
+//                new KeyValue<>("b", "null-B3"),
+                new KeyValue<>("b", "B1-B2-B3")//,
+//                new KeyValue<>("c", "null-C3")
             )},
             {JoinType.LEFT, JoinType.INNER, Arrays.asList(
-                new KeyValue<>("a", null),
-                new KeyValue<>("b", null),
-                new KeyValue<>("c", null),
+//                new KeyValue<>("a", null),
+//                new KeyValue<>("b", null),
+//                new KeyValue<>("c", null),
                 new KeyValue<>("a", "A1-null-A3"),
                 new KeyValue<>("b", "B1-null-B3"),
-                new KeyValue<>("b", "B1-B2-B3"),
-                new KeyValue<>("c", null)
+                new KeyValue<>("b", "B1-B2-B3")//,
+//                new KeyValue<>("c", null)
             )},
             {JoinType.LEFT, JoinType.LEFT, Arrays.asList(
-                new KeyValue<>("a", null),
-                new KeyValue<>("b", null),
-                new KeyValue<>("c", null),
+//                new KeyValue<>("a", null),
+//                new KeyValue<>("b", null),
+//                new KeyValue<>("c", null),
                 new KeyValue<>("a", "A1-null-A3"),
                 new KeyValue<>("b", "B1-null-B3"),
-                new KeyValue<>("b", "B1-B2-B3"),
-                new KeyValue<>("c", null)
+                new KeyValue<>("b", "B1-B2-B3")//,
+//                new KeyValue<>("c", null)
             )},
             {JoinType.LEFT, JoinType.OUTER, Arrays.asList(
                 new KeyValue<>("a", "null-A3"),
@@ -121,22 +121,22 @@ public class KTableKTableJoinIntegrationTest {
                 new KeyValue<>("c", "null-C3"),
                 new KeyValue<>("a", "A1-null-A3"),
                 new KeyValue<>("b", "B1-null-B3"),
-                new KeyValue<>("b", "B1-B2-B3"),
-                new KeyValue<>("c", "null-C3")
+                new KeyValue<>("b", "B1-B2-B3")//,
+//                new KeyValue<>("c", "null-C3")
             )},
             {JoinType.OUTER, JoinType.INNER, Arrays.asList(
-                new KeyValue<>("a", null),
-                new KeyValue<>("b", null),
-                new KeyValue<>("c", null),
+//                new KeyValue<>("a", null),
+//                new KeyValue<>("b", null),
+//                new KeyValue<>("c", null),
                 new KeyValue<>("a", "A1-null-A3"),
                 new KeyValue<>("b", "B1-null-B3"),
                 new KeyValue<>("b", "B1-B2-B3"),
                 new KeyValue<>("c", "null-C2-C3")
             )},
             {JoinType.OUTER, JoinType.LEFT, Arrays.asList(
-                new KeyValue<>("a", null),
-                new KeyValue<>("b", null),
-                new KeyValue<>("c", null),
+//                new KeyValue<>("a", null),
+//                new KeyValue<>("b", null),
+//                new KeyValue<>("c", null),
                 new KeyValue<>("a", "A1-null-A3"),
                 new KeyValue<>("b", "B1-null-B3"),
                 new KeyValue<>("b", "B1-B2-B3"),
