@@ -70,7 +70,7 @@ object ProducerPerformance extends Logging {
   }
 
   class ProducerPerfConfig(args: Array[String]) extends PerfConfig(args) {
-    val brokerListOpt = parser.accepts("broker-list", "REQUIRED: broker info (the list of broker host and port for bootstrap.")
+    val brokerListOpt = parser.accepts("broker-list", "REQUIRED: broker info the list of broker host and port for bootstrap.")
       .withRequiredArg
       .describedAs("hostname:port,..,hostname:port")
       .ofType(classOf[String])
@@ -78,7 +78,7 @@ object ProducerPerformance extends Logging {
       .withRequiredArg
       .describedAs("topic1,topic2..")
       .ofType(classOf[String])
-    val producerRequestTimeoutMsOpt = parser.accepts("request-timeout-ms", "The produce request timeout in ms")
+    val producerRequestTimeoutMsOpt = parser.accepts("request-timeout-ms", "The producer request timeout in ms")
       .withRequiredArg()
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(3000)
