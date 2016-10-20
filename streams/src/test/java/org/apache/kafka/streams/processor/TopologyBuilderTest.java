@@ -604,7 +604,7 @@ public class TopologyBuilderTest {
         updatedTopics.add("topic-3");
         updatedTopics.add("topic-A");
 
-        builder.updateSubscriptions(subscriptionUpdates);
+        builder.updateSubscriptions(subscriptionUpdates, null);
         builder.setApplicationId("test-id");
 
         Map<Integer, TopicsInfo> topicGroups = builder.topicGroups();

@@ -1006,8 +1006,8 @@ public class TopologyBuilder {
         return this.topicPattern;
     }
 
-    public synchronized void updateSubscriptions(SubscriptionUpdates subscriptionUpdates) {
-        log.debug("updating builder with {} topic(s) with possible matching regex subscription(s)", subscriptionUpdates);
+    public synchronized void updateSubscriptions(SubscriptionUpdates subscriptionUpdates, String threadId) {
+        log.debug("stream-thread [{}] updating builder with {} topic(s) with possible matching regex subscription(s)", threadId, subscriptionUpdates);
         this.subscriptionUpdates = subscriptionUpdates;
         setRegexMatchedTopicsToSourceNodes();
     }
