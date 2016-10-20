@@ -134,6 +134,10 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
                 return new KStreamWindowAggregateValueGetter();
             }
 
+            @Override
+            public String[] storeNames() {
+                return new String[]{storeName};
+            }
         };
     }
 

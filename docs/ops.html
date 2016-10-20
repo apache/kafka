@@ -129,7 +129,10 @@ Here is an example showing how to mirror a single topic (named <i>my-topic</i>) 
 </pre>
 Note that we specify the list of topics with the <code>--whitelist</code> option. This option allows any regular expression using <a href="http://docs.oracle.com/javase/7/docs/api/java/util/regex/Pattern.html">Java-style regular expressions</a>. So you could mirror two topics named <i>A</i> and <i>B</i> using <code>--whitelist 'A|B'</code>. Or you could mirror <i>all</i> topics using <code>--whitelist '*'</code>. Make sure to quote any regular expression to ensure the shell doesn't try to expand it as a file path. For convenience we allow the use of ',' instead of '|' to specify a list of topics.
 <p>
-Sometimes it is easier to say what it is that you <i>don't</i> want. Instead of using <code>--whitelist</code> to say what you want to mirror you can use <code>--blacklist</code> to say what to exclude. This also takes a regular expression argument. However, <code>--blacklist</code> is not supported when using <code>--new.consumer</code>.
+Sometimes it is easier to say what it is that you <i>don't</i> want. Instead of using <code>--whitelist</code> to say what you want
+to mirror you can use <code>--blacklist</code> to say what to exclude. This also takes a regular expression argument.
+However, <code>--blacklist</code> is not supported when the new consumer has been enabled (i.e. when <code>bootstrap.servers</code>
+has been defined in the consumer configuration).
 <p>
 Combining mirroring with the configuration <code>auto.create.topics.enable=true</code> makes it possible to have a replica cluster that will automatically create and replicate all data in a source cluster even as new topics are added.
 
@@ -343,6 +346,100 @@ Topic:foo	PartitionCount:1	ReplicationFactor:3	Configs:
 	Topic: foo	Partition: 0	Leader: 5	Replicas: 5,6,7	Isr: 5,6,7
 </pre>
 
+<h4><a id="rep-throttle" href="#rep-throttle">Limiting Bandwidth Usage during Data Migration</a></h4>
+Kafka lets you apply a throttle to replication traffic, setting an upper bound on the bandwidth used to move replicas from machine to machine. This is useful when rebalancing a cluster, bootstrapping a new broker or adding or removing brokers, as it limits the impact these data-intensive operations will have on users.
+<p></p>
+There are two interfaces that can be used to engage a throttle. The simplest, and safest, is to apply a throttle when invoking the kafka-reassign-partitions.sh, but kafka-configs.sh can also be used to view and alter the throttle values directly.
+<p></p>
+So for example, if you were to execute a rebalance, with the below command, it would move partitions at no more than 50MB/s.
+<pre>$ bin/kafka-reassign-partitions.sh --zookeeper myhost:2181--execute --reassignment-json-file bigger-cluster.json —throttle 50000000</pre>
+When you execute this script you will see the throttle engage:
+<pre>
+The throttle limit was set to 50000000 B/s
+Successfully started reassignment of partitions.</pre>
+<p>Should you wish to alter the throttle, during a rebalance, say to increase the throughput so it completes quicker, you can do this by re-running the execute command passing the same reassignment-json-file:</p>
+<pre>$ bin/kafka-reassign-partitions.sh --zookeeper localhost:2181  --execute --reassignment-json-file bigger-cluster.json --throttle 700000000
+There is an existing assignment running.
+The throttle limit was set to 700000000 B/s</pre>
+
+<p>Once the rebalance completes the administrator can check the status of the rebalance using the --verify option.
+    If the rebalance has completed, the throttle will be removed via the --verify command. It is important that
+    administrators remove the throttle in a timely manner once rebalancing completes by running the command with
+    the --verify option. Failure to do so could cause regular replication traffic to be throttled. </p>
+<p>When the --verify option is executed, and the reassignment has completed, the script will confirm that the throttle was removed:</p>
+
+<pre>$ bin/kafka-reassign-partitions.sh --zookeeper localhost:2181  --verify --reassignment-json-file bigger-cluster.json
+Status of partition reassignment:
+Reassignment of partition [my-topic,1] completed successfully
+Reassignment of partition [mytopic,0] completed successfully
+Throttle was removed.</pre>
+
+<p>The administrator can also validate the assigned configs using the kafka-configs.sh. There are two pairs of throttle
+    configuration used to manage the throttling process. The throttle value itself. This is configured, at a broker
+    level, using the dynamic properties: </p>
+
+<pre>leader.replication.throttled.rate
+follower.replication.throttled.rate</pre>
+
+<p>There is also an enumerated set of throttled replicas: </p>
+
+<pre>leader.replication.throttled.replicas
+follower.replication.throttled.replicas</pre>
+
+<p>Which are configured per topic. All four config values are automatically assigned by kafka-reassign-partitions.sh
+    (discussed below). </p>
+<p>To view the throttle limit configuration:</p>
+
+<pre>$ bin/kafka-configs.sh --describe --zookeeper localhost:2181 --entity-type brokers
+Configs for brokers '2' are leader.replication.throttled.rate=700000000,follower.replication.throttled.rate=700000000
+Configs for brokers '1' are leader.replication.throttled.rate=700000000,follower.replication.throttled.rate=700000000</pre>
+
+<p>This shows the throttle applied to both leader and follower side of the replication protocol. By default both sides
+    are assigned the same throttled throughput value. </p>
+
+<p>To view the list of throttled replicas:</p>
+
+<pre>$ bin/kafka-configs.sh --describe --zookeeper localhost:2181 --entity-type topics
+Configs for topic 'my-topic' are leader.replication.throttled.replicas=1:102,0:101,
+    follower.replication.throttled.replicas=1:101,0:102</pre>
+
+<p>Here we see the leader throttle is applied to partition 1 on broker 102 and partition 0 on broker 101. Likewise the
+    follower throttle is applied to partition 1 on
+    broker 101 and partition 0 on broker 102. </p>
+
+<p>By default kafka-reassign-partitions.sh will apply the leader throttle to all replicas that exist before the
+    rebalance, any one of which might be leader.
+    It will apply the follower throttle to all move destinations. So if there is a partition with replicas on brokers
+    101,102, being reassigned to 102,103, a leader throttle,
+    for that partition, would be applied to 101,102 and a follower throttle would be applied to 103 only. </p>
+
+
+<p>If required, you can also use the --alter switch on kafka-configs.sh to alter the throttle configurations manually.
+</p>
+
+<h5>Safe usage of throttled replication</h5>
+
+<p>Some care should be taken when using throttled replication. In particular:</p>
+
+<p><i>(1) Throttle Removal:</i></p>
+The throttle should be removed in a timely manner once reassignment completes (by running kafka-reassign-partitions
+—verify).
+
+<p><i>(2) Ensuring Progress:</i></p>
+<p>If the throttle is set too low, in comparison to the incoming write rate, it is possible for replication to not
+    make progress. This occurs when:</p>
+<pre>max(BytesInPerSec) > throttle</pre>
+<p>
+    Where BytesInPerSec is the metric that monitors the write throughput of producers into each broker. </p>
+<p>The administrator can monitor whether replication is making progress, during the rebalance, using the metric:</p>
+
+<pre>kafka.server:type=FetcherLagMetrics,name=ConsumerLag,clientId=([-.\w]+),topic=([-.\w]+),partition=([0-9]+)</pre>
+
+<p>The lag should constantly decrease during replication.  If the metric does not decrease the administrator should
+    increase the
+    throttle throughput as described above. </p>
+
+
 <h4><a id="quotas" href="#quotas">Setting quotas</a></h4>
 Quotas overrides and defaults may be configured at (user, client-id), user or client-id levels as described <a href="#design_quotas">here</a>.
 By default, clients receive an unlimited quota.
@@ -495,7 +592,7 @@ producer.purgatory.purge.interval.requests=100
 
 Our client configuration varies a fair amount between different use cases.
 
-<h3><a id="java" href="#java">Java Version</a></h3>
+<h3><a id="java" href="#java">6.4 Java Version</a></h3>
 
 From a security perspective, we recommend you use the latest released version of JDK 1.8 as older freely available versions have disclosed security vulnerabilities.
 
@@ -518,7 +615,7 @@ For reference, here are the stats on one of LinkedIn's busiest clusters (at peak
 
 The tuning looks fairly aggressive, but all of the brokers in that cluster have a 90% GC pause time of about 21ms, and they're doing less than 1 young GC per second.
 
-<h3><a id="hwandos" href="#hwandos">6.4 Hardware and OS</a></h3>
+<h3><a id="hwandos" href="#hwandos">6.5 Hardware and OS</a></h3>
 We are using dual quad-core Intel Xeon machines with 24GB of memory.
 <p>
 You need sufficient memory to buffer active readers and writers. You can do a back-of-the-envelope estimate of memory needs by assuming you want to be able to buffer for 30 seconds and compute your memory need as write_throughput*30.
@@ -555,7 +652,7 @@ Note that durability in Kafka does not require syncing data to disk, as a failed
 <p>
 We recommend using the default flush settings which disable application fsync entirely. This means relying on the background flush done by the OS and Kafka's own background flush. This provides the best of all worlds for most uses: no knobs to tune, great throughput and latency, and full recovery guarantees. We generally feel that the guarantees provided by replication are stronger than sync to local disk, however the paranoid still may prefer having both and application level fsync policies are still supported.
 <p>
-The drawback of using application level flush settings is that it is less efficient in it's disk usage pattern (it gives the OS less leeway to re-order writes) and it can introduce latency as fsync in most Linux filesystems blocks writes to the file whereas the background flushing does much more granular page-level locking.
+The drawback of using application level flush settings is that it is less efficient in its disk usage pattern (it gives the OS less leeway to re-order writes) and it can introduce latency as fsync in most Linux filesystems blocks writes to the file whereas the background flushing does much more granular page-level locking.
 <p>
 In general you don't need to do any low-level tuning of the filesystem, but in the next few sections we will go over some of this in case it is useful.
 
@@ -563,7 +660,9 @@ In general you don't need to do any low-level tuning of the filesystem, but in t
 
 In Linux, data written to the filesystem is maintained in <a href="http://en.wikipedia.org/wiki/Page_cache">pagecache</a> until it must be written out to disk (due to an application-level fsync or the OS's own flush policy). The flushing of data is done by a set of background threads called pdflush (or in post 2.6.32 kernels "flusher threads").
 <p>
-Pdflush has a configurable policy that controls how much dirty data can be maintained in cache and for how long before it must be written back to disk. This policy is described <a href="http://www.westnet.com/~gsmith/content/linux-pdflush.htm">here</a>. When Pdflush cannot keep up with the rate of data being written it will eventually cause the writing process to block incurring latency in the writes to slow down the accumulation of data.
+Pdflush has a configurable policy that controls how much dirty data can be maintained in cache and for how long before it must be written back to disk.
+This policy is described <a href="http://web.archive.org/web/20160518040713/http://www.westnet.com/~gsmith/content/linux-pdflush.htm">here</a>.
+When Pdflush cannot keep up with the rate of data being written it will eventually cause the writing process to block incurring latency in the writes to slow down the accumulation of data.
 <p>
 You can see the current state of OS memory usage by doing
 <pre>

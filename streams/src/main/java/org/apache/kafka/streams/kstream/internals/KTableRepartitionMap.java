@@ -53,6 +53,11 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
             public KTableValueGetter<K, KeyValue<K1, V1>> get() {
                 return new KTableMapValueGetter(parentValueGetterSupplier.get());
             }
+
+            @Override
+            public String[] storeNames() {
+                throw new StreamsException("Underlying state store not accessible due to repartitioning.");
+            }
         };
     }
 

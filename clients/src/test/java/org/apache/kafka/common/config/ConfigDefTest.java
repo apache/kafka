@@ -222,7 +222,7 @@ public class ConfigDefTest {
 
         Map<String, ConfigValue> configValues = new HashMap<>();
 
-        for (String name: def.configKeys().keySet()) {
+        for (String name : def.configKeys().keySet()) {
             configValues.put(name, new ConfigValue(name));
         }
 
@@ -364,4 +364,99 @@ public class ConfigDefTest {
             }
         }
     }
+
+    @Test
+    public void toRst() {
+        final ConfigDef def = new ConfigDef()
+                .define("opt1", Type.STRING, "a", ValidString.in("a", "b", "c"), Importance.HIGH, "docs1")
+                .define("opt2", Type.INT, Importance.MEDIUM, "docs2")
+                .define("opt3", Type.LIST, Arrays.asList("a", "b"), Importance.LOW, "docs3");
+
+        final String expectedRst = "" +
+                "``opt2``\n" +
+                "  docs2\n" +
+                "\n" +
+                "  * Type: int\n" +
+                "  * Importance: medium\n" +
+                "\n" +
+                "``opt1``\n" +
+                "  docs1\n" +
+                "\n" +
+                "  * Type: string\n" +
+                "  * Default: a\n" +
+                "  * Valid Values: [a, b, c]\n" +
+                "  * Importance: high\n" +
+                "\n" +
+                "``opt3``\n" +
+                "  docs3\n" +
+                "\n" +
+                "  * Type: list\n" +
+                "  * Default: a,b\n" +
+                "  * Importance: low\n" +
+                "\n";
+
+        assertEquals(expectedRst, def.toRst());
+    }
+
+    @Test
+    public void toEnrichedRst() {
+        final ConfigDef def = new ConfigDef()
+                .define("opt1.of.group1", Type.STRING, "a", ValidString.in("a", "b", "c"), Importance.HIGH, "Doc doc.",
+                        "Group One", 0, Width.NONE, "..", Collections.<String>emptyList())
+                .define("opt2.of.group1", Type.INT, ConfigDef.NO_DEFAULT_VALUE, Importance.MEDIUM, "Doc doc doc.",
+                        "Group One", 1, Width.NONE, "..", Arrays.asList("some.option1", "some.option2"))
+                .define("opt2.of.group2", Type.BOOLEAN, false, Importance.HIGH, "Doc doc doc doc.",
+                        "Group Two", 1, Width.NONE, "..", Collections.<String>emptyList())
+                .define("opt1.of.group2", Type.BOOLEAN, false, Importance.HIGH, "Doc doc doc doc doc.",
+                        "Group Two", 0, Width.NONE, "..", Collections.singletonList("some.option"))
+                .define("poor.opt", Type.STRING, "foo", Importance.HIGH, "Doc doc doc doc.");
+
+        final String expectedRst = "" +
+                "``poor.opt``\n" +
+                "  Doc doc doc doc.\n" +
+                "\n" +
+                "  * Type: string\n" +
+                "  * Default: foo\n" +
+                "  * Importance: high\n" +
+                "\n" +
+                "Group One\n" +
+                "^^^^^^^^^\n" +
+                "\n" +
+                "``opt1.of.group1``\n" +
+                "  Doc doc.\n" +
+                "\n" +
+                "  * Type: string\n" +
+                "  * Default: a\n" +
+                "  * Valid Values: [a, b, c]\n" +
+                "  * Importance: high\n" +
+                "\n" +
+                "``opt2.of.group1``\n" +
+                "  Doc doc doc.\n" +
+                "\n" +
+                "  * Type: int\n" +
+                "  * Importance: medium\n" +
+                "  * Dependents: ``some.option1``, ``some.option2``\n" +
+                "\n" +
+                "Group Two\n" +
+                "^^^^^^^^^\n" +
+                "\n" +
+                "``opt1.of.group2``\n" +
+                "  Doc doc doc doc doc.\n" +
+                "\n" +
+                "  * Type: boolean\n" +
+                "  * Default: false\n" +
+                "  * Importance: high\n" +
+                "  * Dependents: ``some.option``\n" +
+                "\n" +
+                "``opt2.of.group2``\n" +
+                "  Doc doc doc doc.\n" +
+                "\n" +
+                "  * Type: boolean\n" +
+                "  * Default: false\n" +
+                "  * Importance: high\n" +
+                "\n";
+
+        assertEquals(expectedRst, def.toEnrichedRst());
+    }
+
 }
