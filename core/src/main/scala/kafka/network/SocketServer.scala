@@ -251,7 +251,8 @@ private[kafka] class Acceptor(val host: String,
         new InetSocketAddress(host, port)
     val serverChannel = ServerSocketChannel.open()
     serverChannel.configureBlocking(false)
-    serverChannel.socket().setReceiveBufferSize(recvBufferSize)
+    if(recvBufferSize > 0)
+      serverChannel.socket().setReceiveBufferSize(recvBufferSize)
     try {
       serverChannel.socket.bind(socketAddress)
       info("Awaiting socket connections on %s:%d.".format(socketAddress.getHostName, port))
@@ -272,7 +273,8 @@ private[kafka] class Acceptor(val host: String,
       connectionQuotas.inc(socketChannel.socket().getInetAddress)
       socketChannel.configureBlocking(false)
       socketChannel.socket().setTcpNoDelay(true)
-      socketChannel.socket().setSendBufferSize(sendBufferSize)
+      if(sendBufferSize > 0 )
+        socketChannel.socket().setSendBufferSize(sendBufferSize)
 
       debug("Accepted connection from %s on %s. sendBufferSize [actual|requested]: [%d|%d] recvBufferSize [actual|requested]: [%d|%d]"
             .format(socketChannel.socket.getInetAddress, socketChannel.socket.getLocalSocketAddress,

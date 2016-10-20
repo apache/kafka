@@ -128,8 +128,10 @@ public class Selector implements Selectable {
         channel.configureBlocking(false);
         Socket socket = channel.socket();
         socket.setKeepAlive(true);
-        socket.setSendBufferSize(sendBufferSize);
-        socket.setReceiveBufferSize(receiveBufferSize);
+        if(sendBufferSize > 0)
+            socket.setSendBufferSize(sendBufferSize);
+        if(receiveBufferSize > 0)
+            socket.setReceiveBufferSize(receiveBufferSize);
         socket.setTcpNoDelay(true);
         try {
             channel.connect(address);
