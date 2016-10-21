@@ -129,32 +129,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
     }
 
-    private static class AssignmentSupplier {
-        private final String consumer;
-        private final List<TaskId> active;
-        private final Map<TaskId, Set<TopicPartition>> standby;
-        private final Map<HostInfo, Set<TopicPartition>> endPointMap;
-        private final List<TopicPartition> activePartitions;
-
-        AssignmentSupplier(final String consumer,
-                           final List<TaskId> active,
-                           final Map<TaskId, Set<TopicPartition>> standby,
-                           final Map<HostInfo, Set<TopicPartition>> endPointMap,
-                           final List<TopicPartition> activePartitions) {
-            this.consumer = consumer;
-            this.active = active;
-            this.standby = standby;
-            this.endPointMap = endPointMap;
-            this.activePartitions = activePartitions;
-        }
-
-        Assignment get() {
-            return new Assignment(activePartitions, new AssignmentInfo(active,
-                    standby,
-                    endPointMap).encode());
-        }
-    }
-
     private static final Comparator<TopicPartition> PARTITION_COMPARATOR = new Comparator<TopicPartition>() {
         @Override
         public int compare(TopicPartition p1, TopicPartition p2) {
@@ -422,7 +396,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
 
         // also make sure the changelog topics are already created
-
         Map<String, InternalTopicMetadata> changelogTopicMetadata = new HashMap<>();
         for (Map.Entry<InternalTopicConfig, Set<TaskId>> entry : stateChangelogTopicToTaskIds.entrySet()) {
             // the expected number of partitions is the max value of TaskId.partition + 1
@@ -460,7 +433,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // ---------------- Step Three ---------------- //
 
         // construct the global partition assignment per host map
-        final Map<HostInfo, Set<TopicPartition>> partitionsByHostState = new HashMap<>();
+        final Map<HostInfo, Set<TopicPartition>> partitionsByHost = new HashMap<>();
         for (Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
             ClientState<TaskId> state = entry.getValue().state;
             final Set<TopicPartition> topicPartitions = new HashSet<>();
@@ -478,12 +451,11 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
 
             HostInfo hostInfo = entry.getValue().hostInfo;
-            partitionsByHostState.put(hostInfo, topicPartitions);
+            partitionsByHost.put(hostInfo, topicPartitions);
         }
 
         // within the client, distribute tasks to its owned consumers
-        final List<AssignmentSupplier> assignmentSuppliers = new ArrayList<>();
-
+        Map<String, Assignment> assignment = new HashMap<>();
         for (Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
             Set<String> consumers = entry.getValue().consumers;
             ClientState<TaskId> state = entry.getValue().state;
@@ -528,31 +500,15 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 for (AssignedPartition partition : assignedPartitions) {
                     active.add(partition.taskId);
                     activePartitions.add(partition.partition);
-                    HostInfo hostInfo = entry.getValue().hostInfo;
-                    if (hostInfo != null) {
-                        if (!endPointMap.containsKey(hostInfo)) {
-                            endPointMap.put(hostInfo, new HashSet<TopicPartition>());
-                        }
-                        final Set<TopicPartition> topicPartitions = endPointMap.get(hostInfo);
-                        topicPartitions.add(partition.partition);
-                    }
                 }
 
-                assignmentSuppliers.add(new AssignmentSupplier(consumer,
-                                                               active,
-                                                               standby,
-                                                               endPointMap,
-                                                               activePartitions));
+                // finally, encode the assignment before sending back to coordinator
+                assignment.put(consumer, new Assignment(activePartitions, new AssignmentInfo(active, standby, partitionsByHost).encode()));
 
                 i++;
             }
         }
 
-        // finally, encode the assignment before sending back to coordinator
-        Map<String, Assignment> assignment = new HashMap<>();
-        for (AssignmentSupplier assignmentSupplier : assignmentSuppliers) {
-            assignment.put(assignmentSupplier.consumer, assignmentSupplier.get());
-        }
         return assignment;
     }
 
@@ -582,7 +538,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             } else {
                 TaskAssignmentException ex = new TaskAssignmentException(
                         String.format("stream-thread [%s] failed to find a task id for the partition=%s" +
-                        ", partitions=%d, assignmentInfo=%s", streamThread.getName(), partition.toString(), partitions.size(), info.toString())
+                        ", num.partitions=%d, assignmentInfo=%s", streamThread.getName(), partition.toString(), partitions.size(), info.toString())
                 );
                 log.error(ex.getMessage(), ex);
                 throw ex;
