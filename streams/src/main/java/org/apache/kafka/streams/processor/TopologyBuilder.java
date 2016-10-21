@@ -431,15 +431,9 @@ public class TopologyBuilder {
                 }
             }
 
-            if (offsetReset != null) {
-                if (offsetReset == StreamsConfig.AutoOffsetReset.EARLIEST) {
-                    earliestResetTopics.add(topic);
-                } else  if (offsetReset == StreamsConfig.AutoOffsetReset.LATEST) {
-                    latestResetTopics.add(topic);
-                } else {
-                    throw new TopologyBuilderException(String.format("Unrecognized reset format %s", offsetReset));
-                }
-            }
+
+            maybeAddToResetList(earliestResetTopics, latestResetTopics, offsetReset, topic);
+
             sourceTopicNames.add(topic);
         }
 
@@ -508,15 +502,7 @@ public class TopologyBuilder {
             }
         }
 
-        if (offsetReset != null) {
-            if (offsetReset == StreamsConfig.AutoOffsetReset.EARLIEST) {
-                earliestResetPatterns.add(topicPattern);
-            } else if (offsetReset == StreamsConfig.AutoOffsetReset.LATEST) {
-                latestResetPatterns.add(topicPattern);
-            } else {
-                throw new TopologyBuilderException(String.format("Unrecognized reset format %s", offsetReset));
-            }
-        }
+        maybeAddToResetList(earliestResetPatterns, latestResetPatterns, offsetReset, topicPattern);
 
         nodeFactories.put(name, new SourceNodeFactory(name, null, topicPattern, keyDeserializer, valDeserializer));
         nodeToSourcePatterns.put(name, topicPattern);
@@ -828,6 +814,19 @@ public class TopologyBuilder {
         }
         stateStoreNameToSourceTopics.put(stateStoreName,
                 Collections.unmodifiableSet(sourceTopics));
+    }
+
+
+    private <T> void maybeAddToResetList(Collection<T> earliestResets, Collection<T> latestResets, StreamsConfig.AutoOffsetReset offsetReset, T item) {
+        if (offsetReset != null) {
+            if (offsetReset == StreamsConfig.AutoOffsetReset.EARLIEST) {
+                earliestResets.add(item);
+            } else if (offsetReset == StreamsConfig.AutoOffsetReset.LATEST) {
+                latestResets.add(item);
+            } else {
+                throw new TopologyBuilderException(String.format("Unrecognized reset format %s", offsetReset));
+            }
+        }
     }
 
     /**
