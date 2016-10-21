@@ -79,7 +79,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     private static class ClientMetadata {
         final HostInfo hostInfo;
         final Set<String> consumers;
-        final ClientState<TaskId> state;
+        ClientState<TaskId> state;
 
         ClientMetadata(String endPoint) {
 
@@ -106,6 +106,15 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             state.prevAssignedTasks.addAll(info.prevTasks);
             state.prevAssignedTasks.addAll(info.standbyTasks);
             state.capacity = state.capacity + 1d;
+        }
+
+        @Override
+        public String toString() {
+            return "ClientMetadata{" +
+                    "hostInfo=" + hostInfo +
+                    ", consumers=" + consumers +
+                    ", state=" + state +
+                    '}';
         }
     }
 
@@ -245,11 +254,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         if (streamThread.builder.sourceTopicPattern() != null) {
             SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
-<<<<<<< HEAD
-            log.debug("stream-thread [{}] have {} topics matching regex", streamThread.getName(), topics);
-=======
             log.debug("stream-thread [{}] found {} topics possibly matching regex", streamThread.getName(), topics);
->>>>>>> 62c0972efc525cc0677bd3fd470bd9fbbd70b004
             // update the topic groups with the returned subscription set for regex pattern subscriptions
             subscriptionUpdates.updateTopics(topics);
             streamThread.builder.updateSubscriptions(subscriptionUpdates, streamThread.getName());
@@ -301,6 +306,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             // add the consumer to the client
             clientMetadata.addConsumer(consumerId, info);
         }
+
+        log.info("stream-thread [{}] Constructed client metadata {} from the member subscriptions.", streamThread.getName(), clientsMetadata);
 
         // ---------------- Step Zero ---------------- //
 
@@ -386,6 +393,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         if (internalTopicManager != null)
             metadataWithInternalTopics = metadata.withPartitions(allRepartitionTopicPartitions);
 
+        log.debug("stream-thread [{}] Created repartition topics {} from the parsed topology.", streamThread.getName(), allRepartitionTopicPartitions.values());
 
         // ---------------- Step One ---------------- //
 
@@ -432,6 +440,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         prepareTopic(changelogTopicMetadata);
 
+        log.debug("stream-thread [{}] Created state changelog topics {} from the parsed topology.", streamThread.getName(), changelogTopicMetadata);
 
         // ---------------- Step Two ---------------- //
 
@@ -441,14 +450,40 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             states.put(entry.getKey(), entry.getValue().state);
         }
 
-        states = TaskAssignor.assign(states, partitionsForTask.keySet(), numStandbyReplicas, streamThread.getName());
+        log.debug("stream-thread [{}] Assigning tasks {} to clients {} with number of replicas {}",
+                streamThread.getName(), partitionsForTask.keySet(), states, numStandbyReplicas);
+
+        TaskAssignor.assign(states, partitionsForTask.keySet(), numStandbyReplicas);
+
+        log.info("stream-thread [{}] Assigned tasks to clients as {}.", streamThread.getName(), states);
 
         // ---------------- Step Three ---------------- //
+
+        // construct the global partition assignment per host map
+        final Map<HostInfo, Set<TopicPartition>> partitionsByHostState = new HashMap<>();
+        for (Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
+            ClientState<TaskId> state = entry.getValue().state;
+            final Set<TopicPartition> topicPartitions = new HashSet<>();
+
+            for (TaskId id : state.activeTasks) {
+                for (TopicPartition partition : partitionsForTask.get(id)) {
+                    topicPartitions.add(partition);
+                }
+            }
+
+            for (TaskId id : state.assignedTasks) {
+                for (TopicPartition partition : partitionsForTask.get(id)) {
+                    topicPartitions.add(partition);
+                }
+            }
+
+            HostInfo hostInfo = entry.getValue().hostInfo;
+            partitionsByHostState.put(hostInfo, topicPartitions);
+        }
 
         // within the client, distribute tasks to its owned consumers
         final List<AssignmentSupplier> assignmentSuppliers = new ArrayList<>();
 
-        final Map<HostInfo, Set<TopicPartition>> endPointMap = new HashMap<>();
         for (Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
             Set<String> consumers = entry.getValue().consumers;
             ClientState<TaskId> state = entry.getValue().state;
@@ -554,7 +589,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
         }
         this.partitionToTaskIds = partitionToTaskIds;
-        this.partitionsByHostState = info.partitionsByHostState;
+        this.partitionsByHostState = info.partitionsByHost;
+
         // only need to build when not coordinator
         if (metadataWithInternalTopics == null) {
             final Collection<Set<TopicPartition>> values = partitionsByHostState.values();

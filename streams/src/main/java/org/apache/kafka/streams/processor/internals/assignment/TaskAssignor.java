@@ -33,24 +33,20 @@ public class TaskAssignor<C, T extends Comparable<T>> {
 
     private static final Logger log = LoggerFactory.getLogger(TaskAssignor.class);
 
-    public static <C, T extends Comparable<T>> Map<C, ClientState<T>> assign(Map<C, ClientState<T>> states, Set<T> tasks, int numStandbyReplicas, String streamThreadId) {
+    public static <C, T extends Comparable<T>> void assign(Map<C, ClientState<T>> states, Set<T> tasks, int numStandbyReplicas) {
         long seed = 0L;
         for (C client : states.keySet()) {
             seed += client.hashCode();
         }
 
         TaskAssignor<C, T> assignor = new TaskAssignor<>(states, tasks, seed);
-        log.info("stream-thread [{}] Assigning tasks\n{}\nto clients\n{}\nprevAssignmentBalanced: {}, " +
-            "prevClientsUnchanged: {}, number of replicas: {}",
-            streamThreadId, tasks, states,
-            assignor.prevAssignmentBalanced, assignor.prevClientsUnchanged, numStandbyReplicas);
 
+        // assign active tasks
         assignor.assignTasks();
+
+        // assign standby tasks
         if (numStandbyReplicas > 0)
             assignor.assignStandbyTasks(numStandbyReplicas);
-
-        log.info("stream-thread [{}] Task assignment result: {}", streamThreadId, assignor.states);
-        return assignor.states;
     }
 
     private final Random rand;
@@ -63,25 +59,27 @@ public class TaskAssignor<C, T extends Comparable<T>> {
 
     private TaskAssignor(Map<C, ClientState<T>> states, Set<T> tasks, long randomSeed) {
         this.rand = new Random(randomSeed);
-        this.states = new HashMap<>();
+        this.tasks = new ArrayList<>(tasks);
+        this.states = states;
+
         int avgNumTasks = tasks.size() / states.size();
         Set<T> existingTasks = new HashSet<>();
         for (Map.Entry<C, ClientState<T>> entry : states.entrySet()) {
-            this.states.put(entry.getKey(), entry.getValue().copy());
             Set<T> oldTasks = entry.getValue().prevAssignedTasks;
+
             // make sure the previous assignment is balanced
             prevAssignmentBalanced = prevAssignmentBalanced &&
                 oldTasks.size() < 2 * avgNumTasks && oldTasks.size() > avgNumTasks / 2;
+
+            // make sure there is no duplicates
             for (T task : oldTasks) {
-                // Make sure there is no duplicates
                 prevClientsUnchanged = prevClientsUnchanged && !existingTasks.contains(task);
             }
             existingTasks.addAll(oldTasks);
         }
-        // Make sure the existing assignment didn't miss out any task
-        prevClientsUnchanged = prevClientsUnchanged && existingTasks.equals(tasks);
 
-        this.tasks = new ArrayList<>(tasks);
+        // make sure the existing assignment didn't miss out any task
+        prevClientsUnchanged = prevClientsUnchanged && existingTasks.equals(tasks);
 
         int numTasks = tasks.size();
         this.maxNumTaskPairs = numTasks * (numTasks - 1) / 2;

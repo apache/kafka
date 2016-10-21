@@ -22,9 +22,9 @@ import java.util.Set;
 
 public class ClientState<T> {
 
-    public final static double COST_ACTIVE = 0.1;
-    public final static double COST_STANDBY  = 0.2;
-    public final static double COST_LOAD = 0.5;
+    final static double COST_ACTIVE = 0.1;
+    final static double COST_STANDBY  = 0.2;
+    final static double COST_LOAD = 0.5;
 
     public final Set<T> activeTasks;
     public final Set<T> standbyTasks;
