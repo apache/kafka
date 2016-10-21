@@ -387,7 +387,7 @@ class LogSegment(val log: FileMessageSet,
    * the truncated log and maybe retry or even do the search on another log segment.
    *
    * @param timestamp The timestamp to search for.
-   * @return the timestamp and offset of the first message whose timestamp is larger than or equals to the
+   * @return the timestamp and offset of the first message whose timestamp is larger than or equal to the
    *         target timestamp. None will be returned if there is no such message.
    */
   def findOffsetByTimestamp(timestamp: Long): Option[TimestampOffset] = {

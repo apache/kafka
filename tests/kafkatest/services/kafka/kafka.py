@@ -68,14 +68,14 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
                  client_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI,
                  authorizer_class_name=None, topics=None, version=TRUNK, jmx_object_names=None,
-                 jmx_attributes=[], zk_connect_timeout=5000, zk_session_timeout=6000):
+                 jmx_attributes=None, zk_connect_timeout=5000, zk_session_timeout=6000):
         """
         :type context
         :type zk: ZookeeperService
         :type topics: dict
         """
         Service.__init__(self, context, num_nodes)
-        JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes)
+        JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes or [])
 
         self.zk = zk
 
@@ -251,15 +251,23 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         """
         if node is None:
             node = self.nodes[0]
-        self.logger.info("Creating topic %s with settings %s", topic_cfg["topic"], topic_cfg)
+        self.logger.info("Creating topic %s with settings %s",
+                         topic_cfg["topic"], topic_cfg)
         kafka_topic_script = self.path.script("kafka-topics.sh", node)
 
         cmd = kafka_topic_script + " "
-        cmd += "--zookeeper %(zk_connect)s --create --topic %(topic)s --partitions %(partitions)d --replication-factor %(replication)d" % {
+        cmd += "--zookeeper %(zk_connect)s --create --topic %(topic)s " % {
                 'zk_connect': self.zk.connect_setting(),
                 'topic': topic_cfg.get("topic"),
-                'partitions': topic_cfg.get('partitions', 1), 
-                'replication': topic_cfg.get('replication-factor', 1)
+           }
+        if 'replica-assignment' in topic_cfg:
+            cmd += " --replica-assignment %(replica-assignment)s" % {
+                'replica-assignment': topic_cfg.get('replica-assignment')
+            }
+        else:
+            cmd += " --partitions %(partitions)d --replication-factor %(replication-factor)d" % {
+                'partitions': topic_cfg.get('partitions', 1),
+                'replication-factor': topic_cfg.get('replication-factor', 1)
             }
 
         if "configs" in topic_cfg.keys() and topic_cfg["configs"] is not None:
@@ -283,7 +291,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         for line in node.account.ssh_capture(cmd):
             output += line
         return output
-    
+
     def alter_message_format(self, topic, msg_format_version, node=None):
         if node is None:
             node = self.nodes[0]
@@ -351,12 +359,18 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         self.logger.debug(output)
 
-        if re.match(".*is in progress.*", output) is not None:
+        if re.match(".*Reassignment of partition.*failed.*",
+                    output.replace('\n', '')) is not None:
+            return False
+
+        if re.match(".*is still in progress.*",
+                    output.replace('\n', '')) is not None:
             return False
 
         return True
 
-    def execute_reassign_partitions(self, reassignment, node=None):
+    def execute_reassign_partitions(self, reassignment, node=None,
+                                    throttle=None):
         """Run the reassign partitions admin tool in "verify" mode
         """
         if node is None:
@@ -373,6 +387,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         cmd += "--zookeeper %s " % self.zk.connect_setting()
         cmd += "--reassignment-json-file %s " % json_file
         cmd += "--execute"
+        if throttle is not None:
+            cmd += " --throttle %d" % throttle
         cmd += " && sleep 1 && rm -f %s" % json_file
 
         # send command
@@ -393,7 +409,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         """
         payload_match = "payload: " + "$|payload: ".join(str(x) for x in messages) + "$"
         found = set([])
-
+        self.logger.debug("number of unique missing messages we will search for: %d",
+                          len(messages))
         for node in self.nodes:
             # Grab all .log files in directories prefixed with this topic
             files = node.account.ssh_capture("find %s -regex  '.*/%s-.*/[^/]*.log'" % (KafkaService.DATA_LOG_DIR, topic))
@@ -409,6 +426,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                             self.logger.debug("Found %s in data-file [%s] in line: [%s]" % (val, log.strip(), line.strip()))
                             found.add(val)
 
+        self.logger.debug("Number of unique messages found in the log: %d",
+                          len(found))
         missing = list(set(messages) - found)
 
         if len(missing) > 0:

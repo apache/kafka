@@ -14,23 +14,18 @@
 
 package kafka.api
 
-import java.util.Properties
+import java.util.{Collections, Properties}
 
 import kafka.server.{DynamicConfig, KafkaConfig, KafkaServer, QuotaId}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
-import org.apache.kafka.common.MetricName
-import org.apache.kafka.common.metrics.{Quota, KafkaMetric}
+import org.apache.kafka.common.{MetricName, TopicPartition}
+import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-
-import scala.collection.JavaConversions._
-import scala.collection.JavaConverters._
-import scala.collection.Map
-import scala.collection.mutable
 
 abstract class BaseQuotaTest extends IntegrationTestHarness {
 
@@ -87,18 +82,14 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
 
   @Test
   def testThrottledProducerConsumer() {
-    val allMetrics: mutable.Map[MetricName, KafkaMetric] = leaderNode.metrics.metrics().asScala
 
     val numRecords = 1000
-    produce(producers.head, numRecords)
-
-    val producerMetricName = throttleMetricName(ApiKeys.PRODUCE, producerQuotaId)
-    assertTrue("Should have been throttled", allMetrics(producerMetricName).value() > 0)
+    val produced = produceUntilThrottled(producers.head, numRecords)
+    assertTrue("Should have been throttled", producerThrottleMetric.value > 0)
 
     // Consumer should read in a bursty manner and get throttled immediately
-    consume(consumers.head, numRecords)
-    val consumerMetricName = throttleMetricName(ApiKeys.FETCH, consumerQuotaId)
-    assertTrue("Should have been throttled", allMetrics(consumerMetricName).value() > 0)
+    consumeUntilThrottled(consumers.head, produced)
+    assertTrue("Should have been throttled", consumerThrottleMetric.value > 0)
   }
 
   @Test
@@ -111,60 +102,71 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     overrideQuotas(Long.MaxValue, Long.MaxValue)
     waitForQuotaUpdate(Long.MaxValue, Long.MaxValue)
 
-    val allMetrics: mutable.Map[MetricName, KafkaMetric] = leaderNode.metrics.metrics().asScala
     val numRecords = 1000
-    produce(producers.head, numRecords)
-    val producerMetricName = throttleMetricName(ApiKeys.PRODUCE, producerQuotaId)
-    assertEquals("Should not have been throttled", 0.0, allMetrics(producerMetricName).value(), 0.0)
+    assertEquals(numRecords, produceUntilThrottled(producers.head, numRecords))
+    assertEquals("Should not have been throttled", 0.0, producerThrottleMetric.value, 0.0)
 
     // The "client" consumer does not get throttled.
-    consume(consumers.head, numRecords)
-    val consumerMetricName = throttleMetricName(ApiKeys.FETCH, consumerQuotaId)
-    assertEquals("Should not have been throttled", 0.0, allMetrics(consumerMetricName).value(), 0.0)
+    assertEquals(numRecords, consumeUntilThrottled(consumers.head, numRecords))
+    assertEquals("Should not have been throttled", 0.0, consumerThrottleMetric.value, 0.0)
   }
 
   @Test
   def testQuotaOverrideDelete() {
     // Override producer and consumer quotas to unlimited
     overrideQuotas(Long.MaxValue, Long.MaxValue)
+    waitForQuotaUpdate(Long.MaxValue, Long.MaxValue)
 
-    val allMetrics: mutable.Map[MetricName, KafkaMetric] = leaderNode.metrics.metrics().asScala
     val numRecords = 1000
-    produce(producers.head, numRecords)
-    assertTrue("Should not have been throttled", allMetrics(throttleMetricName(ApiKeys.PRODUCE, producerQuotaId)).value() == 0)
-    consume(consumers.head, numRecords)
-    assertTrue("Should not have been throttled", allMetrics(throttleMetricName(ApiKeys.FETCH, consumerQuotaId)).value() == 0)
+    assertEquals(numRecords, produceUntilThrottled(producers.head, numRecords))
+    assertEquals("Should not have been throttled", 0.0, producerThrottleMetric.value, 0.0)
+    assertEquals(numRecords, consumeUntilThrottled(consumers.head, numRecords))
+    assertEquals("Should not have been throttled", 0.0, consumerThrottleMetric.value, 0.0)
 
     // Delete producer and consumer quota overrides. Consumer and producer should now be
     // throttled since broker defaults are very small
     removeQuotaOverrides()
-    produce(producers.head, numRecords)
+    val produced = produceUntilThrottled(producers.head, numRecords)
+    assertTrue("Should have been throttled", producerThrottleMetric.value > 0)
 
-    assertTrue("Should have been throttled", allMetrics(throttleMetricName(ApiKeys.PRODUCE, producerQuotaId)).value() > 0)
-    consume(consumers.head, numRecords)
-    assertTrue("Should have been throttled", allMetrics(throttleMetricName(ApiKeys.FETCH, consumerQuotaId)).value() > 0)
+    // Since producer may have been throttled after producing a couple of records,
+    // consume from beginning till throttled
+    consumers.head.seekToBeginning(Collections.singleton(new TopicPartition(topic1, 0)))
+    consumeUntilThrottled(consumers.head, numRecords + produced)
+    assertTrue("Should have been throttled", consumerThrottleMetric.value > 0)
   }
 
-  def produce(p: KafkaProducer[Array[Byte], Array[Byte]], count: Int): Int = {
-    var numBytesProduced = 0
-    for (i <- 0 to count) {
-      val payload = i.toString.getBytes
-      numBytesProduced += payload.length
+  def produceUntilThrottled(p: KafkaProducer[Array[Byte], Array[Byte]], maxRecords: Int): Int = {
+    var numProduced = 0
+    var throttled = false
+    do {
+      val payload = numProduced.toString.getBytes
       p.send(new ProducerRecord[Array[Byte], Array[Byte]](topic1, null, null, payload),
              new ErrorLoggingCallback(topic1, null, null, true)).get()
-      Thread.sleep(1)
-    }
-    numBytesProduced
+      numProduced += 1
+      val throttleMetric = producerThrottleMetric
+      throttled = throttleMetric != null && throttleMetric.value > 0
+    } while (numProduced < maxRecords && !throttled)
+    numProduced
   }
 
-  def consume(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int) {
-    consumer.subscribe(List(topic1))
+  def consumeUntilThrottled(consumer: KafkaConsumer[Array[Byte], Array[Byte]], maxRecords: Int): Int = {
+    consumer.subscribe(Collections.singleton(topic1))
     var numConsumed = 0
-    while (numConsumed < numRecords) {
-      for (cr <- consumer.poll(100)) {
-        numConsumed += 1
-      }
+    var throttled = false
+    do {
+      numConsumed += consumer.poll(100).count
+      val throttleMetric = consumerThrottleMetric
+      throttled = throttleMetric != null && throttleMetric.value > 0
+    }  while (numConsumed < maxRecords && !throttled)
+
+    // If throttled, wait for the records from the last fetch to be received
+    if (throttled && numConsumed < maxRecords) {
+      val minRecords = numConsumed + 1
+      while (numConsumed < minRecords)
+          numConsumed += consumer.poll(100).count
     }
+    numConsumed
   }
 
   def waitForQuotaUpdate(producerQuota: Long, consumerQuota: Long) {
@@ -185,6 +187,8 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
                                   "user", quotaId.sanitizedUser.getOrElse(""),
                                   "client-id", quotaId.clientId.getOrElse(""))
   }
+  private def producerThrottleMetric = leaderNode.metrics.metrics.get(throttleMetricName(ApiKeys.PRODUCE, producerQuotaId))
+  private def consumerThrottleMetric = leaderNode.metrics.metrics.get(throttleMetricName(ApiKeys.FETCH, consumerQuotaId))
 
   def quotaProperties(producerQuota: Long, consumerQuota: Long): Properties = {
     val props = new Properties()

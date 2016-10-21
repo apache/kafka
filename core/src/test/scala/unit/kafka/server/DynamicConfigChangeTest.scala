@@ -129,6 +129,37 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   }
 
   @Test
+  def testQuotaInitialization() {
+    val server = servers.head
+    val clientIdProps = new Properties()
+    server.shutdown()
+    clientIdProps.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "1000")
+    clientIdProps.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "2000")
+    val userProps = new Properties()
+    userProps.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "10000")
+    userProps.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "20000")
+    val userClientIdProps = new Properties()
+    userClientIdProps.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "100000")
+    userClientIdProps.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "200000")
+
+    AdminUtils.changeClientIdConfig(zkUtils, "overriddenClientId", clientIdProps)
+    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, "overriddenUser", userProps)
+    AdminUtils.changeUserOrUserClientIdConfig(zkUtils, "ANONYMOUS/clients/overriddenUserClientId", userClientIdProps)
+
+    // Remove config change znodes to force quota initialization only through loading of user/client quotas
+    zkUtils.getChildren(ZkUtils.EntityConfigChangesPath).foreach { p => zkUtils.deletePath(ZkUtils.EntityConfigChangesPath + "/" + p) }
+    server.startup()
+    val quotaManagers = server.apis.quotas
+
+    assertEquals(Quota.upperBound(1000),  quotaManagers.produce.quota("someuser", "overriddenClientId"))
+    assertEquals(Quota.upperBound(2000),  quotaManagers.fetch.quota("someuser", "overriddenClientId"))
+    assertEquals(Quota.upperBound(10000),  quotaManagers.produce.quota("overriddenUser", "someclientId"))
+    assertEquals(Quota.upperBound(20000),  quotaManagers.fetch.quota("overriddenUser", "someclientId"))
+    assertEquals(Quota.upperBound(100000),  quotaManagers.produce.quota("ANONYMOUS", "overriddenUserClientId"))
+    assertEquals(Quota.upperBound(200000),  quotaManagers.fetch.quota("ANONYMOUS", "overriddenUserClientId"))
+  }
+
+  @Test
   def testConfigChangeOnNonExistingTopic() {
     val topic = TestUtils.tempTopic
     try {
@@ -203,11 +234,11 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val props: Properties = new Properties()
 
     //Given
-    props.put(ThrottledReplicasListProp, "0:101,0:102,1:101,1:102")
+    props.put(LeaderReplicationThrottledReplicasProp, "0:101,0:102,1:101,1:102")
 
     //When/Then
-    assertEquals(Seq(0,1), configHandler.parseThrottledPartitions(props, 102))
-    assertEquals(Seq(), configHandler.parseThrottledPartitions(props, 103))
+    assertEquals(Seq(0,1), configHandler.parseThrottledPartitions(props, 102, LeaderReplicationThrottledReplicasProp))
+    assertEquals(Seq(), configHandler.parseThrottledPartitions(props, 103, LeaderReplicationThrottledReplicasProp))
   }
 
   @Test
@@ -216,10 +247,10 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val props: Properties = new Properties()
 
     //Given
-    props.put(ThrottledReplicasListProp, "*")
+    props.put(LeaderReplicationThrottledReplicasProp, "*")
 
     //When
-    val result = configHandler.parseThrottledPartitions(props, 102)
+    val result = configHandler.parseThrottledPartitions(props, 102, LeaderReplicationThrottledReplicasProp)
 
     //Then
     assertEquals(AllReplicas, result)
@@ -231,12 +262,26 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val props: Properties = new Properties()
 
     //Given
-    props.put(ThrottledReplicasListProp, "")
+    props.put(FollowerReplicationThrottledReplicasProp, "")
 
     //When
-    val result = configHandler.parseThrottledPartitions(props, 102)
+    val result = configHandler.parseThrottledPartitions(props, 102, FollowerReplicationThrottledReplicasProp)
 
     //Then
     assertEquals(Seq(), result)
+  }
+
+  @Test
+  def shouldParseRegardlessOfWhitespaceAroundValues() {
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
+    assertEquals(AllReplicas, parse(configHandler, "* "))
+    assertEquals(Seq(), parse(configHandler, " "))
+    assertEquals(Seq(6), parse(configHandler, "6:102"))
+    assertEquals(Seq(6), parse(configHandler, "6:102 "))
+    assertEquals(Seq(6), parse(configHandler, " 6:102"))
+  }
+
+  def parse(configHandler: TopicConfigHandler, value: String): Seq[Int] = {
+    configHandler.parseThrottledPartitions(CoreUtils.propsWith(LeaderReplicationThrottledReplicasProp, value), 102, LeaderReplicationThrottledReplicasProp)
   }
 }

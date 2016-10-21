@@ -22,8 +22,12 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayDeque;
+
+import static java.lang.String.format;
 
 /**
  * RecordQueue is a FIFO queue of {@link StampedRecord} (ConsumerRecord + timestamp). It also keeps track of the
@@ -31,6 +35,8 @@ import java.util.ArrayDeque;
  * timestamp is monotonically increasing such that once it is advanced, it will not be decremented.
  */
 public class RecordQueue {
+
+    private static final Logger log = LoggerFactory.getLogger(RecordQueue.class);
 
     private final SourceNode source;
     private final TopicPartition partition;
@@ -75,8 +81,21 @@ public class RecordQueue {
     public int addRawRecords(Iterable<ConsumerRecord<byte[], byte[]>> rawRecords, TimestampExtractor timestampExtractor) {
         for (ConsumerRecord<byte[], byte[]> rawRecord : rawRecords) {
             // deserialize the raw record, extract the timestamp and put into the queue
-            Object key = source.deserializeKey(rawRecord.topic(), rawRecord.key());
-            Object value = source.deserializeValue(rawRecord.topic(), rawRecord.value());
+            final Object key;
+            try {
+                key = source.deserializeKey(rawRecord.topic(), rawRecord.key());
+            } catch (Exception e) {
+                throw new StreamsException(format("Failed to deserialize key for record. topic=%s, partition=%d, offset=%d",
+                                                  rawRecord.topic(), rawRecord.partition(), rawRecord.offset()), e);
+            }
+
+            final Object value;
+            try {
+                value = source.deserializeValue(rawRecord.topic(), rawRecord.value());
+            } catch (Exception e) {
+                throw new StreamsException(format("Failed to deserialize value for record. topic=%s, partition=%d, offset=%d",
+                                                  rawRecord.topic(), rawRecord.partition(), rawRecord.offset()), e);
+            }
 
             ConsumerRecord<Object, Object> record = new ConsumerRecord<>(rawRecord.topic(), rawRecord.partition(), rawRecord.offset(),
                                                                          rawRecord.timestamp(), TimestampType.CREATE_TIME,
@@ -84,6 +103,8 @@ public class RecordQueue {
                                                                          rawRecord.serializedKeySize(),
                                                                          rawRecord.serializedValueSize(), key, value);
             long timestamp = timestampExtractor.extract(record);
+
+            log.trace("Source node {} extracted timestamp {} for record {} when adding to buffered queue", source.name(), timestamp, record);
 
             // validate that timestamp must be non-negative
             if (timestamp < 0)

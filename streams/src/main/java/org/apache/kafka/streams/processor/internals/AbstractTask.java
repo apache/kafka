@@ -19,7 +19,10 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -66,7 +69,7 @@ public abstract class AbstractTask {
             this.stateMgr = new ProcessorStateManager(applicationId, id, partitions, restoreConsumer, isStandby, stateDirectory, topology.sourceStoreToSourceTopic(), topology.storeToProcessorNodeMap());
 
         } catch (IOException e) {
-            throw new ProcessorStateException("Error while creating the state manager", e);
+            throw new ProcessorStateException(String.format("task [%s] Error while creating the state manager", id), e);
         }
     }
 
@@ -105,10 +108,14 @@ public abstract class AbstractTask {
 
     public abstract void commit();
 
+    public abstract void close();
+
+    public abstract void commitOffsets();
+
     /**
      * @throws ProcessorStateException if there is an error while closing the state manager
      */
-    public void close() {
+    void closeStateManager() {
         try {
             stateMgr.close(recordCollectorOffsets());
         } catch (IOException e) {
@@ -122,8 +129,16 @@ public abstract class AbstractTask {
 
     protected void initializeOffsetLimits() {
         for (TopicPartition partition : partitions) {
-            OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
-            stateMgr.putOffsetLimit(partition, metadata != null ? metadata.offset() : 0L);
+            try {
+                OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
+                stateMgr.putOffsetLimit(partition, metadata != null ? metadata.offset() : 0L);
+            } catch (AuthorizationException e) {
+                throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partition), e);
+            } catch (WakeupException e) {
+                throw e;
+            } catch (KafkaException e) {
+                throw new ProcessorStateException(String.format("task [%s] Failed to initialize offsets for %s", id, partition), e);
+            }
         }
     }
 
@@ -156,5 +171,12 @@ public abstract class AbstractTask {
 
         sb.append("\n");
         return sb.toString();
+    }
+
+    /**
+     * Flush all state stores owned by this task
+     */
+    public void flushState() {
+        stateMgr.flush((InternalProcessorContext) this.context());
     }
 }

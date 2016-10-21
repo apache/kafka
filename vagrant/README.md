@@ -35,7 +35,7 @@ Now bring up the cluster:
 We separate out the steps (bringing up the base VMs, mapping hostnames, and configuring the VMs)
 due to current limitations in ZooKeeper (ZOOKEEPER-1506) that require us to
 collect IPs for all nodes before starting ZooKeeper nodes. Breaking into multiple steps
-also allows us to bring machies up in parallel on AWS.
+also allows us to bring machines up in parallel on AWS.
 
 Once this completes:
 

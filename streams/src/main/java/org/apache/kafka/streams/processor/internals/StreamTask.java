@@ -21,9 +21,11 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -34,6 +36,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
+import static java.lang.String.format;
 import static java.util.Collections.singleton;
 
 /**
@@ -45,14 +48,14 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     private static final ConsumerRecord<Object, Object> DUMMY_RECORD = new ConsumerRecord<>(ProcessorContextImpl.NONEXIST_TOPIC, -1, -1L, null, null);
 
-    private final int maxBufferedSize;
-
+    private final String logPrefix;
     private final PartitionGroup partitionGroup;
     private final PartitionGroup.RecordInfo recordInfo = new PartitionGroup.RecordInfo();
     private final PunctuationQueue punctuationQueue;
 
     private final Map<TopicPartition, Long> consumedOffsets;
     private final RecordCollector recordCollector;
+    private final int maxBufferedSize;
 
     private boolean commitRequested = false;
     private boolean commitOffsetNeeded = false;
@@ -98,6 +101,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
             partitionQueues.put(partition, queue);
         }
 
+        this.logPrefix = String.format("task [%s]", id);
+
         TimestampExtractor timestampExtractor = config.getConfiguredInstance(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
         this.partitionGroup = new PartitionGroup(partitionQueues, timestampExtractor);
 
@@ -107,15 +112,15 @@ public class StreamTask extends AbstractTask implements Punctuator {
         // create the record recordCollector that maintains the produced offsets
         this.recordCollector = new RecordCollector(producer, id().toString());
 
-        log.info("task [{}] Creating restoration consumer client", id());
-
         // initialize the topology with its own context
         this.processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics, cache);
 
         // initialize the state stores
+        log.info("{} Initializing state stores", logPrefix);
         initializeStateStores();
 
         // initialize the task by initializing all its processor nodes in the topology
+        log.info("{} Initializing processor nodes of the topology", logPrefix);
         for (ProcessorNode node : this.topology.processors()) {
             this.currNode = node;
             try {
@@ -137,6 +142,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
     @SuppressWarnings("unchecked")
     public void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records) {
         int queueSize = partitionGroup.addRawRecords(partition, records);
+
+        log.trace("{} Added records into the buffered queue of partition {}, new queue size is {}", logPrefix, partition, queueSize);
 
         // if after adding these records, its partition queue's buffered size has been
         // increased beyond the threshold, we can then pause the consumption for this partition
@@ -168,12 +175,12 @@ public class StreamTask extends AbstractTask implements Punctuator {
             this.currNode = recordInfo.node();
             TopicPartition partition = recordInfo.partition();
 
-            log.debug("task [{}] Start processing one record [{}]", id(), record);
+            log.trace("{} Start processing one record [{}]", logPrefix, record);
             final ProcessorRecordContext recordContext = createRecordContext(record);
             updateProcessorContext(recordContext, currNode);
             this.currNode.process(record.key(), record.value());
 
-            log.debug("task [{}] Completed processing one record [{}]", id(), record);
+            log.trace("{} Completed processing one record [{}]", logPrefix, record);
 
             // update the consumed offset map after processing is done
             consumedOffsets.put(partition, record.offset());
@@ -189,6 +196,14 @@ public class StreamTask extends AbstractTask implements Punctuator {
             if (partitionGroup.topQueueSize() <= this.maxBufferedSize) {
                 requiresPoll = true;
             }
+        } catch (KafkaException ke) {
+            throw new StreamsException(format("Exception caught in process. taskId=%s, processor=%s, topic=%s, partition=%d, offset=%d",
+                                              id.toString(),
+                                              currNode.name(),
+                                              record.topic(),
+                                              record.partition(),
+                                              record.offset()
+                                              ), ke);
         } finally {
             processorContext.setCurrentNode(null);
             this.currNode = null;
@@ -227,13 +242,18 @@ public class StreamTask extends AbstractTask implements Punctuator {
     @Override
     public void punctuate(ProcessorNode node, long timestamp) {
         if (currNode != null)
-            throw new IllegalStateException(String.format("task [%s] Current node is not null", id()));
+            throw new IllegalStateException(String.format("%s Current node is not null", logPrefix));
 
         currNode = node;
         final StampedRecord stampedRecord = new StampedRecord(DUMMY_RECORD, timestamp);
         updateProcessorContext(createRecordContext(stampedRecord), node);
+
+        log.trace("{} Punctuating processor {} with timestamp {}", logPrefix, node.name(), timestamp);
+
         try {
             node.processor().punctuate(timestamp);
+        } catch (KafkaException ke) {
+            throw new StreamsException(String.format("Exception caught in punctuate. taskId=%s processor=%s", id,  node.name()), ke);
         } finally {
             processorContext.setCurrentNode(null);
             currNode = null;
@@ -249,6 +269,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * Commit the current task state
      */
     public void commit() {
+        log.debug("{} Committing its state", logPrefix);
+
         // 1) flush local state
         stateMgr.flush(processorContext);
 
@@ -256,6 +278,14 @@ public class StreamTask extends AbstractTask implements Punctuator {
         recordCollector.flush();
 
         // 3) commit consumed offsets if it is dirty already
+        commitOffsets();
+    }
+
+    /**
+     * commit consumed offsets if needed
+     */
+    @Override
+    public void commitOffsets() {
         if (commitOffsetNeeded) {
             Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
             for (Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
@@ -293,7 +323,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      */
     public void schedule(long interval) {
         if (currNode == null)
-            throw new IllegalStateException(String.format("task [%s] Current node is null", id()));
+            throw new IllegalStateException(String.format("%s Current node is null", logPrefix));
 
         punctuationQueue.schedule(new PunctuationSchedule(currNode, interval));
     }
@@ -303,6 +333,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
      */
     @Override
     public void close() {
+        log.debug("{} Closing processor topology", logPrefix);
+
         this.partitionGroup.close();
         this.consumedOffsets.clear();
 
@@ -320,10 +352,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
             }
         }
 
-        super.close();
-
-        if (exception != null)
+        if (exception != null) {
             throw exception;
+        }
     }
 
     @Override

@@ -401,7 +401,7 @@ private[log] class Cleaner(val id: Int,
         val retainDeletes = old.largestTimestamp > deleteHorizonMs
         info("Cleaning segment %s in log %s (largest timestamp %s) into %s, %s deletes."
             .format(old.baseOffset, log.name, new Date(old.largestTimestamp), cleaned.baseOffset, if(retainDeletes) "retaining" else "discarding"))
-        cleanInto(log.topicAndPartition, old, cleaned, map, retainDeletes, log.config.messageFormatVersion.messageFormatVersion)
+        cleanInto(log.topicAndPartition, old, cleaned, map, retainDeletes, log.config.maxMessageSize)
       }
 
       // trim excess index
@@ -434,18 +434,19 @@ private[log] class Cleaner(val id: Int,
    * Clean the given source log segment into the destination segment using the key=>offset mapping
    * provided
    *
+   * @param topicAndPartition The topic and partition of the log segment to clean
    * @param source The dirty log segment
    * @param dest The cleaned log segment
    * @param map The key=>offset mapping
    * @param retainDeletes Should delete tombstones be retained while cleaning this segment
-   * @param messageFormatVersion the message format version to use after compaction
+   * @param maxLogMessageSize The maximum message size of the corresponding topic
    */
   private[log] def cleanInto(topicAndPartition: TopicAndPartition,
                              source: LogSegment,
                              dest: LogSegment,
                              map: OffsetMap,
                              retainDeletes: Boolean,
-                             messageFormatVersion: Byte) {
+                             maxLogMessageSize: Int) {
     var position = 0
     while (position < source.log.sizeInBytes) {
       checkDone(topicAndPartition)
@@ -458,41 +459,54 @@ private[log] class Cleaner(val id: Int,
       throttler.maybeThrottle(messages.sizeInBytes)
       // check each message to see if it is to be retained
       var messagesRead = 0
-      for (entry <- messages.shallowIterator) {
-        val size = MessageSet.entrySize(entry.message)
+      for (shallowMessageAndOffset <- messages.shallowIterator) {
+        val shallowMessage = shallowMessageAndOffset.message
+        val shallowOffset = shallowMessageAndOffset.offset
+        val size = MessageSet.entrySize(shallowMessageAndOffset.message)
+
         stats.readMessage(size)
-        if (entry.message.compressionCodec == NoCompressionCodec) {
-          if (shouldRetainMessage(source, map, retainDeletes, entry)) {
-            ByteBufferMessageSet.writeMessage(writeBuffer, entry.message, entry.offset)
+        if (shallowMessage.compressionCodec == NoCompressionCodec) {
+          if (shouldRetainMessage(source, map, retainDeletes, shallowMessageAndOffset)) {
+            ByteBufferMessageSet.writeMessage(writeBuffer, shallowMessage, shallowOffset)
             stats.recopyMessage(size)
-            if (entry.message.timestamp > maxTimestamp) {
-              maxTimestamp = entry.message.timestamp
-              offsetOfMaxTimestamp = entry.offset
+            if (shallowMessage.timestamp > maxTimestamp) {
+              maxTimestamp = shallowMessage.timestamp
+              offsetOfMaxTimestamp = shallowOffset
             }
           }
           messagesRead += 1
         } else {
-          // We use the absolute offset to decide whether to retain the message or not. This is handled by the
-          // deep iterator.
-          val messages = ByteBufferMessageSet.deepIterator(entry)
+          // We use the absolute offset to decide whether to retain the message or not (this is handled by the
+          // deep iterator). Because of KAFKA-4298, we have to allow for the possibility that a previous version
+          // corrupted the log by writing a compressed message set with a wrapper magic value not matching the magic
+          // of the inner messages. This will be fixed as we recopy the messages to the destination segment.
+
           var writeOriginalMessageSet = true
           val retainedMessages = new mutable.ArrayBuffer[MessageAndOffset]
-          messages.foreach { messageAndOffset =>
+          val shallowMagic = shallowMessage.magic
+
+          for (deepMessageAndOffset <- ByteBufferMessageSet.deepIterator(shallowMessageAndOffset)) {
             messagesRead += 1
-            if (shouldRetainMessage(source, map, retainDeletes, messageAndOffset)) {
-              retainedMessages += messageAndOffset
+            if (shouldRetainMessage(source, map, retainDeletes, deepMessageAndOffset)) {
+              // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
+              // the corrupted entry with correct data.
+              if (shallowMagic != deepMessageAndOffset.message.magic)
+                writeOriginalMessageSet = false
+
+              retainedMessages += deepMessageAndOffset
               // We need the max timestamp and last offset for time index
-              if (messageAndOffset.message.timestamp > maxTimestamp)
-                maxTimestamp = messageAndOffset.message.timestamp
+              if (deepMessageAndOffset.message.timestamp > maxTimestamp)
+                maxTimestamp = deepMessageAndOffset.message.timestamp
+            } else {
+              writeOriginalMessageSet = false
             }
-            else writeOriginalMessageSet = false
           }
           offsetOfMaxTimestamp = if (retainedMessages.nonEmpty) retainedMessages.last.offset else -1L
           // There are no messages compacted out and no message format conversion, write the original message set back
           if (writeOriginalMessageSet)
-            ByteBufferMessageSet.writeMessage(writeBuffer, entry.message, entry.offset)
+            ByteBufferMessageSet.writeMessage(writeBuffer, shallowMessage, shallowOffset)
           else
-            compressMessages(writeBuffer, entry.message.compressionCodec, messageFormatVersion, retainedMessages)
+            compressMessages(writeBuffer, shallowMessage.compressionCodec, retainedMessages)
         }
       }
 
@@ -508,36 +522,41 @@ private[log] class Cleaner(val id: Int,
       
       // if we read bytes but didn't get even one complete message, our I/O buffer is too small, grow it and try again
       if (readBuffer.limit > 0 && messagesRead == 0)
-        growBuffers()
+        growBuffers(maxLogMessageSize)
     }
     restoreBuffers()
   }
 
   private def compressMessages(buffer: ByteBuffer,
                                compressionCodec: CompressionCodec,
-                               messageFormatVersion: Byte,
                                messageAndOffsets: Seq[MessageAndOffset]) {
     require(compressionCodec != NoCompressionCodec, s"compressionCodec must not be $NoCompressionCodec")
     if (messageAndOffsets.nonEmpty) {
       val messages = messageAndOffsets.map(_.message)
       val magicAndTimestamp = MessageSet.magicAndLargestTimestamp(messages)
+
+      // ensure that we use the magic from the first message in the set when writing the wrapper
+      // message in order to fix message sets corrupted by KAFKA-4298
+      val magic = magicAndTimestamp.magic
+
       val firstMessageOffset = messageAndOffsets.head
       val firstAbsoluteOffset = firstMessageOffset.offset
       var offset = -1L
       val timestampType = firstMessageOffset.message.timestampType
       val messageWriter = new MessageWriter(math.min(math.max(MessageSet.messageSetSize(messages) / 2, 1024), 1 << 16))
-      messageWriter.write(codec = compressionCodec, timestamp = magicAndTimestamp.timestamp, timestampType = timestampType, magicValue = messageFormatVersion) { outputStream =>
-        val output = new DataOutputStream(CompressionFactory(compressionCodec, messageFormatVersion, outputStream))
+      messageWriter.write(codec = compressionCodec, timestamp = magicAndTimestamp.timestamp, timestampType = timestampType, magicValue = magic) { outputStream =>
+        val output = new DataOutputStream(CompressionFactory(compressionCodec, magic, outputStream))
         try {
-          for (messageOffset <- messageAndOffsets) {
-            val message = messageOffset.message
-            offset = messageOffset.offset
-            if (messageFormatVersion > Message.MagicValue_V0) {
+          for (messageAndOffset <- messageAndOffsets) {
+            offset = messageAndOffset.offset
+            val innerOffset = if (magic > Message.MagicValue_V0)
               // The offset of the messages are absolute offset, compute the inner offset.
-              val innerOffset = messageOffset.offset - firstAbsoluteOffset
-              output.writeLong(innerOffset)
-            } else
-              output.writeLong(offset)
+              messageAndOffset.offset - firstAbsoluteOffset
+            else
+              offset
+
+            val message = messageAndOffset.message
+            output.writeLong(innerOffset)
             output.writeInt(message.size)
             output.write(message.buffer.array, message.buffer.arrayOffset, message.buffer.limit)
           }
@@ -577,10 +596,11 @@ private[log] class Cleaner(val id: Int,
   /**
    * Double the I/O buffer capacity
    */
-  def growBuffers() {
-    if(readBuffer.capacity >= maxIoBufferSize || writeBuffer.capacity >= maxIoBufferSize)
-      throw new IllegalStateException("This log contains a message larger than maximum allowable size of %s.".format(maxIoBufferSize))
-    val newSize = math.min(this.readBuffer.capacity * 2, maxIoBufferSize)
+  def growBuffers(maxLogMessageSize: Int) {
+    val maxBufferSize = math.max(maxLogMessageSize, maxIoBufferSize)
+    if(readBuffer.capacity >= maxBufferSize || writeBuffer.capacity >= maxBufferSize)
+      throw new IllegalStateException("This log contains a message larger than maximum allowable size of %s.".format(maxBufferSize))
+    val newSize = math.min(this.readBuffer.capacity * 2, maxBufferSize)
     info("Growing cleaner I/O buffers from " + readBuffer.capacity + "bytes to " + newSize + " bytes.")
     this.readBuffer = ByteBuffer.allocate(newSize)
     this.writeBuffer = ByteBuffer.allocate(newSize)
@@ -650,7 +670,7 @@ private[log] class Cleaner(val id: Int,
     for (segment <- dirty if !full) {
       checkDone(log.topicAndPartition)
 
-      full = buildOffsetMapForSegment(log.topicAndPartition, segment, map, start)
+      full = buildOffsetMapForSegment(log.topicAndPartition, segment, map, start, log.config.maxMessageSize)
       if (full)
         debug("Offset map is full, %d segments fully mapped, segment with base offset %d is partially mapped".format(dirty.indexOf(segment), segment.baseOffset))
     }
@@ -665,7 +685,7 @@ private[log] class Cleaner(val id: Int,
    *
    * @return If the map was filled whilst loading from this segment
    */
-  private def buildOffsetMapForSegment(topicAndPartition: TopicAndPartition, segment: LogSegment, map: OffsetMap, start: Long): Boolean = {
+  private def buildOffsetMapForSegment(topicAndPartition: TopicAndPartition, segment: LogSegment, map: OffsetMap, start: Long, maxLogMessageSize: Int): Boolean = {
     var position = segment.index.lookup(start).position
     val maxDesiredMapSize = (map.slots * this.dupBufferLoadFactor).toInt
     while (position < segment.log.sizeInBytes) {
@@ -689,7 +709,7 @@ private[log] class Cleaner(val id: Int,
 
       // if we didn't read even one complete message, our read buffer may be too small
       if(position == startPosition)
-        growBuffers()
+        growBuffers(maxLogMessageSize)
     }
     restoreBuffers()
     return false

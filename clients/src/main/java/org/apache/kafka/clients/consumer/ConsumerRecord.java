@@ -19,7 +19,7 @@ import org.apache.kafka.common.record.TimestampType;
  * A key/value pair to be received from Kafka. This consists of a topic name and a partition number, from which the
  * record is being received and an offset that points to the record in a Kafka partition.
  */
-public final class ConsumerRecord<K, V> {
+public class ConsumerRecord<K, V> {
     public static final long NO_TIMESTAMP = Record.NO_TIMESTAMP;
     public static final int NULL_SIZE = -1;
     public static final int NULL_CHECKSUM = -1;

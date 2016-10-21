@@ -21,4 +21,5 @@ public interface KTableValueGetterSupplier<K, V> {
 
     KTableValueGetter<K, V> get();
 
+    String[] storeNames();
 }

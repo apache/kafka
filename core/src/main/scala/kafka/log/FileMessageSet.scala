@@ -47,8 +47,8 @@ class FileMessageSet private[kafka](@volatile var file: File,
                                     private[log] val channel: FileChannel,
                                     private[log] val start: Int,
                                     private[log] val end: Int,
-                                    isSlice: Boolean) extends MessageSet with Logging {
-
+                                    isSlice: Boolean) extends MessageSet {
+  import FileMessageSet._
   /* the size of the message set in bytes */
   private val _size =
     if(isSlice)
@@ -164,11 +164,9 @@ class FileMessageSet private[kafka](@volatile var file: File,
    * @return The timestamp and offset of the message found. None, if no message is found.
    */
   def searchForTimestamp(targetTimestamp: Long, startingPosition: Int): Option[TimestampOffset] = {
-    var lastOffsetChecked = -1L
     val messagesToSearch = read(startingPosition, sizeInBytes)
     for (messageAndOffset <- messagesToSearch) {
       val message = messageAndOffset.message
-      lastOffsetChecked = messageAndOffset.offset
       if (message.timestamp >= targetTimestamp) {
         // We found a message
         message.compressionCodec match {
@@ -432,8 +430,11 @@ class FileMessageSet private[kafka](@volatile var file: File,
 
 }
 
-object FileMessageSet
+object FileMessageSet extends Logging
 {
+  //preserve the previous logger name after moving logger aspect from FileMessageSet to companion
+  override val loggerName = classOf[FileMessageSet].getName
+
   /**
    * Open a channel for the given file
    * For windows NTFS and some old LINUX file system, set preallocate to true and initFileSize

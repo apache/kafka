@@ -40,7 +40,7 @@ import static org.junit.Assert.fail;
 public class ConsumerNetworkClientTest {
 
     private String topicName = "test";
-    private MockTime time = new MockTime();
+    private MockTime time = new MockTime(1);
     private MockClient client = new MockClient(time);
     private Cluster cluster = TestUtils.singletonCluster(topicName, 1);
     private Node node = cluster.nodes().get(0);
@@ -100,10 +100,35 @@ public class ConsumerNetworkClientTest {
 
     @Test
     public void blockWhenPollConditionNotSatisfied() {
+        long timeout = 4000L;
+
         NetworkClient mockNetworkClient = EasyMock.mock(NetworkClient.class);
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(mockNetworkClient, metadata, time, 100, 1000);
 
-        EasyMock.expect(mockNetworkClient.poll(EasyMock.eq(Long.MAX_VALUE), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
+        EasyMock.expect(mockNetworkClient.inFlightRequestCount()).andReturn(1);
+        EasyMock.expect(mockNetworkClient.poll(EasyMock.eq(timeout), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
+
+        EasyMock.replay(mockNetworkClient);
+
+        consumerClient.poll(timeout, time.milliseconds(), new ConsumerNetworkClient.PollCondition() {
+            @Override
+            public boolean shouldBlock() {
+                return true;
+            }
+        });
+
+        EasyMock.verify(mockNetworkClient);
+    }
+
+    @Test
+    public void blockOnlyForRetryBackoffIfNoInflightRequests() {
+        long retryBackoffMs = 100L;
+
+        NetworkClient mockNetworkClient = EasyMock.mock(NetworkClient.class);
+        ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(mockNetworkClient, metadata, time, retryBackoffMs, 1000L);
+
+        EasyMock.expect(mockNetworkClient.inFlightRequestCount()).andReturn(0);
+        EasyMock.expect(mockNetworkClient.poll(EasyMock.eq(retryBackoffMs), EasyMock.anyLong())).andReturn(Collections.<ClientResponse>emptyList());
 
         EasyMock.replay(mockNetworkClient);
 
@@ -130,6 +155,11 @@ public class ConsumerNetworkClientTest {
         client.respond(heartbeatResponse(Errors.NONE.code()));
         consumerClient.poll(future);
         assertTrue(future.isDone());
+    }
+
+    @Test
+    public void testAwaitForMetadataUpdateWithTimeout() {
+        assertFalse(consumerClient.awaitMetadataUpdate(10L));
     }
 
     @Test

@@ -32,7 +32,6 @@ class KeyValuePrinter<K, V> implements ProcessorSupplier<K, V> {
     private final PrintStream printStream;
     private Serde<?> keySerde;
     private Serde<?> valueSerde;
-    private boolean notStandardOut;
     private String streamName;
 
 
@@ -44,7 +43,6 @@ class KeyValuePrinter<K, V> implements ProcessorSupplier<K, V> {
             this.printStream = System.out;
         } else {
             this.printStream = printStream;
-            notStandardOut = true;
         }
     }
 
@@ -114,10 +112,10 @@ class KeyValuePrinter<K, V> implements ProcessorSupplier<K, V> {
 
         @Override
         public void close() {
-            if (notStandardOut) {
-                this.printStream.close();
-            } else {
+            if (this.printStream == System.out) {
                 this.printStream.flush();
+            } else {
+                this.printStream.close();
             }
         }
     }

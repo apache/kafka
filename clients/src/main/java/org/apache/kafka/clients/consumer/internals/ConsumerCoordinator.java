@@ -149,6 +149,21 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return metadataList;
     }
 
+    public void updatePatternSubscription(Cluster cluster) {
+        final Set<String> topicsToSubscribe = new HashSet<>();
+
+        for (String topic : cluster.topics())
+            if (subscriptions.getSubscribedPattern().matcher(topic).matches() &&
+                    !(excludeInternalTopics && cluster.internalTopics().contains(topic)))
+                topicsToSubscribe.add(topic);
+
+        subscriptions.subscribeFromPattern(topicsToSubscribe);
+
+        // note we still need to update the topics contained in the metadata. Although we have
+        // specified that all topics should be fetched, only those set explicitly will be retained
+        metadata.setTopics(subscriptions.groupSubscription());
+    }
+
     private void addMetadataListener() {
         this.metadata.addListener(new Metadata.Listener() {
             @Override
@@ -157,20 +172,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 if (!cluster.unauthorizedTopics().isEmpty())
                     throw new TopicAuthorizationException(new HashSet<>(cluster.unauthorizedTopics()));
 
-                if (subscriptions.hasPatternSubscription()) {
-                    final Set<String> topicsToSubscribe = new HashSet<>();
-
-                    for (String topic : cluster.topics())
-                        if (subscriptions.getSubscribedPattern().matcher(topic).matches() &&
-                                !(excludeInternalTopics && cluster.internalTopics().contains(topic)))
-                            topicsToSubscribe.add(topic);
-
-                    subscriptions.subscribeFromPattern(topicsToSubscribe);
-
-                    // note we still need to update the topics contained in the metadata. Although we have
-                    // specified that all topics should be fetched, only those set explicitly will be retained
-                    metadata.setTopics(subscriptions.groupSubscription());
-                }
+                if (subscriptions.hasPatternSubscription())
+                    updatePatternSubscription(cluster);
 
                 // check if there are any changes to the metadata which should trigger a rebalance
                 if (subscriptions.partitionsAutoAssigned()) {
@@ -670,6 +673,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     resetGeneration();
                     future.raise(new CommitFailedException());
                     return;
+                } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+                    log.debug("Offset commit for group {} failed on partition {}: {}", groupId, tp, error.message());
+                    future.raise(new KafkaException("Partition " + tp + " may not exist or user may not have Describe access to topic"));
+                    return;
                 } else {
                     log.error("Group {} failed to commit partition {} at offset {}: {}", groupId, tp, offset, error.message());
                     future.raise(new KafkaException("Unexpected error in commit: " + error.message()));
@@ -731,6 +738,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         // re-discover the coordinator and retry
                         coordinatorDead();
                         future.raise(error);
+                    } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+                        future.raise(new KafkaException("Partition " + tp + " may not exist or user may not have Describe access to topic"));
                     } else {
                         future.raise(new KafkaException("Unexpected error in fetch offset response: " + error.message()));
                     }

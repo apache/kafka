@@ -58,6 +58,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         brokerConfig.put(KafkaConfig$.MODULE$.DeleteTopicEnableProp(), true);
         brokerConfig.put(KafkaConfig$.MODULE$.LogCleanerDedupeBufferSizeProp(), 2 * 1024 * 1024L);
         brokerConfig.put(KafkaConfig$.MODULE$.GroupMinSessionTimeoutMsProp(), 0);
+        brokerConfig.put(KafkaConfig$.MODULE$.AutoCreateTopicsEnableProp(), false);
 
         for (int i = 0; i < brokers.length; i++) {
             brokerConfig.put(KafkaConfig$.MODULE$.BrokerIdProp(), i);

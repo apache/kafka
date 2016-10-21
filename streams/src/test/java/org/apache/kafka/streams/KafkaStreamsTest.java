@@ -22,15 +22,12 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.test.MockMetricsReporter;
-import org.apache.kafka.test.TestUtils;
 import org.junit.Assert;
 import org.junit.ClassRule;
 import org.junit.Test;
 
-import java.io.File;
 import java.util.Properties;
 
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class KafkaStreamsTest {
@@ -123,25 +120,25 @@ public class KafkaStreamsTest {
 
     @Test(expected = IllegalStateException.class)
     public void shouldNotGetAllTasksWhenNotRunning() throws Exception {
-        KafkaStreams streams = createKafkaStreams();
+        final KafkaStreams streams = createKafkaStreams();
         streams.allMetadata();
     }
 
     @Test(expected = IllegalStateException.class)
     public void shouldNotGetAllTasksWithStoreWhenNotRunning() throws Exception {
-        KafkaStreams streams = createKafkaStreams();
+        final KafkaStreams streams = createKafkaStreams();
         streams.allMetadataForStore("store");
     }
 
     @Test(expected = IllegalStateException.class)
     public void shouldNotGetTaskWithKeyAndSerializerWhenNotRunning() throws Exception {
-        KafkaStreams streams = createKafkaStreams();
+        final KafkaStreams streams = createKafkaStreams();
         streams.metadataForKey("store", "key", Serdes.String().serializer());
     }
 
     @Test(expected = IllegalStateException.class)
     public void shouldNotGetTaskWithKeyAndPartitionerWhenNotRunning() throws Exception {
-        KafkaStreams streams = createKafkaStreams();
+        final KafkaStreams streams = createKafkaStreams();
         streams.metadataForKey("store", "key", new StreamPartitioner<String, Object>() {
             @Override
             public Integer partition(final String key, final Object value, final int numPartitions) {
@@ -152,11 +149,11 @@ public class KafkaStreamsTest {
 
 
     private KafkaStreams createKafkaStreams() {
-        Properties props = new Properties();
+        final Properties props = new Properties();
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
 
-        KStreamBuilder builder = new KStreamBuilder();
+        final KStreamBuilder builder = new KStreamBuilder();
         return new KafkaStreams(builder, props);
     }
 
@@ -173,40 +170,6 @@ public class KafkaStreamsTest {
         streams.start();
         streams.close();
         streams.cleanUp();
-    }
-
-    @Test
-    public void testCleanupIsolation() throws Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
-
-        final String appId1 = "testIsolation-1";
-        final String appId2 = "testIsolation-2";
-        final String stateDir = TestUtils.tempDirectory().getPath();
-        final File stateDirApp1 = new File(stateDir + File.separator + appId1);
-        final File stateDirApp2 = new File(stateDir + File.separator + appId2);
-
-        final Properties props = new Properties();
-        props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir);
-
-        assertFalse(stateDirApp1.exists());
-        assertFalse(stateDirApp2.exists());
-
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, appId1);
-        final KafkaStreams streams1 = new KafkaStreams(builder, props);
-        props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, appId2);
-        final KafkaStreams streams2 = new KafkaStreams(builder, props);
-
-        assertTrue(stateDirApp1.exists());
-        assertTrue(stateDirApp2.exists());
-
-        streams1.cleanUp();
-        assertFalse(stateDirApp1.exists());
-        assertTrue(stateDirApp2.exists());
-
-        streams2.cleanUp();
-        assertFalse(stateDirApp1.exists());
-        assertFalse(stateDirApp2.exists());
     }
 
     @Test(expected = IllegalStateException.class)

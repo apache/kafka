@@ -19,9 +19,12 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -130,6 +133,30 @@ public class StreamsConfigTest {
         assertEquals(1, consumerConfigs.get(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG));
     }
 
+    @Test
+    public void shouldSupportPrefixedPropertiesThatAreNotPartOfConsumerConfig() throws Exception {
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        props.put(consumerPrefix("interceptor.statsd.host"), "host");
+        final Map<String, Object> consumerConfigs = streamsConfig.getConsumerConfigs(null, "groupId", "clientId");
+        assertEquals("host", consumerConfigs.get("interceptor.statsd.host"));
+    }
+
+    @Test
+    public void shouldSupportPrefixedPropertiesThatAreNotPartOfRestoreConsumerConfig() throws Exception {
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        props.put(consumerPrefix("interceptor.statsd.host"), "host");
+        final Map<String, Object> consumerConfigs = streamsConfig.getRestoreConsumerConfigs("clientId");
+        assertEquals("host", consumerConfigs.get("interceptor.statsd.host"));
+    }
+
+    @Test
+    public void shouldSupportPrefixedPropertiesThatAreNotPartOfProducerConfig() throws Exception {
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        props.put(producerPrefix("interceptor.statsd.host"), "host");
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs("clientId");
+        assertEquals("host", producerConfigs.get("interceptor.statsd.host"));
+    }
+
 
     @Test
     public void shouldSupportPrefixedProducerConfigs() throws Exception {
@@ -172,4 +199,40 @@ public class StreamsConfigTest {
     }
 
 
+
+    @Test(expected = StreamsException.class)
+    public void shouldThrowStreamsExceptionIfKeySerdeConfigFails() throws Exception {
+        props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        streamsConfig.keySerde();
+    }
+
+    @Test(expected = StreamsException.class)
+    public void shouldThrowStreamsExceptionIfValueSerdeConfigFails() throws Exception {
+        props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        streamsConfig.valueSerde();
+    }
+
+    static class MisconfiguredSerde implements Serde {
+        @Override
+        public void configure(final Map configs, final boolean isKey) {
+            throw new RuntimeException("boom");
+        }
+
+        @Override
+        public void close() {
+
+        }
+
+        @Override
+        public Serializer serializer() {
+            return null;
+        }
+
+        @Override
+        public Deserializer deserializer() {
+            return null;
+        }
+    }
 }

@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.util.Properties
+import kafka.log.LogConfig
 import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.common.config.ConfigDef.Importance._
 import org.apache.kafka.common.config.ConfigDef.Range._
@@ -32,19 +33,25 @@ object DynamicConfig {
 
   object Broker {
     //Properties
-    val ThrottledReplicationRateLimitProp = "replication.quota.throttled.rate"
+    val LeaderReplicationThrottledRateProp = "leader.replication.throttled.rate"
+    val FollowerReplicationThrottledRateProp = "follower.replication.throttled.rate"
 
     //Defaults
-    val DefaultThrottledReplicationRateLimit = ReplicationQuotaManagerConfig.QuotaBytesPerSecondDefault
+    val DefaultReplicationThrottledRate = ReplicationQuotaManagerConfig.QuotaBytesPerSecondDefault
 
     //Documentation
-    val ThrottledReplicationRateLimitDoc = "A long representing the upper bound (bytes/sec) on replication traffic for replicas enumerated in the " +
-      s"property $ThrottledReplicationRateLimitProp. This property can be only set dynamically via the config command etc. The minimum value is 1 KB/s."
+    val LeaderReplicationThrottledRateDoc = "A long representing the upper bound (bytes/sec) on replication traffic for leaders enumerated in the " +
+      s"property ${LogConfig.LeaderReplicationThrottledReplicasProp} (for each topic). This property can be only set dynamically. It is suggested that the " +
+      s"limit be kept above 1MB/s for accurate behaviour."
+    val FollowerReplicationThrottledRateDoc = "A long representing the upper bound (bytes/sec) on replication traffic for followers enumerated in the " +
+      s"property ${LogConfig.FollowerReplicationThrottledReplicasProp} (for each topic). This property can be only set dynamically. It is suggested that the " +
+      s"limit be kept above 1MB/s for accurate behaviour."
 
     //Definitions
     private val brokerConfigDef = new ConfigDef()
       //round minimum value down, to make it easier for users.
-      .define(ThrottledReplicationRateLimitProp, LONG, DefaultThrottledReplicationRateLimit, atLeast(1000), MEDIUM, ThrottledReplicationRateLimitDoc)
+      .define(LeaderReplicationThrottledRateProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, LeaderReplicationThrottledRateDoc)
+      .define(FollowerReplicationThrottledRateProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, FollowerReplicationThrottledRateDoc)
 
     def names = brokerConfigDef.names
 
