@@ -556,7 +556,7 @@ private[log] class Cleaner(val id: Int,
           for (messageAndOffset <- messageAndOffsets) {
             offset = messageAndOffset.offset
             val innerOffset = if (magic > Message.MagicValue_V0)
-            // The offset of the messages are absolute offset, compute the inner offset.
+              // The offset of the messages are absolute offset, compute the inner offset.
               messageAndOffset.offset - firstAbsoluteOffset
             else
               offset
