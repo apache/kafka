@@ -189,7 +189,7 @@ object DumpLogSegments {
       val wrapperMessageOpt = shallowIter.find(_.offset >= entry.offset + timeIndex.baseOffset)
       if (!wrapperMessageOpt.isDefined || wrapperMessageOpt.get.offset != entry.offset + timeIndex.baseOffset) {
         timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset + timeIndex.baseOffset,
-          {if (wrapperMessageOpt.isDefined) wrapperMessageOpt.get.offset else -1})
+          {wrapperMessageOpt.fold(-1.toLong)(wrapperMessage => wrapperMessage.offset)})
       } else {
         val deepIter = getIterator(wrapperMessageOpt.get, isDeepIteration = true)
         for (messageAndOffset <- deepIter)
