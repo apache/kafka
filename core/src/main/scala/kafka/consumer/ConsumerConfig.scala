@@ -38,6 +38,7 @@ object ConsumerConfig extends Config {
   val AutoOffsetReset = OffsetRequest.LargestTimeString
   val ConsumerTimeoutMs = -1
   val MinFetchBytes = 1
+  val MaxFetchBytes = 50 * 1024 * 1024
   val MaxFetchWaitMs = 100
   val MirrorTopicsWhitelist = ""
   val MirrorTopicsBlacklist = ""
@@ -119,7 +120,7 @@ class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(
   /** the socket receive buffer for network requests */
   val socketReceiveBufferBytes = props.getInt("socket.receive.buffer.bytes", SocketBufferSize)
   
-  /** the number of bytes of messages to attempt to fetch */
+  /** the number of bytes of messages to attempt to fetch from each partition */
   val fetchMessageMaxBytes = props.getInt("fetch.message.max.bytes", FetchSize)
 
   /** the number threads used to fetch data */
@@ -140,6 +141,9 @@ class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(
   /** the minimum amount of data the server should return for a fetch request. If insufficient data is available the request will block */
   val fetchMinBytes = props.getInt("fetch.min.bytes", MinFetchBytes)
   
+  /** the maximum amount of data the server should return for a fetch request */
+  val fetchMaxBytes = props.getInt("fetch.max.bytes", MaxFetchBytes)
+
   /** the maximum amount of time the server will block before answering the fetch request if there isn't sufficient data to immediately satisfy fetch.min.bytes */
   val fetchWaitMaxMs = props.getInt("fetch.wait.max.ms", MaxFetchWaitMs)
   require(fetchWaitMaxMs <= socketTimeoutMs, "socket.timeout.ms should always be at least fetch.wait.max.ms" +

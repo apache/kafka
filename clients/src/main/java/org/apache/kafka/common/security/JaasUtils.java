@@ -83,10 +83,10 @@ public class JaasUtils {
     }
 
     public static boolean isZkSecurityEnabled() {
-        boolean isSecurityEnabled = false;
         boolean zkSaslEnabled = Boolean.parseBoolean(System.getProperty(ZK_SASL_CLIENT, "true"));
         String zkLoginContextName = System.getProperty(ZK_LOGIN_CONTEXT_NAME_KEY, "Client");
 
+        boolean isSecurityEnabled;
         try {
             Configuration loginConf = Configuration.getConfiguration();
             isSecurityEnabled = loginConf.getAppConfigurationEntry(zkLoginContextName) != null;

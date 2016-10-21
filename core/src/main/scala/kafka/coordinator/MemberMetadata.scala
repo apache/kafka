@@ -55,6 +55,7 @@ private[coordinator] class MemberMetadata(val memberId: String,
                                           val groupId: String,
                                           val clientId: String,
                                           val clientHost: String,
+                                          val rebalanceTimeoutMs: Int,
                                           val sessionTimeoutMs: Int,
                                           val protocolType: String,
                                           var supportedProtocols: List[(String, Array[Byte])]) {

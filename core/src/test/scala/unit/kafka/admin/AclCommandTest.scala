@@ -16,7 +16,6 @@
  */
 package kafka.admin
 
-import java.io.StringReader
 import java.util.Properties
 
 import kafka.admin.AclCommand.AclCommandOptions
@@ -44,9 +43,9 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   )
 
   private val ResourceToOperations = Map[Set[Resource], (Set[Operation], Array[String])](
-    TopicResources -> (Set(Read, Write, Describe), Array("--operation", "Read" , "--operation", "Write", "--operation", "Describe")),
+    TopicResources -> (Set(Read, Write, Describe, Delete), Array("--operation", "Read" , "--operation", "Write", "--operation", "Describe", "--operation", "Delete")),
     Set(Resource.ClusterResource) -> (Set(Create, ClusterAction), Array("--operation", "Create", "--operation", "ClusterAction")),
-    GroupResources -> (Set(Read).toSet[Operation], Array("--operation", "Read"))
+    GroupResources -> (Set(Read, Describe).toSet[Operation], Array("--operation", "Read", "--operation", "Describe"))
   )
 
   private val ProducerResourceToAcls = Map[Set[Resource], Set[Acl]](

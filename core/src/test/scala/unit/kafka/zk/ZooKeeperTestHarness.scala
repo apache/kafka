@@ -25,7 +25,7 @@ import org.apache.kafka.common.security.JaasUtils
 
 trait ZooKeeperTestHarness extends JUnitSuite with Logging {
 
-  val zkConnectionTimeout = 6000
+  val zkConnectionTimeout = 10000
   val zkSessionTimeout = 6000
 
   var zkUtils: ZkUtils = null

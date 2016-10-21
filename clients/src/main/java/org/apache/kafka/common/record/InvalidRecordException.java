@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.common.record;
 
-public class InvalidRecordException extends RuntimeException {
+import org.apache.kafka.common.KafkaException;
+
+public class InvalidRecordException extends KafkaException {
 
     private static final long serialVersionUID = 1;
 

@@ -26,10 +26,11 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     private Deserializer<K> keyDeserializer;
     private Deserializer<V> valDeserializer;
     private ProcessorContext context;
+    private String[] topics;
 
-    public SourceNode(String name, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
+    public SourceNode(String name, String[] topics, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
         super(name);
-
+        this.topics = topics;
         this.keyDeserializer = keyDeserializer;
         this.valDeserializer = valDeserializer;
     }
@@ -59,8 +60,9 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
             ((ChangedDeserializer) this.valDeserializer).setInner(context.valueSerde().deserializer());
     }
 
+
     @Override
-    public void process(K key, V value) {
+    public void process(final K key, final V value) {
         context.forward(key, value);
     }
 
@@ -72,5 +74,19 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     // for test only
     public Deserializer<V> valueDeserializer() {
         return valDeserializer;
+    }
+
+    /**
+     * @return a string representation of this node, useful for debugging.
+     */
+    public String toString() {
+        StringBuilder sb = new StringBuilder(super.toString());
+        sb.append("topics: [");
+        for (String topic : topics) {
+            sb.append(topic + ",");
+        }
+        sb.setLength(sb.length() - 1);
+        sb.append("] ");
+        return sb.toString();
     }
 }

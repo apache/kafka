@@ -39,6 +39,7 @@ public class CreateTopicsResponse extends AbstractRequestResponse {
     /**
      * Possible error codes:
      *
+     * REQUEST_TIMED_OUT(7)
      * INVALID_TOPIC_EXCEPTION(17)
      * CLUSTER_AUTHORIZATION_FAILED(31)
      * TOPIC_ALREADY_EXISTS(36)

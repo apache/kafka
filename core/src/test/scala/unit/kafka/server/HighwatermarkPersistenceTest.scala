@@ -18,14 +18,15 @@ package kafka.server
 
 import kafka.log._
 import java.io.File
+import kafka.utils.SystemTime
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.utils.{Utils, MockTime => JMockTime}
+import org.apache.kafka.common.utils.{MockTime => JMockTime, Utils}
 import org.easymock.EasyMock
 import org.junit._
 import org.junit.Assert._
 import kafka.common._
 import kafka.cluster.Replica
-import kafka.utils.{KafkaScheduler, MockTime, SystemTime, TestUtils, ZkUtils}
+import kafka.utils.{KafkaScheduler, MockTime, TestUtils, ZkUtils}
 import java.util.concurrent.atomic.AtomicBoolean
 
 class HighwatermarkPersistenceTest {
@@ -56,7 +57,7 @@ class HighwatermarkPersistenceTest {
     val metrics = new Metrics
     // create replica manager
     val replicaManager = new ReplicaManager(configs.head, metrics, new MockTime, new JMockTime, zkUtils, scheduler,
-      logManagers.head, new AtomicBoolean(false))
+      logManagers.head, new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, SystemTime).follower)
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()
@@ -99,7 +100,7 @@ class HighwatermarkPersistenceTest {
     val metrics = new Metrics
     // create replica manager
     val replicaManager = new ReplicaManager(configs.head, metrics, new MockTime(), new JMockTime, zkUtils,
-      scheduler, logManagers.head, new AtomicBoolean(false))
+      scheduler, logManagers.head, new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, SystemTime).follower)
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()

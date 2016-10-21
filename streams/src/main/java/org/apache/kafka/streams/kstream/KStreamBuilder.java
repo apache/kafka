@@ -92,7 +92,6 @@ public class KStreamBuilder extends TopologyBuilder {
         return new KStreamImpl<>(this, name, Collections.singleton(name), false);
     }
 
-
     /**
      * Create a {@link KStream} instance from the specified Pattern.
      * <p>
@@ -144,14 +143,18 @@ public class KStreamBuilder extends TopologyBuilder {
      * @return a {@link KTable} for the specified topics
      */
     public <K, V> KTable<K, V> table(Serde<K> keySerde, Serde<V> valSerde, String topic, final String storeName) {
-        String source = newName(KStreamImpl.SOURCE_NAME);
-        String name = newName(KTableImpl.SOURCE_NAME);
+        final String source = newName(KStreamImpl.SOURCE_NAME);
+        final String name = newName(KTableImpl.SOURCE_NAME);
+        final ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(storeName);
 
         addSource(source, keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topic);
-
-        ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(storeName);
         addProcessor(name, processorSupplier, source);
-        return new KTableImpl<>(this, name, processorSupplier, Collections.singleton(source), keySerde, valSerde, storeName);
+
+        final KTableImpl kTable = new KTableImpl<>(this, name, processorSupplier, Collections.singleton(source), keySerde, valSerde, storeName);
+        kTable.materialize((KTableSource) processorSupplier);
+        connectSourceStoreAndTopic(storeName, topic);
+
+        return kTable;
     }
 
     /**

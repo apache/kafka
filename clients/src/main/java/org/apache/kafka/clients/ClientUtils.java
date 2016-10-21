@@ -38,24 +38,26 @@ public class ClientUtils {
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls) {
         List<InetSocketAddress> addresses = new ArrayList<InetSocketAddress>();
         for (String url : urls) {
-            if (url != null && url.length() > 0) {
-                String host = getHost(url);
-                Integer port = getPort(url);
-                if (host == null || port == null)
-                    throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
+            if (url != null && !url.isEmpty()) {
                 try {
+                    String host = getHost(url);
+                    Integer port = getPort(url);
+                    if (host == null || port == null)
+                        throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
+
                     InetSocketAddress address = new InetSocketAddress(host, port);
+
                     if (address.isUnresolved()) {
-                        log.warn("Removing server from " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + " as DNS resolution failed: " + url);
+                        log.warn("Removing server {} from {} as DNS resolution failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, host);
                     } else {
                         addresses.add(address);
                     }
-                } catch (NumberFormatException e) {
+                } catch (IllegalArgumentException e) {
                     throw new ConfigException("Invalid port in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
                 }
             }
         }
-        if (addresses.size() < 1)
+        if (addresses.isEmpty())
             throw new ConfigException("No resolvable bootstrap urls given in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
         return addresses;
     }

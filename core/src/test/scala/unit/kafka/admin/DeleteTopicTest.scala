@@ -20,11 +20,13 @@ import kafka.log.Log
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils
 import kafka.utils.ZkUtils._
-import kafka.server.{KafkaServer, KafkaConfig}
+import kafka.server.{KafkaConfig, KafkaServer}
 import org.junit.Assert._
 import org.junit.Test
 import java.util.Properties
+
 import kafka.common.{TopicAlreadyMarkedForDeletionException, TopicAndPartition}
+import org.apache.kafka.common.errors.InvalidTopicException
 
 class DeleteTopicTest extends ZooKeeperTestHarness {
 
@@ -202,7 +204,12 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     val topic = topicAndPartition.topic
     val servers = createTestTopicAndCluster(topic)
     // start topic deletion
-    AdminUtils.deleteTopic(zkUtils, "test2")
+    try {
+      AdminUtils.deleteTopic(zkUtils, "test2")
+      fail("Expected InvalidTopicException")
+    } catch {
+      case e: InvalidTopicException => // expected exception
+    }
     // verify delete topic path for test2 is removed from zookeeper
     TestUtils.verifyTopicDeletion(zkUtils, "test2", 1, servers)
     // verify that topic test is untouched

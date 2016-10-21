@@ -64,7 +64,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
       case e: Exception => fail("Unexpected failure sending message to broker. " + e.getMessage)
     }
     val firstEnd = SystemTime.milliseconds
-    assertTrue((firstEnd-firstStart) < 500)
+    assertTrue((firstEnd-firstStart) < 2000)
     val secondStart = SystemTime.milliseconds
     try {
       val response = producer.send(produceRequest("test", 0,
@@ -74,7 +74,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
       case e: Exception => fail("Unexpected failure sending message to broker. " + e.getMessage)
     }
     val secondEnd = SystemTime.milliseconds
-    assertTrue((secondEnd-secondStart) < 500)
+    assertTrue((secondEnd-secondStart) < 2000)
     try {
       val response = producer.send(produceRequest("test", 0,
         new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))

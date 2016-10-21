@@ -51,8 +51,9 @@ public class ProducerConfig extends AbstractConfig {
      */
     @Deprecated
     public static final String METADATA_FETCH_TIMEOUT_CONFIG = "metadata.fetch.timeout.ms";
-    private static final String METADATA_FETCH_TIMEOUT_DOC = "The first time data is sent to a topic we must fetch metadata about that topic to know which servers host the topic's partitions. This "
-                                                             + "fetch to succeed before throwing an exception back to the client.";
+    private static final String METADATA_FETCH_TIMEOUT_DOC = "The first time data is sent to a topic we must fetch metadata about that topic to know which servers "
+                                                             + "host the topic's partitions. This config specifies the maximum time, in milliseconds, for this fetch "
+                                                             + "to succeed before throwing an exception back to the client.";
 
     /** <code>metadata.max.age.ms</code> */
     public static final String METADATA_MAX_AGE_CONFIG = CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
@@ -75,7 +76,7 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>acks</code> */
     public static final String ACKS_CONFIG = "acks";
     private static final String ACKS_DOC = "The number of acknowledgments the producer requires the leader to have received before considering a request complete. This controls the "
-                                           + " durability of records that are sent. The following settings are common: "
+                                           + " durability of records that are sent. The following settings are allowed: "
                                            + " <ul>"
                                            + " <li><code>acks=0</code> If set to zero then the producer will not wait for any acknowledgment from the"
                                            + " server at all. The record will be immediately added to the socket buffer and considered sent. No guarantee can be"
@@ -87,7 +88,7 @@ public class ProducerConfig extends AbstractConfig {
                                            + " acknowledging the record but before the followers have replicated it then the record will be lost."
                                            + " <li><code>acks=all</code> This means the leader will wait for the full set of in-sync replicas to"
                                            + " acknowledge the record. This guarantees that the record will not be lost as long as at least one in-sync replica"
-                                           + " remains alive. This is the strongest available guarantee.";
+                                           + " remains alive. This is the strongest available guarantee. This is equivalent to the acks=-1 setting.";
 
     /** <code>timeout.ms</code> */
 
@@ -292,7 +293,7 @@ public class ProducerConfig extends AbstractConfig {
                                         CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
                                 .define(PARTITIONER_CLASS_CONFIG,
                                         Type.CLASS,
-                                        DefaultPartitioner.class.getName(),
+                                        DefaultPartitioner.class,
                                         Importance.MEDIUM, PARTITIONER_CLASS_DOC)
                                 .define(INTERCEPTOR_CLASSES_CONFIG,
                                         Type.LIST,

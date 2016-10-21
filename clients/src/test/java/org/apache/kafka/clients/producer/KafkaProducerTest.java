@@ -104,6 +104,9 @@ public class KafkaProducerTest {
             Assert.assertEquals(1, MockProducerInterceptor.INIT_COUNT.get());
             Assert.assertEquals(0, MockProducerInterceptor.CLOSE_COUNT.get());
 
+            // Cluster metadata will only be updated on calling onSend.
+            Assert.assertNull(MockProducerInterceptor.CLUSTER_META.get());
+
             producer.close();
             Assert.assertEquals(1, MockProducerInterceptor.INIT_COUNT.get());
             Assert.assertEquals(1, MockProducerInterceptor.CLOSE_COUNT.get());
@@ -152,12 +155,15 @@ public class KafkaProducerTest {
         String topic = "topic";
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
         Collection<Node> nodes = Collections.singletonList(new Node(0, "host1", 1000));
-        final Cluster emptyCluster = new Cluster(nodes,
+        final Cluster emptyCluster = new Cluster(null, nodes,
                 Collections.<PartitionInfo>emptySet(),
+                Collections.<String>emptySet(),
                 Collections.<String>emptySet());
         final Cluster cluster = new Cluster(
+                "dummy",
                 Collections.singletonList(new Node(0, "host1", 1000)),
                 Arrays.asList(new PartitionInfo(topic, 0, null, null, null)),
+                Collections.<String>emptySet(),
                 Collections.<String>emptySet());
 
         // Expect exactly one fetch for each attempt to refresh while topic metadata is not available

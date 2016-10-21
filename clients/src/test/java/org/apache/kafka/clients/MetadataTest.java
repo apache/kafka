@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.clients;
 
+import java.net.InetSocketAddress;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -20,9 +21,11 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.test.MockClusterResourceListener;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Test;
@@ -117,7 +120,7 @@ public class MetadataTest {
         assertEquals(100, metadata.lastSuccessfulUpdate());
 
         metadata.needMetadataForAllTopics(true);
-        metadata.update(null, time);
+        metadata.update(Cluster.empty(), time);
         assertEquals(100, metadata.timeToNextUpdate(1000));
     }
 
@@ -129,11 +132,12 @@ public class MetadataTest {
 
         final List<String> expectedTopics = Collections.singletonList("topic");
         metadata.setTopics(expectedTopics);
-        metadata.update(new Cluster(
+        metadata.update(new Cluster(null,
                 Collections.singletonList(new Node(0, "host1", 1000)),
                 Arrays.asList(
                     new PartitionInfo("topic", 0, null, null, null),
                     new PartitionInfo("topic1", 0, null, null, null)),
+                Collections.<String>emptySet(),
                 Collections.<String>emptySet()),
             100);
 
@@ -141,6 +145,36 @@ public class MetadataTest {
             expectedTopics.toArray(), metadata.topics().toArray());
 
         metadata.needMetadataForAllTopics(false);
+    }
+
+    @Test
+    public void testClusterListenerGetsNotifiedOfUpdate() {
+        long time = 0;
+        MockClusterResourceListener mockClusterListener = new MockClusterResourceListener();
+        ClusterResourceListeners listeners = new ClusterResourceListeners();
+        listeners.maybeAdd(mockClusterListener);
+        metadata = new Metadata(refreshBackoffMs, metadataExpireMs, false, listeners);
+
+        String hostName = "www.example.com";
+        Cluster cluster = Cluster.bootstrap(Arrays.asList(new InetSocketAddress(hostName, 9002)));
+        metadata.update(cluster, time);
+        assertFalse("ClusterResourceListener should not called when metadata is updated with bootstrap Cluster",
+                MockClusterResourceListener.IS_ON_UPDATE_CALLED.get());
+
+        metadata.update(new Cluster(
+                        "dummy",
+                        Arrays.asList(new Node(0, "host1", 1000)),
+                        Arrays.asList(
+                                new PartitionInfo("topic", 0, null, null, null),
+                                new PartitionInfo("topic1", 0, null, null, null)),
+                        Collections.<String>emptySet(),
+                        Collections.<String>emptySet()),
+                100);
+
+        assertEquals("MockClusterResourceListener did not get cluster metadata correctly",
+                "dummy", mockClusterListener.clusterResource().clusterId());
+        assertTrue("MockClusterResourceListener should be called when metadata is updated with non-bootstrap Cluster",
+                MockClusterResourceListener.IS_ON_UPDATE_CALLED.get());
     }
 
     @Test
@@ -157,10 +191,12 @@ public class MetadataTest {
         });
 
         metadata.update(new Cluster(
+                null,
                 Arrays.asList(new Node(0, "host1", 1000)),
                 Arrays.asList(
                     new PartitionInfo("topic", 0, null, null, null),
                     new PartitionInfo("topic1", 0, null, null, null)),
+                Collections.<String>emptySet(),
                 Collections.<String>emptySet()),
             100);
 
@@ -183,20 +219,24 @@ public class MetadataTest {
         metadata.addListener(listener);
 
         metadata.update(new Cluster(
+                "cluster",
                 Collections.singletonList(new Node(0, "host1", 1000)),
                 Arrays.asList(
                     new PartitionInfo("topic", 0, null, null, null),
                     new PartitionInfo("topic1", 0, null, null, null)),
+                Collections.<String>emptySet(),
                 Collections.<String>emptySet()),
             100);
 
         metadata.removeListener(listener);
 
         metadata.update(new Cluster(
+                "cluster",
                 Arrays.asList(new Node(0, "host1", 1000)),
                 Arrays.asList(
                     new PartitionInfo("topic2", 0, null, null, null),
                     new PartitionInfo("topic3", 0, null, null, null)),
+                Collections.<String>emptySet(),
                 Collections.<String>emptySet()),
             100);
 
@@ -206,7 +246,7 @@ public class MetadataTest {
 
     @Test
     public void testTopicExpiry() throws Exception {
-        metadata = new Metadata(refreshBackoffMs, metadataExpireMs, true);
+        metadata = new Metadata(refreshBackoffMs, metadataExpireMs, true, new ClusterResourceListeners());
 
         // Test that topic is expired if not used within the expiry interval
         long time = 0;
@@ -238,7 +278,7 @@ public class MetadataTest {
 
     @Test
     public void testNonExpiringMetadata() throws Exception {
-        metadata = new Metadata(refreshBackoffMs, metadataExpireMs, false);
+        metadata = new Metadata(refreshBackoffMs, metadataExpireMs, false, new ClusterResourceListeners());
 
         // Test that topic is not expired if not used within the expiry interval
         long time = 0;

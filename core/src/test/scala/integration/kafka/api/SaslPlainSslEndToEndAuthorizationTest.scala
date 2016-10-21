@@ -16,7 +16,6 @@
   */
 package kafka.api
 
-import kafka.server.KafkaConfig
 import org.apache.kafka.common.protocol.SecurityProtocol
 
 class SaslPlainSslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {

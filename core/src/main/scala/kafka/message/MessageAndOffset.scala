@@ -24,5 +24,13 @@ case class MessageAndOffset(message: Message, offset: Long) {
    * Compute the offset of the next message in the log
    */
   def nextOffset: Long = offset + 1
+
+  /**
+   * We need to decompress the message, if required, to get the offset of the first uncompressed message.
+   */
+  def firstOffset: Long = message.compressionCodec match {
+    case NoCompressionCodec => offset
+    case _ => ByteBufferMessageSet.deepIterator(this).next().offset
+  }
 }
 

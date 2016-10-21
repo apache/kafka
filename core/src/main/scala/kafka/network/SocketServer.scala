@@ -332,8 +332,8 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
       if (sendBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
         socketChannel.socket().setSendBufferSize(sendBufferSize)
 
-      debug("Accepted connection from %s on %s. sendBufferSize [actual|requested]: [%d|%d] recvBufferSize [actual|requested]: [%d|%d]"
-            .format(socketChannel.socket.getInetAddress, socketChannel.socket.getLocalSocketAddress,
+      debug("Accepted connection from %s on %s and assigned it to processor %d, sendBufferSize [actual|requested]: [%d|%d] recvBufferSize [actual|requested]: [%d|%d]"
+            .format(socketChannel.socket.getRemoteSocketAddress, socketChannel.socket.getLocalSocketAddress, processor.id,
                   socketChannel.socket.getSendBufferSize, sendBufferSize,
                   socketChannel.socket.getReceiveBufferSize, recvBufferSize))
 
@@ -548,9 +548,10 @@ private[kafka] class Processor(val id: Int,
         // We explicitly catch all non fatal exceptions and close the socket to avoid a socket leak. The other
         // throwables will be caught in processor and logged as uncaught exceptions.
         case NonFatal(e) =>
+          val remoteAddress = channel.getRemoteAddress
           // need to close the channel here to avoid a socket leak.
           close(channel)
-          error(s"Processor $id closed connection from ${channel.getRemoteAddress}", e)
+          error(s"Processor $id closed connection from $remoteAddress", e)
       }
     }
   }

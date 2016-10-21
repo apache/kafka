@@ -67,7 +67,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
                  client_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI,
-                 authorizer_class_name=None, topics=None, version=TRUNK, quota_config=None, jmx_object_names=None,
+                 authorizer_class_name=None, topics=None, version=TRUNK, jmx_object_names=None,
                  jmx_attributes=[], zk_connect_timeout=5000, zk_session_timeout=6000):
         """
         :type context
@@ -78,7 +78,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes)
 
         self.zk = zk
-        self.quota_config = quota_config
 
         self.security_protocol = security_protocol
         self.interbroker_security_protocol = interbroker_security_protocol
