@@ -17,7 +17,7 @@ import java.util.Properties
 import java.util.concurrent.atomic.AtomicInteger
 
 import kafka.common.KafkaException
-import kafka.coordinator.{GroupOverview, GroupSummary, MemberSummary}
+import kafka.coordinator.{GroupOverview, MemberSummary}
 import kafka.utils.Logging
 import org.apache.kafka.clients._
 import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, ConsumerProtocol, RequestFuture}
@@ -121,44 +121,38 @@ class AdminClient(val time: Time,
     listAllGroupsFlattened.filter(_.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
   }
 
-  def describeGroup(groupId: String): GroupSummary = {
+  /**
+   * Case class used to represent a consumer of a consumer group
+   */
+  case class ConsumerSummary(consumerId: String,
+                             clientId: String,
+                             host: String,
+                             assignment: List[TopicPartition])
+
+  /**
+   * Case class used to represent group metadata (including the group coordinator) for the DescribeGroup API
+   */
+  case class ConsumerGroupSummary(state: String,
+                                  assignmentStrategy: String,
+                                  consumers: Option[List[ConsumerSummary]],
+                                  coordinator: Node)
+
+  def describeConsumerGroup(groupId: String): ConsumerGroupSummary = {
     val coordinator = findCoordinator(groupId)
     val responseBody = send(coordinator, ApiKeys.DESCRIBE_GROUPS, new DescribeGroupsRequest(List(groupId).asJava))
     val response = new DescribeGroupsResponse(responseBody)
-    val metadata = response.groups().get(groupId)
+    val metadata = response.groups.get(groupId)
     if (metadata == null)
       throw new KafkaException(s"Response from broker contained no metadata for group $groupId")
+    if (metadata.state != "Dead" && metadata.state != "Empty" && metadata.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
+      throw new IllegalArgumentException(s"Consumer Group $groupId with protocol type '${metadata.protocolType}' is not a valid consumer group")
 
     Errors.forCode(metadata.errorCode()).maybeThrow()
-    val members = metadata.members().map { member =>
-      val metadata = Utils.readBytes(member.memberMetadata())
-      val assignment = Utils.readBytes(member.memberAssignment())
-      MemberSummary(member.memberId(), member.clientId(), member.clientHost(), metadata, assignment)
+    val consumers = metadata.members.map { consumer =>
+      val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(Utils.readBytes(consumer.memberAssignment)))
+      ConsumerSummary(consumer.memberId, consumer.clientId, consumer.clientHost, assignment.partitions.toList)
     }.toList
-    GroupSummary(metadata.state(), metadata.protocolType(), metadata.protocol(), members)
-  }
-
-  case class ConsumerSummary(memberId: String,
-                             clientId: String,
-                             clientHost: String,
-                             assignment: List[TopicPartition])
-
-  def describeConsumerGroup(groupId: String): Option[List[ConsumerSummary]] = {
-    val group = describeGroup(groupId)
-    if (group.state == "Dead")
-      return None
-
-    if (group.protocolType != ConsumerProtocol.PROTOCOL_TYPE)
-      throw new IllegalArgumentException(s"Group $groupId with protocol type '${group.protocolType}' is not a valid consumer group")
-
-    if (group.state == "Stable") {
-      Some(group.members.map { member =>
-        val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment))
-        new ConsumerSummary(member.memberId, member.clientId, member.clientHost, assignment.partitions().asScala.toList)
-      })
-    } else {
-      Some(List.empty)
-    }
+    ConsumerGroupSummary(metadata.state, metadata.protocol, Some(consumers), coordinator)
   }
 
   def close() {
