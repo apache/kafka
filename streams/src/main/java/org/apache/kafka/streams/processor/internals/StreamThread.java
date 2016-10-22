@@ -641,18 +641,19 @@ public class StreamThread extends Thread {
             TaskId taskId = entry.getKey();
             Set<TopicPartition> partitions = entry.getValue();
 
-            if (!assignment.containsAll(partitions))
-                throw new IllegalStateException(logPrefix + " Constructed task owned partitions " + partitions + " are not contained in the assignment " + assignment);
+            if (assignment.containsAll(partitions)) {
+                try {
+                    StreamTask task = createStreamTask(taskId, partitions);
+                    activeTasks.put(taskId, task);
 
-            try {
-                StreamTask task = createStreamTask(taskId, partitions);
-                activeTasks.put(taskId, task);
-
-                for (TopicPartition partition : partitions)
-                    activeTasksByPartition.put(partition, task);
-            } catch (StreamsException e) {
-                log.error("{} Failed to create an active task %s: ", logPrefix, taskId, e);
-                throw e;
+                    for (TopicPartition partition : partitions)
+                        activeTasksByPartition.put(partition, task);
+                } catch (StreamsException e) {
+                    log.error("{} Failed to create an active task %s: ", logPrefix, taskId, e);
+                    throw e;
+                }
+            } else {
+                log.warn("{} Task {} owned partitions {} are not contained in the assignment {}", logPrefix, taskId, partitions, assignment);
             }
         }
     }

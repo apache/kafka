@@ -145,7 +145,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
     private Cluster metadataWithInternalTopics;
     private Map<HostInfo, Set<TopicPartition>> partitionsByHostState;
-    private Map<InternalTopicConfig, Set<TaskId>> stateChangelogTopicToTaskIds;
 
     private Map<TaskId, Set<TopicPartition>> standbyTasks;
     private Map<TaskId, Set<TopicPartition>> activeTasks;
@@ -161,7 +160,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     @Override
     public void configure(Map<String, ?> configs) {
         numStandbyReplicas = (Integer) configs.get(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
-
 
         Object o = configs.get(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE);
         if (o == null) {
@@ -472,7 +470,10 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
 
             HostInfo hostInfo = entry.getValue().hostInfo;
-            partitionsByHostState.put(hostInfo, topicPartitions);
+
+            if (hostInfo != null) {
+                partitionsByHostState.put(hostInfo, topicPartitions);
+            }
         }
 
         // within the client, distribute tasks to its owned consumers
