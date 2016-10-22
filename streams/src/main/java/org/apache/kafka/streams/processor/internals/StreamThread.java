@@ -111,7 +111,6 @@ public class StreamThread extends Thread {
     private boolean processStandbyRecords = false;
     private AtomicBoolean initialized = new AtomicBoolean(false);
 
-    private final long cacheSizeBytes;
     private ThreadCache cache;
 
     final ConsumerRebalanceListener rebalanceListener = new ConsumerRebalanceListener() {
@@ -184,7 +183,7 @@ public class StreamThread extends Thread {
         if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) < 0) {
             log.warn("Negative cache size passed in thread [{}]. Reverting to cache size of 0 bytes.", threadName);
         }
-        this.cacheSizeBytes = Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
+        long cacheSizeBytes = Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
             config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG));
         this.cache = new ThreadCache(threadClientId, cacheSizeBytes, this.sensors);
 
@@ -637,24 +636,13 @@ public class StreamThread extends Thread {
         if (partitionAssignor == null)
             throw new IllegalStateException(logPrefix + " Partition assignor has not been initialized while adding stream tasks: this should not happen.");
 
-        HashMap<TaskId, Set<TopicPartition>> partitionsForTask = new HashMap<>();
-
-        for (TopicPartition partition : assignment) {
-            Set<TaskId> taskIds = partitionAssignor.tasksForPartition(partition);
-            for (TaskId taskId : taskIds) {
-                Set<TopicPartition> partitions = partitionsForTask.get(taskId);
-                if (partitions == null) {
-                    partitions = new HashSet<>();
-                    partitionsForTask.put(taskId, partitions);
-                }
-                partitions.add(partition);
-            }
-        }
-
         // create the active tasks
-        for (Map.Entry<TaskId, Set<TopicPartition>> entry : partitionsForTask.entrySet()) {
+        for (Map.Entry<TaskId, Set<TopicPartition>> entry : partitionAssignor.activeTasks().entrySet()) {
             TaskId taskId = entry.getKey();
             Set<TopicPartition> partitions = entry.getValue();
+
+            if (!assignment.containsAll(partitions))
+                throw new IllegalStateException(logPrefix + " Constructed task owned partitions " + partitions + " are not contained in the assignment " + assignment);
 
             try {
                 StreamTask task = createStreamTask(taskId, partitions);

@@ -71,11 +71,6 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
         // do nothing
     }
 
-    // for test only
-    public Deserializer<V> valueDeserializer() {
-        return valDeserializer;
-    }
-
     /**
      * @return a string representation of this node, useful for debugging.
      */

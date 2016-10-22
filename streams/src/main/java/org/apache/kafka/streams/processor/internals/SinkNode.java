@@ -77,11 +77,6 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         // do nothing
     }
 
-    // for test only
-    public Serializer<V> valueSerializer() {
-        return valSerializer;
-    }
-
     /**
      * @return a string representation of this node, useful for debugging.
      */

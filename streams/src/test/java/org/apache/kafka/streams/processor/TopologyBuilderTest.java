@@ -156,7 +156,7 @@ public class TopologyBuilderTest {
         builder.addSource("source-3", "topic-3");
         builder.addInternalTopic("topic-3");
 
-        Set<String> expected = new HashSet<String>();
+        Set<String> expected = new HashSet<>();
         expected.add("topic-1");
         expected.add("topic-2");
         expected.add("X-topic-3");
