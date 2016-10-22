@@ -40,6 +40,7 @@ class NamedCache {
     private LRUNode head;
     private long currentSizeBytes;
     private ThreadCacheMetrics metrics;
+    private final List<String> callStack  = new ArrayList<>();
 
     // JMX stats
     private Sensor hitRatio = null;
@@ -109,7 +110,7 @@ class NamedCache {
         for (Bytes key : dirtyKeys) {
             final LRUNode node = getInternal(key);
             if (node == null) {
-                throw new IllegalStateException("Key found in dirty key set, but entry is null");
+                throw new IllegalStateException("Key = " + key + " found in dirty key set, but entry is null");
             }
             entries.add(new ThreadCache.DirtyEntry(key, node.entry.value, node.entry));
             node.entry.markClean();
@@ -200,6 +201,7 @@ class NamedCache {
         }
         remove(eldest);
         cache.remove(eldest.key);
+        dirtyKeys.remove(eldest.key);
     }
 
     synchronized LRUCacheEntry putIfAbsent(final Bytes key, final LRUCacheEntry value) {

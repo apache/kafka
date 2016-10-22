@@ -32,6 +32,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
 
 public class NamedCacheTest {
 
@@ -190,5 +191,25 @@ public class NamedCacheTest {
     @Test
     public void shouldNotThrowNullPointerWhenCacheIsEmptyAndEvictionCalled() throws Exception {
         cache.evict();
+    }
+
+    @Test
+    public void shouldRemoveKeyFromDirtyKeSetOnEvict() throws Exception {
+        cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(new byte[]{10}, true, 0, 0, 0, ""));
+        cache.put(Bytes.wrap(new byte[]{0}), new LRUCacheEntry(new byte[]{10}, false, 0, 0, 0, ""));
+
+        cache.setListener(new ThreadCache.DirtyEntryFlushListener() {
+            @Override
+            public void apply(final List<ThreadCache.DirtyEntry> dirty) {
+                fail("Shouldn't happen here as there should be no dirty keys");
+            }
+        });
+        cache.evict();
+        try {
+            cache.flush();
+        } catch (IllegalStateException e) {
+            fail("Shouldn't happen as there should be no dirty keys");
+        }
+
     }
 }
