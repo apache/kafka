@@ -409,13 +409,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             maybeAutoCommitOffsetsSync();
 
             Node coordinator;
-            long endTimeMs = System.currentTimeMillis() + CLOSE_TIMEOUT_MS;
+            long endTimeMs = time.milliseconds() + CLOSE_TIMEOUT_MS;
             while ((coordinator = coordinator()) != null && client.pendingRequestCount(coordinator) > 0) {
-                long remainingTimeMs = endTimeMs - System.currentTimeMillis();
+                long remainingTimeMs = endTimeMs - time.milliseconds();
                 if (remainingTimeMs > 0)
                     client.poll(remainingTimeMs);
-                else
+                else {
+                    log.warn("Close timed out with {} pending requests to coordinator, terminating client connections for group {}.", client.pendingRequestCount(coordinator), groupId);
                     break;
+                }
             }
         } finally {
             super.close();

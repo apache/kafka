@@ -831,6 +831,7 @@ public class KafkaConsumerTest {
         assertTrue(consumer.subscription().isEmpty());
         assertTrue(consumer.assignment().isEmpty());
 
+        client.requests().clear();
         consumer.close();
     }
 
@@ -905,6 +906,7 @@ public class KafkaConsumerTest {
         for (ClientRequest req: client.requests())
             assertTrue(req.header().apiKey() != ApiKeys.OFFSET_COMMIT.id);
 
+        client.requests().clear();
         consumer.close();
     }
 
@@ -969,6 +971,7 @@ public class KafkaConsumerTest {
         // verify that the offset commits occurred as expected
         assertTrue(commitReceived.get());
 
+        client.requests().clear();
         consumer.close();
     }
 
@@ -1032,6 +1035,7 @@ public class KafkaConsumerTest {
         for (ClientRequest req : client.requests())
             assertTrue(req.header().apiKey() != ApiKeys.OFFSET_COMMIT.id);
 
+        client.requests().clear();
         consumer.close();
     }
 

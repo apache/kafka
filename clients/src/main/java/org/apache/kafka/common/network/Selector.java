@@ -491,6 +491,12 @@ public class Selector implements Selectable {
         } catch (IOException e) {
             log.error("Exception closing connection to node {}:", channel.id(), e);
         }
+
+        // Keep track of closed channels with pending receives so that all received records
+        // may be processed. For example, when producer with acks=0 sends some records and
+        // closes its connections, a single poll() in the broker may receive records and
+        // handle close(). Closed channels are retained until the current poll() processing
+        // completes to enable all records received on the channel to be processed.
         Deque<NetworkReceive> deque = this.stagedReceives.remove(channel);
         if (deque != null) {
             while (!deque.isEmpty()) {
