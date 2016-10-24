@@ -31,6 +31,7 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
@@ -130,8 +131,13 @@ public class StreamsKafkaClient {
         final ClientResponse clientResponse = sendRequest(createTopicsRequest.toStruct(), ApiKeys.CREATE_TOPICS);
         final CreateTopicsResponse createTopicsResponse = new CreateTopicsResponse(clientResponse.responseBody());
         for (InternalTopicConfig internalTopicConfig:topicsMap.keySet()) {
-            if (createTopicsResponse.errors().get(internalTopicConfig.name()).code() > 0) {
-                throw new StreamsException("Could not create topic: " + internalTopicConfig.name() + ". " + createTopicsResponse.errors().get(internalTopicConfig.name()).name());
+            short errorCode = createTopicsResponse.errors().get(internalTopicConfig.name()).code();
+            if (errorCode > 0) {
+                if (errorCode == Errors.TOPIC_ALREADY_EXISTS.code()) {
+                    continue;
+                } else {
+                    throw new StreamsException("Could not create topic: " + internalTopicConfig.name() + ". " + createTopicsResponse.errors().get(internalTopicConfig.name()).name());
+                }
             }
         }
     }
