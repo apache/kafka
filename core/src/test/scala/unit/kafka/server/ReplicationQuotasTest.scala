@@ -119,7 +119,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
       changeTopicConfig(zkUtils, topic, propsWith(FollowerReplicationThrottledReplicasProp, "0:106,1:106,2:106,3:107,4:107,5:107"))
 
     //Add data equally to each partition
-    producer = createNewProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 0)
+    producer = createNewProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 1)
     (0 until msgCount).foreach { x =>
       (0 to 7).foreach { partition =>
         producer.send(new ProducerRecord(topic, partition, null, msg))

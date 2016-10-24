@@ -36,6 +36,7 @@ import java.util.Map;
 
 import static org.apache.kafka.streams.state.internals.ThreadCacheTest.memoryCacheEntrySize;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
@@ -127,6 +128,25 @@ public class CachingKeyValueStoreTest {
             results.add(range.next().key);
         }
         assertEquals(items, results.size());
+    }
+
+    @Test
+    public void shouldDeleteItemsFromCache() throws Exception {
+        store.put("a", "a");
+        store.delete("a");
+        assertNull(store.get("a"));
+        assertFalse(store.range("a", "b").hasNext());
+        assertFalse(store.all().hasNext());
+    }
+
+    @Test
+    public void shouldNotShowItemsDeletedFromCacheButFlushedToStoreBeforeDelete() throws Exception {
+        store.put("a", "a");
+        store.flush();
+        store.delete("a");
+        assertNull(store.get("a"));
+        assertFalse(store.range("a", "b").hasNext());
+        assertFalse(store.all().hasNext());
     }
 
     private int addItemsToCache() throws IOException {

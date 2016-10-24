@@ -653,7 +653,7 @@ class ZkUtils(val zkClient: ZkClient,
     zkClient.exists(path)
   }
 
-  def getCluster() : Cluster = {
+  def getCluster(): Cluster = {
     val cluster = new Cluster
     val nodes = getChildrenParentMayNotExist(BrokerIdsPath)
     for (node <- nodes) {
@@ -783,7 +783,7 @@ class ZkUtils(val zkClient: ZkClient,
     getChildren(dirs.consumerRegistryDir)
   }
 
-  def getConsumersPerTopic(group: String, excludeInternalTopics: Boolean) : mutable.Map[String, List[ConsumerThreadId]] = {
+  def getConsumersPerTopic(group: String, excludeInternalTopics: Boolean): mutable.Map[String, List[ConsumerThreadId]] = {
     val dirs = new ZKGroupDirs(group)
     val consumers = getChildrenParentMayNotExist(dirs.consumerRegistryDir)
     val consumersPerTopicMap = new mutable.HashMap[String, List[ConsumerThreadId]]
@@ -800,6 +800,15 @@ class ZkUtils(val zkClient: ZkClient,
     for ( (topic, consumerList) <- consumersPerTopicMap )
       consumersPerTopicMap.put(topic, consumerList.sortWith((s,t) => s < t))
     consumersPerTopicMap
+  }
+
+  def getTopicsPerMemberId(group: String, excludeInternalTopics: Boolean = true): Map[String, List[String]] = {
+    val dirs = new ZKGroupDirs(group)
+    val memberIds = getChildrenParentMayNotExist(dirs.consumerRegistryDir)
+    memberIds.map { memberId =>
+      val topicCount = TopicCount.constructTopicCount(group, memberId, this, excludeInternalTopics)
+      memberId -> topicCount.getTopicCountMap.keys.toList
+    }.toMap
   }
 
   /**
@@ -891,10 +900,10 @@ class ZkUtils(val zkClient: ZkClient,
 private object ZKStringSerializer extends ZkSerializer {
 
   @throws(classOf[ZkMarshallingError])
-  def serialize(data : Object) : Array[Byte] = data.asInstanceOf[String].getBytes("UTF-8")
+  def serialize(data : Object): Array[Byte] = data.asInstanceOf[String].getBytes("UTF-8")
 
   @throws(classOf[ZkMarshallingError])
-  def deserialize(bytes : Array[Byte]) : Object = {
+  def deserialize(bytes : Array[Byte]): Object = {
     if (bytes == null)
       null
     else

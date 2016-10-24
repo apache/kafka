@@ -61,11 +61,10 @@ public class StandbyTask extends AbstractTask {
                        StreamsMetrics metrics, final StateDirectory stateDirectory) {
         super(id, applicationId, partitions, topology, consumer, restoreConsumer, true, stateDirectory, null);
 
-        log.info("task [{}] Creating processorContext", id());
-
         // initialize the topology with its own context
         this.processorContext = new StandbyContextImpl(id, applicationId, config, stateMgr, metrics);
 
+        log.info("standby-task [{}] Initializing state stores", id());
         initializeStateStores();
 
         ((StandbyContextImpl) this.processorContext).initialized();
@@ -86,12 +85,12 @@ public class StandbyTask extends AbstractTask {
      * @return a list of records not consumed
      */
     public List<ConsumerRecord<byte[], byte[]>> update(TopicPartition partition, List<ConsumerRecord<byte[], byte[]>> records) {
-        log.debug("task [{}] Updates for partition [{}]", id(), partition);
+        log.debug("standby-task [{}] Updating standby replicas of its state store for partition [{}]", id(), partition);
         return stateMgr.updateStandbyStates(partition, records);
     }
 
     public void commit() {
-        log.debug("task [{}] Flushing", id());
+        log.debug("standby-task [{}] Committing its state", id());
         stateMgr.flush(processorContext);
 
         // reinitialize offset limits

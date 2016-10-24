@@ -22,6 +22,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayDeque;
 
@@ -33,6 +35,8 @@ import static java.lang.String.format;
  * timestamp is monotonically increasing such that once it is advanced, it will not be decremented.
  */
 public class RecordQueue {
+
+    private static final Logger log = LoggerFactory.getLogger(RecordQueue.class);
 
     private final SourceNode source;
     private final TopicPartition partition;
@@ -99,6 +103,8 @@ public class RecordQueue {
                                                                          rawRecord.serializedKeySize(),
                                                                          rawRecord.serializedValueSize(), key, value);
             long timestamp = timestampExtractor.extract(record);
+
+            log.trace("Source node {} extracted timestamp {} for record {} when adding to buffered queue", source.name(), timestamp, record);
 
             // validate that timestamp must be non-negative
             if (timestamp < 0)

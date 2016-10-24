@@ -90,7 +90,7 @@ public class StreamsResetter {
 
             adminClient = AdminClient.createSimplePlaintext(this.options.valueOf(bootstrapServerOption));
             final String groupId = this.options.valueOf(applicationIdOption);
-            if (!adminClient.describeGroup(groupId).members().isEmpty()) {
+            if (!adminClient.describeConsumerGroup(groupId).consumers().get().isEmpty()) {
                 throw new IllegalStateException("Consumer group '" + groupId + "' is still active. " +
                     "Make sure to stop all running application instances before running the reset tool.");
             }

@@ -52,6 +52,10 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
                 return new KTableFilterValueGetter(parentValueGetterSupplier.get());
             }
 
+            @Override
+            public String[] storeNames() {
+                return parentValueGetterSupplier.storeNames();
+            }
         };
     }
 

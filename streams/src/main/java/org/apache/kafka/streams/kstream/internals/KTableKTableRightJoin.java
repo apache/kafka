@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -37,13 +37,18 @@ class KTableKTableRightJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
 
     @Override
     public KTableValueGetterSupplier<K, R> view() {
-        return new KTableValueGetterSupplier<K, R>() {
+        return new KTableKTableRightJoinValueGetterSupplier(valueGetterSupplier1, valueGetterSupplier2);
+    }
 
-            public KTableValueGetter<K, R> get() {
-                return new KTableKTableRightJoinValueGetter(valueGetterSupplier1.get(), valueGetterSupplier2.get());
-            }
+    private class KTableKTableRightJoinValueGetterSupplier extends AbstractKTableKTableJoinValueGetterSupplier<K, R, V1, V2> {
 
-        };
+        public KTableKTableRightJoinValueGetterSupplier(KTableValueGetterSupplier<K, V1> valueGetterSupplier1, KTableValueGetterSupplier<K, V2> valueGetterSupplier2) {
+            super(valueGetterSupplier1, valueGetterSupplier2);
+        }
+
+        public KTableValueGetter<K, R> get() {
+            return new KTableKTableRightJoinValueGetter(valueGetterSupplier1.get(), valueGetterSupplier2.get());
+        }
     }
 
     private class KTableKTableRightJoinProcessor extends AbstractProcessor<K, Change<V1>> {
@@ -65,19 +70,23 @@ class KTableKTableRightJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
          * @throws StreamsException if key is null
          */
         @Override
-        public void process(K key, Change<V1> change) {
+        public void process(final K key, final Change<V1> change) {
             // the keys should never be null
             if (key == null)
                 throw new StreamsException("Record key for KTable right-join operator should not be null.");
 
-            R newValue = null;
+            final R newValue;
             R oldValue = null;
-            V2 value2 = valueGetter.get(key);
 
-            if (value2 != null) {
-                newValue = joiner.apply(change.newValue, value2);
-                if (sendOldValues)
-                    oldValue = joiner.apply(change.oldValue, value2);
+            final V2 value2 = valueGetter.get(key);
+            if (value2 == null) {
+                return;
+            }
+
+            newValue = joiner.apply(change.newValue, value2);
+
+            if (sendOldValues) {
+                oldValue = joiner.apply(change.oldValue, value2);
             }
 
             context().forward(key, new Change<>(newValue, oldValue));

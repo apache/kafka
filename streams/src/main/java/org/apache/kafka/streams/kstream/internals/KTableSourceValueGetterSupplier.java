@@ -32,6 +32,11 @@ public class KTableSourceValueGetterSupplier<K, V> implements KTableValueGetterS
         return new KTableSourceValueGetter();
     }
 
+    @Override
+    public String[] storeNames() {
+        return new String[]{storeName};
+    }
+
     private class KTableSourceValueGetter implements KTableValueGetter<K, V> {
 
         KeyValueStore<K, V> store = null;

@@ -47,6 +47,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class ConsumerNetworkClient implements Closeable {
     private static final Logger log = LoggerFactory.getLogger(ConsumerNetworkClient.class);
+    private static final long MAX_POLL_TIMEOUT_MS = 5000L;
 
     // the mutable state of this class is protected by the object's monitor (excluding the wakeup
     // flag and the request completion queue below).
@@ -176,7 +177,7 @@ public class ConsumerNetworkClient implements Closeable {
      */
     public void poll(RequestFuture<?> future) {
         while (!future.isDone())
-            poll(Long.MAX_VALUE, time.milliseconds(), future);
+            poll(MAX_POLL_TIMEOUT_MS, time.milliseconds(), future);
     }
 
     /**
@@ -225,7 +226,10 @@ public class ConsumerNetworkClient implements Closeable {
             // condition becomes satisfied after the call to shouldBlock() (because of a fired completion
             // handler), the client will be woken up.
             if (pollCondition == null || pollCondition.shouldBlock()) {
-                client.poll(timeout, now);
+                // if there are no requests in flight, do not block longer than the retry backoff
+                if (client.inFlightRequestCount() == 0)
+                    timeout = Math.min(timeout, retryBackoffMs);
+                client.poll(Math.min(MAX_POLL_TIMEOUT_MS, timeout), now);
                 now = time.milliseconds();
             } else {
                 client.poll(0, now);
