@@ -285,6 +285,10 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
 
   @Test
   def testAsyncSendCanCorrectlyFailWithTimeout() {
+    val topic = "new-topic"
+    // create topics in ZK
+    TestUtils.createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0->Seq(0,1)), servers = servers)
+
     val timeoutMs = 500
     val props = new Properties()
     props.put("request.timeout.ms", String.valueOf(timeoutMs))
@@ -298,10 +302,6 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
       partitioner = classOf[StaticPartitioner].getName,
       producerProps = props)
 
-    val topic = "new-topic"
-    // create topics in ZK
-    TestUtils.createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0->Seq(0,1)), servers = servers)
-
     // do a simple test to make sure plumbing is okay
     try {
       // this message should be assigned to partition 0 whose leader is on broker 0
@@ -310,25 +310,25 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
       val response1 = getConsumer1().fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
       val messageSet1 = response1.messageSet("new-topic", 0).iterator
       assertTrue("Message set should have 1 message", messageSet1.hasNext)
-      assertEquals(new Message("test".getBytes), messageSet1.next.message)
+      assertEquals(ByteBuffer.wrap("test".getBytes), messageSet1.next.message.payload)
+
+      // stop IO threads and request handling, but leave networking operational
+      // any requests should be accepted and queue up, but not handled
+      server1.requestHandlerPool.shutdown()
+
+      val t1 = SystemTime.milliseconds
+      try {
+        // this message should be assigned to partition 0 whose leader is on broker 0, but
+        // broker 0 will not response within timeoutMs millis.
+        producer.send(new KeyedMessage[String, String](topic, "test", "test"))
+      } catch {
+        case _: FailedToSendMessageException => /* success */
+      }
+      val t2 = SystemTime.milliseconds
+      // make sure we don't wait fewer than timeoutMs
+      assertTrue((t2-t1) >= timeoutMs)
+
     } finally producer.close()
-
-    // stop IO threads and request handling, but leave networking operational
-    // any requests should be accepted and queue up, but not handled
-    server1.requestHandlerPool.shutdown()
-
-    val t1 = SystemTime.milliseconds
-    try {
-      // this message should be assigned to partition 0 whose leader is on broker 0, but
-      // broker 0 will not response within timeoutMs millis.
-      producer.send(new KeyedMessage[String, String](topic, "test", "test"))
-    } catch {
-      case _: FailedToSendMessageException => /* success */
-    } finally producer.close()
-    val t2 = SystemTime.milliseconds
-
-    // make sure we don't wait fewer than timeoutMs
-    assertTrue((t2-t1) >= timeoutMs)
   }
 
   @Test
