@@ -84,6 +84,11 @@ public class AbstractTaskTest {
             }
 
             @Override
+            public void init() {
+
+            }
+
+            @Override
             public void commitOffsets() {
                 // do nothing
             }
