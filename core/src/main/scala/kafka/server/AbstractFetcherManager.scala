@@ -119,6 +119,10 @@ abstract class AbstractFetcherManager(protected val name: String, clientId: Stri
   def closeAllFetchers() {
     mapLock synchronized {
       for ( (_, fetcher) <- fetcherThreadMap) {
+        fetcher.initiateShutdown()
+      }
+
+      for ( (_, fetcher) <- fetcherThreadMap) {
         fetcher.shutdown()
       }
       fetcherThreadMap.clear()

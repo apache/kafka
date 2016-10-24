@@ -51,7 +51,7 @@ We first summarize the key concepts of Kafka Streams.
 
 <ul>
     <li>A <b>stream</b> is the most important abstraction provided by Kafka Streams: it represents an unbounded, continuously updating data set. A stream is an ordered, replayable, and fault-tolerant sequence of immutable data records, where a <b>data record</b> is defined as a key-value pair.</li>
-    <li>A stream processing application written in Kafka Streams defines its computational logic through one or more <b>processor topologies</b>, where a processor topology is a graph of stream processors (nodes) that are connected by streams (edges).</li>
+    <li>A <b>stream processing application</b> written in Kafka Streams defines its computational logic through one or more <b>processor topologies</b>, where a processor topology is a graph of stream processors (nodes) that are connected by streams (edges).</li>
     <li>A <b>stream processor</b> is a node in the processor topology; it represents a processing step to transform data in streams by receiving one input record at a time from its upstream processors in the topology, applying its operation to it, and may subsequently producing one or more output records to its downstream processors.</li>
 </ul>
 
@@ -74,8 +74,11 @@ Common notions of time in streams are:
 <ul>
     <li><b>Event time</b> - The point in time when an event or data record occurred, i.e. was originally created "at the source".</li>
     <li><b>Processing time</b> - The point in time when the event or data record happens to be processed by the stream processing application, i.e. when the record is being consumed. The processing time may be milliseconds, hours, or days etc. later than the original event time.</li>
+    <li><b>Ingestion time</b> - The point in time when an event or data record is stored in a topic partition by a Kafka broker. The difference to event time is that this ingestion timestamp is generated when the record is appended to the target topic by the Kafka broker, not when the record is created "at the source". The difference to processing time is that processing time is when the stream processing application processes the record. For example, if a record is never processed, there is no notion of processing time for it, but it still has an ingestion time.
 </ul>
-
+<p>
+The choice between event-time and ingestion-time is actually done through the configuration of Kafka (not Kafka Streams): From Kafka 0.10.x onwards, timestamps are automatically embedded into Kafka messages. Depending on Kafka's configuration these timestamps represent event-time or ingestion-time. The respective Kafka configuration setting can be specified on the broker level or per topic. The default timestamp extractor in Kafka Streams will retrieve these embedded timestamps as-is. Hence, the effective time semantics of your application depend on the effective Kafka configuration for these embedded timestamps.
+</p>
 <p>
 Kafka Streams assigns a <b>timestamp</b> to every data record
 via the <code>TimestampExtractor</code> interface.
@@ -85,6 +88,15 @@ thereby yielding processing-time semantics to stream processing applications.
 Developers can thus enforce different notions of time depending on their business needs. For example,
 per-record timestamps describe the progress of a stream with regards to time (although records may be out-of-order within the stream) and
 are leveraged by time-dependent operations such as joins.
+</p>
+
+<p>
+  Finally, whenever a Kafka Streams application writes records to Kafka, then it will also assign timestamps to these new records. The way the timestamps are assigned depends on the context:
+  <ul>
+    <li> When new output records are generated via processing some input record, for example, <code>context.forward()</code> triggered in the <code>process()</code> function call, output record timestamps are inherited from input record timestamps directly.</li>
+    <li> When new output records are generated via periodic functions such as <code>punctuate()</code>, the output record timestamp is defined as the current internal time (obtained through <code>context.timestamp()</code>) of the stream task.</li>
+    <li> For aggregations, the timestamp of a resulting aggregate update record will be that of the latest arrived input record that triggered the update.</li>
+  </ul>
 </p>
 
 <h5><a id="streams_state" href="#streams_state">States</a></h5>
@@ -101,6 +113,9 @@ This is an important capability when implementing stateful operations.
 Every task in Kafka Streams embeds one or more state stores that can be accessed via APIs to store and query data required for processing.
 These state stores can either be a persistent key-value store, an in-memory hashmap, or another convenient data structure.
 Kafka Streams offers fault-tolerance and automatic recovery for local state stores.
+</p>
+<p>
+  Kafka Streams allows direct read-only queries of the state stores by methods, threads, processes or applications external to the stream processing application that created the state stores. This is provided through a feature called <b>Interactive Queries</b>. All stores are named and Interactive Queries exposes only the read operations of the underlying implementation. 
 </p>
 <br>
 <p>
@@ -246,7 +261,12 @@ In the next section we present another way to build the processor topology: the 
 To build a processor topology using the Streams DSL, developers can apply the <code>KStreamBuilder</code> class, which is extended from the <code>TopologyBuilder</code>.
 A simple example is included with the source code for Kafka in the <code>streams/examples</code> package. The rest of this section will walk
 through some code to demonstrate the key steps in creating a topology using the Streams DSL, but we recommend developers to read the full example source
-codes for details.
+codes for details. 
+
+<h5><a id="streams_kstream_ktable" href="#streams_kstream_ktable">KStream and KTable</a></h5>
+The DSL uses two main abstractions. A <b>KStream</b> is an abstraction of a record stream, where each data record represents a self-contained datum in the unbounded data set. A <b>KTable</b> is an abstraction of a changelog stream, where each data record represents an update. More precisely, the value in a data record is considered to be an update of the last value for the same record key, if any (if a corresponding key doesn't exist yet, the update will be considered a create). To illustrate the difference between KStreams and KTables, let’s imagine the following two data records are being sent to the stream: <code>("alice", 1) --> ("alice", 3)</code>. If these records a KStream and the stream processing application were to sum the values it would return <code>4</code>. If these records were a KTable, the return would be <code>3</code>, since the last record would be considered as an update.
+
+
 
 <h5><a id="streams_dsl_source" href="#streams_dsl_source">Create Source Streams from Kafka</a></h5>
 
@@ -263,6 +283,25 @@ from a single topic).
     KTable<String, GenericRecord> source2 = builder.table("topic3", "stateStoreName");
 </pre>
 
+<h5><a id="streams_dsl_windowing" href="#streams_dsl_windowing">Windowing a stream</a></h5>
+A stream processor may need to divide data records into time buckets, i.e. to <b>window</b> the stream by time. This is usually needed for join and aggregation operations, etc. Kafka Streams currently defines the following types of windows:
+<ul>
+  <li><b>Hopping time windows</b> are windows based on time intervals. They model fixed-sized, (possibly) overlapping windows. A hopping window is defined by two properties: the window's size and its advance interval (aka "hop"). The advance interval specifies by how much a window moves forward relative to the previous one. For example, you can configure a hopping window with a size 5 minutes and an advance interval of 1 minute. Since hopping windows can overlap a data record may belong to more than one such windows.</li>
+  <li><b>Tumbling time windows</b> are a special case of hopping time windows and, like the latter, are windows based on time intervals. They model fixed-size, non-overlapping, gap-less windows. A tumbling window is defined by a single property: the window's size. A tumbling window is a hopping window whose window size is equal to its advance interval. Since tumbling windows never overlap, a data record will belong to one and only one window.</li>
+  <li><b>Sliding windows</b> model a fixed-size window that slides continuously over the time axis; here, two data records are said to be included in the same window if the difference of their timestamps is within the window size. Thus, sliding windows are not aligned to the epoch, but on the data record timestamps. In Kafka Streams, sliding windows are used only for join operations, and can be specified through the <code>JoinWindows</code> class.</li>
+  </ul>
+
+<h5><a id="streams_dsl_joins" href="#streams_dsl_joins">Joins</a></h5>
+A <b>join</b> operation merges two streams based on the keys of their data records, and yields a new stream. A join over record streams usually needs to be performed on a windowing basis because otherwise the number of records that must be maintained for performing the join may grow indefinitely. In Kafka Streams, you may perform the following join operations:
+<ul>
+  <li><b>KStream-to-KStream Joins</b> are always windowed joins, since otherwise the memory and state required to compute the join would grow infinitely in size. Here, a newly received record from one of the streams is joined with the other stream's records within the specified window interval to produce one result for each matching pair based on user-provided <code>ValueJoiner</code>. A new <code>KStream</code> instance representing the result stream of the join is returned from this operator.</li>
+  
+  <li><b>KTable-to-KTable Joins</b> are join operations designed to be consistent with the ones in relational databases. Here, both changelog streams are materialized into local state stores first. When a new record is received from one of the streams, it is joined with the other stream's materialized state stores to produce one result for each matching pair based on user-provided ValueJoiner. A new <code>KTable</code> instance representing the result stream of the join, which is also a changelog stream of the represented table, is returned from this operator.</li>
+  <li><b>KStream-to-KTable Joins</b> allow you to perform table lookups against a changelog stream (<code>KTable</code>) upon receiving a new record from another record stream (KStream). An example use case would be to enrich a stream of user activities (<code>KStream</code>) with the latest user profile information (<code>KTable</code>). Only records received from the record stream will trigger the join and produce results via <code>ValueJoiner</code>, not vice versa (i.e., records received from the changelog stream will be used only to update the materialized state store). A new <code>KStream</code> instance representing the result stream of the join is returned from this operator.</li>
+  </ul>
+
+Depending on the operands the following join operations are supported: <b>inner joins</b>, <b>outer joins</b> and <b>left joins</b>. Their semantics are similar to the corresponding operators in relational databases.
+a
 <h5><a id="streams_dsl_transform" href="#streams_dsl_transform">Transform a stream</a></h5>
 
 <p>

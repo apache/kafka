@@ -346,6 +346,100 @@ Topic:foo	PartitionCount:1	ReplicationFactor:3	Configs:
 	Topic: foo	Partition: 0	Leader: 5	Replicas: 5,6,7	Isr: 5,6,7
 </pre>
 
+<h4><a id="rep-throttle" href="#rep-throttle">Limiting Bandwidth Usage during Data Migration</a></h4>
+Kafka lets you apply a throttle to replication traffic, setting an upper bound on the bandwidth used to move replicas from machine to machine. This is useful when rebalancing a cluster, bootstrapping a new broker or adding or removing brokers, as it limits the impact these data-intensive operations will have on users.
+<p></p>
+There are two interfaces that can be used to engage a throttle. The simplest, and safest, is to apply a throttle when invoking the kafka-reassign-partitions.sh, but kafka-configs.sh can also be used to view and alter the throttle values directly.
+<p></p>
+So for example, if you were to execute a rebalance, with the below command, it would move partitions at no more than 50MB/s.
+<pre>$ bin/kafka-reassign-partitions.sh --zookeeper myhost:2181--execute --reassignment-json-file bigger-cluster.json —throttle 50000000</pre>
+When you execute this script you will see the throttle engage:
+<pre>
+The throttle limit was set to 50000000 B/s
+Successfully started reassignment of partitions.</pre>
+<p>Should you wish to alter the throttle, during a rebalance, say to increase the throughput so it completes quicker, you can do this by re-running the execute command passing the same reassignment-json-file:</p>
+<pre>$ bin/kafka-reassign-partitions.sh --zookeeper localhost:2181  --execute --reassignment-json-file bigger-cluster.json --throttle 700000000
+There is an existing assignment running.
+The throttle limit was set to 700000000 B/s</pre>
+
+<p>Once the rebalance completes the administrator can check the status of the rebalance using the --verify option.
+    If the rebalance has completed, the throttle will be removed via the --verify command. It is important that
+    administrators remove the throttle in a timely manner once rebalancing completes by running the command with
+    the --verify option. Failure to do so could cause regular replication traffic to be throttled. </p>
+<p>When the --verify option is executed, and the reassignment has completed, the script will confirm that the throttle was removed:</p>
+
+<pre>$ bin/kafka-reassign-partitions.sh --zookeeper localhost:2181  --verify --reassignment-json-file bigger-cluster.json
+Status of partition reassignment:
+Reassignment of partition [my-topic,1] completed successfully
+Reassignment of partition [mytopic,0] completed successfully
+Throttle was removed.</pre>
+
+<p>The administrator can also validate the assigned configs using the kafka-configs.sh. There are two pairs of throttle
+    configuration used to manage the throttling process. The throttle value itself. This is configured, at a broker
+    level, using the dynamic properties: </p>
+
+<pre>leader.replication.throttled.rate
+follower.replication.throttled.rate</pre>
+
+<p>There is also an enumerated set of throttled replicas: </p>
+
+<pre>leader.replication.throttled.replicas
+follower.replication.throttled.replicas</pre>
+
+<p>Which are configured per topic. All four config values are automatically assigned by kafka-reassign-partitions.sh
+    (discussed below). </p>
+<p>To view the throttle limit configuration:</p>
+
+<pre>$ bin/kafka-configs.sh --describe --zookeeper localhost:2181 --entity-type brokers
+Configs for brokers '2' are leader.replication.throttled.rate=700000000,follower.replication.throttled.rate=700000000
+Configs for brokers '1' are leader.replication.throttled.rate=700000000,follower.replication.throttled.rate=700000000</pre>
+
+<p>This shows the throttle applied to both leader and follower side of the replication protocol. By default both sides
+    are assigned the same throttled throughput value. </p>
+
+<p>To view the list of throttled replicas:</p>
+
+<pre>$ bin/kafka-configs.sh --describe --zookeeper localhost:2181 --entity-type topics
+Configs for topic 'my-topic' are leader.replication.throttled.replicas=1:102,0:101,
+    follower.replication.throttled.replicas=1:101,0:102</pre>
+
+<p>Here we see the leader throttle is applied to partition 1 on broker 102 and partition 0 on broker 101. Likewise the
+    follower throttle is applied to partition 1 on
+    broker 101 and partition 0 on broker 102. </p>
+
+<p>By default kafka-reassign-partitions.sh will apply the leader throttle to all replicas that exist before the
+    rebalance, any one of which might be leader.
+    It will apply the follower throttle to all move destinations. So if there is a partition with replicas on brokers
+    101,102, being reassigned to 102,103, a leader throttle,
+    for that partition, would be applied to 101,102 and a follower throttle would be applied to 103 only. </p>
+
+
+<p>If required, you can also use the --alter switch on kafka-configs.sh to alter the throttle configurations manually.
+</p>
+
+<h5>Safe usage of throttled replication</h5>
+
+<p>Some care should be taken when using throttled replication. In particular:</p>
+
+<p><i>(1) Throttle Removal:</i></p>
+The throttle should be removed in a timely manner once reassignment completes (by running kafka-reassign-partitions
+—verify).
+
+<p><i>(2) Ensuring Progress:</i></p>
+<p>If the throttle is set too low, in comparison to the incoming write rate, it is possible for replication to not
+    make progress. This occurs when:</p>
+<pre>max(BytesInPerSec) > throttle</pre>
+<p>
+    Where BytesInPerSec is the metric that monitors the write throughput of producers into each broker. </p>
+<p>The administrator can monitor whether replication is making progress, during the rebalance, using the metric:</p>
+
+<pre>kafka.server:type=FetcherLagMetrics,name=ConsumerLag,clientId=([-.\w]+),topic=([-.\w]+),partition=([0-9]+)</pre>
+
+<p>The lag should constantly decrease during replication.  If the metric does not decrease the administrator should
+    increase the
+    throttle throughput as described above. </p>
+
+
 <h4><a id="quotas" href="#quotas">Setting quotas</a></h4>
 Quotas overrides and defaults may be configured at (user, client-id), user or client-id levels as described <a href="#design_quotas">here</a>.
 By default, clients receive an unlimited quota.

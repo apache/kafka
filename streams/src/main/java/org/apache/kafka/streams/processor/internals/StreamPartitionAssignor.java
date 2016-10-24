@@ -178,10 +178,10 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         if (streamThread.builder.sourceTopicPattern() != null) {
             SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
-            log.debug("have {} topics matching regex", topics);
+            log.debug("stream-thread [{}] found {} topics possibly matching regex", streamThread.getName(), topics);
             // update the topic groups with the returned subscription set for regex pattern subscriptions
             subscriptionUpdates.updateTopics(topics);
-            streamThread.builder.updateSubscriptions(subscriptionUpdates);
+            streamThread.builder.updateSubscriptions(subscriptionUpdates, streamThread.getName());
         }
 
         return new Subscription(new ArrayList<>(topics), data.encode());
@@ -669,6 +669,12 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             return !updatedTopicSubscriptions.isEmpty();
         }
 
+        @Override
+        public String toString() {
+            return "SubscriptionUpdates{" +
+                    "updatedTopicSubscriptions=" + updatedTopicSubscriptions +
+                    '}';
+        }
     }
 
 }
