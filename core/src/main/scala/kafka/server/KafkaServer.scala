@@ -494,8 +494,14 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
                   BlockingChannel.UseDefaultBufferSize,
                   BlockingChannel.UseDefaultBufferSize,
                   config.controllerSocketTimeoutMs)
-                channel.connect()
-                prevController = broker
+                try {
+                  channel.connect()
+                  prevController = broker
+                } catch {
+                  case ioe: IOException =>
+                    warn(ioe)
+                    channel = null
+                }
               }
             case None => //ignore and try again
           }

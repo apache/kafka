@@ -17,6 +17,7 @@
 
 package kafka.network
 
+import java.io.IOException
 import java.net.InetSocketAddress
 import java.nio.channels._
 
@@ -82,7 +83,9 @@ class BlockingChannel( val host: String,
                          connectTimeoutMs))
 
       } catch {
-        case e: Throwable => disconnect()
+        case e: Throwable =>
+          disconnect()
+          throw new IOException("Connecting to %s:%d failed".format(host, port), e)
       }
     }
   }
