@@ -123,7 +123,6 @@ final class ClusterConnectionStates {
         nodeState.lastConnectAttemptMs = now;
     }
 
-
     /**
      * Remove the given node from the tracked connection states. The main difference between this and `disconnected`
      * is the impact on `connectionDelay`: it will be 0 after this call whereas `reconnectBackoffMs` will be taken
