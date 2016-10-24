@@ -21,11 +21,11 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.common.requests.RequestSend;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -98,14 +98,14 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     private RequestFuture<ClientResponse> send(Node node,
-                                              ApiKeys api,
-                                              short version,
-                                              AbstractRequest request) {
+                                               ApiKeys api,
+                                               short version,
+                                               AbstractRequest request) {
         long now = time.milliseconds();
         RequestFutureCompletionHandler completionHandler = new RequestFutureCompletionHandler();
         RequestHeader header = client.nextRequestHeader(api, version);
-        RequestSend send = new RequestSend(node.idString(), header, request.toStruct());
-        put(node, new ClientRequest(now, true, send, completionHandler));
+        Send send = request.toSend(node.idString(), header);
+        put(node, new ClientRequest(now, true, header, request, send, completionHandler));
 
         // wakeup the client in case it is blocking in poll so that we can send the queued request
         client.wakeup();
@@ -469,11 +469,10 @@ public class ConsumerNetworkClient implements Closeable {
                 future.raise(e);
             } else if (response.wasDisconnected()) {
                 ClientRequest request = response.request();
-                RequestSend send = request.request();
-                ApiKeys api = ApiKeys.forId(send.header().apiKey());
-                int correlation = send.header().correlationId();
+                ApiKeys api = ApiKeys.forId(request.header().apiKey());
+                int correlation = request.header().correlationId();
                 log.debug("Cancelled {} request {} with correlation id {} due to node {} being disconnected",
-                        api, request, correlation, send.destination());
+                        api, request, correlation, request.destination());
                 future.raise(DisconnectException.INSTANCE);
             } else {
                 future.complete(response);

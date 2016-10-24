@@ -31,6 +31,7 @@ import static org.apache.kafka.common.protocol.types.Type.BYTES;
 import static org.apache.kafka.common.protocol.types.Type.INT16;
 import static org.apache.kafka.common.protocol.types.Type.INT32;
 import static org.apache.kafka.common.protocol.types.Type.INT64;
+import static org.apache.kafka.common.protocol.types.Type.RECORDS;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
 import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
 
@@ -135,7 +136,7 @@ public class Protocol {
 
     public static final Schema TOPIC_PRODUCE_DATA_V0 = new Schema(new Field("topic", STRING),
                                                                   new Field("data", new ArrayOf(new Schema(new Field("partition", INT32),
-                                                                                                     new Field("record_set", BYTES)))));
+                                                                                                     new Field("record_set", RECORDS)))));
 
     public static final Schema PRODUCE_REQUEST_V0 = new Schema(new Field("acks",
                                                                    INT16,
@@ -500,14 +501,15 @@ public class Protocol {
                                                                        new ArrayOf(FETCH_REQUEST_TOPIC_V0),
                                                                        "Topics to fetch in the order provided."));
 
-    public static final Schema FETCH_RESPONSE_PARTITION_V0 = new Schema(new Field("partition",
-                                                                                  INT32,
-                                                                                  "Topic partition id."),
-                                                                        new Field("error_code", INT16),
-                                                                        new Field("high_watermark",
-                                                                                  INT64,
-                                                                                  "Last committed offset."),
-                                                                        new Field("record_set", BYTES));
+    public static final Schema FETCH_RESPONSE_PARTITION_HEADER_V0 = new Schema(new Field("partition",
+                                                                                         INT32,
+                                                                                         "Topic partition id."),
+                                                                               new Field("error_code", INT16),
+                                                                               new Field("high_watermark",
+                                                                                         INT64,
+                                                                                         "Last committed offset."));
+    public static final Schema FETCH_RESPONSE_PARTITION_V0 = new Schema(new Field("partition_header", FETCH_RESPONSE_PARTITION_HEADER_V0),
+                                                                        new Field("record_set", RECORDS));
 
     public static final Schema FETCH_RESPONSE_TOPIC_V0 = new Schema(new Field("topic", STRING),
                                                                     new Field("partition_responses",
@@ -515,6 +517,7 @@ public class Protocol {
 
     public static final Schema FETCH_RESPONSE_V0 = new Schema(new Field("responses",
                                                                         new ArrayOf(FETCH_RESPONSE_TOPIC_V0)));
+
     public static final Schema FETCH_RESPONSE_V1 = new Schema(new Field("throttle_time_ms",
                                                                         INT32,
                                                                         "Duration in milliseconds for which the request was throttled" +

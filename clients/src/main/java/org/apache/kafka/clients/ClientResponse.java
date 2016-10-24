@@ -12,7 +12,7 @@
  */
 package org.apache.kafka.clients;
 
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.requests.AbstractResponse;
 
 /**
  * A response from the server. Contains both the body of the response as well as the correlated request that was
@@ -23,7 +23,7 @@ public class ClientResponse {
     private final long receivedTimeMs;
     private final boolean disconnected;
     private final ClientRequest request;
-    private final Struct responseBody;
+    private final AbstractResponse responseBody;
 
     /**
      * @param request The original request
@@ -31,7 +31,7 @@ public class ClientResponse {
      * @param disconnected Whether the client disconnected before fully reading a response
      * @param responseBody The response contents (or null) if we disconnected or no response was expected
      */
-    public ClientResponse(ClientRequest request, long receivedTimeMs, boolean disconnected, Struct responseBody) {
+    public ClientResponse(ClientRequest request, long receivedTimeMs, boolean disconnected, AbstractResponse responseBody) {
         super();
         this.receivedTimeMs = receivedTimeMs;
         this.disconnected = disconnected;
@@ -51,7 +51,7 @@ public class ClientResponse {
         return request;
     }
 
-    public Struct responseBody() {
+    public AbstractResponse responseBody() {
         return responseBody;
     }
 

@@ -36,10 +36,11 @@ final class InFlightRequests {
      * Add the given request to the queue for the connection it was directed to
      */
     public void add(ClientRequest request) {
-        Deque<ClientRequest> reqs = this.requests.get(request.request().destination());
+        String destination = request.destination();
+        Deque<ClientRequest> reqs = this.requests.get(destination);
         if (reqs == null) {
             reqs = new ArrayDeque<>();
-            this.requests.put(request.request().destination(), reqs);
+            this.requests.put(destination, reqs);
         }
         reqs.addFirst(request);
     }
@@ -87,7 +88,7 @@ final class InFlightRequests {
     public boolean canSendMore(String node) {
         Deque<ClientRequest> queue = requests.get(node);
         return queue == null || queue.isEmpty() ||
-               (queue.peekFirst().request().completed() && queue.size() < this.maxInFlightRequestsPerConnection);
+               (queue.peekFirst().send().completed() && queue.size() < this.maxInFlightRequestsPerConnection);
     }
 
     /**

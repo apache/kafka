@@ -20,14 +20,15 @@ package kafka.server
 import java.util.concurrent.TimeUnit
 
 import kafka.api.FetchResponsePartitionData
-import kafka.api.PartitionFetchInfo
 import kafka.common.TopicAndPartition
 import kafka.metrics.KafkaMetricsGroup
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{NotLeaderForPartitionException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.requests.FetchRequest.PartitionData
 
 import scala.collection._
 
-case class FetchPartitionStatus(startOffsetMetadata: LogOffsetMetadata, fetchInfo: PartitionFetchInfo) {
+case class FetchPartitionStatus(startOffsetMetadata: LogOffsetMetadata, fetchInfo: PartitionData) {
 
   override def toString = "[startOffsetMetadata: " + startOffsetMetadata + ", " +
                           "fetchInfo: " + fetchInfo + "]"
@@ -103,7 +104,7 @@ class DelayedFetch(delayMs: Long,
                   return forceComplete()
               } else if (fetchOffset.messageOffset < endOffset.messageOffset) {
                 // we take the partition fetch size as upper bound when accumulating the bytes (skip if a throttled partition)
-                val bytesAvailable = math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.fetchSize)
+                val bytesAvailable = math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.maxBytes)
                 if (quota.isThrottled(topicAndPartition))
                   accumulatedThrottledSize += bytesAvailable
                 else
@@ -146,7 +147,7 @@ class DelayedFetch(delayMs: Long,
       readOnlyCommitted = fetchMetadata.fetchOnlyCommitted,
       fetchMaxBytes = fetchMetadata.fetchMaxBytes,
       hardMaxBytesLimit = fetchMetadata.hardMaxBytesLimit,
-      readPartitionInfo = fetchMetadata.fetchPartitionStatus.map { case (tp, status) => tp -> status.fetchInfo },
+      readPartitionInfo = fetchMetadata.fetchPartitionStatus.map { case (tp, status) => new TopicPartition(tp.topic, tp.partition) -> status.fetchInfo },
       quota = quota
     )
 

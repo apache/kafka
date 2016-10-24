@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.record;
 
+import java.io.IOException;
+import java.nio.channels.GatheringByteChannel;
+
 /**
  * A binary format which consists of a 4 byte size, an 8 byte offset, and the record bytes. See {@link MemoryRecords}
  * for the in-memory representation.
@@ -30,5 +33,14 @@ public interface Records extends Iterable<LogEntry> {
      * The size of these records in bytes
      */
     int sizeInBytes();
+
+    /**
+     *
+     * @param channel
+     * @return
+     * @throws IOException
+     */
+    long writeTo(GatheringByteChannel channel, long offset, int length) throws IOException;
+
 
 }

@@ -116,7 +116,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
   override def isThrottled(topicPartition: TopicAndPartition): Boolean = {
     val partitions = throttledPartitions.get(topicPartition.topic)
     if (partitions != null)
-      partitions.contains(topicPartition.partition) || (partitions eq AllReplicas)
+      (partitions eq AllReplicas) || partitions.contains(topicPartition.partition)
     else false
   }
 

@@ -107,17 +107,14 @@ class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
 
     pollContinuously { responses =>
       val response = responses.find { response =>
-        response.request.request.header.correlationId == request.request.header.correlationId
+        response.request.header.correlationId == request.header.correlationId
       }
       response.foreach { r =>
-        if (r.wasDisconnected) {
-          val destination = request.request.destination
-          throw new IOException(s"Connection to $destination was disconnected before the response was read")
-        }
+        if (r.wasDisconnected)
+          throw new IOException(s"Connection to ${request.destination} was disconnected before the response was read")
       }
       response
     }
-
   }
 
   /**

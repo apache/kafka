@@ -12,16 +12,20 @@
  */
 package org.apache.kafka.clients;
 
-import org.apache.kafka.common.requests.RequestSend;
+import org.apache.kafka.common.network.Send;
+import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.RequestHeader;
 
 /**
  * A request being sent to the server. This holds both the network send as well as the client-level metadata.
  */
 public final class ClientRequest {
 
+    private final RequestHeader header;
+    private final AbstractRequest body;
     private final long createdTimeMs;
     private final boolean expectResponse;
-    private final RequestSend request;
+    private final Send send;
     private final RequestCompletionHandler callback;
     private final boolean isInitiatedByNetworkClient;
     private long sendTimeMs;
@@ -29,27 +33,42 @@ public final class ClientRequest {
     /**
      * @param createdTimeMs The unix timestamp in milliseconds for the time at which this request was created.
      * @param expectResponse Should we expect a response message or is this request complete once it is sent?
-     * @param request The request
+     * @param header The request's header
+     * @param body The request's body
+     * @param send The send associated with the request
      * @param callback A callback to execute when the response has been received (or null if no callback is necessary)
      */
-    public ClientRequest(long createdTimeMs, boolean expectResponse, RequestSend request,
+    public ClientRequest(long createdTimeMs,
+                         boolean expectResponse,
+                         RequestHeader header,
+                         AbstractRequest body,
+                         Send send,
                          RequestCompletionHandler callback) {
-        this(createdTimeMs, expectResponse, request, callback, false);
+        this(createdTimeMs, expectResponse, header, body, send, callback, false);
     }
 
     /**
      * @param createdTimeMs The unix timestamp in milliseconds for the time at which this request was created.
      * @param expectResponse Should we expect a response message or is this request complete once it is sent?
-     * @param request The request
+     * @param header The request's header
+     * @param body The request's body
+     * @param send The send associated with the request
      * @param callback A callback to execute when the response has been received (or null if no callback is necessary)
      * @param isInitiatedByNetworkClient Is request initiated by network client, if yes, its
      *                                   response will be consumed by network client
      */
-    public ClientRequest(long createdTimeMs, boolean expectResponse, RequestSend request,
-                         RequestCompletionHandler callback, boolean isInitiatedByNetworkClient) {
+    public ClientRequest(long createdTimeMs,
+                         boolean expectResponse,
+                         RequestHeader header,
+                         AbstractRequest body,
+                         Send send,
+                         RequestCompletionHandler callback,
+                         boolean isInitiatedByNetworkClient) {
         this.createdTimeMs = createdTimeMs;
         this.callback = callback;
-        this.request = request;
+        this.header = header;
+        this.body = body;
+        this.send = send;
         this.expectResponse = expectResponse;
         this.isInitiatedByNetworkClient = isInitiatedByNetworkClient;
     }
@@ -58,7 +77,9 @@ public final class ClientRequest {
     public String toString() {
         return "ClientRequest(expectResponse=" + expectResponse +
             ", callback=" + callback +
-            ", request=" + request +
+            ", header=" + header +
+            ", body=" + body +
+            ", send=" + send +
             (isInitiatedByNetworkClient ? ", isInitiatedByNetworkClient" : "") +
             ", createdTimeMs=" + createdTimeMs +
             ", sendTimeMs=" + sendTimeMs +
@@ -69,8 +90,20 @@ public final class ClientRequest {
         return expectResponse;
     }
 
-    public RequestSend request() {
-        return request;
+    public RequestHeader header() {
+        return header;
+    }
+
+    public AbstractRequest body() {
+        return body;
+    }
+
+    public String destination() {
+        return send.destination();
+    }
+
+    public Send send() {
+        return send;
     }
 
     public boolean hasCallback() {

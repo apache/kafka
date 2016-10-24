@@ -12,20 +12,13 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidMetadataException;
@@ -34,22 +27,30 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
-import org.apache.kafka.common.requests.RequestSend;
+import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
 /**
  * The background thread that handles the sending of produce requests to the Kafka cluster. This thread makes metadata
@@ -254,20 +255,16 @@ public class Sender implements Runnable {
      * Handle a produce response
      */
     private void handleProduceResponse(ClientResponse response, Map<TopicPartition, RecordBatch> batches, long now) {
-        int correlationId = response.request().request().header().correlationId();
+        int correlationId = response.request().header().correlationId();
         if (response.wasDisconnected()) {
-            log.trace("Cancelled request {} due to node {} being disconnected", response, response.request()
-                                                                                                  .request()
-                                                                                                  .destination());
+            log.trace("Cancelled request {} due to node {} being disconnected", response, response.request().destination());
             for (RecordBatch batch : batches.values())
                 completeBatch(batch, Errors.NETWORK_EXCEPTION, -1L, Record.NO_TIMESTAMP, correlationId, now);
         } else {
-            log.trace("Received produce response from node {} with correlation id {}",
-                      response.request().request().destination(),
-                      correlationId);
+            log.trace("Received produce response from node {} with correlation id {}", response.request().destination(), correlationId);
             // if we have a response, parse it
             if (response.hasResponse()) {
-                ProduceResponse produceResponse = new ProduceResponse(response.responseBody());
+                ProduceResponse produceResponse = (ProduceResponse) response.responseBody();
                 for (Map.Entry<TopicPartition, ProduceResponse.PartitionResponse> entry : produceResponse.responses().entrySet()) {
                     TopicPartition tp = entry.getKey();
                     ProduceResponse.PartitionResponse partResp = entry.getValue();
@@ -275,7 +272,7 @@ public class Sender implements Runnable {
                     RecordBatch batch = batches.get(tp);
                     completeBatch(batch, error, partResp.baseOffset, partResp.timestamp, correlationId, now);
                 }
-                this.sensors.recordLatency(response.request().request().destination(), response.requestLatencyMs());
+                this.sensors.recordLatency(response.request().destination(), response.requestLatencyMs());
                 this.sensors.recordThrottleTime(produceResponse.getThrottleTime());
             } else {
                 // this is the acks = 0 case, just complete all requests
@@ -340,7 +337,7 @@ public class Sender implements Runnable {
      * Transfer the record batches into a list of produce requests on a per-node basis
      */
     private List<ClientRequest> createProduceRequests(Map<Integer, List<RecordBatch>> collated, long now) {
-        List<ClientRequest> requests = new ArrayList<ClientRequest>(collated.size());
+        List<ClientRequest> requests = new ArrayList<>(collated.size());
         for (Map.Entry<Integer, List<RecordBatch>> entry : collated.entrySet())
             requests.add(produceRequest(now, entry.getKey(), acks, requestTimeout, entry.getValue()));
         return requests;
@@ -350,24 +347,24 @@ public class Sender implements Runnable {
      * Create a produce request from the given record batches
      */
     private ClientRequest produceRequest(long now, int destination, short acks, int timeout, List<RecordBatch> batches) {
-        Map<TopicPartition, ByteBuffer> produceRecordsByPartition = new HashMap<TopicPartition, ByteBuffer>(batches.size());
-        final Map<TopicPartition, RecordBatch> recordsByPartition = new HashMap<TopicPartition, RecordBatch>(batches.size());
+        Map<TopicPartition, MemoryRecords> produceRecordsByPartition = new HashMap<>(batches.size());
+        final Map<TopicPartition, RecordBatch> recordsByPartition = new HashMap<>(batches.size());
         for (RecordBatch batch : batches) {
             TopicPartition tp = batch.topicPartition;
-            produceRecordsByPartition.put(tp, batch.records.buffer());
+            produceRecordsByPartition.put(tp, batch.records);
             recordsByPartition.put(tp, batch);
         }
+
         ProduceRequest request = new ProduceRequest(acks, timeout, produceRecordsByPartition);
-        RequestSend send = new RequestSend(Integer.toString(destination),
-                                           this.client.nextRequestHeader(ApiKeys.PRODUCE),
-                                           request.toStruct());
+        RequestHeader header = this.client.nextRequestHeader(ApiKeys.PRODUCE);
+        Send send = request.toSend(Integer.toString(destination), header);
         RequestCompletionHandler callback = new RequestCompletionHandler() {
             public void onComplete(ClientResponse response) {
                 handleProduceResponse(response, recordsByPartition, time.milliseconds());
             }
         };
 
-        return new ClientRequest(now, acks != 0, send, callback);
+        return new ClientRequest(now, acks != 0, header, request, send, callback);
     }
 
     /**

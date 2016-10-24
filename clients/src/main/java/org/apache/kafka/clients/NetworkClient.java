@@ -21,10 +21,10 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.common.requests.RequestSend;
 import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -236,7 +236,7 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public void send(ClientRequest request, long now) {
-        String nodeId = request.request().destination();
+        String nodeId = request.destination();
         if (!canSendRequest(nodeId))
             throw new IllegalStateException("Attempt to send a request to node " + nodeId + " which is not ready.");
         doSend(request, now);
@@ -245,7 +245,7 @@ public class NetworkClient implements KafkaClient {
     private void doSend(ClientRequest request, long now) {
         request.setSendTimeMs(now);
         this.inFlightRequests.add(request);
-        selector.send(request.request());
+        selector.send(request.send());
     }
 
     /**
@@ -376,14 +376,14 @@ public class NetworkClient implements KafkaClient {
         return found;
     }
 
-    public static Struct parseResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {
+    public static AbstractResponse parseResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {
         ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer);
         // Always expect the response version id to be the same as the request version id
         short apiKey = requestHeader.apiKey();
         short apiVer = requestHeader.apiVersion();
         Struct responseBody = ProtoUtils.responseSchema(apiKey, apiVer).read(responseBuffer);
         correlate(requestHeader, responseHeader);
-        return responseBody;
+        return AbstractResponse.getResponse(apiKey, responseBody);
     }
 
     /**
@@ -450,7 +450,7 @@ public class NetworkClient implements KafkaClient {
         for (NetworkReceive receive : this.selector.completedReceives()) {
             String source = receive.source();
             ClientRequest req = inFlightRequests.completeNext(source);
-            Struct body = parseResponse(receive.payload(), req.request().header());
+            AbstractResponse body = parseResponse(receive.payload(), req.header());
             if (!metadataUpdater.maybeHandleCompletedReceive(req, now, body))
                 responses.add(new ClientResponse(req, now, false, body));
         }
@@ -559,12 +559,12 @@ public class NetworkClient implements KafkaClient {
 
         @Override
         public boolean maybeHandleDisconnection(ClientRequest request) {
-            ApiKeys requestKey = ApiKeys.forId(request.request().header().apiKey());
+            ApiKeys requestKey = ApiKeys.forId(request.header().apiKey());
 
             if (requestKey == ApiKeys.METADATA && request.isInitiatedByNetworkClient()) {
                 Cluster cluster = metadata.fetch();
                 if (cluster.isBootstrapConfigured()) {
-                    int nodeId = Integer.parseInt(request.request().destination());
+                    int nodeId = Integer.parseInt(request.destination());
                     Node node = cluster.nodeById(nodeId);
                     if (node != null)
                         log.warn("Bootstrap broker {}:{} disconnected", node.host(), node.port());
@@ -578,10 +578,9 @@ public class NetworkClient implements KafkaClient {
         }
 
         @Override
-        public boolean maybeHandleCompletedReceive(ClientRequest req, long now, Struct body) {
-            short apiKey = req.request().header().apiKey();
-            if (apiKey == ApiKeys.METADATA.id && req.isInitiatedByNetworkClient()) {
-                handleResponse(req.request().header(), body, now);
+        public boolean maybeHandleCompletedReceive(ClientRequest req, long now, AbstractResponse response) {
+            if (response instanceof MetadataResponse && req.isInitiatedByNetworkClient()) {
+                handleResponse(req.header(), (MetadataResponse) response, now);
                 return true;
             }
             return false;
@@ -592,9 +591,8 @@ public class NetworkClient implements KafkaClient {
             this.metadata.requestUpdate();
         }
 
-        private void handleResponse(RequestHeader header, Struct body, long now) {
+        private void handleResponse(RequestHeader header, MetadataResponse response, long now) {
             this.metadataFetchInProgress = false;
-            MetadataResponse response = new MetadataResponse(body);
             Cluster cluster = response.cluster();
             // check if any topics metadata failed to get updated
             Map<String, Errors> errors = response.errors();
@@ -615,8 +613,9 @@ public class NetworkClient implements KafkaClient {
          * Create a metadata request for the given topics
          */
         private ClientRequest request(long now, String node, MetadataRequest metadata) {
-            RequestSend send = new RequestSend(node, nextRequestHeader(ApiKeys.METADATA), metadata.toStruct());
-            return new ClientRequest(now, true, send, null, true);
+            RequestHeader header = nextRequestHeader(ApiKeys.METADATA);
+            Send send = metadata.toSend(node, header);
+            return new ClientRequest(now, true, header, metadata, send, null, true);
         }
 
         /**

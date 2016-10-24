@@ -25,7 +25,6 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.GroupCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
@@ -115,7 +114,7 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(ClientRequest request) {
-                if (request.request().header().apiKey() == ApiKeys.HEARTBEAT.id)
+                if (request.header().apiKey() == ApiKeys.HEARTBEAT.id)
                     throw e;
                 return false;
             }
@@ -162,7 +161,7 @@ public class AbstractCoordinatorTest {
             @Override
             public boolean matches(ClientRequest request) {
                 invocations++;
-                boolean isJoinGroupRequest = request.request().header().apiKey() == ApiKeys.JOIN_GROUP.id;
+                boolean isJoinGroupRequest = request.header().apiKey() == ApiKeys.JOIN_GROUP.id;
                 if (isJoinGroupRequest && invocations == 1)
                     // simulate wakeup before the request returns
                     throw new WakeupException();
@@ -198,7 +197,7 @@ public class AbstractCoordinatorTest {
             @Override
             public boolean matches(ClientRequest request) {
                 invocations++;
-                boolean isJoinGroupRequest = request.request().header().apiKey() == ApiKeys.JOIN_GROUP.id;
+                boolean isJoinGroupRequest = request.header().apiKey() == ApiKeys.JOIN_GROUP.id;
                 if (isJoinGroupRequest && invocations == 1)
                     // simulate wakeup before the request returns
                     throw new WakeupException();
@@ -234,7 +233,7 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(ClientRequest request) {
-                boolean isJoinGroupRequest = request.request().header().apiKey() == ApiKeys.JOIN_GROUP.id;
+                boolean isJoinGroupRequest = request.header().apiKey() == ApiKeys.JOIN_GROUP.id;
                 if (isJoinGroupRequest)
                     // wakeup after the request returns
                     consumerClient.wakeup();
@@ -268,7 +267,7 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(ClientRequest request) {
-                boolean isJoinGroupRequest = request.request().header().apiKey() == ApiKeys.JOIN_GROUP.id;
+                boolean isJoinGroupRequest = request.header().apiKey() == ApiKeys.JOIN_GROUP.id;
                 if (isJoinGroupRequest)
                     // wakeup after the request returns
                     consumerClient.wakeup();
@@ -307,7 +306,7 @@ public class AbstractCoordinatorTest {
             @Override
             public boolean matches(ClientRequest request) {
                 invocations++;
-                boolean isSyncGroupRequest = request.request().header().apiKey() == ApiKeys.SYNC_GROUP.id;
+                boolean isSyncGroupRequest = request.header().apiKey() == ApiKeys.SYNC_GROUP.id;
                 if (isSyncGroupRequest && invocations == 1)
                     // simulate wakeup after the request sent
                     throw new WakeupException();
@@ -343,7 +342,7 @@ public class AbstractCoordinatorTest {
             @Override
             public boolean matches(ClientRequest request) {
                 invocations++;
-                boolean isSyncGroupRequest = request.request().header().apiKey() == ApiKeys.SYNC_GROUP.id;
+                boolean isSyncGroupRequest = request.header().apiKey() == ApiKeys.SYNC_GROUP.id;
                 if (isSyncGroupRequest && invocations == 1)
                     // simulate wakeup after the request sent
                     throw new WakeupException();
@@ -379,7 +378,7 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(ClientRequest request) {
-                boolean isSyncGroupRequest = request.request().header().apiKey() == ApiKeys.SYNC_GROUP.id;
+                boolean isSyncGroupRequest = request.header().apiKey() == ApiKeys.SYNC_GROUP.id;
                 if (isSyncGroupRequest)
                     // wakeup after the request returns
                     consumerClient.wakeup();
@@ -413,7 +412,7 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(ClientRequest request) {
-                boolean isSyncGroupRequest = request.request().header().apiKey() == ApiKeys.SYNC_GROUP.id;
+                boolean isSyncGroupRequest = request.header().apiKey() == ApiKeys.SYNC_GROUP.id;
                 if (isSyncGroupRequest)
                     // wakeup after the request returns
                     consumerClient.wakeup();
@@ -447,7 +446,7 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(ClientRequest request) {
-                boolean isHeartbeatRequest = request.request().header().apiKey() == ApiKeys.HEARTBEAT.id;
+                boolean isHeartbeatRequest = request.header().apiKey() == ApiKeys.HEARTBEAT.id;
                 if (isHeartbeatRequest)
                     heartbeatReceived.set(true);
                 return isHeartbeatRequest;
@@ -466,23 +465,21 @@ public class AbstractCoordinatorTest {
         }, 3000, "Should have received a heartbeat request after joining the group");
     }
 
-    private Struct groupCoordinatorResponse(Node node, Errors error) {
-        GroupCoordinatorResponse response = new GroupCoordinatorResponse(error.code(), node);
-        return response.toStruct();
+    private GroupCoordinatorResponse groupCoordinatorResponse(Node node, Errors error) {
+        return new GroupCoordinatorResponse(error.code(), node);
     }
 
-    private Struct heartbeatResponse(Errors error) {
-        HeartbeatResponse response = new HeartbeatResponse(error.code());
-        return response.toStruct();
+    private HeartbeatResponse heartbeatResponse(Errors error) {
+        return new HeartbeatResponse(error.code());
     }
 
-    private Struct joinGroupFollowerResponse(int generationId, String memberId, String leaderId, Errors error) {
+    private JoinGroupResponse joinGroupFollowerResponse(int generationId, String memberId, String leaderId, Errors error) {
         return new JoinGroupResponse(error.code(), generationId, "dummy-subprotocol", memberId, leaderId,
-                Collections.<String, ByteBuffer>emptyMap()).toStruct();
+                Collections.<String, ByteBuffer>emptyMap());
     }
 
-    private Struct syncGroupResponse(Errors error) {
-        return new SyncGroupResponse(error.code(), ByteBuffer.allocate(0)).toStruct();
+    private SyncGroupResponse syncGroupResponse(Errors error) {
+        return new SyncGroupResponse(error.code(), ByteBuffer.allocate(0));
     }
 
     public class DummyCoordinator extends AbstractCoordinator {

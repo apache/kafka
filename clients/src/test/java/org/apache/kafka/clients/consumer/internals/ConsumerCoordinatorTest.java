@@ -39,7 +39,6 @@ import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.GroupCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
@@ -312,7 +311,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(ClientRequest request) {
-                SyncGroupRequest sync = new SyncGroupRequest(request.request().body());
+                SyncGroupRequest sync = (SyncGroupRequest) request.body();
                 return sync.memberId().equals(consumerId) &&
                         sync.generationId() == 1 &&
                         sync.groupAssignment().containsKey(consumerId);
@@ -372,7 +371,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(ClientRequest request) {
-                JoinGroupRequest join = new JoinGroupRequest(request.request().body());
+                JoinGroupRequest join = (JoinGroupRequest) request.body();
                 ProtocolMetadata protocolMetadata = join.groupProtocols().iterator().next();
                 PartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(protocolMetadata.metadata());
                 protocolMetadata.metadata().rewind();
@@ -444,7 +443,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(ClientRequest request) {
-                SyncGroupRequest sync = new SyncGroupRequest(request.request().body());
+                SyncGroupRequest sync = (SyncGroupRequest) request.body();
                 return sync.memberId().equals(consumerId) &&
                         sync.generationId() == 1 &&
                         sync.groupAssignment().isEmpty();
@@ -478,11 +477,11 @@ public class ConsumerCoordinatorTest {
             @Override
             public boolean matches(ClientRequest request) {
                 received.set(true);
-                LeaveGroupRequest leaveRequest = new LeaveGroupRequest(request.request().body());
+                LeaveGroupRequest leaveRequest = (LeaveGroupRequest) request.body();
                 return leaveRequest.memberId().equals(consumerId) &&
                         leaveRequest.groupId().equals(groupId);
             }
-        }, new LeaveGroupResponse(Errors.NONE.code()).toStruct());
+        }, new LeaveGroupResponse(Errors.NONE.code()));
         coordinator.close();
         assertTrue(received.get());
     }
@@ -505,11 +504,11 @@ public class ConsumerCoordinatorTest {
             @Override
             public boolean matches(ClientRequest request) {
                 received.set(true);
-                LeaveGroupRequest leaveRequest = new LeaveGroupRequest(request.request().body());
+                LeaveGroupRequest leaveRequest = (LeaveGroupRequest) request.body();
                 return leaveRequest.memberId().equals(consumerId) &&
                         leaveRequest.groupId().equals(groupId);
             }
-        }, new LeaveGroupResponse(Errors.NONE.code()).toStruct());
+        }, new LeaveGroupResponse(Errors.NONE.code()));
         coordinator.maybeLeaveGroup();
         assertTrue(received.get());
 
@@ -549,7 +548,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(ClientRequest request) {
-                JoinGroupRequest joinRequest = new JoinGroupRequest(request.request().body());
+                JoinGroupRequest joinRequest = (JoinGroupRequest) request.body();
                 return joinRequest.memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID);
             }
         }, joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE.code()));
@@ -601,7 +600,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(ClientRequest request) {
-                JoinGroupRequest joinRequest = new JoinGroupRequest(request.request().body());
+                JoinGroupRequest joinRequest = (JoinGroupRequest) request.body();
                 return joinRequest.memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID);
             }
         }, joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE.code()));
@@ -671,7 +670,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(ClientRequest request) {
-                SyncGroupRequest sync = new SyncGroupRequest(request.request().body());
+                SyncGroupRequest sync = (SyncGroupRequest) request.body();
                 if (sync.memberId().equals(consumerId) &&
                         sync.generationId() == 1 &&
                         sync.groupAssignment().containsKey(consumerId)) {
@@ -939,7 +938,7 @@ public class ConsumerCoordinatorTest {
         coordinator.joinGroupIfNeeded();
 
         // now switch to manual assignment
-        client.prepareResponse(new LeaveGroupResponse(Errors.NONE.code()).toStruct());
+        client.prepareResponse(new LeaveGroupResponse(Errors.NONE.code()));
         subscriptions.unsubscribe();
         coordinator.maybeLeaveGroup();
         subscriptions.assignFromUser(singleton(tp));
@@ -948,7 +947,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(ClientRequest request) {
-                OffsetCommitRequest commitRequest = new OffsetCommitRequest(request.request().body());
+                OffsetCommitRequest commitRequest = (OffsetCommitRequest) request.body();
                 return commitRequest.memberId().equals(OffsetCommitRequest.DEFAULT_MEMBER_ID) &&
                         commitRequest.generationId() == OffsetCommitRequest.DEFAULT_GENERATION_ID;
             }
@@ -1245,48 +1244,44 @@ public class ConsumerCoordinatorTest {
                 excludeInternalTopics);
     }
 
-    private Struct groupCoordinatorResponse(Node node, short error) {
-        GroupCoordinatorResponse response = new GroupCoordinatorResponse(error, node);
-        return response.toStruct();
+    private GroupCoordinatorResponse groupCoordinatorResponse(Node node, short error) {
+        return new GroupCoordinatorResponse(error, node);
     }
 
-    private Struct heartbeatResponse(short error) {
-        HeartbeatResponse response = new HeartbeatResponse(error);
-        return response.toStruct();
+    private HeartbeatResponse heartbeatResponse(short error) {
+        return new HeartbeatResponse(error);
     }
 
-    private Struct joinGroupLeaderResponse(int generationId,
-                                           String memberId,
-                                           Map<String, List<String>> subscriptions,
-                                           short error) {
+    private JoinGroupResponse joinGroupLeaderResponse(int generationId,
+                                                      String memberId,
+                                                      Map<String, List<String>> subscriptions,
+                                                      short error) {
         Map<String, ByteBuffer> metadata = new HashMap<>();
         for (Map.Entry<String, List<String>> subscriptionEntry : subscriptions.entrySet()) {
             PartitionAssignor.Subscription subscription = new PartitionAssignor.Subscription(subscriptionEntry.getValue());
             ByteBuffer buf = ConsumerProtocol.serializeSubscription(subscription);
             metadata.put(subscriptionEntry.getKey(), buf);
         }
-        return new JoinGroupResponse(error, generationId, partitionAssignor.name(), memberId, memberId, metadata).toStruct();
+        return new JoinGroupResponse(error, generationId, partitionAssignor.name(), memberId, memberId, metadata);
     }
 
-    private Struct joinGroupFollowerResponse(int generationId, String memberId, String leaderId, short error) {
+    private JoinGroupResponse joinGroupFollowerResponse(int generationId, String memberId, String leaderId, short error) {
         return new JoinGroupResponse(error, generationId, partitionAssignor.name(), memberId, leaderId,
-                Collections.<String, ByteBuffer>emptyMap()).toStruct();
+                Collections.<String, ByteBuffer>emptyMap());
     }
 
-    private Struct syncGroupResponse(List<TopicPartition> partitions, short error) {
+    private SyncGroupResponse syncGroupResponse(List<TopicPartition> partitions, short error) {
         ByteBuffer buf = ConsumerProtocol.serializeAssignment(new PartitionAssignor.Assignment(partitions));
-        return new SyncGroupResponse(error, buf).toStruct();
+        return new SyncGroupResponse(error, buf);
     }
 
-    private Struct offsetCommitResponse(Map<TopicPartition, Short> responseData) {
-        OffsetCommitResponse response = new OffsetCommitResponse(responseData);
-        return response.toStruct();
+    private OffsetCommitResponse offsetCommitResponse(Map<TopicPartition, Short> responseData) {
+        return new OffsetCommitResponse(responseData);
     }
 
-    private Struct offsetFetchResponse(TopicPartition tp, Short error, String metadata, long offset) {
+    private OffsetFetchResponse offsetFetchResponse(TopicPartition tp, Short error, String metadata, long offset) {
         OffsetFetchResponse.PartitionData data = new OffsetFetchResponse.PartitionData(offset, metadata, error);
-        OffsetFetchResponse response = new OffsetFetchResponse(Collections.singletonMap(tp, data));
-        return response.toStruct();
+        return new OffsetFetchResponse(Collections.singletonMap(tp, data));
     }
 
     private OffsetCommitCallback callback(final AtomicBoolean success) {

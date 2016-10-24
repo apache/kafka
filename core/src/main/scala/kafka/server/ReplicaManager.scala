@@ -36,6 +36,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{LeaderAndIsrRequest, PartitionState, StopReplicaRequest, UpdateMetadataRequest}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.utils.{Time => JTime}
 
 import scala.collection._
@@ -457,7 +458,7 @@ class ReplicaManager(val config: KafkaConfig,
                     fetchMinBytes: Int,
                     fetchMaxBytes: Int,
                     hardMaxBytesLimit: Boolean,
-                    fetchInfos: Seq[(TopicAndPartition, PartitionFetchInfo)],
+                    fetchInfos: Seq[(TopicPartition, PartitionData)],
                     quota: ReplicaQuota = UnboundedQuota,
                     responseCallback: Seq[(TopicAndPartition, FetchResponsePartitionData)] => Unit) {
     val isFromFollower = replicaId >= 0
@@ -498,7 +499,7 @@ class ReplicaManager(val config: KafkaConfig,
       // construct the fetch results from the read results
       val fetchPartitionStatus = logReadResults.map { case (topicAndPartition, result) =>
         val fetchInfo = fetchInfos.collectFirst {
-          case (tp, v) if tp == topicAndPartition => v
+          case (tp, v) if TopicAndPartition(tp.topic, tp.partition) == topicAndPartition => v
         }.getOrElse(sys.error(s"Partition $topicAndPartition not found in fetchInfos"))
         (topicAndPartition, FetchPartitionStatus(result.info.fetchOffsetMetadata, fetchInfo))
       }
@@ -524,19 +525,21 @@ class ReplicaManager(val config: KafkaConfig,
                        readOnlyCommitted: Boolean,
                        fetchMaxBytes: Int,
                        hardMaxBytesLimit: Boolean,
-                       readPartitionInfo: Seq[(TopicAndPartition, PartitionFetchInfo)],
+                       readPartitionInfo: Seq[(TopicPartition, PartitionData)],
                        quota: ReplicaQuota): Seq[(TopicAndPartition, LogReadResult)] = {
 
-    def read(tp: TopicAndPartition, fetchInfo: PartitionFetchInfo, limitBytes: Int, minOneMessage: Boolean): LogReadResult = {
-      val TopicAndPartition(topic, partition) = tp
-      val PartitionFetchInfo(offset, fetchSize) = fetchInfo
+    def read(tp: TopicPartition, fetchInfo: PartitionData, limitBytes: Int, minOneMessage: Boolean): LogReadResult = {
+      val topic = tp.topic
+      val partition = tp.partition
+      val offset = fetchInfo.offset
+      val fetchSize = fetchInfo.maxBytes
 
       BrokerTopicStats.getBrokerTopicStats(topic).totalFetchRequestRate.mark()
       BrokerTopicStats.getBrokerAllTopicsStats().totalFetchRequestRate.mark()
 
       try {
-        trace(s"Fetching log segment for partition $tp, offset ${offset}, partition fetch size ${fetchSize}, " +
-          s"remaining response limit ${limitBytes}" +
+        trace(s"Fetching log segment for partition $tp, offset $offset, partition fetch size $fetchSize, " +
+          s"remaining response limit $limitBytes" +
           (if (minOneMessage) s", ignoring response/partition size limits" else ""))
 
         // decide whether to only fetch from leader
@@ -566,7 +569,7 @@ class ReplicaManager(val config: KafkaConfig,
             val fetch = log.read(offset, adjustedFetchSize, maxOffsetOpt, minOneMessage)
 
             // If the partition is being throttled, simply return an empty set.
-            if (shouldLeaderThrottle(quota, tp, replicaId))
+            if (shouldLeaderThrottle(quota, TopicAndPartition(tp.topic, tp.partition), replicaId))
               FetchDataInfo(fetch.fetchOffsetMetadata, MessageSet.Empty)
             // For FetchRequest version 3, we replace incomplete message sets with an empty one as consumers can make
             // progress in such cases and don't need to report a `RecordTooLargeException`
@@ -608,7 +611,7 @@ class ReplicaManager(val config: KafkaConfig,
       if (messageSetSize > 0)
         minOneMessage = false
       limitBytes = math.max(0, limitBytes - messageSetSize)
-      result += (tp -> readResult)
+      result += (TopicAndPartition(tp.topic, tp.partition) -> readResult)
     }
     result
   }
