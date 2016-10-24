@@ -539,7 +539,7 @@ public class NetworkClient implements KafkaClient {
         public long maybeUpdate(long now) {
             // should we update our metadata?
             long timeToNextMetadataUpdate = metadata.timeToNextUpdate(now);
-            long waitForMetadataFetch = this.metadataFetchInProgress ? Integer.MAX_VALUE : 0;
+            long waitForMetadataFetch = this.metadataFetchInProgress ? requestTimeoutMs : 0;
 
             long metadataTimeout = Math.max(timeToNextMetadataUpdate, waitForMetadataFetch);
             if (metadataTimeout > 0) {
@@ -551,13 +551,7 @@ public class NetworkClient implements KafkaClient {
             Node node = leastLoadedNode(now);
             if (node == null) {
                 log.debug("Give up sending metadata request since no node is available");
-                long shortestBackoff = Long.MAX_VALUE;
-                // Find the shortest remaining reconnect backoff.
-                for (Node backingOffNode : metadataUpdater.fetchNodes()) {
-                    long backoff = connectionStates.connectionDelay(backingOffNode.idString(), now);
-                    shortestBackoff = Math.min(shortestBackoff, backoff);
-                }
-                return shortestBackoff;
+                return reconnectBackoffMs;
             }
 
             return maybeUpdate(now, node);
