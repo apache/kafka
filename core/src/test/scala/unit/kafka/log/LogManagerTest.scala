@@ -215,7 +215,7 @@ class LogManagerTest {
                      TestUtils.tempDir(),
                      TestUtils.tempDir())
     logManager.shutdown()
-    logManager = createLogManager()
+    logManager = createLogManager(dirs)
 
     // verify that logs are always assigned to the least loaded partition
     for(partition <- 0 until 20) {
