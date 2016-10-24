@@ -57,8 +57,8 @@ public class InternalTopicManager {
 
         //TODO: Add loop/ inspect th error codes
         Collection<MetadataResponse.TopicMetadata> topicMetadatas = streamsKafkaClient.fetchTopicMetadata();
-        Map<InternalTopicConfig, Integer> topicsToBeDeleted = streamsKafkaClient.getTopicsToBeDeleted(topics, topicMetadatas);
-        Map<InternalTopicConfig, Integer> topicsToBeCreated = streamsKafkaClient.filterExistingTopics(topics, topicMetadatas);
+        Map<InternalTopicConfig, Integer> topicsToBeDeleted = getTopicsToBeDeleted(topics, topicMetadatas);
+        Map<InternalTopicConfig, Integer> topicsToBeCreated = filterExistingTopics(topics, topicMetadatas);
         topicsToBeCreated.putAll(topicsToBeDeleted);
         streamsKafkaClient.deleteTopics(topicsToBeDeleted);
         streamsKafkaClient.createTopics(topicsToBeCreated, replicationFactor, windowChangeLogAdditionalRetention);
@@ -66,6 +66,54 @@ public class InternalTopicManager {
 
     public void close() throws IOException {
         streamsKafkaClient.close();
+    }
+
+    /**
+     * Return the non existing topics.
+     *
+     * @param topicsPartitionsMap
+     * @param topicsMetadata
+     * @return
+     */
+    public Map<InternalTopicConfig, Integer> filterExistingTopics(final Map<InternalTopicConfig, Integer> topicsPartitionsMap, Collection<MetadataResponse.TopicMetadata> topicsMetadata) {
+        Map<String, Integer> existingTopicNamesPartitions = getExistingTopicNamesPartitions(topicsMetadata);
+        Map<InternalTopicConfig, Integer> nonExistingTopics = new HashMap<>();
+        // Add the topics that don't exist to the nonExistingTopics.
+        for (InternalTopicConfig topic: topicsPartitionsMap.keySet()) {
+            if (existingTopicNamesPartitions.get(topic.name()) == null) {
+                nonExistingTopics.put(topic, topicsPartitionsMap.get(topic));
+            }
+        }
+        return nonExistingTopics;
+    }
+
+    /**
+     * Return the topics that exist but have different partiton number to be deleted.
+     * @param topicsPartitionsMap
+     * @param topicsMetadata
+     * @return
+     */
+    public Map<InternalTopicConfig, Integer> getTopicsToBeDeleted(final Map<InternalTopicConfig, Integer> topicsPartitionsMap, Collection<MetadataResponse.TopicMetadata> topicsMetadata) {
+        Map<String, Integer> existingTopicNamesPartitions = getExistingTopicNamesPartitions(topicsMetadata);
+        Map<InternalTopicConfig, Integer> deleteTopics = new HashMap<>();
+        // Add the topics that don't exist to the nonExistingTopics.
+        for (InternalTopicConfig topic: topicsPartitionsMap.keySet()) {
+            if (existingTopicNamesPartitions.get(topic.name()) != null) {
+                if (existingTopicNamesPartitions.get(topic.name()) != topicsPartitionsMap.get(topic)) {
+                    deleteTopics.put(topic, topicsPartitionsMap.get(topic));
+                }
+            }
+        }
+        return deleteTopics;
+    }
+
+    private Map<String, Integer> getExistingTopicNamesPartitions(Collection<MetadataResponse.TopicMetadata> topicsMetadata) {
+        // The names of existing topics
+        Map<String, Integer> existingTopicNamesPartitions = new HashMap<>();
+        for (MetadataResponse.TopicMetadata topicMetadata: topicsMetadata) {
+            existingTopicNamesPartitions.put(topicMetadata.topic(), topicMetadata.partitionMetadata().size());
+        }
+        return existingTopicNamesPartitions;
     }
 
 }

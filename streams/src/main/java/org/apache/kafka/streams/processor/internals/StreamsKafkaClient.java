@@ -63,7 +63,6 @@ public class StreamsKafkaClient {
     private final StreamsConfig streamsConfig;
 
     private static final int MAX_INFLIGHT_REQUESTS = 100;
-    private static final long MAX_WAIT_TIME_MS = 30000;
 
     public StreamsKafkaClient(final StreamsConfig streamsConfig) {
 
@@ -108,19 +107,6 @@ public class StreamsKafkaClient {
     }
 
     /**
-     * Cretes a new topic with the given number of partitions and replication factor.
-     *
-     * @param internalTopicConfig
-     * @param numPartitions
-     * @param replicationFactor
-     */
-    public void createTopic(final InternalTopicConfig internalTopicConfig, final int numPartitions, final int replicationFactor, final long windowChangeLogAdditionalRetention) {
-        Map<InternalTopicConfig, Integer> topicsMap = new HashMap<>();
-        topicsMap.put(internalTopicConfig, numPartitions);
-        createTopics(topicsMap, replicationFactor, windowChangeLogAdditionalRetention);
-    }
-
-    /**
      * Creates a set of new topics using batch request.
      *
      * @param topicsMap
@@ -150,23 +136,6 @@ public class StreamsKafkaClient {
         }
     }
 
-
-    /**
-     * Delete a given topic.
-     *
-     * @param internalTopicConfig
-     */
-    public void deleteTopic(final InternalTopicConfig internalTopicConfig) {
-        final Set<String> topics = new HashSet();
-        topics.add(internalTopicConfig.name());
-        final DeleteTopicsRequest deleteTopicsRequest = new DeleteTopicsRequest(topics, streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG));
-        final ClientResponse clientResponse = sendRequest(deleteTopicsRequest.toStruct(), ApiKeys.DELETE_TOPICS);
-        final DeleteTopicsResponse deleteTopicsResponse = new DeleteTopicsResponse(clientResponse.responseBody());
-        if (deleteTopicsResponse.errors().get(internalTopicConfig.name()).code() > 0) {
-            throw new StreamsException("Could not delete topic: " + internalTopicConfig.name());
-        }
-    }
-
     /**
      * Delets a set of topics.
      *
@@ -186,7 +155,7 @@ public class StreamsKafkaClient {
      *
      * @param topics
      */
-    public void deleteTopics(final Set<String> topics) {
+    private void deleteTopics(final Set<String> topics) {
 
         final DeleteTopicsRequest deleteTopicsRequest = new DeleteTopicsRequest(topics, streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG));
         final ClientResponse clientResponse = sendRequest(deleteTopicsRequest.toStruct(), ApiKeys.DELETE_TOPICS);
@@ -215,7 +184,7 @@ public class StreamsKafkaClient {
         metadata.update(Cluster.bootstrap(addresses), systemTime.milliseconds());
 
         final List<Node> nodes = metadata.fetch().nodes();
-        final long readyTimeout = systemTime.milliseconds() + MAX_WAIT_TIME_MS;
+        final long readyTimeout = systemTime.milliseconds() + streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG);
         boolean foundNode = false;
         while (!foundNode && (systemTime.milliseconds() < readyTimeout)) {
             for (Node node: nodes) {
@@ -239,7 +208,7 @@ public class StreamsKafkaClient {
 
         kafkaClient.send(clientRequest, systemTime.milliseconds());
 
-        final long responseTimeout = systemTime.milliseconds() + MAX_WAIT_TIME_MS;
+        final long responseTimeout = systemTime.milliseconds() + streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG);
         // Poll for the response.
         while (systemTime.milliseconds() < responseTimeout) {
             List<ClientResponse> responseList = kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), systemTime.milliseconds());
@@ -273,87 +242,6 @@ public class StreamsKafkaClient {
             }
         }
         return null;
-    }
-
-    /**
-     * Check to see if a topic exists.
-     * @param topicName
-     * @return
-     */
-    public boolean topicExists(final String topicName) {
-
-        if (getTopicMetadata(topicName) != null) {
-            return true;
-        }
-        return false;
-    }
-
-    public Set<InternalTopicConfig> filterValidateExistingTopics(final Map<InternalTopicConfig, Integer> topicsPartitionsMap) {
-        Set<InternalTopicConfig> nonExistingTopics = new HashSet<>();
-        final ClientResponse clientResponse = sendRequest(MetadataRequest.allTopics().toStruct(), ApiKeys.METADATA);
-        final MetadataResponse metadataResponse = new MetadataResponse(clientResponse.responseBody());
-        // The names of existing topics
-        Map<String, Integer> existingTopicNamesPartitions = new HashMap<>();
-        for (MetadataResponse.TopicMetadata topicMetadata: metadataResponse.topicMetadata()) {
-            existingTopicNamesPartitions.put(topicMetadata.topic(), topicMetadata.partitionMetadata().size());
-        }
-        // Add the topics that don't exist to the nonExistingTopics.
-        for (InternalTopicConfig topic: topicsPartitionsMap.keySet()) {
-            if (existingTopicNamesPartitions.get(topic.name()) == null) {
-                nonExistingTopics.add(topic);
-            } else if (existingTopicNamesPartitions.get(topic.name()) != topicsPartitionsMap.get(topic.name())) {
-
-            }
-        }
-
-        return nonExistingTopics;
-    }
-
-    /**
-     * Return the non existing topics.
-     *
-     * @param topicsPartitionsMap
-     * @param topicsMetadata
-     * @return
-     */
-    public Map<InternalTopicConfig, Integer> filterExistingTopics(final Map<InternalTopicConfig, Integer> topicsPartitionsMap, Collection<MetadataResponse.TopicMetadata> topicsMetadata) {
-        // The names of existing topics
-        Map<String, Integer> existingTopicNamesPartitions = new HashMap<>();
-        for (MetadataResponse.TopicMetadata topicMetadata: topicsMetadata) {
-            existingTopicNamesPartitions.put(topicMetadata.topic(), topicMetadata.partitionMetadata().size());
-        }
-        Map<InternalTopicConfig, Integer> nonExistingTopics = new HashMap<>();
-        // Add the topics that don't exist to the nonExistingTopics.
-        for (InternalTopicConfig topic: topicsPartitionsMap.keySet()) {
-            if (existingTopicNamesPartitions.get(topic.name()) == null) {
-                nonExistingTopics.put(topic, topicsPartitionsMap.get(topic));
-            }
-        }
-        return nonExistingTopics;
-    }
-
-    /**
-     * Return the topics that exist but have different partiton number to be deleted.
-     * @param topicsPartitionsMap
-     * @param topicsMetadata
-     * @return
-     */
-    public Map<InternalTopicConfig, Integer> getTopicsToBeDeleted(final Map<InternalTopicConfig, Integer> topicsPartitionsMap, Collection<MetadataResponse.TopicMetadata> topicsMetadata) {
-        // The names of existing topics
-        Map<String, Integer> existingTopicNamesPartitions = new HashMap<>();
-        for (MetadataResponse.TopicMetadata topicMetadata: topicsMetadata) {
-            existingTopicNamesPartitions.put(topicMetadata.topic(), topicMetadata.partitionMetadata().size());
-        }
-        Map<InternalTopicConfig, Integer> deleteTopics = new HashMap<>();
-        // Add the topics that don't exist to the nonExistingTopics.
-        for (InternalTopicConfig topic: topicsPartitionsMap.keySet()) {
-            if (existingTopicNamesPartitions.get(topic.name()) != null) {
-                if (existingTopicNamesPartitions.get(topic.name()) != topicsPartitionsMap.get(topic)) {
-                    deleteTopics.put(topic, topicsPartitionsMap.get(topic));
-                }
-            }
-        }
-        return deleteTopics;
     }
 
 
