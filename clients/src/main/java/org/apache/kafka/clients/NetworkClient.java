@@ -520,15 +520,9 @@ public class NetworkClient implements KafkaClient {
         /* true iff there is a metadata request that has been sent and for which we have not yet received a response */
         private boolean metadataFetchInProgress;
 
-        /* the last timestamp when a new connection is created for sending metadata request */
-        private long lastConnectAttemptForMetadataRequestMs;
-
-        private String lastConnectAttemptNodeId;
-
         DefaultMetadataUpdater(Metadata metadata) {
             this.metadata = metadata;
             this.metadataFetchInProgress = false;
-            this.lastConnectAttemptForMetadataRequestMs = 0;
         }
 
         @Override
@@ -632,6 +626,18 @@ public class NetworkClient implements KafkaClient {
         }
 
         /**
+         * Return true if there's at least one connection establishment is currently underway
+         */
+        private boolean isAnyNodeConnecting() {
+            for (Node node : fetchNodes()) {
+                if (connectionStates.isConnecting(node.idString())) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /**
          * Add a metadata request to the list of sends if we can make one
          */
         private long maybeUpdate(long now, Node node) {
@@ -650,21 +656,17 @@ public class NetworkClient implements KafkaClient {
                 return requestTimeoutMs;
             }
 
-            if (lastConnectAttemptNodeId != null &&
-                !connectionStates.isDisconnected(lastConnectAttemptNodeId)) {
-                long timeToNextConnectAttemptMs =
-                        lastConnectAttemptForMetadataRequestMs + reconnectBackoffMs - now;
-                if (timeToNextConnectAttemptMs > 0) {
-                    return timeToNextConnectAttemptMs;
-                }
+            // If there's any connection establishment underway, wait it completes.
+            if (isAnyNodeConnecting()) {
+                // Strictly the timeout we should return here is "connect timeout", but as we don't
+                // have such application level configuration, using reconnect backoff instead.
+                return reconnectBackoffMs;
             }
 
             if (connectionStates.canConnect(nodeConnectionId, now)) {
                 // we don't have a connection to this node right now, make one
                 log.debug("Initialize connection to node {} for sending metadata request", node.id());
                 initiateConnect(node, now);
-                this.lastConnectAttemptNodeId = nodeConnectionId;
-                this.lastConnectAttemptForMetadataRequestMs = now;
                 return reconnectBackoffMs;
             }
 

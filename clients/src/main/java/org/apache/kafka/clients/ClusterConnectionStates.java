@@ -77,6 +77,15 @@ final class ClusterConnectionStates {
     }
 
     /**
+     * Return true if a specific connection establishment is currently underway
+     * @param id The id of the node to check
+     */
+    public boolean isConnecting(String id) {
+        NodeConnectionState state = nodeState.get(id);
+        return state != null && state.state == ConnectionState.CONNECTING;
+    }
+
+    /**
      * Enter the connecting state for the given connection.
      * @param id The id of the connection
      * @param now The current time.
@@ -114,14 +123,6 @@ final class ClusterConnectionStates {
         nodeState.lastConnectAttemptMs = now;
     }
 
-    /**
-     * Return true if a we have no connection or connection attempt to the specific node id
-     * @param id The id of the connection to check
-     */
-    public boolean isDisconnected(String id) {
-        NodeConnectionState state = nodeState.get(id);
-        return state != null && state.state == ConnectionState.DISCONNECTED;
-    }
 
     /**
      * Remove the given node from the tracked connection states. The main difference between this and `disconnected`
