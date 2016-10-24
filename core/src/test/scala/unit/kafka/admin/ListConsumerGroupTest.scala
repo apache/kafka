@@ -80,7 +80,7 @@ class ListConsumerGroupTest extends KafkaServerTestHarness {
     // action/test
     TestUtils.waitUntilTrue(() => {
         val groups = consumerGroupCommand.listGroups()
-        groups.size == 2 && groups.contains(group)
+        groups.size == 2 && groups.map(_._1).contains(group) && groups.map(_._2).toSet == Set(None)
       }, "Expected a different list group results.")
 
     // cleanup
