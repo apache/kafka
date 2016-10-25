@@ -107,8 +107,8 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     val zkSessionTimeOutMs = configs.get(SimpleAclAuthorizer.ZkSessionTimeOutProp).map(_.toString.toInt).getOrElse(kafkaConfig.zkSessionTimeoutMs)
 
     zkUtils = ZkUtils(zkUrl,
-                      zkConnectionTimeoutMs,
-                      zkSessionTimeOutMs,
+                      sessionTimeout = zkSessionTimeOutMs,
+                      connectionTimeout = zkConnectionTimeoutMs,
                       JaasUtils.isZkSecurityEnabled())
     zkUtils.makeSurePersistentPathExists(SimpleAclAuthorizer.AclZkPath)
 
