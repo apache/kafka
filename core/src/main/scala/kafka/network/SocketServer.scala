@@ -488,13 +488,14 @@ private[kafka] class Processor(val id: Int,
     selector.completedReceives.asScala.foreach { receive =>
       try {
         val openChannel = selector.channel(receive.source)
-        val channel = if (openChannel != null) openChannel else selector.closedChannel(receive.source)
-        val session = RequestChannel.Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, channel.principal.getName),
-          channel.socketAddress)
+        val session = {
+          val channel = if (openChannel != null) openChannel else selector.closedChannel(receive.source)
+          RequestChannel.Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, channel.principal.getName), channel.socketAddress)
+        }
         val req = RequestChannel.Request(processor = id, connectionId = receive.source, session = session, buffer = receive.payload, startTimeMs = time.milliseconds, securityProtocol = protocol)
         requestChannel.sendRequest(req)
         if (openChannel != null)
-            selector.mute(openChannel.id)
+            selector.mute(receive.source)
       } catch {
         case e @ (_: InvalidRequestException | _: SchemaException) =>
           // note that even though we got an exception, we can assume that receive.source is valid. Issues with constructing a valid receive object were handled earlier
