@@ -32,6 +32,8 @@ import java.util.TreeSet;
 
 class NamedCache {
     private static final Logger log = LoggerFactory.getLogger(NamedCache.class);
+    private static final boolean RANGE_FROM_INCLUSIVE = true;
+    private static final boolean RANGE_TO_INCLUSIVE = true;
     private final String name;
     private final TreeMap<Bytes, LRUNode> cache = new TreeMap<>();
     private final Set<Bytes> dirtyKeys = new LinkedHashSet<>();
@@ -236,6 +238,14 @@ class NamedCache {
 
     synchronized Iterator<Bytes> keyRange(final Bytes from, final Bytes to) {
         return keySetIterator(cache.navigableKeySet().subSet(from, true, to, true));
+    }
+
+    synchronized Iterator<Bytes> keyRangeUntil(final Bytes to) {
+        return keySetIterator(cache.navigableKeySet().headSet(to, RANGE_TO_INCLUSIVE));
+    }
+
+    synchronized Iterator<Bytes> keyRangeFrom(final Bytes from) {
+        return keySetIterator(cache.navigableKeySet().tailSet(from, RANGE_FROM_INCLUSIVE));
     }
 
     private Iterator<Bytes> keySetIterator(final Set<Bytes> keySet) {

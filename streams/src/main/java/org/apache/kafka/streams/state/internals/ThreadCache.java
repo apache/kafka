@@ -156,6 +156,22 @@ public class ThreadCache {
         return new MemoryLRUCacheBytesIterator(cache.keyRange(cacheKey(from), cacheKey(to)), cache);
     }
 
+    public MemoryLRUCacheBytesIterator rangeUntil(final String namespace, final byte[] to) {
+        final NamedCache cache = getCache(namespace);
+        if (cache == null) {
+            return new MemoryLRUCacheBytesIterator(Collections.<Bytes>emptyIterator(), new NamedCache(namespace));
+        }
+        return new MemoryLRUCacheBytesIterator(cache.keyRangeUntil(cacheKey(to)), cache);
+    }
+
+    public MemoryLRUCacheBytesIterator rangeFrom(final String namespace, final byte[] from) {
+        final NamedCache cache = getCache(namespace);
+        if (cache == null) {
+            return new MemoryLRUCacheBytesIterator(Collections.<Bytes>emptyIterator(), new NamedCache(namespace));
+        }
+        return new MemoryLRUCacheBytesIterator(cache.keyRangeFrom(cacheKey(from)), cache);
+    }
+
     public MemoryLRUCacheBytesIterator all(final String namespace) {
         final NamedCache cache = getCache(namespace);
         if (cache == null) {

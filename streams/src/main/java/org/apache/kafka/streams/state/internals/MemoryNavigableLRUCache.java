@@ -25,6 +25,8 @@ import java.util.Map;
 import java.util.TreeMap;
 
 public class MemoryNavigableLRUCache<K, V> extends MemoryLRUCache<K, V> {
+    private static final boolean RANGE_FROM_INCLUSIVE = true;
+    private static final boolean RANGE_TO_INCLUSIVE = true;
 
 
     public MemoryNavigableLRUCache(String name, final int maxCacheSize, Serde<K> keySerde, Serde<V> valueSerde) {
@@ -42,6 +44,18 @@ public class MemoryNavigableLRUCache<K, V> extends MemoryLRUCache<K, V> {
     public KeyValueIterator<K, V> range(K from, K to) {
         final TreeMap<K, V> treeMap = toTreeMap();
         return new MemoryNavigableLRUCache.CacheIterator<>(treeMap.navigableKeySet().subSet(from, true, to, true).iterator(), treeMap);
+    }
+
+    @Override
+    public KeyValueIterator<K, V> rangeUntil(K to) {
+        final TreeMap<K, V> treeMap = toTreeMap();
+        return new MemoryNavigableLRUCache.CacheIterator<>(treeMap.navigableKeySet().headSet(to, RANGE_TO_INCLUSIVE).iterator(), treeMap);
+    }
+
+    @Override
+    public KeyValueIterator<K, V> rangeFrom(K from) {
+        final TreeMap<K, V> treeMap = toTreeMap();
+        return new MemoryNavigableLRUCache.CacheIterator<>(treeMap.navigableKeySet().tailSet(from, RANGE_FROM_INCLUSIVE).iterator(), treeMap);
     }
 
     @Override

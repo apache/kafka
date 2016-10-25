@@ -19,11 +19,14 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.kstream.internals.Change;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.MockProcessorContext;
 import org.junit.Before;
 import org.junit.Test;
@@ -35,10 +38,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.streams.state.internals.ThreadCacheTest.memoryCacheEntrySize;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
+import static org.junit.Assert.*;
+import static org.junit.Assert.assertTrue;
 
 public class CachingKeyValueStoreTest {
 
@@ -62,6 +63,65 @@ public class CachingKeyValueStoreTest {
         topic = "topic";
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, topic));
         store.init(context, null);
+    }
+
+    @Test
+    public void testPutGetRange() {
+        // Verify that the store reads and writes correctly ...
+        store.put("0", "zero");
+        store.put("1", "one");
+        store.put("2", "two");
+        store.put("4", "four");
+        store.put("5", "five");
+        assertEquals("zero", store.get("0"));
+        assertEquals("one", store.get("1"));
+        assertEquals("two", store.get("2"));
+        assertNull(store.get("3"));
+        assertEquals("four", store.get("4"));
+        assertEquals("five", store.get("5"));
+        store.delete("5");
+
+        try {
+            // Check range iteration ...
+            try (KeyValueIterator<String, String> iter = store.range("2", "4")) {
+                assertTrue("First row exists", iter.hasNext());
+                assertEquals(new KeyValue<>("2", "two"), iter.next());
+                assertTrue("Second row exists", iter.hasNext());
+                assertEquals(new KeyValue<>("4", "four"), iter.next());
+                assertFalse("No more rows", iter.hasNext());
+            }
+
+            // Check range iteration ...
+            try (KeyValueIterator<String, String> iter = store.range("2", "6")) {
+                assertTrue("First row exists", iter.hasNext());
+                assertEquals(new KeyValue<>("2", "two"), iter.next());
+                assertTrue("Second row exists", iter.hasNext());
+                assertEquals(new KeyValue<>("4", "four"), iter.next());
+                assertFalse("No more rows", iter.hasNext());
+            }
+
+            // Check rangeUntil() ...
+            try (KeyValueIterator<String, String> iter = store.rangeUntil("2")) {
+                assertTrue("First row exists", iter.hasNext());
+                assertEquals(new KeyValue<>("0", "zero"), iter.next());
+                assertTrue("Second row exists", iter.hasNext());
+                assertEquals(new KeyValue<>("1", "one"), iter.next());
+                assertTrue("Third row exists", iter.hasNext());
+                assertEquals(new KeyValue<>("2", "two"), iter.next());
+                assertFalse("No more rows", iter.hasNext());
+            }
+
+            // Check rangeFrom()
+            try (KeyValueIterator<String, String> iter = store.rangeFrom("2")) {
+                assertTrue("First row exists", iter.hasNext());
+                assertEquals(new KeyValue<>("2", "two"), iter.next());
+                assertTrue("Second row exists", iter.hasNext());
+                assertEquals(new KeyValue<>("4", "four"), iter.next());
+                assertFalse("No more rows", iter.hasNext());
+            }
+        } finally {
+            store.close();
+        }
     }
 
     @Test

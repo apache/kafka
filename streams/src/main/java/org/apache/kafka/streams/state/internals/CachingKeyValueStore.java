@@ -166,6 +166,22 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
     }
 
     @Override
+    public KeyValueIterator<K, V> rangeUntil(K to) {
+        final byte[] origTo = serdes.rawKey(to);
+        final PeekingKeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>(underlying.rangeUntil(Bytes.wrap(origTo)));
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.rangeUntil(name, origTo);
+        return new MergedSortedCacheKeyValueStoreIterator<>(cacheIterator, storeIterator, serdes);
+    }
+
+    @Override
+    public KeyValueIterator<K, V> rangeFrom(K from) {
+        final byte[] origFrom = serdes.rawKey(from);
+        final PeekingKeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>(underlying.rangeFrom(Bytes.wrap(origFrom)));
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.rangeFrom(name, origFrom);
+        return new MergedSortedCacheKeyValueStoreIterator<>(cacheIterator, storeIterator, serdes);
+    }
+
+    @Override
     public KeyValueIterator<K, V> all() {
         final PeekingKeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>(underlying.all());
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(name);
