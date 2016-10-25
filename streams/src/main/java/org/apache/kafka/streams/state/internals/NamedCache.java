@@ -237,7 +237,7 @@ class NamedCache {
     }
 
     synchronized Iterator<Bytes> keyRange(final Bytes from, final Bytes to) {
-        return keySetIterator(cache.navigableKeySet().subSet(from, true, to, true));
+        return keySetIterator(cache.navigableKeySet().subSet(from, RANGE_FROM_INCLUSIVE, to, RANGE_TO_INCLUSIVE));
     }
 
     synchronized Iterator<Bytes> keyRangeUntil(final Bytes to) {

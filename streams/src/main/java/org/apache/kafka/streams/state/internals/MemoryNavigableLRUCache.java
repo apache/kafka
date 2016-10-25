@@ -43,7 +43,7 @@ public class MemoryNavigableLRUCache<K, V> extends MemoryLRUCache<K, V> {
     @Override
     public KeyValueIterator<K, V> range(K from, K to) {
         final TreeMap<K, V> treeMap = toTreeMap();
-        return new MemoryNavigableLRUCache.CacheIterator<>(treeMap.navigableKeySet().subSet(from, true, to, true).iterator(), treeMap);
+        return new MemoryNavigableLRUCache.CacheIterator<>(treeMap.navigableKeySet().subSet(from, RANGE_FROM_INCLUSIVE, to, RANGE_TO_INCLUSIVE).iterator(), treeMap);
     }
 
     @Override

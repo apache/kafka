@@ -105,7 +105,7 @@ class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public KeyValueIterator<K, V> range(final K from, final K to) {
-        return new TheIterator(this.map.subMap(from, true, to, false).entrySet().iterator());
+        return new TheIterator(this.map.subMap(from, RANGE_FROM_INCLUSIVE, to, RANGE_TO_INCLUSIVE).entrySet().iterator());
     }
 
     @Override
