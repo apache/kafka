@@ -397,12 +397,11 @@ public class SslTransportLayer implements TransportLayer {
     private SSLEngineResult handshakeUnwrap(boolean doRead) throws IOException {
         log.trace("SSLHandshake handshakeUnwrap {}", channelId);
         SSLEngineResult result;
-        boolean cont = false;
-        int read = 0;
         if (doRead)  {
-            read = socketChannel.read(netReadBuffer);
+            int read = socketChannel.read(netReadBuffer);
             if (read == -1) throw new EOFException("EOF during handshake.");
         }
+        boolean cont;
         do {
             //prepare the buffer with the incoming data
             netReadBuffer.flip();

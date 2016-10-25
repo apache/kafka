@@ -82,7 +82,7 @@ class BlockingChannel( val host: String,
                          connectTimeoutMs))
 
       } catch {
-        case e: Throwable => disconnect()
+        case _: Throwable => disconnect()
       }
     }
   }

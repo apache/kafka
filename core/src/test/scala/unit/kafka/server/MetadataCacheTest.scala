@@ -267,7 +267,7 @@ class MetadataCacheTest {
       fail(s"Exception should be thrown by `getTopicMetadata` with non-supported SecurityProtocol, $result was returned instead")
     }
     catch {
-      case e: BrokerEndPointNotAvailableException => //expected
+      case _: BrokerEndPointNotAvailableException => //expected
     }
 
   }

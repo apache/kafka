@@ -290,7 +290,7 @@ class Log(val dir: File,
         try {
           curr.recover(config.maxMessageSize)
         } catch {
-          case e: InvalidOffsetException =>
+          case _: InvalidOffsetException =>
             val startOffset = curr.baseOffset
             warn("Found invalid offset during recovery for log " + dir.getName +". Deleting the corrupt segment and " +
                  "creating an empty one with starting offset " + startOffset)
@@ -627,7 +627,7 @@ class Log(val dir: File,
       val fetchDataInfo = read(offset, 1)
       fetchDataInfo.fetchOffsetMetadata
     } catch {
-      case e: OffsetOutOfRangeException => LogOffsetMetadata.UnknownOffsetMetadata
+      case _: OffsetOutOfRangeException => LogOffsetMetadata.UnknownOffsetMetadata
     }
   }
 

@@ -253,7 +253,7 @@ object ConsumerGroupCommand extends Logging {
       }
 
       assignmentRows ++= groupConsumerIds.sortBy(- consumerTopicPartitions.get(_).size).flatMap { consumerId =>
-        topicsByConsumerId(consumerId).flatMap { topic =>
+        topicsByConsumerId(consumerId).flatMap { _ =>
           // since consumers with no topic partitions are processed here, we pass empty for topic partitions and offsets
           // since consumer id is repeated in client id, leave host and client id empty
           collectConsumerAssignment(group, None, Array[TopicAndPartition](), Map[TopicAndPartition, Option[Long]](), Some(consumerId), None, None)

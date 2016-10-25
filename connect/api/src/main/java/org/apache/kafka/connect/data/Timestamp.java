@@ -19,8 +19,6 @@ package org.apache.kafka.connect.data;
 
 import org.apache.kafka.connect.errors.DataException;
 
-import java.util.TimeZone;
-
 /**
  * <p>
  *     A timestamp representing an absolute time, without timezone information. The corresponding Java type is a
@@ -29,8 +27,6 @@ import java.util.TimeZone;
  */
 public class Timestamp {
     public static final String LOGICAL_NAME = "org.apache.kafka.connect.data.Timestamp";
-
-    private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
 
     /**
      * Returns a SchemaBuilder for a Timestamp. By returning a SchemaBuilder you can override additional schema settings such

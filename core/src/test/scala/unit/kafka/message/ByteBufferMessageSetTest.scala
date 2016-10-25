@@ -293,7 +293,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
                                                 messageTimestampDiffMaxMs = 1000L)
       fail("Should throw InvalidMessageException.")
     } catch {
-      case e: InvalidTimestampException =>
+      case _: InvalidTimestampException =>
     }
 
     try {
@@ -306,7 +306,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
                                                           messageTimestampDiffMaxMs = 1000L)
       fail("Should throw InvalidMessageException.")
     } catch {
-      case e: InvalidTimestampException =>
+      case _: InvalidTimestampException =>
     }
   }
 

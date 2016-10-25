@@ -52,7 +52,6 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     private final String restUrl;
     private final ConfigBackingStore configStorage;
     private ConnectProtocol.Assignment assignmentSnapshot;
-    private final WorkerCoordinatorMetrics sensors;
     private ClusterConfigState configSnapshot;
     private final WorkerRebalanceListener listener;
     private LeaderState leaderState;
@@ -86,7 +85,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         this.restUrl = restUrl;
         this.configStorage = configStorage;
         this.assignmentSnapshot = null;
-        this.sensors = new WorkerCoordinatorMetrics(metrics, metricGrpPrefix);
+        new WorkerCoordinatorMetrics(metrics, metricGrpPrefix);
         this.listener = listener;
         this.rejoinRequested = false;
     }
@@ -306,11 +305,9 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     private class WorkerCoordinatorMetrics {
-        public final Metrics metrics;
         public final String metricGrpName;
 
         public WorkerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
-            this.metrics = metrics;
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
             Measurable numConnectors = new Measurable() {

@@ -45,7 +45,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging wi
     kafka.admin.TopicCommand.createTopic(zkUtils, createOpts)
 
     val topicJson = """{"topics": [{"topic": "foo"}], "version":1}"""
-    val (proposedAssignment, currentAssignment) = ReassignPartitionsCommand.generateAssignment(zkUtils,
+    val (proposedAssignment, _) = ReassignPartitionsCommand.generateAssignment(zkUtils,
       rackInfo.keys.toSeq.sorted, topicJson, disableRackAware = false)
 
     val assignment = proposedAssignment map { case (topicPartition, replicas) =>

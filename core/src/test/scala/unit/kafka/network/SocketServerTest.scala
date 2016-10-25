@@ -159,7 +159,7 @@ class SocketServerTest extends JUnitSuite {
       outgoing.flush()
       receiveResponse(socket)
     } catch {
-      case e: IOException => // thats fine
+      case _: IOException => // thats fine
     }
   }
 
@@ -186,14 +186,14 @@ class SocketServerTest extends JUnitSuite {
       sendRequest(plainSocket, largeChunkOfBytes, Some(0))
       fail("expected exception when writing to closed plain socket")
     } catch {
-      case e: IOException => // expected
+      case _: IOException => // expected
     }
 
     try {
       sendRequest(traceSocket, largeChunkOfBytes, Some(0))
       fail("expected exception when writing to closed trace socket")
     } catch {
-      case e: IOException => // expected
+      case _: IOException => // expected
     }
   }
 

@@ -83,7 +83,7 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
       leaderId = brokerId
       onBecomingLeader()
     } catch {
-      case e: ZkNodeExistsException =>
+      case _: ZkNodeExistsException =>
         // If someone else has written the path, then
         leaderId = getControllerID 
 

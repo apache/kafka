@@ -240,7 +240,7 @@ class LogCleaner(val config: CleanerConfig,
             recordStats(cleaner.id, cleanable.log.name, cleanable.firstDirtyOffset, endOffset, cleanerStats)
             endOffset = nextDirtyOffset
           } catch {
-            case pe: LogCleaningAbortedException => // task can be aborted, let it go.
+            case _: LogCleaningAbortedException => // task can be aborted, let it go.
           } finally {
             cleanerManager.doneCleaning(cleanable.topicPartition, cleanable.log.dir.getParentFile, endOffset)
           }

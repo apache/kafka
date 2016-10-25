@@ -322,8 +322,8 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   def commitOffsets(isAutoCommit: Boolean) {
 
     val offsetsToCommit =
-      immutable.Map(topicRegistry.flatMap { case (topic, partitionTopicInfos) =>
-        partitionTopicInfos.map { case (partition, info) =>
+      immutable.Map(topicRegistry.values.flatMap { partitionTopicInfos =>
+        partitionTopicInfos.values.map { info =>
           TopicAndPartition(info.topic, info.partitionId) -> OffsetAndMetadata(info.getConsumeOffset())
         }
       }.toSeq: _*)
@@ -442,7 +442,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
             trace("Offset fetch response: %s.".format(offsetFetchResponse))
 
             val (leaderChanged, loadInProgress) =
-              offsetFetchResponse.requestInfo.foldLeft(false, false) { case(folded, (topicPartition, offsetMetadataAndError)) =>
+              offsetFetchResponse.requestInfo.values.foldLeft(false, false) { case (folded, offsetMetadataAndError) =>
                 (folded._1 || (offsetMetadataAndError.error == Errors.NOT_COORDINATOR_FOR_GROUP.code),
                  folded._2 || (offsetMetadataAndError.error == Errors.GROUP_LOAD_IN_PROGRESS.code))
               }
@@ -706,7 +706,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         val globalPartitionAssignment = partitionAssignor.assign(assignmentContext)
         val partitionAssignment = globalPartitionAssignment.get(assignmentContext.consumerId)
         val currentTopicRegistry = new Pool[String, Pool[Int, PartitionTopicInfo]](
-          valueFactory = Some((topic: String) => new Pool[Int, PartitionTopicInfo]))
+          valueFactory = Some((_: String) => new Pool[Int, PartitionTopicInfo]))
 
         // fetch current offsets for all topic-partitions
         val topicPartitions = partitionAssignment.keySet.toSeq
@@ -731,7 +731,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
           if(reflectPartitionOwnershipDecision(partitionAssignment)) {
             allTopicsOwnedPartitionsCount = partitionAssignment.size
 
-            partitionAssignment.view.groupBy { case(topicPartition, consumerThreadId) => topicPartition.topic }
+            partitionAssignment.view.groupBy { case (topicPartition, _) => topicPartition.topic }
                                       .foreach { case (topic, partitionThreadPairs) =>
               newGauge("OwnedPartitionsCount",
                 new Gauge[Int] {
@@ -851,11 +851,10 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
           successfullyOwnedPartitions ::= (topic, partition)
           true
         } catch {
-          case e: ZkNodeExistsException =>
+          case _: ZkNodeExistsException =>
             // The node hasn't been deleted by the original owner. So wait a bit and retry.
             info("waiting for the partition ownership to be deleted: " + partition)
             false
-          case e2: Throwable => throw e2
         }
       }
       val hasPartitionOwnershipFailed = partitionOwnershipSuccessful.foldLeft(0)((sum, decision) => sum + (if(decision) 0 else 1))
@@ -918,19 +917,18 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       topicCount.getConsumerThreadIdsPerTopic
 
     val allQueuesAndStreams = topicCount match {
-      case wildTopicCount: WildcardTopicCount =>
+      case _: WildcardTopicCount =>
         /*
          * Wild-card consumption streams share the same queues, so we need to
          * duplicate the list for the subsequent zip operation.
          */
         (1 to consumerThreadIdsPerTopic.keySet.size).flatMap(_ => queuesAndStreams).toList
-      case statTopicCount: StaticTopicCount =>
+      case _: StaticTopicCount =>
         queuesAndStreams
     }
 
-    val topicThreadIds = consumerThreadIdsPerTopic.map {
-      case(topic, threadIds) =>
-        threadIds.map((topic, _))
+    val topicThreadIds = consumerThreadIdsPerTopic.map { case (topic, threadIds) =>
+      threadIds.map((topic, _))
     }.flatten
 
     require(topicThreadIds.size == allQueuesAndStreams.size,
@@ -988,7 +986,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         "message streams by filter at most once.")
 
     private val wildcardQueuesAndStreams = (1 to numStreams)
-      .map(e => {
+      .map(_ => {
         val queue = new LinkedBlockingQueue[FetchedDataChunk](config.queuedMaxMessages)
         val stream = new KafkaStream[K,V](queue,
                                           config.consumerTimeoutMs,

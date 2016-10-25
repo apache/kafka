@@ -246,7 +246,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
           // As an optimization, the controller removes dead replicas from the ISR
           val leaderAndIsrIsEmpty: Boolean =
             controllerContext.partitionLeadershipInfo.get(topicAndPartition) match {
-              case Some(currLeaderIsrAndControllerEpoch) =>
+              case Some(_) =>
                 controller.removeReplicaFromIsr(topic, partition, replicaId) match {
                   case Some(updatedLeaderIsrAndControllerEpoch) =>
                     // send the shrunk ISR state change request to all the remaining alive replicas of the partition.

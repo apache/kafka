@@ -296,7 +296,6 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
     createTopic(zkUtils, topic2, servers = Seq(server), numPartitions = 1)
 
     // Commit an offset
-    val expectedReplicaAssignment = Map(0  -> List(1))
     val commitRequest = OffsetCommitRequest(group, immutable.Map(
       TopicAndPartition(topic1, 0) -> OffsetAndMetadata(offset=42L),
       TopicAndPartition(topic2, 0) -> OffsetAndMetadata(offset=42L)

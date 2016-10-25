@@ -254,7 +254,7 @@ class LogCleanerTest extends JUnitSuite {
 
     // create 6 segments with only one message in each segment
     val messageSet = TestUtils.singleMessageSet(payload = Array.fill[Byte](50)(0), key = 1.toString.getBytes)
-    for (i <- 0 until 6)
+    for (_ <- 0 until 6)
       log.append(messageSet, assignOffsets = true)
 
     val logToClean = LogToClean(TopicAndPartition("test", 0), log, log.activeSegment.baseOffset, log.activeSegment.baseOffset)
@@ -272,7 +272,7 @@ class LogCleanerTest extends JUnitSuite {
 
     // create 6 segments with only one message in each segment
     val messageSet = TestUtils.singleMessageSet(payload = Array.fill[Byte](50)(0), key = 1.toString.getBytes)
-    for (i <- 0 until 6)
+    for (_ <- 0 until 6)
       log.append(messageSet, assignOffsets = true)
 
     // segments [0,1] are clean; segments [2, 3] are cleanable; segments [4,5] are uncleanable
@@ -281,7 +281,6 @@ class LogCleanerTest extends JUnitSuite {
 
     val expectedCleanSize = segs.take(2).map(_.size).sum
     val expectedCleanableSize = segs.slice(2, 4).map(_.size).sum
-    val expectedUncleanableSize = segs.drop(4).map(_.size).sum
 
     assertEquals("Uncleanable bytes of LogToClean should equal size of all segments prior the one containing first dirty",
       logToClean.cleanBytes, expectedCleanSize)

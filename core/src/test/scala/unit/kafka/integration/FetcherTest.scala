@@ -48,7 +48,7 @@ class FetcherTest extends KafkaServerTestHarness {
 
     fetcher = new ConsumerFetcherManager("consumer1", new ConsumerConfig(TestUtils.createConsumerProperties("", "", "")), zkUtils)
     fetcher.stopConnections()
-    val topicInfos = configs.map(c =>
+    val topicInfos = configs.map(_ =>
       new PartitionTopicInfo(topic,
         0,
         queue,
@@ -81,13 +81,10 @@ class FetcherTest extends KafkaServerTestHarness {
 
   def fetch(expected: Int) {
     var count = 0
-    while(true) {
+    while (count < expected) {
       val chunk = queue.poll(2L, TimeUnit.SECONDS)
       assertNotNull("Timed out waiting for data chunk " + (count + 1), chunk)
-      for(message <- chunk.messages)
-        count += 1
-      if(count == expected)
-        return
+      count += chunk.messages.size
     }
   }
 }

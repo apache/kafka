@@ -101,7 +101,8 @@ object TestLinearWriteSpeed {
     val rand = new Random
     rand.nextBytes(buffer.array)
     val numMessages = bufferSize / (messageSize + MessageSet.LogOverhead)
-    val messageSet = new ByteBufferMessageSet(compressionCodec = compressionCodec, messages = (0 until numMessages).map(x => new Message(new Array[Byte](messageSize))): _*)
+    val messageSet = new ByteBufferMessageSet(compressionCodec = compressionCodec,
+      messages = (0 until numMessages).map(_ => new Message(new Array[Byte](messageSize))): _*)
     
     val writables = new Array[Writable](numFiles)
     val scheduler = new KafkaScheduler(1)
