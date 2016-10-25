@@ -84,7 +84,12 @@ public class AbstractTaskTest {
             }
 
             @Override
-            public void init() {
+            public void initTopology() {
+
+            }
+
+            @Override
+            public void closeTopology() {
 
             }
 

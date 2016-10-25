@@ -110,7 +110,8 @@ public abstract class AbstractTask {
 
     public abstract void close();
 
-    public abstract void init();
+    public abstract void initTopology();
+    public abstract void closeTopology();
 
     public abstract void commitOffsets();
 

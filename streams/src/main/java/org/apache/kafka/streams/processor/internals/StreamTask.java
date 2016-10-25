@@ -49,15 +49,12 @@ public class StreamTask extends AbstractTask implements Punctuator {
     private static final ConsumerRecord<Object, Object> DUMMY_RECORD = new ConsumerRecord<>(ProcessorContextImpl.NONEXIST_TOPIC, -1, -1L, null, null);
 
     private final String logPrefix;
-    private PartitionGroup partitionGroup;
+    private final PartitionGroup partitionGroup;
     private final PartitionGroup.RecordInfo recordInfo = new PartitionGroup.RecordInfo();
     private final PunctuationQueue punctuationQueue;
     private final Map<TopicPartition, RecordQueue> partitionQueues;
-    private final Map<TopicPartition, RecordQueue> prevPartitionQueues;
-    private final TimestampExtractor timestampExtractor;
 
     private final Map<TopicPartition, Long> consumedOffsets;
-    private final Map<TopicPartition, Long> prevConsumedOffsets;
     private final RecordCollector recordCollector;
     private final int maxBufferedSize;
 
@@ -98,7 +95,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
         // create queues for each assigned partition and associate them
         // to corresponding source nodes in the processor topology
         partitionQueues = new HashMap<>();
-        prevPartitionQueues = new HashMap<>();
 
         for (TopicPartition partition : partitions) {
             SourceNode source = topology.source(partition.topic());
@@ -108,12 +104,11 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
         this.logPrefix = String.format("task [%s]", id);
 
-        timestampExtractor = config.getConfiguredInstance(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
+        TimestampExtractor timestampExtractor = config.getConfiguredInstance(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
         this.partitionGroup = new PartitionGroup(partitionQueues, timestampExtractor);
 
         // initialize the consumed offset cache
         this.consumedOffsets = new HashMap<>();
-        this.prevConsumedOffsets = new HashMap<>();
 
         // create the record recordCollector that maintains the produced offsets
         this.recordCollector = new RecordCollector(producer, id().toString());
@@ -125,7 +120,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         log.info("{} Initializing state stores", logPrefix);
         initializeStateStores();
 
-        init();
+        initTopology();
 
         ((ProcessorContextImpl) this.processorContext).initialized();
     }
@@ -326,18 +321,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
     }
 
     @Override
-    public void init() {
-        if (prevPartitionQueues.size() > 0) {
-            partitionQueues.clear();
-            partitionQueues.putAll(prevPartitionQueues);
-            this.partitionGroup = new PartitionGroup(partitionQueues, timestampExtractor);
-            prevPartitionQueues.clear();
-        }
-        if (prevConsumedOffsets.size() > 0) {
-            consumedOffsets.clear();
-            consumedOffsets.putAll(prevConsumedOffsets);
-            prevConsumedOffsets.clear();
-        }
+    public void initTopology() {
         // initialize the task by initializing all its processor nodes in the topology
         log.info("{} Initializing processor nodes of the topology", logPrefix);
         for (ProcessorNode node : this.topology.processors()) {
@@ -350,22 +334,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
         }
     }
 
-    /**
-     * @throws RuntimeException if an error happens during closing of processor nodes
-     */
     @Override
-    public void close() {
-        log.debug("{} Closing processor topology", logPrefix);
-
-        // save in case we need to suspend and re-initialize this task
-        prevPartitionQueues.clear();
-        prevPartitionQueues.putAll(partitionQueues);
-        prevConsumedOffsets.clear();
-        prevConsumedOffsets.putAll(consumedOffsets);
-
-        this.partitionGroup.close();
-        this.consumedOffsets.clear();
-
+    public void closeTopology() {
         // close the processors
         // make sure close() is called for each node even when there is a RuntimeException
         RuntimeException exception = null;
@@ -383,6 +353,18 @@ public class StreamTask extends AbstractTask implements Punctuator {
         if (exception != null) {
             throw exception;
         }
+    }
+
+    /**
+     * @throws RuntimeException if an error happens during closing of processor nodes
+     */
+    @Override
+    public void close() {
+        log.debug("{} Closing processor topology", logPrefix);
+
+        this.partitionGroup.close();
+        this.consumedOffsets.clear();
+        closeTopology();
     }
 
     @Override

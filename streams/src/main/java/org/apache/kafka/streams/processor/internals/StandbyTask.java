@@ -103,10 +103,14 @@ public class StandbyTask extends AbstractTask {
     }
 
     @Override
-    public void init() {
+    public void initTopology() {
         //no-op
     }
 
+    @Override
+    public void closeTopology() {
+        //no-op
+    }
 
     @Override
     public void commitOffsets() {

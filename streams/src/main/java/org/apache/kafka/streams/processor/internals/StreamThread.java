@@ -138,7 +138,6 @@ public class StreamThread extends Thread {
             try {
                 log.info("stream-thread [{}] partitions [{}] revoked at the beginning of consumer rebalance.",
                         StreamThread.this.getName(), assignment);
-
                 initialized.set(false);
                 lastCleanMs = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
                 // suspend active tasks
@@ -304,7 +303,11 @@ public class StreamThread extends Thread {
         }
     }
 
-    private void preShutdownSteps(final boolean rethrowExceptions) {
+
+    private void shutdownTasksAndState(final boolean rethrowExceptions) {
+        log.debug("{} shutdownTasksAndState: shutting down all active tasks [{}] and standby tasks [{}]", logPrefix,
+            activeTasks.keySet(), standbyTasks.keySet());
+
         // Commit first as there may be cached records that have not been flushed yet.
         commitOffsets(rethrowExceptions);
         // Close all processors in topology order
@@ -313,18 +316,10 @@ public class StreamThread extends Thread {
         flushAllState(rethrowExceptions);
         // flush out any extra data sent during close
         producer.flush();
-        // remove the changelog partitions from restore consumer
-        unAssignChangeLogPartitions(rethrowExceptions);
-    }
-
-    private void shutdownTasksAndState(final boolean rethrowExceptions) {
-        log.debug("{} shutdownTasksAndState: shutting down all active tasks [{}] and standby tasks [{}]", logPrefix,
-            activeTasks.keySet(), standbyTasks.keySet());
-
-        preShutdownSteps(rethrowExceptions);
-
         // Close all task state managers
         closeAllStateManagers(rethrowExceptions);
+        // remove the changelog partitions from restore consumer
+        unAssignChangeLogPartitions(rethrowExceptions);
     }
 
 
@@ -337,7 +332,16 @@ public class StreamThread extends Thread {
         log.debug("{} suspendTasksAndState: suspending all active tasks [{}] and standby tasks [{}]", logPrefix,
             activeTasks.keySet(), standbyTasks.keySet());
 
-        preShutdownSteps(rethrowExceptions);
+        // Commit first as there may be cached records that have not been flushed yet.
+        commitOffsets(rethrowExceptions);
+        // Close all topology nodes
+        closeAllTasksTopologies();
+        // flush state
+        flushAllState(rethrowExceptions);
+        // flush out any extra data sent during close
+        producer.flush();
+        // remove the changelog partitions from restore consumer
+        unAssignChangeLogPartitions(rethrowExceptions);
 
         updateSuspendedTasks();
         removeStreamTasks();
@@ -712,7 +716,7 @@ public class StreamThread extends Thread {
                 if (task != null) {
                     log.debug("{} recycling old task {}", logPrefix, taskId);
                     suspendedTasks.remove(taskId);
-                    task.init();
+                    task.initTopology();
                 } else {
                     log.debug("{} creating new task {}", logPrefix, taskId);
                     task = createStreamTask(taskId, partitions);
@@ -760,7 +764,7 @@ public class StreamThread extends Thread {
             if (task != null) {
                 log.debug("{} recycling old standby task {}", logPrefix, taskId);
                 suspendedStandbyTasks.remove(taskId);
-                task.init();
+                task.initTopology();
             } else {
                 log.debug("{} creating new standby task {}", logPrefix, taskId);
                 task = createStandbyTask(taskId, partitions);
@@ -864,6 +868,17 @@ public class StreamThread extends Thread {
             public void apply(final AbstractTask task) {
                 log.info("{} Closing a task {}", StreamThread.this.logPrefix, task.id());
                 task.close();
+                sensors.taskDestructionSensor.record();
+            }
+        }, "close", false);
+    }
+
+    private void closeAllTasksTopologies() {
+        performOnAllTasks(new AbstractTaskAction() {
+            @Override
+            public void apply(final AbstractTask task) {
+                log.info("{} Closing a task's topology {}", StreamThread.this.logPrefix, task.id());
+                task.closeTopology();
                 sensors.taskDestructionSensor.record();
             }
         }, "close", false);
