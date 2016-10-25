@@ -27,6 +27,7 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
     private long timeoutMs;
     private KafkaConsumer<byte[], byte[]> consumer;
     private final Set<TopicPartition> pausedPartitions;
+    private boolean commitRequested;
 
     public WorkerSinkTaskContext(KafkaConsumer<byte[], byte[]> consumer) {
         this.offsets = new HashMap<>();
@@ -104,6 +105,19 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
         } catch (IllegalStateException e) {
             throw new IllegalWorkerStateException("SinkTasks may not resume partitions that are not currently assigned to them.", e);
         }
+    }
+
+    @Override
+    public void requestCommit() {
+        commitRequested = true;
+    }
+
+    public boolean isCommitRequested() {
+        return commitRequested;
+    }
+
+    public void clearCommitRequest() {
+        commitRequested = false;
     }
 
     public Set<TopicPartition> pausedPartitions() {

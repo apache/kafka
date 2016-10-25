@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.errors.ConnectException;
 
 import java.util.Collection;
 import java.util.Map;
@@ -95,13 +96,29 @@ public abstract class SinkTask implements Task {
     public abstract void put(Collection<SinkRecord> records);
 
     /**
+     * @return {@code null} if not implemented, an empty map if Connect-managed offset commits should be disabled,
+     * and otherwise a map of committable offsets by topic-partition.
+     */
+    public Map<TopicPartition, Long> commitableOffsets() {
+        return null;
+    }
+
+    /**
      * Flush all records that have been {@link #put} for the specified topic-partitions. The
      * offsets are provided for convenience, but could also be determined by tracking all offsets
      * included in the SinkRecords passed to {@link #put}.
      *
+     * @deprecated You should implement connector-specific flush policies either synchronously with {@link #put(Collection)} (typically size-based)
+     * or using an additional thread (more flexible, typically time-based). It is also a good idea to flush on {@link #close(Collection)}.
+     * <strong>This method will only be called if {@link #commitableOffsets()} returns {@code null}.</strong>
+     *
      * @param offsets mapping of TopicPartition to committed offset
      */
-    public abstract void flush(Map<TopicPartition, OffsetAndMetadata> offsets);
+    @Deprecated
+    public void flush(Map<TopicPartition, OffsetAndMetadata> offsets) {
+        if (commitableOffsets() == null)
+            throw new ConnectException("flush() required to be implemented if commitableOffsets() returns null");
+    }
 
     /**
      * The SinkTask use this method to create writers for newly assigned partitions in case of partition

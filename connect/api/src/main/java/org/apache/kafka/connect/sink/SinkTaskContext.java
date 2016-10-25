@@ -79,4 +79,11 @@ public interface SinkTaskContext {
      * @param partitions the partitions to resume
      */
     void resume(TopicPartition... partitions);
+
+    /**
+     * Request an offset commit. Sink tasks can use this to minimize the potential for duplicate data upon recovery
+     * by requesting an offset commit as soon as they flush data to the destination system.
+     */
+    void requestCommit();
+
 }
