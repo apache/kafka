@@ -413,10 +413,8 @@ class FileMessageSet private[kafka](@volatile var file: File,
   /**
    * Read from the underlying file into the buffer starting at the given position
    */
-  def readInto(buffer: ByteBuffer, relativePosition: Int, throttler: Option[Throttler] = None): ByteBuffer = {
-    val bytesRead = channel.read(buffer, relativePosition + this.start)
-    if (bytesRead > 0)
-      throttler.foreach(_.maybeThrottle(bytesRead))
+  def readInto(buffer: ByteBuffer, relativePosition: Int): ByteBuffer = {
+    channel.read(buffer, relativePosition + this.start)
     buffer.flip()
     buffer
   }

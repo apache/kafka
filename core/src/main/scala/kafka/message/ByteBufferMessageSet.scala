@@ -24,6 +24,7 @@ import java.nio.channels._
 import java.io._
 import java.util.ArrayDeque
 
+import kafka.message.ByteBufferMessageSet.FilterResult
 import org.apache.kafka.common.errors.InvalidTimestampException
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.utils.Utils
@@ -226,6 +227,14 @@ object ByteBufferMessageSet {
     buffer.putInt(messageWriter.size)
     messageWriter.writeTo(buffer)
   }
+
+
+  case class FilterResult(messagesRead: Int,
+                          bytesRead: Int,
+                          messagesRetained: Int,
+                          bytesRetained: Int,
+                          maxTimestamp: Long,
+                          offsetOfMaxTimestamp: Long)
 }
 
 private object OffsetAssigner {
@@ -446,13 +455,6 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
 
     }
   }
-
-  case class FilterResult(messagesRead: Int,
-                          bytesRead: Int,
-                          messagesRetained: Int,
-                          bytesRetained: Int,
-                          maxTimestamp: Long,
-                          offsetOfMaxTimestamp: Long)
 
   def filterInto(buffer: ByteBuffer,
                  filter: MessageAndOffset => Boolean): FilterResult = {

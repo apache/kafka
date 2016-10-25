@@ -458,8 +458,9 @@ private[log] class Cleaner(val id: Int,
       readBuffer.clear()
       writeBuffer.clear()
 
-      source.log.readInto(readBuffer, position, Some(throttler))
+      source.log.readInto(readBuffer, position)
       val messages = new ByteBufferMessageSet(readBuffer)
+      throttler.maybeThrottle(messages.sizeInBytes)
       val result = messages.filterInto(writeBuffer, shouldRetain)
 
       stats.readMessages(result.messagesRead, result.bytesRead)
@@ -617,8 +618,10 @@ private[log] class Cleaner(val id: Int,
     while (position < segment.log.sizeInBytes) {
       checkDone(topicAndPartition)
       readBuffer.clear()
-      segment.log.readInto(readBuffer, position, Some(throttler))
+      segment.log.readInto(readBuffer, position)
       val messages = new ByteBufferMessageSet(readBuffer)
+      throttler.maybeThrottle(messages.sizeInBytes)
+
       val startPosition = position
       for (entry <- messages) {
         val message = entry.message
