@@ -87,7 +87,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
     // action/test
     TestUtils.waitUntilTrue(() => {
-        val (state, assignments) = consumerGroupCommand.describeGroup()
+        val (_, assignments) = consumerGroupCommand.describeGroup()
         assignments.isDefined &&
         assignments.get.filter(_.group == group).size == 1 &&
         assignments.get.filter(_.group == group).head.consumerId.isDefined
@@ -113,7 +113,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
     // action/test
     TestUtils.waitUntilTrue(() => {
-        val (state, assignments) = consumerGroupCommand.describeGroup()
+        val (_, assignments) = consumerGroupCommand.describeGroup()
         assignments.isDefined &&
         assignments.get.filter(_.group == group).size == 2 &&
         assignments.get.filter{ x => x.group == group && x.partition.isDefined}.size == 1 &&

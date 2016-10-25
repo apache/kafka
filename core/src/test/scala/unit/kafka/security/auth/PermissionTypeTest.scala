@@ -31,7 +31,7 @@ class PermissionTypeTest extends JUnitSuite {
       PermissionType.fromString("badName")
       fail("Expected exception on invalid PermissionType name.")
     } catch {
-      case e: KafkaException => // expected
+      case _: KafkaException => // expected
     }
   }
 

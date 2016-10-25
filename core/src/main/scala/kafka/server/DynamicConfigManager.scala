@@ -88,7 +88,6 @@ class DynamicConfigManager(private val zkUtils: ZkUtils,
                            private val configHandlers: Map[String, ConfigHandler],
                            private val changeExpirationMs: Long = 15*60*1000,
                            private val time: Time = SystemTime) extends Logging {
-  private var lastExecutedChange = -1L
 
   object ConfigChangedNotificationHandler extends NotificationHandler {
     override def processNotification(json: String) = {
@@ -106,7 +105,7 @@ class DynamicConfigManager(private val zkUtils: ZkUtils,
                 "Supported versions are 1 and 2.")
           }
 
-        case o => throw new IllegalArgumentException("Config change notification has an unexpected value. The format is:" +
+        case _ => throw new IllegalArgumentException("Config change notification has an unexpected value. The format is:" +
           "{\"version\" : 1, \"entity_type\":\"topics/clients\", \"entity_name\" : \"topic_name/client_id\"}." + " or " +
           "{\"version\" : 2, \"entity_path\":\"entity_type/entity_name\"}." +
           " Received: " + json)

@@ -120,7 +120,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
     //Add data equally to each partition
     producer = createNewProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 1)
-    (0 until msgCount).foreach { x =>
+    (0 until msgCount).foreach { _ =>
       (0 to 7).foreach { partition =>
         producer.send(new ProducerRecord(topic, partition, null, msg))
       }
@@ -215,7 +215,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
   def addData(msgCount: Int, msg: Array[Byte]): Boolean = {
     producer = createNewProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = 0)
-    (0 until msgCount).foreach { x => producer.send(new ProducerRecord(topic, msg)).get }
+    (0 until msgCount).map(_ => producer.send(new ProducerRecord(topic, msg))).foreach(_.get)
     waitForOffsetsToMatch(msgCount, 0, 100)
   }
 

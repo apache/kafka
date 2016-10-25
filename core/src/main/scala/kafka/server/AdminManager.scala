@@ -127,7 +127,7 @@ class AdminManager(val config: KafkaConfig,
           AdminUtils.deleteTopic(zkUtils, topic)
           DeleteTopicMetadata(topic, Errors.NONE)
         } catch {
-          case e: TopicAlreadyMarkedForDeletionException =>
+          case _: TopicAlreadyMarkedForDeletionException =>
             // swallow the exception, and still track deletion allowing multiple calls to wait for deletion
             DeleteTopicMetadata(topic, Errors.NONE)
           case e: Throwable =>

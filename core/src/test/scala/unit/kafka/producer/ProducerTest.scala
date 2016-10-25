@@ -115,15 +115,12 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
         keyEncoder = classOf[StringEncoder].getName,
         producerProps = props)
 
-    try{
+    try {
       producer1.send(new KeyedMessage[String, String](topic, "test", "test1"))
       fail("Test should fail because the broker list provided are not valid")
     } catch {
-      case e: FailedToSendMessageException => // this is expected
-      case oe: Throwable => fail("fails with exception", oe)
-    } finally {
-      producer1.close()
-    }
+      case _: FailedToSendMessageException => // this is expected
+    } finally producer1.close()
 
     val producer2 = TestUtils.createProducer[String, String](
       brokerList = "localhost:80," + TestUtils.getBrokerListStrFromServers(Seq(server1)),
@@ -216,9 +213,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
         fail("we don't support request.required.acks greater than 1")
     }
     catch {
-      case iae: IllegalArgumentException =>  // this is expected
-      case e: Throwable => fail("Not expected", e)
-
+      case _: IllegalArgumentException =>  // this is expected
     }
   }
 
@@ -261,7 +256,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
       fail("Should fail since no leader exists for the partition.")
     } catch {
       case e : TestFailedException => throw e // catch and re-throw the failure message
-      case e2: Throwable => // otherwise success
+      case _: Throwable => // otherwise success
     }
 
     // restart server 1
@@ -290,6 +285,10 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
 
   @Test
   def testAsyncSendCanCorrectlyFailWithTimeout() {
+    val topic = "new-topic"
+    // create topics in ZK
+    TestUtils.createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0->Seq(0,1)), servers = servers)
+
     val timeoutMs = 500
     val props = new Properties()
     props.put("request.timeout.ms", String.valueOf(timeoutMs))
@@ -303,10 +302,6 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
       partitioner = classOf[StaticPartitioner].getName,
       producerProps = props)
 
-    val topic = "new-topic"
-    // create topics in ZK
-    TestUtils.createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0->Seq(0,1)), servers = servers)
-
     // do a simple test to make sure plumbing is okay
     try {
       // this message should be assigned to partition 0 whose leader is on broker 0
@@ -315,30 +310,25 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
       val response1 = getConsumer1().fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
       val messageSet1 = response1.messageSet("new-topic", 0).iterator
       assertTrue("Message set should have 1 message", messageSet1.hasNext)
-      assertEquals(new Message("test".getBytes), messageSet1.next.message)
-    } catch {
-      case e: Throwable => case e: Exception => producer.close; fail("Not expected", e)
-    }
+      assertEquals(ByteBuffer.wrap("test".getBytes), messageSet1.next.message.payload)
 
-    // stop IO threads and request handling, but leave networking operational
-    // any requests should be accepted and queue up, but not handled
-    server1.requestHandlerPool.shutdown()
+      // stop IO threads and request handling, but leave networking operational
+      // any requests should be accepted and queue up, but not handled
+      server1.requestHandlerPool.shutdown()
 
-    val t1 = SystemTime.milliseconds
-    try {
-      // this message should be assigned to partition 0 whose leader is on broker 0, but
-      // broker 0 will not response within timeoutMs millis.
-      producer.send(new KeyedMessage[String, String](topic, "test", "test"))
-    } catch {
-      case e: FailedToSendMessageException => /* success */
-      case e: Exception => fail("Not expected", e)
-    } finally {
-      producer.close()
-    }
-    val t2 = SystemTime.milliseconds
+      val t1 = SystemTime.milliseconds
+      try {
+        // this message should be assigned to partition 0 whose leader is on broker 0, but
+        // broker 0 will not response within timeoutMs millis.
+        producer.send(new KeyedMessage[String, String](topic, "test", "test"))
+      } catch {
+        case _: FailedToSendMessageException => /* success */
+      }
+      val t2 = SystemTime.milliseconds
+      // make sure we don't wait fewer than timeoutMs
+      assertTrue((t2-t1) >= timeoutMs)
 
-    // make sure we don't wait fewer than timeoutMs
-    assertTrue((t2-t1) >= timeoutMs)
+    } finally producer.close()
   }
 
   @Test
