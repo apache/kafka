@@ -23,6 +23,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.kstream.ForeachValueAction;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
@@ -308,6 +309,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         String name = topology.newName(FOREACH_NAME);
 
         topology.addProcessor(name, new KStreamForeach<>(action), this.name);
+    }
+
+    @Override
+    public void foreachValue(ForeachValueAction<V> action) {
+        Objects.requireNonNull(action, "action can't be null");
+        String name = topology.newName(FOREACH_NAME);
+
+        topology.addProcessor(name, new KStreamForeachValue<>(action), this.name);
     }
 
     @Override

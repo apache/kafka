@@ -20,6 +20,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.kstream.ForeachValueAction;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.KeyValue;
@@ -91,6 +92,51 @@ public class KStreamForeachTest {
         for (int i = 0; i < expectedRecords.size(); i++) {
             KeyValue<Integer, String> expectedRecord = expectedRecords.get(i);
             KeyValue<Integer, String> actualRecord = actualRecords.get(i);
+            assertEquals(expectedRecord, actualRecord);
+        }
+    }
+
+    @Test
+    public void testForeachValue() throws Exception {
+        // Given
+        List<KeyValue<Integer, String>> inputRecords = Arrays.asList(
+            new KeyValue<>(0, "zero"),
+            new KeyValue<>(1, "one"),
+            new KeyValue<>(2, "two"),
+            new KeyValue<>(3, "three")
+        );
+
+        List<String> expectedRecords = Arrays.asList(
+            "ZERO",
+            "ONE",
+            "TWO",
+            "THREE"
+        );
+
+        final List<String> actualRecords = new ArrayList<>();
+        ForeachValueAction<String> action =
+            new ForeachValueAction<String>() {
+                @Override
+                public void apply(String value) {
+                    actualRecords.add(value.toUpperCase(Locale.ROOT));
+                }
+            };
+
+        // When
+        KStreamBuilder builder = new KStreamBuilder();
+        KStream<Integer, String> stream = builder.stream(intSerde, stringSerde, topicName);
+        stream.foreachValue(action);
+
+        // Then
+        driver = new KStreamTestDriver(builder);
+        for (KeyValue<Integer, String> record: inputRecords) {
+            driver.process(topicName, record.key, record.value);
+        }
+
+        assertEquals(expectedRecords.size(), actualRecords.size());
+        for (int i = 0; i < expectedRecords.size(); i++) {
+            String expectedRecord = expectedRecords.get(i);
+            String actualRecord = actualRecords.get(i);
             assertEquals(expectedRecord, actualRecord);
         }
     }

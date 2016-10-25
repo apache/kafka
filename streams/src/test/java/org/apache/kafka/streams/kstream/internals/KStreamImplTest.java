@@ -20,6 +20,8 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
+import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.kstream.ForeachValueAction;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
@@ -269,4 +271,8 @@ public class KStreamImplTest {
         testStream.foreach(null);
     }
 
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullActionOnForEachValue() throws Exception {
+        testStream.foreachValue(null);
+    }
 }
