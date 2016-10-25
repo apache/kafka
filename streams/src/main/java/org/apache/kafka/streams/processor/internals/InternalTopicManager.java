@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.streams.errors.StreamsException;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -30,6 +31,7 @@ public class InternalTopicManager {
     public static final String CLEANUP_POLICY_PROP = "cleanup.policy";
     public static final String RETENTION_MS = "retention.ms";
     public static final Long WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
+    private static final int MAX_TOPIC_READY_TRY = 5;
 
     private final long windowChangeLogAdditionalRetention;
 
@@ -55,13 +57,19 @@ public class InternalTopicManager {
      */
     public void makeReady(final Map<InternalTopicConfig, Integer> topics) {
 
-        //TODO: Add loop/ inspect th error codes
         Collection<MetadataResponse.TopicMetadata> topicMetadatas = streamsKafkaClient.fetchTopicMetadata();
         Map<InternalTopicConfig, Integer> topicsToBeDeleted = getTopicsToBeDeleted(topics, topicMetadatas);
         Map<InternalTopicConfig, Integer> topicsToBeCreated = filterExistingTopics(topics, topicMetadatas);
         topicsToBeCreated.putAll(topicsToBeDeleted);
         streamsKafkaClient.deleteTopics(topicsToBeDeleted);
-        streamsKafkaClient.createTopics(topicsToBeCreated, replicationFactor, windowChangeLogAdditionalRetention);
+        for (int i = 0; i < MAX_TOPIC_READY_TRY; i++) {
+            try {
+                streamsKafkaClient.createTopics(topicsToBeCreated, replicationFactor, windowChangeLogAdditionalRetention);
+                return;
+            } catch (StreamsException ex) {
+            }
+        }
+        throw new StreamsException("Could not create internal topics.");
     }
 
     public void close() throws IOException {
