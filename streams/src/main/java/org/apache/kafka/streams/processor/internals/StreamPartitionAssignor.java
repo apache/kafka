@@ -61,13 +61,13 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         public final TaskId taskId;
         public final TopicPartition partition;
 
-        AssignedPartition(TaskId taskId, TopicPartition partition) {
+        AssignedPartition(final TaskId taskId, final TopicPartition partition) {
             this.taskId = taskId;
             this.partition = partition;
         }
 
         @Override
-        public int compareTo(AssignedPartition that) {
+        public int compareTo(final AssignedPartition that) {
             return PARTITION_COMPARATOR.compare(this.partition, that.partition);
         }
     }
@@ -75,9 +75,9 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     private static class ClientMetadata {
         final HostInfo hostInfo;
         final Set<String> consumers;
-        ClientState<TaskId> state;
+        final ClientState<TaskId> state;
 
-        ClientMetadata(String endPoint) {
+        ClientMetadata(final String endPoint) {
 
             // get the host info if possible
             if (endPoint != null) {
@@ -94,7 +94,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             state = new ClientState<>();
         }
 
-        void addConsumer(String consumerMemberId, SubscriptionInfo info) {
+        void addConsumer(final String consumerMemberId, final SubscriptionInfo info) {
 
             consumers.add(consumerMemberId);
 
@@ -119,7 +119,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         public int numPartitions;
 
-        InternalTopicMetadata(InternalTopicConfig config) {
+        InternalTopicMetadata(final InternalTopicConfig config) {
             this.config = config;
             this.numPartitions = -1;
         }
@@ -454,24 +454,24 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // construct the global partition assignment per host map
         partitionsByHostState = new HashMap<>();
         for (Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
-            ClientState<TaskId> state = entry.getValue().state;
-            final Set<TopicPartition> topicPartitions = new HashSet<>();
-
-            for (TaskId id : state.activeTasks) {
-                for (TopicPartition partition : partitionsForTask.get(id)) {
-                    topicPartitions.add(partition);
-                }
-            }
-
-            for (TaskId id : state.assignedTasks) {
-                for (TopicPartition partition : partitionsForTask.get(id)) {
-                    topicPartitions.add(partition);
-                }
-            }
-
             HostInfo hostInfo = entry.getValue().hostInfo;
 
             if (hostInfo != null) {
+                final Set<TopicPartition> topicPartitions = new HashSet<>();
+                final ClientState<TaskId> state = entry.getValue().state;
+
+                for (TaskId id : state.activeTasks) {
+                    for (TopicPartition partition : partitionsForTask.get(id)) {
+                        topicPartitions.add(partition);
+                    }
+                }
+
+                for (TaskId id : state.assignedTasks) {
+                    for (TopicPartition partition : partitionsForTask.get(id)) {
+                        topicPartitions.add(partition);
+                    }
+                }
+
                 partitionsByHostState.put(hostInfo, topicPartitions);
             }
         }
@@ -598,10 +598,10 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
      * @param topicPartitions Map that contains the topic names to be created with the number of partitions
      */
     private void prepareTopic(Map<String, InternalTopicMetadata> topicPartitions) {
+        log.debug("stream-thread [{}] Starting to validate internal topics in partition assignor.", streamThread.getName());
+
         // if ZK is specified, prepare the internal source topic before calling partition grouper
         if (internalTopicManager != null) {
-            log.debug("stream-thread [{}] Starting to validate internal topics in partition assignor.", streamThread.getName());
-
             for (Map.Entry<String, InternalTopicMetadata> entry : topicPartitions.entrySet()) {
                 InternalTopicConfig topic = entry.getValue().config;
                 Integer numPartitions = entry.getValue().numPartitions;
@@ -617,8 +617,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                     partitions = streamThread.restoreConsumer.partitionsFor(topic.name());
                 } while (partitions == null || partitions.size() != numPartitions);
             }
-
-            log.info("stream-thread [{}] Completed validating internal topics in partition assignor", streamThread.getName());
         } else {
             List<String> missingTopics = new ArrayList<>();
             for (String topic : topicPartitions.keySet()) {
@@ -631,9 +629,10 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             if (!missingTopics.isEmpty()) {
                 log.warn("stream-thread [{}] Topic {} do not exists but couldn't created as the config '{}' isn't supplied",
                         streamThread.getName(), missingTopics, StreamsConfig.ZOOKEEPER_CONNECT_CONFIG);
-
             }
         }
+
+        log.info("stream-thread [{}] Completed validating internal topics in partition assignor", streamThread.getName());
     }
 
     private void ensureCopartitioning(Collection<Set<String>> copartitionGroups,
