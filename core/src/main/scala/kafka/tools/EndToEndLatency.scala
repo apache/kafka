@@ -122,8 +122,7 @@ object EndToEndLatency {
 
       //Check we only got the one message
       if (recordIter.hasNext) {
-        var count = 1
-        for (elem <- recordIter) count += 1
+        val count = 1 + recordIter.size
         throw new RuntimeException(s"Only one result was expected during this test. We found [$count]")
       }
 

@@ -755,7 +755,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, topic, Topic.isInternal(topic),
         java.util.Collections.emptyList())
     } catch {
-      case e: TopicExistsException => // let it go, possibly another broker created this topic
+      case _: TopicExistsException => // let it go, possibly another broker created this topic
         new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, topic, Topic.isInternal(topic),
           java.util.Collections.emptyList())
       case ex: Throwable  => // Catch all to prevent unhandled errors

@@ -69,7 +69,7 @@ object FetchRequest {
     val groupedByTopic = requestInfo.groupBy { case (tp, _) => tp.topic }.map { case (topic, values) =>
       topic -> random.shuffle(values)
     }
-    random.shuffle(groupedByTopic.toSeq).flatMap { case (topic, partitions) =>
+    random.shuffle(groupedByTopic.toSeq).flatMap { case (_, partitions) =>
       partitions.map { case (tp, fetchInfo) => tp -> fetchInfo }
     }
   }
@@ -196,9 +196,8 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
   }
 
   override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
-    val fetchResponsePartitionData = requestInfo.map {
-      case (topicAndPartition, data) =>
-        (topicAndPartition, FetchResponsePartitionData(Errors.forException(e).code, -1, MessageSet.Empty))
+    val fetchResponsePartitionData = requestInfo.map { case (topicAndPartition, _) =>
+      (topicAndPartition, FetchResponsePartitionData(Errors.forException(e).code, -1, MessageSet.Empty))
     }
     val fetchRequest = request.requestObj.asInstanceOf[FetchRequest]
     val errorResponse = FetchResponse(correlationId, fetchResponsePartitionData, fetchRequest.versionId)

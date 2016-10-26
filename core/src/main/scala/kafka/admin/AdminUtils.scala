@@ -320,7 +320,7 @@ object AdminUtils extends Logging with AdminUtilities {
         try {
           zkUtils.createPersistentPath(getDeleteTopicPath(topic))
         } catch {
-          case e1: ZkNodeExistsException => throw new TopicAlreadyMarkedForDeletionException(
+          case _: ZkNodeExistsException => throw new TopicAlreadyMarkedForDeletionException(
             "topic %s is already marked for deletion".format(topic))
           case e2: Throwable => throw new AdminOperationException(e2)
         }
@@ -471,7 +471,7 @@ object AdminUtils extends Logging with AdminUtilities {
       }
       debug("Updated path %s with %s for replica assignment".format(zkPath, jsonPartitionData))
     } catch {
-      case e: ZkNodeExistsException => throw new TopicExistsException("topic %s already exists".format(topic))
+      case _: ZkNodeExistsException => throw new TopicExistsException("topic %s already exists".format(topic))
       case e2: Throwable => throw new AdminOperationException(e2.toString)
     }
   }
@@ -593,7 +593,7 @@ object AdminUtils extends Logging with AdminUtilities {
             case _ => throw new IllegalArgumentException(s"Invalid ${entityConfigPath} config: ${str}")
           }
 
-        case o => throw new IllegalArgumentException(s"Unexpected value in config:(${str}), entity_config_path: ${entityConfigPath}")
+        case _ => throw new IllegalArgumentException(s"Unexpected value in config:(${str}), entity_config_path: ${entityConfigPath}")
       }
     }
     props

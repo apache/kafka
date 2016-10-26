@@ -164,7 +164,6 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   @Test
   def testAddPartitionDuringDeleteTopic() {
     val topic = "test"
-    val topicAndPartition = TopicAndPartition(topic, 0)
     val servers = createTestTopicAndCluster(topic)
     // start topic deletion
     AdminUtils.deleteTopic(zkUtils, topic)
@@ -208,7 +207,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
       AdminUtils.deleteTopic(zkUtils, "test2")
       fail("Expected UnknownTopicOrPartitionException")
     } catch {
-      case e: UnknownTopicOrPartitionException => // expected exception
+      case _: UnknownTopicOrPartitionException => // expected exception
     }
     // verify delete topic path for test2 is removed from zookeeper
     TestUtils.verifyTopicDeletion(zkUtils, "test2", 1, servers)
@@ -270,7 +269,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
       fail("Expected TopicAlreadyMarkedForDeletionException")
     }
     catch {
-      case e: TopicAlreadyMarkedForDeletionException => // expected exception
+      case _: TopicAlreadyMarkedForDeletionException => // expected exception
     }
 
     TestUtils.verifyTopicDeletion(zkUtils, topic, 1, servers)
@@ -300,7 +299,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
 
   private def writeDups(numKeys: Int, numDups: Int, log: Log): Seq[(Int, Int)] = {
     var counter = 0
-    for(dup <- 0 until numDups; key <- 0 until numKeys) yield {
+    for (_ <- 0 until numDups; key <- 0 until numKeys) yield {
       val count = counter
       log.append(TestUtils.singleMessageSet(payload = counter.toString.getBytes, key = key.toString.getBytes), assignOffsets = true)
       counter += 1

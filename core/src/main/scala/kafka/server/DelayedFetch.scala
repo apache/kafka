@@ -112,10 +112,10 @@ class DelayedFetch(delayMs: Long,
             }
           }
         } catch {
-          case utpe: UnknownTopicOrPartitionException => // Case B
+          case _: UnknownTopicOrPartitionException => // Case B
             debug("Broker no longer know of %s, satisfy %s immediately".format(topicAndPartition, fetchMetadata))
             return forceComplete()
-          case nle: NotLeaderForPartitionException =>  // Case A
+          case _: NotLeaderForPartitionException =>  // Case A
             debug("Broker is no longer the leader of %s, satisfy %s immediately".format(topicAndPartition, fetchMetadata))
             return forceComplete()
         }

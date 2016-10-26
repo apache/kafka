@@ -112,7 +112,7 @@ class KafkaConfigTest {
     props5.put("log.retention.ms", "0")
 
     intercept[IllegalArgumentException] {
-      val cfg5 = KafkaConfig.fromProps(props5)
+      KafkaConfig.fromProps(props5)
     }
   }
 
@@ -127,13 +127,13 @@ class KafkaConfigTest {
     props3.put("log.retention.hours", "0")
 
     intercept[IllegalArgumentException] {
-      val cfg1 = KafkaConfig.fromProps(props1)
+      KafkaConfig.fromProps(props1)
     }
     intercept[IllegalArgumentException] {
-      val cfg2 = KafkaConfig.fromProps(props2)
+      KafkaConfig.fromProps(props2)
     }
     intercept[IllegalArgumentException] {
-      val cfg3 = KafkaConfig.fromProps(props3)
+      KafkaConfig.fromProps(props3)
     }
 
   }
@@ -303,7 +303,7 @@ class KafkaConfigTest {
       KafkaConfig.fromProps(props)
       true
     } catch {
-      case e: IllegalArgumentException => false
+      case _: IllegalArgumentException => false
     }
   }
 
@@ -561,8 +561,7 @@ class KafkaConfigTest {
         case KafkaConfig.SaslKerberosTicketRenewJitterProp =>
         case KafkaConfig.SaslKerberosMinTimeBeforeReloginProp =>
         case KafkaConfig.SaslKerberosPrincipalToLocalRulesProp => // ignore string
-
-        case nonNegativeIntProperty => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
+        case _ => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
       }
     })
   }

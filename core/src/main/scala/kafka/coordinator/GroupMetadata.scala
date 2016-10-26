@@ -17,13 +17,11 @@
 
 package kafka.coordinator
 
-import kafka.utils.nonthreadsafe
-import java.util.UUID
-
-import kafka.common.OffsetAndMetadata
-import org.apache.kafka.common.TopicPartition
-
 import collection.mutable
+import java.util.UUID
+import kafka.common.OffsetAndMetadata
+import kafka.utils.nonthreadsafe
+import org.apache.kafka.common.TopicPartition
 
 private[coordinator] sealed trait GroupState { def state: Byte }
 

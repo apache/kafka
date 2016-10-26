@@ -168,7 +168,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       AdminUtils.changeTopicConfig(zkUtils, topic, logProps)
       fail("Should fail with AdminOperationException for topic doesn't exist")
     } catch {
-      case e: AdminOperationException => // expected
+      case _: AdminOperationException => // expected
     }
   }
 
@@ -198,7 +198,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       fail("Should have thrown an Exception while parsing incorrect notification " + jsonMap)
     }
     catch {
-      case t: Throwable =>
+      case _: Throwable =>
     }
     // Version is provided. EntityType is incorrect
     try {
@@ -207,7 +207,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       fail("Should have thrown an Exception while parsing incorrect notification " + jsonMap)
     }
     catch {
-      case t: Throwable =>
+      case _: Throwable =>
     }
 
     // EntityName isn't provided
@@ -217,7 +217,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       fail("Should have thrown an Exception while parsing incorrect notification " + jsonMap)
     }
     catch {
-      case t: Throwable =>
+      case _: Throwable =>
     }
 
     // Everything is provided

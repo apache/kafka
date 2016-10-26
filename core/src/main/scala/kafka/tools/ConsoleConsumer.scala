@@ -119,11 +119,11 @@ object ConsoleConsumer extends Logging {
       val msg: BaseConsumerRecord = try {
         consumer.receive()
       } catch {
-        case nse: StreamEndException =>
+        case _: StreamEndException =>
           trace("Caught StreamEndException because consumer is shutdown, ignore and terminate.")
           // Consumer is already closed
           return
-        case nse: WakeupException =>
+        case _: WakeupException =>
           trace("Caught WakeupException because consumer is shutdown, ignore and terminate.")
           // Consumer will be closed
           return
@@ -358,7 +358,7 @@ object ConsoleConsumer extends Logging {
             val offset =
               try offsetString.toLong
               catch {
-                case e: NumberFormatException => invalidOffset(offsetString)
+                case _: NumberFormatException => invalidOffset(offsetString)
               }
             if (offset < 0) invalidOffset(offsetString)
             offset

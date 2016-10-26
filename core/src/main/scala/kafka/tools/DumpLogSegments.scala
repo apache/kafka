@@ -414,12 +414,10 @@ object DumpLogSegments {
         }
       }
 
-      shallowOffsetNotFound.foreach {
-        case (fileName, listOfShallowOffsetNotFound) => {
-          System.err.println("The following indexed offsets are not found in the log.")
-          listOfShallowOffsetNotFound.foreach(m => {
-            System.err.println("Indexed offset: %s, found log offset: %s".format(m._1, m._2))
-          })
+      shallowOffsetNotFound.values.foreach { listOfShallowOffsetNotFound =>
+        System.err.println("The following indexed offsets are not found in the log.")
+        listOfShallowOffsetNotFound.foreach { case (indexedOffset, logOffset) =>
+          System.err.println(s"Indexed offset: $indexedOffset, found log offset: $logOffset")
         }
       }
     }

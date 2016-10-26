@@ -110,7 +110,7 @@ object ByteBufferMessageSet {
           while (true)
             innerMessageAndOffsets.add(readMessageFromStream(compressed))
         } catch {
-          case eofe: EOFException =>
+          case _: EOFException =>
             // we don't do anything at all here, because the finally
             // will close the compressed input stream, and we simply
             // want to return the innerMessageAndOffsets

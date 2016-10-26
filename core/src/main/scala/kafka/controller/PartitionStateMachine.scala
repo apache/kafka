@@ -238,7 +238,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
    * zookeeper
    */
   private def initializePartitionState() {
-    for((topicPartition, replicaAssignment) <- controllerContext.partitionReplicaAssignment) {
+    for (topicPartition <- controllerContext.partitionReplicaAssignment.keys) {
       // check if leader and isr path exists for partition. If not, then it is in NEW state
       controllerContext.partitionLeadershipInfo.get(topicPartition) match {
         case Some(currentLeaderIsrAndEpoch) =>
@@ -297,7 +297,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
           brokerRequestBatch.addLeaderAndIsrRequestForBrokers(liveAssignedReplicas, topicAndPartition.topic,
             topicAndPartition.partition, leaderIsrAndControllerEpoch, replicaAssignment)
         } catch {
-          case e: ZkNodeExistsException =>
+          case _: ZkNodeExistsException =>
             // read the controller epoch
             val leaderIsrAndEpoch = ReplicationUtils.getLeaderIsrAndEpochForPartition(zkUtils, topicAndPartition.topic,
               topicAndPartition.partition).get
@@ -357,7 +357,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       brokerRequestBatch.addLeaderAndIsrRequestForBrokers(replicasForThisPartition, topic, partition,
         newLeaderIsrAndControllerEpoch, replicas)
     } catch {
-      case lenne: LeaderElectionNotNeededException => // swallow
+      case _: LeaderElectionNotNeededException => // swallow
       case nroe: NoReplicaOnlineException => throw nroe
       case sce: Throwable =>
         val failMsg = "encountered error while electing leader for partition %s due to: %s.".format(topicAndPartition, sce.getMessage)
@@ -430,8 +430,8 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
             controllerContext.partitionReplicaAssignment.++=(addedPartitionReplicaAssignment)
             info("New topics: [%s], deleted topics: [%s], new partition replica assignment [%s]".format(newTopics,
               deletedTopics, addedPartitionReplicaAssignment))
-            if(newTopics.nonEmpty)
-              controller.onNewTopicCreation(newTopics, addedPartitionReplicaAssignment.keySet.toSet)
+            if (newTopics.nonEmpty)
+              controller.onNewTopicCreation(newTopics, addedPartitionReplicaAssignment.keySet)
           } catch {
             case e: Throwable => error("Error while handling new topic", e )
           }
@@ -522,7 +522,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
             if (partitionsToBeAdded.nonEmpty) {
               info("New partitions to be added %s".format(partitionsToBeAdded))
               controllerContext.partitionReplicaAssignment.++=(partitionsToBeAdded)
-              controller.onNewPartitionCreation(partitionsToBeAdded.keySet.toSet)
+              controller.onNewPartitionCreation(partitionsToBeAdded.keySet)
             }
           }
         } catch {

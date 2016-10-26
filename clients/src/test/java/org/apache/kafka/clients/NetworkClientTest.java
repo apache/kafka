@@ -153,14 +153,13 @@ public class NetworkClientTest {
 
     @Test
     public void testLeastLoadedNode() {
-        Node leastNode = null;
         client.ready(node, time.milliseconds());
         awaitReady(client, node);
         client.poll(1, time.milliseconds());
         assertTrue("The client should be ready", client.isReady(node, time.milliseconds()));
         
         // leastloadednode should be our single node
-        leastNode = client.leastLoadedNode(time.milliseconds());
+        Node leastNode = client.leastLoadedNode(time.milliseconds());
         assertEquals("There should be one leastloadednode", leastNode.id(), node.id());
         
         // sleep for longer than reconnect backoff

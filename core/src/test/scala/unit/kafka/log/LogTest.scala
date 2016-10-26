@@ -163,7 +163,7 @@ class LogTest extends JUnitSuite {
     assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)
 
     // segments expire in size
-    for (i<- 1 to (msgPerSeg + 1)) {
+    for (_ <- 1 to (msgPerSeg + 1)) {
       log.append(set)
     }
     assertEquals("There should be exactly 2 segments.", 2, log.numberOfSegments)
@@ -326,14 +326,14 @@ class LogTest extends JUnitSuite {
       log.read(0, 1000)
       fail("Reading below the log start offset should throw OffsetOutOfRangeException")
     } catch {
-      case e: OffsetOutOfRangeException => // This is good.
+      case _: OffsetOutOfRangeException => // This is good.
     }
 
     try {
       log.read(1026, 1000)
       fail("Reading at beyond the log end offset should throw OffsetOutOfRangeException")
     } catch {
-      case e: OffsetOutOfRangeException => // This is good.
+      case _: OffsetOutOfRangeException => // This is good.
     }
 
     assertEquals("Reading from below the specified maxOffset should produce 0 byte read.", 0, log.read(1025, 1000, Some(1024)).messageSet.sizeInBytes)
@@ -448,7 +448,7 @@ class LogTest extends JUnitSuite {
       log.append(messageSet)
       fail("message set should throw RecordBatchTooLargeException.")
     } catch {
-      case e: RecordBatchTooLargeException => // this is good
+      case _: RecordBatchTooLargeException => // this is good
     }
   }
 
@@ -475,19 +475,19 @@ class LogTest extends JUnitSuite {
       log.append(messageSetWithUnkeyedMessage)
       fail("Compacted topics cannot accept a message without a key.")
     } catch {
-      case e: CorruptRecordException => // this is good
+      case _: CorruptRecordException => // this is good
     }
     try {
       log.append(messageSetWithOneUnkeyedMessage)
       fail("Compacted topics cannot accept a message without a key.")
     } catch {
-      case e: CorruptRecordException => // this is good
+      case _: CorruptRecordException => // this is good
     }
     try {
       log.append(messageSetWithCompressedUnkeyedMessage)
       fail("Compacted topics cannot accept a message without a key.")
     } catch {
-      case e: CorruptRecordException => // this is good
+      case _: CorruptRecordException => // this is good
     }
 
     // the following should succeed without any InvalidMessageException
@@ -518,7 +518,7 @@ class LogTest extends JUnitSuite {
       log.append(second)
       fail("Second message set should throw MessageSizeTooLargeException.")
     } catch {
-      case e: RecordTooLargeException => // this is good
+      case _: RecordTooLargeException => // this is good
     }
   }
   /**
@@ -725,7 +725,7 @@ class LogTest extends JUnitSuite {
     val log = new Log(logDir, LogConfig(logProps), recoveryPoint = 0L, scheduler = time.scheduler, time = time)
     assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)
 
-    for (i<- 1 to msgPerSeg)
+    for (_ <- 1 to msgPerSeg)
       log.append(set)
 
     assertEquals("There should be exactly 1 segments.", 1, log.numberOfSegments)
@@ -746,7 +746,7 @@ class LogTest extends JUnitSuite {
     assertEquals("Should change offset", 0, log.logEndOffset)
     assertEquals("Should change log size", 0, log.size)
 
-    for (i<- 1 to msgPerSeg)
+    for (_ <- 1 to msgPerSeg)
       log.append(set)
 
     assertEquals("Should be back to original offset", log.logEndOffset, lastOffset)
@@ -755,7 +755,7 @@ class LogTest extends JUnitSuite {
     assertEquals("Should change offset", log.logEndOffset, lastOffset - (msgPerSeg - 1))
     assertEquals("Should change log size", log.size, 0)
 
-    for (i<- 1 to msgPerSeg)
+    for (_ <- 1 to msgPerSeg)
       log.append(set)
 
     assertTrue("Should be ahead of to original offset", log.logEndOffset > msgPerSeg)
@@ -831,7 +831,7 @@ class LogTest extends JUnitSuite {
     assertFalse("The second time index file should have been deleted.", bogusTimeIndex2.exists)
 
     // check that we can append to the log
-    for(i <- 0 until 10)
+    for (_ <- 0 until 10)
       log.append(set)
 
     log.delete()
@@ -857,7 +857,7 @@ class LogTest extends JUnitSuite {
                       time)
 
     // add enough messages to roll over several segments then close and re-open and attempt to truncate
-    for(i <- 0 until 100)
+    for (_ <- 0 until 100)
       log.append(set)
     log.close()
     log = new Log(logDir,
@@ -892,7 +892,7 @@ class LogTest extends JUnitSuite {
                       time)
 
     // append some messages to create some segments
-    for(i <- 0 until 100)
+    for (_ <- 0 until 100)
       log.append(set)
 
     // files should be renamed
@@ -934,7 +934,7 @@ class LogTest extends JUnitSuite {
                       time)
 
     // append some messages to create some segments
-    for(i <- 0 until 100)
+    for (_ <- 0 until 100)
       log.append(set)
 
     // expire all segments
@@ -986,7 +986,7 @@ class LogTest extends JUnitSuite {
     val config = LogConfig(logProps)
     val set = TestUtils.singleMessageSet("test".getBytes)
     val recoveryPoint = 50L
-    for(iteration <- 0 until 50) {
+    for (_ <- 0 until 50) {
       // create a log and write some messages to it
       logDir.mkdirs()
       var log = new Log(logDir,
@@ -995,7 +995,7 @@ class LogTest extends JUnitSuite {
                         time.scheduler,
                         time)
       val numMessages = 50 + TestUtils.random.nextInt(50)
-      for(i <- 0 until numMessages)
+      for (_ <- 0 until numMessages)
         log.append(set)
       val messages = log.logSegments.flatMap(_.log.iterator.toList)
       log.close()
@@ -1033,7 +1033,7 @@ class LogTest extends JUnitSuite {
       recoveryPoint = 0L,
       time.scheduler,
       time)
-    for(i <- 0 until 100)
+    for (_ <- 0 until 100)
       log.append(set)
     log.close()
 
@@ -1062,7 +1062,7 @@ class LogTest extends JUnitSuite {
       Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     } catch {
-      case e: Exception => // its GOOD!
+      case _: Exception => // its GOOD!
     }
   }
 
@@ -1073,7 +1073,7 @@ class LogTest extends JUnitSuite {
       Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir)
     } catch {
-      case e: Exception => // its GOOD!
+      case _: Exception => // its GOOD!
     }
   }
 
@@ -1086,7 +1086,7 @@ class LogTest extends JUnitSuite {
       Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     } catch {
-      case e: Exception => // its GOOD!
+      case _: Exception => // its GOOD!
     }
   }
 
@@ -1099,7 +1099,7 @@ class LogTest extends JUnitSuite {
       Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     } catch {
-      case e: Exception => // its GOOD!
+      case _: Exception => // its GOOD!
     }
   }
 
@@ -1112,7 +1112,7 @@ class LogTest extends JUnitSuite {
       Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     } catch {
-      case e: Exception => // its GOOD!
+      case _: Exception => // its GOOD!
     }
   }
 
@@ -1134,7 +1134,7 @@ class LogTest extends JUnitSuite {
       time)
 
     // append some messages to create some segments
-    for (i <- 0 until 100)
+    for (_ <- 0 until 100)
       log.append(set)
 
     // expire all segments
@@ -1143,7 +1143,7 @@ class LogTest extends JUnitSuite {
     assertEquals("The deleted segments should be gone.", 1, log.numberOfSegments)
 
     // append some messages to create some segments
-    for (i <- 0 until 100)
+    for (_ <- 0 until 100)
       log.append(set)
 
     log.delete()
@@ -1158,7 +1158,7 @@ class LogTest extends JUnitSuite {
     val log = createLog(set.sizeInBytes, retentionBytes = set.sizeInBytes * 10)
 
     // append some messages to create some segments
-    for (i <- 0 until 15)
+    for (_ <- 0 until 15)
       log.append(set)
 
     log.deleteOldSegments
@@ -1171,7 +1171,7 @@ class LogTest extends JUnitSuite {
     val log = createLog(set.sizeInBytes, retentionBytes = set.sizeInBytes * 15)
 
     // append some messages to create some segments
-    for (i <- 0 until 15)
+    for (_ <- 0 until 15)
       log.append(set)
 
     log.deleteOldSegments
@@ -1184,7 +1184,7 @@ class LogTest extends JUnitSuite {
     val log = createLog(set.sizeInBytes, retentionMs = 10000)
 
     // append some messages to create some segments
-    for (i <- 0 until 15)
+    for (_ <- 0 until 15)
       log.append(set)
 
     log.deleteOldSegments()
@@ -1197,7 +1197,7 @@ class LogTest extends JUnitSuite {
     val log = createLog(set.sizeInBytes, retentionMs = 10000000)
 
     // append some messages to create some segments
-    for (i <- 0 until 15)
+    for (_ <- 0 until 15)
       log.append(set)
 
     log.deleteOldSegments()
@@ -1212,7 +1212,7 @@ class LogTest extends JUnitSuite {
       cleanupPolicy = "compact")
 
     // append some messages to create some segments
-    for (i <- 0 until 15)
+    for (_ <- 0 until 15)
       log.append(set)
 
     // mark oldest segment as older the retention.ms
@@ -1231,7 +1231,7 @@ class LogTest extends JUnitSuite {
       cleanupPolicy = "compact,delete")
 
     // append some messages to create some segments
-    for (i <- 0 until 15)
+    for (_ <- 0 until 15)
       log.append(set)
 
     log.deleteOldSegments()
