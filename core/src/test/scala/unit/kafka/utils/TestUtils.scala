@@ -207,7 +207,6 @@ object TestUtils extends Logging {
       props.put(KafkaConfig.InterBrokerSecurityProtocolProp, protocol.name)
     }
 
-    props.put("port", port.toString)
     props
   }
 
