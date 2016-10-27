@@ -51,6 +51,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import static org.apache.kafka.common.utils.Utils.getHost;
+import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.streams.processor.internals.InternalTopicManager.WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT;
 
 public class StreamPartitionAssignor implements PartitionAssignor, Configurable {
@@ -81,8 +83,13 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
             // get the host info if possible
             if (endPoint != null) {
-                final String[] hostPort = endPoint.split(":");
-                hostInfo = new HostInfo(hostPort[0], Integer.valueOf(hostPort[1]));
+                final String host = getHost(endPoint);
+                final Integer port = getPort(endPoint);
+
+                if (host == null || port == null)
+                    throw new ConfigException(String.format("Error parsing host address %s. This should not happen.", endPoint));
+
+                hostInfo = new HostInfo(host, port);
             } else {
                 hostInfo = null;
             }
@@ -179,20 +186,20 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
         String userEndPoint = (String) configs.get(StreamsConfig.APPLICATION_SERVER_CONFIG);
         if (userEndPoint != null && !userEndPoint.isEmpty()) {
-            final String[] hostPort = userEndPoint.split(":");
-            if (hostPort.length != 2) {
-                throw new ConfigException(String.format("stream-thread [%s] Config %s isn't in the correct format. Expected a host:port pair" +
-                                                       " but received %s",
-                        streamThread.getName(), StreamsConfig.APPLICATION_SERVER_CONFIG, userEndPoint));
-            } else {
-                try {
-                    Integer.valueOf(hostPort[1]);
-                    this.userEndPoint = userEndPoint;
-                } catch (NumberFormatException nfe) {
-                    throw new ConfigException(String.format("stream-thread [%s] Invalid port %s supplied in %s for config %s",
-                            streamThread.getName(), hostPort[1], userEndPoint, StreamsConfig.APPLICATION_SERVER_CONFIG));
-                }
+            try {
+                String host = getHost(userEndPoint);
+                Integer port = getPort(userEndPoint);
+
+                if (host == null || port == null)
+                    throw new ConfigException(String.format("stream-thread [%s] Config %s isn't in the correct format. Expected a host:port pair" +
+                                    " but received %s",
+                            streamThread.getName(), StreamsConfig.APPLICATION_SERVER_CONFIG, userEndPoint));
+            } catch (NumberFormatException nfe) {
+                throw new ConfigException(String.format("stream-thread [%s] Invalid port supplied in %s for config %s",
+                        streamThread.getName(), userEndPoint, StreamsConfig.APPLICATION_SERVER_CONFIG));
             }
+
+            this.userEndPoint = userEndPoint;
         }
 
         if (configs.containsKey(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG)) {
@@ -550,12 +557,10 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // the number of assigned partitions should be the same as number of active tasks, which
         // could be duplicated if one task has more than one assigned partitions
         if (partitions.size() != info.activeTasks.size()) {
-            TaskAssignmentException ex = new TaskAssignmentException(
+            throw new TaskAssignmentException(
                     String.format("stream-thread [%s] Number of assigned partitions %d is not equal to the number of active taskIds %d" +
                             ", assignmentInfo=%s", streamThread.getName(), partitions.size(), info.activeTasks.size(), info.toString())
             );
-            log.error(ex.getMessage(), ex);
-            throw ex;
         }
 
         for (int i = 0; i < partitions.size(); i++) {
@@ -665,12 +670,12 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
         }
 
-        // if all topics for this copartition group is repartition topics,
+        // if all topics for this co-partition group is repartition topics,
         // then set the number of partitions to be the maximum of the number of partitions.
         if (numPartitions == -1) {
-            for (String topic : allRepartitionTopicsNumPartitions.keySet()) {
-                if (copartitionGroup.contains(topic)) {
-                    int partitions = allRepartitionTopicsNumPartitions.get(topic).numPartitions;
+            for (Map.Entry<String, InternalTopicMetadata> entry: allRepartitionTopicsNumPartitions.entrySet()) {
+                if (copartitionGroup.contains(entry.getKey())) {
+                    int partitions = entry.getValue().numPartitions;
                     if (partitions > numPartitions) {
                         numPartitions = partitions;
                     }
@@ -679,9 +684,9 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
 
         // enforce co-partitioning restrictions to repartition topics by updating their number of partitions
-        for (String topic : allRepartitionTopicsNumPartitions.keySet()) {
-            if (copartitionGroup.contains(topic)) {
-                allRepartitionTopicsNumPartitions.get(topic).numPartitions = numPartitions;
+        for (Map.Entry<String, InternalTopicMetadata> entry : allRepartitionTopicsNumPartitions.entrySet()) {
+            if (copartitionGroup.contains(entry.getKey())) {
+                entry.getValue().numPartitions = numPartitions;
             }
         }
     }

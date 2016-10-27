@@ -70,7 +70,7 @@ public class TaskAssignor<C, T extends Comparable<T>> {
             prevAssignmentBalanced = prevAssignmentBalanced &&
                 oldTasks.size() < 2 * avgNumTasks && oldTasks.size() > avgNumTasks / 2;
 
-            // make sure there is no duplicates
+            // make sure there are no duplicates
             for (T task : oldTasks) {
                 prevClientsUnchanged = prevClientsUnchanged && !existingTasks.contains(task);
             }
