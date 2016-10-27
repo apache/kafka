@@ -17,7 +17,7 @@
 
 package kafka.message
 
-import kafka.utils.{CoreUtils, IteratorTemplate, Logging, Throttler}
+import kafka.utils.{CoreUtils, IteratorTemplate, Logging}
 import kafka.common.{KafkaException, LongRef}
 import java.nio.ByteBuffer
 import java.nio.channels._
@@ -30,6 +30,7 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 
 object ByteBufferMessageSet {
 
@@ -194,25 +195,28 @@ object ByteBufferMessageSet {
                                              codec: CompressionCodec,
                                              messageAndOffsets: Seq[MessageAndOffset]): Int = {
     require(codec != NoCompressionCodec, s"compressionCodec must not be $NoCompressionCodec")
-    require(messageAndOffsets.nonEmpty, "cannot write empty compressed message set")
 
-    val messages = messageAndOffsets.map(_.message)
-    val magicAndTimestamp = MessageSet.magicAndLargestTimestamp(messages)
+    if (messageAndOffsets.isEmpty)
+      0
+    else {
+      val messages = messageAndOffsets.map(_.message)
+      val magicAndTimestamp = MessageSet.magicAndLargestTimestamp(messages)
 
-    // ensure that we use the magic from the first message in the set when writing the wrapper
-    // message in order to fix message sets corrupted by KAFKA-4298
-    val magic = magicAndTimestamp.magic
+      // ensure that we use the magic from the first message in the set when writing the wrapper
+      // message in order to fix message sets corrupted by KAFKA-4298
+      val magic = magicAndTimestamp.magic
 
-    val firstMessageAndOffset = messageAndOffsets.head
-    val firstAbsoluteOffset = firstMessageAndOffset.offset
-    val offsetAssigner = OffsetAssigner(firstAbsoluteOffset, magic, messageAndOffsets)
-    val timestampType = firstMessageAndOffset.message.timestampType
+      val firstMessageAndOffset = messageAndOffsets.head
+      val firstAbsoluteOffset = firstMessageAndOffset.offset
+      val offsetAssigner = OffsetAssigner(firstAbsoluteOffset, magic, messageAndOffsets)
+      val timestampType = firstMessageAndOffset.message.timestampType
 
-    val (messageWriter, offset) = writeCompressedMessages(codec, offsetAssigner, magicAndTimestamp,
-      timestampType, messages)
+      val (messageWriter, lastOffset) = writeCompressedMessages(codec, offsetAssigner, magicAndTimestamp,
+        timestampType, messages)
 
-    writeMessage(buffer, messageWriter, offset)
-    messageWriter.size + MessageSet.LogOverhead
+      writeMessage(buffer, messageWriter, lastOffset)
+      messageWriter.size + MessageSet.LogOverhead
+    }
   }
 
   private[kafka] def writeMessage(buffer: ByteBuffer, message: Message, offset: Long) {
@@ -243,13 +247,7 @@ private object OffsetAssigner {
     new OffsetAssigner(offsetCounter.value to offsetCounter.addAndGet(size))
 
   def apply(baseOffset: Long, magic: Byte, messageAndOffsets: Seq[MessageAndOffset]): OffsetAssigner =
-    new OffsetAssigner(messageAndOffsets.map { messageAndOffset =>
-      if (magic > Message.MagicValue_V0)
-        // The offset of the messages are absolute offset, compute the inner offset.
-        messageAndOffset.offset - baseOffset
-      else
-        messageAndOffset.offset
-    })
+    new OffsetAssigner(messageAndOffsets.map(_.offset))
 
 }
 
@@ -492,7 +490,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
         // of the inner messages. This will be fixed as we recopy the messages to the destination segment.
 
         var writeOriginalMessageSet = true
-        val retainedMessages = new scala.collection.mutable.ArrayBuffer[MessageAndOffset]
+        val retainedMessages = ArrayBuffer[MessageAndOffset]()
         val shallowMagic = shallowMessage.magic
 
         for (deepMessageAndOffset <- ByteBufferMessageSet.deepIterator(shallowMessageAndOffset)) {
