@@ -303,6 +303,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     props.put(LogConfig.FileDeleteDelayMsProp, deleteDelay: java.lang.Integer)
     props.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
     props.put(LogConfig.MinCleanableDirtyRatioProp, minCleanableDirtyRatio: java.lang.Float)
+    props.put(LogConfig.MessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
     props.putAll(propertyOverrides)
     props
   }

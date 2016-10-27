@@ -30,7 +30,9 @@ import org.apache.kafka.common.config.ConfigDef.Validator
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
+
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 
 /**
   * The ConfigHandler is used to process config change notifications received by the DynamicConfigManager
@@ -47,14 +49,7 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
 
   def processConfigChanges(topic: String, topicConfig: Properties) {
     // Validate the compatibility of message format version.
-    val configNameToExclude = Option(topicConfig.getProperty(LogConfig.MessageFormatVersionProp)).flatMap { versionString =>
-      if (kafkaConfig.interBrokerProtocolVersion < ApiVersion(versionString)) {
-        warn(s"Log configuration ${LogConfig.MessageFormatVersionProp} is ignored for `$topic` because `$versionString` " +
-          s"is not compatible with Kafka inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}`")
-        Some(LogConfig.MessageFormatVersionProp)
-      } else
-        None
-    }
+    val configNamesToExclude = getExcludedConfigs(topic, topicConfig)
 
     val logs = logManager.logsByTopicPartition.filterKeys(_.topic == topic).values.toBuffer
     if (logs.nonEmpty) {
@@ -62,9 +57,13 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
       val props = new Properties()
       props.putAll(logManager.defaultConfig.originals)
       topicConfig.asScala.foreach { case (key, value) =>
-        if (key != configNameToExclude) props.put(key, value)
+        if (!configNamesToExclude.contains(key)) props.put(key, value)
       }
       val logConfig = LogConfig(props)
+      if (logConfig.retentionMs < logConfig.messageTimestampDifferenceMaxMs)
+        warn(s"${LogConfig.RetentionMsProp} for topic $topic is set to ${logConfig.retentionMs}. It is smaller than " + 
+          s"${LogConfig.MessageTimestampDifferenceMaxMsProp} value of ${logConfig.messageTimestampDifferenceMaxMs}. " +
+          s"This may result in potential frequent log rolling.")
       logs.foreach(_.config = logConfig)
     }
 
@@ -94,6 +93,39 @@ class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaC
         .filter(_ (1).toInt == brokerId) //Filter this replica
         .map(_ (0).toInt).toSeq //convert to list of partition ids
     }
+  }
+  
+  def getExcludedConfigs(topic: String, topicConfig: Properties): Set[String] = {
+    val excludeConfigs: mutable.Set[String] = new mutable.HashSet[String]
+    // Verify message format version
+    Option(topicConfig.getProperty(LogConfig.MessageFormatVersionProp)).foreach { versionString =>
+      if (kafkaConfig.interBrokerProtocolVersion < ApiVersion(versionString)) {
+        warn(s"Log configuration ${LogConfig.MessageFormatVersionProp} is ignored for `$topic` because `$versionString` " +
+          s"is not compatible with Kafka inter-broker protocol version `${kafkaConfig.interBrokerProtocolVersionString}`")
+        excludeConfigs += LogConfig.MessageFormatVersionProp
+      }
+    }
+    
+    // Verify log retention and max timestamp difference
+    val logRetentionMsConfig: Option[Long] = 
+      Option(topicConfig.getProperty(LogConfig.RetentionMsProp)) match {
+        case Some(retentionMs) => Some(retentionMs.toLong)
+        case None => logManager.topicConfigs.get(topic).map(config => config.retentionMs)
+      }
+
+    val maxDiffMsConfig: Option[Long] = 
+      Option(topicConfig.getProperty(LogConfig.MessageTimestampDifferenceMaxMsProp)) match {
+        case Some(maxDiffMs) => Some(maxDiffMs.toLong)
+        case None => logManager.topicConfigs.get(topic).map(config => config.messageTimestampDifferenceMaxMs)
+      }
+    maxDiffMsConfig.foreach { maxDiffMs =>
+        if (logRetentionMsConfig.exists(logRetentionMs => logRetentionMs < maxDiffMs)) {
+          excludeConfigs += LogConfig.MessageTimestampDifferenceMaxMsProp
+          excludeConfigs += LogConfig.RetentionMsProp
+        }
+    }
+    
+    excludeConfigs.toSet
   }
 }
 
