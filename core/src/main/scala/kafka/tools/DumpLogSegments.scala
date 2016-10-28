@@ -187,23 +187,29 @@ object DumpLogSegments {
       var maxTimestamp = Message.NoTimestamp
       // We first find the message by offset then check if the timestamp is correct.
       val wrapperMessageOpt = shallowIter.find(_.offset >= entry.offset + timeIndex.baseOffset)
-      if (!wrapperMessageOpt.isDefined || wrapperMessageOpt.get.offset != entry.offset + timeIndex.baseOffset) {
-        timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset + timeIndex.baseOffset,
-          {wrapperMessageOpt.fold(-1.toLong)(_.offset)})
-      } else {
-        val deepIter = getIterator(wrapperMessageOpt.get, isDeepIteration = true)
-        for (messageAndOffset <- deepIter)
-          maxTimestamp = math.max(maxTimestamp, messageAndOffset.message.timestamp)
+      wrapperMessageOpt match {
+        case None =>
+          timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset + timeIndex.baseOffset,
+            {-1.toLong})
+        case Some(wrapperMessage) => wrapperMessage.offset != entry.offset + timeIndex.baseOffset match{
+          case true =>
+            timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset + timeIndex.baseOffset,
+            {wrapperMessage.offset})
+          case false =>
+            val deepIter = getIterator(wrapperMessage, isDeepIteration = true)
+            for (messageAndOffset <- deepIter)
+              maxTimestamp = math.max(maxTimestamp, messageAndOffset.message.timestamp)
 
-        if (maxTimestamp != entry.timestamp)
-          timeIndexDumpErrors.recordMismatchTimeIndex(file, entry.timestamp, maxTimestamp)
+            if (maxTimestamp != entry.timestamp)
+              timeIndexDumpErrors.recordMismatchTimeIndex(file, entry.timestamp, maxTimestamp)
 
-        if (prevTimestamp >= entry.timestamp)
-          timeIndexDumpErrors.recordOutOfOrderIndexTimestamp(file, entry.timestamp, prevTimestamp)
+            if (prevTimestamp >= entry.timestamp)
+              timeIndexDumpErrors.recordOutOfOrderIndexTimestamp(file, entry.timestamp, prevTimestamp)
 
-        // since it is a sparse file, in the event of a crash there may be many zero entries, stop if we see one
-        if (entry.offset == 0 && i > 0)
-          return
+            // since it is a sparse file, in the event of a crash there may be many zero entries, stop if we see one
+            if (entry.offset == 0 && i > 0)
+              return
+        }
       }
       if (!verifyOnly)
         println("timestamp: %s offset: %s".format(entry.timestamp, timeIndex.baseOffset + entry.offset))
