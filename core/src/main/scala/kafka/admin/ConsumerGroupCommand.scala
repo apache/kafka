@@ -73,20 +73,23 @@ object ConsumerGroupCommand extends Logging {
           case None =>
             printError(s"The consumer group '$groupId' does not exist.")
           case Some(assignments) =>
-            if (assignments.isEmpty)
-              state match {
-                case Some("Dead") =>
-                  printError(s"Consumer group '$groupId' does not exist.")
-                case Some("Empty") =>
-                  printError(s"Consumer group '$groupId' has no active members.")
-                case Some(_) =>
-                  printError(s"Consumer group '$groupId' is rebalancing.")
-                case None =>
-                  // the control should never reach here
-                  throw new KafkaException("Expected a valid consumer group state, but none found.")
-              }
-            else
-              printAssignment(assignments, !opts.useOldConsumer)
+            state match {
+              case Some("Dead") =>
+                printError(s"Consumer group '$groupId' does not exist.")
+              case Some("Empty") =>
+                printError(s"Consumer group '$groupId' has no active members.")
+              case Some("PreparingRebalance") | Some("AwaitingSync") =>
+                System.err.println(s"Warning: Consumer group '$groupId' is rebalancing.")
+                printAssignment(assignments, !opts.useOldConsumer)
+              case Some("Stable") =>
+                printAssignment(assignments, !opts.useOldConsumer)
+              case Some(other) =>
+                // the control should never reach here
+                throw new KafkaException(s"Expected a valid consumer group state, but found '$other'.")
+              case None =>
+                // the control should never reach here
+                throw new KafkaException("Expected a valid consumer group state, but none found.")
+            }
         }
       }
       else if (opts.options.has(opts.deleteOpt)) {

@@ -149,9 +149,15 @@ class AdminClient(val time: Time,
 
     Errors.forCode(metadata.errorCode()).maybeThrow()
     val consumers = metadata.members.map { consumer =>
-      val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(Utils.readBytes(consumer.memberAssignment)))
-      ConsumerSummary(consumer.memberId, consumer.clientId, consumer.clientHost, assignment.partitions.toList)
+      ConsumerSummary(consumer.memberId, consumer.clientId, consumer.clientHost, metadata.state match {
+        case "Stable" =>
+          val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(Utils.readBytes(consumer.memberAssignment)))
+          assignment.partitions.toList
+        case _ =>
+          List()
+      })
     }.toList
+
     ConsumerGroupSummary(metadata.state, metadata.protocol, Some(consumers), coordinator)
   }
 

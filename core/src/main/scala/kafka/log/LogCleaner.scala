@@ -448,131 +448,40 @@ private[log] class Cleaner(val id: Int,
                              retainDeletes: Boolean,
                              maxLogMessageSize: Int,
                              stats: CleanerStats) {
+    def shouldRetain(messageAndOffset: MessageAndOffset): Boolean =
+      shouldRetainMessage(source, map, retainDeletes, messageAndOffset, stats)
+
     var position = 0
     while (position < source.log.sizeInBytes) {
       checkDone(topicAndPartition)
       // read a chunk of messages and copy any that are to be retained to the write buffer to be written out
       readBuffer.clear()
       writeBuffer.clear()
-      var maxTimestamp = Message.NoTimestamp
-      var offsetOfMaxTimestamp = -1L
-      val messages = new ByteBufferMessageSet(source.log.readInto(readBuffer, position))
+
+      source.log.readInto(readBuffer, position)
+      val messages = new ByteBufferMessageSet(readBuffer)
       throttler.maybeThrottle(messages.sizeInBytes)
-      // check each message to see if it is to be retained
-      var messagesRead = 0
-      for (shallowMessageAndOffset <- messages.shallowIterator) {
-        val shallowMessage = shallowMessageAndOffset.message
-        val shallowOffset = shallowMessageAndOffset.offset
-        val size = MessageSet.entrySize(shallowMessageAndOffset.message)
+      val result = messages.filterInto(writeBuffer, shouldRetain)
 
-        stats.readMessage(size)
-        if (shallowMessage.compressionCodec == NoCompressionCodec) {
-          if (shouldRetainMessage(source, map, retainDeletes, shallowMessageAndOffset, stats)) {
-            ByteBufferMessageSet.writeMessage(writeBuffer, shallowMessage, shallowOffset)
-            stats.recopyMessage(size)
-            if (shallowMessage.timestamp > maxTimestamp) {
-              maxTimestamp = shallowMessage.timestamp
-              offsetOfMaxTimestamp = shallowOffset
-            }
-          }
-          messagesRead += 1
-        } else {
-          // We use the absolute offset to decide whether to retain the message or not (this is handled by the
-          // deep iterator). Because of KAFKA-4298, we have to allow for the possibility that a previous version
-          // corrupted the log by writing a compressed message set with a wrapper magic value not matching the magic
-          // of the inner messages. This will be fixed as we recopy the messages to the destination segment.
+      stats.readMessages(result.messagesRead, result.bytesRead)
+      stats.recopyMessages(result.messagesRetained, result.bytesRetained)
 
-          var writeOriginalMessageSet = true
-          val retainedMessages = new mutable.ArrayBuffer[MessageAndOffset]
-          val shallowMagic = shallowMessage.magic
+      position += result.bytesRead
 
-          for (deepMessageAndOffset <- ByteBufferMessageSet.deepIterator(shallowMessageAndOffset)) {
-            messagesRead += 1
-            if (shouldRetainMessage(source, map, retainDeletes, deepMessageAndOffset, stats)) {
-              // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
-              // the corrupted entry with correct data.
-              if (shallowMagic != deepMessageAndOffset.message.magic)
-                writeOriginalMessageSet = false
-
-              retainedMessages += deepMessageAndOffset
-              // We need the max timestamp and last offset for time index
-              if (deepMessageAndOffset.message.timestamp > maxTimestamp)
-                maxTimestamp = deepMessageAndOffset.message.timestamp
-            } else {
-              writeOriginalMessageSet = false
-            }
-          }
-          offsetOfMaxTimestamp = if (retainedMessages.nonEmpty) retainedMessages.last.offset else -1L
-          // There are no messages compacted out and no message format conversion, write the original message set back
-          if (writeOriginalMessageSet)
-            ByteBufferMessageSet.writeMessage(writeBuffer, shallowMessage, shallowOffset)
-          else if (retainedMessages.nonEmpty) {
-            val retainedSize = compressMessages(writeBuffer, shallowMessage.compressionCodec, retainedMessages)
-            stats.recopyMessage(retainedSize)
-          }
-        }
-      }
-
-      position += messages.validBytes
       // if any messages are to be retained, write them out
       if (writeBuffer.position > 0) {
         writeBuffer.flip()
         val retained = new ByteBufferMessageSet(writeBuffer)
-        dest.append(firstOffset = retained.head.offset, largestTimestamp = maxTimestamp,
-          offsetOfLargestTimestamp = offsetOfMaxTimestamp, messages = retained)
+        dest.append(firstOffset = retained.head.offset, largestTimestamp = result.maxTimestamp,
+          offsetOfLargestTimestamp = result.offsetOfMaxTimestamp, messages = retained)
         throttler.maybeThrottle(writeBuffer.limit)
       }
       
       // if we read bytes but didn't get even one complete message, our I/O buffer is too small, grow it and try again
-      if (readBuffer.limit > 0 && messagesRead == 0)
+      if (readBuffer.limit > 0 && result.messagesRead == 0)
         growBuffers(maxLogMessageSize)
     }
     restoreBuffers()
-  }
-
-  private def compressMessages(buffer: ByteBuffer,
-                               compressionCodec: CompressionCodec,
-                               messageAndOffsets: Seq[MessageAndOffset]): Int = {
-    require(compressionCodec != NoCompressionCodec, s"compressionCodec must not be $NoCompressionCodec")
-
-    if (messageAndOffsets.isEmpty) {
-      0
-    } else {
-      val messages = messageAndOffsets.map(_.message)
-      val magicAndTimestamp = MessageSet.magicAndLargestTimestamp(messages)
-
-      // ensure that we use the magic from the first message in the set when writing the wrapper
-      // message in order to fix message sets corrupted by KAFKA-4298
-      val magic = magicAndTimestamp.magic
-
-      val firstMessageOffset = messageAndOffsets.head
-      val firstAbsoluteOffset = firstMessageOffset.offset
-      var offset = -1L
-      val timestampType = firstMessageOffset.message.timestampType
-      val messageWriter = new MessageWriter(math.min(math.max(MessageSet.messageSetSize(messages) / 2, 1024), 1 << 16))
-      messageWriter.write(codec = compressionCodec, timestamp = magicAndTimestamp.timestamp, timestampType = timestampType, magicValue = magic) { outputStream =>
-        val output = new DataOutputStream(CompressionFactory(compressionCodec, magic, outputStream))
-        try {
-          for (messageAndOffset <- messageAndOffsets) {
-            offset = messageAndOffset.offset
-            val innerOffset = if (magic > Message.MagicValue_V0)
-              // The offset of the messages are absolute offset, compute the inner offset.
-              messageAndOffset.offset - firstAbsoluteOffset
-            else
-              offset
-
-            val message = messageAndOffset.message
-            output.writeLong(innerOffset)
-            output.writeInt(message.size)
-            output.write(message.buffer.array, message.buffer.arrayOffset, message.buffer.limit)
-          }
-        } finally {
-          output.close()
-        }
-      }
-      ByteBufferMessageSet.writeMessage(buffer, messageWriter, offset)
-      messageWriter.size + MessageSet.LogOverhead
-    }
   }
 
   private def shouldRetainMessage(source: kafka.log.LogSegment,
@@ -709,8 +618,10 @@ private[log] class Cleaner(val id: Int,
     while (position < segment.log.sizeInBytes) {
       checkDone(topicAndPartition)
       readBuffer.clear()
-      val messages = new ByteBufferMessageSet(segment.log.readInto(readBuffer, position))
+      segment.log.readInto(readBuffer, position)
+      val messages = new ByteBufferMessageSet(readBuffer)
       throttler.maybeThrottle(messages.sizeInBytes)
+
       val startPosition = position
       for (entry <- messages) {
         val message = entry.message
@@ -730,7 +641,7 @@ private[log] class Cleaner(val id: Int,
         growBuffers(maxLogMessageSize)
     }
     restoreBuffers()
-    return false
+    false
   }
 }
 
@@ -750,18 +661,18 @@ private class CleanerStats(time: Time = SystemTime) {
   var messagesWritten = 0L
   var bufferUtilization = 0.0d
 
-  def readMessage(size: Int) {
-    messagesRead += 1
-    bytesRead += size
+  def readMessages(messagesRead: Int, bytesRead: Int) {
+    this.messagesRead += messagesRead
+    this.bytesRead += bytesRead
   }
 
   def invalidMessage() {
     invalidMessagesRead += 1
   }
   
-  def recopyMessage(size: Int) {
-    messagesWritten += 1
-    bytesWritten += size
+  def recopyMessages(messagesWritten: Int, bytesWritten: Int) {
+    this.messagesWritten += messagesWritten
+    this.bytesWritten += bytesWritten
   }
 
   def indexMessagesRead(size: Int) {
