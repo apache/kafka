@@ -190,11 +190,11 @@ object DumpLogSegments {
       wrapperMessageOpt match {
         case None =>
           timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset + timeIndex.baseOffset,
-            {-1.toLong})
+            -1.toLong)
         case Some(wrapperMessage) => wrapperMessage.offset != entry.offset + timeIndex.baseOffset match{
           case true =>
             timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset + timeIndex.baseOffset,
-            {wrapperMessage.offset})
+            wrapperMessage.offset)
           case false =>
             val deepIter = getIterator(wrapperMessage, isDeepIteration = true)
             for (messageAndOffset <- deepIter)
