@@ -22,33 +22,26 @@ import java.nio.ByteBuffer;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 public class SimpleRecordTest {
 
     /* This scenario can happen if the record size field is corrupt and we end up allocating a buffer that is too small */
-    @Test
+    @Test(expected = InvalidRecordException.class)
     public void testIsValidWithTooSmallBuffer() {
         ByteBuffer buffer = ByteBuffer.allocate(2);
         Record record = new Record(buffer);
         assertFalse(record.isValid());
-        try {
-            record.ensureValid();
-            fail("InvalidRecordException should have been thrown");
-        } catch (InvalidRecordException e) { }
+        record.ensureValid();
     }
 
-    @Test
+    @Test(expected = InvalidRecordException.class)
     public void testIsValidWithChecksumMismatch() {
         ByteBuffer buffer = ByteBuffer.allocate(4);
         // set checksum
         buffer.putInt(2);
         Record record = new Record(buffer);
         assertFalse(record.isValid());
-        try {
-            record.ensureValid();
-            fail("InvalidRecordException should have been thrown");
-        } catch (InvalidRecordException e) { }
+        record.ensureValid();
     }
 
     @Test

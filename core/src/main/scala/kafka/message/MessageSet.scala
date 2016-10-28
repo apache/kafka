@@ -18,7 +18,6 @@
 package kafka.message
 
 import java.nio._
-import java.nio.channels._
 
 import org.apache.kafka.common.record.Records
 
@@ -99,7 +98,7 @@ abstract class MessageSet extends Iterable[MessageAndOffset] {
   override def toString: String = {
     val builder = new StringBuilder()
     builder.append(getClass.getSimpleName + "(")
-    val iter = this.iterator
+    val iter = this.asRecords.shallowIterator()
     var i = 0
     while(iter.hasNext && i < 100) {
       val message = iter.next

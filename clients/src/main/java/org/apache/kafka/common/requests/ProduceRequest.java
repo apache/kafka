@@ -48,9 +48,9 @@ public class ProduceRequest extends AbstractRequest {
     private final int timeout;
     private final Map<TopicPartition, MemoryRecords> partitionRecords;
 
-    public ProduceRequest(short acks, int timeout, Map<TopicPartition, MemoryRecords> partitionRecords) {
+    public ProduceRequest(short acks, int timeout, Map<TopicPartition, MemoryRecords> recordsPerPartition) {
         super(new Struct(CURRENT_SCHEMA));
-        Map<String, Map<Integer, MemoryRecords>> recordsByTopic = CollectionUtils.groupDataByTopic(partitionRecords);
+        Map<String, Map<Integer, MemoryRecords>> recordsByTopic = CollectionUtils.groupDataByTopic(recordsPerPartition);
         struct.set(ACKS_KEY_NAME, acks);
         struct.set(TIMEOUT_KEY_NAME, timeout);
         List<Struct> topicDatas = new ArrayList<>(recordsByTopic.size());
@@ -71,7 +71,7 @@ public class ProduceRequest extends AbstractRequest {
         struct.set(TOPIC_DATA_KEY_NAME, topicDatas.toArray());
         this.acks = acks;
         this.timeout = timeout;
-        this.partitionRecords = partitionRecords;
+        this.partitionRecords = recordsPerPartition;
     }
 
     public ProduceRequest(Struct struct) {

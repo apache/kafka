@@ -26,12 +26,12 @@ import kafka.api.{FetchRequestBuilder, OffsetRequest, PartitionOffsetRequestInfo
 import kafka.common.TopicAndPartition
 import kafka.consumer.SimpleConsumer
 import kafka.log.{Log, LogSegment}
-import kafka.message.{ByteBufferMessageSet, Message, NoCompressionCodec}
 import kafka.utils.TestUtils._
 import kafka.utils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.record.{MemoryRecords, Record}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.easymock.{EasyMock, IAnswer}
 import org.junit.Assert._
@@ -89,9 +89,9 @@ class LogOffsetTest extends ZooKeeperTestHarness {
                   "Log for partition [topic,0] should be created")
     val log = logManager.getLog(TopicAndPartition(topic, part)).get
 
-    val message = new Message(Integer.toString(42).getBytes())
+    val record = Record.create(Integer.toString(42).getBytes())
     for (_ <- 0 until 20)
-      log.append(new ByteBufferMessageSet(NoCompressionCodec, message))
+      log.append(MemoryRecords.withRecords(record))
     log.flush()
 
     val offsets = server.apis.fetchOffsets(logManager, new TopicPartition(topic, part), OffsetRequest.LatestTime, 15)
@@ -150,9 +150,9 @@ class LogOffsetTest extends ZooKeeperTestHarness {
 
     val logManager = server.getLogManager
     val log = logManager.createLog(TopicAndPartition(topic, part), logManager.defaultConfig)
-    val message = new Message(Integer.toString(42).getBytes())
+    val record = Record.create(Integer.toString(42).getBytes())
     for (_ <- 0 until 20)
-      log.append(new ByteBufferMessageSet(NoCompressionCodec, message))
+      log.append(MemoryRecords.withRecords(record))
     log.flush()
 
     val now = time.milliseconds + 30000 // pretend it is the future to avoid race conditions with the fs
@@ -179,9 +179,9 @@ class LogOffsetTest extends ZooKeeperTestHarness {
 
     val logManager = server.getLogManager
     val log = logManager.createLog(TopicAndPartition(topic, part), logManager.defaultConfig)
-    val message = new Message(Integer.toString(42).getBytes())
+    val record = Record.create(Integer.toString(42).getBytes())
     for (_ <- 0 until 20)
-      log.append(new ByteBufferMessageSet(NoCompressionCodec, message))
+      log.append(MemoryRecords.withRecords(record))
     log.flush()
 
     val offsets = server.apis.fetchOffsets(logManager, new TopicPartition(topic, part), OffsetRequest.EarliestTime, 10)

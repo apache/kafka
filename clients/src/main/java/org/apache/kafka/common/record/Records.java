@@ -18,32 +18,61 @@ package org.apache.kafka.common.record;
 
 import java.io.IOException;
 import java.nio.channels.GatheringByteChannel;
+import java.util.Iterator;
 
 /**
- * A binary format which consists of a 4 byte size, an 8 byte offset, and the record bytes. See {@link MemoryRecords}
- * for the in-memory representation.
+ * A log buffer is a sequence of log entries. Each log entry consists of a 4 byte size, an 8 byte offset,
+ * and the record bytes. See {@link MemoryRecords} for the in-memory representation.
  */
-public interface Records extends Iterable<LogEntry> {
+public interface Records {
 
-    int SIZE_LENGTH = 4;
+    int OFFSET_OFFSET = 0;
     int OFFSET_LENGTH = 8;
-    int LOG_OVERHEAD = SIZE_LENGTH + OFFSET_LENGTH;
+    int SIZE_OFFSET = OFFSET_OFFSET + OFFSET_LENGTH;
+    int SIZE_LENGTH = 4;
+    int LOG_OVERHEAD = SIZE_OFFSET + SIZE_LENGTH;
 
     /**
-     * The size of these records in bytes
-     * @return The size in bytes
+     * The size of these records in bytes.
+     * @return The size in bytes of the entries
      */
     int sizeInBytes();
 
     /**
-     * Write the messages in this set to the given channel starting at the given offset byte.
+     * Write the contents of this buffer to a channel.
      * @param channel The channel to write to
-     * @param position The position within this record set to begin writing from
+     * @param position The position in the buffer to write from
      * @param length The number of bytes to write
-     * @return The number of bytes written to the channel (which may be fewer than requested)
-     * @throws IOException For any IO errors copying the
+     * @return The number of bytes written
+     * @throws IOException For any IO errors
      */
     long writeTo(GatheringByteChannel channel, long position, int length) throws IOException;
 
+    /**
+     * Get the shallow log entries in this log buffer.
+     * @return An iterator over the shallow entries of the log
+     */
+    Iterator<? extends LogEntry> shallowIterator();
+
+    /**
+     * Get the deep log entries (i.e. descend into compressed message sets)
+     * @return An iterator over the deep entries of the log
+     */
+    Iterator<LogEntry> deepIterator();
+
+    /**
+     * Check whether all entries in this buffer have a certain magic value.
+     * @param magic The magic value to check
+     * @return true if all shallow entries have a matching magic value, false otherwise
+     */
+    boolean hasMatchingShallowMagic(byte magic);
+
+
+    /**
+     * Convert all entries in this buffer to a certain magic value.
+     * @param toMagic The magic value to convert to
+     * @return A Records (which may or may not be the same instance)
+     */
+    Records toMessageFormat(byte toMagic);
 
 }
