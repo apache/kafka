@@ -87,7 +87,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 final Integer port = getPort(endPoint);
 
                 if (host == null || port == null)
-                    throw new ConfigException(String.format("Error parsing host address %s. This should not happen.", endPoint));
+                    throw new ConfigException(String.format("Error parsing host address %s. Expected format host:port.", endPoint));
 
                 hostInfo = new HostInfo(host, port);
             } else {
