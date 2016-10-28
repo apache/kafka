@@ -296,8 +296,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         Map<Integer, TopologyBuilder.TopicsInfo> topicGroups = streamThread.builder.topicGroups();
 
         Map<String, InternalTopicMetadata> repartitionTopicMetadata = new HashMap<>();
-        for (Map.Entry<Integer, TopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
-            for (InternalTopicConfig topic: entry.getValue().repartitionSourceTopics.values()) {
+        for (TopologyBuilder.TopicsInfo topicsInfo : topicGroups.values()) {
+            for (InternalTopicConfig topic: topicsInfo.repartitionSourceTopics.values()) {
                 repartitionTopicMetadata.put(topic.name(), new InternalTopicMetadata(topic));
             }
         }
@@ -306,19 +306,19 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         do {
             numPartitionsNeeded = false;
 
-            for (Map.Entry<Integer, TopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
-                for (String topicName : entry.getValue().repartitionSourceTopics.keySet()) {
+            for (TopologyBuilder.TopicsInfo topicsInfo : topicGroups.values()) {
+                for (String topicName : topicsInfo.repartitionSourceTopics.keySet()) {
                     int numPartitions = repartitionTopicMetadata.get(topicName).numPartitions;
 
                     // try set the number of partitions for this repartition topic if it is not set yet
                     if (numPartitions == -1) {
-                        for (Map.Entry<Integer, TopologyBuilder.TopicsInfo> other : topicGroups.entrySet()) {
-                            Set<String> otherSinkTopics = other.getValue().sinkTopics;
+                        for (TopologyBuilder.TopicsInfo otherTopicsInfo : topicGroups.values()) {
+                            Set<String> otherSinkTopics = otherTopicsInfo.sinkTopics;
 
                             if (otherSinkTopics.contains(topicName)) {
                                 // if this topic is one of the sink topics of this topology,
                                 // use the maximum of all its source topic partitions as the number of partitions
-                                for (String sourceTopicName : other.getValue().sourceTopics) {
+                                for (String sourceTopicName : otherTopicsInfo.sourceTopics) {
                                     Integer numPartitionsCandidate;
                                     // It is possible the sourceTopic is another internal topic, i.e,
                                     // map().join().join(map())
@@ -346,7 +346,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
         } while (numPartitionsNeeded);
 
-        // augment the metadata with the newly computer number of partitions for all the
+        // augment the metadata with the newly computed number of partitions for all the
         // repartition source topics
         Map<TopicPartition, PartitionInfo> allRepartitionTopicPartitions = new HashMap<>();
         for (Map.Entry<String, InternalTopicMetadata> entry : repartitionTopicMetadata.entrySet()) {
@@ -388,16 +388,16 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 sourceTopicsByGroup, metadataWithInternalTopics);
 
         // check if all partitions are assigned, and there are no duplicates of partitions in multiple tasks
-        Set<TopicPartition> allAssingedPartitions = new HashSet<>();
+        Set<TopicPartition> allAssignedPartitions = new HashSet<>();
         Map<Integer, Set<TaskId>> tasksByTopicGroup = new HashMap<>();
         for (Map.Entry<TaskId, Set<TopicPartition>> entry : partitionsForTask.entrySet()) {
             Set<TopicPartition> partitions = entry.getValue();
             for (TopicPartition partition : partitions) {
-                if (allAssingedPartitions.contains(partition)) {
+                if (allAssignedPartitions.contains(partition)) {
                     log.warn("stream-thread [{}] Partition {} is assigned to more than one tasks: {}", streamThread.getName(), partition, partitionsForTask);
                 }
             }
-            allAssingedPartitions.addAll(partitions);
+            allAssignedPartitions.addAll(partitions);
 
             TaskId id = entry.getKey();
             Set<TaskId> ids = tasksByTopicGroup.get(id.topicGroupId);
@@ -410,7 +410,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         for (String topic : allSourceTopics) {
             for (PartitionInfo partitionInfo : metadataWithInternalTopics.partitionsForTopic(topic)) {
                 TopicPartition partition = new TopicPartition(partitionInfo.topic(), partitionInfo.partition());
-                if (!allAssingedPartitions.contains(partition)) {
+                if (!allAssignedPartitions.contains(partition)) {
                     log.warn("stream-thread [{}] Partition {} is not assigned to any tasks: {}", streamThread.getName(), partition, partitionsForTask);
                 }
             }
@@ -467,16 +467,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 final Set<TopicPartition> topicPartitions = new HashSet<>();
                 final ClientState<TaskId> state = entry.getValue().state;
 
-                for (TaskId id : state.activeTasks) {
-                    for (TopicPartition partition : partitionsForTask.get(id)) {
-                        topicPartitions.add(partition);
-                    }
-                }
-
                 for (TaskId id : state.assignedTasks) {
-                    for (TopicPartition partition : partitionsForTask.get(id)) {
-                        topicPartitions.add(partition);
-                    }
+                    topicPartitions.addAll(partitionsForTask.get(id));
                 }
 
                 partitionsByHostState.put(hostInfo, topicPartitions);
@@ -491,13 +483,9 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
             ArrayList<TaskId> taskIds = new ArrayList<>(state.assignedTasks.size());
             final int numActiveTasks = state.activeTasks.size();
-            for (TaskId taskId : state.activeTasks) {
-                taskIds.add(taskId);
-            }
-            for (TaskId id : state.assignedTasks) {
-                if (!state.activeTasks.contains(id))
-                    taskIds.add(id);
-            }
+
+            taskIds.addAll(state.activeTasks);
+            taskIds.addAll(state.standbyTasks);
 
             final int numConsumers = consumers.size();
 

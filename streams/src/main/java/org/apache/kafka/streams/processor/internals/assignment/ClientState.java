@@ -54,7 +54,7 @@ public class ClientState<T> {
     }
 
     public ClientState<T> copy() {
-        return new ClientState<>(new HashSet<>(activeTasks), new HashSet<T>(standbyTasks), new HashSet<>(assignedTasks),
+        return new ClientState<>(new HashSet<>(activeTasks), new HashSet<>(standbyTasks), new HashSet<>(assignedTasks),
                 new HashSet<>(prevActiveTasks), new HashSet<>(prevAssignedTasks), capacity);
     }
 
