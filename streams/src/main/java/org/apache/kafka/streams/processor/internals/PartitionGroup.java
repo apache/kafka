@@ -170,4 +170,10 @@ public class PartitionGroup {
         queuesByTime.clear();
         partitionQueues.clear();
     }
+
+    public void clear() {
+        for (RecordQueue queue : partitionQueues.values()) {
+            queue.clear();
+        }
+    }
 }

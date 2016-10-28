@@ -336,6 +336,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     @Override
     public void closeTopology() {
+
+        this.partitionGroup.clear();
+
         // close the processors
         // make sure close() is called for each node even when there is a RuntimeException
         RuntimeException exception = null;
