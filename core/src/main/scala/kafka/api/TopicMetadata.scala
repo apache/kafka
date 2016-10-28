@@ -141,10 +141,10 @@ case class PartitionMetadata(partitionId: Int,
   override def toString: String = {
     val partitionMetadataString = new StringBuilder
     partitionMetadataString.append("\tpartition " + partitionId)
-    partitionMetadataString.append("\tleader: " + leader.fold("none")(leader => leader.toString))
+    partitionMetadataString.append("\tleader: " + leader.getOrElse("none"))
     partitionMetadataString.append("\treplicas: " + replicas.mkString(","))
     partitionMetadataString.append("\tisr: " + isr.mkString(","))
-    partitionMetadataString.append("\tisUnderReplicated: %s".format((isr.size < replicas.size).toString))
+    partitionMetadataString.append("\tisUnderReplicated: %s" + (isr.size < replicas.size))
     partitionMetadataString.toString()
   }
 
