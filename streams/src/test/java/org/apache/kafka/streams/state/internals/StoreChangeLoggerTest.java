@@ -71,10 +71,6 @@ public class StoreChangeLoggerTest {
     @SuppressWarnings("unchecked")
     @Test
     public void testAddRemove() throws Exception {
-        Field dirtyField  = changeLogger.getClass().getDeclaredField("dirty");
-        Field removedField  = changeLogger.getClass().getDeclaredField("removed");
-        dirtyField.setAccessible(true);
-        removedField.setAccessible(true);
 
         context.setTime(1);
         written.put(0, "zero");
@@ -83,26 +79,27 @@ public class StoreChangeLoggerTest {
         changeLogger.add(1);
         written.put(2, "two");
         changeLogger.add(2);
-        assertEquals(3, ((Set<Integer>) dirtyField.get(changeLogger)).size());
-        assertEquals(0, ((Set<Integer>) removedField.get(changeLogger)).size());
+
+        assertEquals(3, changeLogger.dirty.size());
+        assertEquals(0, changeLogger.removed.size());
 
         changeLogger.delete(0);
         changeLogger.delete(1);
         written.put(3, "three");
         changeLogger.add(3);
-        assertEquals(2, ((Set<Integer>) dirtyField.get(changeLogger)).size());
-        assertEquals(2, ((Set<Integer>) removedField.get(changeLogger)).size());
+        assertEquals(2, changeLogger.dirty.size());
+        assertEquals(2, changeLogger.removed.size());
 
         written.put(0, "zero-again");
         changeLogger.add(0);
-        assertEquals(3, ((Set<Integer>) dirtyField.get(changeLogger)).size());
-        assertEquals(1, ((Set<Integer>) removedField.get(changeLogger)).size());
+        assertEquals(3, changeLogger.dirty.size());
+        assertEquals(1, changeLogger.removed.size());
 
         written.put(4, "four");
         changeLogger.add(4);
         changeLogger.maybeLogChange(getter);
-        assertEquals(0, ((Set<Integer>) dirtyField.get(changeLogger)).size());
-        assertEquals(0, ((Set<Integer>) removedField.get(changeLogger)).size());
+        assertEquals(0, changeLogger.dirty.size());
+        assertEquals(0, changeLogger.removed.size());
         assertEquals(5, logged.size());
         assertEquals("zero-again", logged.get(0));
         assertEquals(null, logged.get(1));
