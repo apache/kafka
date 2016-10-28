@@ -19,7 +19,8 @@ package kafka.producer
 
 import java.util.Properties
 import java.util.concurrent.LinkedBlockingQueue
-import org.apache.kafka.common.protocol.Errors
+
+import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 import org.junit.Assert._
 import org.easymock.EasyMock
 import org.junit.Test
@@ -31,6 +32,7 @@ import kafka.producer.async._
 import kafka.serializer._
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils._
+
 import scala.collection.Map
 import scala.collection.mutable.ArrayBuffer
 import kafka.utils._
@@ -43,9 +45,12 @@ class AsyncProducerTest {
   }
 
   // One of the few cases we can just set a fixed port because the producer is mocked out here since this uses mocks
-  val props = Seq(createBrokerConfig(1, "127.0.0.1:1", port=65534))
+  val props = Seq(createBrokerConfig(1, "127.0.0.1:1", port = 65534))
   val configs = props.map(KafkaConfig.fromProps)
-  val brokerList = configs.map(c => org.apache.kafka.common.utils.Utils.formatAddress(c.hostName, c.port)).mkString(",")
+  val brokerList = configs.map { config =>
+    val endPoint = config.advertisedListeners.get(SecurityProtocol.PLAINTEXT).get
+    org.apache.kafka.common.utils.Utils.formatAddress(endPoint.host, endPoint.port)
+  }.mkString(",")
 
   @Test
   def testProducerQueueSize() {
