@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.ChangedSerializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -69,7 +70,18 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
     @Override
     public void process(final K key, final V value) {
         RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
-        collector.send(new ProducerRecord<>(topic, null, context.timestamp(), key, value), keySerializer, valSerializer, partitioner);
+
+        final ProducerRecord record;
+        try {
+            record = new ProducerRecord<>(topic, null, context.timestamp(), key, value);
+        } catch (final IllegalArgumentException e) {
+            if (e.getMessage().startsWith("Invalid timestamp:")) {
+                throw new StreamsException("Input topic record has invalid timestamp. Use a different TimestampExtractor to process this data.", e);
+            }
+            throw e;
+        }
+
+        collector.send(record, keySerializer, valSerializer, partitioner);
     }
 
     @Override
