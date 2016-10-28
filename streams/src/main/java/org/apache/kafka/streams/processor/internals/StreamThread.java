@@ -147,6 +147,8 @@ public class StreamThread extends Thread {
                 throw t;
             } finally {
                 streamsMetadataState.onChange(Collections.<HostInfo, Set<TopicPartition>>emptyMap(), partitionAssignor.clusterMetadata());
+                removeStreamTasks();
+                removeStandbyTasks();
             }
         }
     };
@@ -344,8 +346,7 @@ public class StreamThread extends Thread {
         unAssignChangeLogPartitions(rethrowExceptions);
 
         updateSuspendedTasks();
-        removeStreamTasks();
-        removeStandbyTasks();
+
     }
 
     interface AbstractTaskAction {
