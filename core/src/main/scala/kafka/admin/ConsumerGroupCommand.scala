@@ -71,25 +71,26 @@ object ConsumerGroupCommand extends Logging {
         val groupId = opts.options.valuesOf(opts.groupOpt).asScala.head
         assignments match {
           case None =>
+            // applies to both old and new consumer
             printError(s"The consumer group '$groupId' does not exist.")
           case Some(assignments) =>
-            state match {
-              case Some("Dead") =>
-                printError(s"Consumer group '$groupId' does not exist.")
-              case Some("Empty") =>
-                printError(s"Consumer group '$groupId' has no active members.")
-              case Some("PreparingRebalance") | Some("AwaitingSync") =>
-                System.err.println(s"Warning: Consumer group '$groupId' is rebalancing.")
-                printAssignment(assignments, !opts.useOldConsumer)
-              case Some("Stable") =>
-                printAssignment(assignments, !opts.useOldConsumer)
-              case Some(other) =>
-                // the control should never reach here
-                throw new KafkaException(s"Expected a valid consumer group state, but found '$other'.")
-              case None =>
-                // the control should never reach here
-                throw new KafkaException("Expected a valid consumer group state, but none found.")
-            }
+            if (opts.useOldConsumer)
+              printAssignment(assignments, false)
+            else
+              state match {
+                case Some("Dead") =>
+                  printError(s"Consumer group '$groupId' does not exist.")
+                case Some("Empty") =>
+                  printError(s"Consumer group '$groupId' has no active members.")
+                case Some("PreparingRebalance") | Some("AwaitingSync") =>
+                  System.err.println(s"Warning: Consumer group '$groupId' is rebalancing.")
+                  printAssignment(assignments, true)
+                case Some("Stable") =>
+                  printAssignment(assignments, true)
+                case other =>
+                  // the control should never reach here
+                  throw new KafkaException(s"Expected a valid consumer group state, but found '${other.getOrElse("NONE")}'.")
+              }
         }
       }
       else if (opts.options.has(opts.deleteOpt)) {
