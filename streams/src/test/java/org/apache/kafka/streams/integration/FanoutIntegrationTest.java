@@ -85,7 +85,6 @@ public class FanoutIntegrationTest {
         CLUSTER.createTopic(OUTPUT_TOPIC_C);
     }
 
-
     @Parameter
     public long cacheSizeBytes;
 

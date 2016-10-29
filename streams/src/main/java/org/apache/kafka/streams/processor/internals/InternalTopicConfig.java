@@ -30,8 +30,9 @@ public class InternalTopicConfig {
 
     private final String name;
     private final Map<String, String> logConfig;
-    private Long retentionMs;
     private final Set<CleanupPolicy> cleanupPolicies;
+
+    private Long retentionMs;
 
     public InternalTopicConfig(final String name, final Set<CleanupPolicy> defaultCleanupPolicies, final Map<String, String> logConfig) {
         Objects.requireNonNull(name, "name can't be null");
