@@ -74,7 +74,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         final long timestamp = context.timestamp();
         if (timestamp < 0) {
             throw new StreamsException("Input topic record has invalid (negative) timestamp, " +
-                "possibly because an older versioned client is used to sent topic messages to Kafka that does not have timestamps encoded, " +
+                "possibly because an older versioned client is used to send topic messages to Kafka that does not have timestamps encoded, " +
                 "or because a pre 0.10 Kafka topic is consumed after broker upgrade. " +
                 "Use a different TimestampExtractor to process this data.");
         }
