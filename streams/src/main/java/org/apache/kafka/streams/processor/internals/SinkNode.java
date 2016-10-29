@@ -71,17 +71,15 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
     public void process(final K key, final V value) {
         RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
 
-        final ProducerRecord record;
-        try {
-            record = new ProducerRecord<>(topic, null, context.timestamp(), key, value);
-        } catch (final IllegalArgumentException e) {
-            if (e.getMessage().startsWith("Invalid timestamp:")) {
-                throw new StreamsException("Input topic record has invalid timestamp. Use a different TimestampExtractor to process this data.", e);
-            }
-            throw e;
+        final long timestamp = context.timestamp();
+        if (timestamp < 0) {
+            throw new StreamsException("Input topic record has invalid (negative) timestamp, " +
+                "possibly because an older versioned client is used to sent topic messages to Kafka that does not have timestamps encoded, " +
+                "or because a pre 0.10 Kafka topic is consumed after broker upgrade. " +
+                "Use a different TimestampExtractor to process this data.");
         }
 
-        collector.send(record, keySerializer, valSerializer, partitioner);
+        collector.send(new ProducerRecord<K, V>(topic, null, timestamp, key, value), keySerializer, valSerializer, partitioner);
     }
 
     @Override
