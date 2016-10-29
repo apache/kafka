@@ -561,14 +561,10 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       val consumerRebalanceListener = new InternalRebalanceListenerForNewConsumer(this, customRebalanceListener)
       if (whitelistOpt.isDefined) {
         try {
-          val revisedWhitelist = whitelistOpt.get.trim
-            .replace(',', '|')
-            .replace(" ", "")
-            .replaceAll("""^["']+""","")
-            .replaceAll("""["']+$""","") // property files may bring quotes
-          consumer.subscribe(Pattern.compile(revisedWhitelist), consumerRebalanceListener)
+          val whitelist = Whitelist(whitelistOpt.get)
+          consumer.subscribe(Pattern.compile(whitelist.regex), consumerRebalanceListener)
         } catch {
-          case pse: PatternSyntaxException =>
+          case pse: PatternSyntaxException | RuntimeException =>
             error("Invalid expression syntax: %s".format(whitelistOpt.get))
             throw pse
         }
