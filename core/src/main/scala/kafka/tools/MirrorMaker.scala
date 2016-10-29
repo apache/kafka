@@ -564,7 +564,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
           val whitelist = Whitelist(whitelistOpt.get)
           consumer.subscribe(Pattern.compile(whitelist.regex), consumerRebalanceListener)
         } catch {
-          case pse: PatternSyntaxException | RuntimeException =>
+          case pse: RuntimeException =>
             error("Invalid expression syntax: %s".format(whitelistOpt.get))
             throw pse
         }
