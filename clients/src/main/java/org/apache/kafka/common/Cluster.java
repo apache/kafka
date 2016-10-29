@@ -207,6 +207,16 @@ public final class Cluster {
     }
 
     /**
+     * Get the number of partitions for the given topic
+     * @param topic The topic to get the number of partitions for
+     * @return The number of partitions or null if there is no corresponding metadata
+     */
+    public Integer partitionCountForTopic(String topic) {
+        List<PartitionInfo> partitions = this.partitionsByTopic.get(topic);
+        return partitions == null ? null : partitions.size();
+    }
+
+    /**
      * Get the list of available partitions for this topic
      * @param topic The topic name
      * @return A list of partitions
@@ -222,16 +232,6 @@ public final class Cluster {
      */
     public List<PartitionInfo> partitionsForNode(int nodeId) {
         return this.partitionsByNode.get(nodeId);
-    }
-
-    /**
-     * Get the number of partitions for the given topic
-     * @param topic The topic to get the number of partitions for
-     * @return The number of partitions or null if there is no corresponding metadata
-     */
-    public Integer partitionCountForTopic(String topic) {
-        List<PartitionInfo> partitionInfos = this.partitionsByTopic.get(topic);
-        return partitionInfos == null ? null : partitionInfos.size();
     }
 
     /**

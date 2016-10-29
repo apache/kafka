@@ -74,7 +74,7 @@ public class HostInfo {
     @Override
     public String toString() {
         return "HostInfo{" +
-                "host='" + host + '\'' +
+                "host=\'" + host + '\'' +
                 ", port=" + port +
                 '}';
     }

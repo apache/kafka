@@ -90,13 +90,13 @@ public class StreamPartitionAssignorTest {
     private final TaskId task1 = new TaskId(0, 1);
     private final TaskId task2 = new TaskId(0, 2);
     private final TaskId task3 = new TaskId(0, 3);
-    private String userEndPoint = null;
+    private String userEndPoint = "localhost:2171";
 
     private Properties configProps() {
         return new Properties() {
             {
                 setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "stream-partition-assignor-test");
-                setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171");
+                setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, userEndPoint);
                 setProperty(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3");
                 setProperty(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName());
             }
@@ -297,11 +297,11 @@ public class StreamPartitionAssignorTest {
         TaskId task10 = new TaskId(1, 0);
         TaskId task11 = new TaskId(1, 1);
         TaskId task12 = new TaskId(1, 2);
+        List<TaskId> tasks = Utils.mkList(task00, task01, task02, task10, task11, task12);
 
         UUID uuid1 = UUID.randomUUID();
         UUID uuid2 = UUID.randomUUID();
         String client1 = "client1";
-
 
         StreamThread thread10 = new StreamThread(builder, config, new MockClientSupplier(), applicationId, client1, uuid1, new Metrics(), new SystemTime(), new StreamsMetadataState(builder));
 
@@ -323,14 +323,43 @@ public class StreamPartitionAssignorTest {
         assertEquals(2, assignments.get("consumer11").partitions().size());
         assertEquals(2, assignments.get("consumer20").partitions().size());
 
-        assertEquals(2, AssignmentInfo.decode(assignments.get("consumer10").userData()).activeTasks.size());
-        assertEquals(2, AssignmentInfo.decode(assignments.get("consumer11").userData()).activeTasks.size());
-        assertEquals(2, AssignmentInfo.decode(assignments.get("consumer20").userData()).activeTasks.size());
+        AssignmentInfo info10 = AssignmentInfo.decode(assignments.get("consumer10").userData());
+        AssignmentInfo info11 = AssignmentInfo.decode(assignments.get("consumer11").userData());
+        AssignmentInfo info20 = AssignmentInfo.decode(assignments.get("consumer20").userData());
+
+        assertEquals(2, info10.activeTasks.size());
+        assertEquals(2, info11.activeTasks.size());
+        assertEquals(2, info20.activeTasks.size());
+
+        Set<TaskId> allTasks = new HashSet<>();
+        allTasks.addAll(info10.activeTasks);
+        allTasks.addAll(info11.activeTasks);
+        allTasks.addAll(info20.activeTasks);
+        assertEquals(new HashSet<>(tasks), allTasks);
 
         // check tasks for state topics
-        assertEquals(Utils.mkSet(task00, task01, task02), partitionAssignor.tasksForState("store1"));
-        assertEquals(Utils.mkSet(task10, task11, task12), partitionAssignor.tasksForState("store2"));
-        assertEquals(Utils.mkSet(task10, task11, task12), partitionAssignor.tasksForState("store3"));
+        Map<Integer, TopologyBuilder.TopicsInfo> topicGroups = thread10.builder.topicGroups();
+
+        assertEquals(Utils.mkSet(task00, task01, task02), tasksForState(applicationId, "store1", tasks, topicGroups));
+        assertEquals(Utils.mkSet(task10, task11, task12), tasksForState(applicationId, "store2", tasks, topicGroups));
+        assertEquals(Utils.mkSet(task10, task11, task12), tasksForState(applicationId, "store3", tasks, topicGroups));
+    }
+
+    private Set<TaskId> tasksForState(String applicationId, String storeName, List<TaskId> tasks, Map<Integer, TopologyBuilder.TopicsInfo> topicGroups) {
+        final String changelogTopic = ProcessorStateManager.storeChangelogTopic(applicationId, storeName);
+
+        Set<TaskId> ids = new HashSet<>();
+        for (Map.Entry<Integer, TopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
+            Set<String> stateChangelogTopics = entry.getValue().stateChangelogTopics.keySet();
+
+            if (stateChangelogTopics.contains(changelogTopic)) {
+                for (TaskId id : tasks) {
+                    if (id.topicGroupId == entry.getKey())
+                        ids.add(id);
+                }
+            }
+        }
+        return ids;
     }
 
     @Test
@@ -406,48 +435,6 @@ public class StreamPartitionAssignorTest {
         assertEquals(allTasks, allStandbyTasks);
     }
 
-    private AssignmentInfo checkAssignment(PartitionAssignor.Assignment assignment) {
-
-        // This assumed 1) DefaultPartitionGrouper is used, and 2) there is a only one topic group.
-
-        AssignmentInfo info = AssignmentInfo.decode(assignment.userData());
-
-        // check if the number of assigned partitions == the size of active task id list
-        assertEquals(assignment.partitions().size(), info.activeTasks.size());
-
-        // check if active tasks are consistent
-        List<TaskId> activeTasks = new ArrayList<>();
-        Set<String> activeTopics = new HashSet<>();
-        for (TopicPartition partition : assignment.partitions()) {
-            // since default grouper, taskid.partition == partition.partition()
-            activeTasks.add(new TaskId(0, partition.partition()));
-            activeTopics.add(partition.topic());
-        }
-        assertEquals(activeTasks, info.activeTasks);
-
-        // check if active partitions cover all topics
-        assertEquals(allTopics, activeTopics);
-
-        // check if standby tasks are consistent
-        Set<String> standbyTopics = new HashSet<>();
-        for (Map.Entry<TaskId, Set<TopicPartition>> entry : info.standbyTasks.entrySet()) {
-            TaskId id = entry.getKey();
-            Set<TopicPartition> partitions = entry.getValue();
-            for (TopicPartition partition : partitions) {
-                // since default grouper, taskid.partition == partition.partition()
-                assertEquals(id.partition, partition.partition());
-
-                standbyTopics.add(partition.topic());
-            }
-        }
-
-        if (info.standbyTasks.size() > 0)
-            // check if standby partitions cover all topics
-            assertEquals(allTopics, standbyTopics);
-
-        return info;
-    }
-
     @Test
     public void testOnAssignment() throws Exception {
         StreamsConfig config = new StreamsConfig(configProps());
@@ -468,16 +455,18 @@ public class StreamPartitionAssignorTest {
         partitionAssignor.configure(config.getConsumerConfigs(thread, "test", client1));
 
         List<TaskId> activeTaskList = Utils.mkList(task0, task3);
+        Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
-        standbyTasks.put(task1, Utils.mkSet(new TopicPartition("t1", 0)));
-        standbyTasks.put(task2, Utils.mkSet(new TopicPartition("t2", 0)));
+        activeTasks.put(task0, Utils.mkSet(t1p0));
+        activeTasks.put(task3, Utils.mkSet(t2p3));
+        standbyTasks.put(task1, Utils.mkSet(t1p0));
+        standbyTasks.put(task2, Utils.mkSet(t2p0));
 
         AssignmentInfo info = new AssignmentInfo(activeTaskList, standbyTasks, new HashMap<HostInfo, Set<TopicPartition>>());
         PartitionAssignor.Assignment assignment = new PartitionAssignor.Assignment(Utils.mkList(t1p0, t2p3), info.encode());
         partitionAssignor.onAssignment(assignment);
 
-        assertEquals(Utils.mkSet(task0), partitionAssignor.tasksForPartition(t1p0));
-        assertEquals(Utils.mkSet(task3), partitionAssignor.tasksForPartition(t2p3));
+        assertEquals(activeTasks, partitionAssignor.activeTasks());
         assertEquals(standbyTasks, partitionAssignor.standbyTasks());
     }
 
@@ -621,7 +610,7 @@ public class StreamPartitionAssignorTest {
         final Map<String, PartitionAssignor.Assignment> assignments = partitionAssignor.assign(metadata, subscriptions);
         final PartitionAssignor.Assignment consumerAssignment = assignments.get("consumer1");
         final AssignmentInfo assignmentInfo = AssignmentInfo.decode(consumerAssignment.userData());
-        final Set<TopicPartition> topicPartitions = assignmentInfo.partitionsByHostState.get(new HostInfo("localhost", 8080));
+        final Set<TopicPartition> topicPartitions = assignmentInfo.partitionsByHost.get(new HostInfo("localhost", 8080));
         assertEquals(Utils.mkSet(new TopicPartition("topic1", 0),
                 new TopicPartition("topic1", 1),
                 new TopicPartition("topic1", 2)), topicPartitions);
@@ -725,13 +714,54 @@ public class StreamPartitionAssignorTest {
 
     }
 
+    private AssignmentInfo checkAssignment(PartitionAssignor.Assignment assignment) {
+
+        // This assumed 1) DefaultPartitionGrouper is used, and 2) there is a only one topic group.
+
+        AssignmentInfo info = AssignmentInfo.decode(assignment.userData());
+
+        // check if the number of assigned partitions == the size of active task id list
+        assertEquals(assignment.partitions().size(), info.activeTasks.size());
+
+        // check if active tasks are consistent
+        List<TaskId> activeTasks = new ArrayList<>();
+        Set<String> activeTopics = new HashSet<>();
+        for (TopicPartition partition : assignment.partitions()) {
+            // since default grouper, taskid.partition == partition.partition()
+            activeTasks.add(new TaskId(0, partition.partition()));
+            activeTopics.add(partition.topic());
+        }
+        assertEquals(activeTasks, info.activeTasks);
+
+        // check if active partitions cover all topics
+        assertEquals(allTopics, activeTopics);
+
+        // check if standby tasks are consistent
+        Set<String> standbyTopics = new HashSet<>();
+        for (Map.Entry<TaskId, Set<TopicPartition>> entry : info.standbyTasks.entrySet()) {
+            TaskId id = entry.getKey();
+            Set<TopicPartition> partitions = entry.getValue();
+            for (TopicPartition partition : partitions) {
+                // since default grouper, taskid.partition == partition.partition()
+                assertEquals(id.partition, partition.partition());
+
+                standbyTopics.add(partition.topic());
+            }
+        }
+
+        if (info.standbyTasks.size() > 0)
+            // check if standby partitions cover all topics
+            assertEquals(allTopics, standbyTopics);
+
+        return info;
+    }
 
     private class MockInternalTopicManager extends InternalTopicManager {
 
-        public Map<String, Integer> readyTopics = new HashMap<>();
-        public MockConsumer<byte[], byte[]> restoreConsumer;
+        Map<String, Integer> readyTopics = new HashMap<>();
+        MockConsumer<byte[], byte[]> restoreConsumer;
 
-        public MockInternalTopicManager(MockConsumer<byte[], byte[]> restoreConsumer) {
+        MockInternalTopicManager(MockConsumer<byte[], byte[]> restoreConsumer) {
             super();
 
             this.restoreConsumer = restoreConsumer;
