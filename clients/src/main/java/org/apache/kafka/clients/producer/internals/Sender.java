@@ -177,7 +177,6 @@ public class Sender implements Runnable {
             // and request metadata update, since there are messages to send to the topic.
             for (String topic : result.unknownLeaderTopics)
                 this.metadata.add(topic);
-            this.metadata.requestUpdate();
         }
 
         // remove any nodes we aren't ready to send to

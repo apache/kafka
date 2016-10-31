@@ -111,8 +111,7 @@ public final class Metadata {
      */
     public synchronized void add(String topic) {
         if (topics.put(topic, TOPIC_EXPIRY_NEEDS_UPDATE) == null) {
-            // Override the timestamp of last refresh to let immediate update.
-            this.lastRefreshMs = 0;
+            requestUpdateForNewTopics();
         }
     }
 
@@ -170,9 +169,7 @@ public final class Metadata {
      */
     public synchronized void setTopics(Collection<String> topics) {
         if (!this.topics.keySet().containsAll(topics)) {
-            requestUpdate();
-            // Override the timestamp of last refresh to let immediate update.
-            this.lastRefreshMs = 0;
+            requestUpdateForNewTopics();
         }
         this.topics.clear();
         for (String topic : topics)
@@ -282,8 +279,7 @@ public final class Metadata {
      */
     public synchronized void needMetadataForAllTopics(boolean needMetadataForAllTopics) {
         if (needMetadataForAllTopics && !this.needMetadataForAllTopics) {
-            // Override the timestamp of last refresh to let immediate update.
-            this.lastRefreshMs = 0;
+            requestUpdateForNewTopics();
         }
         this.needMetadataForAllTopics = needMetadataForAllTopics;
     }
@@ -314,6 +310,12 @@ public final class Metadata {
      */
     public interface Listener {
         void onMetadataUpdate(Cluster cluster);
+    }
+
+    private synchronized void requestUpdateForNewTopics() {
+        // Override the timestamp of last refresh to let immediate update.
+        this.lastRefreshMs = 0;
+        requestUpdate();
     }
 
     private Cluster getClusterForCurrentTopics(Cluster cluster) {

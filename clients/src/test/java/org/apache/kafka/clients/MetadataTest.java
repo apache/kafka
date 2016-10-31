@@ -154,7 +154,6 @@ public class MetadataTest {
         // New topic added to fetch set and update requested. It should allow immediate update.
         metadata.update(Cluster.empty(), now);
         metadata.add("new-topic");
-        metadata.requestUpdate();
         assertEquals(0, metadata.timeToNextUpdate(now));
 
         // Even though setTopics called, immediate update isn't necessary if the new topic set isn't
@@ -170,14 +169,12 @@ public class MetadataTest {
         // If metadata requested for all topics it should allow immediate update.
         metadata.update(Cluster.empty(), now);
         metadata.needMetadataForAllTopics(true);
-        metadata.requestUpdate();
         assertEquals(0, metadata.timeToNextUpdate(now));
 
         // However if metadata is already capable to serve all topics it shouldn't override backoff.
         metadata.update(Cluster.empty(), now);
         metadata.needMetadataForAllTopics(true);
-        metadata.requestUpdate();
-        assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now));
+        assertEquals(metadataExpireMs, metadata.timeToNextUpdate(now));
     }
 
     /**
