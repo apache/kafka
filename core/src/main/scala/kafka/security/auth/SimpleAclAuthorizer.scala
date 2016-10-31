@@ -107,8 +107,8 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     val zkSessionTimeOutMs = configs.get(SimpleAclAuthorizer.ZkSessionTimeOutProp).map(_.toString.toInt).getOrElse(kafkaConfig.zkSessionTimeoutMs)
 
     zkUtils = ZkUtils(zkUrl,
-                      zkConnectionTimeoutMs,
-                      zkSessionTimeOutMs,
+                      sessionTimeout = zkSessionTimeOutMs,
+                      connectionTimeout = zkConnectionTimeoutMs,
                       JaasUtils.isZkSecurityEnabled())
     zkUtils.makeSurePersistentPathExists(SimpleAclAuthorizer.AclZkPath)
 
@@ -316,13 +316,13 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     try {
       zkUtils.conditionalUpdatePersistentPathIfExists(path, data, expectedVersion)
     } catch {
-      case e: ZkNoNodeException =>
+      case _: ZkNoNodeException =>
         try {
           debug(s"Node $path does not exist, attempting to create it.")
           zkUtils.createPersistentPath(path, data)
           (true, 0)
         } catch {
-          case e: ZkNodeExistsException =>
+          case _: ZkNodeExistsException =>
             debug(s"Failed to create node for $path because it already exists.")
             (false, 0)
         }

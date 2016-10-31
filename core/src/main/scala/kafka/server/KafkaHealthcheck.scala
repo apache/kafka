@@ -43,7 +43,6 @@ class KafkaHealthcheck(brokerId: Int,
                        rack: Option[String],
                        interBrokerProtocolVersion: ApiVersion) extends Logging {
 
-  private val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + brokerId
   private[server] val sessionExpireListener = new SessionExpireListener
 
   def startup() {

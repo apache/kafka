@@ -33,12 +33,13 @@ object TestKafkaAppender extends Logging {
     try {
       PropertyConfigurator.configure(args(0))
     } catch {
-      case e: Exception => System.err.println("KafkaAppender could not be initialized ! Exiting..")
-      e.printStackTrace()
-      System.exit(1)
+      case e: Exception =>
+        System.err.println("KafkaAppender could not be initialized ! Exiting..")
+        e.printStackTrace()
+        System.exit(1)
     }
 
-    for(i <- 1 to 10)
+    for (_ <- 1 to 10)
       info("test")    
   }
 }

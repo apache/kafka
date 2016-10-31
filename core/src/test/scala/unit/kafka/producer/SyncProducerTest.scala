@@ -151,8 +151,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
       producer.send(produceRequest("test", 0,
         new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(new Array[Byte](configs.head.messageMaxBytes + 1))), acks = 0))
     } catch {
-      case e : java.io.IOException => // success
-      case e2: Throwable => throw e2
+      case _ : java.io.IOException => // success
     }
   }
 
@@ -222,8 +221,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
       producer.send(request)
       fail("Should have received timeout exception since request handling is stopped.")
     } catch {
-      case e: SocketTimeoutException => /* success */
-      case e: Throwable => fail("Unexpected exception when expecting timeout: " + e)
+      case _: SocketTimeoutException => /* success */
     }
     val t2 = SystemTime.milliseconds
     // make sure we don't wait fewer than timeoutMs for a response

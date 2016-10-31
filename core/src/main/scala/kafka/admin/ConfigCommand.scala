@@ -99,7 +99,7 @@ object ConfigCommand extends Config {
   private def parseBroker(broker: String): Int = {
     try broker.toInt
     catch {
-      case e: NumberFormatException =>
+      case _: NumberFormatException =>
         throw new IllegalArgumentException(s"Error parsing broker $broker. The broker's Entity Name must be a single integer value")
     }
   }
@@ -190,20 +190,20 @@ object ConfigCommand extends Config {
           val rootEntities = zkUtils.getAllEntitiesWithConfig(root.entityType)
                                    .map(name => ConfigEntity(Entity(root.entityType, Some(name)), child))
           child match {
-            case Some (s) =>
+            case Some(s) =>
                 rootEntities.flatMap(rootEntity =>
                   ConfigEntity(rootEntity.root, Some(Entity(s.entityType, None))).getAllEntities(zkUtils))
             case None => rootEntities
           }
-        case (rootName, Some(childEntity)) =>
+        case (_, Some(childEntity)) =>
           childEntity.sanitizedName match {
-            case Some(subName) => Seq(this)
+            case Some(_) => Seq(this)
             case None =>
                 zkUtils.getAllEntitiesWithConfig(root.entityPath + "/" + childEntity.entityType)
                        .map(name => ConfigEntity(root, Some(Entity(childEntity.entityType, Some(name)))))
 
           }
-        case (rootName, None) =>
+        case (_, None) =>
           Seq(this)
       }
     }

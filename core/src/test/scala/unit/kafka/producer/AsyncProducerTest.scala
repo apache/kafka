@@ -76,7 +76,7 @@ class AsyncProducerTest {
       fail("Queue should be full")
     }
     catch {
-      case e: QueueFullException => //expected
+      case _: QueueFullException => //expected
     }finally {
       producer.close()
     }
@@ -96,7 +96,7 @@ class AsyncProducerTest {
       fail("should complain that producer is already closed")
     }
     catch {
-      case e: ProducerClosedException => //expected
+      case _: ProducerClosedException => //expected
     }
   }
 
@@ -266,7 +266,7 @@ class AsyncProducerTest {
     }
     catch {
       // should not throw any exception
-      case e: Throwable => fail("Should not throw any exception")
+      case _: Throwable => fail("Should not throw any exception")
 
     }
   }
@@ -298,7 +298,7 @@ class AsyncProducerTest {
       fail("Should fail with FailedToSendMessageException")
     }
     catch {
-      case e: FailedToSendMessageException => // we retry on any exception now
+      case _: FailedToSendMessageException => // we retry on any exception now
     }
   }
 
@@ -317,8 +317,8 @@ class AsyncProducerTest {
       producer.send(getProduceData(1): _*)
       fail("Should fail with ClassCastException due to incompatible Encoder")
     } catch {
-      case e: ClassCastException =>
-    }finally {
+      case _: ClassCastException =>
+    } finally {
       producer.close()
     }
   }
@@ -352,9 +352,9 @@ class AsyncProducerTest {
     val partitionedDataOpt = handler.partitionAndCollate(producerDataList)
     partitionedDataOpt match {
       case Some(partitionedData) =>
-        for ((brokerId, dataPerBroker) <- partitionedData) {
-          for ( (TopicAndPartition(topic, partitionId), dataPerTopic) <- dataPerBroker)
-            assertTrue(partitionId == 0)
+        for (dataPerBroker <- partitionedData.values) {
+          for (tp <- dataPerBroker.keys)
+            assertTrue(tp.partition == 0)
         }
       case None =>
         fail("Failed to collate requests by topic, partition")
@@ -461,7 +461,7 @@ class AsyncProducerTest {
       fail("should complain about wrong config")
     }
     catch {
-      case e: IllegalArgumentException => //expected
+      case _: IllegalArgumentException => //expected
     }
   }
 

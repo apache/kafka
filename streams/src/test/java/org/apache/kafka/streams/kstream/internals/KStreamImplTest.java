@@ -206,7 +206,7 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldCantHaveNullPredicate() throws Exception {
-        testStream.branch(null);
+        testStream.branch((Predicate) null);
     }
 
     @Test(expected = NullPointerException.class)

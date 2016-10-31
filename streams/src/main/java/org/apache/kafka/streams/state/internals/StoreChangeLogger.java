@@ -120,14 +120,4 @@ public class StoreChangeLogger<K, V> {
         this.removed.clear();
         this.dirty.clear();
     }
-
-    // this is for test only
-    public int numDirty() {
-        return this.dirty.size();
-    }
-
-    // this is for test only
-    public int numRemoved() {
-        return this.removed.size();
-    }
 }

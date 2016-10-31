@@ -63,7 +63,6 @@ import org.apache.kafka.common.protocol.Protocol;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractRequestResponse;
-import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.ResponseHeader;
@@ -310,7 +309,7 @@ public class SaslServerAuthenticator implements Authenticator {
                 LOG.debug("Handle Kafka request {}", apiKey);
                 switch (apiKey) {
                     case API_VERSIONS:
-                        handleApiVersionsRequest(requestHeader, (ApiVersionsRequest) request);
+                        handleApiVersionsRequest(requestHeader);
                         break;
                     case SASL_HANDSHAKE:
                         clientMechanism = handleHandshakeRequest(requestHeader, (SaslHandshakeRequest) request);
@@ -361,7 +360,7 @@ public class SaslServerAuthenticator implements Authenticator {
         }
     }
 
-    private void handleApiVersionsRequest(RequestHeader requestHeader, ApiVersionsRequest versionRequest) throws IOException, UnsupportedSaslMechanismException {
+    private void handleApiVersionsRequest(RequestHeader requestHeader) throws IOException, UnsupportedSaslMechanismException {
         sendKafkaResponse(requestHeader, ApiVersionsResponse.apiVersionsResponse());
     }
 

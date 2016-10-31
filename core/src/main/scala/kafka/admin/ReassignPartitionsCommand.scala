@@ -218,7 +218,7 @@ object ReassignPartitionsCommand extends Logging {
                                             partitionsBeingReassigned: Map[TopicAndPartition, Seq[Int]]): ReassignmentStatus = {
     val newReplicas = partitionsToBeReassigned(topicAndPartition)
     partitionsBeingReassigned.get(topicAndPartition) match {
-      case Some(partition) => ReassignmentInProgress
+      case Some(_) => ReassignmentInProgress
       case None =>
         // check if the current replica assignment matches the expected one after reassignment
         val assignedReplicas = zkUtils.getReplicasForPartition(topicAndPartition.topic, topicAndPartition.partition)
@@ -394,7 +394,7 @@ class ReassignPartitionsCommand(zkUtils: ZkUtils, proposedAssignment: Map[TopicA
         true
       }
     } catch {
-      case ze: ZkNodeExistsException =>
+      case _: ZkNodeExistsException =>
         val partitionsBeingReassigned = zkUtils.getPartitionsBeingReassigned()
         throw new AdminCommandFailedException("Partition reassignment currently in " +
         "progress for %s. Aborting operation".format(partitionsBeingReassigned))

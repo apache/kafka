@@ -296,6 +296,15 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             output += line
         return output
 
+    def list_topics(self, topic, node=None):
+        if node is None:
+            node = self.nodes[0]
+        cmd = "%s --zookeeper %s --list" % \
+              (self.path.script("kafka-topics.sh", node), self.zk.connect_setting())
+        for line in node.account.ssh_capture(cmd):
+            if not line.startswith("SLF4J"):
+                yield line.rstrip()
+
     def alter_message_format(self, topic, msg_format_version, node=None):
         if node is None:
             node = self.nodes[0]
@@ -509,7 +518,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         output = ""
         self.logger.debug(cmd)
         for line in node.account.ssh_capture(cmd):
-            if not (line.startswith("SLF4J") or line.startswith("GROUP") or line.startswith("Could not fetch offset")):
+            if not (line.startswith("SLF4J") or line.startswith("TOPIC") or line.startswith("Could not fetch offset")):
                 output += line
         self.logger.debug(output)
         return output

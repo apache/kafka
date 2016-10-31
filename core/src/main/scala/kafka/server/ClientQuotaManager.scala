@@ -183,7 +183,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       // trigger the callback immediately if quota is not violated
       callback(0)
     } catch {
-      case qve: QuotaViolationException =>
+      case _: QuotaViolationException =>
         // Compute the delay
         val clientMetric = metrics.metrics().get(clientRateMetricName(clientQuotaEntity.sanitizedUser, clientQuotaEntity.clientId))
         throttleTimeMs = throttleTime(clientMetric, getQuotaMetricConfig(clientQuotaEntity.quota))
@@ -412,9 +412,9 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
           logger.info(s"Changing ${apiKey} quota for ${userInfo}${clientIdInfo} to ${newQuota.bound}")
           overriddenQuota.put(quotaId, newQuota)
           (sanitizedUser, clientId) match {
-            case (Some(u), Some(c)) => quotaTypesEnabled |= QuotaTypes.UserClientIdQuotaEnabled
-            case (Some(u), None) => quotaTypesEnabled |= QuotaTypes.UserQuotaEnabled
-            case (None, Some(c)) => quotaTypesEnabled |= QuotaTypes.ClientIdQuotaEnabled
+            case (Some(_), Some(_)) => quotaTypesEnabled |= QuotaTypes.UserClientIdQuotaEnabled
+            case (Some(_), None) => quotaTypesEnabled |= QuotaTypes.UserQuotaEnabled
+            case (None, Some(_)) => quotaTypesEnabled |= QuotaTypes.ClientIdQuotaEnabled
             case (None, None) =>
           }
         case None =>

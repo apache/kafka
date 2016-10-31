@@ -34,7 +34,7 @@ sealed abstract class TopicFilter(rawRegex: String) extends Logging {
     Pattern.compile(regex)
   }
   catch {
-    case e: PatternSyntaxException =>
+    case _: PatternSyntaxException =>
       throw new RuntimeException(regex + " is an invalid regex.")
   }
 

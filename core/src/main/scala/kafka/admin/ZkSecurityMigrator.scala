@@ -123,7 +123,6 @@ object ZkSecurityMigrator extends Logging {
 }
 
 class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
-  private val workQueue = new LinkedBlockingQueue[Runnable]
   private val futures = new Queue[Future[String]]
 
   private def setAcl(path: String, setPromise: Promise[String]) = {

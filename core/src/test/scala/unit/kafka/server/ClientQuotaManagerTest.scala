@@ -229,7 +229,7 @@ class ClientQuotaManagerTest {
       /* We have 10 second windows. Make sure that there is no quota violation
        * if we produce under the quota
        */
-      for (i <- 0 until 10) {
+      for (_ <- 0 until 10) {
         clientMetrics.recordAndMaybeThrottle("ANONYMOUS", "unknown", 400, callback)
         time.sleep(1000)
       }
@@ -256,7 +256,7 @@ class ClientQuotaManagerTest {
       assertEquals(11, numCallbacks)
 
       // Could continue to see delays until the bursty sample disappears
-      for (i <- 0 until 10) {
+      for (_ <- 0 until 10) {
         clientMetrics.recordAndMaybeThrottle("ANONYMOUS", "unknown", 400, callback)
         time.sleep(1000)
       }

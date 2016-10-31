@@ -252,7 +252,7 @@ class GroupMetadataTest extends JUnitSuite {
       protocolType, List(("roundrobin", Array.empty[Byte])))
 
     group.transitionTo(PreparingRebalance)
-    member.awaitingJoinCallback = (result) => {}
+    member.awaitingJoinCallback = _ => ()
     group.add(memberId, member)
 
     assertEquals(0, group.generationId)
