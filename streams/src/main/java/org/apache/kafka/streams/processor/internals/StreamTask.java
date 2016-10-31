@@ -257,10 +257,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
     }
 
 
-    public ProcessorNode node() {
-        return this.processorContext.currentNode();
-    }
-
     /**
      * Commit the current task state
      */
