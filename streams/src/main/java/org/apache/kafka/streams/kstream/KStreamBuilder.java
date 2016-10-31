@@ -22,7 +22,9 @@ import org.apache.kafka.streams.kstream.internals.KStreamImpl;
 import org.apache.kafka.streams.kstream.internals.KTableImpl;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.TopologyBuilder;
+import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
 
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -139,7 +141,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * @param valSerde   value serde used to send key-value pairs,
      *                   if not specified the default value serde defined in the configuration will be used
      * @param topic      the topic name; cannot be null
-     * @param storeName  the state store name used if this KTable is materialized, can be null if materialization not expected
+     * @param storeName  the state store name used for the materialized KTable
      * @return a {@link KTable} for the specified topics
      */
     public <K, V> KTable<K, V> table(Serde<K> keySerde, Serde<V> valSerde, String topic, final String storeName) {
@@ -151,7 +153,14 @@ public class KStreamBuilder extends TopologyBuilder {
         addProcessor(name, processorSupplier, source);
 
         final KTableImpl kTable = new KTableImpl<>(this, name, processorSupplier, Collections.singleton(source), keySerde, valSerde, storeName);
-        kTable.materialize((KTableSource) processorSupplier);
+        StateStoreSupplier storeSupplier = new RocksDBKeyValueStoreSupplier<>(storeName,
+            keySerde,
+            valSerde,
+            false,
+            Collections.<String, String>emptyMap(),
+            true);
+
+        addStateStore(storeSupplier, name);
         connectSourceStoreAndTopic(storeName, topic);
 
         return kTable;

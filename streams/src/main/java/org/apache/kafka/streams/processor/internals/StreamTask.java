@@ -52,6 +52,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
     private final PartitionGroup partitionGroup;
     private final PartitionGroup.RecordInfo recordInfo = new PartitionGroup.RecordInfo();
     private final PunctuationQueue punctuationQueue;
+    private final Map<TopicPartition, RecordQueue> partitionQueues;
 
     private final Map<TopicPartition, Long> consumedOffsets;
     private final RecordCollector recordCollector;
@@ -93,7 +94,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
         // create queues for each assigned partition and associate them
         // to corresponding source nodes in the processor topology
-        Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
+        partitionQueues = new HashMap<>();
 
         for (TopicPartition partition : partitions) {
             SourceNode source = topology.source(partition.topic());
@@ -119,16 +120,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         log.info("{} Initializing state stores", logPrefix);
         initializeStateStores();
 
-        // initialize the task by initializing all its processor nodes in the topology
-        log.info("{} Initializing processor nodes of the topology", logPrefix);
-        for (ProcessorNode node : this.topology.processors()) {
-            this.currNode = node;
-            try {
-                node.init(this.processorContext);
-            } finally {
-                this.currNode = null;
-            }
-        }
+        initTopology();
 
         ((ProcessorContextImpl) this.processorContext).initialized();
     }
@@ -328,15 +320,24 @@ public class StreamTask extends AbstractTask implements Punctuator {
         punctuationQueue.schedule(new PunctuationSchedule(currNode, interval));
     }
 
-    /**
-     * @throws RuntimeException if an error happens during closing of processor nodes
-     */
     @Override
-    public void close() {
-        log.debug("{} Closing processor topology", logPrefix);
+    public void initTopology() {
+        // initialize the task by initializing all its processor nodes in the topology
+        log.info("{} Initializing processor nodes of the topology", logPrefix);
+        for (ProcessorNode node : this.topology.processors()) {
+            this.currNode = node;
+            try {
+                node.init(this.processorContext);
+            } finally {
+                this.currNode = null;
+            }
+        }
+    }
 
-        this.partitionGroup.close();
-        this.consumedOffsets.clear();
+    @Override
+    public void closeTopology() {
+
+        this.partitionGroup.clear();
 
         // close the processors
         // make sure close() is called for each node even when there is a RuntimeException
@@ -355,6 +356,18 @@ public class StreamTask extends AbstractTask implements Punctuator {
         if (exception != null) {
             throw exception;
         }
+    }
+
+    /**
+     * @throws RuntimeException if an error happens during closing of processor nodes
+     */
+    @Override
+    public void close() {
+        log.debug("{} Closing processor topology", logPrefix);
+
+        this.partitionGroup.close();
+        this.consumedOffsets.clear();
+        closeTopology();
     }
 
     @Override
