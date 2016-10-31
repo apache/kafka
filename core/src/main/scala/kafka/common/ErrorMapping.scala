@@ -20,6 +20,7 @@ package kafka.common
 import java.nio.ByteBuffer
 
 import kafka.message.InvalidMessageException
+import org.apache.kafka.common.errors.InvalidTopicException
 
 import scala.Predef._
 
@@ -65,6 +66,14 @@ object ErrorMapping {
   // 32: INVALID_TIMESTAMP
   // 33: UNSUPPORTED_SASL_MECHANISM
   // 34: ILLEGAL_SASL_STATE
+  // 35: UNSUPPORTED_VERSION
+  // 36: TOPIC_ALREADY_EXISTS
+  // 37: INVALID_PARTITIONS
+  // 38: INVALID_REPLICATION_FACTOR
+  // 39: INVALID_REPLICA_ASSIGNMENT
+  // 40: INVALID_CONFIG
+  // 41: NOT_CONTROLLER
+  // 42: INVALID_REQUEST
 
   private val exceptionToCode =
     Map[Class[Throwable], Short](

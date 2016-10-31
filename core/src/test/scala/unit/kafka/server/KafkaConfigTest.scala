@@ -112,7 +112,7 @@ class KafkaConfigTest {
     props5.put("log.retention.ms", "0")
 
     intercept[IllegalArgumentException] {
-      val cfg5 = KafkaConfig.fromProps(props5)
+      KafkaConfig.fromProps(props5)
     }
   }
 
@@ -127,13 +127,13 @@ class KafkaConfigTest {
     props3.put("log.retention.hours", "0")
 
     intercept[IllegalArgumentException] {
-      val cfg1 = KafkaConfig.fromProps(props1)
+      KafkaConfig.fromProps(props1)
     }
     intercept[IllegalArgumentException] {
-      val cfg2 = KafkaConfig.fromProps(props2)
+      KafkaConfig.fromProps(props2)
     }
     intercept[IllegalArgumentException] {
-      val cfg3 = KafkaConfig.fromProps(props3)
+      KafkaConfig.fromProps(props3)
     }
 
   }
@@ -303,7 +303,7 @@ class KafkaConfigTest {
       KafkaConfig.fromProps(props)
       true
     } catch {
-      case e: IllegalArgumentException => false
+      case _: IllegalArgumentException => false
     }
   }
 
@@ -481,6 +481,7 @@ class KafkaConfigTest {
         case KafkaConfig.LogCleanerDedupeBufferLoadFactorProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.LogCleanerEnableProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean")
         case KafkaConfig.LogCleanerDeleteRetentionMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
+        case KafkaConfig.LogCleanerMinCompactionLagMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.LogCleanerMinCleanRatioProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.LogIndexSizeMaxBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "3")
         case KafkaConfig.LogFlushIntervalMessagesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
@@ -497,6 +498,7 @@ class KafkaConfigTest {
         case KafkaConfig.ReplicaFetchMaxBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.ReplicaFetchWaitMaxMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.ReplicaFetchMinBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
+        case KafkaConfig.ReplicaFetchResponseMaxBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.NumReplicaFetchersProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.ReplicaHighWatermarkCheckpointIntervalMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.FetchPurgatoryPurgeIntervalRequestsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
@@ -547,6 +549,7 @@ class KafkaConfigTest {
         case KafkaConfig.SslTrustManagerAlgorithmProp =>
         case KafkaConfig.SslClientAuthProp => // ignore string
         case KafkaConfig.SslEndpointIdentificationAlgorithmProp => // ignore string
+        case KafkaConfig.SslSecureRandomImplementationProp => // ignore string
         case KafkaConfig.SslCipherSuitesProp => // ignore string
 
         //Sasl Configs
@@ -558,8 +561,7 @@ class KafkaConfigTest {
         case KafkaConfig.SaslKerberosTicketRenewJitterProp =>
         case KafkaConfig.SaslKerberosMinTimeBeforeReloginProp =>
         case KafkaConfig.SaslKerberosPrincipalToLocalRulesProp => // ignore string
-
-        case nonNegativeIntProperty => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
+        case _ => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
       }
     })
   }

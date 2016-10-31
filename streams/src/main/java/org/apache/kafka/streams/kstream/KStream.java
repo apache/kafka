@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -373,6 +373,10 @@ public interface KStream<K, V> {
     /**
      * Combine element values of this stream with another {@link KStream}'s elements of the same key using windowed Inner Join.
      * If a record key is null it will not included in the resulting {@link KStream}
+     * Both of the joining {@link KStream}s will be materialized in local state stores with auto-generated store names.
+     * Also a changelog topic named "${applicationId}-store name-changelog" will be automatically created
+     * in Kafka for each store for failure recovery, where "applicationID" is user-specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig}.
      *
      * @param otherStream       the instance of {@link KStream} joined with this stream
      * @param joiner            the instance of {@link ValueJoiner}
@@ -400,13 +404,16 @@ public interface KStream<K, V> {
     /**
      * Combine element values of this stream with another {@link KStream}'s elements of the same key using windowed Inner Join
      * with default serializers and deserializers. If a record key is null it will not included in the resulting {@link KStream}
+     * Both of the joining {@link KStream}s will be materialized in local state stores with auto-generated store names.
+     * Also a changelog topic named "${applicationId}-store name-changelog" will be automatically created
+     * in Kafka for each store for failure recovery, where "applicationID" is user-specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig}.
      *
      * @param otherStream   the instance of {@link KStream} joined with this stream
      * @param joiner        the instance of {@link ValueJoiner}
      * @param windows       the specification of the {@link JoinWindows}
      * @param <V1>          the value type of the other stream
      * @param <R>           the value type of the new stream
-     *
      * @return a {@link KStream} that contains join-records for each key and values computed by the given {@link ValueJoiner},
      *         one for each matched record-pair with the same key and within the joining window intervals
      */
@@ -418,6 +425,11 @@ public interface KStream<K, V> {
     /**
      * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Outer Join.
      * If a record key is null it will not included in the resulting {@link KStream}
+     * Both of the joining {@link KStream}s will be materialized in local state stores with an auto-generated
+     * store name.
+     * Also a changelog topic named "${applicationId}-store name-changelog" will be automatically created
+     * in Kafka for each store for failure recovery, where "applicationID" is user-specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig}.
      *
      * @param otherStream       the instance of {@link KStream} joined with this stream
      * @param joiner            the instance of {@link ValueJoiner}
@@ -445,6 +457,11 @@ public interface KStream<K, V> {
     /**
      * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Outer Join
      * with default serializers and deserializers. If a record key is null it will not included in the resulting {@link KStream}
+     * Both of the joining {@link KStream}s will be materialized in local state stores with auto-generated
+     * store names.
+     * Also a changelog topic named "${applicationId}-store name-changelog" will be automatically created
+     * in Kafka for each store for failure recovery, where "applicationID" is user-specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig}.
      *
      * @param otherStream   the instance of {@link KStream} joined with this stream
      * @param joiner        the instance of {@link ValueJoiner}
@@ -463,6 +480,11 @@ public interface KStream<K, V> {
     /**
      * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Left Join.
      * If a record key is null it will not included in the resulting {@link KStream}
+     * Both of the joining {@link KStream}s will be materialized in local state stores with auto-generated
+     * store names.
+     * Also a changelog topic named "${applicationId}-store name-changelog" will be automatically created
+     * in Kafka for each store for failure recovery, where "applicationID" is user-specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig}.
      *
      * @param otherStream       the instance of {@link KStream} joined with this stream
      * @param joiner            the instance of {@link ValueJoiner}
@@ -490,6 +512,11 @@ public interface KStream<K, V> {
     /**
      * Combine values of this stream with another {@link KStream}'s elements of the same key using windowed Left Join
      * with default serializers and deserializers. If a record key is null it will not included in the resulting {@link KStream}
+     * Both of the joining {@link KStream}s will be materialized in local state stores with auto-generated
+     * store names.
+     * Also a changelog topic named "${applicationId}-store name-changelog" will be automatically created
+     * in Kafka for each store for failure recovery, where "applicationID" is user-specified in the
+     * {@link org.apache.kafka.streams.StreamsConfig}.
      *
      * @param otherStream   the instance of {@link KStream} joined with this stream
      * @param joiner        the instance of {@link ValueJoiner}
@@ -506,6 +533,39 @@ public interface KStream<K, V> {
             JoinWindows windows);
 
     /**
+     * Combine values of this stream with {@link KTable}'s elements of the same key using non-windowed Inner Join.
+     * If a record key or value is {@code null} it will not included in the resulting {@link KStream}
+     *
+     * @param table  the instance of {@link KTable} joined with this stream
+     * @param joiner the instance of {@link ValueJoiner}
+     * @param <V1>   the value type of the table
+     * @param <V2>   the value type of the new stream
+     * @return a {@link KStream} that contains join-records for each key and values computed by the given {@link ValueJoiner},
+     * one for each matched record-pair with the same key
+     */
+    <V1, V2> KStream<K, V2> join(KTable<K, V1> table, ValueJoiner<V, V1, V2> joiner);
+
+    /**
+     * Combine values of this stream with {@link KTable}'s elements of the same key using non-windowed Inner Join.
+     * If a record key or value is {@code null} it will not included in the resulting {@link KStream}
+     *
+     * @param table       the instance of {@link KTable} joined with this stream
+     * @param valueJoiner the instance of {@link ValueJoiner}
+     * @param keySerde    key serdes for materializing this stream.
+     *                    If not specified the default serdes defined in the configs will be used
+     * @param valSerde    value serdes for materializing this stream,
+     *                    if not specified the default serdes defined in the configs will be used
+     * @param <V1>        the value type of the table
+     * @param <V2>        the value type of the new stream
+     * @return a {@link KStream} that contains join-records for each key and values computed by the given {@link ValueJoiner},
+     * one for each matched record-pair with the same key and within the joining window intervals
+     */
+    <V1, V2> KStream<K, V2> join(KTable<K, V1> table,
+                                 ValueJoiner<V, V1, V2> valueJoiner,
+                                 Serde<K> keySerde,
+                                 Serde<V> valSerde);
+
+    /**
      * Combine values of this stream with {@link KTable}'s elements of the same key using non-windowed Left Join.
      * If a record key is null it will not included in the resulting {@link KStream}
      *
@@ -515,7 +575,7 @@ public interface KStream<K, V> {
      * @param <V2>      the value type of the new stream
      *
      * @return a {@link KStream} that contains join-records for each key and values computed by the given {@link ValueJoiner},
-     *         one for each matched record-pair with the same key and within the joining window intervals
+     *         one for each matched record-pair with the same key
      */
     <V1, V2> KStream<K, V2> leftJoin(KTable<K, V1> table, ValueJoiner<V, V1, V2> joiner);
 
@@ -539,6 +599,7 @@ public interface KStream<K, V> {
                                      ValueJoiner<V, V1, V2> valueJoiner,
                                      Serde<K> keySerde,
                                      Serde<V> valSerde);
+
     /**
      * Group the records of this {@link KStream} using the provided {@link KeyValueMapper} and
      * default serializers and deserializers. If a record key is null it will not included in
@@ -565,8 +626,8 @@ public interface KStream<K, V> {
      * @return a {@link KGroupedStream} that contains the grouped records of the original {@link KStream}
      */
     <K1> KGroupedStream<K1, V> groupBy(KeyValueMapper<K, V, K1> selector,
-                                            Serde<K1> keySerde,
-                                            Serde<V> valSerde);
+                                       Serde<K1> keySerde,
+                                       Serde<V> valSerde);
 
     /**
      * Group the records with the same key into a {@link KGroupedStream} while preserving the

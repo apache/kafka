@@ -27,6 +27,7 @@ import kafka.producer.{ProducerRequestStatsRegistry, ProducerStatsRegistry, Prod
 import kafka.utils.Logging
 
 import scala.collection.immutable
+import javax.management.ObjectName
 
 
 trait KafkaMetricsGroup extends Logging {
@@ -42,8 +43,11 @@ trait KafkaMetricsGroup extends Logging {
     val klass = this.getClass
     val pkg = if (klass.getPackage == null) "" else klass.getPackage.getName
     val simpleName = klass.getSimpleName.replaceAll("\\$$", "")
+    // Tags may contain ipv6 address with ':', which is not valid in JMX ObjectName
+    def quoteIfRequired(value: String) = if (value.contains(':')) ObjectName.quote(value) else value
+    val metricTags = tags.map(kv => (kv._1, quoteIfRequired(kv._2)))
 
-    explicitMetricName(pkg, simpleName, name, tags)
+    explicitMetricName(pkg, simpleName, name, metricTags)
   }
 
 
@@ -154,23 +158,16 @@ object KafkaMetricsGroup extends KafkaMetricsGroup with Logging {
   )
 
   private def toMBeanName(tags: collection.Map[String, String]): Option[String] = {
-    val filteredTags = tags
-      .filter { case (tagKey, tagValue) => tagValue != ""}
+    val filteredTags = tags.filter { case (_, tagValue) => tagValue != "" }
     if (filteredTags.nonEmpty) {
-      val tagsString = filteredTags
-        .map { case (key, value) => "%s=%s".format(key, value)}
-        .mkString(",")
-
+      val tagsString = filteredTags.map { case (key, value) => "%s=%s".format(key, value) }.mkString(",")
       Some(tagsString)
     }
-    else {
-      None
-    }
+    else None
   }
 
   private def toScope(tags: collection.Map[String, String]): Option[String] = {
-    val filteredTags = tags
-      .filter { case (tagKey, tagValue) => tagValue != ""}
+    val filteredTags = tags.filter { case (_, tagValue) => tagValue != ""}
     if (filteredTags.nonEmpty) {
       // convert dot to _ since reporters like Graphite typically use dot to represent hierarchy
       val tagsString = filteredTags
@@ -180,9 +177,7 @@ object KafkaMetricsGroup extends KafkaMetricsGroup with Logging {
 
       Some(tagsString)
     }
-    else {
-      None
-    }
+    else None
   }
 
   def removeAllConsumerMetrics(clientId: String) {

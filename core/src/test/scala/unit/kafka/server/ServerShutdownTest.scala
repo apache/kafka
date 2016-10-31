@@ -129,16 +129,14 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     val server = new KafkaServer(newConfig, threadNamePrefix = Option(this.getClass.getName))
     try {
       server.startup()
-      fail("Expected KafkaServer setup to fail, throw exception")
+      fail("Expected KafkaServer setup to fail and throw exception")
     }
     catch {
       // Try to clean up carefully without hanging even if the test fails. This means trying to accurately
       // identify the correct exception, making sure the server was shutdown, and cleaning up if anything
       // goes wrong so that awaitShutdown doesn't hang
-      case e: org.I0Itec.zkclient.exception.ZkException =>
+      case _: org.I0Itec.zkclient.exception.ZkException =>
         assertEquals(NotRunning.state, server.brokerState.currentState)
-      case e: Throwable =>
-        fail("Expected ZkException during Kafka server starting up but caught a different exception %s".format(e.toString))
     }
     finally {
       if (server.brokerState.currentState != NotRunning.state)
@@ -170,7 +168,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
       assertTrue(true)
     }
     catch{
-      case ex: Throwable => fail()
+      case _: Throwable => fail()
     }
   }
 }

@@ -14,9 +14,9 @@ package org.apache.kafka.clients.producer.internals;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -31,6 +31,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.MetricName;
@@ -91,9 +92,6 @@ public class Sender implements Runnable {
     /* metrics */
     private final SenderMetrics sensors;
 
-    /* param clientId of the client */
-    private String clientId;
-
     /* the max time to wait for the server to respond to the request*/
     private final int requestTimeout;
 
@@ -106,7 +104,6 @@ public class Sender implements Runnable {
                   int retries,
                   Metrics metrics,
                   Time time,
-                  String clientId,
                   int requestTimeout) {
         this.client = client;
         this.accumulator = accumulator;
@@ -117,7 +114,6 @@ public class Sender implements Runnable {
         this.acks = acks;
         this.retries = retries;
         this.time = time;
-        this.clientId = clientId;
         this.sensors = new SenderMetrics(metrics);
         this.requestTimeout = requestTimeout;
     }
@@ -239,8 +235,10 @@ public class Sender implements Runnable {
      * Start closing the sender (won't actually complete until all data is sent out)
      */
     public void initiateClose() {
-        this.running = false;
+        // Ensure accumulator is closed first to guarantee that no more appends are accepted after
+        // breaking from the sender loop. Otherwise, we may miss some callbacks when shutting down.
         this.accumulator.close();
+        this.running = false;
         this.wakeup();
     }
 
@@ -278,8 +276,7 @@ public class Sender implements Runnable {
                     completeBatch(batch, error, partResp.baseOffset, partResp.timestamp, correlationId, now);
                 }
                 this.sensors.recordLatency(response.request().request().destination(), response.requestLatencyMs());
-                this.sensors.recordThrottleTime(response.request().request().destination(),
-                                                produceResponse.getThrottleTime());
+                this.sensors.recordThrottleTime(produceResponse.getThrottleTime());
             } else {
                 // this is the acks = 0 case, just complete all requests
                 for (RecordBatch batch : batches.values())
@@ -320,8 +317,13 @@ public class Sender implements Runnable {
             if (error != Errors.NONE)
                 this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
         }
-        if (error.exception() instanceof InvalidMetadataException)
+        if (error.exception() instanceof InvalidMetadataException) {
+            if (error.exception() instanceof UnknownTopicOrPartitionException)
+                log.warn("Received unknown topic or partition error in produce request on partition {}. The " +
+                        "topic/partition may not exist or the user may not have Describe access to it", batch.topicPartition);
             metadata.requestUpdate();
+        }
+
         // Unmute the completed partition.
         if (guaranteeMessageOrder)
             this.accumulator.unmutePartition(batch.topicPartition);
@@ -457,14 +459,13 @@ public class Sender implements Runnable {
             });
         }
 
-        public void maybeRegisterTopicMetrics(String topic) {
+        private void maybeRegisterTopicMetrics(String topic) {
             // if one sensor of the metrics has been registered for the topic,
             // then all other sensors should have been registered; and vice versa
             String topicRecordsCountName = "topic." + topic + ".records-per-batch";
             Sensor topicRecordCount = this.metrics.getSensor(topicRecordsCountName);
             if (topicRecordCount == null) {
-                Map<String, String> metricTags = new LinkedHashMap<String, String>();
-                metricTags.put("topic", topic);
+                Map<String, String> metricTags = Collections.singletonMap("topic", topic);
                 String metricGrpName = "producer-topic-metrics";
 
                 topicRecordCount = this.metrics.sensor(topicRecordsCountName);
@@ -557,7 +558,7 @@ public class Sender implements Runnable {
             }
         }
 
-        public void recordThrottleTime(String node, long throttleTimeMs) {
+        public void recordThrottleTime(long throttleTimeMs) {
             this.produceThrottleTimeSensor.record(throttleTimeMs, time.milliseconds());
         }
 

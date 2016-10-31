@@ -27,6 +27,7 @@ kafka.iws
 .vagrant
 Vagrantfile.local
 /logs
+.DS_Store
 
 config/server-*
 config/zookeeper-*
@@ -37,6 +38,7 @@ results
 tests/results
 .ducktape
 tests/.ducktape
+tests/venv
 .cache
 
 docs/generated/

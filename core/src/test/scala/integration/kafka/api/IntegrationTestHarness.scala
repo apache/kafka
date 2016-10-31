@@ -21,13 +21,16 @@ import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import kafka.utils.TestUtils
 import java.util.Properties
+
+import kafka.common.Topic
 import org.apache.kafka.clients.producer.KafkaProducer
 import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
 import org.junit.{After, Before}
+
 import scala.collection.mutable.Buffer
-import kafka.coordinator.GroupCoordinator
-import org.apache.kafka.common.internals.TopicConstants
+import scala.util.control.Breaks.{breakable, break}
+import java.util.ConcurrentModificationException
 
 /**
  * A helper class for writing integration tests that involve producers, consumers, and servers
@@ -62,26 +65,34 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
     consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
     consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
     consumerConfig.putAll(consumerSecurityProps)
-    for (i <- 0 until producerCount)
-      producers += TestUtils.createNewProducer(brokerList,
-                                               securityProtocol = this.securityProtocol,
-                                               trustStoreFile = this.trustStoreFile,
-                                               saslProperties = this.saslProperties,
-                                               props = Some(producerConfig))
-    for (i <- 0 until consumerCount) {
-      consumers += TestUtils.createNewConsumer(brokerList,
-                                               securityProtocol = this.securityProtocol,
-                                               trustStoreFile = this.trustStoreFile,
-                                               saslProperties = this.saslProperties,
-                                               props = Some(consumerConfig))
+    for (_ <- 0 until producerCount)
+      producers += createNewProducer
+    for (_ <- 0 until consumerCount) {
+      consumers += createNewConsumer
     }
 
     // create the consumer offset topic
-    TestUtils.createTopic(zkUtils, TopicConstants.GROUP_METADATA_TOPIC_NAME,
+    TestUtils.createTopic(zkUtils, Topic.GroupMetadataTopicName,
       serverConfig.getProperty(KafkaConfig.OffsetsTopicPartitionsProp).toInt,
       serverConfig.getProperty(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
       servers,
       servers.head.groupCoordinator.offsetsTopicConfigs)
+  }
+
+  def createNewProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
+      TestUtils.createNewProducer(brokerList,
+                                  securityProtocol = this.securityProtocol,
+                                  trustStoreFile = this.trustStoreFile,
+                                  saslProperties = this.saslProperties,
+                                  props = Some(producerConfig))
+  }
+  
+  def createNewConsumer: KafkaConsumer[Array[Byte], Array[Byte]] = {
+      TestUtils.createNewConsumer(brokerList,
+                                  securityProtocol = this.securityProtocol,
+                                  trustStoreFile = this.trustStoreFile,
+                                  saslProperties = this.saslProperties,
+                                  props = Some(consumerConfig))
   }
 
   @After

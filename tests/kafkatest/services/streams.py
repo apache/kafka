@@ -91,7 +91,7 @@ class StreamsSmokeTestBaseService(KafkaPathResolverMixin, Service):
     def wait(self):
         for node in self.nodes:
             for pid in self.pids(node):
-                wait_until(lambda: not node.account.alive(pid), timeout_sec=120, err_msg="Streams Smoke Test process on " + str(node.account) + " took too long to exit")
+                wait_until(lambda: not node.account.alive(pid), timeout_sec=180, err_msg="Streams Smoke Test process on " + str(node.account) + " took too long to exit")
 
     def clean_node(self, node):
         node.account.kill_process("streams", clean_shutdown=False, allow_fail=True)

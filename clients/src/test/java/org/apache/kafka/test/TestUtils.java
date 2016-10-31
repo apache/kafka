@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,21 +15,6 @@
  * limitations under the License.
  */
 package org.apache.kafka.test;
-
-import static java.util.Arrays.asList;
-
-import java.io.File;
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Random;
-import java.util.UUID;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -42,6 +27,29 @@ import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.Utils;
 
+import javax.xml.bind.DatatypeConverter;
+import java.io.File;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Random;
+import java.util.Set;
+import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import static java.util.Arrays.asList;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
 /**
  * Helper functions for writing unit tests
  */
@@ -53,55 +61,59 @@ public class TestUtils {
     public static final String DIGITS = "0123456789";
     public static final String LETTERS_AND_DIGITS = LETTERS + DIGITS;
 
+    public static final String GROUP_METADATA_TOPIC_NAME = "__consumer_offsets";
+    public static final Set<String> INTERNAL_TOPICS = Collections.singleton(GROUP_METADATA_TOPIC_NAME);
+
     /* A consistent random number generator to make tests repeatable */
     public static final Random SEEDED_RANDOM = new Random(192348092834L);
     public static final Random RANDOM = new Random();
+    public static final long DEFAULT_MAX_WAIT_MS = 15000;
 
-    public static Cluster singletonCluster(Map<String, Integer> topicPartitionCounts) {
+    public static Cluster singletonCluster(final Map<String, Integer> topicPartitionCounts) {
         return clusterWith(1, topicPartitionCounts);
     }
 
-    public static Cluster singletonCluster(String topic, int partitions) {
+    public static Cluster singletonCluster(final String topic, final int partitions) {
         return clusterWith(1, topic, partitions);
     }
 
-    public static Cluster clusterWith(int nodes, Map<String, Integer> topicPartitionCounts) {
-        Node[] ns = new Node[nodes];
+    public static Cluster clusterWith(final int nodes, final Map<String, Integer> topicPartitionCounts) {
+        final Node[] ns = new Node[nodes];
         for (int i = 0; i < nodes; i++)
             ns[i] = new Node(i, "localhost", 1969);
-        List<PartitionInfo> parts = new ArrayList<>();
-        for (Map.Entry<String, Integer> topicPartition : topicPartitionCounts.entrySet()) {
-            String topic = topicPartition.getKey();
-            int partitions = topicPartition.getValue();
+        final List<PartitionInfo> parts = new ArrayList<>();
+        for (final Map.Entry<String, Integer> topicPartition : topicPartitionCounts.entrySet()) {
+            final String topic = topicPartition.getKey();
+            final int partitions = topicPartition.getValue();
             for (int i = 0; i < partitions; i++)
                 parts.add(new PartitionInfo(topic, i, ns[i % ns.length], ns, ns));
         }
-        return new Cluster(asList(ns), parts, Collections.<String>emptySet());
+        return new Cluster("kafka-cluster", asList(ns), parts, Collections.<String>emptySet(), INTERNAL_TOPICS);
     }
 
-    public static Cluster clusterWith(int nodes, String topic, int partitions) {
+    public static Cluster clusterWith(final int nodes, final String topic, final int partitions) {
         return clusterWith(nodes, Collections.singletonMap(topic, partitions));
     }
 
     /**
      * Generate an array of random bytes
-     * 
+     *
      * @param size The size of the array
      */
-    public static byte[] randomBytes(int size) {
-        byte[] bytes = new byte[size];
+    public static byte[] randomBytes(final int size) {
+        final byte[] bytes = new byte[size];
         SEEDED_RANDOM.nextBytes(bytes);
         return bytes;
     }
 
     /**
      * Generate a random string of letters and digits of the given length
-     * 
+     *
      * @param len The length of the string
      * @return The random string
      */
-    public static String randomString(int len) {
-        StringBuilder b = new StringBuilder();
+    public static String randomString(final int len) {
+        final StringBuilder b = new StringBuilder();
         for (int i = 0; i < len; i++)
             b.append(LETTERS_AND_DIGITS.charAt(SEEDED_RANDOM.nextInt(LETTERS_AND_DIGITS.length())));
         return b.toString();
@@ -112,7 +124,7 @@ public class TestUtils {
      * suffix to generate its name.
      */
     public static File tempFile() throws IOException {
-        File file = File.createTempFile("kafka", ".tmp");
+        final File file = File.createTempFile("kafka", ".tmp");
         file.deleteOnExit();
 
         return file;
@@ -123,14 +135,15 @@ public class TestUtils {
      *
      * @param prefix The prefix of the temporary directory, if null using "kafka-" as default prefix
      */
-    public static File tempDirectory(String prefix) {
+    public static File tempDirectory(final String prefix) {
         return tempDirectory(null, prefix);
     }
 
     /**
      * Create a temporary relative directory in the default temporary-file directory with a
      * prefix of "kafka-"
-     * @return  the temporary directory just created.
+     *
+     * @return the temporary directory just created.
      */
     public static File tempDirectory() {
         return tempDirectory(null);
@@ -142,13 +155,13 @@ public class TestUtils {
      * @param parent The parent folder path name, if null using the default temporary-file directory
      * @param prefix The prefix of the temporary directory, if null using "kafka-" as default prefix
      */
-    public static File tempDirectory(Path parent, String prefix) {
+    public static File tempDirectory(final Path parent, String prefix) {
         final File file;
         prefix = prefix == null ? "kafka-" : prefix;
         try {
             file = parent == null ?
-                    Files.createTempDirectory(prefix).toFile() : Files.createTempDirectory(parent, prefix).toFile();
-        } catch (IOException ex) {
+                Files.createTempDirectory(prefix).toFile() : Files.createTempDirectory(parent, prefix).toFile();
+        } catch (final IOException ex) {
             throw new RuntimeException("Failed to create a temp dir", ex);
         }
         file.deleteOnExit();
@@ -169,13 +182,13 @@ public class TestUtils {
      * `Record(long timestamp, byte[] key, byte[] value, CompressionType type, int valueOffset, int valueSize)` as this
      * constructor does not include either of these fields.
      */
-    public static ByteBuffer partitionRecordsBuffer(long offset, CompressionType compressionType, Record... records) {
+    public static ByteBuffer partitionRecordsBuffer(final long offset, final CompressionType compressionType, final Record... records) {
         int bufferSize = 0;
-        for (Record record : records)
+        for (final Record record : records)
             bufferSize += Records.LOG_OVERHEAD + record.size();
-        ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
-        MemoryRecords memoryRecords = MemoryRecords.emptyRecords(buffer, compressionType);
-        for (Record record : records)
+        final ByteBuffer buffer = ByteBuffer.allocate(bufferSize);
+        final MemoryRecords memoryRecords = MemoryRecords.emptyRecords(buffer, compressionType);
+        for (final Record record : records)
             memoryRecords.append(offset, record);
         memoryRecords.close();
         return memoryRecords.buffer();
@@ -195,7 +208,7 @@ public class TestUtils {
         return properties;
     }
 
-    public static Properties producerConfig(final String bootstrapServers, Class keySerializer, Class valueSerializer) {
+    public static Properties producerConfig(final String bootstrapServers, final Class keySerializer, final Class valueSerializer) {
         return producerConfig(bootstrapServers, keySerializer, valueSerializer, new Properties());
     }
 
@@ -215,22 +228,33 @@ public class TestUtils {
         return consumerConfig;
     }
 
-    /**
-     * returns consumer config with random UUID for the Group ID
-     */
-    public static Properties consumerConfig(final String bootstrapServers, Class keyDeserializer, Class valueDeserializer) {
+    public static Properties consumerConfig(final String bootstrapServers,
+                                            final String groupId,
+                                            final Class keyDeserializer,
+                                            final Class valueDeserializer) {
         return consumerConfig(bootstrapServers,
-                              UUID.randomUUID().toString(),
-                              keyDeserializer,
-                              valueDeserializer,
-                              new Properties());
+            groupId,
+            keyDeserializer,
+            valueDeserializer,
+            new Properties());
     }
 
     /**
-     *  uses default value of 15 seconds for timeout
+     * returns consumer config with random UUID for the Group ID
      */
-    public static void waitForCondition(TestCondition testCondition, String conditionDetails) throws InterruptedException {
-        waitForCondition(testCondition, 15000, conditionDetails);
+    public static Properties consumerConfig(final String bootstrapServers, final Class keyDeserializer, final Class valueDeserializer) {
+        return consumerConfig(bootstrapServers,
+            UUID.randomUUID().toString(),
+            keyDeserializer,
+            valueDeserializer,
+            new Properties());
+    }
+
+    /**
+     * uses default value of 15 seconds for timeout
+     */
+    public static void waitForCondition(final TestCondition testCondition, final String conditionDetails) throws InterruptedException {
+        waitForCondition(testCondition, DEFAULT_MAX_WAIT_MS, conditionDetails);
     }
 
     /**
@@ -239,18 +263,50 @@ public class TestUtils {
      * without unnecessarily increasing test time (as the condition is checked frequently). The longer timeout is needed to
      * avoid transient failures due to slow or overloaded machines.
      */
-    public static void waitForCondition(TestCondition testCondition, long maxWaitMs, String conditionDetails) throws InterruptedException {
-        long startTime = System.currentTimeMillis();
+    public static void waitForCondition(final TestCondition testCondition, final long maxWaitMs, String conditionDetails) throws InterruptedException {
+        final long startTime = System.currentTimeMillis();
 
-
-        while (!testCondition.conditionMet() && ((System.currentTimeMillis() - startTime) < maxWaitMs)) {
+        boolean testConditionMet;
+        while (!(testConditionMet = testCondition.conditionMet()) && ((System.currentTimeMillis() - startTime) < maxWaitMs)) {
             Thread.sleep(Math.min(maxWaitMs, 100L));
         }
 
-        if (!testCondition.conditionMet()) {
+        // don't re-evaluate testCondition.conditionMet() because this might slow down some tests significantly (this
+        // could be avoided by making the implementations more robust, but we have a large number of such implementations
+        // and it's easier to simply avoid the issue altogether)
+        if (!testConditionMet) {
             conditionDetails = conditionDetails != null ? conditionDetails : "";
             throw new AssertionError("Condition not met within timeout " + maxWaitMs + ". " + conditionDetails);
         }
     }
 
+    /**
+     * Checks if a cluster id is valid.
+     * @param clusterId
+     */
+    public static void isValidClusterId(String clusterId) {
+        assertNotNull(clusterId);
+
+        // Base 64 encoded value is 22 characters
+        assertEquals(clusterId.length(), 22);
+
+        Pattern clusterIdPattern = Pattern.compile("[a-zA-Z0-9_\\-]+");
+        Matcher matcher = clusterIdPattern.matcher(clusterId);
+        assertTrue(matcher.matches());
+
+        // Convert into normal variant and add padding at the end.
+        String originalClusterId = String.format("%s==", clusterId.replace("_", "/").replace("-", "+"));
+        byte[] decodedUuid = DatatypeConverter.parseBase64Binary(originalClusterId);
+
+        // We expect 16 bytes, same as the input UUID.
+        assertEquals(decodedUuid.length, 16);
+
+        //Check if it can be converted back to a UUID.
+        try {
+            ByteBuffer uuidBuffer = ByteBuffer.wrap(decodedUuid);
+            new UUID(uuidBuffer.getLong(), uuidBuffer.getLong()).toString();
+        } catch (Exception e) {
+            fail(clusterId + " cannot be converted back to UUID.");
+        }
+    }
 }

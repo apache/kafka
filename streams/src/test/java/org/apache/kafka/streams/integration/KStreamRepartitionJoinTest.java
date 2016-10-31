@@ -3,13 +3,18 @@
  * agreements.  See the NOTICE file distributed with this work for additional information regarding
  * copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance with the License.  You may obtain a
- * copy of the License at <p> http://www.apache.org/licenses/LICENSE-2.0 <p> Unless required by
- * applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See
- * the License for the specific language governing permissions and limitations under the License.
+ * copy of the License at
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software distributed under the License
+ * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+ * or implied. See the License for the specific language governing permissions and limitations under
+ * the License.
  */
 package org.apache.kafka.streams.integration;
 
+import kafka.utils.MockTime;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
@@ -21,7 +26,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.integration.utils.EmbeddedSingleNodeKafkaCluster;
+import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
@@ -35,6 +40,11 @@ import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
+import org.junit.runners.Parameterized.Parameters;
+
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
@@ -46,12 +56,13 @@ import java.util.concurrent.TimeUnit;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 
+@RunWith(Parameterized.class)
 public class KStreamRepartitionJoinTest {
+    private static final int NUM_BROKERS = 1;
 
     @ClassRule
-    public static final EmbeddedSingleNodeKafkaCluster CLUSTER =
-        new EmbeddedSingleNodeKafkaCluster();
-
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+    private final MockTime mockTime = CLUSTER.time;
     private static final long WINDOW_SIZE = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
 
     private KStreamBuilder builder;
@@ -68,12 +79,21 @@ public class KStreamRepartitionJoinTest {
     private String streamOneInput;
     private String streamTwoInput;
     private String streamFourInput;
+    private static volatile int testNo = 0;
 
+    @Parameter
+    public long cacheSizeBytes;
 
+    //Single parameter, use Object[]
+    @Parameters
+    public static Object[] data() {
+        return new Object[] {0, 10 * 1024 * 1024L};
+    }
 
     @Before
     public void before() {
-        String applicationId = "kstream-repartition-join-test";
+        testNo++;
+        String applicationId = "kstream-repartition-join-test-" + testNo;
         builder = new KStreamBuilder();
         createTopics();
         streamsConfiguration = new Properties();
@@ -83,6 +103,8 @@ public class KStreamRepartitionJoinTest {
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1);
+        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
 
         streamOne = builder.stream(Serdes.Long(), Serdes.Integer(), streamOneInput);
         streamTwo = builder.stream(Serdes.Integer(), Serdes.String(), streamTwoInput);
@@ -95,7 +117,7 @@ public class KStreamRepartitionJoinTest {
             }
         };
 
-        keyMapper = MockKeyValueMapper.<Long, Integer>SelectValueKeyValueMapper();
+        keyMapper = MockKeyValueMapper.SelectValueKeyValueMapper();
     }
 
     @After
@@ -108,8 +130,8 @@ public class KStreamRepartitionJoinTest {
 
     @Test
     public void shouldCorrectlyRepartitionOnJoinOperations() throws Exception {
-        produceMessages();
 
+        produceMessages();
         final ExpectedOutputOnTopic mapOne = mapStreamOneAndJoin();
         final ExpectedOutputOnTopic mapBoth = mapBothStreamsAndJoin();
         final ExpectedOutputOnTopic mapMapJoin = mapMapJoin();
@@ -132,8 +154,8 @@ public class KStreamRepartitionJoinTest {
     }
 
     private ExpectedOutputOnTopic mapStreamOneAndJoin() {
-        String mapOneStreamAndJoinOutput = "map-one-join-output";
-        doJoin(streamOne.map(keyMapper), streamTwo, mapOneStreamAndJoinOutput, "map-one-join");
+        String mapOneStreamAndJoinOutput = "map-one-join-output-" + testNo;
+        doJoin(streamOne.map(keyMapper), streamTwo, mapOneStreamAndJoinOutput);
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, mapOneStreamAndJoinOutput);
     }
 
@@ -141,8 +163,8 @@ public class KStreamRepartitionJoinTest {
         final KStream<Integer, Integer> map1 = streamOne.map(keyMapper);
         final KStream<Integer, String> map2 = streamTwo.map(MockKeyValueMapper.<Integer, String>NoOpKeyValueMapper());
 
-        doJoin(map1, map2, "map-both-streams-and-join", "map-both-join");
-        return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, "map-both-streams-and-join");
+        doJoin(map1, map2, "map-both-streams-and-join-" + testNo);
+        return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, "map-both-streams-and-join-" + testNo);
     }
 
 
@@ -150,7 +172,7 @@ public class KStreamRepartitionJoinTest {
         final KStream<Integer, Integer> mapMapStream = streamOne.map(
             new KeyValueMapper<Long, Integer, KeyValue<Long, Integer>>() {
                 @Override
-                public KeyValue<Long, Integer> apply(Long key, Integer value) {
+                public KeyValue<Long, Integer> apply(final Long key, final Integer value) {
                     if (value == null) {
                         return new KeyValue<>(null, null);
                     }
@@ -158,8 +180,8 @@ public class KStreamRepartitionJoinTest {
                 }
             }).map(keyMapper);
 
-        String outputTopic = "map-map-join";
-        doJoin(mapMapStream, streamTwo, outputTopic, outputTopic);
+        final String outputTopic = "map-map-join-" + testNo;
+        doJoin(mapMapStream, streamTwo, outputTopic);
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
     }
 
@@ -167,10 +189,10 @@ public class KStreamRepartitionJoinTest {
     public ExpectedOutputOnTopic selectKeyAndJoin() throws ExecutionException, InterruptedException {
 
         final KStream<Integer, Integer> keySelected =
-                streamOne.selectKey(MockKeyValueMapper.<Long, Integer>SelectValueMapper());
+            streamOne.selectKey(MockKeyValueMapper.<Long, Integer>SelectValueMapper());
 
-        String outputTopic = "select-key-join";
-        doJoin(keySelected, streamTwo, outputTopic, outputTopic);
+        final String outputTopic = "select-key-join-" + testNo;
+        doJoin(keySelected, streamTwo, outputTopic);
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
     }
 
@@ -179,38 +201,38 @@ public class KStreamRepartitionJoinTest {
         final KStream<Integer, Integer> flatMapped = streamOne.flatMap(
             new KeyValueMapper<Long, Integer, Iterable<KeyValue<Integer, Integer>>>() {
                 @Override
-                public Iterable<KeyValue<Integer, Integer>> apply(Long key,
-                                                                  Integer value) {
+                public Iterable<KeyValue<Integer, Integer>> apply(final Long key, final Integer value) {
                     return Collections.singletonList(new KeyValue<>(value, value));
                 }
             });
 
-        String outputTopic = "flat-map-join";
-        doJoin(flatMapped, streamTwo, outputTopic, outputTopic);
+        final String outputTopic = "flat-map-join-" + testNo;
+        doJoin(flatMapped, streamTwo, outputTopic);
 
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
     }
 
     private ExpectedOutputOnTopic joinMappedRhsStream() throws Exception {
 
-        ValueJoiner<String, Integer, String> joiner = new ValueJoiner<String, Integer, String>() {
+        final ValueJoiner<String, Integer, String> joiner = new ValueJoiner<String, Integer, String>() {
             @Override
-            public String apply(String value1, Integer value2) {
+            public String apply(final String value1, final Integer value2) {
                 return value1 + ":" + value2;
             }
         };
-        String output = "join-rhs-stream-mapped";
+
+        final String output = "join-rhs-stream-mapped-" + testNo;
+        CLUSTER.createTopic(output);
         streamTwo
             .join(streamOne.map(keyMapper),
-                  joiner,
-                  getJoinWindow(output),
-                  Serdes.Integer(),
-                  Serdes.String(),
-                  Serdes.Integer())
+                joiner,
+                getJoinWindow(),
+                Serdes.Integer(),
+                Serdes.String(),
+                Serdes.Integer())
             .to(Serdes.Integer(), Serdes.String(), output);
 
-        return new ExpectedOutputOnTopic(Arrays.asList("A:1", "B:2", "C:3", "D:4", "E:5"),
-                            output);
+        return new ExpectedOutputOnTopic(Arrays.asList("A:1", "B:2", "C:3", "D:4", "E:5"), output);
     }
 
     public ExpectedOutputOnTopic mapBothStreamsAndLeftJoin() throws Exception {
@@ -218,57 +240,59 @@ public class KStreamRepartitionJoinTest {
 
         final KStream<Integer, String> map2 = streamTwo.map(MockKeyValueMapper.<Integer, String>NoOpKeyValueMapper());
 
-        String outputTopic = "left-join";
+
+        final String outputTopic = "left-join-" + testNo;
+        CLUSTER.createTopic(outputTopic);
         map1.leftJoin(map2,
-                      valueJoiner,
-                      getJoinWindow("the-left-join"),
-                      Serdes.Integer(),
-                      Serdes.Integer(),
-                      Serdes.String())
+            valueJoiner,
+            getJoinWindow(),
+            Serdes.Integer(),
+            Serdes.Integer(),
+            Serdes.String())
             .to(Serdes.Integer(), Serdes.String(), outputTopic);
 
         return new ExpectedOutputOnTopic(expectedStreamOneTwoJoin, outputTopic);
     }
 
-    private ExpectedOutputOnTopic joinTwoMappedStreamsOneThatHasBeenPreviouslyJoined() throws
-                                                                                   Exception {
+    private ExpectedOutputOnTopic joinTwoMappedStreamsOneThatHasBeenPreviouslyJoined() throws Exception {
         final KStream<Integer, Integer> map1 = streamOne.map(keyMapper);
 
         final KeyValueMapper<Integer, String, KeyValue<Integer, String>>
-            kvMapper = MockKeyValueMapper.<Integer, String>NoOpKeyValueMapper();
+            kvMapper = MockKeyValueMapper.NoOpKeyValueMapper();
 
         final KStream<Integer, String> map2 = streamTwo.map(kvMapper);
 
         final KStream<Integer, String> join = map1.join(map2,
-                                                        valueJoiner,
-                                                        getJoinWindow("join-one"),
-                                                        Serdes.Integer(),
-                                                        Serdes.Integer(),
-                                                        Serdes.String());
+            valueJoiner,
+            getJoinWindow(),
+            Serdes.Integer(),
+            Serdes.Integer(),
+            Serdes.String());
 
-        ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
+        final ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
             @Override
             public String apply(final String value1, final String value2) {
                 return value1 + ":" + value2;
             }
         };
-        String topic = "map-join-join";
+
+        final String topic = "map-join-join-" + testNo;
+        CLUSTER.createTopic(topic);
         join.map(kvMapper)
             .join(streamFour.map(kvMapper),
-                  joiner,
-                  getJoinWindow("the-other-join"),
-                  Serdes.Integer(),
-                  Serdes.String(),
-                  Serdes.String())
+                joiner,
+                getJoinWindow(),
+                Serdes.Integer(),
+                Serdes.String(),
+                Serdes.String())
             .to(Serdes.Integer(), Serdes.String(), topic);
 
 
-        return new ExpectedOutputOnTopic(Arrays.asList("1:A:A", "2:B:B", "3:C:C", "4:D:D", "5:E:E"),
-                            topic);
+        return new ExpectedOutputOnTopic(Arrays.asList("1:A:A", "2:B:B", "3:C:C", "4:D:D", "5:E:E"), topic);
     }
 
-    private JoinWindows getJoinWindow(String name) {
-        return (JoinWindows) JoinWindows.of(name, WINDOW_SIZE).until(3 * WINDOW_SIZE);
+    private JoinWindows getJoinWindow() {
+        return (JoinWindows) JoinWindows.of(WINDOW_SIZE).until(3 * WINDOW_SIZE);
     }
 
 
@@ -286,13 +310,14 @@ public class KStreamRepartitionJoinTest {
     private void verifyCorrectOutput(final ExpectedOutputOnTopic expectedOutputOnTopic)
         throws InterruptedException {
         assertThat(receiveMessages(new StringDeserializer(),
-                                   expectedOutputOnTopic.expectedOutput.size(),
-                                   expectedOutputOnTopic.outputTopic),
-                   is(expectedOutputOnTopic.expectedOutput));
+            expectedOutputOnTopic.expectedOutput.size(),
+            expectedOutputOnTopic.outputTopic),
+            is(expectedOutputOnTopic.expectedOutput));
     }
-    private void verifyLeftJoin(ExpectedOutputOnTopic expectedOutputOnTopic)
+
+    private void verifyLeftJoin(final ExpectedOutputOnTopic expectedOutputOnTopic)
         throws InterruptedException, ExecutionException {
-        List<String> received = receiveMessages(new StringDeserializer(), expectedOutputOnTopic
+        final List<String> received = receiveMessages(new StringDeserializer(), expectedOutputOnTopic
             .expectedOutput.size(), expectedOutputOnTopic.outputTopic);
         if (!received.equals(expectedOutputOnTopic.expectedOutput)) {
             produceToStreamOne();
@@ -323,7 +348,8 @@ public class KStreamRepartitionJoinTest {
                 CLUSTER.bootstrapServers(),
                 IntegerSerializer.class,
                 StringSerializer.class,
-                new Properties()));
+                new Properties()),
+            mockTime);
     }
 
     private void produceToStreamOne()
@@ -341,15 +367,16 @@ public class KStreamRepartitionJoinTest {
                 CLUSTER.bootstrapServers(),
                 LongSerializer.class,
                 IntegerSerializer.class,
-                new Properties()));
+                new Properties()),
+            mockTime);
     }
 
     private void createTopics() {
-        streamOneInput = "stream-one";
-        streamTwoInput = "stream-two";
-        streamFourInput = "stream-four";
+        streamOneInput = "stream-one-" + testNo;
+        streamTwoInput = "stream-two-" + testNo;
+        streamFourInput = "stream-four-" + testNo;
         CLUSTER.createTopic(streamOneInput);
-        CLUSTER.createTopic(streamTwoInput, 2, 1);
+        CLUSTER.createTopic(streamTwoInput);
         CLUSTER.createTopic(streamFourInput);
     }
 
@@ -365,40 +392,38 @@ public class KStreamRepartitionJoinTest {
 
         final Properties config = new Properties();
 
-        config
-            .setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         config.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "kstream-test");
         config.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         config.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-                                       IntegerDeserializer.class.getName());
+            IntegerDeserializer.class.getName());
         config.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-                                       valueDeserializer.getClass().getName());
-        List<String> received = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(config,
-                                                                                      topic,
-                                                                                      numMessages,
-                                                                                      60 *
-                                                                                      1000);
+            valueDeserializer.getClass().getName());
+        final List<String> received = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(
+            config,
+            topic,
+            numMessages,
+            60 * 1000);
         Collections.sort(received);
         return received;
     }
 
-    private void verifyCorrectOutput(List<String> expectedMessages,
+    private void verifyCorrectOutput(final List<String> expectedMessages,
                                      final String topic) throws InterruptedException {
         assertThat(receiveMessages(new StringDeserializer(), expectedMessages.size(), topic),
-                   is(expectedMessages));
+            is(expectedMessages));
     }
 
-    private void doJoin(KStream<Integer, Integer> lhs,
-                        KStream<Integer, String> rhs,
-                        String outputTopic,
-                        final String joinName) {
+    private void doJoin(final KStream<Integer, Integer> lhs,
+                        final KStream<Integer, String> rhs,
+                        final String outputTopic) {
         CLUSTER.createTopic(outputTopic);
         lhs.join(rhs,
-                 valueJoiner,
-                 getJoinWindow(joinName),
-                 Serdes.Integer(),
-                 Serdes.Integer(),
-                 Serdes.String())
+            valueJoiner,
+            getJoinWindow(),
+            Serdes.Integer(),
+            Serdes.Integer(),
+            Serdes.String())
             .to(Serdes.Integer(), Serdes.String(), outputTopic);
     }
 

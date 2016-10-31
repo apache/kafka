@@ -20,9 +20,11 @@ package kafka.utils
 import java.io._
 import java.nio._
 import java.nio.channels._
-import java.util.concurrent.locks.{ReadWriteLock, Lock}
+import java.util.concurrent.locks.{Lock, ReadWriteLock}
 import java.lang.management._
+import java.util.{Properties, UUID}
 import javax.management._
+import javax.xml.bind.DatatypeConverter
 
 import org.apache.kafka.common.protocol.SecurityProtocol
 
@@ -58,6 +60,7 @@ object CoreUtils extends Logging {
 
   /**
     * Create a thread
+    *
     * @param name The name of the thread
     * @param daemon Whether the thread should block JVM shutdown
     * @param fun The function to execute in the thread
@@ -268,13 +271,44 @@ object CoreUtils extends Logging {
    */
   def duplicates[T](s: Traversable[T]): Iterable[T] = {
     s.groupBy(identity)
-      .map{ case (k,l) => (k,l.size)}
-      .filter{ case (k,l) => l > 1 }
+      .map { case (k, l) => (k, l.size)}
+      .filter { case (_, l) => l > 1 }
       .keys
   }
 
   def listenerListToEndPoints(listeners: String): immutable.Map[SecurityProtocol, EndPoint] = {
     val listenerList = parseCsvList(listeners)
     listenerList.map(listener => EndPoint.createEndPoint(listener)).map(ep => ep.protocolType -> ep).toMap
+  }
+
+  def generateUuidAsBase64(): String = {
+    val uuid = UUID.randomUUID()
+    urlSafeBase64EncodeNoPadding(getBytesFromUuid(uuid))
+  }
+
+  def getBytesFromUuid(uuid: UUID): Array[Byte] = {
+    // Extract bytes for uuid which is 128 bits (or 16 bytes) long.
+    val uuidBytes = ByteBuffer.wrap(new Array[Byte](16))
+    uuidBytes.putLong(uuid.getMostSignificantBits)
+    uuidBytes.putLong(uuid.getLeastSignificantBits)
+    uuidBytes.array
+  }
+
+  def urlSafeBase64EncodeNoPadding(data: Array[Byte]): String = {
+    val base64EncodedUUID = DatatypeConverter.printBase64Binary(data)
+    //Convert to URL safe variant by replacing + and / with - and _ respectively.
+    val urlSafeBase64EncodedUUID = base64EncodedUUID.replace("+", "-").replace("/", "_")
+    // Remove the "==" padding at the end.
+    urlSafeBase64EncodedUUID.substring(0, urlSafeBase64EncodedUUID.length - 2)
+  }
+
+  def propsWith(key: String, value: String): Properties = {
+    propsWith((key, value))
+  }
+
+  def propsWith(props: (String, String)*): Properties = {
+    val properties = new Properties()
+    props.foreach { case (k, v) => properties.put(k, v) }
+    properties
   }
 }

@@ -26,7 +26,7 @@ buildscript {
     // For Apache Rat plugin to ignore non-Git files
     classpath "org.ajoberstar:grgit:1.5.0"
     classpath 'com.github.ben-manes:gradle-versions-plugin:0.12.0'
-    classpath 'org.scoverage:gradle-scoverage:2.0.1'
+    classpath 'org.scoverage:gradle-scoverage:2.1.0'
   }
 }
 
@@ -68,8 +68,12 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "2.13"
+  gradleVersion = "3.0"
   buildVersionFileName = "kafka-version.properties"
+
+  maxPermSizeArgs = []
+  if (!JavaVersion.current().isJava8Compatible())
+    maxPermSizeArgs = ['-XX:MaxPermSize=512m']
 
   userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
 
@@ -157,11 +161,17 @@ subprojects {
 
   test {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+
+    minHeapSize = "256m"
+    maxHeapSize = "2048m"
+    jvmArgs = maxPermSizeArgs
+
     testLogging {
       events = userTestLoggingEvents ?: ["passed", "skipped", "failed"]
       showStandardStreams = userShowStandardStreams ?: false
       exceptionFormat = 'full'
     }
+
   }
 
   jar {
@@ -236,8 +246,6 @@ subprojects {
   }
 
   tasks.withType(ScalaCompile) {
-    scalaCompileOptions.useAnt = false
-
     scalaCompileOptions.additionalParameters = [
       "-deprecation",
       "-unchecked",
@@ -252,7 +260,7 @@ subprojects {
 
     configure(scalaCompileOptions.forkOptions) {
       memoryMaximumSize = '1g'
-      jvmArgs = ['-XX:MaxPermSize=512m', '-Xss2m']
+      jvmArgs = ['-Xss2m'] + maxPermSizeArgs
     }
   }
 
@@ -488,9 +496,17 @@ project(':core') {
     standardOutput = new File(generatedDocsDir, "kafka_config.html").newOutputStream()
   }
 
+  task genTopicConfigDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'kafka.log.LogConfig'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "topic_config.html").newOutputStream()
+  }
+
   task siteDocsTar(dependsOn: ['genProtocolErrorDocs', 'genProtocolApiKeyDocs', 'genProtocolMessageDocs',
                                'genProducerConfigDocs', 'genConsumerConfigDocs', 'genKafkaConfigDocs',
-                               ':connect:runtime:genConnectConfigDocs', ':streams:genStreamsConfigDocs'], type: Tar) {
+                               'genTopicConfigDocs', ':connect:runtime:genConnectConfigDocs', 
+                               ':streams:genStreamsConfigDocs'], type: Tar) {
     classifier = 'site-docs'
     compression = Compression.GZIP
     from project.file("../docs")
@@ -677,19 +693,29 @@ project(':streams') {
   dependencies {
     compile project(':clients')
     compile project(':connect:json')  // this dependency should be removed after we unify data API
-    compile libs.slf4jlog4j
+    compile libs.slf4jApi
     compile libs.rocksDBJni
     // this dependency should be removed after KIP-4
     compile (libs.zkclient) {
+      // users should be able to choose the logging implementation (and slf4j bridge)
+      exclude module: 'slf4j-log4j12'
+      exclude module: 'log4j'
       exclude module: 'jline'
       exclude module: 'netty'
     }
-    compile libs.jacksonDatabind // this dependency should be removed after KIP-4
+
+    // zkclient has a hard log4j dependency, we set it here as well to avoid copying an older
+    // version to the binary package; the following two dependencies should be removed after KIP-4
+    // (along with the zkclient dependency)
+    compile libs.log4j
+    compile libs.jacksonDatabind
 
     testCompile project(':clients').sourceSets.test.output
     testCompile project(':core')
     testCompile project(':core').sourceSets.test.output
     testCompile libs.junit
+
+    testRuntime libs.slf4jlog4j
   }
 
   javadoc {
@@ -730,6 +756,7 @@ project(':streams:examples') {
   dependencies {
     compile project(':streams')
     compile project(':connect:json')  // this dependency should be removed after we unify data API
+    compile libs.slf4jlog4j           // this dependency should be removed after KIP-4
   }
 
   javadoc {
@@ -861,8 +888,8 @@ project(':connect:runtime') {
     testCompile libs.junit
     testCompile libs.powermock
     testCompile libs.powermockEasymock
+    testCompile project(":connect:json")
 
-    testRuntime project(":connect:json")
     testRuntime libs.slf4jlog4j
   }
 

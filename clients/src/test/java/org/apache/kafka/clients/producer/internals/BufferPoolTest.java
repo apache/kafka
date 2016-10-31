@@ -88,7 +88,7 @@ public class BufferPoolTest {
         ByteBuffer buffer = pool.allocate(1024, maxBlockTimeMs);
         assertEquals(1024, buffer.limit());
         pool.deallocate(buffer);
-        buffer = pool.allocate(1025, maxBlockTimeMs);
+        pool.allocate(1025, maxBlockTimeMs);
     }
 
     /**

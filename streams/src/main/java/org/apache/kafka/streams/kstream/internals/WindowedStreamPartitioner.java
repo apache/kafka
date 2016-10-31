@@ -20,6 +20,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
+import static org.apache.kafka.common.utils.Utils.toPositive;
+
 public class WindowedStreamPartitioner<K, V> implements StreamPartitioner<Windowed<K>, V> {
 
     private final WindowedSerializer<K> serializer;
@@ -45,8 +47,5 @@ public class WindowedStreamPartitioner<K, V> implements StreamPartitioner<Window
         return toPositive(Utils.murmur2(keyBytes)) % numPartitions;
     }
 
-    private static int toPositive(int number) {
-        return number & 0x7fffffff;
-    }
 
 }

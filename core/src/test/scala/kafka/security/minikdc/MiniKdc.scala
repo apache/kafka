@@ -102,7 +102,6 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
 
   private val orgName = config.getProperty(MiniKdc.OrgName)
   private val orgDomain = config.getProperty(MiniKdc.OrgDomain)
-  private val dnString = s"dc=$orgName,dc=$orgDomain"
   private val realm = s"${orgName.toUpperCase(Locale.ENGLISH)}.${orgDomain.toUpperCase(Locale.ENGLISH)}"
   private val krb5conf = new File(workDir, "krb5.conf")
 
@@ -163,7 +162,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     val partition = new JdbmPartition(ds.getSchemaManager, ds.getDnFactory)
     partition.setId(orgName)
     partition.setPartitionPath(new File(ds.getInstanceLayout.getPartitionsDirectory, orgName).toURI)
-    val dn = new Dn(dnString)
+    val dn = new Dn(s"dc=$orgName,dc=$orgDomain")
     partition.setSuffixDn(dn)
     ds.addPartition(partition)
 
@@ -207,7 +206,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     val kerberosConfig = new KerberosConfig
     kerberosConfig.setMaximumRenewableLifetime(config.getProperty(MiniKdc.MaxRenewableLifetime).toLong)
     kerberosConfig.setMaximumTicketLifetime(config.getProperty(MiniKdc.MaxTicketLifetime).toLong)
-    kerberosConfig.setSearchBaseDn(dnString)
+    kerberosConfig.setSearchBaseDn(s"dc=$orgName,dc=$orgDomain")
     kerberosConfig.setPaEncTimestampRequired(false)
     kdc = new KdcServer(kerberosConfig)
     kdc.setDirectoryService(ds)

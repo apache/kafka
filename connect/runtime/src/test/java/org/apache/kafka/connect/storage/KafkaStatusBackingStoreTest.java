@@ -30,6 +30,7 @@ import org.apache.kafka.connect.runtime.TaskStatus;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.easymock.Capture;
+import org.easymock.EasyMock;
 import org.easymock.EasyMockSupport;
 import org.easymock.IAnswer;
 import org.junit.Test;
@@ -183,6 +184,33 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
         assertEquals(status, store.get(CONNECTOR));
 
         verifyAll();
+    }
+
+    @Test
+    public void putSafeWithNoPreviousValueIsPropagated() {
+        final Converter converter = mock(Converter.class);
+        final KafkaBasedLog<String, byte[]> kafkaBasedLog = mock(KafkaBasedLog.class);
+        final KafkaStatusBackingStore store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, kafkaBasedLog);
+
+        final byte[] value = new byte[0];
+
+        final Capture<Struct> statusValueStruct = newCapture();
+        converter.fromConnectData(eq(STATUS_TOPIC), anyObject(Schema.class), capture(statusValueStruct));
+        EasyMock.expectLastCall().andReturn(value);
+
+        kafkaBasedLog.send(eq("status-connector-" + CONNECTOR), eq(value), anyObject(Callback.class));
+        expectLastCall();
+
+        replayAll();
+
+        final ConnectorStatus status = new ConnectorStatus(CONNECTOR, ConnectorStatus.State.FAILED, WORKER_ID, 0);
+        store.putSafe(status);
+
+        verifyAll();
+
+        assertEquals(status.state().toString(), statusValueStruct.getValue().get(KafkaStatusBackingStore.STATE_KEY_NAME));
+        assertEquals(status.workerId(), statusValueStruct.getValue().get(KafkaStatusBackingStore.WORKER_ID_KEY_NAME));
+        assertEquals(status.generation(), statusValueStruct.getValue().get(KafkaStatusBackingStore.GENERATION_KEY_NAME));
     }
 
     @Test

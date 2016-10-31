@@ -28,6 +28,7 @@ import org.apache.kafka.clients.{ClientRequest, ClientResponse, ManualMetadataUp
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ChannelBuilders, LoginType, Mode, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
+import org.apache.kafka.common.requests
 import org.apache.kafka.common.requests.{UpdateMetadataRequest, _}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Node, TopicPartition}
@@ -99,7 +100,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
       )
       val selector = new Selector(
         NetworkReceive.UNLIMITED,
-        config.connectionsMaxIdleMs,
+        Selector.NO_IDLE_TIMEOUT_MS,
         metrics,
         time,
         "controller-channel",
@@ -166,7 +167,7 @@ class RequestSendThread(val controllerId: Int,
 
   override def doWork(): Unit = {
 
-    def backoff(): Unit = CoreUtils.swallowTrace(Thread.sleep(300))
+    def backoff(): Unit = CoreUtils.swallowTrace(Thread.sleep(100))
 
     val QueueItem(apiKey, apiVersion, request, callback) = queue.take()
     import NetworkClientBlockingOps._
@@ -225,18 +226,14 @@ class RequestSendThread(val controllerId: Int,
   private def brokerReady(): Boolean = {
     import NetworkClientBlockingOps._
     try {
-
-      if (networkClient.isReady(brokerNode, time.milliseconds()))
-        true
-      else {
-        val ready = networkClient.blockingReady(brokerNode, socketTimeoutMs)(time)
-
-        if (!ready)
+      if (!networkClient.isReady(brokerNode)(time)) {
+        if (!networkClient.blockingReady(brokerNode, socketTimeoutMs)(time))
           throw new SocketTimeoutException(s"Failed to connect within $socketTimeoutMs ms")
 
         info("Controller %d connected to %s for sending state change requests".format(controllerId, brokerNode.toString()))
-        true
       }
+
+      true
     } catch {
       case e: Throwable =>
         warn("Controller %d's connection to broker %s was unsuccessful".format(controllerId, brokerNode.toString()), e)
@@ -362,7 +359,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
         }
         val partitionStates = partitionStateInfos.map { case (topicPartition, partitionStateInfo) =>
           val LeaderIsrAndControllerEpoch(leaderIsr, controllerEpoch) = partitionStateInfo.leaderIsrAndControllerEpoch
-          val partitionState = new LeaderAndIsrRequest.PartitionState(controllerEpoch, leaderIsr.leader,
+          val partitionState = new requests.PartitionState(controllerEpoch, leaderIsr.leader,
             leaderIsr.leaderEpoch, leaderIsr.isr.map(Integer.valueOf).asJava, leaderIsr.zkVersion,
             partitionStateInfo.allReplicas.map(Integer.valueOf).asJava
           )
@@ -379,7 +376,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
           broker, p._1)))
         val partitionStates = partitionStateInfos.map { case (topicPartition, partitionStateInfo) =>
           val LeaderIsrAndControllerEpoch(leaderIsr, controllerEpoch) = partitionStateInfo.leaderIsrAndControllerEpoch
-          val partitionState = new UpdateMetadataRequest.PartitionState(controllerEpoch, leaderIsr.leader,
+          val partitionState = new requests.PartitionState(controllerEpoch, leaderIsr.leader,
             leaderIsr.leaderEpoch, leaderIsr.isr.map(Integer.valueOf).asJava, leaderIsr.zkVersion,
             partitionStateInfo.allReplicas.map(Integer.valueOf).asJava
           )

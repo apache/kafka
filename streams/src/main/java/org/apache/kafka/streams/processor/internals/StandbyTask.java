@@ -23,6 +23,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.TaskId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -34,11 +36,11 @@ import java.util.Map;
  */
 public class StandbyTask extends AbstractTask {
 
+    private static final Logger log = LoggerFactory.getLogger(StandbyTask.class);
     private final Map<TopicPartition, Long> checkpointedOffsets;
 
     /**
      * Create {@link StandbyTask} with its assigned partitions
-     *
      * @param id                    the ID of this task
      * @param applicationId         the ID of the stream processing application
      * @param partitions            the collection of assigned {@link TopicPartition}
@@ -47,6 +49,7 @@ public class StandbyTask extends AbstractTask {
      * @param restoreConsumer       the instance of {@link Consumer} used when restoring state
      * @param config                the {@link StreamsConfig} specified by the user
      * @param metrics               the {@link StreamsMetrics} created by the thread
+     * @param stateDirectory        the {@link StateDirectory} created by the thread
      */
     public StandbyTask(TaskId id,
                        String applicationId,
@@ -55,12 +58,13 @@ public class StandbyTask extends AbstractTask {
                        Consumer<byte[], byte[]> consumer,
                        Consumer<byte[], byte[]> restoreConsumer,
                        StreamsConfig config,
-                       StreamsMetrics metrics) {
-        super(id, applicationId, partitions, topology, consumer, restoreConsumer, config, true);
+                       StreamsMetrics metrics, final StateDirectory stateDirectory) {
+        super(id, applicationId, partitions, topology, consumer, restoreConsumer, true, stateDirectory, null);
 
         // initialize the topology with its own context
         this.processorContext = new StandbyContextImpl(id, applicationId, config, stateMgr, metrics);
 
+        log.info("standby-task [{}] Initializing state stores", id());
         initializeStateStores();
 
         ((StandbyContextImpl) this.processorContext).initialized();
@@ -81,13 +85,44 @@ public class StandbyTask extends AbstractTask {
      * @return a list of records not consumed
      */
     public List<ConsumerRecord<byte[], byte[]>> update(TopicPartition partition, List<ConsumerRecord<byte[], byte[]>> records) {
+        log.debug("standby-task [{}] Updating standby replicas of its state store for partition [{}]", id(), partition);
         return stateMgr.updateStandbyStates(partition, records);
     }
 
     public void commit() {
-        stateMgr.flush();
+        log.debug("standby-task [{}] Committing its state", id());
+        stateMgr.flush(processorContext);
 
         // reinitialize offset limits
         initializeOffsetLimits();
+    }
+
+    @Override
+    public void close() {
+        //no-op
+    }
+
+    @Override
+    public void initTopology() {
+        //no-op
+    }
+
+    @Override
+    public void closeTopology() {
+        //no-op
+    }
+
+    @Override
+    public void commitOffsets() {
+        // no-op
+    }
+
+    /**
+     * Produces a string representation contain useful information about a StreamTask.
+     * This is useful in debugging scenarios.
+     * @return A string representation of the StreamTask instance.
+     */
+    public String toString() {
+        return super.toString();
     }
 }

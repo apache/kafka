@@ -32,9 +32,6 @@ object ReplayLogProducer extends Logging {
   def main(args: Array[String]) {
     val config = new Config(args)
 
-    val executor = Executors.newFixedThreadPool(config.numThreads)
-    val allDone = new CountDownLatch(config.numThreads)
-
     // if there is no group specified then avoid polluting zookeeper with persistent group data, this is a hack
     ZkUtils.maybeDeletePath(config.zkConnect, "/consumers/" + GroupId)
     Thread.sleep(500)
@@ -51,7 +48,7 @@ object ReplayLogProducer extends Logging {
     val consumerConnector: ConsumerConnector = Consumer.create(consumerConfig)
     val topicMessageStreams = consumerConnector.createMessageStreams(Predef.Map(config.inputTopic -> config.numThreads))
     var threadList = List[ZKConsumerThread]()
-    for ((topic, streamList) <- topicMessageStreams)
+    for (streamList <- topicMessageStreams.values)
       for (stream <- streamList)
         threadList ::= new ZKConsumerThread(config, stream)
 

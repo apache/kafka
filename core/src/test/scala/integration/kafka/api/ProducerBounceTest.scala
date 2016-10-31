@@ -88,7 +88,7 @@ class ProducerBounceTest extends KafkaServerTestHarness {
     scheduler.start
 
     // rolling bounce brokers
-    for (i <- 0 until numServers) {
+    for (_ <- 0 until numServers) {
       for (server <- servers) {
         server.shutdown()
         server.awaitShutdown()
@@ -143,7 +143,7 @@ class ProducerBounceTest extends KafkaServerTestHarness {
         futures.map(_.get)
         sent += numRecords
       } catch {
-        case e : Exception => failed = true
+        case _ : Exception => failed = true
       }
     }
 

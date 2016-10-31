@@ -43,7 +43,17 @@ In standalone mode all work is performed in a single process. This configuration
 &gt; bin/connect-standalone.sh config/connect-standalone.properties connector1.properties [connector2.properties ...]
 </pre>
 
-The first parameter is the configuration for the worker. This includes settings such as the Kafka connection parameters, serialization format, and how frequently to commit offsets. The provided example should work well with a local cluster running with the default configuration provided by <code>config/server.properties</code>. It will require tweaking to use with a different configuration or production deployment.
+The first parameter is the configuration for the worker. This includes settings such as the Kafka connection parameters, serialization format, and how frequently to commit offsets. The provided example should work well with a local cluster running with the default configuration provided by <code>config/server.properties</code>. It will require tweaking to use with a different configuration or production deployment. All workers (both standalone and distributed) require a few configs:
+<ul>
+    <li><code>bootstrap.servers</code> - List of Kafka servers used to bootstrap connections to Kafka</li>
+    <li><code>key.converter</code> - Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka. This controls the format of the keys in messages written to or read from Kafka, and since this is independent of connectors it allows any connector to work with any serialization format. Examples of common formats include JSON and Avro.</li>
+    <li><code>value.converter</code> - Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka. This controls the format of the values in messages written to or read from Kafka, and since this is independent of connectors it allows any connector to work with any serialization format. Examples of common formats include JSON and Avro.</li>
+</ul>
+
+The important configuration options specific to standalone mode are:
+<ul>
+    <li><code>offset.storage.file.filename</code> - File to store offset data in</li>
+</ul>
 
 The remaining parameters are connector configuration files. You may include as many as you want, but all will execute within the same process (on different threads).
 
@@ -55,12 +65,12 @@ Distributed mode handles automatic balancing of work, allows you to scale up (or
 
 The difference is in the class which is started and the configuration parameters which change how the Kafka Connect process decides where to store configurations, how to assign work, and where to store offsets and task statues. In the distributed mode, Kafka Connect stores the offsets, configs and task statuses in Kafka topics. It is recommended to manually create the topics for offset, configs and statuses in order to achieve the desired the number of partitions and replication factors. If the topics are not yet created when starting Kafka Connect, the topics will be auto created with default number of partitions and replication factor, which may not be best suited for its usage.
 
-In particular, the following configuration parameters are critical to set before starting your cluster:
+In particular, the following configuration parameters, in addition to the common settings mentioned above, are critical to set before starting your cluster:
 <ul>
     <li><code>group.id</code> (default <code>connect-cluster</code>) - unique name for the cluster, used in forming the Connect cluster group; note that this <b>must not conflict</b> with consumer group IDs</li>
-    <li><code>config.storage.topic</code> (default <code>connect-configs</code>) - topic to use for storing connector and task configurations; note that this should be a single partition, highly replicated topic. You may need to manually create the topic to ensure single partition for the config topic as auto created topics may have multiple partitions.</li>
-    <li><code>offset.storage.topic</code> (default <code>connect-offsets</code>) - topic to use for storing offsets; this topic should have many partitions and be replicated</li>
-    <li><code>status.storage.topic</code> (default <code>connect-status</code>) - topic to use for storing statuses; this topic can have multiple partitions and should be replicated</li>
+    <li><code>config.storage.topic</code> (default <code>connect-configs</code>) - topic to use for storing connector and task configurations; note that this should be a single partition, highly replicated, compacted topic. You may need to manually create the topic to ensure the correct configuration as auto created topics may have multiple partitions or be automatically configured for deletion rather than compaction</li>
+    <li><code>offset.storage.topic</code> (default <code>connect-offsets</code>) - topic to use for storing offsets; this topic should have many partitions, be replicated, and be configured for compaction</li>
+    <li><code>status.storage.topic</code> (default <code>connect-status</code>) - topic to use for storing statuses; this topic can have multiple partitions, and should be replicated and configured for compaction</li>
 </ul>
 
 Note that in distributed mode the connector configurations are not passed on the command line. Instead, use the REST API described below to create, modify, and destroy connectors. 
@@ -76,6 +86,8 @@ Most configurations are connector dependent, so they can't be outlined here. How
     <li><code>name</code> - Unique name for the connector. Attempting to register again with the same name will fail.</li>
     <li><code>connector.class</code> - The Java class for the connector</li>
     <li><code>tasks.max</code> - The maximum number of tasks that should be created for this connector. The connector may create fewer tasks if it cannot achieve this level of parallelism.</li>
+    <li><code>key.converter</code> - (optional) Override the default key converter set by the worker.</li>
+    <li><code>value.converter</code> - (optional) Override the default value converter set by the worker.</li>
 </ul>
 
 The <code>connector.class</code> config supports several formats: the full name or alias of the class for this connector. If the connector is org.apache.kafka.connect.file.FileStreamSinkConnector, you can either specify this full name or use FileStreamSink or FileStreamSinkConnector to make the configuration a bit shorter.
@@ -89,11 +101,11 @@ For any other options, you should consult the documentation for the connector.
 
 <h4><a id="connect_rest" href="#connect_rest">REST API</a></h4>
 
-Since Kafka Connect is intended to be run as a service, it also provides a REST API for managing connectors. By default this service runs on port 8083. The following are the currently supported endpoints:
+Since Kafka Connect is intended to be run as a service, it also provides a REST API for managing connectors. By default, this service runs on port 8083. The following are the currently supported endpoints:
 
 <ul>
     <li><code>GET /connectors</code> - return a list of active connectors</li>
-    <li><code>POST /connectors</code> - create a new connector; the request body should be a JSON object containing a string <code>name</code> field and a object <code>config</code> field with the connector configuration parameters</li>
+    <li><code>POST /connectors</code> - create a new connector; the request body should be a JSON object containing a string <code>name</code> field and an object <code>config</code> field with the connector configuration parameters</li>
     <li><code>GET /connectors/{name}</code> - get information about a specific connector</li>
     <li><code>GET /connectors/{name}/config</code> - get the configuration parameters for a specific connector</li>
     <li><code>PUT /connectors/{name}/config</code> - update the configuration parameters for a specific connector</li>

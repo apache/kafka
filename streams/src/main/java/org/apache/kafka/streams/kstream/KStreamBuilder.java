@@ -22,7 +22,9 @@ import org.apache.kafka.streams.kstream.internals.KStreamImpl;
 import org.apache.kafka.streams.kstream.internals.KTableImpl;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.TopologyBuilder;
+import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
 
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -92,7 +94,6 @@ public class KStreamBuilder extends TopologyBuilder {
         return new KStreamImpl<>(this, name, Collections.singleton(name), false);
     }
 
-
     /**
      * Create a {@link KStream} instance from the specified Pattern.
      * <p>
@@ -118,35 +119,51 @@ public class KStreamBuilder extends TopologyBuilder {
      * Create a {@link KTable} instance for the specified topic.
      * Record keys of the topic should never by null, otherwise an exception will be thrown at runtime.
      * The default deserializers specified in the config are used.
+     * The resulting {@link KTable} will be materialized in a local state store with the given store name.
+     * However, no new changelog topic is created in this case since the underlying topic acts as one.
      *
      * @param topic     the topic name; cannot be null
+     * @param storeName the state store name used if this KTable is materialized, can be null if materialization not expected
      * @return a {@link KTable} for the specified topics
      */
-    public <K, V> KTable<K, V> table(String topic) {
-        return table(null, null, topic);
+    public <K, V> KTable<K, V> table(String topic, final String storeName) {
+        return table(null, null, topic, storeName);
     }
 
     /**
      * Create a {@link KTable} instance for the specified topic.
      * Record keys of the topic should never by null, otherwise an exception will be thrown at runtime.
+     * The resulting {@link KTable} will be materialized in a local state store with the given store name.
+     * However, no new changelog topic is created in this case since the underlying topic acts as one.
      *
      * @param keySerde   key serde used to send key-value pairs,
      *                   if not specified the default key serde defined in the configuration will be used
      * @param valSerde   value serde used to send key-value pairs,
      *                   if not specified the default value serde defined in the configuration will be used
      * @param topic      the topic name; cannot be null
+     * @param storeName  the state store name used for the materialized KTable
      * @return a {@link KTable} for the specified topics
      */
-    public <K, V> KTable<K, V> table(Serde<K> keySerde, Serde<V> valSerde, String topic) {
-        String source = newName(KStreamImpl.SOURCE_NAME);
-        String name = newName(KTableImpl.SOURCE_NAME);
+    public <K, V> KTable<K, V> table(Serde<K> keySerde, Serde<V> valSerde, String topic, final String storeName) {
+        final String source = newName(KStreamImpl.SOURCE_NAME);
+        final String name = newName(KTableImpl.SOURCE_NAME);
+        final ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(storeName);
 
         addSource(source, keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topic);
-
-        ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(topic);
         addProcessor(name, processorSupplier, source);
 
-        return new KTableImpl<>(this, name, processorSupplier, Collections.singleton(source), keySerde, valSerde);
+        final KTableImpl kTable = new KTableImpl<>(this, name, processorSupplier, Collections.singleton(source), keySerde, valSerde, storeName);
+        StateStoreSupplier storeSupplier = new RocksDBKeyValueStoreSupplier<>(storeName,
+            keySerde,
+            valSerde,
+            false,
+            Collections.<String, String>emptyMap(),
+            true);
+
+        addStateStore(storeSupplier, name);
+        connectSourceStoreAndTopic(storeName, topic);
+
+        return kTable;
     }
 
     /**

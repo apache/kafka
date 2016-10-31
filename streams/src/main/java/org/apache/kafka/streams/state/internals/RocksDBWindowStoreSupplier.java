@@ -18,9 +18,12 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
+
+import java.util.Map;
 
 /**
  * A {@link org.apache.kafka.streams.state.KeyValueStore} that stores all entries in a local RocksDB database.
@@ -30,28 +33,26 @@ import org.apache.kafka.streams.processor.StateStoreSupplier;
  *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
-public class RocksDBWindowStoreSupplier<K, V> implements StateStoreSupplier {
 
-    private final String name;
+public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V> {
+
     private final long retentionPeriod;
     private final boolean retainDuplicates;
     private final int numSegments;
-    private final Serde<K> keySerde;
-    private final Serde<V> valueSerde;
-    private final Time time;
+    private final long windowSize;
+    private final boolean enableCaching;
 
-    public RocksDBWindowStoreSupplier(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde) {
-        this(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, null);
+    public RocksDBWindowStoreSupplier(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde, long windowSize, boolean logged, Map<String, String> logConfig, boolean enableCaching) {
+        this(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, null, windowSize, logged, logConfig, enableCaching);
     }
 
-    public RocksDBWindowStoreSupplier(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde, Time time) {
-        this.name = name;
+    public RocksDBWindowStoreSupplier(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde, Time time, long windowSize, boolean logged, Map<String, String> logConfig, boolean enableCaching) {
+        super(name, keySerde, valueSerde, time, logged, logConfig);
         this.retentionPeriod = retentionPeriod;
         this.retainDuplicates = retainDuplicates;
         this.numSegments = numSegments;
-        this.keySerde = keySerde;
-        this.valueSerde = valueSerde;
-        this.time = time;
+        this.windowSize = windowSize;
+        this.enableCaching = enableCaching;
     }
 
     public String name() {
@@ -59,7 +60,16 @@ public class RocksDBWindowStoreSupplier<K, V> implements StateStoreSupplier {
     }
 
     public StateStore get() {
-        return new MeteredWindowStore<>(new RocksDBWindowStore<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde).enableLogging(), "rocksdb-window", time);
+        if (!enableCaching) {
+            final RocksDBWindowStore<K, V> rocksDbStore = new RocksDBWindowStore<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde);
+            return new MeteredWindowStore<>(logged ? rocksDbStore.enableLogging() : rocksDbStore, "rocksdb-window", time);
+        }
+
+        final RocksDBWindowStore<Bytes, byte[]> store = new RocksDBWindowStore<>(name, retentionPeriod, numSegments, false, Serdes.Bytes(), Serdes.ByteArray());
+        return new CachingWindowStore<>(new MeteredWindowStore<>(logged ? store.enableLogging() : store, "rocksdb-window", time), keySerde, valueSerde, windowSize);
     }
 
+    public long retentionPeriod() {
+        return retentionPeriod;
+    }
 }

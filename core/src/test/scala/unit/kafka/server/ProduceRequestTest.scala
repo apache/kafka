@@ -89,10 +89,7 @@ class ProduceRequestTest extends BaseRequestTest {
   }
 
   private def sendProduceRequest(leaderId: Int, request: ProduceRequest): ProduceResponse = {
-    val socket = connect(s = servers.find(_.config.brokerId == leaderId).map(_.socketServer).getOrElse {
-      fail(s"Could not find broker with id $leaderId")
-    })
-    val response = send(socket, request, ApiKeys.PRODUCE, ProtoUtils.latestVersion(ApiKeys.PRODUCE.id))
+    val response = send(request, ApiKeys.PRODUCE, destination = brokerSocketServer(leaderId))
     ProduceResponse.parse(response)
   }
 

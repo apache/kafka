@@ -157,7 +157,7 @@ class OffsetIndexTest extends JUnitSuite {
     val rand = new Random(1L)
     val vals = new mutable.ArrayBuffer[Int](len)
     var last = base
-    for (i <- 0 until len) {
+    for (_ <- 0 until len) {
       last += rand.nextInt(15) + 1
       vals += last
     }

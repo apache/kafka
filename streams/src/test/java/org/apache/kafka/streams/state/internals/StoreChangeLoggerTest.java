@@ -25,7 +25,6 @@ import java.util.Map;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -41,8 +40,8 @@ public class StoreChangeLoggerTest {
     private final Map<Integer, String> logged = new HashMap<>();
     private final Map<Integer, String> written = new HashMap<>();
 
-    private final ProcessorContext context = new MockProcessorContext(StateSerdes.withBuiltinTypes(topic, Integer.class, String.class),
-            new RecordCollector(null) {
+    private final MockProcessorContext context = new MockProcessorContext(StateSerdes.withBuiltinTypes(topic, Integer.class, String.class),
+            new RecordCollector(null, "StoreChangeLoggerTest") {
                 @SuppressWarnings("unchecked")
                 @Override
                 public <K1, V1> void send(ProducerRecord<K1, V1> record, Serializer<K1> keySerializer, Serializer<V1> valueSerializer) {
@@ -67,34 +66,38 @@ public class StoreChangeLoggerTest {
         }
     };
 
+    @SuppressWarnings("unchecked")
     @Test
-    public void testAddRemove() {
+    public void testAddRemove() throws Exception {
+
+        context.setTime(1);
         written.put(0, "zero");
         changeLogger.add(0);
         written.put(1, "one");
         changeLogger.add(1);
         written.put(2, "two");
         changeLogger.add(2);
-        assertEquals(3, changeLogger.numDirty());
-        assertEquals(0, changeLogger.numRemoved());
+
+        assertEquals(3, changeLogger.dirty.size());
+        assertEquals(0, changeLogger.removed.size());
 
         changeLogger.delete(0);
         changeLogger.delete(1);
         written.put(3, "three");
         changeLogger.add(3);
-        assertEquals(2, changeLogger.numDirty());
-        assertEquals(2, changeLogger.numRemoved());
+        assertEquals(2, changeLogger.dirty.size());
+        assertEquals(2, changeLogger.removed.size());
 
         written.put(0, "zero-again");
         changeLogger.add(0);
-        assertEquals(3, changeLogger.numDirty());
-        assertEquals(1, changeLogger.numRemoved());
+        assertEquals(3, changeLogger.dirty.size());
+        assertEquals(1, changeLogger.removed.size());
 
         written.put(4, "four");
         changeLogger.add(4);
         changeLogger.maybeLogChange(getter);
-        assertEquals(0, changeLogger.numDirty());
-        assertEquals(0, changeLogger.numRemoved());
+        assertEquals(0, changeLogger.dirty.size());
+        assertEquals(0, changeLogger.removed.size());
         assertEquals(5, logged.size());
         assertEquals("zero-again", logged.get(0));
         assertEquals(null, logged.get(1));

@@ -133,6 +133,31 @@ abstract class BaseTopicMetadataTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testAutoCreateTopicWithInvalidReplication {
+    val adHocProps = createBrokerConfig(2, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
+      trustStoreFile = trustStoreFile)
+    // Set default replication higher than the number of live brokers
+    adHocProps.setProperty(KafkaConfig.DefaultReplicationFactorProp, "3")
+    // start adHoc brokers with replication factor too high
+    val adHocServer = createServer(new KafkaConfig(adHocProps))
+    // We are using the Scala clients and they don't support SSL. Once we move to the Java ones, we should use
+    // `securityProtocol` instead of PLAINTEXT below
+    val adHocEndpoint = new BrokerEndPoint(adHocServer.config.brokerId, adHocServer.config.hostName,
+      adHocServer.boundPort(SecurityProtocol.PLAINTEXT))
+
+    // auto create topic on "bad" endpoint
+    val topic = "testAutoCreateTopic"
+    val topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic), Seq(adHocEndpoint), "TopicMetadataTest-testAutoCreateTopic",
+      2000,0).topicsMetadata
+    assertEquals(Errors.INVALID_REPLICATION_FACTOR.code, topicsMetadata.head.errorCode)
+    assertEquals("Expecting metadata only for 1 topic", 1, topicsMetadata.size)
+    assertEquals("Expecting metadata for the test topic", topic, topicsMetadata.head.topic)
+    assertEquals(0, topicsMetadata.head.partitionsMetadata.size)
+
+    adHocServer.shutdown()
+  }
+
+  @Test
   def testAutoCreateTopicWithCollision {
     // auto create topic
     val topic1 = "testAutoCreate_Topic"

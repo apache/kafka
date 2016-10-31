@@ -62,7 +62,6 @@ class OffsetMapTest extends JUnitSuite {
     val map = new SkimpyOffsetMap((items/loadFactor * 24).toInt)
     for(i <- 0 until items)
       map.put(key(i), i)
-    var misses = 0
     for(i <- 0 until items)
       assertEquals(map.get(key(i)), i.toLong)
     map

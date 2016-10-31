@@ -79,15 +79,26 @@ class TopicDeletionManager(controller: KafkaController,
   val controllerContext = controller.controllerContext
   val partitionStateMachine = controller.partitionStateMachine
   val replicaStateMachine = controller.replicaStateMachine
-  val topicsToBeDeleted: mutable.Set[String] = mutable.Set.empty[String] ++ initialTopicsToBeDeleted
-  val partitionsToBeDeleted: mutable.Set[TopicAndPartition] = topicsToBeDeleted.flatMap(controllerContext.partitionsForTopic)
   val deleteLock = new ReentrantLock()
-  val topicsIneligibleForDeletion: mutable.Set[String] = mutable.Set.empty[String] ++
-    (initialTopicsIneligibleForDeletion & initialTopicsToBeDeleted)
   val deleteTopicsCond = deleteLock.newCondition()
   val deleteTopicStateChanged: AtomicBoolean = new AtomicBoolean(false)
   var deleteTopicsThread: DeleteTopicsThread = null
   val isDeleteTopicEnabled = controller.config.deleteTopicEnable
+  val topicsToBeDeleted: mutable.Set[String] = if (isDeleteTopicEnabled) {
+    mutable.Set.empty[String] ++ initialTopicsToBeDeleted
+  } else {
+    // if delete topic is disabled clean the topic entries under /admin/delete_topics
+    val zkUtils = controllerContext.zkUtils
+    for (topic <- initialTopicsToBeDeleted) {
+      val deleteTopicPath = getDeleteTopicPath(topic)
+      info("Removing " + deleteTopicPath + " since delete topic is disabled")
+      zkUtils.zkClient.delete(deleteTopicPath)
+    }
+    mutable.Set.empty[String]
+  }
+  val topicsIneligibleForDeletion: mutable.Set[String] = mutable.Set.empty[String] ++
+    (initialTopicsIneligibleForDeletion & topicsToBeDeleted)
+  val partitionsToBeDeleted: mutable.Set[TopicAndPartition] = topicsToBeDeleted.flatMap(controllerContext.partitionsForTopic)
 
   /**
    * Invoked at the end of new controller initiation
@@ -331,8 +342,8 @@ class TopicDeletionManager(controller: KafkaController,
    *@param replicasForTopicsToBeDeleted
    */
   private def startReplicaDeletion(replicasForTopicsToBeDeleted: Set[PartitionAndReplica]) {
-    replicasForTopicsToBeDeleted.groupBy(_.topic).foreach { case(topic, replicas) =>
-      var aliveReplicasForTopic = controllerContext.allLiveReplicas().filter(p => p.topic.equals(topic))
+    replicasForTopicsToBeDeleted.groupBy(_.topic).keys.foreach { topic =>
+      val aliveReplicasForTopic = controllerContext.allLiveReplicas().filter(p => p.topic == topic)
       val deadReplicasForTopic = replicasForTopicsToBeDeleted -- aliveReplicasForTopic
       val successfullyDeletedReplicas = controller.replicaStateMachine.replicasInState(topic, ReplicaDeletionSuccessful)
       val replicasForDeletionRetry = aliveReplicasForTopic -- successfullyDeletedReplicas
