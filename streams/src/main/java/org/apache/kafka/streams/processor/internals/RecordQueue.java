@@ -176,4 +176,11 @@ public class RecordQueue {
     public long timestamp() {
         return partitionTime;
     }
+
+    /**
+     * Clear the fifo queue of its elements
+     */
+    public void clear() {
+        fifoQueue.clear();
+    }
 }

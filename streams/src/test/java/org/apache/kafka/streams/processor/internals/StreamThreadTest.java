@@ -154,6 +154,7 @@ public class StreamThreadTest {
         }
     }
 
+
     @SuppressWarnings("unchecked")
     @Test
     public void testPartitionAssignmentChange() throws Exception {
@@ -200,6 +201,8 @@ public class StreamThreadTest {
         expectedGroup2 = new HashSet<>(Arrays.asList(t1p2));
 
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
+        assertFalse(thread.tasks().containsKey(task1));
+        assertEquals(0, thread.tasks().size());
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
         assertTrue(thread.tasks().containsKey(task2));
@@ -249,6 +252,20 @@ public class StreamThreadTest {
         assertEquals(2, thread.tasks().size());
 
         revokedPartitions = assignedPartitions;
+        assignedPartitions = Arrays.asList(t1p1, t2p1, t3p1);
+        expectedGroup1 = new HashSet<>(Arrays.asList(t1p1));
+        expectedGroup2 = new HashSet<>(Arrays.asList(t2p1, t3p1));
+
+        rebalanceListener.onPartitionsRevoked(revokedPartitions);
+        rebalanceListener.onPartitionsAssigned(assignedPartitions);
+
+        assertTrue(thread.tasks().containsKey(task1));
+        assertTrue(thread.tasks().containsKey(task4));
+        assertEquals(expectedGroup1, thread.tasks().get(task1).partitions());
+        assertEquals(expectedGroup2, thread.tasks().get(task4).partitions());
+        assertEquals(2, thread.tasks().size());
+
+        revokedPartitions = assignedPartitions;
         assignedPartitions = Collections.emptyList();
 
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
@@ -256,6 +273,7 @@ public class StreamThreadTest {
 
         assertTrue(thread.tasks().isEmpty());
     }
+
 
     @Test
     public void testMaybeClean() throws Exception {
