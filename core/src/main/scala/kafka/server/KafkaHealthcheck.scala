@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import java.net.InetAddress
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
@@ -55,18 +54,12 @@ class KafkaHealthcheck(brokerId: Int,
    */
   def register() {
     val jmxPort = System.getProperty("com.sun.management.jmxremote.port", "-1").toInt
-    val updatedEndpoints = advertisedEndpoints.mapValues(endpoint =>
-      if (endpoint.host == null || endpoint.host.trim.isEmpty)
-        EndPoint(InetAddress.getLocalHost.getCanonicalHostName, endpoint.port, endpoint.protocolType)
-      else
-        endpoint
-    )
 
     // the default host and port are here for compatibility with older client
     // only PLAINTEXT is supported as default
     // if the broker doesn't listen on PLAINTEXT protocol, an empty endpoint will be registered and older clients will be unable to connect
-    val plaintextEndpoint = updatedEndpoints.getOrElse(SecurityProtocol.PLAINTEXT, new EndPoint(null,-1,null))
-    zkUtils.registerBrokerInZk(brokerId, plaintextEndpoint.host, plaintextEndpoint.port, updatedEndpoints, jmxPort, rack,
+    val plaintextEndpoint = advertisedEndpoints.getOrElse(SecurityProtocol.PLAINTEXT, new EndPoint(null,-1,null))
+    zkUtils.registerBrokerInZk(brokerId, plaintextEndpoint.host, plaintextEndpoint.port, advertisedEndpoints, jmxPort, rack,
       interBrokerProtocolVersion)
   }
 
