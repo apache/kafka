@@ -22,6 +22,7 @@ import java.util.Properties
 
 import kafka.common._
 import kafka.message._
+import kafka.server.BrokerState
 import kafka.utils._
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
@@ -191,8 +192,11 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     log
   }
 
-  private def makeLog(dir: File = logDir, config: LogConfig = logConfig) =
-    new Log(dir = dir, config = config, recoveryPoint = 0L, scheduler = time.scheduler, time = time)
+  private def makeLog(dir: File = logDir, config: LogConfig = logConfig) = {
+    val brokerState = new BrokerState()
+    new Log(dir = dir, config = config, recoveryPoint = 0L, scheduler = time.scheduler, time = time,
+      brokerState = brokerState)
+    }
 
   private def message(key: Int, value: Int, timestamp: Long) =
     new ByteBufferMessageSet(new Message(key = key.toString.getBytes,

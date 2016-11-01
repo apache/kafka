@@ -22,6 +22,7 @@ import java.util.Properties
 
 import kafka.common.TopicAndPartition
 import kafka.message._
+import kafka.server.BrokerState
 import kafka.utils._
 import org.apache.kafka.common.record.CompressionType
 import org.apache.kafka.common.utils.Utils
@@ -155,11 +156,13 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Logging
       logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
       logProps.put(LogConfig.MinCleanableDirtyRatioProp, minCleanableDirtyRatio: java.lang.Float)
 
+      val brokerState = new BrokerState()
       val log = new Log(dir = dir,
         LogConfig(logProps),
         recoveryPoint = 0L,
         scheduler = time.scheduler,
-        time = time)
+        time = time,
+        brokerState = brokerState)
       logs.put(TopicAndPartition("log", i), log)
     }
 
