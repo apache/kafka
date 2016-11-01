@@ -29,7 +29,6 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
 
     public final String storeName;
 
-    private boolean materialized = false;
     private boolean sendOldValues = false;
 
     public KTableSource(String storeName) {
@@ -38,15 +37,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
 
     @Override
     public Processor<K, V> get() {
-        return materialized ? new MaterializedKTableSourceProcessor() : new KTableSourceProcessor();
-    }
-
-    public void materialize() {
-        materialized = true;
-    }
-
-    public boolean isMaterialized() {
-        return materialized;
+        return new KTableSourceProcessor();
     }
 
     public void enableSendingOldValues() {
@@ -54,17 +45,6 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
     }
 
     private class KTableSourceProcessor extends AbstractProcessor<K, V> {
-        @Override
-        public void process(K key, V value) {
-            // the keys should never be null
-            if (key == null)
-                throw new StreamsException("Record key for the source KTable from store name " + storeName + " should not be null.");
-
-            context().forward(key, new Change<>(value, null));
-        }
-    }
-
-    private class MaterializedKTableSourceProcessor extends AbstractProcessor<K, V> {
 
         private KeyValueStore<K, V> store;
 
