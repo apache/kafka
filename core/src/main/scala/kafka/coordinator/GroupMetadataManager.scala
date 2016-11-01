@@ -98,7 +98,7 @@ class GroupMetadataManager(val brokerId: Int,
     scheduler.startup()
 
     scheduler.schedule(name = "delete-expired-group-metadata",
-      fun = cleanupGroupMetadata,
+      fun = cleanupGroupMetadata _,
       period = config.offsetsRetentionCheckIntervalMs,
       unit = TimeUnit.MILLISECONDS)
   }
@@ -400,7 +400,7 @@ class GroupMetadataManager(val brokerId: Int,
   def loadGroupsForPartition(offsetsPartition: Int,
                              onGroupLoaded: GroupMetadata => Unit) {
     val topicPartition = TopicAndPartition(Topic.GroupMetadataTopicName, offsetsPartition)
-    scheduler.schedule(topicPartition.toString, loadGroupsAndOffsets)
+    scheduler.schedule(topicPartition.toString, loadGroupsAndOffsets _)
 
     def loadGroupsAndOffsets() {
       info("Loading offsets and group metadata from " + topicPartition)
@@ -542,7 +542,7 @@ class GroupMetadataManager(val brokerId: Int,
   def removeGroupsForPartition(offsetsPartition: Int,
                                onGroupUnloaded: GroupMetadata => Unit) {
     val topicPartition = TopicAndPartition(Topic.GroupMetadataTopicName, offsetsPartition)
-    scheduler.schedule(topicPartition.toString, removeGroupsAndOffsets)
+    scheduler.schedule(topicPartition.toString, removeGroupsAndOffsets _)
 
     def removeGroupsAndOffsets() {
       var numOffsetsRemoved = 0
