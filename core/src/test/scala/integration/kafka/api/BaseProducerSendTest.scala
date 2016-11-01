@@ -17,19 +17,20 @@
 
 package kafka.api
 
-import java.util.Properties
+import java.util.{ArrayList, Properties}
 import java.util.concurrent.TimeUnit
 
+import collection.JavaConverters._
+import collection.JavaConversions._
 import kafka.admin.AdminUtils
-import kafka.consumer.SimpleConsumer
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
-import kafka.message.Message
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import kafka.utils.TestUtils._
+import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.clients.producer._
-import org.apache.kafka.common.KafkaException
+import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.record.TimestampType
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -38,7 +39,7 @@ import scala.collection.mutable.Buffer
 
 abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
-  def generateConfigs = {
+  override def generateConfigs = {
     val overridingProps = new Properties()
     val numServers = 2
     overridingProps.put(KafkaConfig.NumPartitionsProp, 4.toString)
@@ -46,8 +47,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       trustStoreFile = trustStoreFile, saslProperties = saslProperties).map(KafkaConfig.fromProps(_, overridingProps))
   }
 
-  private var consumer1: SimpleConsumer = null
-  private var consumer2: SimpleConsumer = null
+  private var consumer1: KafkaConsumer[Array[Byte], Array[Byte]] = _
   private val producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
 
   protected val topic = "topic"
@@ -56,16 +56,12 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   @Before
   override def setUp() {
     super.setUp()
-
-    // TODO: we need to migrate to new consumers when 0.9 is final
-    consumer1 = new SimpleConsumer("localhost", servers.head.boundPort(), 100, 1024 * 1024, "")
-    consumer2 = new SimpleConsumer("localhost", servers(1).boundPort(), 100, 1024 * 1024, "")
+    consumer1 = TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), securityProtocol = SecurityProtocol.PLAINTEXT)
   }
 
   @After
   override def tearDown() {
     consumer1.close()
-    consumer2.close()
     // Ensure that all producers are closed since unclosed producers impact other tests when Kafka server ports are reused
     producers.foreach(_.close())
 
@@ -261,7 +257,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
 
     try {
       // create topic
-      val leaders = TestUtils.createTopic(zkUtils, topic, 2, 2, servers)
+      TestUtils.createTopic(zkUtils, topic, 2, 2, servers)
       val partition = 1
 
       val now = System.currentTimeMillis()
@@ -276,20 +272,26 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         assertEquals(partition, recordMetadata.partition)
       }
 
-      val leader1 = leaders(partition)
-      // make sure the fetched messages also respect the partitioning and ordering
-      val fetchResponse1 = if (leader1.get == configs.head.brokerId) {
-        consumer1.fetch(new FetchRequestBuilder().addFetch(topic, partition, 0, Int.MaxValue).build())
-      } else {
-        consumer2.fetch(new FetchRequestBuilder().addFetch(topic, partition, 0, Int.MaxValue).build())
-      }
-      val messageSet1 = fetchResponse1.messageSet(topic, partition).iterator.toBuffer
-      assertEquals("Should have fetched " + numRecords + " messages", numRecords, messageSet1.size)
+      consumer1.subscribe(List(topic))
 
-      // TODO: also check topic and partition after they are added in the return messageSet
+      // make sure the fetched messages also respect the partitioning and ordering
+      val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
+      val maxIters = numRecords * 50
+      var iters = 0
+      while (records.size < numRecords) {
+        for (record <- consumer1.poll(50)) {
+          records.add(record)
+        }
+        if (iters > maxIters)
+          throw new IllegalStateException("Failed to consume the expected records after " + iters + " iterations.")
+        iters += 1
+      }
+      assertEquals("Should have fetched " + numRecords + " messages", numRecords, records.size)
+
       for (i <- 0 until numRecords) {
-        assertEquals(new Message(bytes = ("value" + (i + 1)).getBytes, now, Message.MagicValue_V1), messageSet1(i).message)
-        assertEquals(i.toLong, messageSet1(i).offset)
+        assertEquals(topic, records(i).topic())
+        assertEquals(partition, records(i).partition)
+        assertEquals(i.toLong, records(i).offset)
       }
     } finally {
       producer.close()
@@ -385,8 +387,9 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   @Test
   def testCloseWithZeroTimeoutFromCallerThread() {
     // create topic
-    val leaders = TestUtils.createTopic(zkUtils, topic, 2, 2, servers)
-    val leader0 = leaders(0)
+    TestUtils.createTopic(zkUtils, topic, 2, 2, servers)
+
+    consumer1.subscribe(List(topic))
 
     // create record
     val record0 = new ProducerRecord[Array[Byte], Array[Byte]](topic, 0, null, "value".getBytes)
@@ -406,12 +409,11 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
             assertEquals("java.lang.IllegalStateException: Producer is closed forcefully.", e.getMessage)
         }
       }
-      val fetchResponse = if (leader0.get == configs.head.brokerId) {
-        consumer1.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, Int.MaxValue).build())
-      } else {
-        consumer2.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, Int.MaxValue).build())
+      val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
+      for (record <- consumer1.poll(50)) {
+        records.add(record)
       }
-      assertEquals("Fetch response should have no message returned.", 0, fetchResponse.messageSet(topic, 0).size)
+      assertEquals("Fetch response should have no message returned.", 0, records.size())
     }
   }
 
@@ -421,8 +423,9 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   @Test
   def testCloseWithZeroTimeoutFromSenderThread() {
     // create topic
-    val leaders = TestUtils.createTopic(zkUtils, topic, 1, 2, servers)
-    val leader = leaders(0)
+    TestUtils.createTopic(zkUtils, topic, 1, 2, servers)
+
+    consumer1.assign(List(new TopicPartition(topic, 0)))
 
     // create record
     val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, 0, null, "value".getBytes)
@@ -452,14 +455,22 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         producer.flush()
         assertTrue("All request are complete.", responses.forall(_.isDone()))
         // Check the messages received by broker.
-        val fetchResponse = if (leader.get == configs.head.brokerId) {
-          consumer1.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, Int.MaxValue).build())
-        } else {
-          consumer2.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, Int.MaxValue).build())
+        val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
+        val maxIters = 50
+        var iters = 0
+        consumer1.seek(new TopicPartition(topic, 0),0)
+        while (records.size < ((i + 1) * numRecords)) {
+          for (record <- consumer1.poll(50)) {
+            records.add(record)
+          }
+          if (iters > maxIters)
+            throw new IllegalStateException("Failed to consume the expected records after " + iters + " iterations.")
+          iters += 1
         }
+
         val expectedNumRecords = (i + 1) * numRecords
         assertEquals("Fetch response to partition 0 should have %d messages.".format(expectedNumRecords),
-          expectedNumRecords, fetchResponse.messageSet(topic, 0).size)
+          expectedNumRecords, records.size())
       } finally {
         producer.close()
       }
