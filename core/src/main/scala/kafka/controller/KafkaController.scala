@@ -1158,8 +1158,8 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
     @throws(classOf[Exception])
     def handleNewSession() {
       info("ZK expired; shut down all controller components and try to re-elect")
+      onControllerResignation()
       inLock(controllerContext.controllerLock) {
-        onControllerResignation()
         controllerElector.elect
       }
     }
