@@ -121,6 +121,12 @@ class NamedCache {
 
 
     synchronized void put(final Bytes key, final LRUCacheEntry value) {
+        if (!value.isDirty && dirtyKeys.contains(key)) {
+            throw new IllegalStateException(String.format("Attempting to put a clean entry for key [%s] " +
+                                                                  "into NamedCache [%s] when it already contains " +
+                                                                  "a dirty entry for the same key",
+                                                          key, name));
+        }
         LRUNode node = cache.get(key);
         if (node != null) {
             numOverwrites++;
