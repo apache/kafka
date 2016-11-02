@@ -94,6 +94,9 @@ public class Sender implements Runnable {
 
     /* the max time to wait for the server to respond to the request*/
     private final int requestTimeout;
+    
+    /* the max time to wait before expiring batches. */
+    private final long metadataStaleMs;
 
     public Sender(KafkaClient client,
                   Metadata metadata,
@@ -116,6 +119,8 @@ public class Sender implements Runnable {
         this.time = time;
         this.sensors = new SenderMetrics(metrics);
         this.requestTimeout = requestTimeout;
+        
+        this.metadataStaleMs = getMetadataStaleMs(metadata.maxAgeMs(), requestTimeout, metadata.refreshBackoff(), retries);
     }
 
     /**
@@ -203,12 +208,14 @@ public class Sender implements Runnable {
                     this.accumulator.mutePartition(batch.topicPartition);
             }
         }
-
-        List<RecordBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, now);
-        // update sensors
-        for (RecordBatch expiredBatch : expiredBatches)
-            this.sensors.recordErrors(expiredBatch.topicPartition.topic(), expiredBatch.recordCount);
-
+        boolean stale = isMetadataStale(now, metadata, this.metadataStaleMs);
+        if (stale || !result.unknownLeaderTopics.isEmpty()) {
+            List<RecordBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, stale, cluster, now);
+            // update sensors
+            for (RecordBatch expiredBatch : expiredBatches)
+                this.sensors.recordErrors(expiredBatch.topicPartition.topic(), expiredBatch.recordCount);
+        }
+        
         sensors.updateProduceRequestMetrics(batches);
         List<ClientRequest> requests = createProduceRequests(batches, now);
         // If we have any nodes that are ready to send + have sendable data, poll with 0 timeout so this can immediately
@@ -377,6 +384,19 @@ public class Sender implements Runnable {
         this.client.wakeup();
     }
 
+    /* metadata becomes "stale" for batch expiry purpose when the time since the last successful update exceeds
+     * the metadataStaleMs value. This value must be greater than the metadata.max.age and some delta to account
+     * for retries and transient network disconnections. There must be enough time for at least one retry. 
+     * As retries are subject to both regular request timeout and the backoff, staleness determination is delayed 
+     * by that factor.
+     */
+    static long getMetadataStaleMs(long metadataMaxAgeMs, int requestTimeoutMs, long refreshBackoffMs, int retries) {
+        return metadataMaxAgeMs + Math.max(retries, 1) * (requestTimeoutMs + refreshBackoffMs);
+    }
+    
+    static boolean isMetadataStale(long now, Metadata metadata, long metadataStaleMs) {
+        return (now - metadata.lastSuccessfulUpdate()) > metadataStaleMs;
+    }
     /**
      * A collection of sensors for the sender
      */

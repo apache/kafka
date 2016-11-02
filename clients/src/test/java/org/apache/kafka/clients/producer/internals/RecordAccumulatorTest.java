@@ -30,11 +30,13 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.LogEntry;
@@ -344,72 +346,124 @@ public class RecordAccumulatorTest {
     @Test
     public void testExpiredBatches() throws InterruptedException {
         long retryBackoffMs = 100L;
-        long lingerMs = 3000L;
-        int requestTimeout = 60;
+        long lingerMs = 500L;
+        int requestTimeoutMs = 2000;
+        int batchSize = 1024;
+        long totalSize = 10 * 1024;
+        long metadataMaxAgeMs = 5 * 60 * 1000L; // 5 min
+        int retries = 1;
+        long staleMetadataAgeMs  = Sender.getMetadataStaleMs(metadataMaxAgeMs, requestTimeoutMs, retryBackoffMs, retries);
+        List<RecordBatch> expiredBatches;
+        RecordAccumulator.ReadyCheckResult result;
+        Set<Node> readyNodes;
+        Map<Integer, List<RecordBatch>> drained;
+        boolean isMetadataStale = false;
 
-        RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, CompressionType.NONE, lingerMs, retryBackoffMs, metrics, time);
-        int appends = 1024 / msgSize;
+        assertTrue("Stale metadata age must be more than request timeout", staleMetadataAgeMs > metadataMaxAgeMs);
+        
+        Metadata metadata = new Metadata(retryBackoffMs, metadataMaxAgeMs, false, new ClusterResourceListeners());
+        metadata.update(cluster, time.milliseconds());
+        RecordAccumulator accum = new RecordAccumulator(batchSize, totalSize, CompressionType.NONE, lingerMs, retryBackoffMs, metrics, time);
+        int appends = batchSize / msgSize;
 
         // Test batches not in retry
         for (int i = 0; i < appends; i++) {
             accum.append(tp1, 0L, key, value, null, maxBlockTimeMs);
             assertEquals("No partitions should be ready.", 0, accum.ready(cluster, time.milliseconds()).readyNodes.size());
         }
-        // Make the batches ready due to batch full
+        // subtest1: Make the batches ready due to batch full
         accum.append(tp1, 0L, key, value, null, 0);
-        Set<Node> readyNodes = accum.ready(cluster, time.milliseconds()).readyNodes;
-        assertEquals("Our partition's leader should be ready", Collections.singleton(node1), readyNodes);
-        // Advance the clock to expire the batch.
-        time.sleep(requestTimeout + 1);
-        accum.mutePartition(tp1);
-        List<RecordBatch> expiredBatches = accum.abortExpiredBatches(requestTimeout, time.milliseconds());
-        assertEquals("The batch should not be expired when the partition is muted", 0, expiredBatches.size());
+        result = accum.ready(cluster, time.milliseconds());
+        assertEquals("Our partition's leader should be ready", Collections.singleton(node1), result.readyNodes);
+
+        isMetadataStale = Sender.isMetadataStale(time.milliseconds(), metadata, staleMetadataAgeMs);
+        expiredBatches = accum.abortExpiredBatches(requestTimeoutMs, isMetadataStale, cluster, time.milliseconds());
+        assertTrue("The batch should not expire because leaders are known and metadata is fresh.",
+                   result.unknownLeaderTopics.isEmpty() && expiredBatches.size() == 0);
+        // subtest1 done 
+
+        // subtest2: test effects of mute-unmute on ready and expired batches 
+        accum.mutePartition(tp1); // a batch is now in-flight. 
+
+        result = accum.ready(cluster, time.milliseconds());
+        assertTrue("No partition should be ready because it's muted", result.readyNodes.isEmpty());
+
+        isMetadataStale = Sender.isMetadataStale(time.milliseconds(), metadata, staleMetadataAgeMs);
+        expiredBatches = accum.abortExpiredBatches(requestTimeoutMs, isMetadataStale, cluster, time.milliseconds());
+        assertTrue("The batch should not expire because the leaders are known and metadata is fresh.",
+                   result.unknownLeaderTopics.isEmpty() && expiredBatches.size() == 0);
 
         accum.unmutePartition(tp1);
-        expiredBatches = accum.abortExpiredBatches(requestTimeout, time.milliseconds());
-        assertEquals("The batch should be expired", 1, expiredBatches.size());
-        assertEquals("No partitions should be ready.", 0, accum.ready(cluster, time.milliseconds()).readyNodes.size());
+        // subtest2 done 
 
-        // Advance the clock to make the next batch ready due to linger.ms
-        time.sleep(lingerMs);
-        assertEquals("Our partition's leader should be ready", Collections.singleton(node1), readyNodes);
-        time.sleep(requestTimeout + 1);
+        // subtest3: test effect of linger on ready and expired batches
+        time.sleep(lingerMs + 1); // Advance the clock beyond linger.ms.
+        result = accum.ready(cluster, time.milliseconds());
+        assertEquals("Our partition's leader should be ready", Collections.singleton(node1), result.readyNodes);
+        // subtest3 done
 
-        accum.mutePartition(tp1);
-        expiredBatches = accum.abortExpiredBatches(requestTimeout, time.milliseconds());
-        assertEquals("The batch should not be expired when metadata is still available and partition is muted", 0, expiredBatches.size());
+        // subtest4: test the effect of request timeout.
+        time.sleep(requestTimeoutMs);
+        isMetadataStale = Sender.isMetadataStale(time.milliseconds(), metadata, staleMetadataAgeMs);
+        expiredBatches = accum.abortExpiredBatches(requestTimeoutMs, isMetadataStale, cluster, time.milliseconds());
+        assertTrue("The batch should not expire because the leaders are known and metadata is fresh.",
+            result.unknownLeaderTopics.isEmpty() && expiredBatches.size() == 0);
+        // subtest4 done
 
-        accum.unmutePartition(tp1);
-        expiredBatches = accum.abortExpiredBatches(requestTimeout, time.milliseconds());
-        assertEquals("The batch should be expired when the partition is not muted", 1, expiredBatches.size());
-        assertEquals("No partitions should be ready.", 0, accum.ready(cluster, time.milliseconds()).readyNodes.size());
+        // drain first batch.
+        drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        assertEquals("There should be one batch.", drained.get(node1.id()).size(), 1);
 
-        // Test batches in retry.
-        // Create a retried batch
+        // drain the second batch.
+        drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        assertEquals("Drain again. There should be one batch.", drained.get(node1.id()).size(), 1);
+
+        // subtest5: Test batches in retry. Create a retried batch
         accum.append(tp1, 0L, key, value, null, 0);
-        time.sleep(lingerMs);
-        readyNodes = accum.ready(cluster, time.milliseconds()).readyNodes;
-        assertEquals("Our partition's leader should be ready", Collections.singleton(node1), readyNodes);
-        Map<Integer, List<RecordBatch>> drained = accum.drain(cluster, readyNodes, Integer.MAX_VALUE, time.milliseconds());
-        assertEquals("There should be only one batch.", drained.get(node1.id()).size(), 1);
-        time.sleep(1000L);
+        time.sleep(lingerMs + 1);
+        result = accum.ready(cluster, time.milliseconds());
+        assertEquals("Our partition's leader should be ready", Collections.singleton(node1), result.readyNodes);
+        time.sleep(requestTimeoutMs);
         accum.reenqueue(drained.get(node1.id()).get(0), time.milliseconds());
+        isMetadataStale = Sender.isMetadataStale(time.milliseconds(), metadata, staleMetadataAgeMs);
+        expiredBatches = accum.abortExpiredBatches(requestTimeoutMs, isMetadataStale, cluster, time.milliseconds());
+        assertTrue("The batch should not expire because the leaders are known and metadata is fresh.",
+                   result.unknownLeaderTopics.isEmpty() && expiredBatches.size() == 0);
+        // subtest5 done.
 
-        // test expiration.
-        time.sleep(requestTimeout + retryBackoffMs);
-        expiredBatches = accum.abortExpiredBatches(requestTimeout, time.milliseconds());
-        assertEquals("The batch should not be expired.", 0, expiredBatches.size());
-        time.sleep(1L);
+        // subtest6: Test meatadata expiry
+        time.sleep(staleMetadataAgeMs);
+        isMetadataStale = Sender.isMetadataStale(time.milliseconds(), metadata, staleMetadataAgeMs);
+        expiredBatches = accum.abortExpiredBatches(requestTimeoutMs, isMetadataStale, cluster, time.milliseconds());
+        assertEquals("The batch should expire because metadata is no longer fresh.", 2, expiredBatches.size());
+        // subtest6 done
+      
+        // subtest7: Test batches with missing leader. 
+        int partition4 = 3;
+        TopicPartition tp4 = new TopicPartition(topic, partition4);
+        PartitionInfo part4 = new PartitionInfo(topic, partition4, null, null, null);
+        Map<TopicPartition, PartitionInfo> extra = Collections.singletonMap(tp4, part4);
+        cluster = cluster.withPartitions(extra);
 
-        accum.mutePartition(tp1);
-        expiredBatches = accum.abortExpiredBatches(requestTimeout, time.milliseconds());
-        assertEquals("The batch should not be expired when the partition is muted", 0, expiredBatches.size());
+        // update metadata
+        metadata.update(cluster, time.milliseconds());
 
-        accum.unmutePartition(tp1);
-        expiredBatches = accum.abortExpiredBatches(requestTimeout, time.milliseconds());
-        assertEquals("The batch should be expired when the partition is not muted.", 1, expiredBatches.size());
+        accum.append(tp4, 0L, key, value, null, 0);
+        time.sleep(lingerMs + 1);
+
+        result = accum.ready(cluster, time.milliseconds());
+        assertEquals("Node should not be ready", 0, result.readyNodes.size());
+        isMetadataStale = Sender.isMetadataStale(time.milliseconds(), metadata, staleMetadataAgeMs);
+        expiredBatches = accum.abortExpiredBatches(requestTimeoutMs, isMetadataStale, cluster, time.milliseconds());
+        assertEquals("The batch should not expire because request timeout has not passed.", 0, expiredBatches.size());
+
+        time.sleep(requestTimeoutMs + 1);
+        isMetadataStale = Sender.isMetadataStale(time.milliseconds(), metadata, staleMetadataAgeMs);
+        expiredBatches = accum.abortExpiredBatches(requestTimeoutMs, isMetadataStale, cluster, time.milliseconds());
+        assertEquals("The batch should expire because request timeout has passed.", 1, expiredBatches.size());
+        // subtest7 done
     }
-
+    
     @Test
     public void testMutedPartitions() throws InterruptedException {
         long now = time.milliseconds();
@@ -441,4 +495,5 @@ public class RecordAccumulatorTest {
         drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
         assertTrue("The batch should have been drained.", drained.get(node1.id()).size() > 0);
     }
+
 }

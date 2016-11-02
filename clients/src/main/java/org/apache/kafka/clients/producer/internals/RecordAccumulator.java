@@ -220,20 +220,34 @@ public final class RecordAccumulator {
     }
 
     /**
-     * Abort the batches that have been sitting in RecordAccumulator for more than the configured requestTimeout
-     * due to metadata being unavailable
+     * Abort the batches that have been sitting in RecordAccumulator 
+     * 1. longer than the requestTimeout when metadata is fresh; or
+     * 2. longer than {@link Sender#metadataStaleMs} when metadata is stale. 
      */
-    public List<RecordBatch> abortExpiredBatches(int requestTimeout, long now) {
+    public List<RecordBatch> abortExpiredBatches(int requestTimeout, boolean isMetadataStale, Cluster cluster, long now) {
         List<RecordBatch> expiredBatches = new ArrayList<>();
         int count = 0;
         for (Map.Entry<TopicPartition, Deque<RecordBatch>> entry : this.batches.entrySet()) {
             Deque<RecordBatch> dq = entry.getValue();
             TopicPartition tp = entry.getKey();
-            // We only check if the batch should be expired if the partition does not have a batch in flight.
-            // This is to prevent later batches from being expired while an earlier batch is still in progress.
-            // Note that `muted` is only ever populated if `max.in.flight.request.per.connection=1` so this protection
-            // is only active in this case. Otherwise the expiration order is not guaranteed.
-            if (!muted.contains(tp)) {
+            
+            // In the case where the user wishes to achieve strict ordering, (i.e., 
+            // max.in.flight.request.per.connection=1) the muted membership condition helps ensure that batches also  
+            // expire in order. Partitions are muted only if strict ordering is enabled and there are in-flight batches.
+            // This prevents later batches from being expired while an earlier batch is still in progress.
+            //
+            // Second, we expire batches when we know that we can't make progress on a given topic-partition. 
+            // Specifically, we check if
+            // (1) the partition does not have an in-flight batch. 
+            // (2) Either the metadata is too stale or we don't have a leader for a partition.
+            //
+            // The second condition allows expiration of ready batches if we don't have a leader for 
+            // the partition.
+            // 
+            // Finally, we expire batches if the last metadata refresh was too long ago. I.e., > {@link Sender#metadataStaleMs}. 
+            // We might run in to this situation when the producer is disconnected from all the brokers. 
+            boolean guaranteeExpirationOrder = muted.contains(tp);
+            if (!guaranteeExpirationOrder && (isMetadataStale || cluster.leaderFor(tp) == null)) {
                 synchronized (dq) {
                     // iterate over the batches and expire them if they have been in the accumulator for more than requestTimeOut
                     RecordBatch lastBatch = dq.peekLast();
