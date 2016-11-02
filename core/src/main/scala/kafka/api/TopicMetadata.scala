@@ -144,7 +144,7 @@ case class PartitionMetadata(partitionId: Int,
     partitionMetadataString.append("\tleader: " + leader.getOrElse("none"))
     partitionMetadataString.append("\treplicas: " + replicas.mkString(","))
     partitionMetadataString.append("\tisr: " + isr.mkString(","))
-    partitionMetadataString.append("\tisUnderReplicated: %s" + (isr.size < replicas.size))
+    partitionMetadataString.append("\tisUnderReplicated: " + (isr.size < replicas.size))
     partitionMetadataString.toString()
   }
 
