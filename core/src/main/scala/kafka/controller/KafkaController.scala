@@ -1158,6 +1158,11 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
     @throws(classOf[Exception])
     def handleNewSession() {
       info("ZK expired; shut down all controller components and try to re-elect")
+    /**
+       * onControllerResignation() is thread safe, put it out of controllerContext.controllerLock can avoid grabbing the controller lock
+       * between onControllerResignation() and checkAndTriggerPartitionRebalance() task, because onControllerResignation() will call autoRebalanceScheduler.shutdown(), so
+       * if not put it out of controllerContext.controllerLock, it may leads to deadlock, More in KAFKA-4360
+       */
       onControllerResignation()
       inLock(controllerContext.controllerLock) {
         controllerElector.elect
