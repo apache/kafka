@@ -126,7 +126,7 @@ case class PartitionMetadata(partitionId: Int,
     buffer.putInt(partitionId)
 
     /* leader */
-    val leaderId = if(leader.isDefined) leader.get.id else TopicMetadata.NoLeaderNodeId
+    val leaderId = leader.fold(TopicMetadata.NoLeaderNodeId)(leader => leader.id)
     buffer.putInt(leaderId)
 
     /* number of replicas */
@@ -141,10 +141,10 @@ case class PartitionMetadata(partitionId: Int,
   override def toString: String = {
     val partitionMetadataString = new StringBuilder
     partitionMetadataString.append("\tpartition " + partitionId)
-    partitionMetadataString.append("\tleader: " + (if(leader.isDefined) leader.get.toString else "none"))
+    partitionMetadataString.append("\tleader: " + leader.getOrElse("none"))
     partitionMetadataString.append("\treplicas: " + replicas.mkString(","))
     partitionMetadataString.append("\tisr: " + isr.mkString(","))
-    partitionMetadataString.append("\tisUnderReplicated: %s".format(if(isr.size < replicas.size) "true" else "false"))
+    partitionMetadataString.append("\tisUnderReplicated: %s" + (isr.size < replicas.size))
     partitionMetadataString.toString()
   }
 
