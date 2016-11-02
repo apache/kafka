@@ -38,6 +38,7 @@ import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, ZooDefs, ZooKeeper}
 
 import scala.collection._
+import scala.collection.JavaConverters._
 
 object ZkUtils {
   val ConsumersPath = "/consumers"
@@ -630,17 +631,11 @@ class ZkUtils(val zkClient: ZkClient,
     dataAndStat
   }
 
-  def getChildren(path: String): Seq[String] = {
-    import scala.collection.JavaConversions._
-    // triggers implicit conversion from java list to scala Seq
-    zkClient.getChildren(path)
-  }
+  def getChildren(path: String): Seq[String] = zkClient.getChildren(path).asScala
 
   def getChildrenParentMayNotExist(path: String): Seq[String] = {
-    import scala.collection.JavaConversions._
-    // triggers implicit conversion from java list to scala Seq
     try {
-      zkClient.getChildren(path)
+      zkClient.getChildren(path).asScala
     } catch {
       case _: ZkNoNodeException => Nil
     }

@@ -13,18 +13,17 @@
 
 package kafka.api
 
-import java.util
+import java.util.Collections
 
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, ShutdownableThread, TestUtils}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.errors.{IllegalGenerationException, UnknownMemberIdException}
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
-import org.junit.{Test, Before}
+import org.junit.{Before, Test}
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 
 
@@ -81,13 +80,13 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     var consumed = 0L
     val consumer = this.consumers.head
 
-    consumer.subscribe(List(topic))
+    consumer.subscribe(Collections.singletonList(topic))
 
     val scheduler = new BounceBrokerScheduler(numIters)
     scheduler.start()
 
     while (scheduler.isRunning.get()) {
-      for (record <- consumer.poll(100)) {
+      for (record <- consumer.poll(100).asScala) {
         assertEquals(consumed, record.offset())
         consumed += 1
       }
@@ -97,7 +96,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
         assertEquals(consumer.position(tp), consumer.committed(tp).offset)
 
         if (consumer.position(tp) == numRecords) {
-          consumer.seekToBeginning(List[TopicPartition]())
+          consumer.seekToBeginning(Collections.emptyList())
           consumed = 0
         }
       } catch {
@@ -118,7 +117,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     this.producers.foreach(_.close)
 
     val consumer = this.consumers.head
-    consumer.assign(List(tp))
+    consumer.assign(Collections.singletonList(tp))
     consumer.seek(tp, 0)
 
     // wait until all the followers have synced the last HW with leader
@@ -133,7 +132,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
       val coin = TestUtils.random.nextInt(3)
       if (coin == 0) {
         info("Seeking to end of log")
-        consumer.seekToEnd(List[TopicPartition]())
+        consumer.seekToEnd(Collections.emptyList())
         assertEquals(numRecords.toLong, consumer.position(tp))
       } else if (coin == 1) {
         val pos = TestUtils.random.nextInt(numRecords).toLong
