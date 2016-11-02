@@ -191,25 +191,23 @@ object DumpLogSegments {
         case None =>
           timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset + timeIndex.baseOffset,
             -1.toLong)
-        case Some(wrapperMessage) => wrapperMessage.offset != entry.offset + timeIndex.baseOffset match{
-          case true =>
-            timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset + timeIndex.baseOffset,
+        case Some(wrapperMessage) if wrapperMessage.offset != entry.offset + timeIndex.baseOffset =>
+          timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset + timeIndex.baseOffset,
             wrapperMessage.offset)
-          case false =>
-            val deepIter = getIterator(wrapperMessage, isDeepIteration = true)
-            for (messageAndOffset <- deepIter)
-              maxTimestamp = math.max(maxTimestamp, messageAndOffset.message.timestamp)
+        case Some(wrapperMessage) =>
+          val deepIter = getIterator(wrapperMessage, isDeepIteration = true)
+          for (messageAndOffset <- deepIter)
+            maxTimestamp = math.max(maxTimestamp, messageAndOffset.message.timestamp)
 
-            if (maxTimestamp != entry.timestamp)
-              timeIndexDumpErrors.recordMismatchTimeIndex(file, entry.timestamp, maxTimestamp)
+          if (maxTimestamp != entry.timestamp)
+            timeIndexDumpErrors.recordMismatchTimeIndex(file, entry.timestamp, maxTimestamp)
 
-            if (prevTimestamp >= entry.timestamp)
-              timeIndexDumpErrors.recordOutOfOrderIndexTimestamp(file, entry.timestamp, prevTimestamp)
+          if (prevTimestamp >= entry.timestamp)
+            timeIndexDumpErrors.recordOutOfOrderIndexTimestamp(file, entry.timestamp, prevTimestamp)
 
-            // since it is a sparse file, in the event of a crash there may be many zero entries, stop if we see one
-            if (entry.offset == 0 && i > 0)
-              return
-        }
+          // since it is a sparse file, in the event of a crash there may be many zero entries, stop if we see one
+          if (entry.offset == 0 && i > 0)
+            return
       }
       if (!verifyOnly)
         println("timestamp: %s offset: %s".format(entry.timestamp, timeIndex.baseOffset + entry.offset))
