@@ -23,7 +23,6 @@ import org.apache.kafka.clients._
 import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, ConsumerProtocol, RequestFuture}
 import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
-import org.apache.kafka.common.errors.DisconnectException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector
 import org.apache.kafka.common.protocol.types.Struct
@@ -32,7 +31,6 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{SystemTime, Time, Utils}
 import org.apache.kafka.common.{Cluster, Node, TopicPartition}
 
-import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
 class AdminClient(val time: Time,
@@ -79,11 +77,11 @@ class AdminClient(val time: Time,
     val responseBody = send(node, ApiKeys.LIST_GROUPS, new ListGroupsRequest())
     val response = new ListGroupsResponse(responseBody)
     Errors.forCode(response.errorCode()).maybeThrow()
-    response.groups().map(group => GroupOverview(group.groupId(), group.protocolType())).toList
+    response.groups().asScala.map(group => GroupOverview(group.groupId(), group.protocolType())).toList
   }
 
   private def findAllBrokers(): List[Node] = {
-    val request = new MetadataRequest(List[String]())
+    val request = new MetadataRequest(List[String]().asJava)
     val responseBody = sendAnyNode(ApiKeys.METADATA, request)
     val response = new MetadataResponse(responseBody)
     val errors = response.errors()
@@ -130,7 +128,7 @@ class AdminClient(val time: Time,
       throw new KafkaException(s"Response from broker contained no metadata for group $groupId")
 
     Errors.forCode(metadata.errorCode()).maybeThrow()
-    val members = metadata.members().map { member =>
+    val members = metadata.members().asScala.map { member =>
       val metadata = Utils.readBytes(member.memberMetadata())
       val assignment = Utils.readBytes(member.memberAssignment())
       MemberSummary(member.memberId(), member.clientId(), member.clientHost(), metadata, assignment)
@@ -194,7 +192,7 @@ object AdminClient {
     config
   }
 
-  class AdminConfig(originals: Map[_,_]) extends AbstractConfig(AdminConfigDef, originals, false)
+  class AdminConfig(originals: Map[_,_]) extends AbstractConfig(AdminConfigDef, originals.asJava, false)
 
   def createSimplePlaintext(brokerUrl: String): AdminClient = {
     val config = Map(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG -> brokerUrl)

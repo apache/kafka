@@ -32,7 +32,8 @@ import org.apache.kafka.common.errors.{UnsupportedForMessageFormatException, Cor
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.requests.ListOffsetRequest
 
-import scala.collection.{Seq, JavaConversions}
+import scala.collection.Seq
+import scala.collection.JavaConverters._
 import com.yammer.metrics.core.Gauge
 import org.apache.kafka.common.utils.Utils
 
@@ -902,23 +903,19 @@ class Log(val dir: File,
   /**
    * All the log segments in this log ordered from oldest to newest
    */
-  def logSegments: Iterable[LogSegment] = {
-    import JavaConversions._
-    segments.values
-  }
+  def logSegments: Iterable[LogSegment] = segments.values.asScala
 
   /**
    * Get all segments beginning with the segment that includes "from" and ending with the segment
    * that includes up to "to-1" or the end of the log (if to > logEndOffset)
    */
   def logSegments(from: Long, to: Long): Iterable[LogSegment] = {
-    import JavaConversions._
     lock synchronized {
       val floor = segments.floorKey(from)
       if(floor eq null)
-        segments.headMap(to).values
+        segments.headMap(to).values.asScala
       else
-        segments.subMap(floor, true, to, false).values
+        segments.subMap(floor, true, to, false).values.asScala
     }
   }
 

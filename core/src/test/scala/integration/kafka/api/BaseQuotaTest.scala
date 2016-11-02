@@ -14,7 +14,7 @@
 
 package kafka.api
 
-import java.util.Properties
+import java.util.{Collections, Properties}
 
 import kafka.server.{DynamicConfig, KafkaConfig, KafkaServer, QuotaId}
 import kafka.utils.TestUtils
@@ -22,14 +22,12 @@ import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.MetricName
-import org.apache.kafka.common.metrics.{Quota, KafkaMetric}
+import org.apache.kafka.common.metrics.{KafkaMetric, Quota}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
-import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
-import scala.collection.Map
 import scala.collection.mutable
 
 abstract class BaseQuotaTest extends IntegrationTestHarness {
@@ -158,10 +156,10 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   }
 
   def consume(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int) {
-    consumer.subscribe(List(topic1))
+    consumer.subscribe(Collections.singletonList(topic1))
     var numConsumed = 0
     while (numConsumed < numRecords) {
-      for (cr <- consumer.poll(100)) {
+      for (cr <- consumer.poll(100).asScala) {
         numConsumed += 1
       }
     }
