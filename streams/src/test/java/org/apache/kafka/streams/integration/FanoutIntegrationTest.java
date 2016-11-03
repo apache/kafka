@@ -45,6 +45,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertThat;
@@ -173,7 +174,7 @@ public class FanoutIntegrationTest {
         consumerConfigC.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         final List<String> actualValuesForC = IntegrationTestUtils.waitUntilMinValuesRecordsReceived(consumerConfigC,
             OUTPUT_TOPIC_C, inputValues.size());
-        streams.close();
+        streams.close(15, TimeUnit.SECONDS);
         assertThat(actualValuesForC, equalTo(expectedValuesForC));
     }
 

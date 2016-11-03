@@ -53,6 +53,7 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.Properties;
 import java.util.Random;
+import java.util.concurrent.TimeUnit;
 
 public class SimpleBenchmark {
 
@@ -230,7 +231,7 @@ public class SimpleBenchmark {
 
         System.out.println(nameOfBenchmark + megaBytePerSec(endTime - startTime, numRecords, KEY_SIZE + VALUE_SIZE));
 
-        streams.close();
+        streams.close(15, TimeUnit.SECONDS);
     }
 
 
@@ -261,7 +262,7 @@ public class SimpleBenchmark {
 
         System.out.println("Streams Performance [MB/sec read]: " + megaBytePerSec(endTime - startTime));
 
-        streams.close();
+        streams.close(15, TimeUnit.SECONDS);
         try {
             thread.join();
         } catch (Exception ex) {
@@ -295,7 +296,7 @@ public class SimpleBenchmark {
 
         System.out.println("Streams Performance [MB/sec read+write]: " + megaBytePerSec(endTime - startTime));
 
-        streams.close();
+        streams.close(15, TimeUnit.SECONDS);
         try {
             thread.join();
         } catch (Exception ex) {
@@ -329,7 +330,7 @@ public class SimpleBenchmark {
 
         System.out.println("Streams Performance [MB/sec read+store]: " + megaBytePerSec(endTime - startTime));
 
-        streams.close();
+        streams.close(15, TimeUnit.SECONDS);
         try {
             thread.join();
         } catch (Exception ex) {

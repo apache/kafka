@@ -40,6 +40,7 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.Windowed;
 
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Demonstrates how to perform a join between a KStream and a KTable, i.e. an example of a stateful computation,
@@ -128,6 +129,6 @@ public class PageViewUntypedDemo {
         // in this example we just let it run for some time and stop since the input data is finite.
         Thread.sleep(5000L);
 
-        streams.close();
+        streams.close(15, TimeUnit.SECONDS);
     }
 }

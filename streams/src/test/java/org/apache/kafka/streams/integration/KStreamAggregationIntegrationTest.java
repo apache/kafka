@@ -51,6 +51,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
@@ -121,7 +122,7 @@ public class KStreamAggregationIntegrationTest {
     @After
     public void whenShuttingDown() throws IOException {
         if (kafkaStreams != null) {
-            kafkaStreams.close();
+            kafkaStreams.close(15, TimeUnit.SECONDS);
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }

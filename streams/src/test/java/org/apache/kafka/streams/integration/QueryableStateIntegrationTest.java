@@ -188,7 +188,7 @@ public class QueryableStateIntegrationTest {
     @After
     public void shutdown() throws IOException {
         if (kafkaStreams != null) {
-            kafkaStreams.close();
+            kafkaStreams.close(15, TimeUnit.SECONDS);
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
@@ -243,7 +243,7 @@ public class QueryableStateIntegrationTest {
 
         public void close() {
             if (!closed) {
-                myStream.close();
+                myStream.close(15, TimeUnit.SECONDS);
                 closed = true;
             }
         }
@@ -508,7 +508,7 @@ public class QueryableStateIntegrationTest {
         }, maxWaitMs, "wait for count to be 8");
 
         // close stream
-        kafkaStreams.close();
+        kafkaStreams.close(15, TimeUnit.SECONDS);
 
         // start again
         kafkaStreams = new KafkaStreams(builder, streamsConfiguration);

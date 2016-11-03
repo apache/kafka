@@ -27,6 +27,7 @@ import org.junit.ClassRule;
 import org.junit.Test;
 
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertTrue;
 
@@ -56,7 +57,7 @@ public class KafkaStreamsTest {
         final int initCountDifference = newInitCount - oldInitCount;
         assertTrue("some reporters should be initialized by calling start()", initCountDifference > 0);
 
-        streams.close();
+        streams.close(15, TimeUnit.SECONDS);
         Assert.assertEquals("each reporter initialized should also be closed",
             oldCloseCount + initCountDifference, MockMetricsReporter.CLOSE_COUNT.get());
     }
@@ -70,10 +71,10 @@ public class KafkaStreamsTest {
 
         final KStreamBuilder builder = new KStreamBuilder();
         final KafkaStreams streams = new KafkaStreams(builder, props);
-        streams.close();
+        streams.close(15, TimeUnit.SECONDS);
         final int closeCount = MockMetricsReporter.CLOSE_COUNT.get();
 
-        streams.close();
+        streams.close(15, TimeUnit.SECONDS);
         Assert.assertEquals("subsequent close() calls should do nothing",
             closeCount, MockMetricsReporter.CLOSE_COUNT.get());
     }
@@ -86,15 +87,15 @@ public class KafkaStreamsTest {
 
         final KStreamBuilder builder = new KStreamBuilder();
         final KafkaStreams streams = new KafkaStreams(builder, props);
-        streams.close();
-
+        streams.start();
+        streams.close(15, TimeUnit.SECONDS);
         try {
             streams.start();
         } catch (final IllegalStateException e) {
             Assert.assertEquals("Cannot restart after closing.", e.getMessage());
             throw e;
         } finally {
-            streams.close();
+            streams.close(15, TimeUnit.SECONDS);
         }
     }
 
@@ -114,7 +115,7 @@ public class KafkaStreamsTest {
             Assert.assertEquals("This process was already started.", e.getMessage());
             throw e;
         } finally {
-            streams.close();
+            streams.close(15, TimeUnit.SECONDS);
         }
     }
 
@@ -168,7 +169,7 @@ public class KafkaStreamsTest {
 
         streams.cleanUp();
         streams.start();
-        streams.close();
+        streams.close(15, TimeUnit.SECONDS);
         streams.cleanUp();
     }
 
@@ -188,8 +189,7 @@ public class KafkaStreamsTest {
             Assert.assertEquals("Cannot clean up while running.", e.getMessage());
             throw e;
         } finally {
-            streams.close();
+            streams.close(15, TimeUnit.SECONDS);
         }
     }
-
 }

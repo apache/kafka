@@ -40,6 +40,7 @@ import org.junit.runners.Parameterized;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertThat;
@@ -218,7 +219,7 @@ public class KTableKTableJoinIntegrationTest {
     @After
     public void after() throws Exception {
         if (streams != null) {
-            streams.close();
+            streams.close(15, TimeUnit.SECONDS);
             streams = null;
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfig);

@@ -43,6 +43,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 import kafka.utils.MockTime;
 
@@ -107,7 +108,7 @@ public class KStreamAggregationDedupIntegrationTest {
     @After
     public void whenShuttingDown() throws IOException {
         if (kafkaStreams != null) {
-            kafkaStreams.close();
+            kafkaStreams.close(15, TimeUnit.SECONDS);
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }

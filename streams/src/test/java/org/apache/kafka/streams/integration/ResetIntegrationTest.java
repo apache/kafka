@@ -52,6 +52,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -130,7 +131,7 @@ public class ResetIntegrationTest {
             1
         ).get(0);
 
-        streams.close();
+        streams.close(15, TimeUnit.SECONDS);
         final int timeoutMultiplier = 5;
         TestUtils.waitForCondition(consumerGroupInactive, timeoutMultiplier * STREAMS_CONSUMER_TIMEOUT,
             "Streams Application consumer group did not time out after " + (timeoutMultiplier * STREAMS_CONSUMER_TIMEOUT) + " ms.");
@@ -156,7 +157,7 @@ public class ResetIntegrationTest {
             OUTPUT_TOPIC_2_RERUN,
             1
         ).get(0);
-        streams.close();
+        streams.close(15, TimeUnit.SECONDS);
 
         assertThat(resultRerun, equalTo(result));
         assertThat(resultRerun2, equalTo(result2));

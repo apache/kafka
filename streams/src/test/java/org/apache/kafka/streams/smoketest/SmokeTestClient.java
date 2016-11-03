@@ -36,6 +36,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 
 import java.io.File;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
 public class SmokeTestClient extends SmokeTestUtil {
 
@@ -70,7 +71,7 @@ public class SmokeTestClient extends SmokeTestUtil {
     }
 
     public void close() {
-        streams.close();
+        streams.close(15, TimeUnit.SECONDS);
         try {
             thread.join();
         } catch (Exception ex) {
