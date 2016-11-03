@@ -21,8 +21,8 @@ public class MockTime implements Time {
 
     private final long autoTickMs;
 
-    // Values from `nanoTime` and `currentTimeMillis` are not comparable, so we store them separately to catch bugs
-    // where this is incorrectly assumed to be true
+    // Values from `nanoTime` and `currentTimeMillis` are not comparable, so we store them separately to allow tests
+    // using this class to detect bugs where this is incorrectly assumed to be true
     private long timeMs;
     private long highResTimeNs;
 
