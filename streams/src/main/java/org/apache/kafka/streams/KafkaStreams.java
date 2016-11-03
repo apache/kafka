@@ -190,12 +190,10 @@ public class KafkaStreams {
     public synchronized void start() {
         log.debug("Starting Kafka Stream process");
 
-        if (state.get() == StreamsState.created) {
-            for (final StreamThread thread : threads)
+        if (state.compareAndSet(StreamsState.created, StreamsState.running)) {
+            for (final StreamThread thread : threads) {
                 thread.start();
-
-            state.set(StreamsState.running);
-
+            }
             log.info("Started Kafka Stream process");
         } else if (state.get() == StreamsState.running) {
             throw new IllegalStateException("This process was already started.");

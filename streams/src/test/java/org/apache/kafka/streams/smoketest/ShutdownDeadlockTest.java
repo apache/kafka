@@ -28,7 +28,6 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 
 import java.util.Properties;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 public class ShutdownDeadlockTest {
@@ -51,7 +50,6 @@ public class ShutdownDeadlockTest {
         props.setProperty(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, zookeeper);
         final KStreamBuilder builder = new KStreamBuilder();
         final KStream<String, String> source = builder.stream(Serdes.String(), Serdes.String(), topic);
-        final CountDownLatch latch = new CountDownLatch(1);
 
         source.foreach(new ForeachAction<String, String>() {
             @Override
@@ -64,7 +62,6 @@ public class ShutdownDeadlockTest {
             @Override
             public void uncaughtException(final Thread t, final Throwable e) {
                 System.exit(-1);
-                latch.countDown();
             }
         });
 
@@ -86,10 +83,14 @@ public class ShutdownDeadlockTest {
         producer.flush();
 
         streams.start();
-        try {
-            latch.await(300, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            //
+        while (true) {
+            synchronized (this) {
+                try {
+                    wait();
+                } catch (InterruptedException e) {
+                    // ignored
+                }
+            }
         }
 
     }
