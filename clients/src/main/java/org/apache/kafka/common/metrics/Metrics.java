@@ -430,6 +430,7 @@ public class Metrics implements Closeable {
                 this.metricsScheduler.awaitTermination(30, TimeUnit.SECONDS);
             } catch (InterruptedException ex) {
                 // ignore and continue shutdown
+                Thread.currentThread().interrupt();
             }
         }
 

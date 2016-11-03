@@ -37,6 +37,7 @@ public class SystemTime implements Time {
             Thread.sleep(ms);
         } catch (InterruptedException e) {
             // just wake up early
+            Thread.currentThread().interrupt();
         }
     }
 
