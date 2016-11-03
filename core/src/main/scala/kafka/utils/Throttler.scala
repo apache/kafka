@@ -49,8 +49,8 @@ class Throttler(val desiredRatePerSec: Double,
   private var observedSoFar: Double = 0.0
   
   def maybeThrottle(observed: Double) {
-    val msPerSec = 1000
-    val nsPerSec = 1000 * 1000 * msPerSec
+    val msPerSec = TimeUnit.SECONDS.toMillis(1)
+    val nsPerSec = TimeUnit.SECONDS.toNanos(1)
 
     meter.mark(observed.toLong)
     lock synchronized {
