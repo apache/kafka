@@ -18,7 +18,9 @@
 package kafka.utils
 
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.{TimeUnit, LinkedBlockingQueue}
+import java.util.concurrent.{LinkedBlockingQueue, TimeUnit}
+
+import org.apache.kafka.common.utils.{SystemTime, Time}
 
 /**
  * A blocking queue that have size limits on both number of elements and number of bytes.
@@ -43,17 +45,17 @@ class ByteBoundedBlockingQueue[E] (val queueNumMessageCapacity: Int, val queueBy
    */
   def offer(e: E, timeout: Long, unit: TimeUnit = TimeUnit.MICROSECONDS): Boolean = {
     if (e == null) throw new NullPointerException("Putting null element into queue.")
-    val startTime = SystemTime.nanoseconds
+    val startTime = Time.SYSTEM.nanoseconds
     val expireTime = startTime + unit.toNanos(timeout)
     putLock synchronized {
-      var timeoutNanos = expireTime - SystemTime.nanoseconds
+      var timeoutNanos = expireTime - Time.SYSTEM.nanoseconds
       while (currentByteSize.get() >= queueByteCapacity && timeoutNanos > 0) {
         // ensure that timeoutNanos > 0, otherwise (per javadoc) we have to wait until the next notify
         putLock.wait(timeoutNanos / 1000000, (timeoutNanos % 1000000).toInt)
-        timeoutNanos = expireTime - SystemTime.nanoseconds
+        timeoutNanos = expireTime - Time.SYSTEM.nanoseconds
       }
       // only proceed if queue has capacity and not timeout
-      timeoutNanos = expireTime - SystemTime.nanoseconds
+      timeoutNanos = expireTime - Time.SYSTEM.nanoseconds
       if (currentByteSize.get() < queueByteCapacity && timeoutNanos > 0) {
         val success = queue.offer(e, timeoutNanos, TimeUnit.NANOSECONDS)
         // only increase queue byte size if put succeeds

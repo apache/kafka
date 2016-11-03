@@ -26,8 +26,8 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils._
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.requests.{AbstractRequestResponse, AbstractRequest}
-import org.apache.kafka.common.utils.SystemTime
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractRequestResponse}
+import org.apache.kafka.common.utils.{SystemTime, Time}
 import org.apache.log4j.{Level, Logger}
 import org.junit.{After, Before, Test}
 
@@ -150,7 +150,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
 }
 
 class MockChannelManager(private val controllerContext: ControllerContext, config: KafkaConfig, metrics: Metrics)
-  extends ControllerChannelManager(controllerContext, config, new SystemTime, metrics) {
+  extends ControllerChannelManager(controllerContext, config, Time.SYSTEM, metrics) {
 
   def stopSendThread(brokerId: Int) {
     val requestThread = brokerStateInfo(brokerId).requestSendThread

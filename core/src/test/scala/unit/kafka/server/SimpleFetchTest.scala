@@ -24,7 +24,6 @@ import kafka.log.Log
 import kafka.message.{ByteBufferMessageSet, Message, MessageSet}
 import kafka.server.QuotaFactory.UnboundedQuota
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.utils.{MockTime => JMockTime}
 
 import org.junit.{Test, After, Before}
 
@@ -49,7 +48,6 @@ class SimpleFetchTest {
 
   // set the replica manager with the partition
   val time = new MockTime
-  val jTime = new JMockTime
   val metrics = new Metrics
   val leaderLEO = 20L
   val followerLEO = 15L
@@ -99,7 +97,7 @@ class SimpleFetchTest {
     EasyMock.replay(logManager)
 
     // create the replica manager
-    replicaManager = new ReplicaManager(configs.head, metrics, time, jTime, zkUtils, scheduler, logManager,
+    replicaManager = new ReplicaManager(configs.head, metrics, time, zkUtils, scheduler, logManager,
       new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time).follower)
 
     // add the partition with two replicas, both in ISR

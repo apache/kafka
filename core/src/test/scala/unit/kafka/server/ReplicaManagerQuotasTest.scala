@@ -27,7 +27,6 @@ import kafka.log.Log
 import kafka.message.{ByteBufferMessageSet, Message}
 import kafka.utils._
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.utils.{MockTime => JMockTime}
 import org.easymock.EasyMock
 import org.easymock.EasyMock._
 import org.junit.Assert._
@@ -37,7 +36,6 @@ import org.junit.{After, Test}
 class ReplicaManagerQuotasTest {
   val configs = TestUtils.createBrokerConfigs(2, TestUtils.MockZkConnect).map(KafkaConfig.fromProps(_, new Properties()))
   val time = new MockTime
-  val jTime = new JMockTime
   val metrics = new Metrics
   val message = new Message("some-data-in-a-message".getBytes())
   val topicAndPartition1 = TopicAndPartition("test-topic", 1)
@@ -174,7 +172,7 @@ class ReplicaManagerQuotasTest {
     expect(logManager.getLog(anyObject())).andReturn(Some(log)).anyTimes()
     replay(logManager)
 
-    replicaManager = new ReplicaManager(configs.head, metrics, time, jTime, zkUtils, scheduler, logManager,
+    replicaManager = new ReplicaManager(configs.head, metrics, time, zkUtils, scheduler, logManager,
       new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time).follower)
 
     //create the two replicas

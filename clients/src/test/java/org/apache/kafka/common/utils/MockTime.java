@@ -19,33 +19,53 @@ import java.util.concurrent.TimeUnit;
  */
 public class MockTime implements Time {
 
-    private long nanos = 0;
-    private long autoTickMs = 0;
+    private final long autoTickMs;
+
+    // Values from `nanoTime` and `currentTimeMillis` are not comparable, so we store them separately to catch bugs
+    // where this is incorrectly assumed to be true
+    private long timeMs;
+    private long highResTimeNs;
 
     public MockTime() {
-        this.nanos = System.nanoTime();
+        this(0);
     }
 
     public MockTime(long autoTickMs) {
-        this.nanos = System.nanoTime();
+        this(autoTickMs, System.currentTimeMillis(), System.nanoTime());
+    }
+
+    public MockTime(long autoTickMs, long currentTimeMs, long currentHighResTimeNs) {
+        this.timeMs = currentTimeMs;
+        this.highResTimeNs = currentHighResTimeNs;
         this.autoTickMs = autoTickMs;
     }
 
     @Override
     public long milliseconds() {
-        this.sleep(autoTickMs);
-        return TimeUnit.MILLISECONDS.convert(this.nanos, TimeUnit.NANOSECONDS);
+        maybeSleep(autoTickMs);
+        return timeMs;
     }
 
     @Override
     public long nanoseconds() {
-        this.sleep(autoTickMs);
-        return nanos;
+        maybeSleep(autoTickMs);
+        return highResTimeNs;
+    }
+
+    @Override
+    public long hiResClockMs() {
+        return TimeUnit.NANOSECONDS.toMillis(nanoseconds());
+    }
+
+    private void maybeSleep(long ms) {
+        if (ms != 0)
+            sleep(ms);
     }
 
     @Override
     public void sleep(long ms) {
-        this.nanos += TimeUnit.NANOSECONDS.convert(ms, TimeUnit.MILLISECONDS);
+        timeMs += ms;
+        highResTimeNs += TimeUnit.MILLISECONDS.toNanos(ms);
     }
 
 }

@@ -18,9 +18,8 @@ package kafka.server
 
 import kafka.log._
 import java.io.File
-import kafka.utils.SystemTime
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.utils.{MockTime => JMockTime, Utils}
+import org.apache.kafka.common.utils.Utils
 import org.easymock.EasyMock
 import org.junit._
 import org.junit.Assert._
@@ -55,9 +54,10 @@ class HighwatermarkPersistenceTest {
     val scheduler = new KafkaScheduler(2)
     scheduler.startup
     val metrics = new Metrics
+    val time = new MockTime
     // create replica manager
-    val replicaManager = new ReplicaManager(configs.head, metrics, new MockTime, new JMockTime, zkUtils, scheduler,
-      logManagers.head, new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, SystemTime).follower)
+    val replicaManager = new ReplicaManager(configs.head, metrics, time, zkUtils, scheduler,
+      logManagers.head, new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time).follower)
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()
@@ -66,9 +66,9 @@ class HighwatermarkPersistenceTest {
       val partition0 = replicaManager.getOrCreatePartition(topic, 0)
       // create leader and follower replicas
       val log0 = logManagers.head.createLog(TopicAndPartition(topic, 0), LogConfig())
-      val leaderReplicaPartition0 = new Replica(configs.head.brokerId, partition0, SystemTime, 0, Some(log0))
+      val leaderReplicaPartition0 = new Replica(configs.head.brokerId, partition0, time, 0, Some(log0))
       partition0.addReplicaIfNotExists(leaderReplicaPartition0)
-      val followerReplicaPartition0 = new Replica(configs.last.brokerId, partition0, SystemTime)
+      val followerReplicaPartition0 = new Replica(configs.last.brokerId, partition0, time)
       partition0.addReplicaIfNotExists(followerReplicaPartition0)
       replicaManager.checkpointHighWatermarks()
       fooPartition0Hw = hwmFor(replicaManager, topic, 0)
@@ -98,9 +98,10 @@ class HighwatermarkPersistenceTest {
     val scheduler = new KafkaScheduler(2)
     scheduler.startup
     val metrics = new Metrics
+    val time = new MockTime
     // create replica manager
-    val replicaManager = new ReplicaManager(configs.head, metrics, new MockTime(), new JMockTime, zkUtils,
-      scheduler, logManagers.head, new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, SystemTime).follower)
+    val replicaManager = new ReplicaManager(configs.head, metrics, time, zkUtils,
+      scheduler, logManagers.head, new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time).follower)
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()
@@ -110,7 +111,7 @@ class HighwatermarkPersistenceTest {
       // create leader log
       val topic1Log0 = logManagers.head.createLog(TopicAndPartition(topic1, 0), LogConfig())
       // create a local replica for topic1
-      val leaderReplicaTopic1Partition0 = new Replica(configs.head.brokerId, topic1Partition0, SystemTime, 0, Some(topic1Log0))
+      val leaderReplicaTopic1Partition0 = new Replica(configs.head.brokerId, topic1Partition0, time, 0, Some(topic1Log0))
       topic1Partition0.addReplicaIfNotExists(leaderReplicaTopic1Partition0)
       replicaManager.checkpointHighWatermarks()
       topic1Partition0Hw = hwmFor(replicaManager, topic1, 0)
@@ -126,7 +127,7 @@ class HighwatermarkPersistenceTest {
       // create leader log
       val topic2Log0 = logManagers.head.createLog(TopicAndPartition(topic2, 0), LogConfig())
       // create a local replica for topic2
-      val leaderReplicaTopic2Partition0 =  new Replica(configs.head.brokerId, topic2Partition0, SystemTime, 0, Some(topic2Log0))
+      val leaderReplicaTopic2Partition0 =  new Replica(configs.head.brokerId, topic2Partition0, time, 0, Some(topic2Log0))
       topic2Partition0.addReplicaIfNotExists(leaderReplicaTopic2Partition0)
       replicaManager.checkpointHighWatermarks()
       var topic2Partition0Hw = hwmFor(replicaManager, topic2, 0)

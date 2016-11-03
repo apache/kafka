@@ -206,7 +206,7 @@ object AdminClient {
   def create(props: Map[String, _]): AdminClient = create(new AdminConfig(props))
 
   def create(config: AdminConfig): AdminClient = {
-    val time = new SystemTime
+    val time = Time.SYSTEM
     val metrics = new Metrics(time)
     val metadata = new Metadata
     val channelBuilder = ClientUtils.createChannelBuilder(config.values())
