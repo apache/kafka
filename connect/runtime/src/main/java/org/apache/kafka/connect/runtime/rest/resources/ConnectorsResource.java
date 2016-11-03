@@ -89,6 +89,9 @@ public class ConnectorsResource {
     public Response createConnector(final @QueryParam("forward") Boolean forward,
                                     final CreateConnectorRequest createRequest) throws Throwable {
         String name = createRequest.name();
+        if (name.contains("/")){
+            throw new BadRequestException("connector name should not contain '/'");
+        }
         Map<String, String> configs = createRequest.config();
         if (!configs.containsKey(ConnectorConfig.NAME_CONFIG))
             configs.put(ConnectorConfig.NAME_CONFIG, name);
