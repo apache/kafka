@@ -47,7 +47,6 @@ import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Kafka Streams allows for performing continuous computation on input coming from one or more input topics and
@@ -93,8 +92,8 @@ public class KafkaStreams {
     private static final Logger log = LoggerFactory.getLogger(KafkaStreams.class);
     private static final String JMX_PREFIX = "kafka.streams";
 
-    private enum StreamsState { created, running, stopping, stopped }
-    private final AtomicReference<StreamsState> state = new AtomicReference<>(StreamsState.created);
+    private enum StreamsState { created, running, stopped }
+    private StreamsState state = StreamsState.created;
 
     private final StreamThread[] threads;
     private final Metrics metrics;
@@ -190,12 +189,13 @@ public class KafkaStreams {
     public synchronized void start() {
         log.debug("Starting Kafka Stream process");
 
-        if (state.compareAndSet(StreamsState.created, StreamsState.running)) {
+        if (state == StreamsState.created) {
             for (final StreamThread thread : threads) {
                 thread.start();
             }
+            state = StreamsState.running;
             log.info("Started Kafka Stream process");
-        } else if (state.get() == StreamsState.running) {
+        } else if (state == StreamsState.running) {
             throw new IllegalStateException("This process was already started.");
         } else {
             throw new IllegalStateException("Cannot restart after closing.");
@@ -213,7 +213,7 @@ public class KafkaStreams {
     public synchronized void close(final long timeout, final TimeUnit timeUnit) {
         log.debug("Stopping Kafka Stream process");
 
-        if (state.compareAndSet(StreamsState.running, StreamsState.stopping)) {
+        if (state == StreamsState.running) {
             final Thread shutdown = new Thread(new Runnable() {
                 @Override
                 public void run() {
@@ -231,7 +231,7 @@ public class KafkaStreams {
                         }
 
                         metrics.close();
-                        state.set(StreamsState.stopped);
+                        state = StreamsState.stopped;
                         log.info("Stopped Kafka Stream process");
                     }
             }, "kafka-streams-close-thread");
@@ -274,7 +274,7 @@ public class KafkaStreams {
      * @throws IllegalStateException if instance is currently running
      */
     public void cleanUp() {
-        if (state.get() == StreamsState.running) {
+        if (state == StreamsState.running) {
             throw new IllegalStateException("Cannot clean up while running.");
         }
 
@@ -390,7 +390,7 @@ public class KafkaStreams {
     }
 
     private void validateIsRunning() {
-        if (state.get() != StreamsState.running) {
+        if (state != StreamsState.running) {
             throw new IllegalStateException("KafkaStreams is not running");
         }
     }

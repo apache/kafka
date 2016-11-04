@@ -83,15 +83,15 @@ public class ShutdownDeadlockTest {
         producer.flush();
 
         streams.start();
-        while (true) {
-            synchronized (this) {
-                try {
-                    wait();
-                } catch (InterruptedException e) {
-                    // ignored
-                }
+
+        synchronized (this) {
+            try {
+                wait();
+            } catch (InterruptedException e) {
+                // ignored
             }
         }
+
 
     }
 
