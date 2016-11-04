@@ -196,7 +196,7 @@ public class ConnectorsResourceTest {
 
     @Test(expected = BadRequestException.class)
     public void testCreateConnectorWithASlashInItsName() throws Throwable {
-        String badConnectorName = CONNECTOR_NAME+"/"+"test";
+        String badConnectorName = CONNECTOR_NAME + "/" + "test";
 
         CreateConnectorRequest body = new CreateConnectorRequest(badConnectorName, Collections.singletonMap(ConnectorConfig.NAME_CONFIG, badConnectorName));
 
