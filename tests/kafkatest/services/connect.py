@@ -57,7 +57,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
         self.kafka = kafka
         self.security_config = kafka.security_config.client_config()
         self.files = files
-        self.kafka_heap_opts = None
+        self.environment = {}
 
     def pids(self, node):
         """Return process ids for Kafka Connect processes."""

@@ -111,10 +111,13 @@ class MirrorMaker(KafkaPathResolverMixin, Service):
         self.producer_interceptor_classes = producer_interceptor_classes
         self.external_jars = None
 
+        # These properties are potentially used by third-party tests.
+        self.source_auto_offset_reset = None
+        self.partition_assignment_strategy = None
+
     def start_cmd(self, node):
         cmd = "export LOG_DIR=%s;" % MirrorMaker.LOG_DIR
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\";" % MirrorMaker.LOG4J_CONFIG
-        cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         # add external dependencies, for instance for interceptors
         if self.external_jars is not None:
