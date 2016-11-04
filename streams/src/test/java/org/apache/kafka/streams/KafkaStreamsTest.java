@@ -71,10 +71,10 @@ public class KafkaStreamsTest {
 
         final KStreamBuilder builder = new KStreamBuilder();
         final KafkaStreams streams = new KafkaStreams(builder, props);
-        streams.close(15, TimeUnit.SECONDS);
+        streams.close();
         final int closeCount = MockMetricsReporter.CLOSE_COUNT.get();
 
-        streams.close(15, TimeUnit.SECONDS);
+        streams.close();
         Assert.assertEquals("subsequent close() calls should do nothing",
             closeCount, MockMetricsReporter.CLOSE_COUNT.get());
     }
@@ -88,14 +88,14 @@ public class KafkaStreamsTest {
         final KStreamBuilder builder = new KStreamBuilder();
         final KafkaStreams streams = new KafkaStreams(builder, props);
         streams.start();
-        streams.close(15, TimeUnit.SECONDS);
+        streams.close();
         try {
             streams.start();
         } catch (final IllegalStateException e) {
             Assert.assertEquals("Cannot restart after closing.", e.getMessage());
             throw e;
         } finally {
-            streams.close(15, TimeUnit.SECONDS);
+            streams.close();
         }
     }
 
@@ -115,7 +115,7 @@ public class KafkaStreamsTest {
             Assert.assertEquals("This process was already started.", e.getMessage());
             throw e;
         } finally {
-            streams.close(15, TimeUnit.SECONDS);
+            streams.close();
         }
     }
 
@@ -169,7 +169,7 @@ public class KafkaStreamsTest {
 
         streams.cleanUp();
         streams.start();
-        streams.close(15, TimeUnit.SECONDS);
+        streams.close();
         streams.cleanUp();
     }
 
@@ -189,7 +189,7 @@ public class KafkaStreamsTest {
             Assert.assertEquals("Cannot clean up while running.", e.getMessage());
             throw e;
         } finally {
-            streams.close(15, TimeUnit.SECONDS);
+            streams.close();
         }
     }
 }

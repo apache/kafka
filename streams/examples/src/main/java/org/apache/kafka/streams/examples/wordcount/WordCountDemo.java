@@ -31,7 +31,6 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.Properties;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Demonstrates, using the high-level KStream DSL, how to implement the WordCount program
@@ -86,6 +85,6 @@ public class WordCountDemo {
         // in this example we just let it run for some time and stop since the input data is finite.
         Thread.sleep(5000L);
 
-        streams.close(15, TimeUnit.SECONDS);
+        streams.close();
     }
 }

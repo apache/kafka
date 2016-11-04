@@ -56,7 +56,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -171,7 +170,7 @@ public class RegexSourceIntegrationTest {
 
         TestUtils.waitForCondition(secondTopicAdded, STREAM_TASKS_NOT_UPDATED);
 
-        streams.close(15, TimeUnit.SECONDS);
+        streams.close();
     }
 
     @Test
@@ -226,7 +225,7 @@ public class RegexSourceIntegrationTest {
 
         TestUtils.waitForCondition(oneTopicRemoved, STREAM_TASKS_NOT_UPDATED);
 
-        streams.close(15, TimeUnit.SECONDS);
+        streams.close();
     }
 
 
@@ -275,7 +274,7 @@ public class RegexSourceIntegrationTest {
             actualValues.add(receivedKeyValue.value);
         }
 
-        streams.close(15, TimeUnit.SECONDS);
+        streams.close();
         Collections.sort(actualValues);
         Collections.sort(expectedReceivedValues);
         assertThat(actualValues, equalTo(expectedReceivedValues));
@@ -348,8 +347,8 @@ public class RegexSourceIntegrationTest {
         partitionedStreamsFollower.start();
         TestUtils.waitForCondition(bothTopicsAddedToFollower, "Topics never assigned to follower stream");
 
-        partitionedStreamsLeader.close(15, TimeUnit.SECONDS);
-        partitionedStreamsFollower.close(15, TimeUnit.SECONDS);
+        partitionedStreamsLeader.close();
+        partitionedStreamsFollower.close();
 
     }
 
@@ -390,7 +389,7 @@ public class RegexSourceIntegrationTest {
             IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, DEFAULT_OUTPUT_TOPIC, 2, 5000);
             fail("Should not get here");
         } finally {
-            streams.close(15, TimeUnit.SECONDS);
+            streams.close();
         }
 
     }

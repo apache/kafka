@@ -123,7 +123,7 @@ public class KStreamRepartitionJoinTest {
     @After
     public void whenShuttingDown() throws IOException {
         if (kafkaStreams != null) {
-            kafkaStreams.close(15, TimeUnit.SECONDS);
+            kafkaStreams.close();
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }

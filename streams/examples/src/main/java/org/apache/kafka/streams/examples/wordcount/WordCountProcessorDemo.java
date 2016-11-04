@@ -32,7 +32,6 @@ import org.apache.kafka.streams.state.Stores;
 
 import java.util.Locale;
 import java.util.Properties;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Demonstrates, using the low-level Processor APIs, how to implement the WordCount program
@@ -130,6 +129,6 @@ public class WordCountProcessorDemo {
         // in this example we just let it run for some time and stop since the input data is finite.
         Thread.sleep(5000L);
 
-        streams.close(15, TimeUnit.SECONDS);
+        streams.close();
     }
 }

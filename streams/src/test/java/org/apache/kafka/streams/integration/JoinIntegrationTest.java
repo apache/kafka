@@ -51,7 +51,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
@@ -191,7 +190,7 @@ public class JoinIntegrationTest {
                 checkResult(OUTPUT_TOPIC, resultIterator.next());
             }
         } finally {
-            streams.close(15, TimeUnit.SECONDS);
+            streams.close();
         }
     }
 

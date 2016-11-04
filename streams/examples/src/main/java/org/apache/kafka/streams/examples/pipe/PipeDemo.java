@@ -24,7 +24,6 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 
 import java.util.Properties;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Demonstrates, using the high-level KStream DSL, how to read data from a source (input) topic and how to
@@ -59,6 +58,6 @@ public class PipeDemo {
         // in this example we just let it run for some time and stop since the input data is finite.
         Thread.sleep(5000L);
 
-        streams.close(15, TimeUnit.SECONDS);
+        streams.close();
     }
 }

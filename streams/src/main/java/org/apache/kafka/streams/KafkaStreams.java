@@ -91,6 +91,7 @@ public class KafkaStreams {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaStreams.class);
     private static final String JMX_PREFIX = "kafka.streams";
+    public static final int DEFAULT_CLOSE_TIMEOUT = 30;
 
     private enum StreamsState { created, running, stopped }
     private StreamsState state = StreamsState.created;
@@ -204,15 +205,21 @@ public class KafkaStreams {
 
     /**
      * Shutdown this stream instance by signaling all the threads to stop,
-     * and then wait for them to join.
+     * and then wait for them to join. Uses a default timeout of 30 seconds
+     */
+    public void close() {
+        close(DEFAULT_CLOSE_TIMEOUT, TimeUnit.SECONDS);
+    }
+
+    /**
+     * Shutdown this stream instance by signaling all the threads to stop,
+     * and then wait up to the timeout for the threads to join.
      *
-     * @throws IllegalStateException if process has not started yet
      * @param timeout   how long to wait for {@link StreamThread}s to shutdown
      * @param timeUnit  unit of time used for timeout
      */
     public synchronized void close(final long timeout, final TimeUnit timeUnit) {
         log.debug("Stopping Kafka Stream process");
-
         if (state == StreamsState.running) {
             final Thread shutdown = new Thread(new Runnable() {
                 @Override
