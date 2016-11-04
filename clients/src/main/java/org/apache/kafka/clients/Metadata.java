@@ -110,7 +110,9 @@ public final class Metadata {
      * will be reset on the next update.
      */
     public synchronized void add(String topic) {
-        topics.put(topic, TOPIC_EXPIRY_NEEDS_UPDATE);
+        if (topics.put(topic, TOPIC_EXPIRY_NEEDS_UPDATE) == null) {
+            requestUpdateForNewTopics();
+        }
     }
 
     /**
@@ -166,8 +168,9 @@ public final class Metadata {
      * @param topics
      */
     public synchronized void setTopics(Collection<String> topics) {
-        if (!this.topics.keySet().containsAll(topics))
-            requestUpdate();
+        if (!this.topics.keySet().containsAll(topics)) {
+            requestUpdateForNewTopics();
+        }
         this.topics.clear();
         for (String topic : topics)
             this.topics.put(topic, TOPIC_EXPIRY_NEEDS_UPDATE);
@@ -264,17 +267,13 @@ public final class Metadata {
     }
 
     /**
-     * The metadata refresh backoff in ms
-     */
-    public long refreshBackoff() {
-        return refreshBackoffMs;
-    }
-
-    /**
      * Set state to indicate if metadata for all topics in Kafka cluster is required or not.
      * @param needMetadataForAllTopics boolean indicating need for metadata of all topics in cluster.
      */
     public synchronized void needMetadataForAllTopics(boolean needMetadataForAllTopics) {
+        if (needMetadataForAllTopics && !this.needMetadataForAllTopics) {
+            requestUpdateForNewTopics();
+        }
         this.needMetadataForAllTopics = needMetadataForAllTopics;
     }
 
@@ -304,6 +303,12 @@ public final class Metadata {
      */
     public interface Listener {
         void onMetadataUpdate(Cluster cluster);
+    }
+
+    private synchronized void requestUpdateForNewTopics() {
+        // Override the timestamp of last refresh to let immediate update.
+        this.lastRefreshMs = 0;
+        requestUpdate();
     }
 
     private Cluster getClusterForCurrentTopics(Cluster cluster) {

@@ -79,6 +79,104 @@ public class MetadataTest {
         assertTrue("Update needed due to stale metadata.", metadata.timeToNextUpdate(time) == 0);
     }
 
+    private static void checkTimeToNextUpdate(long refreshBackoffMs, long metadataExpireMs) {
+        long now = 10000;
+
+        // Metadata timeToNextUpdate is implicitly relying on the premise that the currentTimeMillis is always
+        // larger than the metadataExpireMs or refreshBackoffMs.
+        // It won't be a problem practically since all usages of Metadata calls first update() immediately after
+        // it's construction.
+        if (metadataExpireMs > now || refreshBackoffMs > now) {
+            throw new IllegalArgumentException(
+                    "metadataExpireMs and refreshBackoffMs must be smaller than 'now'");
+        }
+
+        long largerOfBackoffAndExpire = Math.max(refreshBackoffMs, metadataExpireMs);
+        Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs);
+
+        assertEquals(0, metadata.timeToNextUpdate(now));
+
+        // lastSuccessfulRefreshMs updated to now.
+        metadata.update(Cluster.empty(), now);
+
+        // The last update was successful so the remaining time to expire the current metadata should be returned.
+        assertEquals(largerOfBackoffAndExpire, metadata.timeToNextUpdate(now));
+
+        // Metadata update requested explicitly
+        metadata.requestUpdate();
+        // Update requested so metadataExpireMs should no longer take effect.
+        assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now));
+
+        // Reset needUpdate to false.
+        metadata.update(Cluster.empty(), now);
+        assertEquals(largerOfBackoffAndExpire, metadata.timeToNextUpdate(now));
+
+        // Both metadataExpireMs and refreshBackoffMs elapsed.
+        now += largerOfBackoffAndExpire;
+        assertEquals(0, metadata.timeToNextUpdate(now));
+        assertEquals(0, metadata.timeToNextUpdate(now + 1));
+    }
+
+    @Test
+    public void testTimeToNextUpdate() {
+        checkTimeToNextUpdate(100, 1000);
+        checkTimeToNextUpdate(1000, 100);
+        checkTimeToNextUpdate(0, 0);
+        checkTimeToNextUpdate(0, 100);
+        checkTimeToNextUpdate(100, 0);
+    }
+
+    @Test
+    public void testTimeToNextUpdate_RetryBackoff() {
+        long now = 10000;
+
+        // lastRefreshMs updated to now.
+        metadata.failedUpdate(now);
+
+        // Backing off. Remaining time until next try should be returned.
+        assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now));
+
+        // Even though metadata update requested explicitly, still respects backoff.
+        metadata.requestUpdate();
+        assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now));
+
+        // refreshBackoffMs elapsed.
+        now += refreshBackoffMs;
+        // It should return 0 to let next try.
+        assertEquals(0, metadata.timeToNextUpdate(now));
+        assertEquals(0, metadata.timeToNextUpdate(now + 1));
+    }
+
+    @Test
+    public void testTimeToNextUpdate_OverwriteBackoff() {
+        long now = 10000;
+
+        // New topic added to fetch set and update requested. It should allow immediate update.
+        metadata.update(Cluster.empty(), now);
+        metadata.add("new-topic");
+        assertEquals(0, metadata.timeToNextUpdate(now));
+
+        // Even though setTopics called, immediate update isn't necessary if the new topic set isn't
+        // containing a new topic,
+        metadata.update(Cluster.empty(), now);
+        metadata.setTopics(metadata.topics());
+        assertEquals(metadataExpireMs, metadata.timeToNextUpdate(now));
+
+        // If the new set of topics containing a new topic then it should allow immediate update.
+        metadata.setTopics(Collections.singletonList("another-new-topic"));
+        assertEquals(0, metadata.timeToNextUpdate(now));
+
+        // If metadata requested for all topics it should allow immediate update.
+        metadata.update(Cluster.empty(), now);
+        metadata.needMetadataForAllTopics(true);
+        assertEquals(0, metadata.timeToNextUpdate(now));
+
+        // However if metadata is already capable to serve all topics it shouldn't override backoff.
+        metadata.update(Cluster.empty(), now);
+        metadata.needMetadataForAllTopics(true);
+        assertEquals(metadataExpireMs, metadata.timeToNextUpdate(now));
+    }
+
     /**
      * Tests that {@link org.apache.kafka.clients.Metadata#awaitUpdate(int, long)} doesn't
      * wait forever with a max timeout value of 0
