@@ -121,13 +121,12 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
      */
     @throws(classOf[Exception])
     def handleDataChange(dataPath: String, data: Object) {
-      var shouldResign = false
-      inLock(controllerContext.controllerLock) {
+      val shouldResign = inLock(controllerContext.controllerLock) {
         val amILeaderBeforeDataChange = amILeader
         leaderId = KafkaController.parseControllerId(data.toString)
         info("New leader is %d".format(leaderId))
         // The old leader needs to resign leadership if it is no longer the leader
-        shouldResign = amILeaderBeforeDataChange && !amILeader
+        amILeaderBeforeDataChange && !amILeader
       }
 
       if (shouldResign) {
@@ -141,12 +140,11 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
      *             On any error.
      */
     @throws(classOf[Exception])
-    def handleDataDeleted(dataPath: String) {
-      var shouldResign = false
-      inLock(controllerContext.controllerLock) {
+    def handleDataDeleted(dataPath: String) { 
+      val shouldResign = inLock(controllerContext.controllerLock) {
         debug("%s leader change listener fired for path %s to handle data deleted: trying to elect as a leader"
           .format(brokerId, dataPath))
-        shouldResign = amILeader
+        amILeader
       }
 
       if(shouldResign) {
