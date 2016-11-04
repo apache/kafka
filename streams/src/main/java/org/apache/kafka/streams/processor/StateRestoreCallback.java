@@ -23,5 +23,7 @@ package org.apache.kafka.streams.processor;
  */
 public interface StateRestoreCallback {
 
-    void restore(byte[] key, byte[] value);
+    void beginRestore(StateRestoreCallbackContext context);
+    void restore(long offset, byte[] key, byte[] value);
+    void endRestore();
 }

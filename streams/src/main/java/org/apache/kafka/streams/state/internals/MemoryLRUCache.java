@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateRestoreCallbackContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -110,7 +111,10 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
         // register the store
         context.register(root, true, new StateRestoreCallback() {
             @Override
-            public void restore(byte[] key, byte[] value) {
+            public void beginRestore(StateRestoreCallbackContext context) {}
+
+            @Override
+            public void restore(long offset, byte[] key, byte[] value) {
                 // check value for null, to avoid  deserialization error.
                 if (value == null) {
                     put(serdes.keyFrom(key), null);
@@ -118,6 +122,9 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
                     put(serdes.keyFrom(key), serdes.valueFrom(value));
                 }
             }
+
+            @Override
+            public void endRestore() {}
         });
     }
 
