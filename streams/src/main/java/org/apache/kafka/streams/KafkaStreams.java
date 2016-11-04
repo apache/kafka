@@ -231,7 +231,6 @@ public class KafkaStreams {
                         }
 
                         metrics.close();
-                        state = StreamsState.stopped;
                         log.info("Stopped Kafka Stream process");
                     }
             }, "kafka-streams-close-thread");
@@ -242,7 +241,7 @@ public class KafkaStreams {
             } catch (InterruptedException e) {
                 Thread.interrupted();
             }
-
+            state = StreamsState.stopped;
             if (shutdown.isAlive()) {
                 log.warn("Failed to cleanly shutdown KafkaStreams within timeout");
             }
