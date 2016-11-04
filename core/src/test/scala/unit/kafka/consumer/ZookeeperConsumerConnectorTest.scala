@@ -17,6 +17,7 @@
 
 package kafka.consumer
 
+import java.util
 import java.util.{Collections, Properties}
 
 import org.junit.Assert._
@@ -30,7 +31,7 @@ import kafka.utils.TestUtils._
 import kafka.utils._
 import org.I0Itec.zkclient.ZkClient
 import org.apache.log4j.{Level, Logger}
-import org.junit.{Test, After, Before}
+import org.junit.{After, Before, Test}
 
 import scala.collection._
 
@@ -402,7 +403,7 @@ class ZookeeperConsumerConnectorTest extends KafkaServerTestHarness with Logging
     // Check if rebalance listener is fired
     assertEquals(true, rebalanceListener1.beforeReleasingPartitionsCalled)
     assertEquals(true, rebalanceListener1.beforeStartingFetchersCalled)
-    assertEquals(Set[Int](0, 1), rebalanceListener1.partitionOwnership.get(topic))
+    assertEquals(new util.HashSet(util.Arrays.asList(0, 1)), rebalanceListener1.partitionOwnership.get(topic))
     // Check if global partition ownership in rebalance listener is correct
     assertEquals("group1_consumer1", rebalanceListener1.globalPartitionOwnership.get(topic).get(0).consumer)
     assertEquals("group1_consumer2", rebalanceListener1.globalPartitionOwnership.get(topic).get(1).consumer)
