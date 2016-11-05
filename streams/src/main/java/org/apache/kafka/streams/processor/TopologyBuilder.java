@@ -366,7 +366,9 @@ public class TopologyBuilder {
      * {@link org.apache.kafka.streams.StreamsConfig stream configuration}.
      *
      * @param name the unique name of the source used to reference this node when
-     * @param offsetReset the offset reset value for this source acceptable values earliest or latest
+     * @param offsetReset the offset reset value for this source acceptable values earliest or latest.  For this parameter
+     * to take effect the {@link org.apache.kafka.clients.consumer.ConsumerConfig#AUTO_OFFSET_RESET_CONFIG} setting needs
+     * to set to "none" in the {@link org.apache.kafka.streams.StreamsConfig stream configuration}.
      * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
      * @param topicPattern regular expression pattern to match Kafka topics that this source is to consume
      * @return this builder instance so methods can be chained together; never null
@@ -402,7 +404,9 @@ public class TopologyBuilder {
      *
      * @param name the unique name of the source used to reference this node when
      * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
-     * @param offsetReset the offset reset to use for this stream acceptable values are earliest or latest
+     * @param offsetReset the offset reset to use for this stream acceptable values are earliest or latest.  For this parameter
+     * to take effect the {@link org.apache.kafka.clients.consumer.ConsumerConfig#AUTO_OFFSET_RESET_CONFIG} setting needs
+     * to set to "none" in the {@link org.apache.kafka.streams.StreamsConfig stream configuration}.
      * @param keyDeserializer the {@link Deserializer key deserializer} used when consuming records; may be null if the source
      * should use the {@link org.apache.kafka.streams.StreamsConfig#KEY_SERDE_CLASS_CONFIG default key deserializer} specified in the
      * {@link org.apache.kafka.streams.StreamsConfig stream configuration}
