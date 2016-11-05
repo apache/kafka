@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -232,7 +233,6 @@ public class StreamThread extends Thread {
                 closeNonAssignedSuspendedStandbyTasks();
                 closeNonAssignedSuspendedTasks();
                 addStreamTasks(assignment);
-                maybeSetConsumerOffsets(assignment);
                 addStandbyTasks();
                 lastCleanMs = time.milliseconds(); // start the cleaning cycle
                 streamsMetadataState.onChange(partitionAssignor.getPartitionsByHostState(), partitionAssignor.clusterMetadata());
@@ -575,13 +575,31 @@ public class StreamThread extends Thread {
 
                 boolean longPoll = totalNumBuffered == 0;
 
-                ConsumerRecords<byte[], byte[]> records = consumer.poll(longPoll ? this.pollTimeMs : 0);
+                ConsumerRecords<byte[], byte[]> records = null;
+
+                try {
+                    records = consumer.poll(longPoll ? this.pollTimeMs : 0);
+                } catch (NoOffsetForPartitionException ex) {
+                    TopicPartition partition = ex.partition();
+                    if (builder.earliestResetTopicsPattern().matcher(partition.topic()).matches()) {
+                        log.info(String.format("stream-thread [%s] setting topic to consume from earliest offset %s", this.getName(), partition.topic()));
+                        consumer.seekToBeginning(ex.partitions());
+                    } else if (builder.latestResetTopicsPattern().matcher(partition.topic()).matches()) {
+                        consumer.seekToEnd(ex.partitions());
+                        log.info(String.format("stream-thread [%s] setting topic to consume from latest offset %s", this.getName(), partition.topic()));
+                    } else {
+                        //If not defined go to default config of earliest
+                        consumer.seekToBeginning(ex.partitions());
+                        log.info(String.format("stream-thread [%s] no setting defined for topic %s setting to consume from earliest offset", this.getName(), partition.topic()));
+                    }
+                }
 
                 if (rebalanceException != null)
                     throw new StreamsException(logPrefix + " Failed to rebalance", rebalanceException);
 
                 if (!records.isEmpty()) {
                     int numAddedRecords = 0;
+
                     for (TopicPartition partition : records.partitions()) {
                         StreamTask task = activeTasksByPartition.get(partition);
                         numAddedRecords += task.addRecords(partition, records.records(partition));

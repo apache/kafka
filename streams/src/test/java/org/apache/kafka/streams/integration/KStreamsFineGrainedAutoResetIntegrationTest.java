@@ -18,6 +18,7 @@ package org.apache.kafka.streams.integration;
 
 
 import kafka.utils.MockTime;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -81,9 +82,15 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
     @Before
     public void setUp() throws Exception {
 
-        streamsConfiguration = StreamsTestUtils.getStreamsConfig(CLUSTER.bootstrapServers(),
+        Properties props = new Properties();
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
+
+        streamsConfiguration = StreamsTestUtils.getStreamsConfig(
+                "testAutoOffsetId",
+                CLUSTER.bootstrapServers(),
                 STRING_SERDE_CLASSNAME,
-                STRING_SERDE_CLASSNAME);
+                STRING_SERDE_CLASSNAME,
+                props);
 
         // Remove any state from previous test runs
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
@@ -97,7 +104,7 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
 
         final KStream<String, String> pattern1Stream = builder.stream(StreamsConfig.AutoOffsetReset.EARLIEST, Pattern.compile("topic-\\d"));
         final KStream<String, String> pattern2Stream = builder.stream(StreamsConfig.AutoOffsetReset.LATEST, Pattern.compile("topic-[A-D]"));
-        final KStream<String, String> namedTopicsStream = builder.stream(StreamsConfig.AutoOffsetReset.EARLIEST, TOPIC_Y, TOPIC_Z);
+        final KStream<String, String> namedTopicsStream = builder.stream(TOPIC_Y, TOPIC_Z);
 
         pattern1Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
         pattern2Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
