@@ -55,6 +55,11 @@ public class ProducerConfig extends AbstractConfig {
                                                              + "host the topic's partitions. This config specifies the maximum time, in milliseconds, for this fetch "
                                                              + "to succeed before throwing an exception back to the client.";
 
+    public static final String METADATA_FETCH_MAX_COUNT_CONFIG = "metadata.fetch.max.count";
+    private static final String METADATA_FETCH_MAX_COUNT_DOC = "when fetching metadata for a topic, within the time of metadata.fetch.timeout.ms, "
+                                                             + " if the metadata response does not contain the topic's metadata, then it will keep sending the meta request until metadata.fetch.timeout.ms is exceeded"
+                                                             + " this will become too many overhead when broker side has configured auto.create.topics.enable=false and a msg is sent to non-exist topic ";
+
     /** <code>metadata.max.age.ms</code> */
     public static final String METADATA_MAX_AGE_CONFIG = CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
     private static final String METADATA_MAX_AGE_DOC = CommonClientConfigs.METADATA_MAX_AGE_DOC;
@@ -251,6 +256,11 @@ public class ProducerConfig extends AbstractConfig {
                                         atLeast(0),
                                         Importance.LOW,
                                         METADATA_FETCH_TIMEOUT_DOC)
+                                .define(METADATA_FETCH_MAX_COUNT_CONFIG,
+                                        Type.INT,
+                                        Integer.MAX_VALUE,
+                                        Importance.LOW,
+                                        METADATA_FETCH_MAX_COUNT_DOC)
                                 .define(MAX_BLOCK_MS_CONFIG,
                                         Type.LONG,
                                         60 * 1000,

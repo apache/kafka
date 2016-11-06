@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.MetadataNotAvailableException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.JmxReporter;
@@ -149,6 +150,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ProducerConfig producerConfig;
     private final long maxBlockTimeMs;
     private final int requestTimeoutMs;
+    private final int maxMetaFetchCount;
     private final ProducerInterceptors<K, V> interceptors;
 
     /**
@@ -276,6 +278,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             } else {
                 this.maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
             }
+
+            if (userProvidedConfigs.containsKey(ProducerConfig.METADATA_FETCH_MAX_COUNT_CONFIG)) {
+                this.maxMetaFetchCount = config.getInt(ProducerConfig.METADATA_FETCH_MAX_COUNT_CONFIG);
+            } else { // if not specified, then this parameter is just not taking effect
+                this.maxMetaFetchCount = Integer.MAX_VALUE;
+            }
+
 
             /* check for user defined settings.
              * If the TIME_OUT config is set use that for request timeout.
@@ -530,12 +539,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
         long begin = time.milliseconds();
         long remainingWaitMs = maxWaitMs;
-        long elapsed;
-        // Issue metadata requests until we have metadata for the topic or maxWaitTimeMs is exceeded.
-        // In case we already have cached metadata for the topic, but the requested partition is greater
-        // than expected, issue an update request only once. This is necessary in case the metadata
-        // is stale and the number of partitions for this topic has increased in the meantime.
-        do {
+        long elapsed = 0;
+
+        // update metadata controlled by both maxWaitMs and maxMetaFetchCount
+        // when auto.create.topics.enable=true and sending a msg to non-exist topic
+        // setting maxMetaFetchCount will reduce many unnecessary metadata request
+        for (int i = 0; i < maxMetaFetchCount; ++i) {
             log.trace("Requesting metadata update for topic {}.", topic);
             int version = metadata.requestUpdate();
             sender.wakeup();
@@ -553,7 +562,16 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 throw new TopicAuthorizationException(topic);
             remainingWaitMs = maxWaitMs - elapsed;
             partitionsCount = cluster.partitionCountForTopic(topic);
-        } while (partitionsCount == null);
+
+            // get meta data for this topic, no need to call again
+            if (null != partitionsCount) {
+                break;
+            }
+        }
+
+        if (null == partitionsCount) {
+            throw new MetadataNotAvailableException("Metadata not available for topic=" + topic);
+        }
 
         if (partition != null && partition >= partitionsCount) {
             throw new KafkaException(
