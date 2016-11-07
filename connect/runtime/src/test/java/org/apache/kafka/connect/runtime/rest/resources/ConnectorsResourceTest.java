@@ -194,6 +194,23 @@ public class ConnectorsResourceTest {
         PowerMock.verifyAll();
     }
 
+    @Test(expected = BadRequestException.class)
+    public void testCreateConnectorWithASlashInItsName() throws Throwable {
+        String badConnectorName = CONNECTOR_NAME + "/" + "test";
+
+        CreateConnectorRequest body = new CreateConnectorRequest(badConnectorName, Collections.singletonMap(ConnectorConfig.NAME_CONFIG, badConnectorName));
+
+        final Capture<Callback<Herder.Created<ConnectorInfo>>> cb = Capture.newInstance();
+        herder.putConnectorConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.eq(body.config()), EasyMock.eq(false), EasyMock.capture(cb));
+        expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG, CONNECTOR_TASK_NAMES)));
+
+        PowerMock.replayAll();
+
+        connectorsResource.createConnector(FORWARD, body);
+
+        PowerMock.verifyAll();
+    }
+
     @Test
     public void testDeleteConnector() throws Throwable {
         final Capture<Callback<Herder.Created<ConnectorInfo>>> cb = Capture.newInstance();

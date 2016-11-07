@@ -77,6 +77,9 @@ public class NetworkClient implements KafkaClient {
     /* max time in ms for the producer to wait for acknowledgement from server*/
     private final int requestTimeoutMs;
 
+    /* time in ms to wait before retrying to create connection to a server */
+    private final long reconnectBackoffMs;
+
     private final Time time;
 
     public NetworkClient(Selectable selector,
@@ -136,6 +139,7 @@ public class NetworkClient implements KafkaClient {
         this.correlation = 0;
         this.randOffset = new Random();
         this.requestTimeoutMs = requestTimeoutMs;
+        this.reconnectBackoffMs = reconnectBackoffMs;
         this.time = time;
     }
 
@@ -516,13 +520,9 @@ public class NetworkClient implements KafkaClient {
         /* true iff there is a metadata request that has been sent and for which we have not yet received a response */
         private boolean metadataFetchInProgress;
 
-        /* the last timestamp when no broker node is available to connect */
-        private long lastNoNodeAvailableMs;
-
         DefaultMetadataUpdater(Metadata metadata) {
             this.metadata = metadata;
             this.metadataFetchInProgress = false;
-            this.lastNoNodeAvailableMs = 0;
         }
 
         @Override
@@ -539,20 +539,22 @@ public class NetworkClient implements KafkaClient {
         public long maybeUpdate(long now) {
             // should we update our metadata?
             long timeToNextMetadataUpdate = metadata.timeToNextUpdate(now);
-            long timeToNextReconnectAttempt = Math.max(this.lastNoNodeAvailableMs + metadata.refreshBackoff() - now, 0);
-            long waitForMetadataFetch = this.metadataFetchInProgress ? Integer.MAX_VALUE : 0;
-            // if there is no node available to connect, back off refreshing metadata
-            long metadataTimeout = Math.max(Math.max(timeToNextMetadataUpdate, timeToNextReconnectAttempt),
-                    waitForMetadataFetch);
+            long waitForMetadataFetch = this.metadataFetchInProgress ? requestTimeoutMs : 0;
 
-            if (metadataTimeout == 0) {
-                // Beware that the behavior of this method and the computation of timeouts for poll() are
-                // highly dependent on the behavior of leastLoadedNode.
-                Node node = leastLoadedNode(now);
-                maybeUpdate(now, node);
+            long metadataTimeout = Math.max(timeToNextMetadataUpdate, waitForMetadataFetch);
+            if (metadataTimeout > 0) {
+                return metadataTimeout;
             }
 
-            return metadataTimeout;
+            // Beware that the behavior of this method and the computation of timeouts for poll() are
+            // highly dependent on the behavior of leastLoadedNode.
+            Node node = leastLoadedNode(now);
+            if (node == null) {
+                log.debug("Give up sending metadata request since no node is available");
+                return reconnectBackoffMs;
+            }
+
+            return maybeUpdate(now, node);
         }
 
         @Override
@@ -618,15 +620,21 @@ public class NetworkClient implements KafkaClient {
         }
 
         /**
+         * Return true if there's at least one connection establishment is currently underway
+         */
+        private boolean isAnyNodeConnecting() {
+            for (Node node : fetchNodes()) {
+                if (connectionStates.isConnecting(node.idString())) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /**
          * Add a metadata request to the list of sends if we can make one
          */
-        private void maybeUpdate(long now, Node node) {
-            if (node == null) {
-                log.debug("Give up sending metadata request since no node is available");
-                // mark the timestamp for no node available to connect
-                this.lastNoNodeAvailableMs = now;
-                return;
-            }
+        private long maybeUpdate(long now, Node node) {
             String nodeConnectionId = node.idString();
 
             if (canSendRequest(nodeConnectionId)) {
@@ -639,19 +647,29 @@ public class NetworkClient implements KafkaClient {
                 ClientRequest clientRequest = request(now, nodeConnectionId, metadataRequest);
                 log.debug("Sending metadata request {} to node {}", metadataRequest, node.id());
                 doSend(clientRequest, now);
-            } else if (connectionStates.canConnect(nodeConnectionId, now)) {
+                return requestTimeoutMs;
+            }
+
+            // If there's any connection establishment underway, wait until it completes. This prevents
+            // the client from unnecessarily connecting to additional nodes while a previous connection
+            // attempt has not been completed.
+            if (isAnyNodeConnecting()) {
+                // Strictly the timeout we should return here is "connect timeout", but as we don't
+                // have such application level configuration, using reconnect backoff instead.
+                return reconnectBackoffMs;
+            }
+
+            if (connectionStates.canConnect(nodeConnectionId, now)) {
                 // we don't have a connection to this node right now, make one
                 log.debug("Initialize connection to node {} for sending metadata request", node.id());
                 initiateConnect(node, now);
-                // If initiateConnect failed immediately, this node will be put into blackout and we
-                // should allow immediately retrying in case there is another candidate node. If it
-                // is still connecting, the worst case is that we end up setting a longer timeout
-                // on the next round and then wait for the response.
-            } else { // connected, but can't send more OR connecting
-                // In either case, we just need to wait for a network event to let us know the selected
-                // connection might be usable again.
-                this.lastNoNodeAvailableMs = now;
+                return reconnectBackoffMs;
             }
+
+            // connected, but can't send more OR connecting
+            // In either case, we just need to wait for a network event to let us know the selected
+            // connection might be usable again.
+            return Long.MAX_VALUE;
         }
 
     }
