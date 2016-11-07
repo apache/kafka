@@ -105,8 +105,7 @@ class Log(@volatile var dir: File,
   }
   val t = time.milliseconds
   /* the actual segments of the log */
-  private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
-    loadSegments()
+  private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = loadSegments()
 
   /* Calculate the offset of the next message */
   @volatile var nextOffsetMetadata = new LogOffsetMetadata(activeSegment.nextOffset(), activeSegment.baseOffset, activeSegment.size.toInt)
@@ -146,7 +145,8 @@ class Log(@volatile var dir: File,
   def name  = dir.getName()
 
   /* Load the log segments from the log files on disk */
-  private def loadSegments() {
+  private def loadSegments() = {
+    val segments = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
     // create the log directory if it doesn't exist
     dir.mkdirs()
     var swapFiles = Set[File]()
@@ -269,6 +269,7 @@ class Log(@volatile var dir: File,
         activeSegment.timeIndex.resize(config.maxIndexSize)
       }
     }
+    segments
   }
 
   private def updateLogEndOffset(messageOffset: Long) {
@@ -833,7 +834,6 @@ class Log(@volatile var dir: File,
    */
   private[log] def delete() {
     lock synchronized {
-      removeLogMetrics()
       logSegments.foreach(_.delete())
       segments.clear()
       Utils.delete(dir)
@@ -898,12 +898,7 @@ class Log(@volatile var dir: File,
   /**
    * The active segment that is currently taking appends
    */
-  def activeSegment: LogSegment = {
-    if (segments.size() > 0)
-      segments.lastEntry.getValue
-    else
-      null
-  }
+  def activeSegment = segments.lastEntry.getValue
 
   /**
    * All the log segments in this log ordered from oldest to newest
@@ -1100,14 +1095,18 @@ object Log {
    * Parse the topic and partition out of the directory name of a log
    */
   def parseTopicPartitionName(dir: File): TopicAndPartition = {
-    var name: String = dir.getName
-    if (name == null || name.isEmpty || !name.contains('-')) {
+    val dirName = dir.getName
+    if (dirName == null || dirName.isEmpty || !dirName.contains('-')) {
       throwException(dir)
     }
 
-    if (name.endsWith(DeleteDirSuffix)) {
-      name = name.substring(0, name.indexOf('.'))
-    }
+    val name: String =
+      if (dirName.endsWith(DeleteDirSuffix)) {
+        dirName.substring(0, dirName.indexOf('.'))
+      } else {
+        dirName
+      }
+
     val index = name.lastIndexOf('-')
     val topic: String = name.substring(0, index)
     val partition: String = name.substring(index + 1)

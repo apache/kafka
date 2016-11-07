@@ -390,23 +390,18 @@ class LogManager(val logDirs: Array[File],
    */
   private def deleteLogs(): Unit = {
     while (!logsToBeDeleted.isEmpty) {
-      val log = logsToBeDeleted.take()
-      val removedLog = log
+      val removedLog = logsToBeDeleted.take()
       if (removedLog != null) {
         removedLog.delete()
-        info("Deleted log for partition [%s,%d] in %s."
-          .format(log.topicAndPartition.topic,
-            log.topicAndPartition.partition,
-            removedLog.dir.getAbsolutePath))
+        info(s"Deleted log for partition ${removedLog.topicAndPartition} in ${removedLog.dir.getAbsolutePath}.")
       }
     }
   }
 
-  def asyncDelete(topicAndPartition: TopicAndPartition) {
-    var removedLog: Log = null
-    logCreationOrDeletionLock synchronized {
-      removedLog = logs.remove(topicAndPartition)
-    }
+  def asyncDelete(topicAndPartition: TopicAndPartition) : String = {
+    val removedLog: Log = logCreationOrDeletionLock synchronized {
+                            logs.remove(topicAndPartition)
+                          }
     if (removedLog != null) {
       //We need to wait until there is no more cleaning task on the log to be deleted before actually deleting it.
       if (cleaner != null) {
@@ -414,29 +409,31 @@ class LogManager(val logDirs: Array[File],
         cleaner.updateCheckpoints(removedLog.dir.getParentFile)
       }
       // renaming the directory to topic-partition.uniqueId-delete
-      val dirName = StringBuilder.newBuilder
-      dirName.append(removedLog.name)
-      dirName.append(".")
-      val uniqueId = java.util.UUID.randomUUID.toString.replaceAll("-","")
-      dirName.append(uniqueId)
-      dirName.append(Log.DeleteDirSuffix)
+      val dirName = new StringBuilder(removedLog.name)
+                      .append(".")
+                      .append(java.util.UUID.randomUUID.toString.replaceAll("-",""))
+                      .append(Log.DeleteDirSuffix)
+                      .toString()
       removedLog.close()
-      val renamed = new File(removedLog.dir.getParent, dirName.toString())
-      val renameSuccessful = removedLog.dir.renameTo(renamed)
+      val renamedDir = new File(removedLog.dir.getParent, dirName)
+      val renameSuccessful = removedLog.dir.renameTo(renamedDir)
       if (renameSuccessful) {
-        removedLog.dir = renamed
+        removedLog.dir = renamedDir
         // change the file pointers for log and index file
         for (logSegment <- removedLog.logSegments) {
-          logSegment.log.file = new File(renamed, logSegment.log.file.getName)
-          logSegment.index.file = new File(renamed, logSegment.index.file.getName)
+          logSegment.log.file = new File(renamedDir, logSegment.log.file.getName)
+          logSegment.index.file = new File(renamedDir, logSegment.index.file.getName)
         }
 
         logsToBeDeleted.add(removedLog)
-        info("Log for partition [%s,%d] is renamed to %s and is scheduled for deletion"
-          .format(removedLog.topicAndPartition.topic, removedLog.topicAndPartition.partition, removedLog.dir.getAbsolutePath))
+        removedLog.removeLogMetrics()
+        info(s"Log for partition ${removedLog.topicAndPartition.topic} is renamed to ${removedLog.topicAndPartition.partition} and is scheduled for deletion")
       } else {
-        throw new KafkaStorageException("Failed to rename log directory from " + removedLog.dir.getAbsolutePath + " to " + renamed.getAbsolutePath)
+        throw new KafkaStorageException("Failed to rename log directory from " + removedLog.dir.getAbsolutePath + " to " + renamedDir.getAbsolutePath)
       }
+      dirName
+    } else {
+      ""
     }
   }
 
