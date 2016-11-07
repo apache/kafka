@@ -28,7 +28,6 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
 
-import java.util.ArrayList;
 import java.util.List;
 
 class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStore<K, V> {
@@ -78,9 +77,7 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
         cache.addDirtyEntryFlushListener(name, new ThreadCache.DirtyEntryFlushListener() {
             @Override
             public void apply(final List<ThreadCache.DirtyEntry> entries) {
-                final List<KeyValue<Bytes, byte[]>> keyValues = new ArrayList<>();
                 for (ThreadCache.DirtyEntry entry : entries) {
-                    keyValues.add(KeyValue.pair(entry.key(), entry.newValue()));
                     putAndMaybeForward(entry, (InternalProcessorContext) context);
                 }
             }
