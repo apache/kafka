@@ -41,7 +41,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         brokers = new KafkaEmbedded[numBrokers];
     }
 
-    public MockTime time = new MockTime();
+    public final MockTime time = new MockTime();
 
     /**
      * Creates and starts a Kafka cluster.
