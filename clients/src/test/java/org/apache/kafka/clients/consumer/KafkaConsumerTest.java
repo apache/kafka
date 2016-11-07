@@ -82,6 +82,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import org.apache.kafka.common.errors.InterruptException;
+
 public class KafkaConsumerTest {
     private final String topic = "test";
     private final TopicPartition tp0 = new TopicPartition(topic, 0);
@@ -672,6 +674,61 @@ public class KafkaConsumerTest {
         // the next poll should return the completed fetch
         ConsumerRecords<String, String> records = consumer.poll(0);
         assertEquals(5, records.count());
+    }
+    
+    @Test
+    public void testCommitSyncTerminatesIfInterrupted() throws Exception {
+        int rebalanceTimeoutMs = 60000;
+        int sessionTimeoutMs = 30000;
+        int heartbeatIntervalMs = 3000;
+
+        final Time time = new MockTime();
+        Cluster cluster = TestUtils.singletonCluster(topic, 1);
+        final Node node = cluster.nodes().get(0);
+
+        Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+        metadata.update(cluster, time.milliseconds());
+
+        final MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
+        final PartitionAssignor assignor = new RoundRobinAssignor();
+
+        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
+                rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, false, 0);
+        
+        Runnable consumerRunner = new Runnable() {
+            @Override
+            public void run() {
+                consumer.subscribe(Arrays.asList(topic), getConsumerRebalanceListener(consumer));
+                prepareRebalance(client, node, assignor, Arrays.asList(tp0), null);
+
+                consumer.poll(0);
+
+                // respond to the outstanding fetch so that we have data available on the next poll
+                client.respondFrom(fetchResponse(tp0, 0, 5), node);
+                client.poll(0, time.milliseconds());
+                
+                //Get the messages
+                consumer.poll(0);
+                
+                // Interrupt the thread and call commitSync
+                Thread.currentThread().interrupt();
+                try {
+                    consumer.commitSync();
+                } catch (InterruptException ignored) {
+                }
+            }
+        };
+        Thread consumerThread = new Thread(consumerRunner);
+        consumerThread.start();
+        consumerThread.join(30_000);
+        
+        if (consumerThread.isAlive()) {
+            //If this test fails, the thread could leak. Shut it down by answering the commit request.
+            client.respondFrom(offsetCommitResponse(Collections.singletonMap(tp0, (short) 5)), node);
+            consumerThread.join();
+            fail("Interrupted consumer thread must terminate");
+        }
     }
 
     @Test
