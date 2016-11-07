@@ -20,7 +20,7 @@ package kafka.utils
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{LinkedBlockingQueue, TimeUnit}
 
-import org.apache.kafka.common.utils.{SystemTime, Time}
+import org.apache.kafka.common.utils.Time
 
 /**
  * A blocking queue that have size limits on both number of elements and number of bytes.
