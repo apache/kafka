@@ -227,14 +227,14 @@ public class TopologyBuilder {
     public static class TopicsInfo {
         public Set<String> sinkTopics;
         public Set<String> sourceTopics;
-        public Map<String, InternalTopicConfig> interSourceTopics;
         public Map<String, InternalTopicConfig> stateChangelogTopics;
+        public Map<String, InternalTopicConfig> repartitionSourceTopics;
 
-        public TopicsInfo(Set<String> sinkTopics, Set<String> sourceTopics, Map<String, InternalTopicConfig> interSourceTopics, Map<String, InternalTopicConfig> stateChangelogTopics) {
+        public TopicsInfo(Set<String> sinkTopics, Set<String> sourceTopics, Map<String, InternalTopicConfig> repartitionSourceTopics, Map<String, InternalTopicConfig> stateChangelogTopics) {
             this.sinkTopics = sinkTopics;
             this.sourceTopics = sourceTopics;
-            this.interSourceTopics = interSourceTopics;
             this.stateChangelogTopics = stateChangelogTopics;
+            this.repartitionSourceTopics = repartitionSourceTopics;
         }
 
         @Override
@@ -258,7 +258,7 @@ public class TopologyBuilder {
             return "TopicsInfo{" +
                     "sinkTopics=" + sinkTopics +
                     ", sourceTopics=" + sourceTopics +
-                    ", interSourceTopics=" + interSourceTopics +
+                    ", repartitionSourceTopics=" + repartitionSourceTopics +
                     ", stateChangelogTopics=" + stateChangelogTopics +
                     '}';
         }

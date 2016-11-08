@@ -156,7 +156,7 @@ class GroupMetadataManagerTest {
 
     val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
       protocolType, List(("protocol", Array[Byte]())))
-    member.awaitingJoinCallback = (joinGroupResult: JoinGroupResult) => {}
+    member.awaitingJoinCallback = _ => ()
     group.add(memberId, member)
     group.transitionTo(PreparingRebalance)
     group.initNextGeneration()
@@ -389,7 +389,7 @@ class GroupMetadataManagerTest {
 
     val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
       protocolType, List(("protocol", Array[Byte]())))
-    member.awaitingJoinCallback = (joinGroupResult: JoinGroupResult) => {}
+    member.awaitingJoinCallback = _ => ()
     group.add(memberId, member)
     group.transitionTo(PreparingRebalance)
     group.initNextGeneration()

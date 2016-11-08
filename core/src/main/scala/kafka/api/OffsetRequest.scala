@@ -114,8 +114,7 @@ case class OffsetRequest(requestInfo: Map[TopicAndPartition, PartitionOffsetRequ
   }
 
   override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
-    val partitionOffsetResponseMap = requestInfo.map {
-      case (topicAndPartition, partitionOffsetRequest) =>
+    val partitionOffsetResponseMap = requestInfo.map { case (topicAndPartition, _) =>
         (topicAndPartition, PartitionOffsetsResponse(Errors.forException(e).code, Nil))
     }
     val errorResponse = OffsetResponse(correlationId, partitionOffsetResponseMap)

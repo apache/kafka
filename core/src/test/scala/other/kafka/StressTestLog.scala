@@ -69,7 +69,6 @@ object StressTestLog {
   abstract class WorkerThread extends Thread {
     override def run() {
       try {
-        var offset = 0
         while(running.get)
           work()
       } catch {
@@ -107,7 +106,7 @@ object StressTestLog {
           case _ =>
         }
       } catch {
-        case e: OffsetOutOfRangeException => // this is okay
+        case _: OffsetOutOfRangeException => // this is okay
       }
     }
   }

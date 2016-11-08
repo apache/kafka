@@ -29,7 +29,7 @@ import kafka.utils.TestUtils
 object FixedPortTestUtils {
   def choosePorts(count: Int): Seq[Int] = {
     try {
-      val sockets = (0 until count).map(i => new ServerSocket(0))
+      val sockets = (0 until count).map(_ => new ServerSocket(0))
       val ports = sockets.map(_.getLocalPort())
       sockets.foreach(_.close())
       ports

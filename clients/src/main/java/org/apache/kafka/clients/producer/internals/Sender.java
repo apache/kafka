@@ -92,9 +92,6 @@ public class Sender implements Runnable {
     /* metrics */
     private final SenderMetrics sensors;
 
-    /* param clientId of the client */
-    private String clientId;
-
     /* the max time to wait for the server to respond to the request*/
     private final int requestTimeout;
 
@@ -107,7 +104,6 @@ public class Sender implements Runnable {
                   int retries,
                   Metrics metrics,
                   Time time,
-                  String clientId,
                   int requestTimeout) {
         this.client = client;
         this.accumulator = accumulator;
@@ -118,7 +114,6 @@ public class Sender implements Runnable {
         this.acks = acks;
         this.retries = retries;
         this.time = time;
-        this.clientId = clientId;
         this.sensors = new SenderMetrics(metrics);
         this.requestTimeout = requestTimeout;
     }
@@ -281,8 +276,7 @@ public class Sender implements Runnable {
                     completeBatch(batch, error, partResp.baseOffset, partResp.timestamp, correlationId, now);
                 }
                 this.sensors.recordLatency(response.request().request().destination(), response.requestLatencyMs());
-                this.sensors.recordThrottleTime(response.request().request().destination(),
-                                                produceResponse.getThrottleTime());
+                this.sensors.recordThrottleTime(produceResponse.getThrottleTime());
             } else {
                 // this is the acks = 0 case, just complete all requests
                 for (RecordBatch batch : batches.values())
@@ -564,7 +558,7 @@ public class Sender implements Runnable {
             }
         }
 
-        public void recordThrottleTime(String node, long throttleTimeMs) {
+        public void recordThrottleTime(long throttleTimeMs) {
             this.produceThrottleTimeSensor.record(throttleTimeMs, time.milliseconds());
         }
 

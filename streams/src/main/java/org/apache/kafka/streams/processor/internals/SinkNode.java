@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.ChangedSerializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -69,17 +70,21 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
     @Override
     public void process(final K key, final V value) {
         RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
-        collector.send(new ProducerRecord<>(topic, null, context.timestamp(), key, value), keySerializer, valSerializer, partitioner);
+
+        final long timestamp = context.timestamp();
+        if (timestamp < 0) {
+            throw new StreamsException("A record consumed from an input topic has invalid (negative) timestamp, " +
+                "possibly because a pre-0.10 producer client was used to write this record to Kafka without embedding a timestamp, " +
+                "or because the input topic was created before upgrading the Kafka cluster to 0.10+. " +
+                "Use a different TimestampExtractor to process this data.");
+        }
+
+        collector.send(new ProducerRecord<K, V>(topic, null, timestamp, key, value), keySerializer, valSerializer, partitioner);
     }
 
     @Override
     public void close() {
         // do nothing
-    }
-
-    // for test only
-    public Serializer<V> valueSerializer() {
-        return valSerializer;
     }
 
     /**

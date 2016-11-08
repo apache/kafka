@@ -65,9 +65,6 @@ public class SubscriptionState {
     /* the list of topics the user has requested */
     private Set<String> subscription;
 
-    /* the list of partitions the user has requested */
-    private Set<TopicPartition> userAssignment;
-
     /* the list of topics the group has subscribed to (set only for the leader on join group completion) */
     private final Set<String> groupSubscription;
 
@@ -86,7 +83,6 @@ public class SubscriptionState {
     public SubscriptionState(OffsetResetStrategy defaultResetStrategy) {
         this.defaultResetStrategy = defaultResetStrategy;
         this.subscription = Collections.emptySet();
-        this.userAssignment = Collections.emptySet();
         this.assignment = new PartitionStates<>();
         this.groupSubscription = new HashSet<>();
         this.needsFetchCommittedOffsets = true; // initialize to true for the consumers to fetch offset upon starting up
@@ -160,8 +156,6 @@ public class SubscriptionState {
         setSubscriptionType(SubscriptionType.USER_ASSIGNED);
 
         if (!this.assignment.partitionSet().equals(partitions)) {
-            this.userAssignment = partitions;
-
             Map<TopicPartition, TopicPartitionState> partitionToState = new HashMap<>();
             for (TopicPartition partition : partitions) {
                 TopicPartitionState state = assignment.stateValue(partition);
@@ -218,7 +212,6 @@ public class SubscriptionState {
 
     public void unsubscribe() {
         this.subscription = Collections.emptySet();
-        this.userAssignment = Collections.emptySet();
         this.assignment.clear();
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;

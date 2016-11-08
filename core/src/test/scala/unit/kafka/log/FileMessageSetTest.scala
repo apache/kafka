@@ -46,7 +46,7 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
   @Test
   def testFileSize() {
     assertEquals(messageSet.channel.size, messageSet.sizeInBytes)
-    for(i <- 0 until 20) {
+    for (_ <- 0 until 20) {
       messageSet.append(singleMessageSet("abcd".getBytes))
       assertEquals(messageSet.channel.size, messageSet.sizeInBytes)
     } 
@@ -66,9 +66,8 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
   
   def testPartialWrite(size: Int, messageSet: FileMessageSet) {
     val buffer = ByteBuffer.allocate(size)
-    val originalPosition = messageSet.channel.position
-    for(i <- 0 until size)
-      buffer.put(0.asInstanceOf[Byte])
+    for (_ <- 0 until size)
+      buffer.put(0: Byte)
     buffer.rewind()
     messageSet.channel.write(buffer)
     // appending those bytes should not change the contents
@@ -195,7 +194,7 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
       msgSet.truncateTo(43)
       fail("Should throw KafkaException")
     } catch {
-      case e: KafkaException => // expected
+      case _: KafkaException => // expected
     }
 
     EasyMock.verify(channelMock)

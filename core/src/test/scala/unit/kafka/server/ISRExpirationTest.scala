@@ -31,7 +31,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.message.MessageSet
 import org.apache.kafka.common.utils.{MockTime => JMockTime}
 
-
 class IsrExpirationTest {
 
   var topicPartitionIsr: Map[(String, Int), Seq[Int]] = new HashMap[(String, Int), Seq[Int]]()
@@ -52,7 +51,8 @@ class IsrExpirationTest {
 
   @Before
   def setUp() {
-    replicaManager = new ReplicaManager(configs.head, metrics, time, jTime, null, null, null, new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, SystemTime).follower)
+    replicaManager = new ReplicaManager(configs.head, metrics, time, jTime, null, null, null, new AtomicBoolean(false),
+      QuotaFactory.instantiate(configs.head, metrics, SystemTime).follower)
   }
 
   @After
@@ -66,7 +66,7 @@ class IsrExpirationTest {
    */
   @Test
   def testIsrExpirationForStuckFollowers() {
-    val log = getLogWithLogEndOffset(15L, 2) // set logEndOffset for leader to 15L
+    val log = logMock
 
     // create one partition and all replicas
     val partition0 = getPartitionWithAllReplicasInIsr(topic, 0, time, configs.head, log)
@@ -75,8 +75,7 @@ class IsrExpirationTest {
 
     // let the follower catch up to the Leader logEndOffset (15)
     (partition0.assignedReplicas() - leaderReplica).foreach(
-      r => r.updateLogReadResult(new LogReadResult(FetchDataInfo(new LogOffsetMetadata(15L),
-                                                                 MessageSet.Empty),
+      r => r.updateLogReadResult(new LogReadResult(FetchDataInfo(new LogOffsetMetadata(15L), MessageSet.Empty),
                                                    -1L,
                                                    -1,
                                                    true)))
@@ -97,7 +96,7 @@ class IsrExpirationTest {
    */
   @Test
   def testIsrExpirationIfNoFetchRequestMade() {
-    val log = getLogWithLogEndOffset(15L, 1) // set logEndOffset for leader to 15L
+    val log = logMock
 
     // create one partition and all replicas
     val partition0 = getPartitionWithAllReplicasInIsr(topic, 0, time, configs.head, log)
@@ -119,7 +118,7 @@ class IsrExpirationTest {
   @Test
   def testIsrExpirationForSlowFollowers() {
     // create leader replica
-    val log = getLogWithLogEndOffset(15L, 4)
+    val log = logMock
     // add one partition
     val partition0 = getPartitionWithAllReplicasInIsr(topic, 0, time, configs.head, log)
     assertEquals("All replicas should be in ISR", configs.map(_.brokerId).toSet, partition0.inSyncReplicas.map(_.brokerId))
@@ -158,7 +157,7 @@ class IsrExpirationTest {
 
   private def getPartitionWithAllReplicasInIsr(topic: String, partitionId: Int, time: Time, config: KafkaConfig,
                                                localLog: Log): Partition = {
-    val leaderId=config.brokerId
+    val leaderId = config.brokerId
     val partition = replicaManager.getOrCreatePartition(topic, partitionId)
     val leaderReplica = new Replica(leaderId, partition, time, 0, Some(localLog))
 
@@ -171,12 +170,10 @@ class IsrExpirationTest {
     partition
   }
 
-  private def getLogWithLogEndOffset(logEndOffset: Long, expectedCalls: Int): Log = {
-    val log1 = EasyMock.createMock(classOf[kafka.log.Log])
-    EasyMock.expect(log1.logEndOffsetMetadata).andReturn(new LogOffsetMetadata(logEndOffset)).times(expectedCalls)
-    EasyMock.replay(log1)
-
-    log1
+  private def logMock: Log = {
+    val log = EasyMock.createMock(classOf[kafka.log.Log])
+    EasyMock.replay(log)
+    log
   }
 
   private def getFollowerReplicas(partition: Partition, leaderId: Int, time: Time): Seq[Replica] = {

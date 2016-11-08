@@ -71,7 +71,7 @@ object ConsumerPerformance {
       val consumerConnector: ConsumerConnector = Consumer.create(consumerConfig)
       val topicMessageStreams = consumerConnector.createMessageStreams(Map(config.topic -> config.numThreads))
       var threadList = List[ConsumerPerfThread]()
-      for ((topic, streamList) <- topicMessageStreams)
+      for (streamList <- topicMessageStreams.values)
         for (i <- 0 until streamList.length)
           threadList ::= new ConsumerPerfThread(i, "kafka-zk-consumer-" + i, streamList(i), config, totalMessagesRead, totalBytesRead, consumerTimeout)
 

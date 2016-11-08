@@ -71,22 +71,26 @@ object ConsumerGroupCommand extends Logging {
         val groupId = opts.options.valuesOf(opts.groupOpt).asScala.head
         assignments match {
           case None =>
+            // applies to both old and new consumer
             printError(s"The consumer group '$groupId' does not exist.")
           case Some(assignments) =>
-            if (assignments.isEmpty)
+            if (opts.useOldConsumer)
+              printAssignment(assignments, false)
+            else
               state match {
                 case Some("Dead") =>
                   printError(s"Consumer group '$groupId' does not exist.")
                 case Some("Empty") =>
                   printError(s"Consumer group '$groupId' has no active members.")
-                case Some(_) =>
-                  printError(s"Consumer group '$groupId' is rebalancing.")
-                case None =>
+                case Some("PreparingRebalance") | Some("AwaitingSync") =>
+                  System.err.println(s"Warning: Consumer group '$groupId' is rebalancing.")
+                  printAssignment(assignments, true)
+                case Some("Stable") =>
+                  printAssignment(assignments, true)
+                case other =>
                   // the control should never reach here
-                  throw new KafkaException("Expected a valid consumer group state, but none found.")
+                  throw new KafkaException(s"Expected a valid consumer group state, but found '${other.getOrElse("NONE")}'.")
               }
-            else
-              printAssignment(assignments, !opts.useOldConsumer)
         }
       }
       else if (opts.options.has(opts.deleteOpt)) {
@@ -253,7 +257,7 @@ object ConsumerGroupCommand extends Logging {
       }
 
       assignmentRows ++= groupConsumerIds.sortBy(- consumerTopicPartitions.get(_).size).flatMap { consumerId =>
-        topicsByConsumerId(consumerId).flatMap { topic =>
+        topicsByConsumerId(consumerId).flatMap { _ =>
           // since consumers with no topic partitions are processed here, we pass empty for topic partitions and offsets
           // since consumer id is repeated in client id, leave host and client id empty
           collectConsumerAssignment(group, None, Array[TopicAndPartition](), Map[TopicAndPartition, Option[Long]](), Some(consumerId), None, None)

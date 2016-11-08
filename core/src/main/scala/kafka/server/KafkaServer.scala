@@ -316,8 +316,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
     chrootOption.foreach { chroot =>
       val zkConnForChrootCreation = config.zkConnect.substring(0, chrootIndex)
       val zkClientForChrootCreation = ZkUtils(zkConnForChrootCreation,
-                                              config.zkSessionTimeoutMs,
-                                              config.zkConnectionTimeoutMs,
+                                              sessionTimeout = config.zkSessionTimeoutMs,
+                                              connectionTimeout = config.zkConnectionTimeoutMs,
                                               secureAclsEnabled)
       zkClientForChrootCreation.makeSurePersistentPathExists(chroot)
       info(s"Created zookeeper path $chroot")
@@ -325,8 +325,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime, threadNamePr
     }
 
     val zkUtils = ZkUtils(config.zkConnect,
-                          config.zkSessionTimeoutMs,
-                          config.zkConnectionTimeoutMs,
+                          sessionTimeout = config.zkSessionTimeoutMs,
+                          connectionTimeout = config.zkConnectionTimeoutMs,
                           secureAclsEnabled)
     zkUtils.setupCommonPaths()
     zkUtils

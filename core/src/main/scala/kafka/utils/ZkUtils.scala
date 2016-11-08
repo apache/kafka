@@ -237,7 +237,7 @@ class ZkUtils(val zkClient: ZkClient,
       createPersistentPath(ClusterIdPath, ClusterId.toJson(proposedClusterId))
       proposedClusterId
     } catch {
-      case e: ZkNodeExistsException =>
+      case _: ZkNodeExistsException =>
         getClusterId.getOrElse(throw new KafkaException("Failed to get cluster id from Zookeeper. This can only happen if /cluster/id is deleted from Zookeeper."))
     }
   }
@@ -389,7 +389,7 @@ class ZkUtils(val zkClient: ZkClient,
                                                       isSecure)
       zkCheckedEphemeral.create()
     } catch {
-      case e: ZkNodeExistsException =>
+      case _: ZkNodeExistsException =>
         throw new RuntimeException("A broker is already registered on the path " + brokerIdPath
                 + ". This probably " + "indicates that you either have configured a brokerid that is already in use, or "
                 + "else you have shutdown this broker and restarted it faster than the zookeeper "
@@ -445,7 +445,7 @@ class ZkUtils(val zkClient: ZkClient,
     try {
       ZkPath.createEphemeral(zkClient, path, data, acls)
     } catch {
-      case e: ZkNoNodeException =>
+      case _: ZkNoNodeException =>
         createParentPath(path)
         ZkPath.createEphemeral(zkClient, path, data, acls)
     }
@@ -465,7 +465,7 @@ class ZkUtils(val zkClient: ZkClient,
         try {
           storedData = readData(path)._1
         } catch {
-          case e1: ZkNoNodeException => // the node disappeared; treat as if node existed and let caller handles this
+          case _: ZkNoNodeException => // the node disappeared; treat as if node existed and let caller handles this
         }
         if (storedData == null || storedData != data) {
           info("conflict in " + path + " data: " + data + " stored data: " + storedData)
@@ -484,7 +484,7 @@ class ZkUtils(val zkClient: ZkClient,
     try {
       ZkPath.createPersistent(zkClient, path, data, acls)
     } catch {
-      case e: ZkNoNodeException =>
+      case _: ZkNoNodeException =>
         createParentPath(path)
         ZkPath.createPersistent(zkClient, path, data, acls)
     }
@@ -503,12 +503,12 @@ class ZkUtils(val zkClient: ZkClient,
     try {
       zkClient.writeData(path, data)
     } catch {
-      case e: ZkNoNodeException =>
+      case _: ZkNoNodeException =>
         createParentPath(path)
         try {
           ZkPath.createPersistent(zkClient, path, data, acls)
         } catch {
-          case e: ZkNodeExistsException =>
+          case _: ZkNodeExistsException =>
             zkClient.writeData(path, data)
         }
     }
@@ -573,7 +573,7 @@ class ZkUtils(val zkClient: ZkClient,
     try {
       zkClient.writeData(path, data)
     } catch {
-      case e: ZkNoNodeException =>
+      case _: ZkNoNodeException =>
         createParentPath(path)
         ZkPath.createEphemeral(zkClient, path, data, acls)
     }
@@ -583,7 +583,7 @@ class ZkUtils(val zkClient: ZkClient,
     try {
       zkClient.delete(path)
     } catch {
-      case e: ZkNoNodeException =>
+      case _: ZkNoNodeException =>
         // this can happen during a connection loss event, return normally
         info(path + " deleted during connection loss; this is ok")
         false
@@ -599,7 +599,7 @@ class ZkUtils(val zkClient: ZkClient,
       zkClient.delete(path, expectedVersion)
       true
     } catch {
-      case e: ZkBadVersionException => false
+      case _: ZkBadVersionException => false
     }
   }
 
@@ -607,7 +607,7 @@ class ZkUtils(val zkClient: ZkClient,
     try {
       zkClient.deleteRecursive(path)
     } catch {
-      case e: ZkNoNodeException =>
+      case _: ZkNoNodeException =>
         // this can happen during a connection loss event, return normally
         info(path + " deleted during connection loss; this is ok")
     }
@@ -624,7 +624,7 @@ class ZkUtils(val zkClient: ZkClient,
     val dataAndStat = try {
                         (Some(zkClient.readData(path, stat)), stat)
                       } catch {
-                        case e: ZkNoNodeException =>
+                        case _: ZkNoNodeException =>
                           (None, stat)
                       }
     dataAndStat
@@ -642,7 +642,7 @@ class ZkUtils(val zkClient: ZkClient,
     try {
       zkClient.getChildren(path)
     } catch {
-      case e: ZkNoNodeException => Nil
+      case _: ZkNoNodeException => Nil
     }
   }
 
@@ -754,7 +754,7 @@ class ZkUtils(val zkClient: ZkClient,
           updatePersistentPath(zkPath, jsonData)
           debug("Updated partition reassignment path with %s".format(jsonData))
         } catch {
-          case nne: ZkNoNodeException =>
+          case _: ZkNoNodeException =>
             createPersistentPath(zkPath, jsonData)
             debug("Created path %s with %s for partition reassignment".format(zkPath, jsonData))
           case e2: Throwable => throw new AdminOperationException(e2.toString)
@@ -835,7 +835,7 @@ class ZkUtils(val zkClient: ZkClient,
     try {
       writeToZk
     } catch {
-      case e1: ZkNoNodeException =>
+      case _: ZkNoNodeException =>
         makeSurePersistentPathExists(path)
         writeToZk
     }

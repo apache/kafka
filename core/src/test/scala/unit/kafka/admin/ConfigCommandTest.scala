@@ -250,7 +250,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
         ConfigCommand.parseEntity(opts)
         fail("Did not fail with invalid argument list")
       } catch {
-        case e: IllegalArgumentException => // expected exception
+        case _: IllegalArgumentException => // expected exception
       }
     }
 
@@ -315,7 +315,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
           "--alter", "--add-config", "a=b,c=d")
       fail("Did not fail with invalid client-id")
     } catch {
-      case e: InvalidConfigException => // expected
+      case _: InvalidConfigException => // expected
     }
 
     checkEntity("users", QuotaId.sanitize("CN=user1") + "/clients/client1",

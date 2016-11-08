@@ -58,7 +58,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
       TestUtils.createServer(KafkaConfig.fromProps(props2))
       fail("Registering a broker with a conflicting id should fail")
     } catch {
-      case e : RuntimeException =>
+      case _: RuntimeException =>
       // this is expected
     }
 

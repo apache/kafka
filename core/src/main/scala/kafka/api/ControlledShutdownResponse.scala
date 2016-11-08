@@ -30,7 +30,7 @@ object ControlledShutdownResponse {
     val numEntries = buffer.getInt
 
     var partitionsRemaining = Set[TopicAndPartition]()
-    for (i<- 0 until numEntries){
+    for (_ <- 0 until numEntries){
       val topic = readShortString(buffer)
       val partition = buffer.getInt
       partitionsRemaining += new TopicAndPartition(topic, partition)
