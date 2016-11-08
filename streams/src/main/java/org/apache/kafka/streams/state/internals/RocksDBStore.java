@@ -41,8 +41,6 @@ import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
 import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.util.Comparator;
@@ -66,7 +64,6 @@ import java.util.Set;
  */
 public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
-    private static final Logger log = LoggerFactory.getLogger(RocksDBStore.class);
     private static final int TTL_NOT_USED = -1;
 
     // TODO: these values should be configurable

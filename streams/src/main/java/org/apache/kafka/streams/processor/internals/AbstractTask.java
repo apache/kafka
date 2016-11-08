@@ -28,6 +28,8 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -37,6 +39,8 @@ import java.util.Map;
 import java.util.Set;
 
 public abstract class AbstractTask {
+    private static final Logger log = LoggerFactory.getLogger(AbstractTask.class);
+
     protected final TaskId id;
     protected final String applicationId;
     protected final ProcessorTopology topology;
@@ -78,6 +82,7 @@ public abstract class AbstractTask {
         initializeOffsetLimits();
 
         for (StateStore store : this.topology.stateStores()) {
+            log.trace("task [{}] Initializing store {}", id(), store.name());
             store.init(this.processorContext, store);
         }
     }
@@ -119,6 +124,7 @@ public abstract class AbstractTask {
      * @throws ProcessorStateException if there is an error while closing the state manager
      */
     void closeStateManager() {
+        log.trace("task [{}] Closing", id());
         try {
             stateMgr.close(recordCollectorOffsets());
         } catch (IOException e) {

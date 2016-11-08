@@ -592,6 +592,7 @@ public class StreamThread extends Thread {
      * Commit the states of all its tasks
      */
     private void commitAll() {
+        log.trace("stream-thread [{}] Committing all its owned tasks", this.getName());
         for (StreamTask task : activeTasks.values()) {
             commitOne(task);
         }
@@ -604,8 +605,7 @@ public class StreamThread extends Thread {
      * Commit the state of a task
      */
     private void commitOne(AbstractTask task) {
-        log.info("{} Committing task {}", logPrefix, task.id());
-
+        log.info("{} Committing task {} {}", logPrefix, task.getClass().getSimpleName(), task.id());
         try {
             task.commit();
         } catch (CommitFailedException e) {
