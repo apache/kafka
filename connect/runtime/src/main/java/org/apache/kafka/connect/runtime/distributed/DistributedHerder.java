@@ -57,10 +57,11 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.PriorityQueue;
-import java.util.Queue;
+import java.util.NavigableSet;
+import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -124,7 +125,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     // To handle most external requests, like creating or destroying a connector, we can use a generic request where
     // the caller specifies all the code that should be executed.
-    private final Queue<HerderRequest> requests = new PriorityQueue<>();
+    private final NavigableSet<HerderRequest> requests = new ConcurrentSkipListSet<>();
     // Config updates can be collected and applied together when possible. Also, we need to take care to rebalance when
     // needed (e.g. task reconfiguration, which requires everyone to coordinate offset commits).
     private Set<String> connectorConfigUpdates = new HashSet<>();
@@ -228,17 +229,14 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         final long now = time.milliseconds();
         long nextRequestTimeoutMs = Long.MAX_VALUE;
         while (true) {
-            final HerderRequest next;
-            synchronized (this) {
-                next = requests.peek();
-                if (next == null) {
-                    break;
-                } else if (now >= next.at) {
-                    requests.poll();
-                } else {
-                    nextRequestTimeoutMs = next.at - now;
-                    break;
-                }
+            final HerderRequest next = peekWithoutException();
+            if (next == null) {
+                break;
+            } else if (now >= next.at) {
+                requests.pollFirst();
+            } else {
+                nextRequestTimeoutMs = next.at - now;
+                break;
             }
 
             try {
@@ -358,9 +356,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
             // Explicitly fail any outstanding requests so they actually get a response and get an understandable reason
             // for their failure
-            while (!requests.isEmpty()) {
-                HerderRequest request = requests.poll();
+            HerderRequest request = requests.pollFirst();
+            while (request != null) {
                 request.callback().onCompletion(new ConnectException("Worker is shutting down"), null);
+                request = requests.pollFirst();
             }
 
             stopServices();
@@ -396,7 +395,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
-    public synchronized void connectors(final Callback<Collection<String>> callback) {
+    public void connectors(final Callback<Collection<String>> callback) {
         log.trace("Submitting connector listing request");
 
         addRequest(
@@ -415,7 +414,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
-    public synchronized void connectorInfo(final String connName, final Callback<ConnectorInfo> callback) {
+    public void connectorInfo(final String connName, final Callback<ConnectorInfo> callback) {
         log.trace("Submitting connector info request {}", connName);
 
         addRequest(
@@ -538,7 +537,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
-    public synchronized void requestTaskReconfiguration(final String connName) {
+    public void requestTaskReconfiguration(final String connName) {
         log.trace("Submitting connector task reconfiguration request {}", connName);
 
         addRequest(
@@ -562,7 +561,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
-    public synchronized void taskConfigs(final String connName, final Callback<List<TaskInfo>> callback) {
+    public void taskConfigs(final String connName, final Callback<List<TaskInfo>> callback) {
         log.trace("Submitting get task configuration request {}", connName);
 
         addRequest(
@@ -590,7 +589,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
-    public synchronized void putTaskConfigs(final String connName, final List<Map<String, String>> configs, final Callback<Void> callback) {
+    public void putTaskConfigs(final String connName, final List<Map<String, String>> configs, final Callback<Void> callback) {
         log.trace("Submitting put task configuration request {}", connName);
 
         addRequest(
@@ -613,7 +612,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
-    public synchronized void restartConnector(final String connName, final Callback<Void> callback) {
+    public void restartConnector(final String connName, final Callback<Void> callback) {
         addRequest(new Callable<Void>() {
             @Override
             public Void call() throws Exception {
@@ -646,7 +645,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
-    public synchronized void restartTask(final ConnectorTaskId id, final Callback<Void> callback) {
+    public void restartTask(final ConnectorTaskId id, final Callback<Void> callback) {
         addRequest(new Callable<Void>() {
             @Override
             public Void call() throws Exception {
@@ -1019,8 +1018,18 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private void addRequest(long delayMs, Callable<Void> action, Callback<Void> callback) {
         HerderRequest req = new HerderRequest(time.milliseconds() + delayMs, action, callback);
         requests.add(req);
-        if (requests.peek() == req)
+        if (peekWithoutException() == req)
             member.wakeup();
+    }
+
+    private HerderRequest peekWithoutException() {
+        try {
+            return requests.isEmpty() ? null : requests.first();
+        } catch (NoSuchElementException e) {
+            // Ignore exception. Should be rare.
+            // Means that the collection became empty between checking the size and retrieving the first element.
+        }
+        return null;
     }
 
     public class ConfigUpdateListener implements ConfigBackingStore.UpdateListener {
@@ -1077,7 +1086,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
-    private class HerderRequest implements Comparable<HerderRequest> {
+    private static class HerderRequest implements Comparable<HerderRequest> {
         private final long at;
         private final Callable<Void> action;
         private final Callback<Void> callback;
@@ -1098,7 +1107,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         @Override
         public int compareTo(HerderRequest o) {
-            return Long.compare(at, o.at);
+            final int soonest = Long.compare(at, o.at);
+            // If tied, returning a positive value should respect insertion order.
+            return soonest != 0 ? soonest : 1;
         }
     }
 

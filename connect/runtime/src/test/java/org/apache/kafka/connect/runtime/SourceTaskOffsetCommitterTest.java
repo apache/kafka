@@ -41,7 +41,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.eq;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
