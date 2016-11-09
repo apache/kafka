@@ -106,7 +106,7 @@ public class RecordQueue {
 
             log.trace("Source node {} extracted timestamp {} for record {} when adding to buffered queue", source.name(), timestamp, record);
 
-            // validate that timestamp must be non-negative
+            // drop message if TS is invalid, ie, negative
             if (timestamp < 0) {
                 continue;
             }

@@ -23,43 +23,51 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Retrieves built-in timestamps from Kafka messages (introduced in KIP-32: Add timestamps to Kafka message).
+ * Retrieves embedded metadata timestamps from Kafka messages.
+ * Embedded metadata timestamp was introduced in "KIP-32: Add timestamps to Kafka message" for the new
+ * 0.10+ Kafka message format.
  * <p>
- * Here, "built-in" refers to the fact that compatible Kafka producer clients automatically and
- * transparently embed such timestamps into messages they sent to Kafka, which can then be retrieved
+ * Here, "embedded metadata" refers to the fact that compatible Kafka producer clients automatically and
+ * transparently embed such timestamps into message metadata they send to Kafka, which can then be retrieved
  * via this timestamp extractor.
  * <p>
- * If <i>CreateTime</i> is used to define the built-in timestamps, using this extractor effectively provide
- * <i>event-time</i> semantics. If <i>LogAppendTime</i> is used to define the built-in timestamps, using
- * this extractor effectively provides <i>ingestion-time</i> semantics.
+ * If the embedded metadata timestamp represents <i>CreateTime</i> (cf. Kafka broker setting
+ * {@code message.timestamp.type} and Kafka topic setting {@code log.message.timestamp.type}),
+ * this extractor effectively provides <i>event-time</i> semantics.
+ * If <i>LogAppendTime</i> is used as broker/topic setting to define the embedded metadata timestamps,
+ * using this extractor effectively provides <i>ingestion-time</i> semantics.
  * <p>
  * If you need <i>processing-time</i> semantics, use {@link WallclockTimestampExtractor}.
  * <p>
- * If a record has a negative timestamp value, a log message is written and the timestamp is returned.
- * This results in dropping the record, i.e., the record will not be processed.
+ * If a record has a negative (invalid) timestamp value the timestamp is returned as-is;
+ * in addition, a WARN message is logged in your application.
+ * Returning the timestamp as-is results in dropping the record, i.e., the record will not be processed.
  *
  * @see ConsumerRecordTimestampExtractor
+ * @see InferringConsumerRecordTimestampExtractor
  * @see WallclockTimestampExtractor
  */
 public class RobustConsumerRecordTimestampExtractor implements TimestampExtractor {
     private static final Logger log = LoggerFactory.getLogger(RobustConsumerRecordTimestampExtractor.class);
 
     /**
-     * Extracts the embedded meta data timestamp from the given {@link ConsumerRecord}
+     * Extracts the embedded metadata timestamp from the given {@link ConsumerRecord}
      * and writes a log warn message if the extracted timestamp is negative,
      * because the record will no be processed but dropped.
      *
      * @param record a data record
-     * @return the embedded meta-data timestamp of the given {@link ConsumerRecord}
+     * @param currentStreamsTime the current value of the internally tracked Streams time (could be -1 if unknown)
+     * @return the embedded metadata timestamp of the given {@link ConsumerRecord}
      */
     @Override
-    public long extract(ConsumerRecord<Object, Object> record) {
+    public long extract(final ConsumerRecord<Object, Object> record, final long currentStreamsTime) {
         final long timestamp = record.timestamp();
 
         if (timestamp < 0) {
-            log.warn("Dropping input record {} because it has an invalid (negative) timestamp.", record);
+            log.warn("Input record {} will be dropped because it has an invalid (negative) timestamp.", record);
         }
 
         return timestamp;
     }
+
 }
