@@ -40,7 +40,6 @@ class NamedCache {
     private LRUNode head;
     private long currentSizeBytes;
     private ThreadCacheMetrics metrics;
-    private final List<String> callStack  = new ArrayList<>();
 
     // JMX stats
     private Sensor hitRatio = null;
@@ -207,7 +206,6 @@ class NamedCache {
         }
         remove(eldest);
         cache.remove(eldest.key);
-        dirtyKeys.remove(eldest.key);
     }
 
     synchronized LRUCacheEntry putIfAbsent(final Bytes key, final LRUCacheEntry value) {
