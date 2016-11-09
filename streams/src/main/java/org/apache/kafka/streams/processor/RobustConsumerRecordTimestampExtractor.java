@@ -19,6 +19,8 @@ package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Retrieves built-in timestamps from Kafka messages (introduced in KIP-32: Add timestamps to Kafka message).
@@ -33,29 +35,29 @@ import org.apache.kafka.streams.errors.StreamsException;
  * <p>
  * If you need <i>processing-time</i> semantics, use {@link WallclockTimestampExtractor}.
  * <p>
- * If a record has a negative timestamp value, this extractor raises an exception.
+ * If a record has a negative timestamp value, a log message is written and the timestamp is returned.
+ * This results in dropping the record, i.e., the record will not be processed.
  *
- * @see RobustConsumerRecordTimestampExtractor
+ * @see ConsumerRecordTimestampExtractor
  * @see WallclockTimestampExtractor
  */
-public class ConsumerRecordTimestampExtractor implements TimestampExtractor {
+public class RobustConsumerRecordTimestampExtractor implements TimestampExtractor {
+    private static final Logger log = LoggerFactory.getLogger(RobustConsumerRecordTimestampExtractor.class);
 
     /**
-     * Extracts the embedded meta data timestamp from the given {@link ConsumerRecord}.
+     * Extracts the embedded meta data timestamp from the given {@link ConsumerRecord}
+     * and writes a log warn message if the extracted timestamp is negative,
+     * because the record will no be processed but dropped.
      *
      * @param record a data record
      * @return the embedded meta-data timestamp of the given {@link ConsumerRecord}
-     * @throws StreamsException if the embedded meta-data timestamp is negative
      */
     @Override
     public long extract(ConsumerRecord<Object, Object> record) {
         final long timestamp = record.timestamp();
 
         if (timestamp < 0) {
-            throw new StreamsException("Input record " + record + " has invalid (negative) timestamp. " +
-                    "Possibly because a pre-0.10 producer client was used to write this record to Kafka without embedding a timestamp, " +
-                    "or because the input topic was created before upgrading the Kafka cluster to 0.10+. " +
-                    "Use a different TimestampExtractor to process this data.");
+            log.warn("Dropping input record {} because it has an invalid (negative) timestamp.", record);
         }
 
         return timestamp;

@@ -21,19 +21,22 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 
 /**
  * Retrieves current wall clock timestamps as {@link System#currentTimeMillis()}.
- *
+ * <p>
  * Using this extractor effectively provides <i>processing-time</i> semantics.
- *
+ * <p>
  * If you need <i>event-time</i> semantics, use {@link ConsumerRecordTimestampExtractor} with
  * built-in <i>CreateTime</i> or <i>LogAppendTime</i> timestamp (see KIP-32: Add timestamps to Kafka message for details).
+ *
+ * @see ConsumerRecordTimestampExtractor
+ * @see RobustConsumerRecordTimestampExtractor
  */
 public class WallclockTimestampExtractor implements TimestampExtractor {
 
     /**
      * Return the current wall clock time as timestamp.
      *
-     * @param record  a data record
-     * @return        the current wall clock time, expressed in milliseconds since midnight, January 1, 1970 UTC
+     * @param record a data record
+     * @return the current wall clock time, expressed in milliseconds since midnight, January 1, 1970 UTC
      */
     @Override
     public long extract(ConsumerRecord<Object, Object> record) {
