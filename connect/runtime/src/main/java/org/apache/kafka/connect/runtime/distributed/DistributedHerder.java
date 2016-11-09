@@ -102,7 +102,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(DistributedHerder.class);
 
     private static final long RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MS = 250;
-    private static final int BULK_THREAD_POOL_SIZE = 8;
+    private static final int START_STOP_THREAD_POOL_SIZE = 8;
 
     private final Time time;
 
@@ -111,7 +111,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private final int workerUnsyncBackoffMs;
 
     private final ExecutorService forwardRequestExecutor;
-    private final ExecutorService bulkExecutor;
+    private final ExecutorService startAndStopExecutor;
     private final WorkerGroupMember member;
     private final AtomicBoolean stopping;
     private final CountDownLatch stopLatch = new CountDownLatch(1);
@@ -162,7 +162,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         this.workerUnsyncBackoffMs = config.getInt(DistributedConfig.WORKER_UNSYNC_BACKOFF_MS_CONFIG);
         this.member = member != null ? member : new WorkerGroupMember(config, restUrl, this.configBackingStore, new RebalanceListener(), time);
         this.forwardRequestExecutor = Executors.newSingleThreadExecutor();
-        this.bulkExecutor = Executors.newFixedThreadPool(BULK_THREAD_POOL_SIZE);
+        this.startAndStopExecutor = Executors.newFixedThreadPool(START_STOP_THREAD_POOL_SIZE);
 
         stopping = new AtomicBoolean(false);
         configState = ClusterConfigState.EMPTY;
@@ -350,7 +350,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             for (ConnectorTaskId taskId : new ArrayList<>(worker.taskIds())) {
                 callables.add(getTaskCallable(taskId, TaskStatus.State.DESTROYED));
             }
-            bulkRun(callables);
+            startAndStop(callables);
 
             member.stop();
 
@@ -381,12 +381,12 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
 
         forwardRequestExecutor.shutdown();
-        bulkExecutor.shutdown();
+        startAndStopExecutor.shutdown();
         try {
             if (!forwardRequestExecutor.awaitTermination(10000, TimeUnit.MILLISECONDS))
                 forwardRequestExecutor.shutdownNow();
-            if (!bulkExecutor.awaitTermination(1000, TimeUnit.MILLISECONDS))
-                bulkExecutor.shutdownNow();
+            if (!startAndStopExecutor.awaitTermination(1000, TimeUnit.MILLISECONDS))
+                startAndStopExecutor.shutdownNow();
         } catch (InterruptedException e) {
             // ignore
         }
@@ -802,9 +802,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         Utils.sleep(ms);
     }
 
-    private void bulkRun(Collection<Callable<Void>> bulk) {
+    private void startAndStop(Collection<Callable<Void>> callables) {
         try {
-            bulkExecutor.invokeAll(bulk);
+            startAndStopExecutor.invokeAll(callables);
         } catch (InterruptedException e) {
             // ignore
         }
@@ -821,7 +821,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         for (ConnectorTaskId taskId : assignment.tasks()) {
             callables.add(getTaskCallable(taskId, TaskStatus.State.RUNNING));
         }
-        bulkRun(callables);
+        startAndStop(callables);
         log.info("Finished starting connectors and tasks");
     }
 
@@ -865,7 +865,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private boolean startConnector(String connectorName) {
         log.info("Starting connector {}", connectorName);
         final Map<String, String> configProps = configState.connectorConfig(connectorName);
-        final ConnectorContext ctx = new HerderConnectorContext(DistributedHerder.this, connectorName);
+        final ConnectorContext ctx = new HerderConnectorContext(this, connectorName);
         final TargetState initialState = configState.targetState(connectorName);
         boolean started = worker.startConnector(connectorName, configProps, ctx, this, initialState);
 
@@ -1026,8 +1026,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         try {
             return requests.isEmpty() ? null : requests.first();
         } catch (NoSuchElementException e) {
-            // Ignore exception. Should be rare.
-            // Means that the collection became empty between checking the size and retrieving the first element.
+            // Ignore exception. Should be rare. Means that the collection became empty between
+            // checking the size and retrieving the first element.
         }
         return null;
     }
@@ -1188,7 +1188,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 }
 
                 // The actual timeout for graceful task stop is applied in worker's stopAndAwaitTask method.
-                bulkRun(callables);
+                startAndStop(callables);
 
                 // Ensure that all status updates have been pushed to the storage system before rebalancing.
                 // Otherwise, we may inadvertently overwrite the state with a stale value after the rebalance
