@@ -150,11 +150,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                       Worker worker,
                       String workerId,
                       StatusBackingStore statusBackingStore,
-                      ConfigBackingStore configStorage,
+                      ConfigBackingStore configBackingStore,
                       WorkerGroupMember member,
                       String restUrl,
                       Time time) {
-        super(worker, workerId, statusBackingStore, configStorage);
+        super(worker, workerId, statusBackingStore, configBackingStore);
 
         this.time = time;
         this.workerGroupId = config.getString(DistributedConfig.GROUP_ID_CONFIG);
