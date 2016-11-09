@@ -18,6 +18,7 @@
 package kafka.coordinator
 
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.NotCoordinatorForGroupException
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.{ArrayOf, Field, Schema, Struct}
 import org.apache.kafka.common.protocol.types.Type.STRING
@@ -150,7 +151,7 @@ class GroupMetadataManager(val brokerId: Int,
       // if we crash or leaders move) since the new leaders will still expire the consumers with heartbeat and
       // retry removing this group.
       val groupPartition = partitionFor(group.groupId)
-      val (magicValue, timestamp) = getMessageFormatVersionAndTimestamp(groupPartition)
+      val (magicValue, timestamp) = getMessageFormatVersionAndTimestampIfReplicaIsLocal(groupPartition)
       val tombstone = new Message(bytes = null, key = GroupMetadataManager.groupMetadataKey(group.groupId),
         timestamp = timestamp, magicValue = magicValue)
 
@@ -176,7 +177,7 @@ class GroupMetadataManager(val brokerId: Int,
   def prepareStoreGroup(group: GroupMetadata,
                         groupAssignment: Map[String, Array[Byte]],
                         responseCallback: Errors => Unit): DelayedStore = {
-    val (magicValue, timestamp) = getMessageFormatVersionAndTimestamp(partitionFor(group.groupId))
+    val (magicValue, timestamp) = getMessageFormatVersionAndTimestampIfReplicaIsLocal(partitionFor(group.groupId))
     val groupMetadataValueVersion = if (interBrokerProtocolVersion < KAFKA_0_10_1_IV0) 0.toShort else GroupMetadataManager.CURRENT_GROUP_VALUE_SCHEMA_VERSION
 
     val message = new Message(
@@ -271,7 +272,7 @@ class GroupMetadataManager(val brokerId: Int,
 
     // construct the message set to append
     val messages = filteredOffsetMetadata.map { case (topicAndPartition, offsetAndMetadata) =>
-      val (magicValue, timestamp) = getMessageFormatVersionAndTimestamp(partitionFor(group.groupId))
+      val (magicValue, timestamp) = getMessageFormatVersionAndTimestampIfReplicaIsLocal(partitionFor(group.groupId))
       new Message(
         key = GroupMetadataManager.offsetCommitKey(group.groupId, topicAndPartition.topic, topicAndPartition.partition),
         bytes = GroupMetadataManager.offsetCommitValue(offsetAndMetadata),
@@ -585,7 +586,7 @@ class GroupMetadataManager(val brokerId: Int,
           val tombstones = group.removeExpiredOffsets(startMs).map { case (topicPartition, offsetAndMetadata) =>
             trace("Removing expired offset and metadata for %s, %s: %s".format(groupId, topicPartition, offsetAndMetadata))
             val commitKey = GroupMetadataManager.offsetCommitKey(groupId, topicPartition.topic, topicPartition.partition)
-            val (magicValue, timestamp) = getMessageFormatVersionAndTimestamp(offsetsPartition)
+            val (magicValue, timestamp) = getMessageFormatVersionAndTimestampIfReplicaIsLocal(offsetsPartition)
             new Message(bytes = null, key = commitKey, timestamp = timestamp, magicValue = magicValue)
           }.toBuffer
 
@@ -659,10 +660,10 @@ class GroupMetadataManager(val brokerId: Int,
       config.offsetsTopicNumPartitions
   }
 
-  private def getMessageFormatVersionAndTimestamp(partition: Int): (Byte, Long) = {
+  private def getMessageFormatVersionAndTimestampIfReplicaIsLocal(partition: Int): (Byte, Long) = {
     val groupMetadataTopicAndPartition = new TopicAndPartition(Topic.GroupMetadataTopicName, partition)
     val messageFormatVersion = replicaManager.getMessageFormatVersion(groupMetadataTopicAndPartition).getOrElse {
-      throw new IllegalArgumentException(s"Message format version for partition $groupMetadataTopicPartitionCount not found")
+      throw new NotCoordinatorForGroupException(s"Message format version for $groupMetadataTopicAndPartition not found since the replica is not local")
     }
     val timestamp = if (messageFormatVersion == Message.MagicValue_V0) Message.NoTimestamp else time.milliseconds()
     (messageFormatVersion, timestamp)
