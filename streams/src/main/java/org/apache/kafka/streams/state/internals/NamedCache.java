@@ -109,7 +109,7 @@ class NamedCache {
         for (Bytes key : dirtyKeys) {
             final LRUNode node = getInternal(key);
             if (node == null) {
-                throw new IllegalStateException("Key found in dirty key set, but entry is null");
+                throw new IllegalStateException("Key = " + key + " found in dirty key set, but entry is null");
             }
             entries.add(new ThreadCache.DirtyEntry(key, node.entry.value, node.entry));
             node.entry.markClean();
@@ -120,6 +120,12 @@ class NamedCache {
 
 
     synchronized void put(final Bytes key, final LRUCacheEntry value) {
+        if (!value.isDirty && dirtyKeys.contains(key)) {
+            throw new IllegalStateException(String.format("Attempting to put a clean entry for key [%s] " +
+                                                                  "into NamedCache [%s] when it already contains " +
+                                                                  "a dirty entry for the same key",
+                                                          key, name));
+        }
         LRUNode node = cache.get(key);
         if (node != null) {
             numOverwrites++;
