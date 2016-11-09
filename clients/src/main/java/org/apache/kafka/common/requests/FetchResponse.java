@@ -111,7 +111,7 @@ public class FetchResponse extends AbstractResponse {
         this(3, responseData, throttleTime);
     }
 
-    private FetchResponse(int version, LinkedHashMap<TopicPartition, PartitionData> responseData, int throttleTime) {
+    public FetchResponse(int version, LinkedHashMap<TopicPartition, PartitionData> responseData, int throttleTime) {
         super(new Struct(ProtoUtils.responseSchema(ApiKeys.FETCH.id, version)));
         writeStruct(struct, version, responseData, throttleTime);
         this.responseData = responseData;

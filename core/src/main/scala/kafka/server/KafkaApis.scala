@@ -494,12 +494,12 @@ class KafkaApis(val requestChannel: RequestChannel,
         BrokerTopicStats.getBrokerAllTopicsStats().bytesOutRate.mark(data.records.sizeInBytes)
       }
 
-      val response = new FetchResponse(fetchedPartitionData, 0)
+      val response = new FetchResponse(versionId, fetchedPartitionData, 0)
 
       def fetchResponseCallback(delayTimeMs: Int) {
         trace(s"Sending fetch response to client $clientId of " +
           s"${convertedPartitionData.map { case (_, v) => v.records.sizeInBytes }.sum} bytes")
-        val fetchResponse = if (delayTimeMs > 0) new FetchResponse(fetchedPartitionData, delayTimeMs) else response
+        val fetchResponse = if (delayTimeMs > 0) new FetchResponse(versionId, fetchedPartitionData, delayTimeMs) else response
         requestChannel.sendResponse(new RequestChannel.Response(request, fetchResponse))
       }
 
