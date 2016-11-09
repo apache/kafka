@@ -82,10 +82,15 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         try {
             collector.send(new ProducerRecord<K, V>(topic, null, timestamp, key, value), keySerializer, valSerializer, partitioner);
         } catch (ClassCastException e) {
-            throw new StreamsException("A serializer (key: " + keySerializer.getClass().getName()
-                    + " / value: " + valSerializer.getClass().getName() + ") is not compatible to the actual key or value type "
-                    + "(key type: " + key.getClass().getName() + " / value type: " + value.getClass().getName()
-                    + "). Change the default Serdes in StreamConfig or provide correct Serdes via method parameters.", e);
+            throw new StreamsException(
+                    String.format("A serializer (key: %s / value: %s) is not compatible to the actual key or value type " +
+                                    "(key type: %s / value type: %s). Change the default Serdes in StreamConfig or " +
+                                    "provide correct Serdes via method parameters.",
+                                    keySerializer.getClass().getName(),
+                                    valSerializer.getClass().getName(),
+                                    key.getClass().getName(),
+                                    value.getClass().getName()),
+                    e);
         }
     }
 
