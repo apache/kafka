@@ -73,8 +73,8 @@ public class Worker {
     private final OffsetBackingStore offsetBackingStore;
     private final Map<String, Object> producerProps;
 
-    private ConcurrentMap<String, WorkerConnector> connectors = new ConcurrentHashMap<>();
-    private ConcurrentMap<ConnectorTaskId, WorkerTask> tasks = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, WorkerConnector> connectors = new ConcurrentHashMap<>();
+    private final ConcurrentMap<ConnectorTaskId, WorkerTask> tasks = new ConcurrentHashMap<>();
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
 
     public Worker(String workerId, Time time, ConnectorFactory connectorFactory, WorkerConfig config, OffsetBackingStore offsetBackingStore) {
@@ -412,14 +412,14 @@ public class Worker {
     }
 
     /**
-     * Stop asynchronously all the tasks of the worker and await their termination.
+     * Stop asynchronously all the worker's tasks and await their termination.
      */
     public void stopAndAwaitTasks() {
         stopAndAwaitTasks(new ArrayList<>(tasks.keySet()));
     }
 
     /**
-     * Stop asynchronously a collection of tasks that belong to the worker and await their termination.
+     * Stop asynchronously a collection of tasks that belong to this worker and await their termination.
      *
      * @param ids the collection of tasks to be stopped.
      */
