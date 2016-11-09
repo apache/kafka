@@ -56,14 +56,26 @@ public class KStreamTestDriver {
         this(builder, stateDir, Serdes.ByteArray(), Serdes.ByteArray());
     }
 
+    public KStreamTestDriver(KStreamBuilder builder, File stateDir, final long cacheSize) {
+        this(builder, stateDir, Serdes.ByteArray(), Serdes.ByteArray(), cacheSize);
+    }
+
     public KStreamTestDriver(KStreamBuilder builder,
                              File stateDir,
                              Serde<?> keySerde,
                              Serde<?> valSerde) {
+        this(builder, stateDir, keySerde, valSerde, DEFAULT_CACHE_SIZE_BYTES);
+    }
+
+    public KStreamTestDriver(KStreamBuilder builder,
+                             File stateDir,
+                             Serde<?> keySerde,
+                             Serde<?> valSerde,
+                             long cacheSize) {
         builder.setApplicationId("TestDriver");
         this.topology = builder.build(null);
         this.stateDir = stateDir;
-        this.cache = new ThreadCache(DEFAULT_CACHE_SIZE_BYTES);
+        this.cache = new ThreadCache(cacheSize);
         this.context = new MockProcessorContext(this, stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
         this.context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
 
@@ -73,13 +85,14 @@ public class KStreamTestDriver {
         }
 
         for (ProcessorNode node : topology.processors()) {
-            currNode = node;
+            context.setCurrentNode(node);
             try {
                 node.init(context);
             } finally {
-                currNode = null;
+                context.setCurrentNode(null);
             }
         }
+
     }
 
     public ProcessorContext context() {
@@ -223,6 +236,10 @@ public class KStreamTestDriver {
 
         }
 
+    }
+
+    public void setCurrentNode(final ProcessorNode currentNode) {
+        currNode = currentNode;
     }
 
 

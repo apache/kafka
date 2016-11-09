@@ -60,7 +60,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     private boolean commitRequested = false;
     private boolean commitOffsetNeeded = false;
-    private ProcessorNode currNode = null;
 
     private boolean requiresPoll = true;
 
@@ -119,9 +118,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         // initialize the state stores
         log.info("{} Initializing state stores", logPrefix);
         initializeStateStores();
-
         initTopology();
-
         ((ProcessorContextImpl) this.processorContext).initialized();
     }
 
@@ -164,13 +161,13 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
         try {
             // process the record by passing to the source node of the topology
-            this.currNode = recordInfo.node();
+            final ProcessorNode currNode = recordInfo.node();
             TopicPartition partition = recordInfo.partition();
 
             log.trace("{} Start processing one record [{}]", logPrefix, record);
             final ProcessorRecordContext recordContext = createRecordContext(record);
             updateProcessorContext(recordContext, currNode);
-            this.currNode.process(record.key(), record.value());
+            currNode.process(record.key(), record.value());
 
             log.trace("{} Completed processing one record [{}]", logPrefix, record);
 
@@ -191,14 +188,13 @@ public class StreamTask extends AbstractTask implements Punctuator {
         } catch (KafkaException ke) {
             throw new StreamsException(format("Exception caught in process. taskId=%s, processor=%s, topic=%s, partition=%d, offset=%d",
                                               id.toString(),
-                                              currNode.name(),
+                                              processorContext.currentNode().name(),
                                               record.topic(),
                                               record.partition(),
                                               record.offset()
                                               ), ke);
         } finally {
             processorContext.setCurrentNode(null);
-            this.currNode = null;
         }
 
         return partitionGroup.numBuffered();
@@ -233,10 +229,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
      */
     @Override
     public void punctuate(ProcessorNode node, long timestamp) {
-        if (currNode != null)
+        if (processorContext.currentNode() != null)
             throw new IllegalStateException(String.format("%s Current node is not null", logPrefix));
 
-        currNode = node;
         final StampedRecord stampedRecord = new StampedRecord(DUMMY_RECORD, timestamp);
         updateProcessorContext(createRecordContext(stampedRecord), node);
 
@@ -248,14 +243,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
             throw new StreamsException(String.format("Exception caught in punctuate. taskId=%s processor=%s", id,  node.name()), ke);
         } finally {
             processorContext.setCurrentNode(null);
-            currNode = null;
         }
     }
 
-
-    public ProcessorNode node() {
-        return this.currNode;
-    }
 
     /**
      * Commit the current task state
@@ -314,10 +304,10 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * @throws IllegalStateException if the current node is not null
      */
     public void schedule(long interval) {
-        if (currNode == null)
+        if (processorContext.currentNode() == null)
             throw new IllegalStateException(String.format("%s Current node is null", logPrefix));
 
-        punctuationQueue.schedule(new PunctuationSchedule(currNode, interval));
+        punctuationQueue.schedule(new PunctuationSchedule(processorContext.currentNode(), interval));
     }
 
     @Override
@@ -325,11 +315,11 @@ public class StreamTask extends AbstractTask implements Punctuator {
         // initialize the task by initializing all its processor nodes in the topology
         log.info("{} Initializing processor nodes of the topology", logPrefix);
         for (ProcessorNode node : this.topology.processors()) {
-            this.currNode = node;
+            processorContext.setCurrentNode(node);
             try {
                 node.init(this.processorContext);
             } finally {
-                this.currNode = null;
+                processorContext.setCurrentNode(null);
             }
         }
     }
@@ -343,13 +333,13 @@ public class StreamTask extends AbstractTask implements Punctuator {
         // make sure close() is called for each node even when there is a RuntimeException
         RuntimeException exception = null;
         for (ProcessorNode node : this.topology.processors()) {
-            currNode = node;
+            processorContext.setCurrentNode(node);
             try {
                 node.close();
             } catch (RuntimeException e) {
                 exception = e;
             } finally {
-                currNode = null;
+                processorContext.setCurrentNode(null);
             }
         }
 
