@@ -29,6 +29,21 @@ import org.scalatest.Assertions._
 class LogConfigTest {
 
   @Test
+  def ensureNoStaticInitializationOrderDependency() {
+    // KafkaConfig object should not depend on LogConfig. If it does (for val
+    // initialization in KafkaConfig) bad things happen due to static initialization 
+    // order dependencies. LogConfig.configDef ends up adding null values for
+    // serverDefaultConfigNames. We ensure mapping of keys from LogConfig 
+    // KafkaConfig are not missing values.
+    
+    // Access any KafkaConfig val to load KafkaConfig object before LogConfig.
+    val unused = KafkaConfig.LogRetentionTimeMillisProp
+    assertTrue(LogConfig.configDef.serverDefaultConfigNames.forall { 
+      case (key, value) => value != null 
+    }) 
+  }
+
+  @Test
   def testKafkaConfigToProps() {
     val millisInHour = 60L * 60L * 1000L
     val kafkaProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")

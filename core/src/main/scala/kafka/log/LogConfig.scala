@@ -201,9 +201,9 @@ object LogConfig {
   val FollowerReplicationThrottledReplicasDoc = "A list of replicas for which log replication should be throttled on the follower side. The list should describe a set of " +
     "replicas in the form [PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:... or alternatively the wildcard '*' can be used to throttle all replicas for this topic."
 
-  private class LogConfigDef extends ConfigDef {
+  class LogConfigDef extends ConfigDef {
 
-    private final val serverDefaultConfigNames = mutable.Map[String, String]()
+    final val serverDefaultConfigNames = mutable.Map[String, String]()
 
     def define(name: String, defType: ConfigDef.Type, defaultValue: Any, validator: Validator,
                importance: ConfigDef.Importance, doc: String, serverDefaultConfigName: String): LogConfigDef = {
@@ -236,7 +236,7 @@ object LogConfig {
     }
   }
 
-  private val configDef: LogConfigDef = {
+  val configDef: LogConfigDef = {
     import org.apache.kafka.common.config.ConfigDef.Importance._
     import org.apache.kafka.common.config.ConfigDef.Range._
     import org.apache.kafka.common.config.ConfigDef.Type._
