@@ -307,7 +307,8 @@ class LogManager(val logDirs: Array[File],
 
   /**
    *  Delete all data in a partition and start the log at the new offset
-   *  @param newOffset The new offset to start the log with
+    *
+    *  @param newOffset The new offset to start the log with
    */
   def truncateFullyAndStartAt(topicAndPartition: TopicAndPartition, newOffset: Long) {
     val log = logs.get(topicAndPartition)
@@ -389,14 +390,27 @@ class LogManager(val logDirs: Array[File],
    *  Delete logs marked for deletion.
    */
   private def deleteLogs(): Unit = {
-    while (!logsToBeDeleted.isEmpty) {
-      val removedLog = logsToBeDeleted.take()
-      if (removedLog != null) {
-        removedLog.delete()
-        info(s"Deleted log for partition ${removedLog.topicAndPartition} in ${removedLog.dir.getAbsolutePath}.")
+    try {
+      var failed = 0
+      while (!logsToBeDeleted.isEmpty && failed < logsToBeDeleted.size()) {
+        val removedLog = logsToBeDeleted.take()
+        if (removedLog != null) {
+          try {
+            removedLog.delete()
+            info(s"Deleted log for partition ${removedLog.topicAndPartition} in ${removedLog.dir.getAbsolutePath}.")
+          } catch {
+            case e: Throwable =>
+              error(s"Exception in deleting $removedLog. Moving it to the end of the queue.", e)
+              failed = failed + 1
+              logsToBeDeleted.put(removedLog)
+          }
+        }
       }
+    } catch {
+      case e: Throwable => 
+        error(s"Exception in kafka-delete-logs thread. Ignoring.", e)
     }
-  }
+}
 
   def asyncDelete(topicAndPartition: TopicAndPartition) : String = {
     val removedLog: Log = logCreationOrDeletionLock synchronized {

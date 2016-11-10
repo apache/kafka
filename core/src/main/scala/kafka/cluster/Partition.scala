@@ -140,7 +140,6 @@ class Partition(val topic: String,
 
   def delete() {
     // need to hold the lock to prevent appendMessagesToLeader() from hitting I/O exceptions due to log being deleted
-    val start = time.milliseconds
     inWriteLock(leaderIsrUpdateLock) {
       assignedReplicaMap.clear()
       inSyncReplicas = Set.empty[Replica]
@@ -149,7 +148,7 @@ class Partition(val topic: String,
       try {
         val renamedDir = logManager.asyncDelete(topicPartition)
         removePartitionMetrics()
-        info(s"Log for $topicPartition renamed to $renamedDir and scheduled for deletion. Spent ${time.milliseconds - start} ms.")
+        info(s"Log for $topicPartition renamed to $renamedDir and scheduled for deletion.")
       } catch {
         case e: IOException =>
           fatal(s"Error deleting the log for partition $topicPartition", e)
