@@ -389,7 +389,7 @@ public class Sender implements Runnable {
      * by that factor.
      */
     static long getMetadataStaleMs(long metadataMaxAgeMs, int requestTimeoutMs, long refreshBackoffMs, int retries) {
-        return metadataMaxAgeMs + Math.max(retries, 1) * (requestTimeoutMs + refreshBackoffMs);
+        return metadataMaxAgeMs + (retries + 1) * (requestTimeoutMs + refreshBackoffMs);
     }
     
     static boolean isMetadataStale(long now, Metadata metadata, long metadataStaleMs) {
