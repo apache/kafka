@@ -192,23 +192,25 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     private static final long READ_TO_END_TIMEOUT_MS = 30000;
 
     private final Object lock;
-    private volatile boolean started;
     private final Converter converter;
+    private volatile boolean started;
+    // Although updateListener is not final, it's guaranteed to be visible to any thread after its
+    // initialization as long as we always read the volatile variable "started" before we access the listener.
     private UpdateListener updateListener;
 
-    private String topic;
+    private final String topic;
     // Data is passed to the log already serialized. We use a converter to handle translating to/from generic Connect
     // format to serialized form
-    private KafkaBasedLog<String, byte[]> configLog;
+    private final KafkaBasedLog<String, byte[]> configLog;
     // Connector -> # of tasks
-    private Map<String, Integer> connectorTaskCounts = new HashMap<>();
+    private final Map<String, Integer> connectorTaskCounts = new HashMap<>();
     // Connector and task configs: name or id -> config map
-    private Map<String, Map<String, String>> connectorConfigs = new HashMap<>();
-    private Map<ConnectorTaskId, Map<String, String>> taskConfigs = new HashMap<>();
+    private final Map<String, Map<String, String>> connectorConfigs = new HashMap<>();
+    private final Map<ConnectorTaskId, Map<String, String>> taskConfigs = new HashMap<>();
 
     // Set of connectors where we saw a task commit with an incomplete set of task config updates, indicating the data
     // is in an inconsistent state and we cannot safely use them until they have been refreshed.
-    private Set<String> inconsistent = new HashSet<>();
+    private final Set<String> inconsistent = new HashSet<>();
     // The most recently read offset. This does not take into account deferred task updates/commits, so we may have
     // outstanding data to be applied.
     private volatile long offset;
@@ -218,22 +220,14 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
     private final Map<String, TargetState> connectorTargetStates = new HashMap<>();
 
-    public KafkaConfigBackingStore(Converter converter) {
+    public KafkaConfigBackingStore(Converter converter, WorkerConfig config) {
         this.lock = new Object();
         this.started = false;
         this.converter = converter;
         this.offset = -1;
-    }
 
-    @Override
-    public void setUpdateListener(UpdateListener listener) {
-        this.updateListener = listener;
-    }
-
-    @Override
-    public void configure(WorkerConfig config) {
-        topic = config.getString(DistributedConfig.CONFIG_TOPIC_CONFIG);
-        if (topic.equals(""))
+        this.topic = config.getString(DistributedConfig.CONFIG_TOPIC_CONFIG);
+        if (this.topic.equals(""))
             throw new ConfigException("Must specify topic for connector configuration.");
 
         Map<String, Object> producerProps = new HashMap<>();
@@ -248,6 +242,15 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
 
         configLog = createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback());
+    }
+
+    @Override
+    public void setUpdateListener(UpdateListener listener) {
+        this.updateListener = listener;
+    }
+
+    @Override
+    public void configure(WorkerConfig config) {
     }
 
     @Override
@@ -294,7 +297,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     }
 
     /**
-     * Write this connector configuration to persistent storage and wait until it has been acknowledge and read back by
+     * Write this connector configuration to persistent storage and wait until it has been acknowledged and read back by
      * tailing the Kafka log with a consumer.
      *
      * @param connector  name of the connector to write data for
@@ -305,7 +308,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         log.debug("Writing connector configuration {} for connector {} configuration", properties, connector);
         Struct connectConfig = new Struct(CONNECTOR_CONFIGURATION_V0);
         connectConfig.put("properties", properties);
-        byte[] serializedConfig = converter.fromConnectData(topic, CONNECTOR_CONFIGURATION_V0, connectConfig);
+        byte[] serializedConfig = convertFromConnectData(CONNECTOR_CONFIGURATION_V0, connectConfig);
         updateConnectorConfig(connector, serializedConfig);
     }
 
@@ -368,7 +371,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         for (Map<String, String> taskConfig: configs) {
             Struct connectConfig = new Struct(TASK_CONFIGURATION_V0);
             connectConfig.put("properties", taskConfig);
-            byte[] serializedConfig = converter.fromConnectData(topic, TASK_CONFIGURATION_V0, connectConfig);
+            byte[] serializedConfig = convertFromConnectData(TASK_CONFIGURATION_V0, connectConfig);
             log.debug("Writing configuration for task " + index + " configuration: " + taskConfig);
             ConnectorTaskId connectorTaskId = new ConnectorTaskId(connector, index);
             configLog.send(TASK_KEY(connectorTaskId), serializedConfig);
@@ -385,7 +388,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             // Write the commit message
             Struct connectConfig = new Struct(CONNECTOR_TASKS_COMMIT_V0);
             connectConfig.put("tasks", taskCount);
-            byte[] serializedConfig = converter.fromConnectData(topic, CONNECTOR_TASKS_COMMIT_V0, connectConfig);
+            byte[] serializedConfig = convertFromConnectData(CONNECTOR_TASKS_COMMIT_V0, connectConfig);
             log.debug("Writing commit for connector " + connector + " with " + taskCount + " tasks.");
             configLog.send(COMMIT_TASKS_KEY(connector), serializedConfig);
 
@@ -410,7 +413,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     public void putTargetState(String connector, TargetState state) {
         Struct connectTargetState = new Struct(TARGET_STATE_V0);
         connectTargetState.put("state", state.name());
-        byte[] serializedTargetState = converter.fromConnectData(topic, TARGET_STATE_V0, connectTargetState);
+        byte[] serializedTargetState = convertFromConnectData(TARGET_STATE_V0, connectTargetState);
         log.debug("Writing target state {} for connector {}", state, connector);
         configLog.send(TARGET_STATE_KEY(connector), serializedTargetState);
     }
@@ -431,7 +434,9 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
             final SchemaAndValue value;
             try {
-                value = converter.toConnectData(topic, record.value());
+                synchronized (lock) {
+                    value = converter.toConnectData(topic, record.value());
+                }
             } catch (DataException e) {
                 log.error("Failed to convert config data to Kafka Connect format: ", e);
                 return;
@@ -682,5 +687,13 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         else
             throw new ConnectException("Expected integer value to be either Integer or Long");
     }
+
+    // Helper method offering synchronization around the converter.
+    private byte[] convertFromConnectData(Schema schema, Object value) {
+        synchronized (lock) {
+            return converter.fromConnectData(topic, schema, value);
+        }
+    }
+
 }
 
