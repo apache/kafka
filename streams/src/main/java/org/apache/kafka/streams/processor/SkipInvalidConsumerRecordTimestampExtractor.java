@@ -18,12 +18,15 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.streams.errors.StreamsException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Retrieves embedded metadata timestamps from Kafka messages.
- * If a record has a negative (invalid) timestamp value a new timestamp will be inferred as the current stream-time.
- * <p></p>
+ * If a record has a negative (invalid) timestamp value the timestamp is returned as-is;
+ * in addition, a WARN message is logged in your application.
+ * Returning the timestamp as-is results in dropping the record, i.e., the record will not be processed.
+ * <p>
  * Embedded metadata timestamp was introduced in "KIP-32: Add timestamps to Kafka message" for the new
  * 0.10+ Kafka message format.
  * <p>
@@ -40,31 +43,26 @@ import org.apache.kafka.streams.errors.StreamsException;
  * If you need <i>processing-time</i> semantics, use {@link WallclockTimestampExtractor}.
  *
  * @see FailingConsumerRecordTimestampExtractor
- * @see SkipInvalidConsumerRecordTimestampExtractor
+ * @see InferringConsumerRecordTimestampExtractor
  * @see WallclockTimestampExtractor
  */
-public class InferringConsumerRecordTimestampExtractor extends AbstractConsumerRecordTimestampExtractor {
+public class SkipInvalidConsumerRecordTimestampExtractor extends AbstractConsumerRecordTimestampExtractor {
+    private static final Logger log = LoggerFactory.getLogger(SkipInvalidConsumerRecordTimestampExtractor.class);
 
     /**
-     * Returns the current stream-time as new timestamp for the record.
+     * Writes a log warn message as the extracted timestamp is negative and the record will no be processed but dropped.
      *
      * @param record a data record
      * @param recordTimestamp the timestamp extractor from the record
      * @param currentStreamsTime the current value of the internally tracked Streams time (could be -1 if unknown)
-     * @return the current stream-time as new timestamp for the record
-     * @throws StreamsException if current streams-time is unknown
+     * @return the originally extracted timestamp of the record
      */
     @Override
     public long onInvalidTimestamp(final ConsumerRecord<Object, Object> record,
                                    final long recordTimestamp,
-                                   final long currentStreamsTime)
-            throws StreamsException {
-        if (currentStreamsTime == -1) {
-            throw new StreamsException("Could not infer new timestamp for input record " + record
-                    + " because current internal Streams time in unknown");
-        }
-        return currentStreamsTime;
+                                   final long currentStreamsTime) {
+        log.warn("Input record {} will be dropped because it has an invalid (negative) timestamp.", record);
+        return recordTimestamp;
     }
-
 
 }

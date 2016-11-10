@@ -22,6 +22,8 @@ import org.apache.kafka.streams.errors.StreamsException;
 
 /**
  * Retrieves embedded metadata timestamps from Kafka messages.
+ * If a record has a negative (invalid) timestamp value, this extractor raises an exception.
+ * <p>
  * Embedded metadata timestamp was introduced in "KIP-32: Add timestamps to Kafka message" for the new
  * 0.10+ Kafka message format.
  * <p>
@@ -36,35 +38,31 @@ import org.apache.kafka.streams.errors.StreamsException;
  * using this extractor effectively provides <i>ingestion-time</i> semantics.
  * <p>
  * If you need <i>processing-time</i> semantics, use {@link WallclockTimestampExtractor}.
- * <p>
- * If a record has a negative (invalid) timestamp value, this extractor raises an exception.
  *
- * @see RobustConsumerRecordTimestampExtractor
+ * @see SkipInvalidConsumerRecordTimestampExtractor
  * @see InferringConsumerRecordTimestampExtractor
  * @see WallclockTimestampExtractor
  */
-public class ConsumerRecordTimestampExtractor implements TimestampExtractor {
+public class FailingConsumerRecordTimestampExtractor extends AbstractConsumerRecordTimestampExtractor {
 
     /**
-     * Extracts the embedded metadata timestamp from the given {@link ConsumerRecord}.
+     * Raised an exception.
      *
      * @param record a data record
+     * @param recordTimestamp the timestamp extractor from the record
      * @param currentStreamsTime the current value of the internally tracked Streams time (could be -1 if unknown)
-     * @return the embedded metadata timestamp of the given {@link ConsumerRecord}
-     * @throws StreamsException if the embedded metadata timestamp is negative
+     * @return nothing; always raises an exception
+     * @throws StreamsException on every invocation
      */
     @Override
-    public long extract(final ConsumerRecord<Object, Object> record, final long currentStreamsTime) {
-        final long timestamp = record.timestamp();
-
-        if (timestamp < 0) {
-            throw new StreamsException("Input record " + record + " has invalid (negative) timestamp. " +
-                    "Possibly because a pre-0.10 producer client was used to write this record to Kafka without embedding a timestamp, " +
-                    "or because the input topic was created before upgrading the Kafka cluster to 0.10+. " +
-                    "Use a different TimestampExtractor to process this data.");
-        }
-
-        return timestamp;
+    public long onInvalidTimestamp(final ConsumerRecord<Object, Object> record,
+                                   final long recordTimestamp,
+                                   final long currentStreamsTime)
+            throws StreamsException {
+        throw new StreamsException("Input record " + record + " has invalid (negative) timestamp. " +
+            "Possibly because a pre-0.10 producer client was used to write this record to Kafka without embedding a timestamp, " +
+            "or because the input topic was created before upgrading the Kafka cluster to 0.10+. " +
+            "Use a different TimestampExtractor to process this data.");
     }
 
 }

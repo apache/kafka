@@ -38,7 +38,7 @@ public interface TimestampExtractor {
      *
      *
      * @param record a data record
-     * @param currentStreamsTime the current value of the internally tracked Streams time (could be -1 if unknown)
+     * @param currentStreamsTime the current value of the internally tracked stream-time (could be -1 if unknown)
      * @return        the timestamp of the record
      */
     long extract(ConsumerRecord<Object, Object> record, long currentStreamsTime);

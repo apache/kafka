@@ -102,11 +102,11 @@ public class RecordQueue {
                                                                          rawRecord.checksum(),
                                                                          rawRecord.serializedKeySize(),
                                                                          rawRecord.serializedValueSize(), key, value);
-            long timestamp = timestampExtractor.extract(record);
+            long timestamp = timestampExtractor.extract(record, timeTracker.get());
 
             log.trace("Source node {} extracted timestamp {} for record {} when adding to buffered queue", source.name(), timestamp, record);
 
-            // drop message if TS is invalid, ie, negative
+            // drop message if TS is invalid, i.e., negative
             if (timestamp < 0) {
                 continue;
             }

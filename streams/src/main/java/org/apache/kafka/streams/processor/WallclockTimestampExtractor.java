@@ -24,11 +24,11 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
  * <p>
  * Using this extractor effectively provides <i>processing-time</i> semantics.
  * <p>
- * If you need <i>event-time</i> semantics, use {@link ConsumerRecordTimestampExtractor} with
+ * If you need <i>event-time</i> semantics, use {@link FailingConsumerRecordTimestampExtractor} with
  * built-in <i>CreateTime</i> or <i>LogAppendTime</i> timestamp (see KIP-32: Add timestamps to Kafka message for details).
  *
- * @see ConsumerRecordTimestampExtractor
- * @see RobustConsumerRecordTimestampExtractor
+ * @see FailingConsumerRecordTimestampExtractor
+ * @see SkipInvalidConsumerRecordTimestampExtractor
  */
 public class WallclockTimestampExtractor implements TimestampExtractor {
 
@@ -36,10 +36,11 @@ public class WallclockTimestampExtractor implements TimestampExtractor {
      * Return the current wall clock time as timestamp.
      *
      * @param record a data record
+     * @param currentStreamsTime the current value of the internally tracked Streams time (could be -1 if unknown)
      * @return the current wall clock time, expressed in milliseconds since midnight, January 1, 1970 UTC
      */
     @Override
-    public long extract(ConsumerRecord<Object, Object> record) {
+    public long extract(final ConsumerRecord<Object, Object> record, final long currentStreamsTime) {
         return System.currentTimeMillis();
     }
 }

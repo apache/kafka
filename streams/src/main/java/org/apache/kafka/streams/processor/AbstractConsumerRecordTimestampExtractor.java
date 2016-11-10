@@ -18,12 +18,11 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.streams.errors.StreamsException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Retrieves embedded metadata timestamps from Kafka messages.
+ * If a record has a negative (invalid) timestamp value, an error handler method is called.
+ * <p>
  * Embedded metadata timestamp was introduced in "KIP-32: Add timestamps to Kafka message" for the new
  * 0.10+ Kafka message format.
  * <p>
@@ -38,22 +37,16 @@ import org.slf4j.LoggerFactory;
  * using this extractor effectively provides <i>ingestion-time</i> semantics.
  * <p>
  * If you need <i>processing-time</i> semantics, use {@link WallclockTimestampExtractor}.
- * <p>
- * If a record has a negative (invalid) timestamp value the timestamp is returned as-is;
- * in addition, a WARN message is logged in your application.
- * Returning the timestamp as-is results in dropping the record, i.e., the record will not be processed.
  *
- * @see ConsumerRecordTimestampExtractor
+ * @see FailingConsumerRecordTimestampExtractor
+ * @see SkipInvalidConsumerRecordTimestampExtractor
  * @see InferringConsumerRecordTimestampExtractor
  * @see WallclockTimestampExtractor
  */
-public class RobustConsumerRecordTimestampExtractor implements TimestampExtractor {
-    private static final Logger log = LoggerFactory.getLogger(RobustConsumerRecordTimestampExtractor.class);
+public abstract class AbstractConsumerRecordTimestampExtractor implements TimestampExtractor {
 
     /**
-     * Extracts the embedded metadata timestamp from the given {@link ConsumerRecord}
-     * and writes a log warn message if the extracted timestamp is negative,
-     * because the record will no be processed but dropped.
+     * Extracts the embedded metadata timestamp from the given {@link ConsumerRecord}.
      *
      * @param record a data record
      * @param currentStreamsTime the current value of the internally tracked Streams time (could be -1 if unknown)
@@ -64,10 +57,21 @@ public class RobustConsumerRecordTimestampExtractor implements TimestampExtracto
         final long timestamp = record.timestamp();
 
         if (timestamp < 0) {
-            log.warn("Input record {} will be dropped because it has an invalid (negative) timestamp.", record);
+            return onInvalidTimestamp(record, timestamp, currentStreamsTime);
         }
 
         return timestamp;
     }
 
+    /**
+     * Called if no valid timestamp is embedded in the record meta data.
+     *
+     * @param record a data record
+     * @param recordTimestamp the timestamp extractor from the record
+     * @param currentStreamsTime the current value of the internally tracked Streams time (could be -1 if unknown)
+     * @return a new timestamp for the record
+     */
+    public abstract long onInvalidTimestamp(final ConsumerRecord<Object, Object> record,
+                                            final long recordTimestamp,
+                                            final long currentStreamsTime);
 }
