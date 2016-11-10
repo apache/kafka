@@ -241,7 +241,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         putInternal(rawKey, rawValue);
 
         if (loggingEnabled) {
-            changeLogger.logChange(Bytes.wrap(rawKey), rawValue, context.timestamp());
+            changeLogger.logChange(Bytes.wrap(rawKey), rawValue);
         }
     }
 
@@ -288,7 +288,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                     final byte[] value = serdes.rawValue(entry.value);
                     batch.put(rawKey, value);
                     if (loggingEnabled) {
-                        changeLogger.logChange(Bytes.wrap(rawKey), value, context.timestamp());
+                        changeLogger.logChange(Bytes.wrap(rawKey), value);
                     }
                 }
             }

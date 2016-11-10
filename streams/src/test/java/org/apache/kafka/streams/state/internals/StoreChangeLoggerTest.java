@@ -64,16 +64,16 @@ public class StoreChangeLoggerTest {
     @SuppressWarnings("unchecked")
     @Test
     public void testAddRemove() throws Exception {
-        final long time = 1;
-        changeLogger.logChange(0, "zero", time);
-        changeLogger.logChange(1, "one", time);
-        changeLogger.logChange(2, "two", time);
+        context.setTime(1);
+        changeLogger.logChange(0, "zero");
+        changeLogger.logChange(1, "one");
+        changeLogger.logChange(2, "two");
 
         assertEquals("zero", logged.get(0));
         assertEquals("one", logged.get(1));
         assertEquals("two", logged.get(2));
 
-        changeLogger.logChange(0, null, time);
+        changeLogger.logChange(0, null);
         assertNull(logged.get(0));
 
     }

@@ -279,7 +279,7 @@ public class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         byte[] rawKey = putAndReturnInternalKey(key, rawValue, timestamp);
 
         if (rawKey != null && loggingEnabled) {
-            changeLogger.logChange(Bytes.wrap(rawKey), rawValue, timestamp);
+            changeLogger.logChange(Bytes.wrap(rawKey), rawValue);
         }
     }
 

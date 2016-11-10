@@ -93,14 +93,14 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
     public void put(K key, V value) {
         this.inner.put(key, value);
 
-        changeLogger.logChange(key, value, context.timestamp());
+        changeLogger.logChange(key, value);
     }
 
     @Override
     public V putIfAbsent(K key, V value) {
         V originalValue = this.inner.putIfAbsent(key, value);
         if (originalValue == null) {
-            changeLogger.logChange(key, value, context.timestamp());
+            changeLogger.logChange(key, value);
         }
         return originalValue;
     }
@@ -111,7 +111,7 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
 
         for (KeyValue<K, V> entry : entries) {
             K key = entry.key;
-            changeLogger.logChange(key, entry.value, context.timestamp());
+            changeLogger.logChange(key, entry.value);
         }
     }
 
@@ -131,7 +131,7 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
      * @param key the key for the entry that the inner store removed
      */
     protected void removed(K key) {
-        changeLogger.logChange(key, null, context.timestamp());
+        changeLogger.logChange(key, null);
     }
 
     @Override

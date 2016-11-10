@@ -39,6 +39,7 @@ class StoreChangeLogger<K, V> {
     private final String topic;
     private final int partition;
     private final ProcessorContext context;
+    private final RecordCollector collector;
 
 
     StoreChangeLogger(String storeName, ProcessorContext context, StateSerdes<K, V> serialization) {
@@ -50,14 +51,14 @@ class StoreChangeLogger<K, V> {
         this.context = context;
         this.partition = partition;
         this.serialization = serialization;
+        this.collector = ((RecordCollector.Supplier) context).recordCollector();
     }
 
-    void logChange(final K key, final V value, final long timestamp) {
-        final RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
+    void logChange(final K key, final V value) {
         if (collector != null) {
             final Serializer<K> keySerializer = serialization.keySerializer();
             final Serializer<V> valueSerializer = serialization.valueSerializer();
-            collector.send(new ProducerRecord<>(this.topic, this.partition, timestamp, key, value), keySerializer, valueSerializer);
+            collector.send(new ProducerRecord<>(this.topic, this.partition, context.timestamp(), key, value), keySerializer, valueSerializer);
         }
     }
 
