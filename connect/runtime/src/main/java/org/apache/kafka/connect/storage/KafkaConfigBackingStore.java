@@ -230,18 +230,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         if (this.topic.equals(""))
             throw new ConfigException("Must specify topic for connector configuration.");
 
-        Map<String, Object> producerProps = new HashMap<>();
-        producerProps.putAll(config.originals());
-        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-        producerProps.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
-
-        Map<String, Object> consumerProps = new HashMap<>();
-        consumerProps.putAll(config.originals());
-        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
-
-        configLog = createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback());
+        configLog = setupAndCreateKafkaBasedLog(this.topic, config);
     }
 
     @Override
@@ -416,6 +405,22 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         byte[] serializedTargetState = convertFromConnectData(TARGET_STATE_V0, connectTargetState);
         log.debug("Writing target state {} for connector {}", state, connector);
         configLog.send(TARGET_STATE_KEY(connector), serializedTargetState);
+    }
+
+    // package private for testing
+    KafkaBasedLog<String, byte[]> setupAndCreateKafkaBasedLog(String topic, WorkerConfig config) {
+        Map<String, Object> producerProps = new HashMap<>();
+        producerProps.putAll(config.originals());
+        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+        producerProps.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
+
+        Map<String, Object> consumerProps = new HashMap<>();
+        consumerProps.putAll(config.originals());
+        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
+
+        return createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback());
     }
 
     private KafkaBasedLog<String, byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
