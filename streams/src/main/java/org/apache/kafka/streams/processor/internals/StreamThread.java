@@ -290,6 +290,7 @@ public class StreamThread extends Thread {
         removeStandbyTasks();
 
         log.info("{} Stream thread shutdown complete", logPrefix);
+        running.set(false);
     }
 
     private void unAssignChangeLogPartitions(final boolean rethrowExceptions) {
@@ -346,6 +347,10 @@ public class StreamThread extends Thread {
 
         updateSuspendedTasks();
 
+    }
+
+    public boolean isRunning() {
+        return running.get();
     }
 
     interface AbstractTaskAction {

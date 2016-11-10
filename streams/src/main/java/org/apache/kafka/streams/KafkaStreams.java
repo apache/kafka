@@ -221,6 +221,8 @@ public class KafkaStreams {
     public synchronized void close(final long timeout, final TimeUnit timeUnit) {
         log.debug("Stopping Kafka Stream process");
         if (state == StreamsState.running) {
+            // save the current thread so that if it is a stream thread
+            // we don't attempt to join it and cause a deadlock
             final Thread shutdown = new Thread(new Runnable() {
                 @Override
                 public void run() {
@@ -231,7 +233,9 @@ public class KafkaStreams {
 
                         for (final StreamThread thread : threads) {
                             try {
-                                thread.join();
+                                if (!thread.isRunning()) {
+                                    thread.join();
+                                }
                             } catch (final InterruptedException ex) {
                                 Thread.interrupted();
                             }
