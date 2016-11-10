@@ -192,7 +192,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     private static final long READ_TO_END_TIMEOUT_MS = 30000;
 
     private final Object lock;
-    private boolean starting;
+    private volatile boolean started;
     private final Converter converter;
     private UpdateListener updateListener;
 
@@ -220,7 +220,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
     public KafkaConfigBackingStore(Converter converter) {
         this.lock = new Object();
-        this.starting = false;
+        this.started = false;
         this.converter = converter;
         this.offset = -1;
     }
@@ -253,11 +253,10 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     @Override
     public void start() {
         log.info("Starting KafkaConfigBackingStore");
-        // During startup, callbacks are *not* invoked. You can grab a snapshot after starting -- just take care that
+        // Before startup, callbacks are *not* invoked. You can grab a snapshot after starting -- just take care that
         // updates can continue to occur in the background
-        starting = true;
         configLog.start();
-        starting = false;
+        started = true;
         log.info("Started KafkaConfigBackingStore");
     }
 
@@ -480,7 +479,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
                 // Note that we do not notify the update listener if the target state has been removed.
                 // Instead we depend on the removal callback of the connector config itself to notify the worker.
-                if (!starting && !removed)
+                if (started && !removed)
                     updateListener.onConnectorTargetStateChange(connectorName);
 
             } else if (record.key().startsWith(CONNECTOR_PREFIX)) {
@@ -513,7 +512,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                             connectorTargetStates.put(connectorName, TargetState.STARTED);
                     }
                 }
-                if (!starting) {
+                if (started) {
                     if (removed)
                         updateListener.onConnectorConfigRemove(connectorName);
                     else
@@ -604,7 +603,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                     connectorTaskCounts.put(connectorName, newTaskCount);
                 }
 
-                if (!starting)
+                if (started)
                     updateListener.onTaskConfigUpdate(updatedTasks);
             } else {
                 log.error("Discarding config update record with invalid key: " + record.key());
