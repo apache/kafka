@@ -160,11 +160,11 @@ class CachingWindowStore<K, V> implements WindowStore<K, V>, CachedStateStore<Wi
     }
 
     private V fetchPrevious(final Bytes key, final long timestamp) {
-        final WindowStoreIterator<byte[]> iterator = underlying.fetch(key, timestamp, timestamp);
-        if (!iterator.hasNext()) {
-            return null;
+        try (final WindowStoreIterator<byte[]> iterator = underlying.fetch(key, timestamp, timestamp)) {
+            if (!iterator.hasNext()) {
+                return null;
+            }
+            return serdes.valueFrom(iterator.next().value);
         }
-        return serdes.valueFrom(iterator.next().value);
     }
-
 }
