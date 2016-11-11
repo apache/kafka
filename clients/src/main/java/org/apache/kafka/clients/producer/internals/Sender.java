@@ -32,7 +32,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -45,7 +44,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -211,19 +209,17 @@ public class Sender implements Runnable {
             this.sensors.recordErrors(expiredBatch.topicPartition.topic(), expiredBatch.recordCount);
 
         sensors.updateProduceRequestMetrics(batches);
-        List<ClientRequest> requests = createProduceRequests(batches, now);
+
         // If we have any nodes that are ready to send + have sendable data, poll with 0 timeout so this can immediately
         // loop and try sending more data. Otherwise, the timeout is determined by nodes that have partitions with data
         // that isn't yet sendable (e.g. lingering, backing off). Note that this specifically does not include nodes
         // with sendable data that aren't ready to send since they would cause busy looping.
         long pollTimeout = Math.min(result.nextReadyCheckDelayMs, notReadyTimeout);
-        if (result.readyNodes.size() > 0) {
+        if (!result.readyNodes.isEmpty()) {
             log.trace("Nodes with data ready to send: {}", result.readyNodes);
-            log.trace("Created {} produce requests: {}", requests.size(), requests);
             pollTimeout = 0;
         }
-        for (ClientRequest request : requests)
-            client.send(request, now);
+        sendProduceRequests(batches, now);
 
         // if some partitions are already ready to be sent, the select time would be 0;
         // otherwise if some partition already has some data accumulated but not ready yet,
@@ -336,17 +332,15 @@ public class Sender implements Runnable {
     /**
      * Transfer the record batches into a list of produce requests on a per-node basis
      */
-    private List<ClientRequest> createProduceRequests(Map<Integer, List<RecordBatch>> collated, long now) {
-        List<ClientRequest> requests = new ArrayList<>(collated.size());
+    private void sendProduceRequests(Map<Integer, List<RecordBatch>> collated, long now) {
         for (Map.Entry<Integer, List<RecordBatch>> entry : collated.entrySet())
-            requests.add(produceRequest(now, entry.getKey(), acks, requestTimeout, entry.getValue()));
-        return requests;
+            sendProduceRequest(now, entry.getKey(), acks, requestTimeout, entry.getValue());
     }
 
     /**
      * Create a produce request from the given record batches
      */
-    private ClientRequest produceRequest(long now, int destination, short acks, int timeout, List<RecordBatch> batches) {
+    private void sendProduceRequest(long now, int destination, short acks, int timeout, List<RecordBatch> batches) {
         Map<TopicPartition, MemoryRecords> produceRecordsByPartition = new HashMap<>(batches.size());
         final Map<TopicPartition, RecordBatch> recordsByPartition = new HashMap<>(batches.size());
         for (RecordBatch batch : batches) {
@@ -357,14 +351,17 @@ public class Sender implements Runnable {
 
         ProduceRequest request = new ProduceRequest(acks, timeout, produceRecordsByPartition);
         RequestHeader header = this.client.nextRequestHeader(ApiKeys.PRODUCE);
-        Send send = request.toSend(Integer.toString(destination), header);
         RequestCompletionHandler callback = new RequestCompletionHandler() {
             public void onComplete(ClientResponse response) {
                 handleProduceResponse(response, recordsByPartition, time.milliseconds());
             }
         };
 
-        return new ClientRequest(now, acks != 0, header, request, send, callback);
+        String nodeId = Integer.toString(destination);
+        ClientRequest clientRequest = new ClientRequest(nodeId, now, acks != 0, header, callback);
+
+        client.send(clientRequest, request, now);
+        log.trace("Sent produce request to {}: {}", nodeId, request);
     }
 
     /**

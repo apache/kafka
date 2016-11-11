@@ -65,7 +65,7 @@ public class ManualMetadataUpdater implements MetadataUpdater {
     }
 
     @Override
-    public boolean maybeHandleCompletedReceive(ClientRequest request, long now, AbstractResponse body) {
+    public boolean maybeHandleCompletedMetadataResponse(ClientRequest request, long now, AbstractResponse body) {
         return false;
     }
 

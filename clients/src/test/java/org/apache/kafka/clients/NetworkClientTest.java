@@ -20,7 +20,6 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.network.NetworkReceive;
-import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -69,9 +68,8 @@ public class NetworkClientTest {
     public void testSendToUnreadyNode() {
         MetadataRequest metadataRequest = new MetadataRequest(Arrays.asList("test"));
         RequestHeader header = client.nextRequestHeader(ApiKeys.METADATA);
-        Send send = metadataRequest.toSend("5", header);
-        ClientRequest request = new ClientRequest(time.milliseconds(), false, header, metadataRequest, send, null);
-        client.send(request, time.milliseconds());
+        ClientRequest request = new ClientRequest("5", time.milliseconds(), false, header, null);
+        client.send(request, metadataRequest, time.milliseconds());
         client.poll(1, time.milliseconds());
     }
 
@@ -94,9 +92,8 @@ public class NetworkClientTest {
 
         ProduceRequest produceRequest = new ProduceRequest((short) 1, 1000, Collections.<TopicPartition, MemoryRecords>emptyMap());
         RequestHeader reqHeader = client.nextRequestHeader(ApiKeys.PRODUCE);
-        Send send = produceRequest.toSend(node.idString(), reqHeader);
-        ClientRequest request = new ClientRequest(time.milliseconds(), true, reqHeader, produceRequest, send, null);
-        client.send(request, time.milliseconds());
+        ClientRequest request = new ClientRequest(node.idString(), time.milliseconds(), true, reqHeader, null);
+        client.send(request, produceRequest, time.milliseconds());
         assertEquals("There should be 1 in-flight request after send", 1, client.inFlightRequestCount(node.idString()));
 
         client.close(node.idString());
@@ -107,11 +104,10 @@ public class NetworkClientTest {
     private void checkSimpleRequestResponse(NetworkClient networkClient) {
         ProduceRequest produceRequest = new ProduceRequest((short) 1, 1000, Collections.<TopicPartition, MemoryRecords>emptyMap());
         RequestHeader reqHeader = networkClient.nextRequestHeader(ApiKeys.PRODUCE);
-        Send send = produceRequest.toSend(node.idString(), reqHeader);
         TestCallbackHandler handler = new TestCallbackHandler();
-        ClientRequest request = new ClientRequest(time.milliseconds(), true, reqHeader, produceRequest, send, handler);
+        ClientRequest request = new ClientRequest(node.idString(), time.milliseconds(), true, reqHeader, handler);
         awaitReady(networkClient, node);
-        networkClient.send(request, time.milliseconds());
+        networkClient.send(request, produceRequest, time.milliseconds());
         networkClient.poll(1, time.milliseconds());
         assertEquals(1, networkClient.inFlightRequestCount());
         ResponseHeader respHeader = new ResponseHeader(reqHeader.correlationId());
@@ -139,12 +135,11 @@ public class NetworkClientTest {
     public void testRequestTimeout() {
         ProduceRequest produceRequest = new ProduceRequest((short) 1, 1000, Collections.<TopicPartition, MemoryRecords>emptyMap());
         RequestHeader reqHeader = client.nextRequestHeader(ApiKeys.PRODUCE);
-        Send send = produceRequest.toSend(node.idString(), reqHeader);
         TestCallbackHandler handler = new TestCallbackHandler();
-        ClientRequest request = new ClientRequest(time.milliseconds(), true, reqHeader, produceRequest, send, handler);
+        ClientRequest request = new ClientRequest(node.idString(), time.milliseconds(), true, reqHeader, handler);
         awaitReady(client, node);
         long now = time.milliseconds();
-        client.send(request, now);
+        client.send(request, produceRequest, now);
         // sleeping to make sure that the time since last send is greater than requestTimeOut
         time.sleep(3000);
         client.poll(3000, time.milliseconds());
@@ -212,10 +207,9 @@ public class NetworkClientTest {
         awaitReady(client, node);
         RequestHeader reqHeader = client.nextRequestHeader(ApiKeys.METADATA);
 
-        MetadataRequest req = new MetadataRequest(Collections.<String>emptyList());
-        Send send = req.toSend(node.idString(), reqHeader);
-        ClientRequest request = new ClientRequest(time.milliseconds(), true, reqHeader, req, send, null);
-        client.send(request, time.milliseconds());
+        MetadataRequest metadataRequest = new MetadataRequest(Collections.<String>emptyList());
+        ClientRequest request = new ClientRequest(node.idString(), time.milliseconds(), true, reqHeader, null);
+        client.send(request, metadataRequest, time.milliseconds());
         client.poll(requestTimeoutMs, time.milliseconds());
         assertEquals(1, client.inFlightRequestCount(node.idString()));
 

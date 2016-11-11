@@ -31,16 +31,19 @@ public interface Records extends Iterable<LogEntry> {
 
     /**
      * The size of these records in bytes
+     * @return The size in bytes
      */
     int sizeInBytes();
 
     /**
-     *
-     * @param channel
-     * @return
-     * @throws IOException
+     * Write the messages in this set to the given channel starting at the given offset byte.
+     * @param channel The channel to write to
+     * @param position The position within this record set to begin writing from
+     * @param length The number of bytes to write
+     * @return The number of bytes written to the channel (which may be fewer than requested)
+     * @throws IOException For any IO errors copying the
      */
-    long writeTo(GatheringByteChannel channel, long offset, int length) throws IOException;
+    long writeTo(GatheringByteChannel channel, long position, int length) throws IOException;
 
 
 }

@@ -17,6 +17,7 @@ import java.util.List;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.RequestHeader;
 
 /**
@@ -66,11 +67,11 @@ public interface KafkaClient extends Closeable {
 
     /**
      * Queue up the given request for sending. Requests can only be sent on ready connections.
-     * 
      * @param request The request
+     * @param body The body of the request
      * @param now The current timestamp
      */
-    public void send(ClientRequest request, long now);
+    public void send(ClientRequest request, AbstractRequest body, long now);
 
     /**
      * Do actual reads and writes from sockets.

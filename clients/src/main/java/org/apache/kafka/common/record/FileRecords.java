@@ -63,26 +63,22 @@ public class FileRecords implements Records {
         if (newSize < size)
             throw new KafkaException(String.format("Size of FileRecords %s has been truncated during write: old size %d, new size %d", file.getAbsolutePath(), size, newSize));
 
+        if (offset > size)
+            throw new KafkaException(String.format("The requested offset %d is out of range. The size of this FileRecords is %d.", offset, size));
+
         long position = start + offset;
-        long count = Math.min(length, this.size);
-        final long bytesTransferred;
+        long count = Math.min(length, this.size - offset);
         if (destChannel instanceof TransportLayer) {
             TransportLayer tl = (TransportLayer) destChannel;
-            bytesTransferred = tl.transferFrom(this.channel, position, count);
+            return tl.transferFrom(this.channel, position, count);
         } else {
-            bytesTransferred = this.channel.transferTo(position, count, destChannel);
+            return this.channel.transferTo(position, count, destChannel);
         }
-        return bytesTransferred;
     }
 
     @Override
     public RecordsIterator iterator() {
-        try {
-            InputStream input = Channels.newInputStream(channel);
-            channel.position(start);
-            return new RecordsIterator(input, false);
-        } catch (IOException e) {
-            throw new KafkaException(e);
-        }
+        InputStream input = Channels.newInputStream(channel);
+        return new RecordsIterator(input, false);
     }
 }

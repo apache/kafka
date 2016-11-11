@@ -41,7 +41,7 @@ interface MetadataUpdater {
      * be 0 if an update has been started as a result of this call).
      *
      * If the implementation relies on `NetworkClient` to send requests, the completed receive will be passed to
-     * `maybeHandleCompletedReceive`.
+     * `maybeHandleCompletedMetadataResponse`.
      *
      * The semantics of `needed` and `possible` are implementation-dependent and may take into account a number of
      * factors like node availability, how long since the last metadata update, etc.
@@ -62,7 +62,7 @@ interface MetadataUpdater {
      * This provides a mechanism for the `MetadataUpdater` implementation to use the NetworkClient instance for its own
      * requests with special handling for completed receives of such requests.
      */
-    boolean maybeHandleCompletedReceive(ClientRequest request, long now, AbstractResponse body);
+    boolean maybeHandleCompletedMetadataResponse(ClientRequest request, long now, AbstractResponse body);
 
     /**
      * Schedules an update of the current cluster metadata info. A subsequent call to `maybeUpdate` would trigger the

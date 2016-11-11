@@ -174,7 +174,6 @@ public class FetchResponse extends AbstractResponse {
     private void addResponseData(String dest, List<Send> sends) {
         Object[] allTopicData = struct.getArray(RESPONSES_KEY_NAME);
 
-        // include the topic header and the count for the number of topics
         if (struct.hasField(THROTTLE_TIME_KEY_NAME)) {
             int throttleTime = struct.getInt(THROTTLE_TIME_KEY_NAME);
             ByteBuffer buffer = ByteBuffer.allocate(8);

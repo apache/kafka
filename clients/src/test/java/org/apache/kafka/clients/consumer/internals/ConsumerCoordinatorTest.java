@@ -39,6 +39,7 @@ import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.GroupCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
@@ -310,8 +311,8 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, Errors.NONE.code()));
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request) {
-                SyncGroupRequest sync = (SyncGroupRequest) request.body();
+            public boolean matches(ClientRequest request, AbstractRequest body) {
+                SyncGroupRequest sync = (SyncGroupRequest) body;
                 return sync.memberId().equals(consumerId) &&
                         sync.generationId() == 1 &&
                         sync.groupAssignment().containsKey(consumerId);
@@ -352,7 +353,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, initialSubscription, Errors.NONE.code()));
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request) {
+            public boolean matches(ClientRequest request, AbstractRequest body) {
                 final Map<String, Integer> updatedPartitions = new HashMap<>();
                 for (String topic : updatedSubscription)
                     updatedPartitions.put(topic, 1);
@@ -370,8 +371,8 @@ public class ConsumerCoordinatorTest {
         // we expect to see a second rebalance with the new-found topics
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request) {
-                JoinGroupRequest join = (JoinGroupRequest) request.body();
+            public boolean matches(ClientRequest request, AbstractRequest body) {
+                JoinGroupRequest join = (JoinGroupRequest) body;
                 ProtocolMetadata protocolMetadata = join.groupProtocols().iterator().next();
                 PartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(protocolMetadata.metadata());
                 protocolMetadata.metadata().rewind();
@@ -442,8 +443,8 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(joinGroupFollowerResponse(1, consumerId, "leader", Errors.NONE.code()));
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request) {
-                SyncGroupRequest sync = (SyncGroupRequest) request.body();
+            public boolean matches(ClientRequest request, AbstractRequest body) {
+                SyncGroupRequest sync = (SyncGroupRequest) body;
                 return sync.memberId().equals(consumerId) &&
                         sync.generationId() == 1 &&
                         sync.groupAssignment().isEmpty();
@@ -475,9 +476,9 @@ public class ConsumerCoordinatorTest {
         final AtomicBoolean received = new AtomicBoolean(false);
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request) {
+            public boolean matches(ClientRequest request, AbstractRequest body) {
                 received.set(true);
-                LeaveGroupRequest leaveRequest = (LeaveGroupRequest) request.body();
+                LeaveGroupRequest leaveRequest = (LeaveGroupRequest) body;
                 return leaveRequest.memberId().equals(consumerId) &&
                         leaveRequest.groupId().equals(groupId);
             }
@@ -502,9 +503,9 @@ public class ConsumerCoordinatorTest {
         final AtomicBoolean received = new AtomicBoolean(false);
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request) {
+            public boolean matches(ClientRequest request, AbstractRequest body) {
                 received.set(true);
-                LeaveGroupRequest leaveRequest = (LeaveGroupRequest) request.body();
+                LeaveGroupRequest leaveRequest = (LeaveGroupRequest) body;
                 return leaveRequest.memberId().equals(consumerId) &&
                         leaveRequest.groupId().equals(groupId);
             }
@@ -547,8 +548,8 @@ public class ConsumerCoordinatorTest {
         // now we should see a new join with the empty UNKNOWN_MEMBER_ID
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request) {
-                JoinGroupRequest joinRequest = (JoinGroupRequest) request.body();
+            public boolean matches(ClientRequest request, AbstractRequest body) {
+                JoinGroupRequest joinRequest = (JoinGroupRequest) body;
                 return joinRequest.memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID);
             }
         }, joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE.code()));
@@ -599,8 +600,8 @@ public class ConsumerCoordinatorTest {
         // then let the full join/sync finish successfully
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request) {
-                JoinGroupRequest joinRequest = (JoinGroupRequest) request.body();
+            public boolean matches(ClientRequest request, AbstractRequest body) {
+                JoinGroupRequest joinRequest = (JoinGroupRequest) body;
                 return joinRequest.memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID);
             }
         }, joinGroupFollowerResponse(2, consumerId, "leader", Errors.NONE.code()));
@@ -669,8 +670,8 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, Errors.NONE.code()));
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request) {
-                SyncGroupRequest sync = (SyncGroupRequest) request.body();
+            public boolean matches(ClientRequest request, AbstractRequest body) {
+                SyncGroupRequest sync = (SyncGroupRequest) body;
                 if (sync.memberId().equals(consumerId) &&
                         sync.generationId() == 1 &&
                         sync.groupAssignment().containsKey(consumerId)) {
@@ -946,8 +947,8 @@ public class ConsumerCoordinatorTest {
         // the client should not reuse generation/memberId from auto-subscribed generation
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request) {
-                OffsetCommitRequest commitRequest = (OffsetCommitRequest) request.body();
+            public boolean matches(ClientRequest request, AbstractRequest body) {
+                OffsetCommitRequest commitRequest = (OffsetCommitRequest) body;
                 return commitRequest.memberId().equals(OffsetCommitRequest.DEFAULT_MEMBER_ID) &&
                         commitRequest.generationId() == OffsetCommitRequest.DEFAULT_GENERATION_ID;
             }

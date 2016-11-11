@@ -21,6 +21,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -230,20 +231,17 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Queue up the given request for sending. Requests can only be sent out to ready nodes.
-     *
-     * @param request The request
+     *  @param request The request
+     * @param body
      * @param now The current timestamp
      */
     @Override
-    public void send(ClientRequest request, long now) {
+    public void send(ClientRequest request, AbstractRequest body, long now) {
         String nodeId = request.destination();
         if (!canSendRequest(nodeId))
             throw new IllegalStateException("Attempt to send a request to node " + nodeId + " which is not ready.");
-        doSend(request, now);
-    }
 
-    private void doSend(ClientRequest request, long now) {
-        request.setSendTimeMs(now);
+        request.setSend(body.toSend(nodeId, request.header()), now);
         this.inFlightRequests.add(request);
         selector.send(request.send());
     }
@@ -451,7 +449,7 @@ public class NetworkClient implements KafkaClient {
             String source = receive.source();
             ClientRequest req = inFlightRequests.completeNext(source);
             AbstractResponse body = parseResponse(receive.payload(), req.header());
-            if (!metadataUpdater.maybeHandleCompletedReceive(req, now, body))
+            if (!metadataUpdater.maybeHandleCompletedMetadataResponse(req, now, body))
                 responses.add(new ClientResponse(req, now, false, body));
         }
     }
@@ -578,7 +576,7 @@ public class NetworkClient implements KafkaClient {
         }
 
         @Override
-        public boolean maybeHandleCompletedReceive(ClientRequest req, long now, AbstractResponse response) {
+        public boolean maybeHandleCompletedMetadataResponse(ClientRequest req, long now, AbstractResponse response) {
             if (response instanceof MetadataResponse && req.isInitiatedByNetworkClient()) {
                 handleResponse(req.header(), (MetadataResponse) response, now);
                 return true;
@@ -610,15 +608,6 @@ public class NetworkClient implements KafkaClient {
         }
 
         /**
-         * Create a metadata request for the given topics
-         */
-        private ClientRequest request(long now, String node, MetadataRequest metadata) {
-            RequestHeader header = nextRequestHeader(ApiKeys.METADATA);
-            Send send = metadata.toSend(node, header);
-            return new ClientRequest(now, true, header, metadata, send, null, true);
-        }
-
-        /**
          * Return true if there's at least one connection establishment is currently underway
          */
         private boolean isAnyNodeConnecting() {
@@ -643,9 +632,9 @@ public class NetworkClient implements KafkaClient {
                     metadataRequest = MetadataRequest.allTopics();
                 else
                     metadataRequest = new MetadataRequest(new ArrayList<>(metadata.topics()));
-                ClientRequest clientRequest = request(now, nodeConnectionId, metadataRequest);
+                ClientRequest clientRequest = new ClientRequest(nodeConnectionId, now, true, nextRequestHeader(ApiKeys.METADATA), null, true);
                 log.debug("Sending metadata request {} to node {}", metadataRequest, node.id());
-                doSend(clientRequest, now);
+                send(clientRequest, metadataRequest, now);
                 return requestTimeoutMs;
             }
 

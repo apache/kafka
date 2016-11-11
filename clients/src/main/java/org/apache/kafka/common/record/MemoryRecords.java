@@ -156,7 +156,9 @@ public class MemoryRecords implements Records {
     @Override
     public long writeTo(GatheringByteChannel channel, long offset, int length) throws IOException {
         ByteBuffer dup = buffer.duplicate();
-        dup.position(new Long(offset).intValue());
+        int position = (int) offset;
+        dup.position(position);
+        dup.limit(position + length);
         return channel.write(dup);
     }
 

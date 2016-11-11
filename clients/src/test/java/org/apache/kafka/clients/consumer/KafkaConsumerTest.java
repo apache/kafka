@@ -39,6 +39,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.FetchResponse.PartitionData;
 import org.apache.kafka.common.requests.GroupCoordinatorResponse;
@@ -1092,8 +1093,8 @@ public class KafkaConsumerTest {
         // join group
         client.prepareResponseFrom(new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request) {
-                JoinGroupRequest joinGroupRequest = (JoinGroupRequest) request.body();
+            public boolean matches(ClientRequest request, AbstractRequest body) {
+                JoinGroupRequest joinGroupRequest = (JoinGroupRequest) body;
                 PartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(joinGroupRequest.groupProtocols().get(0).metadata());
                 return subscribedTopics.equals(new HashSet<>(subscription.topics()));
             }
@@ -1125,7 +1126,7 @@ public class KafkaConsumerTest {
         final AtomicBoolean heartbeatReceived = new AtomicBoolean(false);
         client.prepareResponseFrom(new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request) {
+            public boolean matches(ClientRequest request, AbstractRequest body) {
                 heartbeatReceived.set(true);
                 return true;
             }
@@ -1141,8 +1142,8 @@ public class KafkaConsumerTest {
 
         client.prepareResponseFrom(new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request) {
-                OffsetCommitRequest commitRequest = (OffsetCommitRequest) request.body();
+            public boolean matches(ClientRequest request, AbstractRequest body) {
+                OffsetCommitRequest commitRequest = (OffsetCommitRequest) body;
                 for (Map.Entry<TopicPartition, Long> partitionOffset : partitionOffsets.entrySet()) {
                     OffsetCommitRequest.PartitionData partitionData = commitRequest.offsetData().get(partitionOffset.getKey());
                     // verify that the expected offset has been committed

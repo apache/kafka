@@ -469,7 +469,7 @@ public abstract class Type {
             if (item instanceof Records)
                 return (Records) item;
 
-            throw new SchemaException(item + " is not a java.nio.ByteBuffer.");
+            throw new SchemaException(item + " is not an instance of " + Records.class.getName());
         }
     };
 

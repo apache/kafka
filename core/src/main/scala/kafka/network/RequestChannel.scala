@@ -23,7 +23,7 @@ import java.util.HashMap
 import java.util.concurrent._
 
 import com.yammer.metrics.core.Gauge
-import kafka.api.ControlledShutdownRequest
+import kafka.api.{ControlledShutdownRequest, RequestOrResponse}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.QuotaId
 import kafka.utils.{Logging, SystemTime}
@@ -63,7 +63,7 @@ object RequestChannel extends Logging {
 
     // TODO: this will be removed once we remove support for v0 of ControlledShutdownRequest (which
     // depends on a non-standard request header)
-    val requestObj = if (requestId == ApiKeys.CONTROLLED_SHUTDOWN_KEY.id)
+    val requestObj: RequestOrResponse = if (requestId == ApiKeys.CONTROLLED_SHUTDOWN_KEY.id)
       ControlledShutdownRequest.readFrom(buffer)
     else
       null

@@ -42,6 +42,7 @@ import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.Compressor;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.ListOffsetRequest;
@@ -165,8 +166,8 @@ public class FetcherTest {
     private MockClient.RequestMatcher matchesOffset(final TopicPartition tp, final long offset) {
         return new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request) {
-                FetchRequest fetch = (FetchRequest) request.body();
+            public boolean matches(ClientRequest request, AbstractRequest body) {
+                FetchRequest fetch = (FetchRequest) body;
                 return fetch.fetchData().containsKey(tp) &&
                         fetch.fetchData().get(tp).offset == offset;
             }
@@ -704,8 +705,8 @@ public class FetcherTest {
         // matches any list offset request with the provided timestamp
         return new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request) {
-                ListOffsetRequest req = (ListOffsetRequest) request.body();
+            public boolean matches(ClientRequest request, AbstractRequest body) {
+                ListOffsetRequest req = (ListOffsetRequest) body;
                 return timestamp == req.partitionTimestamps().get(tp);
             }
         };

@@ -250,9 +250,8 @@ class ReplicaFetcherThread(name: String,
       if (!networkClient.blockingReady(sourceNode, socketTimeout)(time))
         throw new SocketTimeoutException(s"Failed to connect within $socketTimeout ms")
       else {
-        val send = request.toSend(sourceBroker.id.toString, header)
-        val clientRequest = new ClientRequest(time.milliseconds(), true, header, request, send, null)
-        networkClient.blockingSendAndReceive(clientRequest)(time)
+        val clientRequest = new ClientRequest(sourceBroker.id.toString, time.milliseconds(), true, header, null)
+        networkClient.blockingSendAndReceive(clientRequest, request)(time)
       }
     }
     catch {

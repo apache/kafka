@@ -185,9 +185,8 @@ class RequestSendThread(val controllerId: Int,
             }
             else {
               val requestHeader = apiVersion.fold(networkClient.nextRequestHeader(apiKey))(networkClient.nextRequestHeader(apiKey, _))
-              val send = request.toSend(brokerNode.idString, requestHeader)
-              val clientRequest = new ClientRequest(time.milliseconds(), true, requestHeader, request, send, null)
-              clientResponse = networkClient.blockingSendAndReceive(clientRequest)(time)
+              val clientRequest = new ClientRequest(brokerNode.idString, time.milliseconds(), true, requestHeader, null)
+              clientResponse = networkClient.blockingSendAndReceive(clientRequest, request)(time)
               isSendSuccessful = true
             }
           } catch {

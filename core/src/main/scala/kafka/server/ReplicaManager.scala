@@ -532,13 +532,13 @@ class ReplicaManager(val config: KafkaConfig,
       val topic = tp.topic
       val partition = tp.partition
       val offset = fetchInfo.offset
-      val fetchSize = fetchInfo.maxBytes
+      val partitionFetchSize = fetchInfo.maxBytes
 
       BrokerTopicStats.getBrokerTopicStats(topic).totalFetchRequestRate.mark()
       BrokerTopicStats.getBrokerAllTopicsStats().totalFetchRequestRate.mark()
 
       try {
-        trace(s"Fetching log segment for partition $tp, offset $offset, partition fetch size $fetchSize, " +
+        trace(s"Fetching log segment for partition $tp, offset $offset, partition fetch size $partitionFetchSize, " +
           s"remaining response limit $limitBytes" +
           (if (minOneMessage) s", ignoring response/partition size limits" else ""))
 
@@ -563,7 +563,7 @@ class ReplicaManager(val config: KafkaConfig,
         val initialLogEndOffset = localReplica.logEndOffset
         val logReadInfo = localReplica.log match {
           case Some(log) =>
-            val adjustedFetchSize = math.min(fetchSize, limitBytes)
+            val adjustedFetchSize = math.min(partitionFetchSize, limitBytes)
 
             // Try the read first, this tells us whether we need all of adjustedFetchSize for this partition
             val fetch = log.read(offset, adjustedFetchSize, maxOffsetOpt, minOneMessage)
@@ -584,7 +584,7 @@ class ReplicaManager(val config: KafkaConfig,
 
         val readToEndOfLog = initialLogEndOffset.messageOffset - logReadInfo.fetchOffsetMetadata.messageOffset <= 0
 
-        LogReadResult(logReadInfo, localReplica.highWatermark.messageOffset, fetchSize, readToEndOfLog, None)
+        LogReadResult(logReadInfo, localReplica.highWatermark.messageOffset, partitionFetchSize, readToEndOfLog, None)
       } catch {
         // NOTE: Failed fetch requests metric is not incremented for known exceptions since it
         // is supposed to indicate un-expected failure of a broker in handling a fetch request
@@ -592,12 +592,12 @@ class ReplicaManager(val config: KafkaConfig,
                  _: NotLeaderForPartitionException |
                  _: ReplicaNotAvailableException |
                  _: OffsetOutOfRangeException) =>
-          LogReadResult(FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MessageSet.Empty), -1L, fetchSize, false, Some(e))
+          LogReadResult(FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MessageSet.Empty), -1L, partitionFetchSize, false, Some(e))
         case e: Throwable =>
           BrokerTopicStats.getBrokerTopicStats(topic).failedFetchRequestRate.mark()
           BrokerTopicStats.getBrokerAllTopicsStats().failedFetchRequestRate.mark()
           error(s"Error processing fetch operation on partition ${tp}, offset $offset", e)
-          LogReadResult(FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MessageSet.Empty), -1L, fetchSize, false, Some(e))
+          LogReadResult(FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MessageSet.Empty), -1L, partitionFetchSize, false, Some(e))
       }
     }
 

@@ -24,6 +24,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.GroupCoordinatorResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.requests.JoinGroupResponse;
@@ -181,8 +182,8 @@ public class WorkerCoordinatorTest {
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberConfigOffsets, Errors.NONE.code()));
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request) {
-                SyncGroupRequest sync = (SyncGroupRequest) request.body();
+            public boolean matches(ClientRequest request, AbstractRequest body) {
+                SyncGroupRequest sync = (SyncGroupRequest) body;
                 return sync.memberId().equals(consumerId) &&
                         sync.generationId() == 1 &&
                         sync.groupAssignment().containsKey(consumerId);
@@ -218,8 +219,8 @@ public class WorkerCoordinatorTest {
         client.prepareResponse(joinGroupFollowerResponse(1, memberId, "leader", Errors.NONE.code()));
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request) {
-                SyncGroupRequest sync = (SyncGroupRequest) request.body();
+            public boolean matches(ClientRequest request, AbstractRequest body) {
+                SyncGroupRequest sync = (SyncGroupRequest) body;
                 return sync.memberId().equals(memberId) &&
                         sync.generationId() == 1 &&
                         sync.groupAssignment().isEmpty();
@@ -259,8 +260,8 @@ public class WorkerCoordinatorTest {
         client.prepareResponse(joinGroupFollowerResponse(1, memberId, "leader", Errors.NONE.code()));
         MockClient.RequestMatcher matcher = new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request) {
-                SyncGroupRequest sync = (SyncGroupRequest) request.body();
+            public boolean matches(ClientRequest request, AbstractRequest body) {
+                SyncGroupRequest sync = (SyncGroupRequest) body;
                 return sync.memberId().equals(memberId) &&
                         sync.generationId() == 1 &&
                         sync.groupAssignment().isEmpty();
