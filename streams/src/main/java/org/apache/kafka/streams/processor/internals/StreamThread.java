@@ -349,10 +349,6 @@ public class StreamThread extends Thread {
 
     }
 
-    public boolean isRunning() {
-        return running.get();
-    }
-
     interface AbstractTaskAction {
         void apply(final AbstractTask task);
     }
@@ -497,6 +493,7 @@ public class StreamThread extends Thread {
 
             maybeClean();
         }
+        log.debug("{} Shutting down at user request", logPrefix);
     }
 
     private void maybeUpdateStandbyTasks() {
@@ -543,13 +540,8 @@ public class StreamThread extends Thread {
         }
     }
 
-    private boolean stillRunning() {
-        if (!running.get()) {
-            log.debug("{} Shutting down at user request", logPrefix);
-            return false;
-        }
-
-        return true;
+    public boolean stillRunning() {
+        return running.get();
     }
 
     private void maybePunctuate(StreamTask task) {

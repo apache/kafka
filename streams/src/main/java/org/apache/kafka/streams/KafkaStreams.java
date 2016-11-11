@@ -233,7 +233,7 @@ public class KafkaStreams {
 
                         for (final StreamThread thread : threads) {
                             try {
-                                if (!thread.isRunning()) {
+                                if (!thread.stillRunning()) {
                                     thread.join();
                                 }
                             } catch (final InterruptedException ex) {
