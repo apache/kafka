@@ -1093,7 +1093,7 @@ public class KafkaConsumerTest {
         // join group
         client.prepareResponseFrom(new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request, AbstractRequest body) {
+            public boolean matches(AbstractRequest body) {
                 JoinGroupRequest joinGroupRequest = (JoinGroupRequest) body;
                 PartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(joinGroupRequest.groupProtocols().get(0).metadata());
                 return subscribedTopics.equals(new HashSet<>(subscription.topics()));
@@ -1126,7 +1126,7 @@ public class KafkaConsumerTest {
         final AtomicBoolean heartbeatReceived = new AtomicBoolean(false);
         client.prepareResponseFrom(new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request, AbstractRequest body) {
+            public boolean matches(AbstractRequest body) {
                 heartbeatReceived.set(true);
                 return true;
             }
@@ -1142,7 +1142,7 @@ public class KafkaConsumerTest {
 
         client.prepareResponseFrom(new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request, AbstractRequest body) {
+            public boolean matches(AbstractRequest body) {
                 OffsetCommitRequest commitRequest = (OffsetCommitRequest) body;
                 for (Map.Entry<TopicPartition, Long> partitionOffset : partitionOffsets.entrySet()) {
                     OffsetCommitRequest.PartitionData partitionData = commitRequest.offsetData().get(partitionOffset.getKey());

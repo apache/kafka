@@ -104,11 +104,11 @@ class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
    * care.
    */
   def blockingSendAndReceive(request: ClientRequest, body: AbstractRequest)(implicit time: JTime): ClientResponse = {
-    client.send(request, body, time.milliseconds())
+    client.send(request, time.milliseconds())
 
     pollContinuously { responses =>
       val response = responses.find { response =>
-        response.request.header.correlationId == request.header.correlationId
+        response.requestHeader.correlationId == request.header.correlationId
       }
       response.foreach { r =>
         if (r.wasDisconnected)

@@ -204,7 +204,7 @@ public class SenderTest {
             accumulator.append(tp2, 0L, "key1".getBytes(), "value1".getBytes(), null, MAX_BLOCK_TIMEOUT);
             sender.run(time.milliseconds()); // connect
             sender.run(time.milliseconds()); // send produce request
-            String id = client.requests().peek().send().destination();
+            String id = client.requests().peek().destination();
             assertEquals(ApiKeys.PRODUCE.id, client.requests().peek().header().apiKey());
             Node node = new Node(Integer.valueOf(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());

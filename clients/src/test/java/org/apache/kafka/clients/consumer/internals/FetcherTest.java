@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -166,7 +165,7 @@ public class FetcherTest {
     private MockClient.RequestMatcher matchesOffset(final TopicPartition tp, final long offset) {
         return new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request, AbstractRequest body) {
+            public boolean matches(AbstractRequest body) {
                 FetchRequest fetch = (FetchRequest) body;
                 return fetch.fetchData().containsKey(tp) &&
                         fetch.fetchData().get(tp).offset == offset;
@@ -705,7 +704,7 @@ public class FetcherTest {
         // matches any list offset request with the provided timestamp
         return new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request, AbstractRequest body) {
+            public boolean matches(AbstractRequest body) {
                 ListOffsetRequest req = (ListOffsetRequest) body;
                 return timestamp == req.partitionTimestamps().get(tp);
             }

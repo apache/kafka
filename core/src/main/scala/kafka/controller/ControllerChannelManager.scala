@@ -185,7 +185,7 @@ class RequestSendThread(val controllerId: Int,
             }
             else {
               val requestHeader = apiVersion.fold(networkClient.nextRequestHeader(apiKey))(networkClient.nextRequestHeader(apiKey, _))
-              val clientRequest = new ClientRequest(brokerNode.idString, time.milliseconds(), true, requestHeader, null)
+              val clientRequest = new ClientRequest(brokerNode.idString, time.milliseconds(), true, requestHeader, request, null)
               clientResponse = networkClient.blockingSendAndReceive(clientRequest, request)(time)
               isSendSuccessful = true
             }
@@ -200,7 +200,7 @@ class RequestSendThread(val controllerId: Int,
           }
         }
         if (clientResponse != null) {
-          val api = ApiKeys.forId(clientResponse.request.header.apiKey)
+          val api = ApiKeys.forId(clientResponse.requestHeader.apiKey)
           if (api != ApiKeys.LEADER_AND_ISR && api != ApiKeys.STOP_REPLICA && api != ApiKeys.UPDATE_METADATA_KEY)
             throw new KafkaException(s"Unexpected apiKey received: $apiKey")
 

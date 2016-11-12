@@ -251,13 +251,13 @@ public class Sender implements Runnable {
      * Handle a produce response
      */
     private void handleProduceResponse(ClientResponse response, Map<TopicPartition, RecordBatch> batches, long now) {
-        int correlationId = response.request().header().correlationId();
+        int correlationId = response.requestHeader().correlationId();
         if (response.wasDisconnected()) {
-            log.trace("Cancelled request {} due to node {} being disconnected", response, response.request().destination());
+            log.trace("Cancelled request {} due to node {} being disconnected", response, response.destination());
             for (RecordBatch batch : batches.values())
                 completeBatch(batch, Errors.NETWORK_EXCEPTION, -1L, Record.NO_TIMESTAMP, correlationId, now);
         } else {
-            log.trace("Received produce response from node {} with correlation id {}", response.request().destination(), correlationId);
+            log.trace("Received produce response from node {} with correlation id {}", response.destination(), correlationId);
             // if we have a response, parse it
             if (response.hasResponse()) {
                 ProduceResponse produceResponse = (ProduceResponse) response.responseBody();
@@ -268,7 +268,7 @@ public class Sender implements Runnable {
                     RecordBatch batch = batches.get(tp);
                     completeBatch(batch, error, partResp.baseOffset, partResp.timestamp, correlationId, now);
                 }
-                this.sensors.recordLatency(response.request().destination(), response.requestLatencyMs());
+                this.sensors.recordLatency(response.destination(), response.requestLatencyMs());
                 this.sensors.recordThrottleTime(produceResponse.getThrottleTime());
             } else {
                 // this is the acks = 0 case, just complete all requests
@@ -349,7 +349,7 @@ public class Sender implements Runnable {
             recordsByPartition.put(tp, batch);
         }
 
-        ProduceRequest request = new ProduceRequest(acks, timeout, produceRecordsByPartition);
+        ProduceRequest produceRequest = new ProduceRequest(acks, timeout, produceRecordsByPartition);
         RequestHeader header = this.client.nextRequestHeader(ApiKeys.PRODUCE);
         RequestCompletionHandler callback = new RequestCompletionHandler() {
             public void onComplete(ClientResponse response) {
@@ -358,10 +358,10 @@ public class Sender implements Runnable {
         };
 
         String nodeId = Integer.toString(destination);
-        ClientRequest clientRequest = new ClientRequest(nodeId, now, acks != 0, header, callback);
+        ClientRequest clientRequest = new ClientRequest(nodeId, now, acks != 0, header, produceRequest, callback);
 
-        client.send(clientRequest, request, now);
-        log.trace("Sent produce request to {}: {}", nodeId, request);
+        client.send(clientRequest, now);
+        log.trace("Sent produce request to {}: {}", nodeId, produceRequest);
     }
 
     /**

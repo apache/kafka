@@ -40,7 +40,7 @@ import java.util.Set;
 public class MockClient implements KafkaClient {
     public static final RequestMatcher ALWAYS_TRUE = new RequestMatcher() {
         @Override
-        public boolean matches(ClientRequest request, AbstractRequest body) {
+        public boolean matches(AbstractRequest body) {
             return true;
         }
     };
@@ -127,7 +127,8 @@ public class MockClient implements KafkaClient {
         while (iter.hasNext()) {
             ClientRequest request = iter.next();
             if (request.destination().equals(node)) {
-                responses.add(new ClientResponse(request, now, true, null));
+                responses.add(new ClientResponse(request.header(), request.callback(), request.destination(),
+                        request.createdTimeMs(), now, true, null));
                 iter.remove();
             }
         }
@@ -135,23 +136,23 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
-    public void send(ClientRequest request, AbstractRequest body, long now) {
+    public void send(ClientRequest request, long now) {
         Iterator<FutureResponse> iterator = futureResponses.iterator();
         while (iterator.hasNext()) {
             FutureResponse futureResp = iterator.next();
             if (futureResp.node != null && !request.destination().equals(futureResp.node.idString()))
                 continue;
 
-            if (!futureResp.requestMatcher.matches(request, body))
+            if (!futureResp.requestMatcher.matches(request.body()))
                 throw new IllegalStateException("Next in line response did not match expected request");
 
-            ClientResponse resp = new ClientResponse(request, time.milliseconds(), futureResp.disconnected, futureResp.responseBody);
+            ClientResponse resp = new ClientResponse(request.header(), request.callback(), request.destination(),
+                    request.createdTimeMs(), time.milliseconds(), futureResp.disconnected, futureResp.responseBody);
             responses.add(resp);
             iterator.remove();
             return;
         }
 
-        request.setSend(body.toSend(request.destination(), request.header()), now);
         this.requests.add(request);
     }
 
@@ -169,8 +170,7 @@ public class MockClient implements KafkaClient {
 
         while (!this.responses.isEmpty()) {
             ClientResponse response = this.responses.poll();
-            if (response.request().hasCallback())
-                response.request().callback().onComplete(response);
+            response.onComplete();
         }
 
         return copy;
@@ -186,7 +186,8 @@ public class MockClient implements KafkaClient {
 
     public void respond(AbstractResponse response, boolean disconnected) {
         ClientRequest request = requests.remove();
-        responses.add(new ClientResponse(request, time.milliseconds(), disconnected, response));
+        responses.add(new ClientResponse(request.header(), request.callback(), request.destination(),
+                request.createdTimeMs(), time.milliseconds(), disconnected, response));
     }
 
     public void respondFrom(AbstractResponse response, Node node) {
@@ -199,7 +200,8 @@ public class MockClient implements KafkaClient {
             ClientRequest request = iterator.next();
             if (request.destination().equals(node.idString())) {
                 iterator.remove();
-                responses.add(new ClientResponse(request, time.milliseconds(), disconnected, response));
+                responses.add(new ClientResponse(request.header(), request.callback(), request.destination(),
+                        request.createdTimeMs(), time.milliseconds(), disconnected, response));
                 return;
             }
         }
@@ -216,7 +218,7 @@ public class MockClient implements KafkaClient {
 
     /**
      * Prepare a response for a request matching the provided matcher. If the matcher does not
-     * match, {@link KafkaClient#send(ClientRequest, AbstractRequest, long)} will throw IllegalStateException
+     * match, {@link KafkaClient#send(ClientRequest, long)} will throw IllegalStateException
      * @param matcher The matcher to apply
      * @param response The response body
      */
@@ -238,7 +240,7 @@ public class MockClient implements KafkaClient {
 
     /**
      * Prepare a response for a request matching the provided matcher. If the matcher does not
-     * match, {@link KafkaClient#send(ClientRequest, AbstractRequest, long)} will throw IllegalStateException
+     * match, {@link KafkaClient#send(ClientRequest, long)} will throw IllegalStateException
      * @param matcher The matcher to apply
      * @param response The response body
      * @param disconnected Whether the request was disconnected
@@ -313,7 +315,7 @@ public class MockClient implements KafkaClient {
      * and to fail the test if it doesn't match.
      */
     public interface RequestMatcher {
-        boolean matches(ClientRequest request, AbstractRequest body);
+        boolean matches(AbstractRequest body);
     }
 
 }

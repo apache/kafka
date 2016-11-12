@@ -21,7 +21,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -61,7 +60,7 @@ public class NetworkClient implements KafkaClient {
     private final ClusterConnectionStates connectionStates;
 
     /* the set of requests currently being sent or awaiting a response */
-    private final InFlightRequests inFlightRequests;
+    private final InFlightRequests<InFlightRequest> inFlightRequests;
 
     /* the socket send buffer size in bytes */
     private final int socketSendBuffer;
@@ -174,8 +173,9 @@ public class NetworkClient implements KafkaClient {
     @Override
     public void close(String nodeId) {
         selector.close(nodeId);
-        for (ClientRequest request : inFlightRequests.clearAll(nodeId))
-            metadataUpdater.maybeHandleDisconnection(request);
+        for (InFlightRequest request : inFlightRequests.clearAll(nodeId))
+            if (request.isInternalMetadataRequest)
+                metadataUpdater.handleDisconnection(request.destination);
         connectionStates.remove(nodeId);
     }
 
@@ -231,19 +231,36 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Queue up the given request for sending. Requests can only be sent out to ready nodes.
-     *  @param request The request
-     * @param body
+     * @param request The request
      * @param now The current timestamp
      */
     @Override
-    public void send(ClientRequest request, AbstractRequest body, long now) {
+    public void send(ClientRequest request, long now) {
+        doSend(request, false, now);
+    }
+
+    private void sendInternalMetadataRequest(ClientRequest request, long now) {
+        doSend(request, true, now);
+    }
+
+    private void doSend(ClientRequest request, boolean isInternalMetadataRequest, long now) {
         String nodeId = request.destination();
         if (!canSendRequest(nodeId))
             throw new IllegalStateException("Attempt to send a request to node " + nodeId + " which is not ready.");
 
-        request.setSend(body.toSend(nodeId, request.header()), now);
-        this.inFlightRequests.add(request);
-        selector.send(request.send());
+        Send send = request.body().toSend(nodeId, request.header());
+        InFlightRequest inFlightRequest = new InFlightRequest(
+                request.header(),
+                request.createdTimeMs(),
+                request.destination(),
+                request.callback(),
+                request.expectResponse(),
+                isInternalMetadataRequest,
+                send,
+                now);
+
+        this.inFlightRequests.add(inFlightRequest);
+        selector.send(inFlightRequest.send);
     }
 
     /**
@@ -275,12 +292,10 @@ public class NetworkClient implements KafkaClient {
 
         // invoke callbacks
         for (ClientResponse response : responses) {
-            if (response.request().hasCallback()) {
-                try {
-                    response.request().callback().onComplete(response);
-                } catch (Exception e) {
-                    log.error("Uncaught error in request completion:", e);
-                }
+            try {
+                response.onComplete();
+            } catch (Exception e) {
+                log.error("Uncaught error in request completion:", e);
             }
         }
 
@@ -393,10 +408,12 @@ public class NetworkClient implements KafkaClient {
      */
     private void processDisconnection(List<ClientResponse> responses, String nodeId, long now) {
         connectionStates.disconnected(nodeId, now);
-        for (ClientRequest request : this.inFlightRequests.clearAll(nodeId)) {
+        for (InFlightRequest request : this.inFlightRequests.clearAll(nodeId)) {
             log.trace("Cancelled request {} due to node {} being disconnected", request, nodeId);
-            if (!metadataUpdater.maybeHandleDisconnection(request))
-                responses.add(new ClientResponse(request, now, true, null));
+            if (request.isInternalMetadataRequest)
+                metadataUpdater.handleDisconnection(request.destination);
+            else
+                responses.add(request.disconnected(now));
         }
     }
 
@@ -430,10 +447,10 @@ public class NetworkClient implements KafkaClient {
     private void handleCompletedSends(List<ClientResponse> responses, long now) {
         // if no response is expected then when the send is completed, return it
         for (Send send : this.selector.completedSends()) {
-            ClientRequest request = this.inFlightRequests.lastSent(send.destination());
-            if (!request.expectResponse()) {
+            InFlightRequest request = this.inFlightRequests.lastSent(send.destination());
+            if (!request.expectResponse) {
                 this.inFlightRequests.completeLastSent(send.destination());
-                responses.add(new ClientResponse(request, now, false, null));
+                responses.add(request.completed(null, now));
             }
         }
     }
@@ -447,10 +464,12 @@ public class NetworkClient implements KafkaClient {
     private void handleCompletedReceives(List<ClientResponse> responses, long now) {
         for (NetworkReceive receive : this.selector.completedReceives()) {
             String source = receive.source();
-            ClientRequest req = inFlightRequests.completeNext(source);
-            AbstractResponse body = parseResponse(receive.payload(), req.header());
-            if (!metadataUpdater.maybeHandleCompletedMetadataResponse(req, now, body))
-                responses.add(new ClientResponse(req, now, false, body));
+            InFlightRequest req = inFlightRequests.completeNext(source);
+            AbstractResponse body = parseResponse(receive.payload(), req.header);
+            if (req.isInternalMetadataRequest)
+                metadataUpdater.handleCompletedMetadataResponse(req.header, now, body);
+            else
+                responses.add(req.completed(body, now));
         }
     }
 
@@ -556,32 +575,23 @@ public class NetworkClient implements KafkaClient {
         }
 
         @Override
-        public boolean maybeHandleDisconnection(ClientRequest request) {
-            ApiKeys requestKey = ApiKeys.forId(request.header().apiKey());
-
-            if (requestKey == ApiKeys.METADATA && request.isInitiatedByNetworkClient()) {
-                Cluster cluster = metadata.fetch();
-                if (cluster.isBootstrapConfigured()) {
-                    int nodeId = Integer.parseInt(request.destination());
-                    Node node = cluster.nodeById(nodeId);
-                    if (node != null)
-                        log.warn("Bootstrap broker {}:{} disconnected", node.host(), node.port());
-                }
-
-                metadataFetchInProgress = false;
-                return true;
+        public void handleDisconnection(String destination) {
+            Cluster cluster = metadata.fetch();
+            if (cluster.isBootstrapConfigured()) {
+                int nodeId = Integer.parseInt(destination);
+                Node node = cluster.nodeById(nodeId);
+                if (node != null)
+                    log.warn("Bootstrap broker {}:{} disconnected", node.host(), node.port());
             }
 
-            return false;
+            metadataFetchInProgress = false;
         }
 
         @Override
-        public boolean maybeHandleCompletedMetadataResponse(ClientRequest req, long now, AbstractResponse response) {
-            if (response instanceof MetadataResponse && req.isInitiatedByNetworkClient()) {
-                handleMetadataResponse(req.header(), (MetadataResponse) response, now);
-                return true;
-            }
-            return false;
+        public void handleCompletedMetadataResponse(RequestHeader requestHeader, long now, AbstractResponse response) {
+            if (!(response instanceof MetadataResponse))
+                throw new IllegalStateException("Unexpected response type in metadata handler: " + response);
+            handleMetadataResponse(requestHeader, (MetadataResponse) response, now);
         }
 
         @Override
@@ -632,9 +642,11 @@ public class NetworkClient implements KafkaClient {
                     metadataRequest = MetadataRequest.allTopics();
                 else
                     metadataRequest = new MetadataRequest(new ArrayList<>(metadata.topics()));
-                ClientRequest clientRequest = new ClientRequest(nodeConnectionId, now, true, nextRequestHeader(ApiKeys.METADATA), null, true);
+
+                ClientRequest clientRequest = new ClientRequest(nodeConnectionId, now, true,
+                        nextRequestHeader(ApiKeys.METADATA), metadataRequest, null);
                 log.debug("Sending metadata request {} to node {}", metadataRequest, node.id());
-                send(clientRequest, metadataRequest, now);
+                sendInternalMetadataRequest(clientRequest, now);
                 return requestTimeoutMs;
             }
 
@@ -660,6 +672,58 @@ public class NetworkClient implements KafkaClient {
             return Long.MAX_VALUE;
         }
 
+    }
+
+    static class InFlightRequest implements InFlightRequests.InFlightRequest {
+        final RequestHeader header;
+        final String destination;
+        final RequestCompletionHandler callback;
+        final boolean expectResponse;
+        final boolean isInternalMetadataRequest;
+        final Send send;
+        final long sendTimeMs;
+        final long createdTimeMs;
+
+        public InFlightRequest(RequestHeader header,
+                               long createdTimeMs,
+                               String destination,
+                               RequestCompletionHandler callback,
+                               boolean expectResponse,
+                               boolean isInternalMetadataRequest,
+                               Send send,
+                               long sendTimeMs) {
+            this.header = header;
+            this.destination = destination;
+            this.callback = callback;
+            this.expectResponse = expectResponse;
+            this.isInternalMetadataRequest = isInternalMetadataRequest;
+            this.send = send;
+            this.sendTimeMs = sendTimeMs;
+            this.createdTimeMs = createdTimeMs;
+        }
+
+        public ClientResponse completed(AbstractResponse response, long timeMs) {
+            return new ClientResponse(header, callback, destination, createdTimeMs, timeMs, false, response);
+        }
+
+        public ClientResponse disconnected(long timeMs) {
+            return new ClientResponse(header, callback, destination, createdTimeMs, timeMs, true, null);
+        }
+
+        @Override
+        public long sendTimeMs() {
+            return sendTimeMs;
+        }
+
+        @Override
+        public String destination() {
+            return destination;
+        }
+
+        @Override
+        public Send send() {
+            return send;
+        }
     }
 
 }

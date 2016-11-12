@@ -16,7 +16,6 @@
  **/
 package org.apache.kafka.connect.runtime.distributed;
 
-import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
@@ -182,7 +181,7 @@ public class WorkerCoordinatorTest {
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberConfigOffsets, Errors.NONE.code()));
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request, AbstractRequest body) {
+            public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
                 return sync.memberId().equals(consumerId) &&
                         sync.generationId() == 1 &&
@@ -219,7 +218,7 @@ public class WorkerCoordinatorTest {
         client.prepareResponse(joinGroupFollowerResponse(1, memberId, "leader", Errors.NONE.code()));
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request, AbstractRequest body) {
+            public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
                 return sync.memberId().equals(memberId) &&
                         sync.generationId() == 1 &&
@@ -260,7 +259,7 @@ public class WorkerCoordinatorTest {
         client.prepareResponse(joinGroupFollowerResponse(1, memberId, "leader", Errors.NONE.code()));
         MockClient.RequestMatcher matcher = new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request, AbstractRequest body) {
+            public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
                 return sync.memberId().equals(memberId) &&
                         sync.generationId() == 1 &&

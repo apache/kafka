@@ -12,7 +12,7 @@
  */
 package org.apache.kafka.clients;
 
-import org.apache.kafka.common.network.Send;
+import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.RequestHeader;
 
 /**
@@ -22,49 +22,31 @@ public final class ClientRequest {
 
     private final String destination;
     private final RequestHeader header;
+    private final AbstractRequest body;
     private final long createdTimeMs;
     private final boolean expectResponse;
     private final RequestCompletionHandler callback;
-    private final boolean isInitiatedByNetworkClient;
-
-    private Send send;
-    private long sendTimeMs;
 
     /**
      * @param destination The brokerId to send the request to
      * @param createdTimeMs The unix timestamp in milliseconds for the time at which this request was created.
      * @param expectResponse Should we expect a response message or is this request complete once it is sent?
      * @param header The request's header
+     * @param body The request's body
      * @param callback A callback to execute when the response has been received (or null if no callback is necessary)
      */
     public ClientRequest(String destination,
                          long createdTimeMs,
                          boolean expectResponse,
                          RequestHeader header,
+                         AbstractRequest body,
                          RequestCompletionHandler callback) {
-        this(destination, createdTimeMs, expectResponse, header, callback, false);
-    }
-
-    /**
-     * @param destination The brokerId to send the request to
-     * @param createdTimeMs The unix timestamp in milliseconds for the time at which this request was created.
-     * @param expectResponse Should we expect a response message or is this request complete once it is sent?
-     * @param header The request's header
-     * @param callback A callback to execute when the response has been received (or null if no callback is necessary)
-     * @param isInitiatedByNetworkClient Is request initiated by network client, if yes, its
-     */
-    public ClientRequest(String destination,
-                         long createdTimeMs,
-                         boolean expectResponse,
-                         RequestHeader header,
-                         RequestCompletionHandler callback,
-                         boolean isInitiatedByNetworkClient) {
         this.destination = destination;
         this.createdTimeMs = createdTimeMs;
         this.callback = callback;
         this.header = header;
+        this.body = body;
         this.expectResponse = expectResponse;
-        this.isInitiatedByNetworkClient = isInitiatedByNetworkClient;
     }
 
     @Override
@@ -72,10 +54,8 @@ public final class ClientRequest {
         return "ClientRequest(expectResponse=" + expectResponse +
             ", callback=" + callback +
             ", header=" + header +
-            ", send=" + send +
-            (isInitiatedByNetworkClient ? ", isInitiatedByNetworkClient" : "") +
+            ", body=" + body +
             ", createdTimeMs=" + createdTimeMs +
-            ", sendTimeMs=" + sendTimeMs +
             ")";
     }
 
@@ -87,16 +67,12 @@ public final class ClientRequest {
         return header;
     }
 
+    public AbstractRequest body() {
+        return body;
+    }
+
     public String destination() {
         return destination;
-    }
-
-    public Send send() {
-        return send;
-    }
-
-    public boolean hasCallback() {
-        return callback != null;
     }
 
     public RequestCompletionHandler callback() {
@@ -107,16 +83,4 @@ public final class ClientRequest {
         return createdTimeMs;
     }
 
-    public boolean isInitiatedByNetworkClient() {
-        return isInitiatedByNetworkClient;
-    }
-
-    public long sendTimeMs() {
-        return sendTimeMs;
-    }
-
-    public void setSend(Send send, long sendTimeMs) {
-        this.send = send;
-        this.sendTimeMs = sendTimeMs;
-    }
 }

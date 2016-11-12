@@ -12,6 +12,8 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.network.Send;
+
 import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Deque;
@@ -23,10 +25,10 @@ import java.util.Map;
 /**
  * The set of requests which have been sent or are being sent but haven't yet received a response
  */
-final class InFlightRequests {
+final class InFlightRequests<T extends InFlightRequests.InFlightRequest> {
 
     private final int maxInFlightRequestsPerConnection;
-    private final Map<String, Deque<ClientRequest>> requests = new HashMap<>();
+    private final Map<String, Deque<T>> requests = new HashMap<>();
 
     public InFlightRequests(int maxInFlightRequestsPerConnection) {
         this.maxInFlightRequestsPerConnection = maxInFlightRequestsPerConnection;
@@ -35,9 +37,9 @@ final class InFlightRequests {
     /**
      * Add the given request to the queue for the connection it was directed to
      */
-    public void add(ClientRequest request) {
+    public void add(T request) {
         String destination = request.destination();
-        Deque<ClientRequest> reqs = this.requests.get(destination);
+        Deque<T> reqs = this.requests.get(destination);
         if (reqs == null) {
             reqs = new ArrayDeque<>();
             this.requests.put(destination, reqs);
@@ -48,8 +50,8 @@ final class InFlightRequests {
     /**
      * Get the request queue for the given node
      */
-    private Deque<ClientRequest> requestQueue(String node) {
-        Deque<ClientRequest> reqs = requests.get(node);
+    private Deque<T> requestQueue(String node) {
+        Deque<T> reqs = requests.get(node);
         if (reqs == null || reqs.isEmpty())
             throw new IllegalStateException("Response from server for which there are no in-flight requests.");
         return reqs;
@@ -58,7 +60,7 @@ final class InFlightRequests {
     /**
      * Get the oldest request (the one that that will be completed next) for the given node
      */
-    public ClientRequest completeNext(String node) {
+    public T completeNext(String node) {
         return requestQueue(node).pollLast();
     }
 
@@ -66,7 +68,7 @@ final class InFlightRequests {
      * Get the last request we sent to the given node (but don't remove it from the queue)
      * @param node The node id
      */
-    public ClientRequest lastSent(String node) {
+    public T lastSent(String node) {
         return requestQueue(node).peekFirst();
     }
 
@@ -75,18 +77,18 @@ final class InFlightRequests {
      * @param node The node the request was sent to
      * @return The request
      */
-    public ClientRequest completeLastSent(String node) {
+    public T completeLastSent(String node) {
         return requestQueue(node).pollFirst();
     }
 
     /**
      * Can we send more requests to this node?
-     * 
+     *
      * @param node Node in question
      * @return true iff we have no requests still being sent to the given node
      */
     public boolean canSendMore(String node) {
-        Deque<ClientRequest> queue = requests.get(node);
+        Deque<T> queue = requests.get(node);
         return queue == null || queue.isEmpty() ||
                (queue.peekFirst().send().completed() && queue.size() < this.maxInFlightRequestsPerConnection);
     }
@@ -97,7 +99,7 @@ final class InFlightRequests {
      * @return The request count.
      */
     public int inFlightRequestCount(String node) {
-        Deque<ClientRequest> queue = requests.get(node);
+        Deque<T> queue = requests.get(node);
         return queue == null ? 0 : queue.size();
     }
 
@@ -106,19 +108,19 @@ final class InFlightRequests {
      */
     public int inFlightRequestCount() {
         int total = 0;
-        for (Deque<ClientRequest> deque : this.requests.values())
+        for (Deque<T> deque : this.requests.values())
             total += deque.size();
         return total;
     }
 
     /**
      * Clear out all the in-flight requests for the given node and return them
-     * 
+     *
      * @param node The node
      * @return All the in-flight requests for that node that have been removed
      */
-    public Iterable<ClientRequest> clearAll(String node) {
-        Deque<ClientRequest> reqs = requests.get(node);
+    public Iterable<T> clearAll(String node) {
+        Deque<T> reqs = requests.get(node);
         if (reqs == null) {
             return Collections.emptyList();
         } else {
@@ -127,7 +129,7 @@ final class InFlightRequests {
     }
 
     /**
-     * Returns a list of nodes with pending inflight request, that need to be timed out
+     * Returns a list of nodes with pending in-flight request, that need to be timed out
      *
      * @param now current time in milliseconds
      * @param requestTimeout max time to wait for the request to be completed
@@ -135,12 +137,12 @@ final class InFlightRequests {
      */
     public List<String> getNodesWithTimedOutRequests(long now, int requestTimeout) {
         List<String> nodeIds = new LinkedList<>();
-        for (Map.Entry<String, Deque<ClientRequest>> requestEntry : requests.entrySet()) {
+        for (Map.Entry<String, Deque<T>> requestEntry : requests.entrySet()) {
             String nodeId = requestEntry.getKey();
-            Deque<ClientRequest> deque = requestEntry.getValue();
+            Deque<T> deque = requestEntry.getValue();
 
             if (!deque.isEmpty()) {
-                ClientRequest request = deque.peekLast();
+                T request = deque.peekLast();
                 long timeSinceSend = now - request.sendTimeMs();
                 if (timeSinceSend > requestTimeout)
                     nodeIds.add(nodeId);
@@ -148,5 +150,11 @@ final class InFlightRequests {
         }
 
         return nodeIds;
+    }
+    
+    public interface InFlightRequest {
+        long sendTimeMs();
+        String destination();
+        Send send();
     }
 }
