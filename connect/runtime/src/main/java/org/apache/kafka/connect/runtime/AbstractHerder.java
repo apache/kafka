@@ -29,6 +29,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorPluginInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
@@ -247,7 +248,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     public ConfigInfos validateConnectorConfig(Map<String, String> connectorConfig) {
         String connType = connectorConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
         if (connType == null)
-            throw new IllegalArgumentException("Connector config " + connectorConfig + " contains no connector type");
+            throw new BadRequestException("Connector config " + connectorConfig + " contains no connector type");
 
         Connector connector = getConnector(connType);
         ConfigDef connectorConfigDef;
