@@ -578,7 +578,7 @@ public class NetworkClient implements KafkaClient {
         @Override
         public boolean maybeHandleCompletedMetadataResponse(ClientRequest req, long now, AbstractResponse response) {
             if (response instanceof MetadataResponse && req.isInitiatedByNetworkClient()) {
-                handleResponse(req.header(), (MetadataResponse) response, now);
+                handleMetadataResponse(req.header(), (MetadataResponse) response, now);
                 return true;
             }
             return false;
@@ -589,7 +589,7 @@ public class NetworkClient implements KafkaClient {
             this.metadata.requestUpdate();
         }
 
-        private void handleResponse(RequestHeader header, MetadataResponse response, long now) {
+        private void handleMetadataResponse(RequestHeader header, MetadataResponse response, long now) {
             this.metadataFetchInProgress = false;
             Cluster cluster = response.cluster();
             // check if any topics metadata failed to get updated
