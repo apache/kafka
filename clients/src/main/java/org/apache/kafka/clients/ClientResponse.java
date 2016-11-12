@@ -16,8 +16,8 @@ import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 
 /**
- * A response from the server. Contains both the body of the response as well as the correlated request that was
- * originally sent.
+ * A response from the server. Contains both the body of the response as well as the correlated request
+ * metadata that was originally sent.
  */
 public class ClientResponse {
 
