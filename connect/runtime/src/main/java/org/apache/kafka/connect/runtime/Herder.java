@@ -82,7 +82,7 @@ public interface Herder {
     void connectorConfig(String connName, Callback<Map<String, String>> callback);
 
     /**
-     * Set the configuration for a connector. This supports creation, update, and deletion.
+     * Set the configuration for a connector. This supports creation and updating.
      * @param connName name of the connector
      * @param config the connectors configuration, or null if deleting the connector
      * @param allowReplace if true, allow overwriting previous configs; if false, throw AlreadyExistsException if a connector
@@ -90,6 +90,13 @@ public interface Herder {
      * @param callback callback to invoke when the configuration has been written
      */
     void putConnectorConfig(String connName, Map<String, String> config, boolean allowReplace, Callback<Created<ConnectorInfo>> callback);
+
+    /**
+     * Delete a connector and its configuration.
+     * @param connName name of the connector
+     * @param callback callback to invoke when the configuration has been written
+     */
+    void deleteConnectorConfig(String connName, Callback<Created<ConnectorInfo>> callback);
 
     /**
      * Requests reconfiguration of the task. This should only be triggered by
@@ -130,10 +137,9 @@ public interface Herder {
 
     /**
      * Validate the provided connector config values against the configuration definition.
-     * @param connType the connector class
      * @param connectorConfig the provided connector config values
      */
-    ConfigInfos validateConfigs(String connType, Map<String, String> connectorConfig);
+    ConfigInfos validateConnectorConfig(Map<String, String> connectorConfig);
 
     /**
      * Restart the task with the given id.
