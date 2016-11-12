@@ -105,7 +105,8 @@ class Log(@volatile var dir: File,
   }
   val t = time.milliseconds
   /* the actual segments of the log */
-  private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = loadSegments()
+  private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
+    loadSegments()
 
   /* Calculate the offset of the next message */
   @volatile var nextOffsetMetadata = new LogOffsetMetadata(activeSegment.nextOffset(), activeSegment.baseOffset, activeSegment.size.toInt)
@@ -145,8 +146,7 @@ class Log(@volatile var dir: File,
   def name  = dir.getName()
 
   /* Load the log segments from the log files on disk */
-  private def loadSegments() = {
-    val segments = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
+  private def loadSegments() {
     // create the log directory if it doesn't exist
     dir.mkdirs()
     var swapFiles = Set[File]()
@@ -250,7 +250,7 @@ class Log(@volatile var dir: File,
       replaceSegments(swapSegment, oldSegments.toSeq, isRecoveredSwapFile = true)
     }
 
-    if(segments.isEmpty) {
+    if(logSegments.isEmpty) {
       // no existing segments, create a new mutable segment beginning at offset 0
       segments.put(0L, new LogSegment(dir = dir,
                                      startOffset = 0,
@@ -269,7 +269,6 @@ class Log(@volatile var dir: File,
         activeSegment.timeIndex.resize(config.maxIndexSize)
       }
     }
-    segments
   }
 
   private def updateLogEndOffset(messageOffset: Long) {
