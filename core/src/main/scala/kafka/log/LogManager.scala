@@ -408,7 +408,7 @@ class LogManager(val logDirs: Array[File],
       }
     } catch {
       case e: Throwable => 
-        error(s"Exception in kafka-delete-logs thread. Ignoring.", e)
+        error(s"Exception in kafka-delete-logs thread. Ignoring to ensure continued scheduling.", e)
     }
 }
 
