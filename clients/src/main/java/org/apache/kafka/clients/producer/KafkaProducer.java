@@ -542,8 +542,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         long elapsed = 0;
 
         // update metadata controlled by both maxWaitMs and maxMetaFetchCount
-        // when auto.create.topics.enable=true and sending a msg to non-exist topic
-        // setting maxMetaFetchCount will reduce many unnecessary metadata request
+        // when auto.create.topics.enable=false and sending a msg to non-exist topic
+        // setting maxMetaFetchCount=1 can reduce many unnecessary metadata request
         for (int i = 0; i < maxMetaFetchCount; ++i) {
             log.trace("Requesting metadata update for topic {}.", topic);
             int version = metadata.requestUpdate();
