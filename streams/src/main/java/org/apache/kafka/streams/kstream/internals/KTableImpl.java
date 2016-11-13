@@ -55,17 +55,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     public static final String JOINOTHER_NAME = "KTABLE-JOINOTHER-";
 
-    public static final String LEFTTHIS_NAME = "KTABLE-LEFTTHIS-";
-
-    public static final String LEFTOTHER_NAME = "KTABLE-LEFTOTHER-";
-
     private static final String MAPVALUES_NAME = "KTABLE-MAPVALUES-";
 
     public static final String MERGE_NAME = "KTABLE-MERGE-";
-
-    public static final String OUTERTHIS_NAME = "KTABLE-OUTERTHIS-";
-
-    public static final String OUTEROTHER_NAME = "KTABLE-OUTEROTHER-";
 
     private static final String PRINTING_NAME = "KSTREAM-PRINTER-";
 
@@ -77,8 +69,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     public final ProcessorSupplier<?, ?> processorSupplier;
 
-    private final Serde<K> keySerde;
-    private final Serde<V> valSerde;
     private final String storeName;
 
     private boolean sendOldValues = false;
@@ -89,20 +79,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                       ProcessorSupplier<?, ?> processorSupplier,
                       Set<String> sourceNodes,
                       final String storeName) {
-        this(topology, name, processorSupplier, sourceNodes, null, null, storeName);
-    }
-
-    public KTableImpl(KStreamBuilder topology,
-                      String name,
-                      ProcessorSupplier<?, ?> processorSupplier,
-                      Set<String> sourceNodes,
-                      Serde<K> keySerde,
-                      Serde<V> valSerde,
-                      final String storeName) {
         super(topology, name, sourceNodes);
         this.processorSupplier = processorSupplier;
-        this.keySerde = keySerde;
-        this.valSerde = valSerde;
         this.storeName = storeName;
     }
 

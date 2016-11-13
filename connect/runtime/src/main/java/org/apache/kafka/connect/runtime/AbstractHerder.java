@@ -29,6 +29,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorPluginInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
@@ -237,9 +238,18 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 status.workerId(), status.trace());
     }
 
+    protected Map<String, ConfigValue> validateBasicConnectorConfig(Connector connector,
+                                                                    ConfigDef configDef,
+                                                                    Map<String, String> config) {
+        return configDef.validateAll(config);
+    }
 
     @Override
-    public ConfigInfos validateConfigs(String connType, Map<String, String> connectorConfig) {
+    public ConfigInfos validateConnectorConfig(Map<String, String> connectorConfig) {
+        String connType = connectorConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+        if (connType == null)
+            throw new BadRequestException("Connector config " + connectorConfig + " contains no connector type");
+
         Connector connector = getConnector(connType);
         ConfigDef connectorConfigDef;
         if (connector instanceof SourceConnector) {
@@ -247,22 +257,25 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         } else {
             connectorConfigDef = SinkConnectorConfig.configDef();
         }
-        List<ConfigValue> connectorConfigValues = connectorConfigDef.validate(connectorConfig);
-        
+
+        List<ConfigValue> configValues = new ArrayList<>();
+        Map<String, ConfigKey> configKeys = new HashMap<>();
+        List<String> allGroups = new ArrayList<>();
+
+        // do basic connector validation (name, connector type, etc.)
+        Map<String, ConfigValue> validatedConnectorConfig = validateBasicConnectorConfig(connector, connectorConfigDef, connectorConfig);
+        configValues.addAll(validatedConnectorConfig.values());
+        configKeys.putAll(connectorConfigDef.configKeys());
+        allGroups.addAll(connectorConfigDef.groups());
+
+        // do custom connector-specific validation
         Config config = connector.validate(connectorConfig);
         ConfigDef configDef = connector.config();
-        Map<String, ConfigKey> configKeys = configDef.configKeys();
-        List<ConfigValue> configValues = config.configValues();
+        configKeys.putAll(configDef.configKeys());
+        allGroups.addAll(configDef.groups());
+        configValues.addAll(config.configValues());
 
-        Map<String, ConfigKey> resultConfigKeys = new HashMap<>(configKeys);
-        resultConfigKeys.putAll(connectorConfigDef.configKeys());
-        configValues.addAll(connectorConfigValues);
-
-        List<String> allGroups = new LinkedList<>(connectorConfigDef.groups());
-        List<String> groups = configDef.groups();
-        allGroups.addAll(groups);
-
-        return generateResult(connType, resultConfigKeys, configValues, allGroups);
+        return generateResult(connType, configKeys, configValues, allGroups);
     }
 
     public static List<ConnectorPluginInfo> connectorPlugins() {
@@ -357,7 +370,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return new ConfigValueInfo(configValue.name(), value, recommendedValues, configValue.errorMessages(), configValue.visible());
     }
 
-    private Connector getConnector(String connType) {
+    protected Connector getConnector(String connType) {
         if (tempConnectors.containsKey(connType)) {
             return tempConnectors.get(connType);
         } else {

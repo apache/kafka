@@ -28,7 +28,6 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
 
-import java.util.ArrayList;
 import java.util.List;
 
 class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStore<K, V> {
@@ -78,27 +77,27 @@ class CachingKeyValueStore<K, V> implements KeyValueStore<K, V>, CachedStateStor
         cache.addDirtyEntryFlushListener(name, new ThreadCache.DirtyEntryFlushListener() {
             @Override
             public void apply(final List<ThreadCache.DirtyEntry> entries) {
-                final List<KeyValue<Bytes, byte[]>> keyValues = new ArrayList<>();
                 for (ThreadCache.DirtyEntry entry : entries) {
-                    keyValues.add(KeyValue.pair(entry.key(), entry.newValue()));
-                    maybeForward(entry, (InternalProcessorContext) context);
+                    putAndMaybeForward(entry, (InternalProcessorContext) context);
                 }
-                underlying.putAll(keyValues);
             }
         });
 
     }
 
-    private void maybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
-        if (flushListener != null) {
-            final RecordContext current = context.recordContext();
+    private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
+        final RecordContext current = context.recordContext();
+        try {
             context.setRecordContext(entry.recordContext());
-            try {
+            if (flushListener != null) {
+
                 flushListener.apply(serdes.keyFrom(entry.key().get()),
                                     serdes.valueFrom(entry.newValue()), serdes.valueFrom(underlying.get(entry.key())));
-            } finally {
-                context.setRecordContext(current);
+
             }
+            underlying.put(entry.key(), entry.newValue());
+        } finally {
+            context.setRecordContext(current);
         }
     }
 

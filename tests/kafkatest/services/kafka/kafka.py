@@ -88,6 +88,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.authorizer_class_name = authorizer_class_name
         self.zk_set_acl = False
         self.server_prop_overides = server_prop_overides
+        self.log_level = "DEBUG"
 
         #
         # In a heavily loaded and not very fast machine, it is
