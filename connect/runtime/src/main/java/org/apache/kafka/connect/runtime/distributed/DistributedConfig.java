@@ -105,7 +105,10 @@ public class DistributedConfig extends WorkerConfig {
 
     static {
         CONFIG = baseConfigDef()
-                .define(GROUP_ID_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, GROUP_ID_DOC)
+                .define(GROUP_ID_CONFIG,
+                        ConfigDef.Type.STRING,
+                        ConfigDef.Importance.HIGH,
+                        GROUP_ID_DOC)
                 .define(SESSION_TIMEOUT_MS_CONFIG,
                         ConfigDef.Type.INT,
                         10000,
