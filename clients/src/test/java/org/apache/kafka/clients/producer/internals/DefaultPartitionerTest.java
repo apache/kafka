@@ -12,14 +12,21 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Partitioner;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
@@ -61,5 +68,36 @@ public class DefaultPartitionerTest {
                 countForPart2++;
         }
         assertEquals("The distribution between two available partitions should be even", countForPart0, countForPart2);
+    }
+
+    @Test
+    public void testRoundRobin() throws InterruptedException {
+        final String topicA = "topicA";
+        String topicB = "topicB";
+
+        List<PartitionInfo> allPartitions = asList(new PartitionInfo(topicA, 0, node0, nodes, nodes),
+                new PartitionInfo(topicA, 1, node1, nodes, nodes),
+                new PartitionInfo(topicA, 2, node2, nodes, nodes),
+                new PartitionInfo(topicB, 0, node0, nodes, nodes)
+                );
+        Cluster testCluster = new Cluster("clusterId", asList(node0, node1, node2), allPartitions,
+                Collections.<String>emptySet(), Collections.<String>emptySet());
+
+        final Map<Integer, Integer> partitionCount = new HashMap<>();
+
+        for(int i = 0; i < 30; ++i){
+            int partition = partitioner.partition(topicA, null, null, null, null, testCluster);
+            Integer count = partitionCount.get(partition);
+            if (null == count) count = 0;
+            partitionCount.put(partition, count + 1);
+
+            if(i%5 == 0 ){
+                partitioner.partition(topicB, null, null, null, null, testCluster);
+            }
+        }
+
+        Assert.assertEquals(10, (int)partitionCount.get(0));
+        Assert.assertEquals(10, (int)partitionCount.get(1));
+        Assert.assertEquals(10, (int)partitionCount.get(2));
     }
 }
