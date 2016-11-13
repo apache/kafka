@@ -36,7 +36,6 @@ import org.apache.kafka.common.utils.Utils;
  */
 public class DefaultPartitioner implements Partitioner {
 
-    //private final AtomicInteger counter = new AtomicInteger(new Random().nextInt());
     private final Map<String, AtomicInteger> topicCounterMap = new ConcurrentHashMap<>();
 
     public void configure(Map<String, ?> configs) {}
@@ -70,7 +69,7 @@ public class DefaultPartitioner implements Partitioner {
         }
     }
 
-    public int getNextValue(String topic) {
+    private int getNextValue(String topic) {
         AtomicInteger counter = topicCounterMap.get(topic);
         if (null == counter) {
             counter = new AtomicInteger(new Random().nextInt());
