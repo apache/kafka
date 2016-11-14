@@ -42,25 +42,26 @@ import org.slf4j.LoggerFactory;
  * <p>
  * If you need <i>processing-time</i> semantics, use {@link WallclockTimestampExtractor}.
  *
- * @see FailingConsumerRecordTimestampExtractor
- * @see InferringConsumerRecordTimestampExtractor
+ * @see FailOnInvalidTimestamp
+ * @see UsePreviousTimeOnInvalidTimestamp
  * @see WallclockTimestampExtractor
  */
-public class SkipInvalidConsumerRecordTimestampExtractor extends AbstractConsumerRecordTimestampExtractor {
-    private static final Logger log = LoggerFactory.getLogger(SkipInvalidConsumerRecordTimestampExtractor.class);
+public class LogAndSkipOnInvalidTimestamp extends ExtractRecordMetadataTimestamp {
+    private static final Logger log = LoggerFactory.getLogger(LogAndSkipOnInvalidTimestamp.class);
 
     /**
-     * Writes a log warn message as the extracted timestamp is negative and the record will no be processed but dropped.
+     * Writes a log WARN message when the extracted timestamp is invalid (negative) but returns the invalid timestamp as-is,
+     * which ultimately causes the record to be skipped and not to be processed.
      *
      * @param record a data record
      * @param recordTimestamp the timestamp extractor from the record
-     * @param currentStreamsTime the current value of the internally tracked Streams time (could be -1 if unknown)
+     * @param previousTimestamp the latest extracted valid timestamp of the current record's partition˙ (could be -1 if unknown)
      * @return the originally extracted timestamp of the record
      */
     @Override
     public long onInvalidTimestamp(final ConsumerRecord<Object, Object> record,
                                    final long recordTimestamp,
-                                   final long currentStreamsTime) {
+                                   final long previousTimestamp) {
         log.warn("Input record {} will be dropped because it has an invalid (negative) timestamp.", record);
         return recordTimestamp;
     }

@@ -444,10 +444,13 @@ public class StreamThread extends Thread {
                     throw new StreamsException(logPrefix + " Failed to rebalance", rebalanceException);
 
                 if (!records.isEmpty()) {
+                    int numAddedRecords = 0;
                     for (TopicPartition partition : records.partitions()) {
                         StreamTask task = activeTasksByPartition.get(partition);
-                        task.addRecords(partition, records.records(partition));
+                        numAddedRecords += task.addRecords(partition, records.records(partition));
                     }
+                    sensors.processedRecordsSensor.record(numAddedRecords, timerStartedMs);
+                    sensors.skippedRecordsSensor.record(records.count() - numAddedRecords, timerStartedMs);
                     polledRecords = true;
                 } else {
                     polledRecords = false;
@@ -919,6 +922,8 @@ public class StreamThread extends Thread {
         final Sensor punctuateTimeSensor;
         final Sensor taskCreationSensor;
         final Sensor taskDestructionSensor;
+        final Sensor processedRecordsSensor;
+        final Sensor skippedRecordsSensor;
 
         public StreamsMetricsImpl(Metrics metrics) {
             this.metrics = metrics;
@@ -951,6 +956,12 @@ public class StreamThread extends Thread {
 
             this.taskDestructionSensor = metrics.sensor(sensorNamePrefix + ".task-destruction");
             this.taskDestructionSensor.add(metrics.metricName("task-destruction-rate", metricGrpName, "The average per-second number of destructed tasks", metricTags), new Rate(new Count()));
+
+            this.processedRecordsSensor = metrics.sensor(sensorNamePrefix + ".processed-records");
+            this.processedRecordsSensor.add(metrics.metricName("processed-records-count", metricGrpName, "The number of processed records.", metricTags), new Count());
+
+            this.skippedRecordsSensor = metrics.sensor(sensorNamePrefix + ".skipped-records");
+            this.skippedRecordsSensor.add(metrics.metricName("skipped-records-count", metricGrpName, "The number of skipped records.", metricTags), new Count());
         }
 
         @Override

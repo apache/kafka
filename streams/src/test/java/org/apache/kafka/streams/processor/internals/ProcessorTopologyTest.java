@@ -403,7 +403,7 @@ public class ProcessorTopologyTest {
 
     public static class CustomTimestampExtractor implements TimestampExtractor {
         @Override
-        public long extract(final ConsumerRecord<Object, Object> record, final long currentStreamsTime) {
+        public long extract(final ConsumerRecord<Object, Object> record, final long previousTimestamp) {
             return timestamp;
         }
     }

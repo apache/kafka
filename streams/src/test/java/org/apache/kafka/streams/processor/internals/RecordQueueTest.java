@@ -29,8 +29,8 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.FailingConsumerRecordTimestampExtractor;
-import org.apache.kafka.streams.processor.SkipInvalidConsumerRecordTimestampExtractor;
+import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
+import org.apache.kafka.streams.processor.LogAndSkipOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
@@ -145,7 +145,7 @@ public class RecordQueueTest {
         final List<ConsumerRecord<byte[], byte[]>> records = Collections.singletonList(
                 new ConsumerRecord<>("topic", 1, 1, -1L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue));
 
-        queue.addRawRecords(records, new FailingConsumerRecordTimestampExtractor());
+        queue.addRawRecords(records, new FailOnInvalidTimestamp());
     }
 
     @Test
@@ -154,7 +154,7 @@ public class RecordQueueTest {
         final List<ConsumerRecord<byte[], byte[]>> records = Collections.singletonList(
                 new ConsumerRecord<>("topic", 1, 1, -1L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue));
 
-        queue.addRawRecords(records, new SkipInvalidConsumerRecordTimestampExtractor());
+        queue.addRawRecords(records, new LogAndSkipOnInvalidTimestamp());
 
         assertEquals(0, queue.size());
     }

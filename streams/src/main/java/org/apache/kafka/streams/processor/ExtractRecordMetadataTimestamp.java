@@ -38,26 +38,26 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
  * <p>
  * If you need <i>processing-time</i> semantics, use {@link WallclockTimestampExtractor}.
  *
- * @see FailingConsumerRecordTimestampExtractor
- * @see SkipInvalidConsumerRecordTimestampExtractor
- * @see InferringConsumerRecordTimestampExtractor
+ * @see FailOnInvalidTimestamp
+ * @see LogAndSkipOnInvalidTimestamp
+ * @see UsePreviousTimeOnInvalidTimestamp
  * @see WallclockTimestampExtractor
  */
-public abstract class AbstractConsumerRecordTimestampExtractor implements TimestampExtractor {
+abstract class ExtractRecordMetadataTimestamp implements TimestampExtractor {
 
     /**
      * Extracts the embedded metadata timestamp from the given {@link ConsumerRecord}.
      *
      * @param record a data record
-     * @param currentStreamsTime the current value of the internally tracked Streams time (could be -1 if unknown)
+     * @param previousTimestamp the latest extracted valid timestamp of the current record's partition˙ (could be -1 if unknown)
      * @return the embedded metadata timestamp of the given {@link ConsumerRecord}
      */
     @Override
-    public long extract(final ConsumerRecord<Object, Object> record, final long currentStreamsTime) {
+    public long extract(final ConsumerRecord<Object, Object> record, final long previousTimestamp) {
         final long timestamp = record.timestamp();
 
         if (timestamp < 0) {
-            return onInvalidTimestamp(record, timestamp, currentStreamsTime);
+            return onInvalidTimestamp(record, timestamp, previousTimestamp);
         }
 
         return timestamp;
@@ -68,10 +68,10 @@ public abstract class AbstractConsumerRecordTimestampExtractor implements Timest
      *
      * @param record a data record
      * @param recordTimestamp the timestamp extractor from the record
-     * @param currentStreamsTime the current value of the internally tracked Streams time (could be -1 if unknown)
+     * @param previousTimestamp the latest extracted valid timestamp of the current record's partition˙ (could be -1 if unknown)
      * @return a new timestamp for the record
      */
     public abstract long onInvalidTimestamp(final ConsumerRecord<Object, Object> record,
                                             final long recordTimestamp,
-                                            final long currentStreamsTime);
+                                            final long previousTimestamp);
 }

@@ -27,8 +27,8 @@ import org.apache.kafka.streams.kstream.KTable;
 public interface TimestampExtractor {
 
     /**
-     * Extracts a timestamp from a record. The timestamp must be positive. If a negative timestamp is returned,
-     * the record will not be processed but dropped silently.
+     * Extracts a timestamp from a record. The timestamp must be positive to be considered a valid timestamp.
+     * Returning a negative timestamp will cause the record not to be processed but rather silently skipped.
      * <p>
      * The extracted timestamp MUST represent the milliseconds since midnight, January 1, 1970 UTC.
      * <p>
@@ -38,8 +38,8 @@ public interface TimestampExtractor {
      *
      *
      * @param record a data record
-     * @param currentStreamsTime the current value of the internally tracked stream-time (could be -1 if unknown)
+     * @param previousTimestamp the latest extracted valid timestamp of the current record's partition˙ (could be -1 if unknown)
      * @return        the timestamp of the record
      */
-    long extract(ConsumerRecord<Object, Object> record, long currentStreamsTime);
+    long extract(ConsumerRecord<Object, Object> record, long previousTimestamp);
 }
