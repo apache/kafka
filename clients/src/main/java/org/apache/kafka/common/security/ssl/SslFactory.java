@@ -21,12 +21,16 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
+import java.security.Provider;
 import java.security.SecureRandom;
+import java.security.Security;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -44,6 +48,7 @@ public class SslFactory implements Configurable {
 
     private String protocol;
     private String provider;
+    private List<String> providerClasses;
     private String kmfAlgorithm;
     private String tmfAlgorithm;
     private SecurityStore keystore = null;
@@ -70,6 +75,10 @@ public class SslFactory implements Configurable {
     public void configure(Map<String, ?> configs) throws KafkaException {
         this.protocol =  (String) configs.get(SslConfigs.SSL_PROTOCOL_CONFIG);
         this.provider = (String) configs.get(SslConfigs.SSL_PROVIDER_CONFIG);
+
+        @SuppressWarnings("unchecked")
+        List<String> providerClasses = (List<String>) configs.get(SslConfigs.SSL_PROVIDER_CLASSES_CONFIG);
+        this.providerClasses = (providerClasses != null) ? providerClasses : Collections.<String>emptyList();
 
         @SuppressWarnings("unchecked")
         List<String> cipherSuitesList = (List<String>) configs.get(SslConfigs.SSL_CIPHER_SUITES_CONFIG);
@@ -123,7 +132,10 @@ public class SslFactory implements Configurable {
     }
 
 
-    private SSLContext createSSLContext() throws GeneralSecurityException, IOException  {
+    private SSLContext createSSLContext() throws GeneralSecurityException, IOException, ClassNotFoundException {
+        for (String providerClassName : providerClasses) {
+            Security.addProvider(Utils.newInstance(providerClassName, Provider.class));
+        }
         SSLContext sslContext;
         if (provider != null)
             sslContext = SSLContext.getInstance(protocol, provider);

@@ -56,6 +56,7 @@ import org.bouncycastle.operator.DefaultDigestAlgorithmIdentifierFinder;
 import org.bouncycastle.operator.DefaultSignatureAlgorithmIdentifierFinder;
 import org.bouncycastle.operator.bc.BcRSAContentSignerBuilder;
 
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -166,14 +167,14 @@ public class TestSslUtils {
         saveKeyStore(ks, filename, password);
     }
 
-    private static Map<String, Object> createSslConfig(Mode mode, File keyStoreFile, Password password, Password keyPassword,
-                                                      File trustStoreFile, Password trustStorePassword) {
+    public static Map<String, Object> createSslConfig(Mode mode, File keyStoreFile, Password password, Password keyPassword, String keyStoreType,
+                                                      File trustStoreFile, Password trustStorePassword, String trustStoreType, List<String> providerClasses) {
         Map<String, Object> sslConfigs = new HashMap<>();
         sslConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2"); // protocol to create SSLContext
 
         if (mode == Mode.SERVER || (mode == Mode.CLIENT && keyStoreFile != null)) {
             sslConfigs.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, keyStoreFile.getPath());
-            sslConfigs.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, "JKS");
+            sslConfigs.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, keyStoreType);
             sslConfigs.put(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, TrustManagerFactory.getDefaultAlgorithm());
             sslConfigs.put(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, password);
             sslConfigs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, keyPassword);
@@ -181,12 +182,13 @@ public class TestSslUtils {
 
         sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, trustStoreFile.getPath());
         sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, trustStorePassword);
-        sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS");
+        sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, trustStoreType);
         sslConfigs.put(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, TrustManagerFactory.getDefaultAlgorithm());
 
         List<String> enabledProtocols  = new ArrayList<>();
         enabledProtocols.add("TLSv1.2");
         sslConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, enabledProtocols);
+        sslConfigs.put(SslConfigs.SSL_PROVIDER_CLASSES_CONFIG, providerClasses);
 
         return sslConfigs;
     }
@@ -226,7 +228,8 @@ public class TestSslUtils {
             trustStoreFile.deleteOnExit();
         }
 
-        return createSslConfig(mode, keyStoreFile, password, password, trustStoreFile, trustStorePassword);
+        return createSslConfig(mode, keyStoreFile, password, password, "JKS", trustStoreFile, trustStorePassword, "JKS",
+            Collections.<String>emptyList());
     }
 
 }

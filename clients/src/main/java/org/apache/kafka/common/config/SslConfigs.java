@@ -37,6 +37,10 @@ public class SslConfigs {
     public static final String SSL_PROVIDER_CONFIG = "ssl.provider";
     public static final String SSL_PROVIDER_DOC = "The name of the security provider used for SSL connections. Default value is the default security provider of the JVM.";
 
+    public static final String SSL_PROVIDER_CLASSES_CONFIG = "ssl.provider.classes";
+    public static final String SSL_PROVIDER_CLASSES_DOC = "Names of security provider classes to install. The provider classes listed must be default constructible.";
+
+
     public static final String SSL_CIPHER_SUITES_CONFIG = "ssl.cipher.suites";
     public static final String SSL_CIPHER_SUITES_DOC = "A list of cipher suites. This is a named combination of authentication, encryption, MAC and key exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL network protocol. "
             + "By default all the available cipher suites are supported.";
@@ -101,6 +105,7 @@ public class SslConfigs {
     public static void addClientSslSupport(ConfigDef config) {
         config.define(SslConfigs.SSL_PROTOCOL_CONFIG, ConfigDef.Type.STRING, SslConfigs.DEFAULT_SSL_PROTOCOL, ConfigDef.Importance.MEDIUM, SslConfigs.SSL_PROTOCOL_DOC)
                 .define(SslConfigs.SSL_PROVIDER_CONFIG, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SslConfigs.SSL_PROVIDER_DOC)
+                .define(SslConfigs.SSL_PROVIDER_CLASSES_CONFIG, ConfigDef.Type.LIST, null, ConfigDef.Importance.LOW, SslConfigs.SSL_PROVIDER_CLASSES_DOC)
                 .define(SslConfigs.SSL_CIPHER_SUITES_CONFIG, ConfigDef.Type.LIST, null, ConfigDef.Importance.LOW, SslConfigs.SSL_CIPHER_SUITES_DOC)
                 .define(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, ConfigDef.Type.LIST, SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS, ConfigDef.Importance.MEDIUM, SslConfigs.SSL_ENABLED_PROTOCOLS_DOC)
                 .define(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, ConfigDef.Type.STRING, SslConfigs.DEFAULT_SSL_KEYSTORE_TYPE, ConfigDef.Importance.MEDIUM, SslConfigs.SSL_KEYSTORE_TYPE_DOC)

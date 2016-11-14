@@ -331,6 +331,7 @@ object KafkaConfig {
   val PrincipalBuilderClassProp = SslConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG
   val SslProtocolProp = SslConfigs.SSL_PROTOCOL_CONFIG
   val SslProviderProp = SslConfigs.SSL_PROVIDER_CONFIG
+  val SslProviderClassesProp = SslConfigs.SSL_PROVIDER_CLASSES_CONFIG
   val SslCipherSuitesProp = SslConfigs.SSL_CIPHER_SUITES_CONFIG
   val SslEnabledProtocolsProp = SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG
   val SslKeystoreTypeProp = SslConfigs.SSL_KEYSTORE_TYPE_CONFIG
@@ -552,6 +553,7 @@ object KafkaConfig {
   val PrincipalBuilderClassDoc = SslConfigs.PRINCIPAL_BUILDER_CLASS_DOC
   val SslProtocolDoc = SslConfigs.SSL_PROTOCOL_DOC
   val SslProviderDoc = SslConfigs.SSL_PROVIDER_DOC
+  val SslProviderClassesDoc = SslConfigs.SSL_PROVIDER_CLASSES_DOC
   val SslCipherSuitesDoc = SslConfigs.SSL_CIPHER_SUITES_DOC
   val SslEnabledProtocolsDoc = SslConfigs.SSL_ENABLED_PROTOCOLS_DOC
   val SslKeystoreTypeDoc = SslConfigs.SSL_KEYSTORE_TYPE_DOC
@@ -729,6 +731,7 @@ object KafkaConfig {
       .define(PrincipalBuilderClassProp, CLASS, Defaults.PrincipalBuilderClass, MEDIUM, PrincipalBuilderClassDoc)
       .define(SslProtocolProp, STRING, Defaults.SslProtocol, MEDIUM, SslProtocolDoc)
       .define(SslProviderProp, STRING, null, MEDIUM, SslProviderDoc)
+      .define(SslProviderClassesProp, LIST, null, LOW, SslProviderClassesDoc)
       .define(SslEnabledProtocolsProp, LIST, Defaults.SslEnabledProtocols, MEDIUM, SslEnabledProtocolsDoc)
       .define(SslKeystoreTypeProp, STRING, Defaults.SslKeystoreType, MEDIUM, SslKeystoreTypeDoc)
       .define(SslKeystoreLocationProp, STRING, null, MEDIUM, SslKeystoreLocationDoc)
@@ -914,6 +917,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val principalBuilderClass = getClass(KafkaConfig.PrincipalBuilderClassProp)
   val sslProtocol = getString(KafkaConfig.SslProtocolProp)
   val sslProvider = getString(KafkaConfig.SslProviderProp)
+  val sslProviderClasses = getList(KafkaConfig.SslProviderClassesProp)
   val sslEnabledProtocols = getList(KafkaConfig.SslEnabledProtocolsProp)
   val sslKeystoreType = getString(KafkaConfig.SslKeystoreTypeProp)
   val sslKeystoreLocation = getString(KafkaConfig.SslKeystoreLocationProp)

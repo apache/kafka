@@ -13,23 +13,33 @@
 package org.apache.kafka.common.security.ssl;
 
 import java.io.File;
+import java.security.Security;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Map;
 
 import javax.net.ssl.SSLEngine;
 
-import org.apache.kafka.test.TestSslUtils;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.test.TestSslUtils;
+import org.junit.Assert;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
  * A set of tests for the selector over ssl. These use a test harness that runs a simple socket server that echos back responses.
  */
 public class SslFactoryTest {
+    @Rule
+    public ExpectedException thrown = ExpectedException.none();
 
     @Test
     public void testSslFactoryConfiguration() throws Exception {
@@ -56,4 +66,56 @@ public class SslFactoryTest {
         assertTrue(engine.getUseClientMode());
     }
 
+    @Test
+    public void unknownProviderShouldGiveKeyStoreException() throws Exception {
+        File keyStoreFile = File.createTempFile("keystore", ".jks");
+        File trustStoreFile = File.createTempFile("truststore", ".jks");
+        Map<String, Object> clientSslConfig = TestSslUtils.createSslConfig(Mode.CLIENT,
+            keyStoreFile, new Password("test"), new Password("test"), "BAD",
+            trustStoreFile, new Password("test"), "JKS",
+            Collections.<String>emptyList());
+        SslFactory sslFactory = new SslFactory(Mode.CLIENT);
+
+        thrown.expect(KafkaException.class);
+        thrown.expectMessage("java.security.KeyStoreException");
+        thrown.expectMessage("BAD");
+        sslFactory.configure(clientSslConfig);
+    }
+
+    @Test
+    public void unknownProviderClassShouldGiveClassNotFoundException() throws Exception {
+        File keyStoreFile = File.createTempFile("keystore", ".jks");
+        File trustStoreFile = File.createTempFile("truststore", ".jks");
+        Map<String, Object> clientSslConfig = TestSslUtils.createSslConfig(Mode.CLIENT,
+            keyStoreFile, new Password("test"), new Password("test"), "JKS",
+            trustStoreFile, new Password("test"), "JKS",
+            Collections.singletonList("com.example.NotAvailable"));
+        SslFactory sslFactory = new SslFactory(Mode.CLIENT);
+
+        thrown.expect(KafkaException.class);
+        thrown.expectMessage("java.lang.ClassNotFoundException");
+        thrown.expectMessage("com.example.NotAvailable");
+        sslFactory.configure(clientSslConfig);
+    }
+
+    @Test
+    public void testProviderClasses() throws Exception {
+        try {
+            File keyStoreFile = File.createTempFile("keystore", ".a");
+            File trustStoreFile = File.createTempFile("truststore", ".b");
+            Map<String, Object> clientSslConfig = TestSslUtils.createSslConfig(Mode.CLIENT,
+                keyStoreFile, new Password("test"), new Password("test"), "A",
+                trustStoreFile, new Password("test"), "B",
+                Arrays.asList(TestProviderA.class.getCanonicalName(), TestProviderB.class.getCanonicalName()));
+            SslFactory sslFactory = new SslFactory(Mode.CLIENT);
+
+            sslFactory.configure(clientSslConfig);
+
+            Assert.assertNotNull("Provider A should have been installed", Security.getProvider("A"));
+            Assert.assertNotNull("Provider B should have been installed", Security.getProvider("B"));
+        } finally {
+            Security.removeProvider("A");
+            Security.removeProvider("B");
+        }
+    }
 }

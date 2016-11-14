@@ -195,6 +195,7 @@ Apache Kafka allows clients to connect over SSL. By default, SSL is disabled but
         Other configuration settings that may also be needed depending on our requirements and the broker configuration:
             <ol>
                 <li>ssl.provider (Optional). The name of the security provider used for SSL connections. Default value is the default security provider of the JVM.</li>
+                <li>ssl.provider.classes (Optional). Names of custom security provider classes that should be installed. The classes listed must extend java.security.Provider and be default constructible.</li>
                 <li>ssl.cipher.suites (Optional). A cipher suite is a named combination of authentication, encryption, MAC and key exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL network protocol.</li>
                 <li>ssl.enabled.protocols=TLSv1.2,TLSv1.1,TLSv1. It should list at least one of the protocols configured on the broker side</li>
                 <li>ssl.truststore.type=JKS</li>
@@ -440,7 +441,7 @@ Apache Kafka allows clients to connect over SSL. By default, SSL is disabled but
               <pre>    security.provider.n=providerClassName</pre>
               where <i>providerClassName</i> is the fully qualified name of the new provider and <i>n</i> is the preference order with
               lower numbers indicating higher preference.</li>
-              <li>Alternatively, you can register providers dynamically at runtime by invoking <code>Security.addProvider</code> at the beginning of the client
+              <li>Alternatively, you can register providers dynamically at runtime using the ssl.provider.classes setting, or by invoking <code>Security.addProvider</code> at the beginning of the client
               application or in a static initializer in the login module. For example:
               <pre>    Security.addProvider(new PlainSaslServerProvider());</pre></li>
               <li>For more details, see <a href="http://docs.oracle.com/javase/8/docs/technotes/guides/security/crypto/CryptoSpec.html">JCA Reference</a>.</li>
