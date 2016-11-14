@@ -29,7 +29,6 @@ import java.util.concurrent.TimeUnit
 
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import org.apache.kafka.common.errors.CorruptRecordException
-import org.apache.kafka.common.network.TransportLayer
 import org.apache.kafka.common.record.FileRecords
 import org.apache.kafka.common.utils.Utils
 

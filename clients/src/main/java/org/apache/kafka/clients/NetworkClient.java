@@ -60,7 +60,7 @@ public class NetworkClient implements KafkaClient {
     private final ClusterConnectionStates connectionStates;
 
     /* the set of requests currently being sent or awaiting a response */
-    private final InFlightRequests<InFlightRequest> inFlightRequests;
+    private final InFlightRequests inFlightRequests;
 
     /* the socket send buffer size in bytes */
     private final int socketSendBuffer;
@@ -239,8 +239,10 @@ public class NetworkClient implements KafkaClient {
         doSend(request, false, now);
     }
 
-    private void sendInternalMetadataRequest(ClientRequest request, long now) {
-        doSend(request, true, now);
+    private void sendInternalMetadataRequest(MetadataRequest metadataRequest, String nodeConnectionId, long now) {
+        ClientRequest clientRequest = new ClientRequest(nodeConnectionId, now, true,
+                nextRequestHeader(ApiKeys.METADATA), metadataRequest, null);
+        doSend(clientRequest, true, now);
     }
 
     private void doSend(ClientRequest request, boolean isInternalMetadataRequest, long now) {
@@ -643,10 +645,8 @@ public class NetworkClient implements KafkaClient {
                 else
                     metadataRequest = new MetadataRequest(new ArrayList<>(metadata.topics()));
 
-                ClientRequest clientRequest = new ClientRequest(nodeConnectionId, now, true,
-                        nextRequestHeader(ApiKeys.METADATA), metadataRequest, null);
                 log.debug("Sending metadata request {} to node {}", metadataRequest, node.id());
-                sendInternalMetadataRequest(clientRequest, now);
+                sendInternalMetadataRequest(metadataRequest, nodeConnectionId, now);
                 return requestTimeoutMs;
             }
 
@@ -674,12 +674,12 @@ public class NetworkClient implements KafkaClient {
 
     }
 
-    static class InFlightRequest implements InFlightRequests.InFlightRequest {
+    static class InFlightRequest {
         final RequestHeader header;
         final String destination;
         final RequestCompletionHandler callback;
         final boolean expectResponse;
-        final boolean isInternalMetadataRequest;
+        final boolean isInternalMetadataRequest; // used to flag metadata fetches which are triggered internally by NetworkClient
         final Send send;
         final long sendTimeMs;
         final long createdTimeMs;
@@ -710,20 +710,6 @@ public class NetworkClient implements KafkaClient {
             return new ClientResponse(header, callback, destination, createdTimeMs, timeMs, true, null);
         }
 
-        @Override
-        public long sendTimeMs() {
-            return sendTimeMs;
-        }
-
-        @Override
-        public String destination() {
-            return destination;
-        }
-
-        @Override
-        public Send send() {
-            return send;
-        }
     }
 
 }

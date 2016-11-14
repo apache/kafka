@@ -53,7 +53,7 @@ public class FileRecords implements Records {
 
     @Override
     public int sizeInBytes() {
-        return Long.valueOf(size).intValue();
+        return (int) size;
     }
 
     @Override
@@ -107,6 +107,9 @@ public class FileRecords implements Records {
             int size = logHeaderBuffer.getInt();
             if (size < 0)
                 throw new IllegalStateException("Record with size " + size);
+
+            if (position + Records.LOG_OVERHEAD + size > end)
+                return null;
 
             ByteBuffer recordBuffer = ByteBuffer.allocate(size);
             channel.read(recordBuffer, position + Records.LOG_OVERHEAD);
