@@ -152,7 +152,7 @@ public class KStreamBuilder extends TopologyBuilder {
         addSource(source, keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topic);
         addProcessor(name, processorSupplier, source);
 
-        final KTableImpl kTable = new KTableImpl<>(this, name, processorSupplier, Collections.singleton(source), keySerde, valSerde, storeName);
+        final KTableImpl kTable = new KTableImpl<>(this, name, processorSupplier, Collections.singleton(source), storeName);
         StateStoreSupplier storeSupplier = new RocksDBKeyValueStoreSupplier<>(storeName,
             keySerde,
             valSerde,

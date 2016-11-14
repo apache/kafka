@@ -32,6 +32,7 @@ import org.apache.kafka.test.MockProcessorContext;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 public class StoreChangeLoggerTest {
 
@@ -57,52 +58,23 @@ public class StoreChangeLoggerTest {
             }
     );
 
-    private final StoreChangeLogger<Integer, String> changeLogger = new StoreChangeLogger<>(topic, context, StateSerdes.withBuiltinTypes(topic, Integer.class, String.class), 3, 3);
+    private final StoreChangeLogger<Integer, String> changeLogger = new StoreChangeLogger<>(topic, context, StateSerdes.withBuiltinTypes(topic, Integer.class, String.class));
 
-    private final StoreChangeLogger.ValueGetter<Integer, String> getter = new StoreChangeLogger.ValueGetter<Integer, String>() {
-        @Override
-        public String get(Integer key) {
-            return written.get(key);
-        }
-    };
 
     @SuppressWarnings("unchecked")
     @Test
     public void testAddRemove() throws Exception {
-
         context.setTime(1);
-        written.put(0, "zero");
-        changeLogger.add(0);
-        written.put(1, "one");
-        changeLogger.add(1);
-        written.put(2, "two");
-        changeLogger.add(2);
+        changeLogger.logChange(0, "zero");
+        changeLogger.logChange(1, "one");
+        changeLogger.logChange(2, "two");
 
-        assertEquals(3, changeLogger.dirty.size());
-        assertEquals(0, changeLogger.removed.size());
-
-        changeLogger.delete(0);
-        changeLogger.delete(1);
-        written.put(3, "three");
-        changeLogger.add(3);
-        assertEquals(2, changeLogger.dirty.size());
-        assertEquals(2, changeLogger.removed.size());
-
-        written.put(0, "zero-again");
-        changeLogger.add(0);
-        assertEquals(3, changeLogger.dirty.size());
-        assertEquals(1, changeLogger.removed.size());
-
-        written.put(4, "four");
-        changeLogger.add(4);
-        changeLogger.maybeLogChange(getter);
-        assertEquals(0, changeLogger.dirty.size());
-        assertEquals(0, changeLogger.removed.size());
-        assertEquals(5, logged.size());
-        assertEquals("zero-again", logged.get(0));
-        assertEquals(null, logged.get(1));
+        assertEquals("zero", logged.get(0));
+        assertEquals("one", logged.get(1));
         assertEquals("two", logged.get(2));
-        assertEquals("three", logged.get(3));
-        assertEquals("four", logged.get(4));
+
+        changeLogger.logChange(0, null);
+        assertNull(logged.get(0));
+
     }
 }
