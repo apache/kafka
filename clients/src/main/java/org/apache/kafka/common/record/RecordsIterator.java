@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.Utils;
 import java.io.DataInputStream;
 import java.io.EOFException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 
@@ -32,13 +31,8 @@ public class RecordsIterator extends AbstractIterator<LogEntry> {
     private final boolean shallow;
     private DeepRecordsIterator innerIter;
 
-    public RecordsIterator(ByteBuffer buffer, boolean shallow) {
-        this.shallow = shallow;
-        this.logStream = new NoCopyLogInputStream(buffer);
-    }
-
-    public RecordsIterator(InputStream input, boolean shallow) {
-        this.logStream = new CopyLogInputStream(new DataInputStream(input));
+    public RecordsIterator(LogInputStream logStream, boolean shallow) {
+        this.logStream = logStream;
         this.shallow = shallow;
     }
 
@@ -86,14 +80,10 @@ public class RecordsIterator extends AbstractIterator<LogEntry> {
         return innerIter == null || !innerIter.hasNext();
     }
 
-    interface LogInputStream {
-        LogEntry nextEntry() throws IOException;
-    }
-
-    private static class CopyLogInputStream implements LogInputStream {
+    private static class DataLogInputStream implements LogInputStream {
         private final DataInputStream stream;
 
-        private CopyLogInputStream(DataInputStream stream) {
+        private DataLogInputStream(DataInputStream stream) {
             this.stream = stream;
         }
 
@@ -110,31 +100,6 @@ public class RecordsIterator extends AbstractIterator<LogEntry> {
         }
     }
 
-    private static class NoCopyLogInputStream implements LogInputStream {
-        private final DataInputStream stream;
-        private final ByteBuffer buffer;
-
-        private NoCopyLogInputStream(ByteBuffer buffer) {
-            this.stream = new DataInputStream(new ByteBufferInputStream(buffer));
-            this.buffer = buffer;
-        }
-
-        public LogEntry nextEntry() throws IOException {
-            long offset = stream.readLong();
-            int size = stream.readInt();
-            if (size < 0)
-                throw new IllegalStateException("Record with size " + size);
-
-            ByteBuffer slice = buffer.slice();
-            int newPos = buffer.position() + size;
-            if (newPos > buffer.limit())
-                return null;
-            buffer.position(newPos);
-            slice.limit(size);
-            return new LogEntry(offset, new Record(slice));
-        }
-    }
-
     private static class DeepRecordsIterator extends AbstractIterator<LogEntry> {
         private final ArrayDeque<LogEntry> logEntries;
         private final long absoluteBaseOffset;
@@ -143,7 +108,7 @@ public class RecordsIterator extends AbstractIterator<LogEntry> {
             CompressionType compressionType = entry.record().compressionType();
             ByteBuffer buffer = entry.record().value();
             DataInputStream stream = Compressor.wrapForInput(new ByteBufferInputStream(buffer), compressionType, entry.record().magic());
-            LogInputStream logStream = new CopyLogInputStream(stream);
+            LogInputStream logStream = new DataLogInputStream(stream);
 
             long wrapperRecordOffset = entry.offset();
             long wrapperRecordTimestamp = entry.record().timestamp();

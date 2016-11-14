@@ -21,8 +21,7 @@ import org.apache.kafka.common.network.TransportLayer;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.channels.Channels;
+import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.GatheringByteChannel;
 
@@ -78,7 +77,47 @@ public class FileRecords implements Records {
 
     @Override
     public RecordsIterator iterator() {
-        InputStream input = Channels.newInputStream(channel);
-        return new RecordsIterator(input, false);
+        return new RecordsIterator(new FileLogInputStream(channel, start, end), false);
+    }
+
+    private static class FileLogInputStream implements LogInputStream {
+        private long position;
+        protected final long end;
+        protected final FileChannel channel;
+        private final ByteBuffer logHeaderBuffer = ByteBuffer.allocate(Records.LOG_OVERHEAD);
+
+        public FileLogInputStream(FileChannel channel, long start, long end) {
+            this.channel = channel;
+            this.position = start;
+            this.end = end;
+        }
+
+        @Override
+        public LogEntry nextEntry() throws IOException {
+            if (position + Records.LOG_OVERHEAD >= end)
+                return null;
+
+            logHeaderBuffer.rewind();
+            channel.read(logHeaderBuffer, position);
+            if (logHeaderBuffer.hasRemaining())
+                return null;
+
+            logHeaderBuffer.rewind();
+            long offset = logHeaderBuffer.getLong();
+            int size = logHeaderBuffer.getInt();
+            if (size < 0)
+                throw new IllegalStateException("Record with size " + size);
+
+            ByteBuffer recordBuffer = ByteBuffer.allocate(size);
+            channel.read(recordBuffer, position + Records.LOG_OVERHEAD);
+            if (recordBuffer.hasRemaining())
+                return null;
+            recordBuffer.rewind();
+
+            Record record = new Record(recordBuffer);
+            LogEntry logEntry = new LogEntry(offset, record);
+            position += logEntry.size();
+            return logEntry;
+        }
     }
 }

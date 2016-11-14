@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.common.record;
 
+import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.GatheringByteChannel;
@@ -192,13 +193,11 @@ public class MemoryRecords implements Records {
 
     @Override
     public Iterator<LogEntry> iterator() {
-        if (writable) {
+        ByteBuffer input = this.buffer.duplicate();
+        if (writable)
             // flip on a duplicate buffer for reading
-            return new RecordsIterator((ByteBuffer) this.buffer.duplicate().flip(), false);
-        } else {
-            // do not need to flip for non-writable buffer
-            return new RecordsIterator(this.buffer.duplicate(), false);
-        }
+            input.flip();
+        return new RecordsIterator(new ByteBufferLogInputStream(input), false);
     }
     
     @Override
@@ -239,5 +238,30 @@ public class MemoryRecords implements Records {
     @Override
     public int hashCode() {
         return buffer.hashCode();
+    }
+
+    private static class ByteBufferLogInputStream implements LogInputStream {
+        private final DataInputStream stream;
+        private final ByteBuffer buffer;
+
+        private ByteBufferLogInputStream(ByteBuffer buffer) {
+            this.stream = new DataInputStream(new ByteBufferInputStream(buffer));
+            this.buffer = buffer;
+        }
+
+        public LogEntry nextEntry() throws IOException {
+            long offset = stream.readLong();
+            int size = stream.readInt();
+            if (size < 0)
+                throw new IllegalStateException("Record with size " + size);
+
+            ByteBuffer slice = buffer.slice();
+            int newPos = buffer.position() + size;
+            if (newPos > buffer.limit())
+                return null;
+            buffer.position(newPos);
+            slice.limit(size);
+            return new LogEntry(offset, new Record(slice));
+        }
     }
 }

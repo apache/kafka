@@ -90,8 +90,8 @@ public class ClientResponse {
     @Override
     public String toString() {
         return "ClientResponse(receivedTimeMs=" + receivedTimeMs +
-                ", latencyMs=" +
-                latencyMs +
+               ", latencyMs=" +
+               latencyMs +
                ", disconnected=" +
                disconnected +
                ", requestHeader=" +
