@@ -18,9 +18,15 @@ package org.apache.kafka.common.record;
 
 import java.io.IOException;
 
+/**
+ * An abstraction between an underlying input stream and record iterators, a LogInputStream
+ * returns only the shallow log entries, depending on {@link org.apache.kafka.common.record.RecordsIterator.DeepRecordsIterator}
+ * for the deep iteration.
+ */
 interface LogInputStream {
 
     /**
+     * Get the next log entry from the underlying input stream.
      *
      * @return The next log entry or null if there is none
      * @throws IOException for any IO errors
