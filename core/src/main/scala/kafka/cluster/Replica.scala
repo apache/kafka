@@ -23,7 +23,7 @@ import kafka.server.{LogOffsetMetadata, LogReadResult}
 import kafka.common.KafkaException
 import java.util.concurrent.atomic.AtomicLong
 
-import org.apache.kafka.common.utils.{SystemTime, Time}
+import org.apache.kafka.common.utils.Time
 
 class Replica(val brokerId: Int,
               val partition: Partition,

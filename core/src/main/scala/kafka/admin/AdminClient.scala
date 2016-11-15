@@ -17,19 +17,17 @@ import java.util.Properties
 import java.util.concurrent.atomic.AtomicInteger
 
 import kafka.common.KafkaException
-import kafka.coordinator.{GroupOverview, MemberSummary}
+import kafka.coordinator.GroupOverview
 import kafka.utils.Logging
 import org.apache.kafka.clients._
 import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, ConsumerProtocol, RequestFuture}
 import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
-import org.apache.kafka.common.errors.DisconnectException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector
-import org.apache.kafka.common.protocol.types.Struct
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.utils.{SystemTime, Time, Utils}
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{Cluster, Node, TopicPartition}
 
 import scala.collection.JavaConversions._
@@ -42,7 +40,7 @@ class AdminClient(val time: Time,
 
   private def send(target: Node,
                    api: ApiKeys,
-                   request: AbstractRequest): Struct = {
+                   request: AbstractRequest): AbstractResponse = {
     var future: RequestFuture[ClientResponse] = null
 
     future = client.send(target, api, request)
@@ -54,9 +52,8 @@ class AdminClient(val time: Time,
       throw future.exception()
   }
 
-  private def sendAnyNode(api: ApiKeys, request: AbstractRequest): Struct = {
-    bootstrapBrokers.foreach {
-      case broker =>
+  private def sendAnyNode(api: ApiKeys, request: AbstractRequest): AbstractResponse = {
+    bootstrapBrokers.foreach { broker =>
         try {
           return send(broker, api, request)
         } catch {
@@ -69,23 +66,20 @@ class AdminClient(val time: Time,
 
   private def findCoordinator(groupId: String): Node = {
     val request = new GroupCoordinatorRequest(groupId)
-    val responseBody = sendAnyNode(ApiKeys.GROUP_COORDINATOR, request)
-    val response = new GroupCoordinatorResponse(responseBody)
+    val response = sendAnyNode(ApiKeys.GROUP_COORDINATOR, request).asInstanceOf[GroupCoordinatorResponse]
     Errors.forCode(response.errorCode()).maybeThrow()
     response.node()
   }
 
   def listGroups(node: Node): List[GroupOverview] = {
-    val responseBody = send(node, ApiKeys.LIST_GROUPS, new ListGroupsRequest())
-    val response = new ListGroupsResponse(responseBody)
+    val response = send(node, ApiKeys.LIST_GROUPS, new ListGroupsRequest()).asInstanceOf[ListGroupsResponse]
     Errors.forCode(response.errorCode()).maybeThrow()
     response.groups().map(group => GroupOverview(group.groupId(), group.protocolType())).toList
   }
 
   private def findAllBrokers(): List[Node] = {
     val request = new MetadataRequest(List[String]())
-    val responseBody = sendAnyNode(ApiKeys.METADATA, request)
-    val response = new MetadataResponse(responseBody)
+    val response = sendAnyNode(ApiKeys.METADATA, request).asInstanceOf[MetadataResponse]
     val errors = response.errors()
     if (!errors.isEmpty)
       debug(s"Metadata request contained errors: $errors")
@@ -140,7 +134,7 @@ class AdminClient(val time: Time,
   def describeConsumerGroup(groupId: String): ConsumerGroupSummary = {
     val coordinator = findCoordinator(groupId)
     val responseBody = send(coordinator, ApiKeys.DESCRIBE_GROUPS, new DescribeGroupsRequest(List(groupId).asJava))
-    val response = new DescribeGroupsResponse(responseBody)
+    val response = responseBody.asInstanceOf[DescribeGroupsResponse]
     val metadata = response.groups.get(groupId)
     if (metadata == null)
       throw new KafkaException(s"Response from broker contained no metadata for group $groupId")
