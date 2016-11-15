@@ -83,7 +83,7 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
     public void setUp() throws Exception {
 
         Properties props = new Properties();
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         streamsConfiguration = StreamsTestUtils.getStreamsConfig(
                 "testAutoOffsetId",

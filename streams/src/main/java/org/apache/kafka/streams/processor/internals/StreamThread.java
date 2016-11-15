@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -200,6 +201,7 @@ public class StreamThread extends Thread {
     private final long commitTimeMs;
     private final StreamsMetricsThreadImpl streamsMetrics;
     final StateDirectory stateDirectory;
+    private String originalReset;
 
     private StreamPartitionAssignor partitionAssignor = null;
     private boolean cleanRun = false;
@@ -312,7 +314,16 @@ public class StreamThread extends Thread {
         log.info("{} Creating producer client", logPrefix);
         this.producer = clientSupplier.getProducer(config.getProducerConfigs(threadClientId));
         log.info("{} Creating consumer client", logPrefix);
-        this.consumer = clientSupplier.getConsumer(config.getConsumerConfigs(this, applicationId, threadClientId));
+
+        Map<String, Object> consumerConfigs = config.getConsumerConfigs(this, applicationId, threadClientId);
+
+        if (!builder.latestResetTopicsPattern().pattern().equals("") || !builder.earliestResetTopicsPattern().pattern().equals("")) {
+            log.info("{} custom offset resets specified, updating configs", logPrefix);
+            originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
+            consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
+        }
+
+        this.consumer = clientSupplier.getConsumer(consumerConfigs);
         log.info("{} Creating restore consumer client", logPrefix);
         this.restoreConsumer = clientSupplier.getRestoreConsumer(config.getRestoreConsumerConfigs(threadClientId));
 
@@ -588,9 +599,14 @@ public class StreamThread extends Thread {
                         consumer.seekToEnd(ex.partitions());
                         log.info(String.format("stream-thread [%s] setting topic to consume from latest offset %s", this.getName(), partition.topic()));
                     } else {
-                        //If not defined go to default config of earliest
-                        consumer.seekToBeginning(ex.partitions());
-                        log.info(String.format("stream-thread [%s] no setting defined for topic %s setting to consume from earliest offset", this.getName(), partition.topic()));
+                        if (originalReset != null) { //client could specify "none" and not provide custom offset resets
+                            if (originalReset.equals("earliest")) {
+                                consumer.seekToBeginning(ex.partitions());
+                            } else if (originalReset.equals("latest")) {
+                                consumer.seekToEnd(ex.partitions());
+                            }
+                            log.info(String.format("stream-thread [%s] no custom setting defined for topic %s using original config  %s for offset reset", this.getName(), partition.topic(), originalReset));
+                        }
                     }
                 }
 
@@ -738,36 +754,6 @@ public class StreamThread extends Thread {
         if (now > lastCleanMs + cleanTimeMs) {
             stateDirectory.cleanRemovedTasks();
             lastCleanMs = now;
-        }
-    }
-
-
-    /**
-     * @param assignment The Topics and partitions assigned to this stream thread
-     */
-    protected void maybeSetConsumerOffsets(Collection<TopicPartition> assignment) {
-        Set<TopicPartition> earliestTopicPartitions = new HashSet<>();
-        Set<TopicPartition> latestTopicPartitions = new HashSet<>();
-
-        Pattern earliestOffsetTopicPattern = builder.earliestResetTopicsPattern();
-        Pattern latestOffsetTopicPattern = builder.latestResetTopicsPattern();
-
-        for (TopicPartition topicPartition : assignment) {
-            if (earliestOffsetTopicPattern.matcher(topicPartition.topic()).matches()) {
-                earliestTopicPartitions.add(topicPartition);
-            } else if (latestOffsetTopicPattern.matcher(topicPartition.topic()).matches()) {
-                latestTopicPartitions.add(topicPartition);
-            }
-        }
-
-        if (!earliestTopicPartitions.isEmpty()) {
-            log.info(String.format("stream-thread [%s] setting these topics to consume from earliest offset %s", this.getName(), earliestTopicPartitions));
-            consumer.seekToBeginning(earliestTopicPartitions);
-        }
-
-        if (!latestTopicPartitions.isEmpty()) {
-            log.info(String.format("stream-thread [%s] setting these topics to consume from latest offset %s", this.getName(), latestTopicPartitions));
-            consumer.seekToEnd(latestTopicPartitions);
         }
     }
 
