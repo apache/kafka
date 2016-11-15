@@ -21,7 +21,7 @@ import org.apache.kafka.common.TopicPartition
 
 import scala.collection.JavaConverters._
 import kafka.api.LeaderAndIsr
-import org.apache.kafka.common.requests.{AbstractRequestResponse, LeaderAndIsrRequest, LeaderAndIsrResponse, PartitionState}
+import org.apache.kafka.common.requests._
 import org.junit.Assert._
 import kafka.utils.{CoreUtils, TestUtils}
 import kafka.cluster.Broker
@@ -156,7 +156,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     }
   }
 
-  private def staleControllerEpochCallback(response: AbstractRequestResponse): Unit = {
+  private def staleControllerEpochCallback(response: AbstractResponse): Unit = {
     val leaderAndIsrResponse = response.asInstanceOf[LeaderAndIsrResponse]
     staleControllerEpochDetected = Errors.forCode(leaderAndIsrResponse.errorCode) match {
       case Errors.STALE_CONTROLLER_EPOCH => true

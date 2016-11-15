@@ -31,7 +31,7 @@ public class Schema extends Type {
      */
     public Schema(Field... fs) {
         this.fields = new Field[fs.length];
-        this.fieldsByName = new HashMap<String, Field>();
+        this.fieldsByName = new HashMap<>();
         for (int i = 0; i < this.fields.length; i++) {
             Field field = fs[i];
             if (fieldsByName.containsKey(field.name))
@@ -47,13 +47,12 @@ public class Schema extends Type {
     @Override
     public void write(ByteBuffer buffer, Object o) {
         Struct r = (Struct) o;
-        for (int i = 0; i < fields.length; i++) {
-            Field f = fields[i];
+        for (Field field : fields) {
             try {
-                Object value = f.type().validate(r.get(f));
-                f.type.write(buffer, value);
+                Object value = field.type().validate(r.get(field));
+                field.type.write(buffer, value);
             } catch (Exception e) {
-                throw new SchemaException("Error writing field '" + f.name +
+                throw new SchemaException("Error writing field '" + field.name +
                                           "': " +
                                           (e.getMessage() == null ? e.getClass().getName() : e.getMessage()));
             }
@@ -85,8 +84,8 @@ public class Schema extends Type {
     public int sizeOf(Object o) {
         int size = 0;
         Struct r = (Struct) o;
-        for (int i = 0; i < fields.length; i++)
-            size += fields[i].type.sizeOf(r.get(fields[i]));
+        for (Field field : fields)
+            size += field.type.sizeOf(r.get(field));
         return size;
     }
 
@@ -146,8 +145,7 @@ public class Schema extends Type {
     public Struct validate(Object item) {
         try {
             Struct struct = (Struct) item;
-            for (int i = 0; i < this.fields.length; i++) {
-                Field field = this.fields[i];
+            for (Field field : fields) {
                 try {
                     field.type.validate(struct.get(field));
                 } catch (SchemaException e) {

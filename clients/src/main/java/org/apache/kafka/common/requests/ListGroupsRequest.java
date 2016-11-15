@@ -34,7 +34,7 @@ public class ListGroupsRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
+    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
         switch (versionId) {
             case 0:
                 short errorCode = Errors.forException(e).code();

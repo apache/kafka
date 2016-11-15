@@ -27,7 +27,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class ApiVersionsResponse extends AbstractRequestResponse {
+public class ApiVersionsResponse extends AbstractResponse {
 
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.API_VERSIONS.id);
     private static final ApiVersionsResponse API_VERSIONS_RESPONSE = createApiVersionsResponse();

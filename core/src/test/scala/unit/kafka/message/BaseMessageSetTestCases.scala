@@ -103,7 +103,7 @@ trait BaseMessageSetTestCases extends JUnitSuite {
     var remaining = messageSetSize
     var iterations = 0
     while (remaining > 0) {
-      remaining -= messageSet.writeTo(channel, messageSetSize - remaining, remaining)
+      remaining -= messageSet.asRecords.writeTo(channel, messageSetSize - remaining, remaining).toInt
       iterations += 1
     }
 
@@ -112,7 +112,7 @@ trait BaseMessageSetTestCases extends JUnitSuite {
   }
 
   def checkWriteToWithMessageSet(messageSet: MessageSet) {
-    checkWriteWithMessageSet(messageSet, messageSet.writeTo(_, 0, messageSet.sizeInBytes))
+    checkWriteWithMessageSet(messageSet, messageSet.asRecords.writeTo(_, 0, messageSet.sizeInBytes))
   }
 
   def checkWriteWithMessageSet(set: MessageSet, write: GatheringByteChannel => Long) {
