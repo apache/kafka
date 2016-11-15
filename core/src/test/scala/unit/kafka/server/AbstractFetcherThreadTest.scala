@@ -19,16 +19,17 @@ package kafka.server
 
 import com.yammer.metrics.Metrics
 import kafka.cluster.BrokerEndPoint
-import kafka.message.ByteBufferMessageSet
+import kafka.message.{ByteBufferMessageSet, Message, NoCompressionCodec}
 import kafka.server.AbstractFetcherThread.{FetchRequest, PartitionData}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.utils.Utils
 import org.junit.Assert.{assertFalse, assertTrue}
 import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
-import scala.collection.Map
+import scala.collection.{mutable, Map}
 
 class AbstractFetcherThreadTest {
 
@@ -102,8 +103,9 @@ class AbstractFetcherThreadTest {
 
   class DummyFetcherThread(name: String,
                            clientId: String,
-                           sourceBroker: BrokerEndPoint)
-    extends AbstractFetcherThread(name, clientId, sourceBroker, 0) {
+                           sourceBroker: BrokerEndPoint,
+                           fetchBackOffMs: Int = 0)
+    extends AbstractFetcherThread(name, clientId, sourceBroker, fetchBackOffMs) {
 
     type REQ = DummyFetchRequest
     type PD = PartitionData
@@ -121,6 +123,96 @@ class AbstractFetcherThreadTest {
 
     override protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): DummyFetchRequest =
       new DummyFetchRequest(partitionMap.map { case (k, v) => (k, v.offset) }.toMap)
+  }
+
+
+  @Test
+  def testFetchRequestCorruptedMessageException() {
+    val partition = new TopicPartition("topic", 0)
+    val fetcherThread = new TestFetcherThreadForCorruptedMessage("test", "client",
+      new BrokerEndPoint(0, "localhost", 9092), 100)
+
+    fetcherThread.start()
+
+    // Add one partition for fetching
+    fetcherThread.addPartitions(Map(partition -> 0L))
+
+    // Wait until fetcherThread finishes the work
+    TestUtils.waitUntilTrue(() => fetcherThread.fetchCount > 3,
+      "Failed waiting for fetcherThread tp finish the work")
+
+    fetcherThread.shutdown()
+
+    // The fetcherThread should have fetched two normal messages
+    assertTrue(fetcherThread.logEndOffset == 2);
+  }
+
+  class TestFetcherThreadForCorruptedMessage(name: String,
+                          clientId: String,
+                          sourceBroker: BrokerEndPoint,
+                          fetchBackOffMs: Int = 0)
+    extends DummyFetcherThread(name, clientId, sourceBroker, fetchBackOffMs) {
+
+    var logEndOffset = 0L
+    var fetchCount = 0
+    val normalPartitionDataSet = List(new NormalPartitionData(Seq(0)), new NormalPartitionData(Seq(1)))
+
+    override def processPartitionData(topicAndPartition: TopicPartition,
+                                      fetchOffset: Long,
+                                      partitionData: PartitionData): Unit = {
+      // Throw exception if the fetchOffset does not match the fetcherThread partition state
+      if (fetchOffset != logEndOffset)
+        throw new RuntimeException(
+          "Offset mismatch for partition %s: fetched offset = %d, log end offset = %d."
+            .format(topicAndPartition, fetchOffset, logEndOffset))
+
+      // Now check message's crc
+      val messages = partitionData.toByteBufferMessageSet
+      for (messageAndOffset <- messages.shallowIterator) {
+        val m = messageAndOffset.message
+        m.ensureValid()
+        logEndOffset = messageAndOffset.nextOffset
+      }
+    }
+
+    override protected def fetch(fetchRequest: DummyFetchRequest): Seq[(TopicPartition, DummyPartitionData)] = {
+      fetchCount += 1
+      // Set the first fetch to get a corrupted message
+      if (fetchCount == 1) {
+        fetchRequest.offsets.mapValues(_ => new CorruptedPartitionData).toSeq
+      } else {
+        // Then, the following fetches get the normal data
+        fetchRequest.offsets.map {
+          case (k, v) => (k, normalPartitionDataSet(v.toInt))
+        }.toSeq
+      }
+    }
+
+    override protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): DummyFetchRequest = {
+      val requestMap = new mutable.HashMap[TopicPartition, Long]
+      partitionMap.foreach { case (topicPartition, partitionFetchState) =>
+        // Add backoff delay check
+        if (partitionFetchState.isActive)
+          requestMap.put(topicPartition, partitionFetchState.offset)
+      }
+      new DummyFetchRequest(requestMap)
+    }
+  }
+
+  class CorruptedPartitionData extends DummyPartitionData {
+    override def toByteBufferMessageSet: ByteBufferMessageSet = {
+      val corruptedMessage = new Message("hello".getBytes)
+      val badChecksum = (corruptedMessage.checksum + 1 % Int.MaxValue).toInt
+      // Garble checksum
+      Utils.writeUnsignedInt(corruptedMessage.buffer, Message.CrcOffset, badChecksum)
+      new ByteBufferMessageSet(NoCompressionCodec, corruptedMessage)
+    }
+  }
+
+  class NormalPartitionData(offsetSeq: Seq[Long]) extends DummyPartitionData {
+    override def toByteBufferMessageSet: ByteBufferMessageSet = {
+      new ByteBufferMessageSet(NoCompressionCodec, offsetSeq, new Message("hello".getBytes))
+    }
   }
 
 }
