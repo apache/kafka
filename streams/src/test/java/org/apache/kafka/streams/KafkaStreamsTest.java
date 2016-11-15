@@ -50,13 +50,16 @@ public class KafkaStreamsTest {
 
         final KStreamBuilder builder = new KStreamBuilder();
         final KafkaStreams streams = new KafkaStreams(builder, props);
+        Assert.assertEquals(streams.getState(), KafkaStreams.KafkaStreamsState.CREATED);
 
         streams.start();
+        Assert.assertEquals(streams.getState(), KafkaStreams.KafkaStreamsState.RUNNING);
         final int newInitCount = MockMetricsReporter.INIT_COUNT.get();
         final int initCountDifference = newInitCount - oldInitCount;
         assertTrue("some reporters should be initialized by calling start()", initCountDifference > 0);
 
         streams.close();
+        Assert.assertEquals(streams.getState(), KafkaStreams.KafkaStreamsState.NOT_RUNNING);
         Assert.assertEquals("each reporter initialized should also be closed",
             oldCloseCount + initCountDifference, MockMetricsReporter.CLOSE_COUNT.get());
     }
@@ -91,7 +94,7 @@ public class KafkaStreamsTest {
         try {
             streams.start();
         } catch (final IllegalStateException e) {
-            Assert.assertEquals("Cannot restart after closing.", e.getMessage());
+            Assert.assertEquals("Cannot start again.", e.getMessage());
             throw e;
         } finally {
             streams.close();
@@ -111,7 +114,7 @@ public class KafkaStreamsTest {
         try {
             streams.start();
         } catch (final IllegalStateException e) {
-            Assert.assertEquals("This process was already started.", e.getMessage());
+            Assert.assertEquals("Cannot start again.", e.getMessage());
             throw e;
         } finally {
             streams.close();

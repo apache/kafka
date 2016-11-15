@@ -277,6 +277,7 @@ public class QueryableStateIntegrationTest {
                         return false;
                     } catch (final InvalidStateStoreException e) {
                         // rebalance
+                        assertEquals(streams.getState(), KafkaStreams.KafkaStreamsState.REBALANCING);
                         return false;
                     }
 
@@ -307,6 +308,7 @@ public class QueryableStateIntegrationTest {
                         return false;
                     } catch (InvalidStateStoreException e) {
                         // rebalance
+                        assertEquals(streams.getState(), KafkaStreams.KafkaStreamsState.REBALANCING);
                         return false;
                     }
 

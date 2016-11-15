@@ -71,6 +71,48 @@ public class StreamThread extends Thread {
     private static final Logger log = LoggerFactory.getLogger(StreamThread.class);
     private static final AtomicInteger STREAM_THREAD_ID_SEQUENCE = new AtomicInteger(1);
 
+    /**
+     * Stream thread states are the possible state that a stream thread can be in.
+     * A thread should only be in one state at a time
+     * The expected state transition with the following defined states is:
+     *
+     *                +-----------+
+     *                |Not Running|
+     *                +-----+-----+
+     *                      |
+     *                      v
+     *                +-----+-----+
+     *          +---->| Running   |<------------+
+     *          |     +-----+-----+             |
+     *          |           |                   |
+     *          |           v                   |
+     *          |     +-----+------------+      |
+     *          <---- |Partitions        |      |
+     *          |     |Revoked           |      |
+     *          |     +-----+------------+      |
+     *          |           |                   |
+     *          |           v                   |
+     *          |     +-----+------------+      |
+     *          |     |Partitions        |      |
+     *          |     |Assigned          |------+
+     *          |     +-----+------------+
+     *          |
+     *          |
+     *          |    +-----+----------+
+     *          +--->|Pending         |
+     *               |Shutdown        |
+     *               +-----+----------+
+     *                     |
+     *                     v
+     *               +-----+-----+
+     *               |Not Running|
+     *               +-----------+
+     *
+     * Custom states is also allowed for cases where there are custom kafka states for different scenarios.
+     */
+    public enum StreamThreadStateType { NOT_RUNNING, RUNNING, PARTITIONS_REVOKED, PARTITIONS_ASSIGNED, PENDING_SHUTDOWN }
+    public StreamThreadStateType state = StreamThreadStateType.NOT_RUNNING;
+
     public final PartitionGrouper partitionGrouper;
     private final StreamsMetadataState streamsMetadataState;
     public final String applicationId;
@@ -121,11 +163,13 @@ public class StreamThread extends Thread {
             try {
                 log.info("stream-thread [{}] New partitions [{}] assigned at the end of consumer rebalance.",
                         StreamThread.this.getName(), assignment);
+                state = StreamThreadStateType.PARTITIONS_ASSIGNED;
                 addStreamTasks(assignment);
                 addStandbyTasks();
                 lastCleanMs = time.milliseconds(); // start the cleaning cycle
                 streamsMetadataState.onChange(partitionAssignor.getPartitionsByHostState(), partitionAssignor.clusterMetadata());
                 initialized.set(true);
+                state = StreamThreadStateType.RUNNING;
             } catch (Throwable t) {
                 rebalanceException = t;
                 throw t;
@@ -137,6 +181,7 @@ public class StreamThread extends Thread {
             try {
                 log.info("stream-thread [{}] partitions [{}] revoked at the beginning of consumer rebalance.",
                         StreamThread.this.getName(), assignment);
+                state = StreamThreadStateType.PARTITIONS_REVOKED;
                 initialized.set(false);
                 lastCleanMs = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
                 // suspend active tasks
@@ -166,7 +211,7 @@ public class StreamThread extends Thread {
                         Time time,
                         StreamsMetadataState streamsMetadataState) {
         super("StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement());
-
+        this.state = StreamThreadStateType.NOT_RUNNING;
         this.applicationId = applicationId;
         String threadName = getName();
         this.config = config;
@@ -223,6 +268,7 @@ public class StreamThread extends Thread {
 
 
         this.running = new AtomicBoolean(true);
+        this.state = StreamThreadStateType.RUNNING;
     }
 
     public void partitionAssignor(StreamPartitionAssignor partitionAssignor) {
@@ -257,6 +303,7 @@ public class StreamThread extends Thread {
      * Shutdown this stream thread.
      */
     public void close() {
+        this.state = StreamThreadStateType.PENDING_SHUTDOWN;
         running.set(false);
     }
 
@@ -290,6 +337,7 @@ public class StreamThread extends Thread {
         removeStandbyTasks();
 
         log.info("{} Stream thread shutdown complete", logPrefix);
+        this.state = StreamThreadStateType.NOT_RUNNING;
     }
 
     private void unAssignChangeLogPartitions(final boolean rethrowExceptions) {

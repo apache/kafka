@@ -93,10 +93,42 @@ public class KafkaStreams {
     private static final String JMX_PREFIX = "kafka.streams";
 
     // container states
-    private static final int CREATED = 0;
-    private static final int RUNNING = 1;
-    private static final int STOPPED = 2;
-    private int state = CREATED;
+    /**
+     * Kafka Streams states are the possible state that a Kafka Streams instance can be in.
+     * An instance should only be in one state at a time.
+     * Note this instance will be in "Rebalancing" state if any of its threads is rebalancing
+     * The expected state transition with the following defined states is:
+     *
+     *                +-----------+
+     *         +<-----|Created    |
+     *         |      +-----+-----+
+     *         |             |
+     *         |             v
+     *         |       +-----+---------+
+     *         +<----- | Rebalancing   |<--------+
+     *         |       +-----+---------+         ^
+     *         |             |                   |
+     *         |             v                   |
+     *         |       +-----+------------+      |
+     *         |       |Running           |------+
+     *         |       +-----+------------+
+     *         |             |
+     *         |             v
+     *         |     +-----+----------+
+     *         +---->|Pending         |
+     *               |Shutdown        |
+     *               +-----+----------+
+     *                     |
+     *                     v
+     *               +-----+-----+
+     *               |Not Running|
+     *               +-----------+
+     *
+     * Custom states is also allowed for cases where there are custom kafka states for different scenarios.
+     */
+    public enum KafkaStreamsState { CREATED, RUNNING, REBALANCING, PENDING_SHUTDOWN, NOT_RUNNING }
+
+    private KafkaStreamsState state = KafkaStreamsState.CREATED;
 
     private final StreamThread[] threads;
     private final Metrics metrics;
@@ -192,17 +224,15 @@ public class KafkaStreams {
     public synchronized void start() {
         log.debug("Starting Kafka Stream process");
 
-        if (state == CREATED) {
+        if (state == KafkaStreamsState.CREATED) {
             for (final StreamThread thread : threads)
                 thread.start();
 
-            state = RUNNING;
+            state = KafkaStreamsState.RUNNING;
 
             log.info("Started Kafka Stream process");
-        } else if (state == RUNNING) {
-            throw new IllegalStateException("This process was already started.");
         } else {
-            throw new IllegalStateException("Cannot restart after closing.");
+            throw new IllegalStateException("Cannot start again.");
         }
     }
 
@@ -215,7 +245,9 @@ public class KafkaStreams {
     public synchronized void close() {
         log.debug("Stopping Kafka Stream process");
 
-        if (state == RUNNING) {
+        if (state != KafkaStreamsState.PENDING_SHUTDOWN &&
+            state != KafkaStreamsState.NOT_RUNNING) {
+            state = KafkaStreamsState.PENDING_SHUTDOWN;
             // signal the threads to stop and wait
             for (final StreamThread thread : threads)
                 thread.close();
@@ -229,9 +261,9 @@ public class KafkaStreams {
             }
         }
 
-        if (state != STOPPED) {
+        if (state != KafkaStreamsState.NOT_RUNNING) {
             metrics.close();
-            state = STOPPED;
+            state = KafkaStreamsState.NOT_RUNNING;
             log.info("Stopped Kafka Stream process");
         }
 
@@ -261,7 +293,7 @@ public class KafkaStreams {
      * @throws IllegalStateException if instance is currently running
      */
     public void cleanUp() {
-        if (state == RUNNING) {
+        if (state == KafkaStreamsState.RUNNING || state == KafkaStreamsState.REBALANCING) {
             throw new IllegalStateException("Cannot clean up while running.");
         }
 
@@ -377,9 +409,22 @@ public class KafkaStreams {
     }
 
     private void validateIsRunning() {
-        if (state != RUNNING) {
+        if (state != KafkaStreamsState.RUNNING) {
             throw new IllegalStateException("KafkaStreams is not running");
         }
+    }
+
+    /**
+     * @return The state this instance is in
+     */
+    public KafkaStreamsState getState() {
+        for (final StreamThread thread : threads) {
+            if (thread.state == StreamThread.StreamThreadStateType.PARTITIONS_REVOKED ||
+                thread.state == StreamThread.StreamThreadStateType.PARTITIONS_ASSIGNED) {
+                return KafkaStreamsState.REBALANCING;
+            }
+        }
+        return state;
     }
 
 }

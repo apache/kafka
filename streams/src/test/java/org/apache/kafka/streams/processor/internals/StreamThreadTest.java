@@ -173,7 +173,7 @@ public class StreamThreadTest {
                 return new TestStreamTask(id, applicationId, partitionsForTask, topology, consumer, producer, restoreConsumer, config, stateDirectory);
             }
         };
-
+        assertEquals(thread.state, StreamThread.StreamThreadStateType.RUNNING);
         initPartitionGrouper(config, thread);
 
         ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener;
@@ -190,7 +190,9 @@ public class StreamThreadTest {
         expectedGroup1 = new HashSet<>(Arrays.asList(t1p1));
 
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
+        assertEquals(thread.state, StreamThread.StreamThreadStateType.PARTITIONS_REVOKED);
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
+        assertEquals(thread.state, StreamThread.StreamThreadStateType.RUNNING);
 
         assertTrue(thread.tasks().containsKey(task1));
         assertEquals(expectedGroup1, thread.tasks().get(task1).partitions());
@@ -272,6 +274,10 @@ public class StreamThreadTest {
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
         assertTrue(thread.tasks().isEmpty());
+
+        thread.close();
+        assertTrue((thread.state == StreamThread.StreamThreadStateType.PENDING_SHUTDOWN) ||
+            (thread.state == StreamThread.StreamThreadStateType.NOT_RUNNING));
     }
 
 
