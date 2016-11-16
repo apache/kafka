@@ -97,7 +97,9 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
     @Test
     public void shouldPerformRangeQueriesWithCachingDisabled() throws Exception {
         final KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
-        final KeyValueStore<Integer, String> store = createStore(driver.context(), Integer.class, String.class, false, false);
+        final MockProcessorContext context = (MockProcessorContext) driver.context();
+        final KeyValueStore<Integer, String> store = createStore(context, Integer.class, String.class, false, false);
+        context.setTime(1L);
         store.put(1, "hi");
         store.put(2, "goodbye");
         final KeyValueIterator<Integer, String> range = store.range(1, 2);
@@ -109,7 +111,9 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
     @Test
     public void shouldPerformAllQueriesWithCachingDisabled() throws Exception {
         final KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
-        final KeyValueStore<Integer, String> store = createStore(driver.context(), Integer.class, String.class, false, false);
+        final MockProcessorContext context = (MockProcessorContext) driver.context();
+        final KeyValueStore<Integer, String> store = createStore(context, Integer.class, String.class, false, false);
+        context.setTime(1L);
         store.put(1, "hi");
         store.put(2, "goodbye");
         final KeyValueIterator<Integer, String> range = store.all();

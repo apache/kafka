@@ -26,9 +26,10 @@ import kafka.utils._
 import kafka.message._
 import kafka.common.KafkaException
 import java.util.concurrent.TimeUnit
-import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
+
+import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import org.apache.kafka.common.errors.CorruptRecordException
-import org.apache.kafka.common.network.TransportLayer
+import org.apache.kafka.common.record.FileRecords
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.mutable.ArrayBuffer
@@ -48,7 +49,6 @@ class FileMessageSet private[kafka](@volatile var file: File,
                                     private[log] val start: Int,
                                     private[log] val end: Int,
                                     isSlice: Boolean) extends MessageSet {
-  import FileMessageSet._
   /* the size of the message set in bytes */
   private val _size =
     if(isSlice)
@@ -125,6 +125,8 @@ class FileMessageSet private[kafka](@volatile var file: File,
                            math.min(this.start + position + size, sizeInBytes())
                        })
   }
+
+  override def asRecords: FileRecords = new FileRecords(file, channel, start, end, isSlice)
 
   /**
    * Search forward for the file position of the last offset that is greater than or equal to the target offset
@@ -203,31 +205,6 @@ class FileMessageSet private[kafka](@volatile var file: File,
       }
     }
     TimestampOffset(maxTimestamp, offsetOfMaxTimestamp)
-  }
-
-  /**
-   * Write some of this set to the given channel.
-   * @param destChannel The channel to write to.
-   * @param writePosition The position in the message set to begin writing from.
-   * @param size The maximum number of bytes to write
-   * @return The number of bytes actually written.
-   */
-  def writeTo(destChannel: GatheringByteChannel, writePosition: Long, size: Int): Int = {
-    // Ensure that the underlying size has not changed.
-    val newSize = math.min(channel.size.toInt, end) - start
-    if (newSize < _size.get()) {
-      throw new KafkaException("Size of FileMessageSet %s has been truncated during write: old size %d, new size %d"
-        .format(file.getAbsolutePath, _size.get(), newSize))
-    }
-    val position = start + writePosition
-    val count = math.min(size, sizeInBytes)
-    val bytesTransferred = (destChannel match {
-      case tl: TransportLayer => tl.transferFrom(channel, position, count)
-      case dc => channel.transferTo(position, count, dc)
-    }).toInt
-    trace("FileMessageSet " + file.getAbsolutePath + " : bytes transferred : " + bytesTransferred
-      + " bytes requested for transfer : " + math.min(size, sizeInBytes))
-    bytesTransferred
   }
 
   /**
@@ -337,7 +314,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
 
         // increment the location and return the item
         location += size + sizeOffsetLength
-        new MessageAndOffset(new Message(buffer), offset)
+        MessageAndOffset(new Message(buffer), offset)
       }
     }
   }

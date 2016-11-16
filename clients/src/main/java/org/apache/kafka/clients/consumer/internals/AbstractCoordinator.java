@@ -393,17 +393,11 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     private class JoinGroupResponseHandler extends CoordinatorResponseHandler<JoinGroupResponse, ByteBuffer> {
-
-        @Override
-        public JoinGroupResponse parse(ClientResponse response) {
-            return new JoinGroupResponse(response.responseBody());
-        }
-
         @Override
         public void handle(JoinGroupResponse joinResponse, RequestFuture<ByteBuffer> future) {
             Errors error = Errors.forCode(joinResponse.errorCode());
             if (error == Errors.NONE) {
-                log.debug("Received successful join group response for group {}: {}", groupId, joinResponse.toStruct());
+                log.debug("Received successful join group response for group {}: {}", groupId, joinResponse);
                 sensors.joinLatency.record(response.requestLatencyMs());
 
                 synchronized (AbstractCoordinator.this) {
@@ -483,12 +477,6 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     private class SyncGroupResponseHandler extends CoordinatorResponseHandler<SyncGroupResponse, ByteBuffer> {
-
-        @Override
-        public SyncGroupResponse parse(ClientResponse response) {
-            return new SyncGroupResponse(response.responseBody());
-        }
-
         @Override
         public void handle(SyncGroupResponse syncResponse,
                            RequestFuture<ByteBuffer> future) {
@@ -540,7 +528,7 @@ public abstract class AbstractCoordinator implements Closeable {
         public void onSuccess(ClientResponse resp, RequestFuture<Void> future) {
             log.debug("Received group coordinator response {}", resp);
 
-            GroupCoordinatorResponse groupCoordinatorResponse = new GroupCoordinatorResponse(resp.responseBody());
+            GroupCoordinatorResponse groupCoordinatorResponse = (GroupCoordinatorResponse) resp.responseBody();
             // use MAX_VALUE - node.id as the coordinator id to mimic separate connections
             // for the coordinator in the underlying network client layer
             // TODO: this needs to be better handled in KAFKA-1935
@@ -653,12 +641,6 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     private class LeaveGroupResponseHandler extends CoordinatorResponseHandler<LeaveGroupResponse, Void> {
-
-        @Override
-        public LeaveGroupResponse parse(ClientResponse response) {
-            return new LeaveGroupResponse(response.responseBody());
-        }
-
         @Override
         public void handle(LeaveGroupResponse leaveResponse, RequestFuture<Void> future) {
             Errors error = Errors.forCode(leaveResponse.errorCode());
@@ -680,12 +662,6 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     private class HeartbeatResponseHandler extends CoordinatorResponseHandler<HeartbeatResponse, Void> {
-
-        @Override
-        public HeartbeatResponse parse(ClientResponse response) {
-            return new HeartbeatResponse(response.responseBody());
-        }
-
         @Override
         public void handle(HeartbeatResponse heartbeatResponse, RequestFuture<Void> future) {
             sensors.heartbeatLatency.record(response.requestLatencyMs());
@@ -722,8 +698,6 @@ public abstract class AbstractCoordinator implements Closeable {
     protected abstract class CoordinatorResponseHandler<R, T> extends RequestFutureAdapter<ClientResponse, T> {
         protected ClientResponse response;
 
-        public abstract R parse(ClientResponse response);
-
         public abstract void handle(R response, RequestFuture<T> future);
 
         @Override
@@ -735,10 +709,11 @@ public abstract class AbstractCoordinator implements Closeable {
         }
 
         @Override
+        @SuppressWarnings("unchecked")
         public void onSuccess(ClientResponse clientResponse, RequestFuture<T> future) {
             try {
                 this.response = clientResponse;
-                R responseObj = parse(clientResponse);
+                R responseObj = (R) clientResponse.responseBody();
                 handle(responseObj, future);
             } catch (RuntimeException e) {
                 if (!future.isDone())

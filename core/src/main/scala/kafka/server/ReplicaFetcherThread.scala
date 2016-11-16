@@ -29,15 +29,16 @@ import kafka.common.{KafkaStorageException, TopicAndPartition}
 import ReplicaFetcherThread._
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.network.{ChannelBuilders, LoginType, Mode, NetworkReceive, Selectable, Selector}
-import org.apache.kafka.common.requests.{AbstractRequest, FetchResponse, ListOffsetRequest, ListOffsetResponse, RequestSend}
+import org.apache.kafka.common.requests.{AbstractRequest, FetchResponse, ListOffsetRequest, ListOffsetResponse}
 import org.apache.kafka.common.requests.{FetchRequest => JFetchRequest}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.utils.Time
 
-import scala.collection.{JavaConverters, Map}
-import JavaConverters._
+import scala.collection.Map
+import scala.collection.JavaConverters._
 
 class ReplicaFetcherThread(name: String,
                            fetcherId: Int,
@@ -139,7 +140,7 @@ class ReplicaFetcherThread(name: String,
       if (logger.isTraceEnabled)
         trace("Follower %d set replica high watermark for partition [%s,%d] to %s"
           .format(replica.brokerId, topic, partitionId, followerHighWatermark))
-      if (quota.isThrottled(new TopicAndPartition(topic, partitionId)))
+      if (quota.isThrottled(TopicAndPartition(topic, partitionId)))
         quota.record(messageSet.sizeInBytes)
     } catch {
       case e: KafkaStorageException =>
@@ -236,7 +237,8 @@ class ReplicaFetcherThread(name: String,
 
   protected def fetch(fetchRequest: FetchRequest): Seq[(TopicPartition, PartitionData)] = {
     val clientResponse = sendRequest(ApiKeys.FETCH, Some(fetchRequestVersion), fetchRequest.underlying)
-    new FetchResponse(clientResponse.responseBody).responseData.asScala.toSeq.map { case (key, value) =>
+    val fetchResponse = clientResponse.responseBody.asInstanceOf[FetchResponse]
+    fetchResponse.responseData.asScala.toSeq.map { case (key, value) =>
       key -> new PartitionData(value)
     }
   }
@@ -248,9 +250,8 @@ class ReplicaFetcherThread(name: String,
       if (!networkClient.blockingReady(sourceNode, socketTimeout)(time))
         throw new SocketTimeoutException(s"Failed to connect within $socketTimeout ms")
       else {
-        val send = new RequestSend(sourceBroker.id.toString, header, request.toStruct)
-        val clientRequest = new ClientRequest(time.milliseconds(), true, send, null)
-        networkClient.blockingSendAndReceive(clientRequest)(time)
+        val clientRequest = new ClientRequest(sourceBroker.id.toString, time.milliseconds(), true, header, request, null)
+        networkClient.blockingSendAndReceive(clientRequest, request)(time)
       }
     }
     catch {
@@ -271,7 +272,7 @@ class ReplicaFetcherThread(name: String,
         (new ListOffsetRequest(consumerId, partitions.asJava), 0)
       }
     val clientResponse = sendRequest(ApiKeys.LIST_OFFSETS, Some(apiVersion.toShort), request)
-    val response = new ListOffsetResponse(clientResponse.responseBody)
+    val response = clientResponse.responseBody.asInstanceOf[ListOffsetResponse]
     val partitionData = response.responseData.get(topicPartition)
     Errors.forCode(partitionData.errorCode) match {
       case Errors.NONE =>
@@ -322,7 +323,10 @@ object ReplicaFetcherThread {
 
     def errorCode: Short = underlying.errorCode
 
-    def toByteBufferMessageSet: ByteBufferMessageSet = new ByteBufferMessageSet(underlying.recordSet)
+    def toByteBufferMessageSet: ByteBufferMessageSet = {
+      val buffer = underlying.records.asInstanceOf[MemoryRecords].buffer
+      new ByteBufferMessageSet(buffer)
+    }
 
     def highWatermark: Long = underlying.highWatermark
 

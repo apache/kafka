@@ -25,7 +25,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.common.requests.RequestSend;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -98,14 +97,14 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     private RequestFuture<ClientResponse> send(Node node,
-                                              ApiKeys api,
-                                              short version,
-                                              AbstractRequest request) {
+                                               ApiKeys api,
+                                               short version,
+                                               AbstractRequest request) {
         long now = time.milliseconds();
         RequestFutureCompletionHandler completionHandler = new RequestFutureCompletionHandler();
         RequestHeader header = client.nextRequestHeader(api, version);
-        RequestSend send = new RequestSend(node.idString(), header, request.toStruct());
-        put(node, new ClientRequest(now, true, send, completionHandler));
+        ClientRequest clientRequest = new ClientRequest(node.idString(), now, true, header, request, completionHandler);
+        put(node, clientRequest);
 
         // wakeup the client in case it is blocking in poll so that we can send the queued request
         client.wakeup();
@@ -336,9 +335,9 @@ public class ConsumerNetworkClient implements Closeable {
                 // coordinator failures traversing the unsent list again.
                 iterator.remove();
                 for (ClientRequest request : requestEntry.getValue()) {
-                    RequestFutureCompletionHandler handler =
-                            (RequestFutureCompletionHandler) request.callback();
-                    handler.onComplete(new ClientResponse(request, now, true, null));
+                    RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
+                    handler.onComplete(new ClientResponse(request.header(), request.callback(), request.destination(),
+                            request.createdTimeMs(), now, true, null));
                 }
             }
         }
@@ -369,8 +368,8 @@ public class ConsumerNetworkClient implements Closeable {
         synchronized (this) {
             List<ClientRequest> unsentRequests = unsent.remove(node);
             if (unsentRequests != null) {
-                for (ClientRequest request : unsentRequests) {
-                    RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
+                for (ClientRequest unsentRequest : unsentRequests) {
+                    RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) unsentRequest.callback();
                     handler.onFailure(e);
                 }
             }
@@ -468,12 +467,11 @@ public class ConsumerNetworkClient implements Closeable {
             if (e != null) {
                 future.raise(e);
             } else if (response.wasDisconnected()) {
-                ClientRequest request = response.request();
-                RequestSend send = request.request();
-                ApiKeys api = ApiKeys.forId(send.header().apiKey());
-                int correlation = send.header().correlationId();
+                RequestHeader requestHeader = response.requestHeader();
+                ApiKeys api = ApiKeys.forId(requestHeader.apiKey());
+                int correlation = requestHeader.correlationId();
                 log.debug("Cancelled {} request {} with correlation id {} due to node {} being disconnected",
-                        api, request, correlation, send.destination());
+                        api, requestHeader, correlation, response.destination());
                 future.raise(DisconnectException.INSTANCE);
             } else {
                 future.complete(response);

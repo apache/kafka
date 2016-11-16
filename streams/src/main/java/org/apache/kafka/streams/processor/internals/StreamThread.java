@@ -713,7 +713,7 @@ public class StreamThread extends Thread {
                     for (TopicPartition partition : partitions)
                         activeTasksByPartition.put(partition, task);
                 } catch (StreamsException e) {
-                    log.error("{} Failed to create an active task %s: ", logPrefix, taskId, e);
+                    log.error("{} Failed to create an active task {}: ", logPrefix, taskId, e);
                     throw e;
                 }
             } else {

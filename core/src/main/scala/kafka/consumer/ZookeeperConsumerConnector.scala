@@ -211,9 +211,9 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       info("ZKConsumerConnector shutting down")
       val startTime = System.nanoTime()
       KafkaMetricsGroup.removeAllConsumerMetrics(config.clientId)
+      if (wildcardTopicWatcher != null)
+        wildcardTopicWatcher.shutdown()
       rebalanceLock synchronized {
-        if (wildcardTopicWatcher != null)
-          wildcardTopicWatcher.shutdown()
         try {
           if (config.autoCommitEnable)
 	        scheduler.shutdown()

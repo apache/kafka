@@ -280,6 +280,7 @@ public class ProcessorTopologyTest {
                 .addSink("sink-2", OUTPUT_TOPIC_2, constantPartitioner(partition), "processor-2");
     }
 
+
     /**
      * A processor that simply forwards all messages to all children.
      */
