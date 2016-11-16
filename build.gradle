@@ -67,10 +67,6 @@ allprojects {
 
 }
 
-project(':jmh-benchmarks') {
-  apply plugin: 'com.github.johnrengelman.shadow'
-}
-
 ext {
   gradleVersion = "3.2.1"
   buildVersionFileName = "kafka-version.properties"
@@ -829,7 +825,13 @@ project(':streams:examples') {
 
 project(':jmh-benchmarks') {
 
-  archivesBaseName = "kafka-jmh-benchmarks"
+  apply plugin: 'com.github.johnrengelman.shadow'
+
+  shadowJar {
+    baseName = 'kafka-jmh-benchmarks-all'
+    classifier = null
+    version = null
+  }
 
   dependencies {
       compile project(':clients')

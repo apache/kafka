@@ -34,10 +34,11 @@ import static org.github.jamm.MemoryMeter.Guess.FALLBACK_UNSAFE;
 @State(Scope.Thread)
 public class MemoryBytesCacheBenchmark {
 
-    MockMemoryLRUCache<String, String> memoryCache;
-    MockMemoryLRUCache<String, String> bytesCache;
-    String key = "the_key_to_use";
-    String value = "the quick brown fox jumped over the lazy dog the olympics are about to start";
+    private MockMemoryLRUCache<String, String> memoryCache;
+    private MockMemoryLRUCache<String, String> bytesCache;
+
+    private final String key = "the_key_to_use";
+    private final String value = "the quick brown fox jumped over the lazy dog the olympics are about to start";
     int counter;
 
 
