@@ -248,7 +248,7 @@ public class ConsumerNetworkClient implements Closeable {
             // to be fired on the next call to poll()
             maybeTriggerWakeup();
             
-            //Throw InterruptException if this thread is interrupted
+            // throw InterruptException if this thread is interrupted
             maybeThrowInterruptException();
 
             // try again to send requests since buffer space may have been

@@ -25,7 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
-import java.util.concurrent.ConcurrentLinkedDeque;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
@@ -66,8 +65,8 @@ public class MockClient implements KafkaClient {
     private Node node = null;
     private final Set<String> ready = new HashSet<>();
     private final Map<Node, Long> blackedOut = new HashMap<>();
-    private final Queue<ClientRequest> requests = new ConcurrentLinkedDeque<>();
-    private final Queue<ClientResponse> responses = new ConcurrentLinkedDeque<>();
+    private final Queue<ClientRequest> requests = new ArrayDeque<>();
+    private final Queue<ClientResponse> responses = new ArrayDeque<>();
     private final Queue<FutureResponse> futureResponses = new ArrayDeque<>();
     private final Queue<Cluster> metadataUpdates = new ArrayDeque<>();
 
