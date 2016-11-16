@@ -1413,6 +1413,21 @@ object TestUtils extends Logging {
     records
   }
 
+  /**
+   * Utility to run a Scala Unit can capture its Console.out
+   */
+  def grabConsoleOutput(unit: () => Unit) : String = {
+    val baos = new ByteArrayOutputStream();
+    val oldConsole = scala.Console.out;
+    scala.Console.setOut(new PrintStream(baos));
+    try {
+      unit()
+    } finally {
+      scala.Console.out.flush();
+      scala.Console.setOut(oldConsole);
+    }
+    return baos.toString()
+  }
 }
 
 class IntEncoder(props: VerifiableProperties = null) extends Encoder[Int] {

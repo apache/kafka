@@ -27,6 +27,7 @@ import kafka.utils.ZkUtils._
 import org.apache.kafka.common.errors.TopicExistsException
 import org.apache.kafka.common.internals.Topic
 
+
 class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
   @Test
@@ -187,4 +188,55 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     }
     checkReplicaDistribution(assignment, rackInfo, rackInfo.size, alteredNumPartitions, replicationFactor)
   }
+
+  @Test
+  def testDescribeTopicsMarkedForDeletion() {
+    val brokers = List(0)
+    val topic = "testtopic"
+    TestUtils.createBrokersInZk(zkUtils, brokers)
+
+    val createOpts = new TopicCommandOptions(Array("--partitions", "1",
+      "--replication-factor", "1",
+      "--topic", topic))
+    TopicCommand.createTopic(zkUtils, createOpts)
+
+    // delete the broker first, so when we attempt to delete the topic it gets into
+    // "marked for deletion"
+    TestUtils.deleteBrokersInZk(zkUtils, brokers)
+    val deleteOpts = new TopicCommandOptions(Array("--topic", topic))
+    TopicCommand.deleteTopic(zkUtils, deleteOpts)
+
+    def unit() {
+      val describeOpts = new TopicCommandOptions(Array("--describe"))
+      TopicCommand.describeTopic(zkUtils, describeOpts)
+    }
+    val output = TestUtils.grabConsoleOutput(unit)
+    assertTrue(output.contains(topic) && output.contains("marked for deletion"))
+  }
+
+  @Test
+  def testListTopicsMarkedForDeletion() {
+    val brokers = List(0)
+    val topic = "testtopic"
+    TestUtils.createBrokersInZk(zkUtils, brokers)
+
+    val createOpts = new TopicCommandOptions(Array("--partitions", "1",
+      "--replication-factor", "1",
+      "--topic", topic))
+    TopicCommand.createTopic(zkUtils, createOpts)
+
+    // delete the broker first, so when we attempt to delete the topic it gets into
+    // "marked for deletion"
+    TestUtils.deleteBrokersInZk(zkUtils, brokers)
+    val deleteOpts = new TopicCommandOptions(Array("--topic", topic))
+    TopicCommand.deleteTopic(zkUtils, deleteOpts)
+
+    def unit() {
+      val listOpts = new TopicCommandOptions(Array("--list"))
+      TopicCommand.listTopics(zkUtils, listOpts)
+    }
+    val output = TestUtils.grabConsoleOutput(unit)
+    assertTrue(output.contains(topic) && output.contains("marked for deletion"))
+  }
+
 }
