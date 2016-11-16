@@ -227,7 +227,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         try {
             Set<TopicPartition> assigned = new HashSet<>(subscriptions.assignedPartitions());
             listener.onPartitionsAssigned(assigned);
-        } catch (WakeupException e) {
+        } catch (WakeupException | InterruptException e) {
             throw e;
         } catch (Exception e) {
             log.error("User provided listener {} for group {} failed on partition assignment",
@@ -335,7 +335,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         try {
             Set<TopicPartition> revoked = new HashSet<>(subscriptions.assignedPartitions());
             listener.onPartitionsRevoked(revoked);
-        } catch (WakeupException e) {
+        } catch (WakeupException | InterruptException e) {
             throw e;
         } catch (Exception e) {
             log.error("User provided listener {} for group {} failed on partition revocation",
