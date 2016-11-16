@@ -17,12 +17,9 @@
 
 package org.apache.kafka.connect.runtime.distributed;
 
-import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -39,12 +36,10 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
-import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.apache.kafka.connect.util.SinkUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -103,7 +98,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     private final Time time;
 
-    private final String workerGroupId;
     private final int workerSyncTimeoutMs;
     private final int workerUnsyncBackoffMs;
 
@@ -154,7 +148,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         super(worker, workerId, statusBackingStore, configBackingStore);
 
         this.time = time;
-        this.workerGroupId = config.getString(DistributedConfig.GROUP_ID_CONFIG);
         this.workerSyncTimeoutMs = config.getInt(DistributedConfig.WORKER_SYNC_TIMEOUT_MS_CONFIG);
         this.workerUnsyncBackoffMs = config.getInt(DistributedConfig.WORKER_UNSYNC_BACKOFF_MS_CONFIG);
         this.member = member != null ? member : new WorkerGroupMember(config, restUrl, this.configBackingStore, new RebalanceListener(), time);
@@ -473,24 +466,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 forwardErrorCallback(callback)
         );
     }
-
-    @Override
-    protected Map<String, ConfigValue> validateBasicConnectorConfig(Connector connector,
-                                                                    ConfigDef configDef,
-                                                                    Map<String, String> config) {
-        Map<String, ConfigValue> validatedConfig = super.validateBasicConnectorConfig(connector, configDef, config);
-        if (connector instanceof SinkConnector) {
-            ConfigValue validatedName = validatedConfig.get(ConnectorConfig.NAME_CONFIG);
-            String name = (String) validatedName.value();
-
-            if (workerGroupId.equals(SinkUtils.consumerGroupId(name))) {
-                validatedName.addErrorMessage("Consumer group for sink connector named " + name +
-                        " conflicts with Connect worker group " + workerGroupId);
-            }
-        }
-        return validatedConfig;
-    }
-
 
     @Override
     public void putConnectorConfig(final String connName, final Map<String, String> config, final boolean allowReplace,

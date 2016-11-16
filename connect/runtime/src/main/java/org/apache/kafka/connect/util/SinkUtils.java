@@ -20,8 +20,8 @@ public final class SinkUtils {
 
     private SinkUtils() {}
 
-    public static String consumerGroupId(String connector) {
-        return "connect-" + connector;
+    public static String consumerGroupId(String prefix, String connector) {
+        return prefix + "-" + connector;
     }
 
 }

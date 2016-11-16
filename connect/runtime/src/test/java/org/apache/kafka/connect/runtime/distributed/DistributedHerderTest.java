@@ -416,48 +416,6 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testConnectorNameConflictsWithWorkerGroupId() throws Exception {
-        EasyMock.expect(member.memberId()).andStubReturn("leader");
-        expectRebalance(1, Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList());
-        expectPostRebalanceCatchup(SNAPSHOT);
-
-        member.wakeup();
-        PowerMock.expectLastCall();
-
-        Map<String, String> config = new HashMap<>(CONN2_CONFIG);
-        config.put(ConnectorConfig.NAME_CONFIG, "test-group");
-
-        // config validation
-        ConnectorFactory connectorFactoryMock = PowerMock.createMock(ConnectorFactory.class);
-        EasyMock.expect(worker.getConnectorFactory()).andStubReturn(connectorFactoryMock);
-        Connector connectorMock = PowerMock.createMock(SinkConnector.class);
-        EasyMock.expect(connectorFactoryMock.newConnector(EasyMock.anyString())).andReturn(connectorMock);
-        EasyMock.expect(connectorMock.config()).andReturn(new ConfigDef());
-        EasyMock.expect(connectorMock.validate(config)).andReturn(new Config(Collections.<ConfigValue>emptyList()));
-
-        // CONN2 creation should fail because the worker group id (connect-test-group) conflicts with
-        // the consumer group id we would use for this sink
-
-        Capture<Throwable> error = EasyMock.newCapture();
-        putConnectorCallback.onCompletion(EasyMock.capture(error), EasyMock.isNull(Herder.Created.class));
-        PowerMock.expectLastCall();
-
-        member.poll(EasyMock.anyInt());
-        PowerMock.expectLastCall();
-        // No immediate action besides this -- change will be picked up via the config log
-
-        PowerMock.replayAll();
-
-        herder.putConnectorConfig(CONN2, config, false, putConnectorCallback);
-        herder.tick();
-
-        assertTrue(error.hasCaptured());
-        assertTrue(error.getValue() instanceof BadRequestException);
-
-        PowerMock.verifyAll();
-    }
-
-    @Test
     public void testCreateConnectorAlreadyExists() throws Exception {
         EasyMock.expect(member.memberId()).andStubReturn("leader");
         expectRebalance(1, Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList());

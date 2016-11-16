@@ -43,6 +43,10 @@ public class WorkerConfig extends AbstractConfig {
             + "than one, though, in case a server is down).";
     public static final String BOOTSTRAP_SERVERS_DEFAULT = "localhost:9092";
 
+    public static final String CONNECT_PREFIX_CONFIG = "connect.prefix";
+    public static final String CONNECT_PREFIX_DOC = "Prefix for sink task consumer group.";
+    public static final String CONNECT_PREFIX_DEFAULT = "connect";
+
     public static final String KEY_CONVERTER_CLASS_CONFIG = "key.converter";
     public static final String KEY_CONVERTER_CLASS_DOC =
             "Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka." +
@@ -134,6 +138,8 @@ public class WorkerConfig extends AbstractConfig {
         return new ConfigDef()
                 .define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, BOOTSTRAP_SERVERS_DEFAULT,
                         Importance.HIGH, BOOTSTRAP_SERVERS_DOC)
+                .define(CONNECT_PREFIX_CONFIG, Type.STRING, CONNECT_PREFIX_DEFAULT,
+                        Importance.MEDIUM, CONNECT_PREFIX_DOC)
                 .define(KEY_CONVERTER_CLASS_CONFIG, Type.CLASS,
                         Importance.HIGH, KEY_CONVERTER_CLASS_DOC)
                 .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS,

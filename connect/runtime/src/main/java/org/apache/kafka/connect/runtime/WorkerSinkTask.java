@@ -367,9 +367,10 @@ class WorkerSinkTask extends WorkerTask {
         // and through to the task
         Map<String, Object> props = new HashMap<>();
 
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, SinkUtils.consumerGroupId(id.connector()));
+        props.put(ConsumerConfig.GROUP_ID_CONFIG,
+            SinkUtils.consumerGroupId(workerConfig.getString(WorkerConfig.CONNECT_PREFIX_CONFIG), id.connector()));
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
-                Utils.join(workerConfig.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
+            Utils.join(workerConfig.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");

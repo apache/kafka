@@ -238,8 +238,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 status.workerId(), status.trace());
     }
 
-    protected Map<String, ConfigValue> validateBasicConnectorConfig(Connector connector,
-                                                                    ConfigDef configDef,
+    protected Map<String, ConfigValue> validateBasicConnectorConfig(ConfigDef configDef,
                                                                     Map<String, String> config) {
         return configDef.validateAll(config);
     }
@@ -263,7 +262,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         List<String> allGroups = new ArrayList<>();
 
         // do basic connector validation (name, connector type, etc.)
-        Map<String, ConfigValue> validatedConnectorConfig = validateBasicConnectorConfig(connector, connectorConfigDef, connectorConfig);
+        Map<String, ConfigValue> validatedConnectorConfig = validateBasicConnectorConfig(connectorConfigDef, connectorConfig);
         configValues.addAll(validatedConnectorConfig.values());
         configKeys.putAll(connectorConfigDef.configKeys());
         allGroups.addAll(connectorConfigDef.groups());
