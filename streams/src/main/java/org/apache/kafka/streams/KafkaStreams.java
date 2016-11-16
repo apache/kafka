@@ -91,7 +91,7 @@ public class KafkaStreams {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaStreams.class);
     private static final String JMX_PREFIX = "kafka.streams";
-    public static final int DEFAULT_CLOSE_TIMEOUT = 30;
+    public static final int DEFAULT_CLOSE_TIMEOUT = 0;
 
     private enum StreamsState { created, running, stopped }
     private StreamsState state = StreamsState.created;
@@ -205,7 +205,9 @@ public class KafkaStreams {
 
     /**
      * Shutdown this stream instance by signaling all the threads to stop,
-     * and then wait for them to join. Uses a default timeout of 30 seconds
+     * and then wait for them to join.
+     *
+     * This will block until all threads have stopped.
      */
     public void close() {
         close(DEFAULT_CLOSE_TIMEOUT, TimeUnit.SECONDS);
@@ -215,10 +217,13 @@ public class KafkaStreams {
      * Shutdown this stream instance by signaling all the threads to stop,
      * and then wait up to the timeout for the threads to join.
      *
+     * A timeout of 0 means to wait forever
+     *
      * @param timeout   how long to wait for {@link StreamThread}s to shutdown
      * @param timeUnit  unit of time used for timeout
+     * @return true if all threads were successfully stopped
      */
-    public synchronized void close(final long timeout, final TimeUnit timeUnit) {
+    public synchronized boolean close(final long timeout, final TimeUnit timeUnit) {
         log.debug("Stopping Kafka Stream process");
         if (state == StreamsState.running) {
             // save the current thread so that if it is a stream thread
@@ -253,10 +258,9 @@ public class KafkaStreams {
                 Thread.interrupted();
             }
             state = StreamsState.stopped;
-            if (shutdown.isAlive()) {
-                log.warn("Failed to cleanly shutdown KafkaStreams within timeout");
-            }
+            return !shutdown.isAlive();
         }
+        return true;
 
     }
 
