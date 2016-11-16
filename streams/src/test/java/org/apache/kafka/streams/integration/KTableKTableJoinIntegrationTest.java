@@ -124,10 +124,6 @@ public class KTableKTableJoinIntegrationTest {
         };
     }
 
-    public static Object[] data() {
-        return new Object[]{0, 10 * 1024 * 1024L};
-    }
-
     @BeforeClass
     public static void beforeTest() throws Exception {
         CLUSTER.createTopic(TABLE_1);
@@ -142,7 +138,6 @@ public class KTableKTableJoinIntegrationTest {
         streamsConfig.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
-        streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1);
         streamsConfig.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
 
         final Properties producerConfig = new Properties();
