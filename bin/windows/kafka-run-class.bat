@@ -34,10 +34,10 @@ IF ["%SCALA_BINARY_VERSION%"] EQU [""] (
   for /f "tokens=1,2 delims=." %%a in ("%SCALA_VERSION%") do (
     set FIRST=%%a
     set SECOND=%%b
-    if ["%SECOND%"] EQU [""] (
-      set SCALA_BINARY_VERSION=%FIRST%
+    if ["!SECOND!"] EQU [""] (
+      set SCALA_BINARY_VERSION=!FIRST!
     ) else (
-      set SCALA_BINARY_VERSION=%FIRST%.%SECOND%
+      set SCALA_BINARY_VERSION=!FIRST!.!SECOND!
     )
   )
 )
