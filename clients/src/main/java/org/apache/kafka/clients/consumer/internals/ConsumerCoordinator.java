@@ -56,6 +56,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import org.apache.kafka.common.errors.InterruptException;
 
 /**
  * This class manages the coordination process with the consumer coordinator.
@@ -546,7 +547,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (autoCommitEnabled) {
             try {
                 commitOffsetsSync(subscriptions.allConsumed());
-            } catch (WakeupException e) {
+            } catch (WakeupException | InterruptException e) {
                 // rethrow wakeups since they are triggered by the user
                 throw e;
             } catch (Exception e) {
