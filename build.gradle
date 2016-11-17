@@ -363,20 +363,20 @@ def connectPkgs = ['connect:api', 'connect:runtime', 'connect:json', 'connect:fi
 def pkgs = ['clients', 'examples', 'log4j-appender', 'tools', 'streams', 'streams:examples'] + connectPkgs
 
 tasks.create(name: "jarConnect", dependsOn: connectPkgs.collect { it + ":jar" }) {}
-tasks.create(name: "jarAll", dependsOn: ['jar_core_2_10', 'jar_core_2_11', 'jar_core_2_12'] + pkgs.collect { it + ":jar" }) { }
+tasks.create(name: "jarAll", dependsOn: ['jar_core_2_10', 'jar_core_2_11'] + pkgs.collect { it + ":jar" }) { }
 
-tasks.create(name: "srcJarAll", dependsOn: ['srcJar_2_10', 'srcJar_2_11', 'srcJar_2_12'] + pkgs.collect { it + ":srcJar" }) { }
+tasks.create(name: "srcJarAll", dependsOn: ['srcJar_2_10', 'srcJar_2_11'] + pkgs.collect { it + ":srcJar" }) { }
 
-tasks.create(name: "docsJarAll", dependsOn: ['docsJar_2_10', 'docsJar_2_11', 'docsJar_2_12'] + pkgs.collect { it + ":docsJar" }) { }
+tasks.create(name: "docsJarAll", dependsOn: ['docsJar_2_10', 'docsJar_2_11'] + pkgs.collect { it + ":docsJar" }) { }
 
 tasks.create(name: "testConnect", dependsOn: connectPkgs.collect { it + ":test" }) {}
-tasks.create(name: "testAll", dependsOn: ['test_core_2_10', 'test_core_2_11', 'test_core_2_12'] + pkgs.collect { it + ":test" }) { }
+tasks.create(name: "testAll", dependsOn: ['test_core_2_10', 'test_core_2_11'] + pkgs.collect { it + ":test" }) { }
 
-tasks.create(name: "installAll", dependsOn: ['install_2_10', 'install_2_11', 'install_2_12'] + pkgs.collect { it + ":install" }) { }
+tasks.create(name: "installAll", dependsOn: ['install_2_10', 'install_2_11'] + pkgs.collect { it + ":install" }) { }
 
-tasks.create(name: "releaseTarGzAll", dependsOn: ['releaseTarGz_2_10', 'releaseTarGz_2_11', 'releaseTarGz_2_12']) { }
+tasks.create(name: "releaseTarGzAll", dependsOn: ['releaseTarGz_2_10', 'releaseTarGz_2_11']) { }
 
-tasks.create(name: "uploadArchivesAll", dependsOn: ['uploadCoreArchives_2_10', 'uploadCoreArchives_2_11', 'uploadCoreArchives_2_12'] + pkgs.collect { it + ":uploadArchives" }) { }
+tasks.create(name: "uploadArchivesAll", dependsOn: ['uploadCoreArchives_2_10', 'uploadCoreArchives_2_11'] + pkgs.collect { it + ":uploadArchives" }) { }
 
 project(':core') {
   println "Building project 'core' with Scala version ${versions.scala}"
