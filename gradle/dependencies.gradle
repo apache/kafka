@@ -39,9 +39,9 @@ versions += [
   powermock: "1.6.4",
   reflections: "0.9.10",
   rocksDB: "4.11.2",
-  scalaTest: "2.2.6",
+  scalaTest: "3.0.1",
   scalaParserCombinators: "1.0.4",
-  scoverage: "1.1.1",
+  scoverage: "1.3.0",
   slf4j: "1.7.21",
   snappy: "1.1.2.6",
   zkclient: "0.9",
@@ -51,11 +51,14 @@ versions += [
 // Add Scala version
 def defaultScala210Version = '2.10.6'
 def defaultScala211Version = '2.11.8'
+def defaultScala212Version = '2.12.0'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.10') {
     versions["scala"] = defaultScala210Version
   } else if (scalaVersion == '2.11') {
     versions["scala"] = defaultScala211Version
+  } else if (scalaVersion == '2.12') {
+    versions["scala"] = defaultScala212Version
   } else {
     versions["scala"] = scalaVersion
   }
