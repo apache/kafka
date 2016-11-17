@@ -24,8 +24,8 @@ buildscript {
 
   dependencies {
     // For Apache Rat plugin to ignore non-Git files
-    classpath "org.ajoberstar:grgit:1.5.0"
-    classpath 'com.github.ben-manes:gradle-versions-plugin:0.12.0'
+    classpath "org.ajoberstar:grgit:1.7.0"
+    classpath 'com.github.ben-manes:gradle-versions-plugin:0.13.0'
     classpath 'org.scoverage:gradle-scoverage:2.1.0'
   }
 }
@@ -68,7 +68,7 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "3.0"
+  gradleVersion = "3.2"
   buildVersionFileName = "kafka-version.properties"
 
   maxPermSizeArgs = []
@@ -695,19 +695,20 @@ project(':streams') {
     compile project(':connect:json')  // this dependency should be removed after we unify data API
     compile libs.slf4jApi
     compile libs.rocksDBJni
-    // this dependency should be removed after KIP-4
+
+    // the following 3 dependencies should be removed after KIP-4 (zkclient, zookeeper, jacksonDatabind)
     compile (libs.zkclient) {
+      exclude module: 'zookeeper'
+    }
+
+    compile (libs.zookeeper) {
+      exclude module: 'jline'
+      exclude module: 'netty'
       // users should be able to choose the logging implementation (and slf4j bridge)
       exclude module: 'slf4j-log4j12'
       exclude module: 'log4j'
-      exclude module: 'jline'
-      exclude module: 'netty'
     }
 
-    // zkclient has a hard log4j dependency, we set it here as well to avoid copying an older
-    // version to the binary package; the following two dependencies should be removed after KIP-4
-    // (along with the zkclient dependency)
-    compile libs.log4j
     compile libs.jacksonDatabind
 
     testCompile project(':clients').sourceSets.test.output
