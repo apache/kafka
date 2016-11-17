@@ -19,7 +19,6 @@ import org.reflections.vfs.Vfs.Dir;
 import org.reflections.vfs.Vfs.File;
 import org.reflections.vfs.Vfs.UrlType;
 
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Arrays;
 import java.util.Collections;
