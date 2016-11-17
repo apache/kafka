@@ -22,6 +22,7 @@ import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockReducer;
@@ -45,7 +46,14 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreNameOnReduce() throws Exception {
-        groupedStream.reduce(MockReducer.STRING_ADDER, null);
+        String storeName = null;
+        groupedStream.reduce(MockReducer.STRING_ADDER, storeName);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullStoreSupplierOnReduce() throws Exception {
+        StateStoreSupplier storeSupplier = null;
+        groupedStream.reduce(MockReducer.STRING_ADDER, storeSupplier);
     }
 
     @Test(expected = NullPointerException.class)
@@ -60,7 +68,8 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreNameWithWindowedReduce() throws Exception {
-        groupedStream.reduce(MockReducer.STRING_ADDER, TimeWindows.of(10), null);
+        String storeName = null;
+        groupedStream.reduce(MockReducer.STRING_ADDER, TimeWindows.of(10), storeName);
     }
 
     @Test(expected = NullPointerException.class)
@@ -75,7 +84,8 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreNameOnAggregate() throws Exception {
-        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, Serdes.String(), null);
+        String storeName = null;
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, Serdes.String(), storeName);
     }
 
     @Test(expected = NullPointerException.class)
@@ -95,6 +105,13 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreNameOnWindowedAggregate() throws Exception {
-        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, TimeWindows.of(10), Serdes.String(), null);
+        String storeName = null;
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, TimeWindows.of(10), Serdes.String(), storeName);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullStoreSupplierOnWindowedAggregate() throws Exception {
+        StateStoreSupplier storeSupplier = null;
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, TimeWindows.of(10), storeSupplier);
     }
 }

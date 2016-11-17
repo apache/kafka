@@ -17,10 +17,18 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.Window;
+import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.WindowStore;
 
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 public abstract class AbstractStream<K> {
@@ -63,5 +71,35 @@ public abstract class AbstractStream<K> {
             }
         };
     }
+
+    @SuppressWarnings("unchecked")
+    public static <T, K>  StateStoreSupplier<KeyValueStore> keyValueStore(final Serde<K> keySerde,
+                                                                  final Serde<T> aggValueSerde,
+                                                                  final String storeName) {
+        Objects.requireNonNull(storeName, "storeName can't be null");
+        return storeFactory(keySerde, aggValueSerde, storeName).build();
+    }
+
+    @SuppressWarnings("unchecked")
+    public static  <W extends Window, T, K> StateStoreSupplier<WindowStore> windowedStore(final Serde<K> keySerde,
+                                                                                     final Serde<T> aggValSerde,
+                                                                                     final Windows<W> windows,
+                                                                                     final String storeName) {
+        Objects.requireNonNull(storeName, "storeName can't be null");
+        return storeFactory(keySerde, aggValSerde, storeName)
+                .windowed(windows.size(), windows.maintainMs(), windows.segments, false)
+                .build();
+    }
+    @SuppressWarnings("unchecked")
+    public static  <T, K> Stores.PersistentKeyValueFactory<K, T> storeFactory(final Serde<K> keySerde,
+                                                                         final Serde<T> aggValueSerde,
+                                                                         final String storeName) {
+        return Stores.create(storeName)
+                .withKeys(keySerde)
+                .withValues(aggValueSerde)
+                .persistent()
+                .enableCaching();
+    }
+
 
 }
