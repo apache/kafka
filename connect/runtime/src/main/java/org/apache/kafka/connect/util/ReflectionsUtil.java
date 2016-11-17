@@ -43,14 +43,6 @@ public class ReflectionsUtil {
         Vfs.setDefaultURLTypes(urlTypes);
     }
 
-    public static URL stringtoURL(String path) {
-        try{
-            return new java.io.File(path).toURI().toURL();
-        } catch (MalformedURLException e) {
-            return null;
-        }
-
-    }
     private static class EmptyUrlType implements UrlType {
 
         private final List<String> endings;
