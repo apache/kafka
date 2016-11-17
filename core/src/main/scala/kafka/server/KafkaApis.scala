@@ -168,13 +168,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     val response =
       if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
         val (result, error) = replicaManager.stopReplicas(stopReplicaRequest)
-        result.map{case (topicPartition, errorCode) => {
-          if (errorCode == Errors.NONE.code && stopReplicaRequest.deletePartitions()) {
-            if (topicPartition.topic == Topic.GroupMetadataTopicName) {
-              coordinator.handleGroupEmigration(topicPartition.partition)
-            }
+        result.map { case (topicPartition, errorCode) => {
+          if (errorCode == Errors.NONE.code && stopReplicaRequest.deletePartitions() && topicPartition.topic == Topic.GroupMetadataTopicName) {
+            coordinator.handleGroupEmigration(topicPartition.partition)
           }
-        }}
+        }
+        }
         new StopReplicaResponse(error, result.asInstanceOf[Map[TopicPartition, JShort]].asJava)
       } else {
         val result = stopReplicaRequest.partitions.asScala.map((_, new JShort(Errors.CLUSTER_AUTHORIZATION_FAILED.code))).toMap
