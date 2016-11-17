@@ -1113,33 +1113,39 @@ public class KafkaConsumerTest {
         client.prepareResponseFrom(fetchResponse(tp0, 1, 0), node);
         consumer.poll(0);
 
-        // Initiate close() after a commit request on another thread
+        // Initiate close() after a commit request on another thread.
+        // Kafka consumer is single-threaded, but the implementation allows calls on a
+        // different thread as long as the calls are not executed concurrently. So this is safe.
         ExecutorService executor = Executors.newSingleThreadExecutor();
-        Future<?> future = executor.submit(new Runnable() {
-            @Override
-            public void run() {
-                consumer.commitAsync();
-                consumer.close();
-            }
-        });
-
-        // Close task should not complete until commit succeeds or close times out
         try {
-            future.get(100, TimeUnit.MILLISECONDS);
-            fail("Close completed without waiting for commit response");
-        } catch (TimeoutException e) {
-            // Expected exception
-        }
+            Future<?> future = executor.submit(new Runnable() {
+                @Override
+                public void run() {
+                    consumer.commitAsync();
+                    consumer.close();
+                }
+            });
 
-        // In graceful mode, commit response results in close() completing immediately without a timeout
-        // In non-graceful mode, close() times out without an exception even though commit response is pending
-        if (graceful) {
-            Map<TopicPartition, Short> response = new HashMap<>();
-            response.put(tp0, Errors.NONE.code());
-            client.respondFrom(offsetCommitResponse(response), coordinator);
-        } else
-            time.sleep(5000);
-        future.get(500, TimeUnit.MILLISECONDS); // Should succeed without TimeoutException or ExecutionException
+            // Close task should not complete until commit succeeds or close times out
+            try {
+                future.get(100, TimeUnit.MILLISECONDS);
+                fail("Close completed without waiting for commit response");
+            } catch (TimeoutException e) {
+                // Expected exception
+            }
+
+            // In graceful mode, commit response results in close() completing immediately without a timeout
+            // In non-graceful mode, close() times out without an exception even though commit response is pending
+            if (graceful) {
+                Map<TopicPartition, Short> response = new HashMap<>();
+                response.put(tp0, Errors.NONE.code());
+                client.respondFrom(offsetCommitResponse(response), coordinator);
+            } else
+                time.sleep(5000);
+            future.get(500, TimeUnit.MILLISECONDS); // Should succeed without TimeoutException or ExecutionException
+        } finally {
+            executor.shutdownNow();
+        }
     }
 
     private ConsumerRebalanceListener getConsumerRebalanceListener(final KafkaConsumer<String, String> consumer) {
