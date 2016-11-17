@@ -44,8 +44,8 @@ versions += [
   scoverage: "1.3.0",
   slf4j: "1.7.21",
   snappy: "1.1.2.6",
-  zkclient: "0.9",
-  zookeeper: "3.4.8",
+  zkclient: "0.10",
+  zookeeper: "3.4.9",
 ]
 
 // Add Scala version
