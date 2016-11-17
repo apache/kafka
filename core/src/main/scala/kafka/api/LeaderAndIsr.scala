@@ -15,10 +15,7 @@
  * limitations under the License.
  */
 
-
 package kafka.api
-
-import java.nio._
 
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.utils._
@@ -40,48 +37,9 @@ case class LeaderAndIsr(var leader: Int, var leaderEpoch: Int, var isr: List[Int
   }
 }
 
-object PartitionStateInfo {
-  def readFrom(buffer: ByteBuffer): PartitionStateInfo = {
-    val controllerEpoch = buffer.getInt
-    val leader = buffer.getInt
-    val leaderEpoch = buffer.getInt
-    val isrSize = buffer.getInt
-    val isr = for (_ <- 0 until isrSize) yield buffer.getInt
-    val zkVersion = buffer.getInt
-    val replicationFactor = buffer.getInt
-    val replicas = for (_ <- 0 until replicationFactor) yield buffer.getInt
-    PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, leaderEpoch, isr.toList, zkVersion), controllerEpoch),
-                       replicas.toSet)
-  }
-}
+case class PartitionStateInfo(leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch, allReplicas: Set[Int]) {
 
-case class PartitionStateInfo(leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
-                              allReplicas: Set[Int]) {
   def replicationFactor = allReplicas.size
-
-  def writeTo(buffer: ByteBuffer) {
-    buffer.putInt(leaderIsrAndControllerEpoch.controllerEpoch)
-    buffer.putInt(leaderIsrAndControllerEpoch.leaderAndIsr.leader)
-    buffer.putInt(leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch)
-    buffer.putInt(leaderIsrAndControllerEpoch.leaderAndIsr.isr.size)
-    leaderIsrAndControllerEpoch.leaderAndIsr.isr.foreach(buffer.putInt(_))
-    buffer.putInt(leaderIsrAndControllerEpoch.leaderAndIsr.zkVersion)
-    buffer.putInt(replicationFactor)
-    allReplicas.foreach(buffer.putInt(_))
-  }
-
-  def sizeInBytes(): Int = {
-    val size =
-      4 /* epoch of the controller that elected the leader */ +
-      4 /* leader broker id */ +
-      4 /* leader epoch */ +
-      4 /* number of replicas in isr */ +
-      4 * leaderIsrAndControllerEpoch.leaderAndIsr.isr.size /* replicas in isr */ +
-      4 /* zk version */ +
-      4 /* replication factor */ +
-      allReplicas.size * 4
-    size
-  }
 
   override def toString: String = {
     val partitionStateInfo = new StringBuilder
