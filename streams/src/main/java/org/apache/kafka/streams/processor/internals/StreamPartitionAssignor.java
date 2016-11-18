@@ -416,6 +416,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                         log.warn("stream-thread [{}] Partition {} is not assigned to any tasks: {}", streamThread.getName(), partition, partitionsForTask);
                     }
                 }
+            } else {
+                log.warn("stream-thread [{}] No partitions found for topic {}", streamThread.getName(), topic);
             }
         }
 
