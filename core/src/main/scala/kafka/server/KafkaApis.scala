@@ -470,12 +470,17 @@ class KafkaApis(val requestChannel: RequestChannel,
           // Please note that if the message format is changed from a higher version back to lower version this
           // test might break because some messages in new message format can be delivered to consumers before 0.10.0.0
           // without format down conversion.
-          val convertedData = if (versionId <= 1 && replicaManager.getMagic(tp).exists(_ > Record.MAGIC_VALUE_V0) &&
-            !data.records.hasMatchingShallowMagic(Record.MAGIC_VALUE_V0)) {
-            trace(s"Down converting message to V0 for fetch request from $clientId")
-            val downConvertedRecords = data.records.toMessageFormat(Record.MAGIC_VALUE_V0, TimestampType.NO_TIMESTAMP_TYPE)
-            FetchPartitionData(data.error, data.hw, downConvertedRecords)
-          } else data
+          val convertedData = replicaManager.getMagic(tp) match {
+            case Some(magic) if magic > 0 && versionId <= 1 && !data.records.hasCompatibleMagic(Record.MAGIC_VALUE_V0) =>
+              trace(s"Down converting message to V0 for fetch request from $clientId")
+              FetchPartitionData(data.error, data.hw, data.records.toMessageFormat(Record.MAGIC_VALUE_V0, TimestampType.NO_TIMESTAMP_TYPE))
+
+            case Some(magic) if magic > 1 && versionId <= 3 && !data.records.hasCompatibleMagic(Record.MAGIC_VALUE_V1) =>
+              trace(s"Down converting message to V1 for fetch request from $clientId")
+              FetchPartitionData(data.error, data.hw, data.records.toMessageFormat(Record.MAGIC_VALUE_V1, TimestampType.NO_TIMESTAMP_TYPE))
+
+            case _ => data
+          }
 
           tp -> new FetchResponse.PartitionData(convertedData.error, convertedData.hw, convertedData.records)
         }

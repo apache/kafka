@@ -24,7 +24,8 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.ByteUtils
-import org.apache.kafka.common.record.{MemoryRecords, Record}
+import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.record.{KafkaRecord, CompressionType, MemoryRecords, Record}
 import org.junit.Assert.{assertFalse, assertTrue}
 import org.junit.{Before, Test}
 
@@ -156,8 +157,8 @@ class AbstractFetcherThreadTest {
     @volatile var fetchCount = 0
 
     private val normalPartitionDataSet = List(
-      new TestPartitionData(MemoryRecords.withRecords(0L, Record.create("hello".getBytes()))),
-      new TestPartitionData(MemoryRecords.withRecords(1L, Record.create("hello".getBytes())))
+      new TestPartitionData(MemoryRecords.withRecords(0L, CompressionType.NONE, new KafkaRecord("hello".getBytes()))),
+      new TestPartitionData(MemoryRecords.withRecords(1L, CompressionType.NONE, new KafkaRecord("hello".getBytes())))
     )
 
     override def processPartitionData(topicPartition: TopicPartition,
@@ -171,8 +172,8 @@ class AbstractFetcherThreadTest {
 
       // Now check message's crc
       val records = partitionData.toRecords
-      for (entry <- records.shallowEntries.asScala) {
-        entry.record.ensureValid()
+      for (entry <- records.entries.asScala) {
+        entry.ensureValid()
         logEndOffset = entry.nextOffset
       }
     }
@@ -181,15 +182,15 @@ class AbstractFetcherThreadTest {
       fetchCount += 1
       // Set the first fetch to get a corrupted message
       if (fetchCount == 1) {
-        val corruptedRecord = Record.create("hello".getBytes())
-        val badChecksum = (corruptedRecord.checksum + 1 % Int.MaxValue).toInt
-        // Garble checksum
-        ByteUtils.writeUnsignedInt(corruptedRecord.buffer, Record.CRC_OFFSET, badChecksum)
-        val records = MemoryRecords.withRecords(corruptedRecord)
+        val record = new KafkaRecord("hello".getBytes())
+        val records = MemoryRecords.withRecords(CompressionType.NONE, record)
+        ByteUtils.writeUnsignedInt(records.buffer, 15, Int.MaxValue)
+
         fetchRequest.offsets.mapValues(_ => new TestPartitionData(records)).toSeq
-      } else
-      // Then, the following fetches get the normal data
+      } else {
+        // Then, the following fetches get the normal data
         fetchRequest.offsets.mapValues(v => normalPartitionDataSet(v.toInt)).toSeq
+      }
     }
 
     override protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): DummyFetchRequest = {

@@ -220,7 +220,7 @@ public class FetcherTest {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
 
-        byte magic = Record.CURRENT_MAGIC_VALUE;
+        byte magic = Record.MAGIC_VALUE_V1;
         byte[] key = "foo".getBytes();
         byte[] value = "baz".getBytes();
         long offset = 0;
@@ -298,7 +298,8 @@ public class FetcherTest {
         // if we are fetching from a compacted topic, there may be gaps in the returned records
         // this test verifies the fetcher updates the current fetched/consumed positions correctly for this case
 
-        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
+                TimestampType.CREATE_TIME, 0L);
         builder.appendWithOffset(15L, 0L, "key".getBytes(), "value-1".getBytes());
         builder.appendWithOffset(20L, 0L, "key".getBytes(), "value-2".getBytes());
         builder.appendWithOffset(30L, 0L, "key".getBytes(), "value-3".getBytes());
@@ -741,7 +742,8 @@ public class FetcherTest {
         for (int i = 1; i < 4; i++) {
             // We need to make sure the message offset grows. Otherwise they will be considered as already consumed
             // and filtered out by consumer.
-            MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME);
+            MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
+                    TimestampType.CREATE_TIME, 0L);
             for (int v = 0; v < 3; v++)
                 builder.appendWithOffset((long) i * 3 + v, Record.NO_TIMESTAMP, "key".getBytes(), String.format("value-%d", v).getBytes());
             List<ConsumerRecord<byte[], byte[]>> records = fetchRecords(builder.build(), Errors.NONE, 100L, 100 * i).get(tp);
@@ -780,7 +782,8 @@ public class FetcherTest {
         assertEquals(100, partitionLag.value(), EPSILON);
 
         // recordsFetchLagMax should be hw - offset of the last message after receiving a non-empty FetchResponse
-        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
+                TimestampType.CREATE_TIME, 0L);
         for (int v = 0; v < 3; v++)
             builder.appendWithOffset((long) v, Record.NO_TIMESTAMP, "key".getBytes(), String.format("value-%d", v).getBytes());
         fetchRecords(builder.build(), Errors.NONE, 200L, 0);

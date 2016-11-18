@@ -20,8 +20,7 @@ import java.io.IOException;
 
 /**
  * An abstraction between an underlying input stream and record iterators, a LogInputStream
- * returns only the shallow log entries, depending on {@link RecordsIterator.DeepRecordsIterator}
- * for the deep iteration. The generic typing allows for implementations which present only
+ * returns only the shallow log entries. The generic typing allows for implementations which present only
  * a view of the log entries, which enables more efficient iteration when the record data is
  * not actually needed. See for example {@link org.apache.kafka.common.record.FileLogInputStream.FileChannelLogEntry}
  * in which the record is not brought into memory until needed.

@@ -29,6 +29,7 @@ import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.record.{EosLogEntry, EosLogRecord}
 import org.junit.Test
 import org.junit.Assert._
 
@@ -119,7 +120,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
     assertEquals(Errors.MESSAGE_TOO_LARGE, response1.status(TopicAndPartition("test", 0)).error)
     assertEquals(-1L, response1.status(TopicAndPartition("test", 0)).offset)
 
-    val safeSize = configs.head.messageMaxBytes - Message.MinMessageOverhead - Message.TimestampLength - MessageSet.LogOverhead - 1
+    val safeSize = configs.head.messageMaxBytes - EosLogEntry.LOG_ENTRY_OVERHEAD - EosLogRecord.RECORD_OVERHEAD - 1
     val message2 = new Message(new Array[Byte](safeSize))
     val messageSet2 = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = message2)
     val response2 = producer.send(produceRequest("test", 0, messageSet2, acks = 1))

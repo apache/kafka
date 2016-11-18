@@ -16,37 +16,34 @@
  */
 package org.apache.kafka.common.record;
 
-import java.util.ArrayList;
+import org.apache.kafka.common.utils.AbstractIterator;
+import org.apache.kafka.common.utils.Utils;
+
+import java.nio.ByteBuffer;
 import java.util.Iterator;
 import java.util.List;
 
 public abstract class AbstractRecords implements Records {
 
-    private final Iterable<Record> records = new Iterable<Record>() {
+    private final Iterable<LogRecord> records = new Iterable<LogRecord>() {
         @Override
-        public Iterator<Record> iterator() {
-            return new Iterator<Record>() {
-                private final Iterator<? extends LogEntry> deepEntries = deepEntries().iterator();
-                @Override
-                public boolean hasNext() {
-                    return deepEntries.hasNext();
-                }
-                @Override
-                public Record next() {
-                    return deepEntries.next().record();
-                }
-                @Override
-                public void remove() {
-                    throw new UnsupportedOperationException("Removal not supported");
-                }
-            };
+        public Iterator<LogRecord> iterator() {
+            return recordsIterator();
         }
     };
 
     @Override
     public boolean hasMatchingShallowMagic(byte magic) {
-        for (LogEntry entry : shallowEntries())
+        for (LogEntry entry : entries())
             if (entry.magic() != magic)
+                return false;
+        return true;
+    }
+
+    @Override
+    public boolean hasCompatibleMagic(byte magic) {
+        for (LogEntry entry : entries())
+            if (entry.magic() > magic)
                 return false;
         return true;
     }
@@ -56,11 +53,8 @@ public abstract class AbstractRecords implements Records {
      */
     @Override
     public Records toMessageFormat(byte toMagic, TimestampType upconvertTimestampType) {
-        List<LogEntry> converted = new ArrayList<>();
-        for (LogEntry entry : deepEntries())
-            converted.add(LogEntry.create(entry.offset(), entry.record().convert(toMagic, upconvertTimestampType)));
-
-        if (converted.isEmpty()) {
+        List<LogRecord> records = Utils.toList(records().iterator());
+        if (records.isEmpty()) {
             // This indicates that the message is too large, which indicates that the buffer is not large
             // enough to hold a full log entry. We just return all the bytes in the file message set.
             // Even though the message set does not have the right format version, we expect old clients
@@ -75,25 +69,68 @@ public abstract class AbstractRecords implements Records {
             // cause some timestamp information to be lost (e.g. if the timestamp type was changed) since
             // we are essentially merging multiple message sets. However, currently this method is only
             // used for down-conversion, so we've ignored the problem.
-            CompressionType compressionType = shallowEntries().iterator().next().record().compressionType();
-            return MemoryRecords.withLogEntries(compressionType, converted);
+            LogEntry firstEntry = entries().iterator().next();
+
+            // FIXME: Using the timestamp and compression type from the first message is almost certainly wrong
+            //        We also need to take into account pid information
+            TimestampType timestampType = firstEntry.timestampType();
+            if (timestampType == TimestampType.NO_TIMESTAMP_TYPE)
+                timestampType = upconvertTimestampType;
+
+            return convert(toMagic, timestampType, firstEntry.compressionType(), firstEntry.timestamp(), records);
         }
     }
 
-    public static int estimatedSize(CompressionType compressionType, Iterable<LogEntry> entries) {
-        int size = 0;
-        for (LogEntry entry : entries)
-            size += entry.sizeInBytes();
-        // NOTE: 1024 is the minimum block size for snappy encoding
-        return compressionType == CompressionType.NONE ? size : Math.min(Math.max(size / 2, 1024), 1 << 16);
+    private MemoryRecords convert(byte magic,
+                                  TimestampType timestampType,
+                                  CompressionType compressionType,
+                                  long logAppendTime,
+                                  List<LogRecord> records) {
+
+        LogRecord firstRecord = records.iterator().next();
+        long firstOffset = firstRecord.offset();
+        ByteBuffer buffer = ByteBuffer.allocate(estimatedSizeRecords(compressionType, records));
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compressionType, timestampType,
+                firstOffset, logAppendTime, 0L, (short) 0, 0);
+        for (LogRecord record : records)
+            builder.appendWithOffset(record.offset(), record.timestamp(), record.key(), record.value());
+        return builder.build();
     }
 
     /**
      * Get an iterator over the deep records.
      * @return An iterator over the records
      */
-    public Iterable<Record> records() {
+    @Override
+    public Iterable<LogRecord> records() {
         return records;
     }
 
+    private Iterator<LogRecord> recordsIterator() {
+        return new AbstractIterator<LogRecord>() {
+            private final Iterator<? extends LogEntry> entries = entries().iterator();
+            private Iterator<LogRecord> records;
+
+            @Override
+            protected LogRecord makeNext() {
+                if (records != null && records.hasNext())
+                    return records.next();
+
+                if (entries.hasNext()) {
+                    records = entries.next().iterator();
+                    return makeNext();
+                }
+
+                return allDone();
+            }
+        };
+    }
+
+    public static int estimatedSizeRecords(CompressionType compressionType, Iterable<LogRecord> records) {
+        int size = 0;
+        for (LogRecord record : records)
+            size += record.sizeInBytes();
+        // TODO: Account for header overhead
+        return compressionType == CompressionType.NONE ? size : Math.min(Math.max(size / 2, 1024), 1 << 16);
+    }
 }

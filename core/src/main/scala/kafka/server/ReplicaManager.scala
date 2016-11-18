@@ -384,6 +384,7 @@ class ReplicaManager(val config: KafkaConfig,
           val info = partitionOpt match {
             case Some(partition) =>
               partition.appendRecordsToLeader(records, requiredAcks)
+
             case None => throw new UnknownTopicOrPartitionException("Partition %s doesn't exist on %d"
               .format(topicPartition, localBrokerId))
           }

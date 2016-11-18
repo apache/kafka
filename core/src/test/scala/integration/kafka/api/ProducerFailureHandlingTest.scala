@@ -120,7 +120,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     TestUtils.createTopic(zkUtils, topic10, servers.size, numServers, servers, topicConfig)
 
     // send a record that is too large for replication, but within the broker max message limit
-    val record = new ProducerRecord(topic10, null, "key".getBytes, new Array[Byte](maxMessageSize - 50))
+    val record = new ProducerRecord(topic10, null, "key".getBytes, new Array[Byte](maxMessageSize - 90))
     val recordMetadata = producer3.send(record).get
 
     assertEquals(topic10, recordMetadata.topic)

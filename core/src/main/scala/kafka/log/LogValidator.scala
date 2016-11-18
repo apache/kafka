@@ -19,14 +19,15 @@ package kafka.log
 import java.nio.ByteBuffer
 
 import kafka.common.LongRef
-import kafka.message.{CompressionCodec, InvalidMessageException, NoCompressionCodec}
+import kafka.message.{CompressionCodec, InvalidMessageException, Message, NoCompressionCodec}
+import kafka.utils.Logging
 import org.apache.kafka.common.errors.InvalidTimestampException
 import org.apache.kafka.common.record._
 
 import scala.collection.mutable
 import scala.collection.JavaConverters._
 
-private[kafka] object LogValidator {
+private[kafka] object LogValidator extends Logging {
 
   /**
    * Update the offsets for this message set and do further validation on messages including:
@@ -76,19 +77,31 @@ private[kafka] object LogValidator {
                                                    timestampType: TimestampType,
                                                    messageTimestampDiffMaxMs: Long,
                                                    toMagicValue: Byte): ValidationAndOffsetAssignResult = {
-    val sizeInBytesAfterConversion = records.shallowEntries.asScala.map { logEntry =>
-      logEntry.record.convertedSize(toMagicValue)
-    }.sum
+    val sizeInBytesAfterConversion = if (toMagicValue > 1)
+      EosLogEntry.LOG_ENTRY_OVERHEAD + records.records.asScala.map(record => EosLogRecord.sizeOf(record.key, record.value)).sum
+    else
+      records.entries.asScala.map { logEntry =>
+      if (logEntry.magic > 1)
+        logEntry.sizeInBytes() // FIXME: Can we get a better estimate?
+      else
+        logEntry.sizeInBytes() + Message.headerSizeDiff(logEntry.magic(), toMagicValue)
+      }.sum
+
+    val (pid, epoch, sequence) = {
+      val first = records.entries().asScala.head
+      (first.pid, first.epoch, first.firstSequence)
+    }
 
     val newBuffer = ByteBuffer.allocate(sizeInBytesAfterConversion)
     val builder = MemoryRecords.builder(newBuffer, toMagicValue, CompressionType.NONE, timestampType,
-      offsetCounter.value, now)
+      offsetCounter.value, now, pid, epoch, sequence)
 
-    records.shallowEntries.asScala.foreach { logEntry =>
-      val record = logEntry.record
-      validateKey(record, compactedTopic)
-      validateTimestamp(record, now, timestampType, messageTimestampDiffMaxMs)
-      builder.convertAndAppendWithOffset(offsetCounter.getAndIncrement(), record)
+    for (entry <- records.entries.asScala) {
+      for (record <- entry.asScala) {
+        validateKey(record, compactedTopic)
+        validateTimestamp(entry, record, now, timestampType, messageTimestampDiffMaxMs)
+        builder.appendWithOffset(offsetCounter.getAndIncrement(), record)
+      }
     }
 
     val convertedRecords = builder.build()
@@ -108,30 +121,38 @@ private[kafka] object LogValidator {
                                          timestampDiffMaxMs: Long): ValidationAndOffsetAssignResult = {
     var maxTimestamp = Record.NO_TIMESTAMP
     var offsetOfMaxTimestamp = -1L
-    val firstOffset = offsetCounter.value
+    val initialOffset = offsetCounter.value
 
-    for (entry <- records.shallowEntries.asScala) {
-      val record = entry.record
-      validateKey(record, compactedTopic)
+    for (entry <- records.entries.asScala) {
+      val baseOffset = offsetCounter.value
+      for (record <- entry.asScala) {
+        record.ensureValid()
 
-      val offset = offsetCounter.getAndIncrement()
-      entry.setOffset(offset)
+        validateKey(record, compactedTopic)
+        val offset = offsetCounter.getAndIncrement()
 
-      if (record.magic > Record.MAGIC_VALUE_V0) {
-        validateTimestamp(record, now, timestampType, timestampDiffMaxMs)
+        if (entry.magic > Record.MAGIC_VALUE_V0) {
+          validateTimestamp(entry, record, now, timestampType, timestampDiffMaxMs)
 
-        if (timestampType == TimestampType.LOG_APPEND_TIME)
-          entry.setLogAppendTime(now)
-        else if (record.timestamp > maxTimestamp) {
-          maxTimestamp = record.timestamp
-          offsetOfMaxTimestamp = offset
+          if (record.timestamp > maxTimestamp) {
+            maxTimestamp = record.timestamp
+            offsetOfMaxTimestamp = offset
+          }
         }
       }
+
+      if (entry.magic > Record.MAGIC_VALUE_V1)
+        entry.setOffset(baseOffset)
+      else
+        entry.setOffset(offsetCounter.value - 1)
+
+      if (entry.magic > 0 && timestampType == TimestampType.LOG_APPEND_TIME)
+        entry.setLogAppendTime(now)
     }
 
     if (timestampType == TimestampType.LOG_APPEND_TIME) {
       maxTimestamp = now
-      offsetOfMaxTimestamp = firstOffset
+      offsetOfMaxTimestamp = initialOffset
     }
 
     ValidationAndOffsetAssignResult(
@@ -148,84 +169,121 @@ private[kafka] object LogValidator {
    * 3. When magic value to use is above 0, but some fields of inner messages need to be overwritten.
    * 4. Message format conversion is needed.
    */
-  private def validateMessagesAndAssignOffsetsCompressed(records: MemoryRecords,
-                                                         offsetCounter: LongRef,
-                                                         now: Long,
-                                                         sourceCodec: CompressionCodec,
-                                                         targetCodec: CompressionCodec,
-                                                         compactedTopic: Boolean = false,
-                                                         messageFormatVersion: Byte = Record.CURRENT_MAGIC_VALUE,
-                                                         messageTimestampType: TimestampType,
-                                                         messageTimestampDiffMaxMs: Long): ValidationAndOffsetAssignResult = {
-    // No in place assignment situation 1 and 2
-    var inPlaceAssignment = sourceCodec == targetCodec && messageFormatVersion > Record.MAGIC_VALUE_V0
 
-    var maxTimestamp = Record.NO_TIMESTAMP
-    val expectedInnerOffset = new LongRef(0)
-    val validatedRecords = new mutable.ArrayBuffer[Record]
+  def validateMessagesAndAssignOffsetsCompressed(records: MemoryRecords,
+                                                 offsetCounter: LongRef,
+                                                 now: Long,
+                                                 sourceCodec: CompressionCodec,
+                                                 targetCodec: CompressionCodec,
+                                                 compactedTopic: Boolean = false,
+                                                 messageFormatVersion: Byte = Record.CURRENT_MAGIC_VALUE,
+                                                 messageTimestampType: TimestampType,
+                                                 messageTimestampDiffMaxMs: Long): ValidationAndOffsetAssignResult = {
+      // Deal with compressed messages
+      // We cannot do in place assignment in one of the following situations:
+      // 1. Source and target compression codec are different
+      // 2. When magic value to use is 0 because offsets need to be overwritten
+      // 3. When magic value to use is above 0, but some fields of inner messages need to be overwritten.
+      // 4. Message format conversion is needed.
 
-    records.deepEntries(true).asScala.foreach { logEntry =>
-      val record = logEntry.record
-      validateKey(record, compactedTopic)
+      // No in place assignment situation 1 and 2
+      var inPlaceAssignment = sourceCodec == targetCodec && messageFormatVersion > Record.MAGIC_VALUE_V0
 
-      if (record.magic > Record.MAGIC_VALUE_V0 && messageFormatVersion > Record.MAGIC_VALUE_V0) {
-        // Validate the timestamp
-        validateTimestamp(record, now, messageTimestampType, messageTimestampDiffMaxMs)
-        // Check if we need to overwrite offset, no in place assignment situation 3
-        if (logEntry.offset != expectedInnerOffset.getAndIncrement())
-          inPlaceAssignment = false
-        if (record.timestamp > maxTimestamp)
-          maxTimestamp = record.timestamp
+      var maxTimestamp = Record.NO_TIMESTAMP
+      val expectedInnerOffset = new LongRef(0)
+      val validatedRecords = new mutable.ArrayBuffer[LogRecord]
+
+      for (entry <- records.entries.asScala) {
+        // TODO: Do message set validation?
+        for (record <- entry.asScala) {
+          if (!record.hasMagic(entry.magic))
+            throw new InvalidRecordException(s"Log record magic does not match outer magic ${entry.magic}")
+
+          record.ensureValid()
+          validateKey(record, compactedTopic)
+
+          if (!record.hasMagic(Record.MAGIC_VALUE_V0) && messageFormatVersion > Record.MAGIC_VALUE_V0) {
+            // No in place assignment situation 3
+            // Validate the timestamp
+            validateTimestamp(entry, record, now, messageTimestampType, messageTimestampDiffMaxMs)
+            // Check if we need to overwrite offset
+            if (record.offset != expectedInnerOffset.getAndIncrement())
+              inPlaceAssignment = false
+            if (record.timestamp > maxTimestamp)
+              maxTimestamp = record.timestamp
+          }
+
+          if (sourceCodec != NoCompressionCodec && record.isCompressed)
+            throw new InvalidMessageException("Compressed outer record should not have an inner record with a " +
+              s"compression attribute set: $record")
+
+          // No in place assignment situation 4
+          if (!record.hasMagic(messageFormatVersion))
+            inPlaceAssignment = false
+
+          validatedRecords += record
+        }
       }
 
-      if (sourceCodec != NoCompressionCodec && logEntry.isCompressed)
-        throw new InvalidMessageException("Compressed outer record should not have an inner record with a " +
-          s"compression attribute set: $record")
+      if (!inPlaceAssignment) {
+        buildRecordsAndAssignOffsets(messageFormatVersion, offsetCounter, messageTimestampType,
+          CompressionType.forId(targetCodec.codec), now, validatedRecords)
+      } else {
+        // ensure the inner messages are valid
+        validatedRecords.foreach(_.ensureValid)
 
-      // No in place assignment situation 4
-      if (record.magic != messageFormatVersion)
-        inPlaceAssignment = false
+        // we can update the wrapper message only and write the compressed payload as is
+        val entry = records.entries.iterator.next()
+        val firstOffset = offsetCounter.value
+        val lastOffset = offsetCounter.addAndGet(validatedRecords.size) - 1
 
-      validatedRecords += record.convert(messageFormatVersion, messageTimestampType)
+        if (messageFormatVersion > Record.MAGIC_VALUE_V1)
+          entry.setOffset(firstOffset)
+        else
+          entry.setOffset(lastOffset)
+
+        if (messageTimestampType == TimestampType.CREATE_TIME)
+          entry.setCreateTime(maxTimestamp)
+        else if (messageTimestampType == TimestampType.LOG_APPEND_TIME)
+          entry.setLogAppendTime(now)
+
+        ValidationAndOffsetAssignResult(validatedRecords = records,
+          maxTimestamp = if (messageTimestampType == TimestampType.LOG_APPEND_TIME) now else maxTimestamp,
+          shallowOffsetOfMaxTimestamp = lastOffset,
+          messageSizeMaybeChanged = false)
+      }
+  }
+
+  private def buildRecordsAndAssignOffsets(magic: Byte, offsetCounter: LongRef, timestampType: TimestampType,
+                                           compressionType: CompressionType, logAppendTime: Long,
+                                           validatedRecords: Seq[LogRecord]): ValidationAndOffsetAssignResult = {
+    val buffer = ByteBuffer.allocate(AbstractRecords.estimatedSizeRecords(compressionType, validatedRecords.asJava))
+    val builder = MemoryRecords.builder(buffer, magic, compressionType, timestampType, offsetCounter.value, logAppendTime)
+
+    validatedRecords.foreach { record =>
+      builder.appendWithOffset(offsetCounter.getAndIncrement(), record)
     }
 
-    if (!inPlaceAssignment) {
-      val entries = validatedRecords.map(record => LogEntry.create(offsetCounter.getAndIncrement(), record))
-      val builder = MemoryRecords.builderWithEntries(messageTimestampType, CompressionType.forId(targetCodec.codec),
-        now, entries.asJava)
-      val updatedRecords = builder.build()
-      val info = builder.info
-      ValidationAndOffsetAssignResult(
-        validatedRecords = updatedRecords,
-        maxTimestamp = info.maxTimestamp,
-        shallowOffsetOfMaxTimestamp = info.shallowOffsetOfMaxTimestamp,
-        messageSizeMaybeChanged = true)
-    } else {
-      // ensure the inner messages are valid
-      validatedRecords.foreach(_.ensureValid)
+    val records = builder.build()
+    val info = builder.info
 
-      // we can update the wrapper message only and write the compressed payload as is
-      val entry = records.shallowEntries.iterator.next()
-      val offset = offsetCounter.addAndGet(validatedRecords.size) - 1
-      entry.setOffset(offset)
-
-      val shallowTimestamp = if (messageTimestampType == TimestampType.LOG_APPEND_TIME) now else maxTimestamp
-      if (messageTimestampType == TimestampType.LOG_APPEND_TIME)
-        entry.setLogAppendTime(shallowTimestamp)
-      else if (messageTimestampType == TimestampType.CREATE_TIME)
-        entry.setCreateTime(shallowTimestamp)
-
-      ValidationAndOffsetAssignResult(validatedRecords = records,
-        maxTimestamp = shallowTimestamp,
-        shallowOffsetOfMaxTimestamp = offset,
-        messageSizeMaybeChanged = false)
-    }
+    ValidationAndOffsetAssignResult(
+      validatedRecords = records,
+      maxTimestamp = info.maxTimestamp,
+      shallowOffsetOfMaxTimestamp = info.shallowOffsetOfMaxTimestamp,
+      messageSizeMaybeChanged = true)
   }
 
   private def validateKey(record: Record, compactedTopic: Boolean) {
     if (compactedTopic && !record.hasKey)
       throw new InvalidMessageException("Compacted topic cannot accept message without key.")
   }
+
+  private def validateKey(record: LogRecord, compactedTopic: Boolean) {
+    if (compactedTopic && !record.hasKey)
+      throw new InvalidMessageException("Compacted topic cannot accept message without key.")
+  }
+
 
   /**
    * This method validates the timestamps of a message.
@@ -241,6 +299,23 @@ private[kafka] object LogValidator {
       throw new InvalidTimestampException(s"Timestamp ${record.timestamp} of message is out of range. " +
         s"The timestamp should be within [${now - timestampDiffMaxMs}, ${now + timestampDiffMaxMs}]")
     if (record.timestampType == TimestampType.LOG_APPEND_TIME)
+      throw new InvalidTimestampException(s"Invalid timestamp type in message $record. Producer should not set " +
+        s"timestamp type to LogAppendTime.")
+  }
+
+  /**
+   * This method validates the timestamps of a message.
+   * If the message is using create time, this method checks if it is within acceptable range.
+   */
+  private def validateTimestamp(entry: LogEntry,
+                                record: LogRecord,
+                                now: Long,
+                                timestampType: TimestampType,
+                                timestampDiffMaxMs: Long) {
+    if (timestampType == TimestampType.CREATE_TIME && math.abs(record.timestamp - now) > timestampDiffMaxMs)
+      throw new InvalidTimestampException(s"Timestamp ${record.timestamp} of message is out of range. " +
+        s"The timestamp should be within [${now - timestampDiffMaxMs}, ${now + timestampDiffMaxMs}")
+    if (entry.timestampType == TimestampType.LOG_APPEND_TIME || record.hasTimestampType(TimestampType.LOG_APPEND_TIME))
       throw new InvalidTimestampException(s"Invalid timestamp type in message $record. Producer should not set " +
         s"timestamp type to LogAppendTime.")
   }

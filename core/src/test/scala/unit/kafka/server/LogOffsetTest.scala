@@ -42,7 +42,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
   var logDir: File = null
   var topicLogDir: File = null
   var server: KafkaServer = null
-  var logSize: Int = 100
+  var logSize: Int = 150
   var simpleConsumer: SimpleConsumer = null
   var time: Time = new MockTime()
 
@@ -90,9 +90,8 @@ class LogOffsetTest extends ZooKeeperTestHarness {
                   "Log for partition [topic,0] should be created")
     val log = logManager.getLog(new TopicPartition(topic, part)).get
 
-    val record = Record.create(Integer.toString(42).getBytes())
     for (_ <- 0 until 20)
-      log.append(MemoryRecords.withRecords(record))
+      log.append(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()))
     log.flush()
 
     val offsets = server.apis.fetchOffsets(logManager, new TopicPartition(topic, part), OffsetRequest.LatestTime, 15)
@@ -151,9 +150,9 @@ class LogOffsetTest extends ZooKeeperTestHarness {
 
     val logManager = server.getLogManager
     val log = logManager.createLog(new TopicPartition(topic, part), logManager.defaultConfig)
-    val record = Record.create(Integer.toString(42).getBytes())
+
     for (_ <- 0 until 20)
-      log.append(MemoryRecords.withRecords(record))
+      log.append(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()))
     log.flush()
 
     val now = time.milliseconds + 30000 // pretend it is the future to avoid race conditions with the fs
@@ -180,9 +179,8 @@ class LogOffsetTest extends ZooKeeperTestHarness {
 
     val logManager = server.getLogManager
     val log = logManager.createLog(new TopicPartition(topic, part), logManager.defaultConfig)
-    val record = Record.create(Integer.toString(42).getBytes())
     for (_ <- 0 until 20)
-      log.append(MemoryRecords.withRecords(record))
+      log.append(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()))
     log.flush()
 
     val offsets = server.apis.fetchOffsets(logManager, new TopicPartition(topic, part), OffsetRequest.EarliestTime, 10)

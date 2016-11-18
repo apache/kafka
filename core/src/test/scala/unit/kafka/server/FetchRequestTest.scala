@@ -25,7 +25,7 @@ import kafka.utils.TestUtils._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.LogEntry
+import org.apache.kafka.common.record.LogRecord
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.junit.Assert._
@@ -52,7 +52,6 @@ class FetchRequestTest extends BaseRequestTest {
     producer.close()
     super.tearDown()
   }
-
 
   private def createFetchRequest(maxResponseBytes: Int, maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
                                  offsetMap: Map[TopicPartition, Long] = Map.empty): FetchRequest =
@@ -97,6 +96,7 @@ class FetchRequestTest extends BaseRequestTest {
     val partitionWithLargeMessage2 = partitionsWithLargeMessages(1)
     producer.send(new ProducerRecord(partitionWithLargeMessage1.topic, partitionWithLargeMessage1.partition,
       "larger than partition limit", new String(new Array[Byte](maxPartitionBytes + 1)))).get
+    producer.flush()
     producer.send(new ProducerRecord(partitionWithLargeMessage2.topic, partitionWithLargeMessage2.partition,
       "larger than response limit", new String(new Array[Byte](maxResponseBytes + 1)))).get
 
@@ -166,8 +166,8 @@ class FetchRequestTest extends BaseRequestTest {
     assertEquals(0, logEntries(partitionData).map(_.sizeInBytes).sum)
   }
 
-  private def logEntries(partitionData: FetchResponse.PartitionData): Seq[LogEntry] = {
-    partitionData.records.deepEntries.asScala.toIndexedSeq
+  private def logEntries(partitionData: FetchResponse.PartitionData): Seq[LogRecord] = {
+    partitionData.records.records.asScala.toIndexedSeq
   }
 
   private def checkFetchResponse(expectedPartitions: Seq[TopicPartition], fetchResponse: FetchResponse,
@@ -185,7 +185,7 @@ class FetchRequestTest extends BaseRequestTest {
       val records = partitionData.records
       responseBufferSize += records.sizeInBytes
 
-      val entries = records.shallowEntries.asScala.toIndexedSeq
+      val entries = records.entries.asScala.toIndexedSeq
       assertTrue(entries.size < numMessagesPerPartition)
       val entriesSize = entries.map(_.sizeInBytes).sum
       responseSize += entriesSize
@@ -227,7 +227,7 @@ class FetchRequestTest extends BaseRequestTest {
       val suffix = s"$tp-$messageIndex"
       new ProducerRecord(tp.topic, tp.partition, s"key $suffix", s"value $suffix")
     }
-    records.map(producer.send).foreach(_.get)
+    records.map(producer.send(_).get)
     records
   }
 

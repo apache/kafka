@@ -35,13 +35,14 @@ public class SimpleRecordTest {
     public void testCompressedIterationWithNullValue() throws Exception {
         ByteBuffer buffer = ByteBuffer.allocate(128);
         DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
-        LogEntry.writeHeader(out, 0L, Record.RECORD_OVERHEAD_V1);
-        Record.write(out, Record.CURRENT_MAGIC_VALUE, 1L, null, null, CompressionType.GZIP, TimestampType.CREATE_TIME);
+        OldLogEntry.writeHeader(out, 0L, Record.RECORD_OVERHEAD_V1);
+        Record.write(out, Record.MAGIC_VALUE_V1, 1L, (byte[]) null, null,
+                CompressionType.GZIP, TimestampType.CREATE_TIME);
 
         buffer.flip();
 
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
-        for (Record record : records.records())
+        for (LogRecord record : records.records())
             fail("Iteration should have caused invalid record error");
     }
 
@@ -55,14 +56,14 @@ public class SimpleRecordTest {
 
         ByteBuffer buffer = ByteBuffer.allocate(128);
         DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
-        LogEntry.writeHeader(out, 0L, Record.RECORD_OVERHEAD_V1 + emptyCompressedValue.remaining());
-        Record.write(out, Record.CURRENT_MAGIC_VALUE, 1L, null, Utils.toArray(emptyCompressedValue),
+        OldLogEntry.writeHeader(out, 0L, Record.RECORD_OVERHEAD_V1 + emptyCompressedValue.remaining());
+        Record.write(out, Record.MAGIC_VALUE_V1, 1L, null, Utils.toArray(emptyCompressedValue),
                 CompressionType.GZIP, TimestampType.CREATE_TIME);
 
         buffer.flip();
 
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
-        for (Record record : records.records())
+        for (LogRecord record : records.records())
             fail("Iteration should have caused invalid record error");
     }
 
@@ -138,6 +139,26 @@ public class SimpleRecordTest {
             assertEquals(record.value(), converted.value());
             assertTrue(record.isValid());
             assertEquals(record.convertedSize(Record.MAGIC_VALUE_V0), converted.sizeInBytes());
+        }
+    }
+
+    @Test
+    public void buildEosRecord() {
+        ByteBuffer buffer = ByteBuffer.allocate(2048);
+
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, Record.MAGIC_VALUE_V2, CompressionType.NONE, TimestampType.CREATE_TIME, 1234567L);
+        builder.appendWithOffset(1234567, System.currentTimeMillis(), "a".getBytes(), "v".getBytes());
+        builder.appendWithOffset(1234568, System.currentTimeMillis(), "b".getBytes(), "v".getBytes());
+
+        MemoryRecords records = builder.build();
+        for (LogEntry.MutableLogEntry entry : records.entries()) {
+            assertEquals(1234567, entry.baseOffset());
+            assertEquals(1234568, entry.lastOffset());
+            assertTrue(entry.isValid());
+
+            for (LogRecord record : entry) {
+                assertTrue(record.isValid());
+            }
         }
     }
 

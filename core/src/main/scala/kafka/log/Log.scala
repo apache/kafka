@@ -332,7 +332,7 @@ class Log(@volatile var dir: File,
    * Close this log
    */
   def close() {
-    debug("Closing log " + name)
+    debug(s"Closing log $name")
     lock synchronized {
       logSegments.foreach(_.close())
     }
@@ -391,7 +391,7 @@ class Log(@volatile var dir: File,
           // re-validate message sizes if there's a possibility that they have changed (due to re-compression or message
           // format conversion)
           if (validateAndOffsetAssignResult.messageSizeMaybeChanged) {
-            for (logEntry <- validRecords.shallowEntries.asScala) {
+            for (logEntry <- validRecords.entries.asScala) {
               if (logEntry.sizeInBytes > config.maxMessageSize) {
                 // we record the original message set size instead of the trimmed size
                 // to be consistent with pre-compression bytesRejectedRate recording
@@ -402,11 +402,10 @@ class Log(@volatile var dir: File,
               }
             }
           }
-
         } else {
           // we are taking the offsets we are given
           if (!appendInfo.offsetsMonotonic || appendInfo.firstOffset < nextOffsetMetadata.messageOffset)
-            throw new IllegalArgumentException("Out of order offsets found in " + records.deepEntries.asScala.map(_.offset))
+            throw new IllegalArgumentException("Out of order offsets found in " + records.records.asScala.map(_.offset))
         }
 
         // check messages set size may be exceed config.segmentSize
@@ -470,17 +469,16 @@ class Log(@volatile var dir: File,
     var monotonic = true
     var maxTimestamp = Record.NO_TIMESTAMP
     var offsetOfMaxTimestamp = -1L
-    for (entry <- records.shallowEntries.asScala) {
+    for (entry <- records.entries.asScala) {
       // update the first offset if on the first message
-      if(firstOffset < 0)
-        firstOffset = entry.offset
+      if (firstOffset < 0)
+        firstOffset = if (entry.magic >= Record.MAGIC_VALUE_V2) entry.baseOffset else entry.lastOffset
+
       // check that offsets are monotonically increasing
-      if(lastOffset >= entry.offset)
+      if (lastOffset >= entry.lastOffset)
         monotonic = false
       // update the last offset seen
-      lastOffset = entry.offset
-
-      val record = entry.record
+      lastOffset = entry.lastOffset
 
       // Check if the message sizes are valid.
       val messageSize = entry.sizeInBytes
@@ -492,15 +490,16 @@ class Log(@volatile var dir: File,
       }
 
       // check the validity of the message by checking CRC
-      record.ensureValid()
-      if (record.timestamp > maxTimestamp) {
-        maxTimestamp = record.timestamp
+      entry.ensureValid()
+
+      if (entry.timestamp > maxTimestamp) {
+        maxTimestamp = entry.timestamp
         offsetOfMaxTimestamp = lastOffset
       }
       shallowMessageCount += 1
       validBytesCount += messageSize
 
-      val messageCodec = CompressionCodec.getCompressionCodec(record.compressionType.id)
+      val messageCodec = CompressionCodec.getCompressionCodec(entry.compressionType.id)
       if (messageCodec != NoCompressionCodec)
         sourceCodec = messageCodec
     }

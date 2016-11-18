@@ -23,6 +23,9 @@ import org.apache.kafka.common.utils.Utils;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.Iterator;
+
+import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 
 /**
  * A log input stream which is backed by a {@link FileChannel}.
@@ -32,7 +35,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
     private final int end;
     private final FileChannel channel;
     private final int maxRecordSize;
-    private final ByteBuffer logHeaderBuffer = ByteBuffer.allocate(Records.LOG_OVERHEAD);
+    private final ByteBuffer logHeaderBuffer = ByteBuffer.allocate(LOG_OVERHEAD);
 
     /**
      * Create a new log input stream over the FileChannel
@@ -53,7 +56,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
 
     @Override
     public FileChannelLogEntry nextEntry() throws IOException {
-        if (position + Records.LOG_OVERHEAD >= end)
+        if (position + LOG_OVERHEAD >= end)
             return null;
 
         logHeaderBuffer.rewind();
@@ -69,7 +72,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         if (size > maxRecordSize)
             throw new CorruptRecordException(String.format("Record size exceeds the largest allowable message size (%d).", maxRecordSize));
 
-        if (position + Records.LOG_OVERHEAD + size > end)
+        if (position + LOG_OVERHEAD + size > end)
             return null;
 
         FileChannelLogEntry logEntry = new FileChannelLogEntry(offset, channel, position, size);
@@ -82,17 +85,17 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
      * entries without needing to read the record data into memory until it is needed. The downside
      * is that entries will generally no longer be readable when the underlying channel is closed.
      */
-    public static class FileChannelLogEntry extends LogEntry {
+    public static class FileChannelLogEntry extends AbstractLogEntry {
         private final long offset;
         private final FileChannel channel;
         private final int position;
         private final int recordSize;
-        private Record record = null;
+        private LogEntry underlying;
 
         private FileChannelLogEntry(long offset,
-                                   FileChannel channel,
-                                   int position,
-                                   int recordSize) {
+                                    FileChannel channel,
+                                    int position,
+                                    int recordSize) {
             this.offset = offset;
             this.channel = channel;
             this.position = position;
@@ -100,8 +103,52 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         }
 
         @Override
-        public long offset() {
-            return offset;
+        public long baseOffset() {
+            if (magic() >= Record.MAGIC_VALUE_V2)
+                return offset;
+
+            loadUnderlyingEntry();
+            return underlying.baseOffset();
+        }
+
+        @Override
+        public CompressionType compressionType() {
+            loadUnderlyingEntry();
+            return underlying.compressionType();
+        }
+
+        @Override
+        public TimestampType timestampType() {
+            loadUnderlyingEntry();
+            return underlying.timestampType();
+        }
+
+        @Override
+        public long timestamp() {
+            loadUnderlyingEntry();
+            return underlying.timestamp();
+        }
+
+        @Override
+        public long lastOffset() {
+            if (magic() < Record.MAGIC_VALUE_V2)
+                return offset;
+            else if (underlying != null)
+                return underlying.lastOffset();
+
+            try {
+                // FIXME: This logic probably should be moved into EosLogEntry somehow
+                // maybe we just need two separate implementations
+
+                byte[] offsetDelta = new byte[4];
+                ByteBuffer buf = ByteBuffer.wrap(offsetDelta);
+                channel.read(buf, position + EosLogEntry.OFFSET_DELTA_OFFSET);
+                if (buf.hasRemaining())
+                    throw new KafkaException("Failed to read magic byte from FileChannel " + channel);
+                return offset + buf.getInt(0);
+            } catch (IOException e) {
+                throw new KafkaException(e);
+            }
         }
 
         public int position() {
@@ -110,8 +157,8 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
 
         @Override
         public byte magic() {
-            if (record != null)
-                return record.magic();
+            if (underlying != null)
+                return underlying.magic();
 
             try {
                 byte[] magic = new byte[1];
@@ -123,39 +170,105 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
             }
         }
 
-        /**
-         * Force load the record and its data (key and value) into memory.
-         * @return The resulting record
-         * @throws IOException for any IO errors reading from the underlying file
-         */
-        private Record loadRecord() throws IOException {
-            if (record != null)
-                return record;
-
-            ByteBuffer recordBuffer = ByteBuffer.allocate(recordSize);
-            Utils.readFullyOrFail(channel, recordBuffer, position + Records.LOG_OVERHEAD, "full record");
-
-            recordBuffer.rewind();
-            record = new Record(recordBuffer);
-            return record;
+        @Override
+        public long pid() {
+            loadUnderlyingEntry();
+            return underlying.pid();
         }
 
         @Override
-        public Record record() {
-            if (record != null)
-                return record;
+        public short epoch() {
+            loadUnderlyingEntry();
+            return underlying.epoch();
+        }
 
+        @Override
+        public int firstSequence() {
+            loadUnderlyingEntry();
+            return underlying.firstSequence();
+        }
+
+        @Override
+        public int lastSequence() {
+            loadUnderlyingEntry();
+            return underlying.lastSequence();
+        }
+
+        private void loadUnderlyingEntry() {
             try {
-                return loadRecord();
+                if (underlying != null)
+                    return;
+
+                ByteBuffer entryBuffer = ByteBuffer.allocate(LOG_OVERHEAD + recordSize);
+                Utils.readFullyOrFail(channel, entryBuffer, position, "full entry");
+                entryBuffer.rewind();
+
+                byte magic = entryBuffer.get(LOG_OVERHEAD + Record.MAGIC_OFFSET);
+                if (magic > Record.MAGIC_VALUE_V1)
+                    underlying = new EosLogEntry(entryBuffer);
+                else
+                    underlying = new OldLogEntry.ByteBufferLogEntry(entryBuffer);
             } catch (IOException e) {
-                throw new KafkaException(e);
+                throw new KafkaException("Failed to load log entry at position " + position + " from file channel " + channel);
             }
         }
 
         @Override
-        public int sizeInBytes() {
-            return Records.LOG_OVERHEAD + recordSize;
+        public Iterator<LogRecord> iterator() {
+            loadUnderlyingEntry();
+            return underlying.iterator();
         }
 
+        @Override
+        public boolean isValid() {
+            loadUnderlyingEntry();
+            return underlying.isValid();
+        }
+
+        @Override
+        public void ensureValid() {
+            loadUnderlyingEntry();
+            underlying.ensureValid();
+        }
+
+        @Override
+        public long checksum() {
+            loadUnderlyingEntry();
+            return underlying.checksum();
+        }
+
+        @Override
+        public int sizeInBytes() {
+            return LOG_OVERHEAD + recordSize;
+        }
+
+        @Override
+        public void writeTo(ByteBuffer buffer) {
+            loadUnderlyingEntry();
+            underlying.writeTo(buffer);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            FileChannelLogEntry that = (FileChannelLogEntry) o;
+
+            if (offset != that.offset) return false;
+            if (position != that.position) return false;
+            if (recordSize != that.recordSize) return false;
+            return channel != null ? channel.equals(that.channel) : that.channel == null;
+        }
+
+        @Override
+        public int hashCode() {
+            int result = super.hashCode();
+            result = 31 * result + (int) (offset ^ (offset >>> 32));
+            result = 31 * result + (channel != null ? channel.hashCode() : 0);
+            result = 31 * result + position;
+            result = 31 * result + recordSize;
+            return result;
+        }
     }
 }

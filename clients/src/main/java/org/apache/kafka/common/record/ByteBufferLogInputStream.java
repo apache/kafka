@@ -17,19 +17,17 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.errors.CorruptRecordException;
-import org.apache.kafka.common.utils.ByteUtils;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
-import static org.apache.kafka.common.record.Records.OFFSET_OFFSET;
 
 /**
  * A byte buffer backed log input stream. This class avoids the need to copy records by returning
  * slices from the underlying byte buffer.
  */
-class ByteBufferLogInputStream implements LogInputStream<ByteBufferLogInputStream.ByteBufferLogEntry> {
+class ByteBufferLogInputStream implements LogInputStream<LogEntry.MutableLogEntry> {
     private final ByteBuffer buffer;
     private final int maxMessageSize;
 
@@ -38,7 +36,7 @@ class ByteBufferLogInputStream implements LogInputStream<ByteBufferLogInputStrea
         this.maxMessageSize = maxMessageSize;
     }
 
-    public ByteBufferLogEntry nextEntry() throws IOException {
+    public LogEntry.MutableLogEntry nextEntry() throws IOException {
         int remaining = buffer.remaining();
         if (remaining < LOG_OVERHEAD)
             return null;
@@ -53,65 +51,16 @@ class ByteBufferLogInputStream implements LogInputStream<ByteBufferLogInputStrea
         if (remaining < entrySize)
             return null;
 
+        byte magic = buffer.get(buffer.position() + LOG_OVERHEAD + Record.MAGIC_OFFSET);
+
         ByteBuffer entrySlice = buffer.slice();
         entrySlice.limit(entrySize);
         buffer.position(buffer.position() + entrySize);
-        return new ByteBufferLogEntry(entrySlice);
-    }
 
-    public static class ByteBufferLogEntry extends LogEntry {
-        private final ByteBuffer buffer;
-        private final Record record;
-
-        private ByteBufferLogEntry(ByteBuffer buffer) {
-            this.buffer = buffer;
-            buffer.position(LOG_OVERHEAD);
-            this.record = new Record(buffer.slice());
-            buffer.position(OFFSET_OFFSET);
-        }
-
-        @Override
-        public long offset() {
-            return buffer.getLong(OFFSET_OFFSET);
-        }
-
-        @Override
-        public Record record() {
-            return record;
-        }
-
-        public void setOffset(long offset) {
-            buffer.putLong(OFFSET_OFFSET, offset);
-        }
-
-        public void setCreateTime(long timestamp) {
-            if (record.magic() == Record.MAGIC_VALUE_V0)
-                throw new IllegalArgumentException("Cannot set timestamp for a record with magic = 0");
-
-            long currentTimestamp = record.timestamp();
-            // We don't need to recompute crc if the timestamp is not updated.
-            if (record.timestampType() == TimestampType.CREATE_TIME && currentTimestamp == timestamp)
-                return;
-            setTimestampAndUpdateCrc(TimestampType.CREATE_TIME, timestamp);
-        }
-
-        public void setLogAppendTime(long timestamp) {
-            if (record.magic() == Record.MAGIC_VALUE_V0)
-                throw new IllegalArgumentException("Cannot set timestamp for a record with magic = 0");
-            setTimestampAndUpdateCrc(TimestampType.LOG_APPEND_TIME, timestamp);
-        }
-
-        private void setTimestampAndUpdateCrc(TimestampType timestampType, long timestamp) {
-            byte attributes = record.attributes();
-            buffer.put(LOG_OVERHEAD + Record.ATTRIBUTES_OFFSET, timestampType.updateAttributes(attributes));
-            buffer.putLong(LOG_OVERHEAD + Record.TIMESTAMP_OFFSET, timestamp);
-            long crc = record.computeChecksum();
-            ByteUtils.writeUnsignedInt(buffer, LOG_OVERHEAD + Record.CRC_OFFSET, crc);
-        }
-
-        public ByteBuffer buffer() {
-            return buffer;
-        }
+        if (magic > Record.MAGIC_VALUE_V1)
+            return new EosLogEntry(entrySlice);
+        else
+            return new OldLogEntry.ByteBufferLogEntry(entrySlice);
     }
 
 }

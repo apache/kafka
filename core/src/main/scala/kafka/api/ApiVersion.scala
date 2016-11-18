@@ -62,7 +62,10 @@ object ApiVersion {
     "0.10.1" -> KAFKA_0_10_1_IV2,
     // introduced UpdateMetadataRequest v3 in KIP-103
     "0.10.2-IV0" -> KAFKA_0_10_2_IV0,
-    "0.10.2" -> KAFKA_0_10_2_IV0
+    "0.10.2" -> KAFKA_0_10_2_IV0,
+    // KIP-98, aka EOS, changes.
+    "0.10.3-IV0" -> KAFKA_0_10_3_IV0,
+    "0.10.3" -> KAFKA_0_10_3_IV0
   )
 
   private val versionPattern = "\\.".r
@@ -146,3 +149,10 @@ case object KAFKA_0_10_2_IV0 extends ApiVersion {
   val messageFormatVersion: Byte = Record.MAGIC_VALUE_V1
   val id: Int = 9
 }
+
+case object KAFKA_0_10_3_IV0 extends ApiVersion {
+  val version: String = "0.10.3-IV0"
+  val messageFormatVersion: Byte = Record.MAGIC_VALUE_V2
+  val id: Int = 10
+}
+

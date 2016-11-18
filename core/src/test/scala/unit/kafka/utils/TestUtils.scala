@@ -313,10 +313,37 @@ object TestUtils extends Logging {
                        key: Array[Byte] = null,
                        codec: CompressionType = CompressionType.NONE,
                        timestamp: Long = Record.NO_TIMESTAMP,
-                       magicValue: Byte = Record.CURRENT_MAGIC_VALUE) = {
-    val record = Record.create(magicValue, timestamp, key, value)
-    MemoryRecords.withRecords(codec, record)
+                       magicValue: Byte = Record.CURRENT_MAGIC_VALUE): MemoryRecords = {
+    records(magicValue = magicValue, codec = codec, (key, value, timestamp))
   }
+
+  def recordsWithValues(magicValue: Byte,
+                        codec: CompressionType,
+                        values: Array[Byte]*): MemoryRecords = {
+    records(magicValue, codec, values.map((null, _, Record.NO_TIMESTAMP)): _*)
+  }
+
+  def records(magicValue: Byte,
+              codec: CompressionType,
+              records: (Array[Byte], Array[Byte], Long)*): MemoryRecords = {
+    this.records(records, magicValue = magicValue, codec = codec)
+  }
+
+  def records(records: Iterable[(Array[Byte], Array[Byte], Long)],
+              magicValue: Byte = Record.CURRENT_MAGIC_VALUE,
+              codec: CompressionType = CompressionType.NONE,
+              pid: Long = 0,
+              epoch: Short = 0,
+              sequence: Int = 0): MemoryRecords = {
+    val buf = ByteBuffer.allocate(EosLogEntry.LOG_ENTRY_OVERHEAD + records.map(r => EosLogRecord.sizeOf(r._1, r._2)).sum)
+    val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L,
+      System.currentTimeMillis, pid, epoch, sequence)
+    records.foreach { case (key, value, timestamp) =>
+      builder.appendWithOffset(0, timestamp, key, value)
+    }
+    builder.build()
+  }
+
 
   /**
    * Generate an array of random bytes

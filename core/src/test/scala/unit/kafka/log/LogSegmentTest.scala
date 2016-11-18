@@ -17,7 +17,8 @@
  package kafka.log
 
 import kafka.utils.TestUtils
-import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Record}
+import kafka.utils.TestUtils.checkEquals
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Time
 import org.junit.Assert._
 import org.junit.{After, Test}
@@ -46,7 +47,9 @@ class LogSegmentTest {
   
   /* create a ByteBufferMessageSet for the given messages starting from the given offset */
   def records(offset: Long, records: String*): MemoryRecords = {
-    MemoryRecords.withRecords(offset, records.map(s => Record.create(Record.MAGIC_VALUE_V1, offset * 10, s.getBytes)):_*)
+    MemoryRecords.withRecords(Record.MAGIC_VALUE_V1, offset, CompressionType.NONE, records.map { s =>
+      new KafkaRecord(offset * 10, s.getBytes)
+    }: _*)
   }
 
   @After
@@ -77,7 +80,7 @@ class LogSegmentTest {
     val ms = records(50, "hello", "there", "little", "bee")
     seg.append(50, 53, Record.NO_TIMESTAMP, -1L, ms)
     val read = seg.read(startOffset = 41, maxSize = 300, maxOffset = None).records
-    assertEquals(ms.deepEntries.asScala.toList, read.deepEntries.asScala.toList)
+    checkEquals(ms.records.iterator, read.records.iterator)
   }
 
   /**
@@ -91,8 +94,8 @@ class LogSegmentTest {
     val ms = records(baseOffset, "hello", "there", "beautiful")
     seg.append(baseOffset, 52, Record.NO_TIMESTAMP, -1L, ms)
     def validate(offset: Long) =
-      assertEquals(ms.deepEntries.asScala.filter(_.offset == offset).toList,
-                   seg.read(startOffset = offset, maxSize = 1024, maxOffset = Some(offset+1)).records.deepEntries.asScala.toList)
+      assertEquals(ms.records.asScala.filter(_.offset == offset).toList,
+                   seg.read(startOffset = offset, maxSize = 1024, maxOffset = Some(offset+1)).records.records.asScala.toList)
     validate(50)
     validate(51)
     validate(52)
@@ -122,7 +125,7 @@ class LogSegmentTest {
     val ms2 = records(60, "alpha", "beta")
     seg.append(60, 61, Record.NO_TIMESTAMP, -1L, ms2)
     val read = seg.read(startOffset = 55, maxSize = 200, maxOffset = None)
-    assertEquals(ms2.deepEntries.asScala.toList, read.records.deepEntries.asScala.toList)
+    checkEquals(ms2.records.iterator, read.records.records.iterator)
   }
 
   /**
@@ -140,12 +143,12 @@ class LogSegmentTest {
       seg.append(offset + 1, offset + 1, Record.NO_TIMESTAMP, -1L, ms2)
       // check that we can read back both messages
       val read = seg.read(offset, None, 10000)
-      assertEquals(List(ms1.deepEntries.iterator.next(), ms2.deepEntries.iterator.next()), read.records.deepEntries.asScala.toList)
+      assertEquals(List(ms1.records.iterator.next(), ms2.records.iterator.next()), read.records.records.asScala.toList)
       // now truncate off the last message
       seg.truncateTo(offset + 1)
       val read2 = seg.read(offset, None, 10000)
-      assertEquals(1, read2.records.deepEntries.asScala.size)
-      assertEquals(ms1.deepEntries.iterator.next(), read2.records.deepEntries.iterator.next())
+      assertEquals(1, read2.records.records.asScala.size)
+      checkEquals(ms1.records.iterator, read2.records.records.iterator)
       offset += 1
     }
   }
@@ -246,7 +249,7 @@ class LogSegmentTest {
     TestUtils.writeNonsenseToFile(indexFile, 5, indexFile.length.toInt)
     seg.recover(64*1024)
     for(i <- 0 until 100)
-      assertEquals(i, seg.read(i, Some(i + 1), 1024).records.deepEntries.iterator.next().offset)
+      assertEquals(i, seg.read(i, Some(i + 1), 1024).records.records.iterator.next().offset)
   }
 
   /**
@@ -285,7 +288,8 @@ class LogSegmentTest {
       val position = recordPosition.position + TestUtils.random.nextInt(15)
       TestUtils.writeNonsenseToFile(seg.log.file, position, (seg.log.file.length - position).toInt)
       seg.recover(64*1024)
-      assertEquals("Should have truncated off bad messages.", (0 until offsetToBeginCorruption).toList, seg.log.shallowEntries.asScala.map(_.offset).toList)
+      assertEquals("Should have truncated off bad messages.", (0 until offsetToBeginCorruption).toList,
+        seg.log.entries.asScala.map(_.lastOffset).toList)
       seg.delete()
     }
   }
@@ -293,7 +297,8 @@ class LogSegmentTest {
   /* create a segment with   pre allocate */
   def createSegment(offset: Long, fileAlreadyExists: Boolean, initFileSize: Int, preallocate: Boolean): LogSegment = {
     val tempDir = TestUtils.tempDir()
-    val seg = new LogSegment(tempDir, offset, 10, 1000, 0, Time.SYSTEM, fileAlreadyExists = fileAlreadyExists, initFileSize = initFileSize, preallocate = preallocate)
+    val seg = new LogSegment(tempDir, offset, 10, 1000, 0, Time.SYSTEM, fileAlreadyExists = fileAlreadyExists,
+      initFileSize = initFileSize, preallocate = preallocate)
     segments += seg
     seg
   }
@@ -307,7 +312,7 @@ class LogSegmentTest {
     val ms2 = records(60, "alpha", "beta")
     seg.append(60, 61, Record.NO_TIMESTAMP, -1L, ms2)
     val read = seg.read(startOffset = 55, maxSize = 200, maxOffset = None)
-    assertEquals(ms2.deepEntries.asScala.toList, read.records.deepEntries.asScala.toList)
+    checkEquals(ms2.records.iterator, read.records.records.iterator)
   }
 
   /* create a segment with   pre allocate and clearly shut down*/
@@ -321,7 +326,7 @@ class LogSegmentTest {
     val ms2 = records(60, "alpha", "beta")
     seg.append(60, 61, Record.NO_TIMESTAMP, -1L, ms2)
     val read = seg.read(startOffset = 55, maxSize = 200, maxOffset = None)
-    assertEquals(ms2.deepEntries.asScala.toList, read.records.deepEntries.asScala.toList)
+    checkEquals(ms2.records.iterator, read.records.records.iterator)
     val oldSize = seg.log.sizeInBytes()
     val oldPosition = seg.log.channel.position
     val oldFileSize = seg.log.file.length
@@ -334,7 +339,7 @@ class LogSegmentTest {
     segments += segReopen
 
     val readAgain = segReopen.read(startOffset = 55, maxSize = 200, maxOffset = None)
-    assertEquals(ms2.deepEntries.asScala.toList, readAgain.records.deepEntries.asScala.toList)
+    checkEquals(ms2.records.iterator, readAgain.records.records.iterator)
     val size = segReopen.log.sizeInBytes()
     val position = segReopen.log.channel.position
     val fileSize = segReopen.log.file.length

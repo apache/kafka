@@ -275,7 +275,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
             "fetched " + fetchResponsePerReplica.size + " replicas for " + topicAndPartition + ", but expected "
             + expectedReplicasPerTopicAndPartition(topicAndPartition) + " replicas")
       val logEntryIteratorMap = fetchResponsePerReplica.map { case (replicaId, fetchResponse) =>
-        replicaId -> fetchResponse.messages.asInstanceOf[ByteBufferMessageSet].asRecords.shallowEntries.iterator
+        replicaId -> fetchResponse.messages.asInstanceOf[ByteBufferMessageSet].asRecords.entries.iterator
       }
       val maxHw = fetchResponsePerReplica.values.map(_.hw).max
 
@@ -289,26 +289,26 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
               val logEntry = logEntriesIterator.next()
 
               // only verify up to the high watermark
-              if (logEntry.offset >= fetchResponsePerReplica.get(replicaId).hw)
+              if (logEntry.lastOffset >= fetchResponsePerReplica.get(replicaId).hw)
                 isMessageInAllReplicas = false
               else {
                 messageInfoFromFirstReplicaOpt match {
                   case None =>
                     messageInfoFromFirstReplicaOpt = Some(
-                      MessageInfo(replicaId, logEntry.offset, logEntry.nextOffset, logEntry.record.checksum))
+                      MessageInfo(replicaId, logEntry.lastOffset, logEntry.nextOffset, logEntry.checksum))
                   case Some(messageInfoFromFirstReplica) =>
-                    if (messageInfoFromFirstReplica.offset != logEntry.offset) {
+                    if (messageInfoFromFirstReplica.offset != logEntry.lastOffset) {
                       println(ReplicaVerificationTool.getCurrentTimeString + ": partition " + topicAndPartition
                         + ": replica " + messageInfoFromFirstReplica.replicaId + "'s offset "
                         + messageInfoFromFirstReplica.offset + " doesn't match replica "
-                        + replicaId + "'s offset " + logEntry.offset)
+                        + replicaId + "'s offset " + logEntry.lastOffset)
                       Exit.exit(1)
                     }
-                    if (messageInfoFromFirstReplica.checksum != logEntry.record.checksum)
+                    if (messageInfoFromFirstReplica.checksum != logEntry.checksum)
                       println(ReplicaVerificationTool.getCurrentTimeString + ": partition "
-                        + topicAndPartition + " has unmatched checksum at offset " + logEntry.offset + "; replica "
+                        + topicAndPartition + " has unmatched checksum at offset " + logEntry.lastOffset + "; replica "
                         + messageInfoFromFirstReplica.replicaId + "'s checksum " + messageInfoFromFirstReplica.checksum
-                        + "; replica " + replicaId + "'s checksum " + logEntry.record.checksum)
+                        + "; replica " + replicaId + "'s checksum " + logEntry.checksum)
                 }
               }
             } else
