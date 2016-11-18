@@ -411,7 +411,15 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
           .format(broker, stopReplicaWithDelete.mkString(",")))
         debug("The stop replica request (delete = false) sent to broker %d is %s"
           .format(broker, stopReplicaWithoutDelete.mkString(",")))
-        replicaInfoList.foreach { r =>
+
+        val stopReplicaRequestWithDelete = new StopReplicaRequest(controllerId, controllerEpoch, true,
+          stopReplicaWithDelete.map(r => new TopicPartition(r.topic, r.partition)).asJava)
+        controller.sendRequest(broker, ApiKeys.STOP_REPLICA, None, stopReplicaRequestWithDelete)
+        val stopReplicaRequestWithoutDelete = new StopReplicaRequest(controllerId, controllerEpoch, false,
+          stopReplicaWithoutDelete.map(r => new TopicPartition(r.topic, r.partition)).asJava)
+        controller.sendRequest(broker, ApiKeys.STOP_REPLICA, None, stopReplicaRequestWithoutDelete)
+
+        replicaInfoList.filter(_.callback != null).foreach { r =>
           val stopReplicaRequest = new StopReplicaRequest(controllerId, controllerEpoch, r.deletePartition,
             Set(new TopicPartition(r.replica.topic, r.replica.partition)).asJava)
           controller.sendRequest(broker, ApiKeys.STOP_REPLICA, None, stopReplicaRequest, r.callback)
