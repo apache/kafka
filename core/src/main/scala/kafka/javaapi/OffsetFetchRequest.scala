@@ -18,9 +18,7 @@
 package kafka.javaapi
 
 import kafka.common.TopicAndPartition
-import scala.collection.mutable
-import collection.JavaConversions
-import java.nio.ByteBuffer
+import collection.JavaConverters._
 
 class OffsetFetchRequest(groupId: String,
                          requestInfo: java.util.List[TopicAndPartition],
@@ -37,13 +35,9 @@ class OffsetFetchRequest(groupId: String,
   }
 
   val underlying = {
-    val scalaSeq = {
-      import JavaConversions._
-      requestInfo: mutable.Buffer[TopicAndPartition]
-    }
     kafka.api.OffsetFetchRequest(
       groupId = groupId,
-      requestInfo = scalaSeq,
+      requestInfo = requestInfo.asScala,
       versionId = versionId,
       correlationId = correlationId,
       clientId = clientId

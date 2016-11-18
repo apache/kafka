@@ -42,7 +42,7 @@ import org.apache.kafka.common.security.JaasUtils
 import org.apache.zookeeper.Watcher.Event.KeeperState
 
 import scala.collection._
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 /**
  * This class handles the consumers interaction with zookeeper
@@ -696,9 +696,9 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
             if (topicRegistry.size == 0)
               new java.util.HashMap[String, java.util.Set[java.lang.Integer]]
             else
-              mapAsJavaMap(topicRegistry.map(topics =>
-                topics._1 -> topics._2.keys
-              ).toMap).asInstanceOf[java.util.Map[String, java.util.Set[java.lang.Integer]]]
+              topicRegistry.map(topics =>
+                topics._1 -> topics._2.keys   // note this is incorrect, see KAFKA-2284
+              ).toMap.asJava.asInstanceOf[java.util.Map[String, java.util.Set[java.lang.Integer]]]
           )
         }
         releasePartitionOwnership(topicRegistry)
@@ -755,14 +755,13 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                 case (topic, partitionOwnerShips) =>
                   val partitionOwnershipForTopicScalaMap = partitionOwnerShips.map({
                     case (topicAndPartition, consumerThreadId) =>
-                      topicAndPartition.partition -> consumerThreadId
-                  })
-                  topic -> mapAsJavaMap(collection.mutable.Map(partitionOwnershipForTopicScalaMap.toSeq:_*))
-                    .asInstanceOf[java.util.Map[java.lang.Integer, ConsumerThreadId]]
+                      (topicAndPartition.partition: Integer) -> consumerThreadId
+                  }).toMap
+                  topic -> partitionOwnershipForTopicScalaMap.asJava
               })
               consumerRebalanceListener.beforeStartingFetchers(
                 consumerIdString,
-                mapAsJavaMap(collection.mutable.Map(partitionAssigmentMapForCallback.toSeq:_*))
+                partitionAssigmentMapForCallback.asJava
               )
             }
             updateFetcher(cluster)

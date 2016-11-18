@@ -17,14 +17,13 @@
 
 package kafka.tools
 
-import java.util.{Arrays, Properties}
+import java.util.{Arrays, Collections, Properties}
 
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.TopicPartition
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import scala.util.Random
 
 
@@ -70,7 +69,7 @@ object EndToEndLatency {
     consumerProps.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0") //ensure we have no temporal batching
 
     val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](consumerProps)
-    consumer.subscribe(List(topic))
+    consumer.subscribe(Collections.singletonList(topic))
 
     val producerProps = loadProps
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
@@ -89,7 +88,7 @@ object EndToEndLatency {
 
     //Ensure we are at latest offset. seekToEnd evaluates lazily, that is to say actually performs the seek only when
     //a poll() or position() request is issued. Hence we need to poll after we seek to ensure we see our first write.
-    consumer.seekToEnd(List[TopicPartition]())
+    consumer.seekToEnd(Collections.emptyList())
     consumer.poll(0)
 
     var totalTime = 0.0
@@ -122,7 +121,7 @@ object EndToEndLatency {
 
       //Check we only got the one message
       if (recordIter.hasNext) {
-        val count = 1 + recordIter.size
+        val count = 1 + recordIter.asScala.size
         throw new RuntimeException(s"Only one result was expected during this test. We found [$count]")
       }
 

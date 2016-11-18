@@ -31,7 +31,7 @@ import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 import org.apache.kafka.common.requests.MetadataResponse
 
 import scala.collection._
-import JavaConverters._
+import scala.collection.JavaConverters._
 import mutable.ListBuffer
 import scala.collection.mutable
 import collection.Map
@@ -560,11 +560,7 @@ object AdminUtils extends Logging with AdminUtilities {
    * Write out the entity config to zk, if there is any
    */
   private def writeEntityConfig(zkUtils: ZkUtils, entityPath: String, config: Properties) {
-    val configMap: mutable.Map[String, String] = {
-      import JavaConversions._
-      config
-    }
-    val map = Map("version" -> 1, "config" -> configMap)
+    val map = Map("version" -> 1, "config" -> config.asScala)
     zkUtils.updatePersistentPath(entityPath, Json.encode(map))
   }
 
