@@ -152,29 +152,26 @@ class GroupMetadataManager(val brokerId: Int,
       // retry removing this group.
       val groupPartition = partitionFor(group.groupId)
       val magicValueAndTimestampOpt = getMessageFormatVersionAndTimestamp(groupPartition)
-      magicValueAndTimestampOpt match {
-        case Some(magicValueAndTimestamp) =>
-          val tombstone = new Message(bytes = null, key = GroupMetadataManager.groupMetadataKey(group.groupId),
-            timestamp = magicValueAndTimestamp._2, magicValue = magicValueAndTimestamp._1)
+      getMessageFormatVersionAndTimestamp(groupPartition).foreach { magicValueAndTimestamp =>
+        val tombstone = new Message(bytes = null, key = GroupMetadataManager.groupMetadataKey(group.groupId),
+          timestamp = magicValueAndTimestamp._2, magicValue = magicValueAndTimestamp._1)
 
-          val partitionOpt = replicaManager.getPartition(Topic.GroupMetadataTopicName, groupPartition)
-          partitionOpt.foreach { partition =>
-            val appendPartition = TopicAndPartition(Topic.GroupMetadataTopicName, groupPartition)
+        val partitionOpt = replicaManager.getPartition(Topic.GroupMetadataTopicName, groupPartition)
+        partitionOpt.foreach { partition =>
+          val appendPartition = TopicAndPartition(Topic.GroupMetadataTopicName, groupPartition)
 
-            trace("Marking group %s as deleted.".format(group.groupId))
+          trace("Marking group %s as deleted.".format(group.groupId))
 
-            try {
-              // do not need to require acks since even if the tombstone is lost,
-              // it will be appended again by the new leader
-              partition.appendMessagesToLeader(new ByteBufferMessageSet(config.offsetsTopicCompressionCodec, tombstone))
-            } catch {
-              case t: Throwable =>
-                error("Failed to mark group %s as deleted in %s.".format(group.groupId, appendPartition), t)
-              // ignore and continue
-            }
+          try {
+            // do not need to require acks since even if the tombstone is lost,
+            // it will be appended again by the new leader
+            partition.appendMessagesToLeader(new ByteBufferMessageSet(config.offsetsTopicCompressionCodec, tombstone))
+          } catch {
+            case t: Throwable =>
+              error("Failed to mark group %s as deleted in %s.".format(group.groupId, appendPartition), t)
+            // ignore and continue
           }
-
-        case None =>
+        }
       }
     }
   }
@@ -694,11 +691,9 @@ class GroupMetadataManager(val brokerId: Int,
   private def getMessageFormatVersionAndTimestamp(partition: Int): Option[(Byte, Long)] = {
     val groupMetadataTopicAndPartition = new TopicAndPartition(Topic.GroupMetadataTopicName, partition)
     val messageFormatVersionOpt = replicaManager.getMessageFormatVersion(groupMetadataTopicAndPartition)
-    messageFormatVersionOpt match {
-      case None => None
-      case Some(messageFormatVersion) =>
-        val timestamp = if (messageFormatVersion == Message.MagicValue_V0) Message.NoTimestamp else time.milliseconds()
-        Some(messageFormatVersion, timestamp)
+    messageFormatVersionOpt.map { messageFormatVersion =>
+      val timestamp = if (messageFormatVersion == Message.MagicValue_V0) Message.NoTimestamp else time.milliseconds()
+      (messageFormatVersion, timestamp)
     }
   }
 

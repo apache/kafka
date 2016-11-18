@@ -168,11 +168,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     val response =
       if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
         val (result, error) = replicaManager.stopReplicas(stopReplicaRequest)
-        result.map { case (topicPartition, errorCode) => {
+        result.map { case (topicPartition, errorCode) =>
           if (errorCode == Errors.NONE.code && stopReplicaRequest.deletePartitions() && topicPartition.topic == Topic.GroupMetadataTopicName) {
             coordinator.handleGroupEmigration(topicPartition.partition)
           }
-        }
         }
         new StopReplicaResponse(error, result.asInstanceOf[Map[TopicPartition, JShort]].asJava)
       } else {

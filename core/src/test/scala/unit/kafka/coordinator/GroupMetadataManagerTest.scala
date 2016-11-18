@@ -467,7 +467,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    val delayedStore= groupMetadataManager.prepareStoreOffsets(group, memberId, group.generationId, offsets, callback).get
+    val delayedStore = groupMetadataManager.prepareStoreOffsets(group, memberId, group.generationId, offsets, callback).get
     assertTrue(group.hasOffsets)
 
     groupMetadataManager.store(delayedStore)
