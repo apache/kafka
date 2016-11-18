@@ -27,6 +27,8 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
+import scala.collection.JavaConverters._
+
 abstract class BaseQuotaTest extends IntegrationTestHarness {
 
   def userPrincipal : String
