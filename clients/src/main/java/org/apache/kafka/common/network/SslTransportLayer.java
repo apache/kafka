@@ -489,8 +489,10 @@ public class SslTransportLayer implements TransportLayer {
                     break;
                 } else if (unwrapResult.getStatus() == Status.CLOSED) {
                     // If data has been read and unwrapped, return the data. Close will be handled on the next poll.
-                    if (!appReadBuffer.hasRemaining())
+                    if (appReadBuffer.position() == 0 && read == 0)
                         throw new EOFException();
+                    else
+                        break;
                 }
             } while (netReadBuffer.position() != 0);
         }
