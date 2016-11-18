@@ -51,6 +51,7 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
 
     long timestamp = -1L;
     private RecordContext recordContext;
+    private ProcessorNode currentNode;
 
     public MockProcessorContext(StateSerdes<?, ?> serdes, RecordCollector collector) {
         this(null, null, serdes.keySerde(), serdes.valueSerde(), collector, null);
@@ -248,7 +249,13 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
 
     @Override
     public void setCurrentNode(final ProcessorNode currentNode) {
+        this.currentNode  = currentNode;
+        driver.setCurrentNode(currentNode);
+    }
 
+    @Override
+    public ProcessorNode currentNode() {
+        return currentNode;
     }
 
 }

@@ -195,6 +195,7 @@ public class ThreadCache {
     private void maybeEvict(final String namespace) {
         while (sizeBytes() > maxCacheSizeBytes) {
             final NamedCache cache = getOrCreateCache(namespace);
+            log.trace("Thread {} evicting cache {}", name, namespace);
             cache.evict();
 
             numEvicts++;

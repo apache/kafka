@@ -29,11 +29,10 @@ public class ByteBufferSend implements Send {
     private boolean pending = false;
 
     public ByteBufferSend(String destination, ByteBuffer... buffers) {
-        super();
         this.destination = destination;
         this.buffers = buffers;
-        for (int i = 0; i < buffers.length; i++)
-            remaining += buffers[i].remaining();
+        for (ByteBuffer buffer : buffers)
+            remaining += buffer.remaining();
         this.size = remaining;
     }
 

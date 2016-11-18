@@ -23,7 +23,7 @@ import java.util.HashMap
 import java.util.concurrent._
 
 import com.yammer.metrics.core.Gauge
-import kafka.api._
+import kafka.api.{ControlledShutdownRequest, RequestOrResponse}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.QuotaId
 import kafka.utils.{Logging, SystemTime}
@@ -31,19 +31,19 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.protocol.{ApiKeys, Protocol, SecurityProtocol}
-import org.apache.kafka.common.requests.{AbstractRequest, ApiVersionsRequest, ProduceRequest, RequestHeader, RequestSend}
+import org.apache.kafka.common.record.MemoryRecords
+import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.log4j.Logger
 
-
 object RequestChannel extends Logging {
-  val AllDone = new Request(processor = 1, connectionId = "2", new Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost()), buffer = getShutdownReceive(), startTimeMs = 0, securityProtocol = SecurityProtocol.PLAINTEXT)
+  val AllDone = Request(processor = 1, connectionId = "2", Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost), buffer = getShutdownReceive(), startTimeMs = 0, securityProtocol = SecurityProtocol.PLAINTEXT)
   private val requestLogger = Logger.getLogger("kafka.request.logger")
 
   def getShutdownReceive() = {
     val emptyRequestHeader = new RequestHeader(ApiKeys.PRODUCE.id, "", 0)
-    val emptyProduceRequest = new ProduceRequest(0, 0, new HashMap[TopicPartition, ByteBuffer]())
-    RequestSend.serialize(emptyRequestHeader, emptyProduceRequest.toStruct)
+    val emptyProduceRequest = new ProduceRequest(0, 0, new HashMap[TopicPartition, MemoryRecords]())
+    AbstractRequestResponse.serialize(emptyRequestHeader, emptyProduceRequest)
   }
 
   case class Session(principal: KafkaPrincipal, clientAddress: InetAddress) {
@@ -61,19 +61,12 @@ object RequestChannel extends Logging {
 
     val requestId = buffer.getShort()
 
-    // TODO: this will be removed once we migrated to client-side format
-    // for server-side request / response format
-    // NOTE: this map only includes the server-side request/response handlers. Newer
-    // request types should only use the client-side versions which are parsed with
-    // o.a.k.common.requests.AbstractRequest.getRequest()
-    private val keyToNameAndDeserializerMap: Map[Short, (ByteBuffer) => RequestOrResponse]=
-      Map(ApiKeys.FETCH.id -> FetchRequest.readFrom,
-        ApiKeys.CONTROLLED_SHUTDOWN_KEY.id -> ControlledShutdownRequest.readFrom
-      )
-
-    // TODO: this will be removed once we migrated to client-side format
-    val requestObj =
-      keyToNameAndDeserializerMap.get(requestId).map(readFrom => readFrom(buffer)).orNull
+    // TODO: this will be removed once we remove support for v0 of ControlledShutdownRequest (which
+    // depends on a non-standard request header)
+    val requestObj: RequestOrResponse = if (requestId == ApiKeys.CONTROLLED_SHUTDOWN_KEY.id)
+      ControlledShutdownRequest.readFrom(buffer)
+    else
+      null
 
     // if we failed to find a server-side mapping, then try using the
     // client-side request / response format
@@ -108,7 +101,7 @@ object RequestChannel extends Logging {
       if (requestObj != null)
         requestObj.describe(details)
       else
-        header.toString + " -- " + body.toString
+        s"$header -- $body"
     }
 
     trace("Processor %d received request : %s".format(processor, requestDesc(true)))
@@ -135,7 +128,7 @@ object RequestChannel extends Logging {
       val totalTime = endTimeMs - startTimeMs
       val fetchMetricNames =
         if (requestId == ApiKeys.FETCH.id) {
-          val isFromFollower = requestObj.asInstanceOf[FetchRequest].isFromFollower
+          val isFromFollower = body.asInstanceOf[FetchRequest].isFromFollower
           Seq(
             if (isFromFollower) RequestMetrics.followFetchMetricName
             else RequestMetrics.consumerFetchMetricName
@@ -172,6 +165,9 @@ object RequestChannel extends Logging {
 
     def this(request: Request, send: Send) =
       this(request.processor, request, send)
+
+    def this(request: Request, response: AbstractResponse) =
+      this(request, response.toSend(request.connectionId, request.header))
   }
 
   trait ResponseAction
@@ -221,14 +217,14 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
 
   /** No operation to take for the request, need to read more over the network */
   def noOperation(processor: Int, request: RequestChannel.Request) {
-    responseQueues(processor).put(new RequestChannel.Response(processor, request, null, RequestChannel.NoOpAction))
+    responseQueues(processor).put(RequestChannel.Response(processor, request, null, RequestChannel.NoOpAction))
     for(onResponse <- responseListeners)
       onResponse(processor)
   }
 
   /** Close the connection for the request */
   def closeConnection(processor: Int, request: RequestChannel.Request) {
-    responseQueues(processor).put(new RequestChannel.Response(processor, request, null, RequestChannel.CloseConnectionAction))
+    responseQueues(processor).put(RequestChannel.Response(processor, request, null, RequestChannel.CloseConnectionAction))
     for(onResponse <- responseListeners)
       onResponse(processor)
   }
@@ -254,7 +250,7 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
   }
 
   def shutdown() {
-    requestQueue.clear
+    requestQueue.clear()
   }
 }
 
@@ -283,4 +279,3 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
   val responseSendTimeHist = newHistogram("ResponseSendTimeMs", biased = true, tags)
   val totalTimeHist = newHistogram("TotalTimeMs", biased = true, tags)
 }
-

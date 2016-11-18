@@ -90,12 +90,39 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
         val (_, assignments) = consumerGroupCommand.describeGroup()
         assignments.isDefined &&
         assignments.get.filter(_.group == group).size == 1 &&
-        assignments.get.filter(_.group == group).head.consumerId.isDefined
+        assignments.get.filter(_.group == group).head.consumerId.exists(_.trim.nonEmpty)
       }, "Expected rows and a member id column in describe group results.")
 
     // cleanup
     consumerGroupCommand.close()
     consumerMock.stop()
+  }
+
+  @Test
+  def testDescribeExistingGroupWithNoMembers() {
+    // mocks
+    val consumerMock = EasyMock.createMockBuilder(classOf[OldConsumer]).withConstructor(topicFilter, props).createMock()
+
+    // stubs
+    val opts = new ConsumerGroupCommandOptions(Array("--zookeeper", zkConnect, "--describe", "--group", group))
+    val consumerGroupCommand = new ZkConsumerGroupService(opts)
+
+    // simulation
+    EasyMock.replay(consumerMock)
+
+    // action/test
+    val (_, a1) = consumerGroupCommand.describeGroup() // there should be a member here
+    consumerMock.stop()
+    TestUtils.waitUntilTrue(() => {
+        val (_, assignments) = consumerGroupCommand.describeGroup()
+        assignments.isDefined &&
+        assignments.get.filter(_.group == group).size == 1 &&
+        assignments.get.filter(_.group == group).head.consumerId.isDefined &&
+        assignments.get.filter(_.group == group).head.consumerId.exists(_.trim.isEmpty) // the member should be gone
+      }, "Expected no active member in describe group results.")
+
+    // cleanup
+    consumerGroupCommand.close()
   }
 
   @Test

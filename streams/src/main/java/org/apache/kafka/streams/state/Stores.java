@@ -16,13 +16,15 @@
  */
 package org.apache.kafka.streams.state;
 
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryLRUCacheStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -32,6 +34,8 @@ import java.util.Map;
  * Factory for creating state stores in Kafka Streams.
  */
 public class Stores {
+
+    private static final Logger log = LoggerFactory.getLogger(Stores.class);
 
     /**
      * Begin to create a new {@link org.apache.kafka.streams.processor.StateStoreSupplier} instance.
@@ -83,6 +87,7 @@ public class Stores {
 
                                     @Override
                                     public StateStoreSupplier build() {
+                                        log.trace("Creating InMemory Store name={} capacity={} logged={}", name, capacity, logged);
                                         if (capacity < Integer.MAX_VALUE) {
                                             return new InMemoryLRUCacheStoreSupplier<>(name, capacity, keySerde, valueSerde, logged, logConfig);
                                         }
@@ -134,6 +139,7 @@ public class Stores {
 
                                     @Override
                                     public StateStoreSupplier build() {
+                                        log.trace("Creating RocksDb Store name={} numSegments={} logged={}", name, numSegments, logged);
                                         if (numSegments > 0) {
                                             return new RocksDBWindowStoreSupplier<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde, windowSize, logged, logConfig, cachingEnabled);
                                         }
@@ -412,3 +418,4 @@ public class Stores {
 
     }
 }
+

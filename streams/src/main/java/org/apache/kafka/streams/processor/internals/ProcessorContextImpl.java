@@ -127,13 +127,11 @@ public class ProcessorContextImpl implements InternalProcessorContext, RecordCol
      */
     @Override
     public StateStore getStateStore(String name) {
-        ProcessorNode node = task.node();
-
-        if (node == null)
+        if (currentNode == null)
             throw new TopologyBuilderException("Accessing from an unknown node");
 
-        if (!node.stateStores.contains(name)) {
-            throw new TopologyBuilderException("Processor " + node.name() + " has no access to StateStore " + name);
+        if (!currentNode.stateStores.contains(name)) {
+            throw new TopologyBuilderException("Processor " + currentNode.name() + " has no access to StateStore " + name);
         }
 
         return stateMgr.getStore(name);
@@ -267,5 +265,10 @@ public class ProcessorContextImpl implements InternalProcessorContext, RecordCol
     @Override
     public void setCurrentNode(final ProcessorNode currentNode) {
         this.currentNode = currentNode;
+    }
+
+    @Override
+    public ProcessorNode currentNode() {
+        return currentNode;
     }
 }

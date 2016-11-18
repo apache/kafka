@@ -52,7 +52,7 @@ if [ -z "$SCALA_VERSION" ]; then
 fi
 
 if [ -z "$SCALA_BINARY_VERSION" ]; then
-  SCALA_BINARY_VERSION=2.10
+  SCALA_BINARY_VERSION=$(echo $SCALA_VERSION | cut -f 1-2 -d '.')
 fi
 
 # run ./gradlew copyDependantLibs to get all dependant jars in a local dir

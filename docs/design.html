@@ -488,12 +488,9 @@ Log compaction guarantees the following:
 guarantee the minimum length of time must pass after a message is written before it could be compacted. I.e. it provides a lower bound on how long each message will remain in the (uncompacted) head.
 <li>Ordering of messages is always maintained.  Compaction will never re-order messages, just remove some.
 <li>The offset for a message never changes.  It is the permanent identifier for a position in the log.
-<li>Any read progressing from offset 0 will see at least the final state of all records in the order they were written. All delete markers for deleted records will be seen provided the reader reaches the head of
-the log in a time period less than the topic's delete.retention.ms setting (the default is 24 hours). This is important as delete marker removal happens concurrently with read (and thus it is important that we not
-remove any delete marker prior to the reader seeing it).
-<li>Any consumer progressing from the start of the log will see at least the <em>final</em> state of all records in the order they were written.  All delete markers for deleted records will be seen provided the
-consumer reaches the head of the log in a time period less than the topic's <code>delete.retention.ms</code> setting (the default is 24 hours).  This is important as delete marker removal happens concurrently with
-read, and thus it is important that we do not remove any delete marker prior to the consumer seeing it.
+<li>Any consumer progressing from the start of the log will see at least the final state of all records in the order they were written.  Additionally, all delete markers for deleted records will be seen, provided 
+the consumer reaches the head of the log in a time period less than the topic's <code>delete.retention.ms</code> setting (the default is 24 hours).  In other words: since the removal of delete markers happens 
+concurrently with reads, it is possible for a consumer to miss delete markers if it lags by more than <code>delete.retention.ms</code>.
 </ol>
 
 <h4><a id="design_compactiondetails" href="#design_compactiondetails">Log Compaction Details</a></h4>

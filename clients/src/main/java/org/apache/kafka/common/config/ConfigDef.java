@@ -438,6 +438,10 @@ public class ConfigDef {
      * the current configuration values.
      */
     public List<ConfigValue> validate(Map<String, String> props) {
+        return new ArrayList<>(validateAll(props).values());
+    }
+
+    public Map<String, ConfigValue> validateAll(Map<String, String> props) {
         Map<String, ConfigValue> configValues = new HashMap<>();
         for (String name: configKeys.keySet()) {
             configValues.put(name, new ConfigValue(name));
@@ -466,12 +470,12 @@ public class ConfigDef {
     }
 
 
-    private List<ConfigValue> validate(Map<String, Object> parsed, Map<String, ConfigValue> configValues) {
+    private Map<String, ConfigValue> validate(Map<String, Object> parsed, Map<String, ConfigValue> configValues) {
         Set<String> configsWithNoParent = getConfigsWithNoParent();
         for (String name: configsWithNoParent) {
             validate(name, parsed, configValues);
         }
-        return new LinkedList<>(configValues.values());
+        return configValues;
     }
 
     private List<String> undefinedDependentConfigs() {
@@ -485,7 +489,7 @@ public class ConfigDef {
                 }
             }
         }
-        return new LinkedList<>(undefinedConfigKeys);
+        return new ArrayList<>(undefinedConfigKeys);
     }
 
     private Set<String> getConfigsWithNoParent() {

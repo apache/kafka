@@ -37,12 +37,12 @@ class PerformanceServiceTest(Test):
 
     # We are keeping 0.8.2 here so that we don't inadvertently break support for it. Since this is just a sanity check,
     # the overhead should be manageable.
-    @parametrize(version=str(LATEST_0_8_2))
+    @parametrize(version=str(LATEST_0_8_2), new_consumer=False)
     @parametrize(version=str(LATEST_0_9), new_consumer=False)
-    @parametrize(version=str(LATEST_0_9), new_consumer=True)
+    @parametrize(version=str(LATEST_0_9))
     @parametrize(version=str(TRUNK), new_consumer=False)
-    @parametrize(version=str(TRUNK), new_consumer=True)
-    def test_version(self, version=str(LATEST_0_9), new_consumer=False):
+    @parametrize(version=str(TRUNK))
+    def test_version(self, version=str(LATEST_0_9), new_consumer=True):
         """
         Sanity check out producer performance service - verify that we can run the service with a small
         number of messages. The actual stats here are pretty meaningless since the number of messages is quite small.
