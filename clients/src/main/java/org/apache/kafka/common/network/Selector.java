@@ -239,15 +239,16 @@ public class Selector implements Selectable {
      * @param send The request to send
      */
     public void send(Send send) {
-        String channelId = send.destination();
-        if (closingChannels.containsKey(channelId))
-            this.failedSends.add(channelId);
+        String connectionId = send.destination();
+        KafkaChannel closingChannel = closingChannels.remove(connectionId);
+        if (closingChannel != null)
+            doClose(closingChannel, true);
         else {
-            KafkaChannel channel = channelOrFail(send.destination(), false);
+            KafkaChannel channel = channelOrFail(connectionId, false);
             try {
                 channel.setSend(send);
             } catch (CancelledKeyException e) {
-                this.failedSends.add(send.destination());
+                this.failedSends.add(connectionId);
                 close(channel, false);
             }
         }
@@ -439,11 +440,13 @@ public class Selector implements Selectable {
         Map.Entry<String, Long> expiredConnection = idleExpiryManager.pollExpiredConnection(currentTimeNanos);
         if (expiredConnection != null) {
             String connectionId = expiredConnection.getKey();
-
-            if (log.isTraceEnabled())
-                log.trace("About to close the idle connection from {} due to being idle for {} millis",
-                        connectionId, (currentTimeNanos - expiredConnection.getValue()) / 1000 / 1000);
-            close(connectionId);
+            KafkaChannel channel = this.channels.get(connectionId);
+            if (channel != null) {
+                if (log.isTraceEnabled())
+                    log.trace("About to close the idle connection from {} due to being idle for {} millis",
+                            connectionId, (currentTimeNanos - expiredConnection.getValue()) / 1000 / 1000);
+                close(channel, true);
+            }
         }
     }
 
@@ -462,7 +465,7 @@ public class Selector implements Selectable {
             KafkaChannel channel = it.next().getValue();
             Deque<NetworkReceive> deque = this.stagedReceives.get(channel);
             if (deque == null || deque.isEmpty()) {
-                doClose(channel);
+                doClose(channel, true);
                 it.remove();
             }
         }
@@ -492,13 +495,21 @@ public class Selector implements Selectable {
     public void close(String id) {
         KafkaChannel channel = this.channels.get(id);
         if (channel != null)
-            close(channel, true);
+            close(channel, false);
     }
 
     /**
-     * Begin closing this connection
+     * Begin closing this connection.
+     *
+     * If 'processOutstanding' is true, the channel is disconnected here, but staged receives are
+     * processed. The channel is closed when there are no outstanding receives or if a send
+     * is requested. The channel will be added to disconnect list when it is actually closed.
+     *
+     * If 'processOutstanding' is false, outstanding receives are discarded and the channel is
+     * closed immediately. The channel will not be added to disconnected list and it is the
+     * responsibility of the caller to handle disconnect notifications.
      */
-    private void close(KafkaChannel channel, boolean graceful) {
+    private void close(KafkaChannel channel, boolean processOutstanding) {
 
         channel.disconnect();
 
@@ -509,7 +520,7 @@ public class Selector implements Selectable {
         // a send fails or all outstanding receives are processed. Mute state of disconnected channels
         // are tracked to ensure that requests are processed one-by-one by the broker to preserve ordering.
         Deque<NetworkReceive> deque = this.stagedReceives.get(channel);
-        if (graceful && deque != null && !deque.isEmpty()) {
+        if (processOutstanding && deque != null && !deque.isEmpty()) {
             if (!channel.isMute()) {
                 addToCompletedReceives(channel, deque);
                 if (deque.isEmpty())
@@ -517,7 +528,7 @@ public class Selector implements Selectable {
             }
             closingChannels.put(channel.id(), channel);
         } else
-            doClose(channel);
+            doClose(channel, processOutstanding);
         this.channels.remove(channel.id());
         this.sensors.connectionClosed.record();
 
@@ -525,14 +536,15 @@ public class Selector implements Selectable {
             idleExpiryManager.remove(channel.id());
     }
 
-    private void doClose(KafkaChannel channel) {
+    private void doClose(KafkaChannel channel, boolean notifyDisconnect) {
         try {
             channel.close();
         } catch (IOException e) {
             log.error("Exception closing connection to node {}:", channel.id(), e);
         }
         this.stagedReceives.remove(channel);
-        this.disconnected.add(channel.id());
+        if (notifyDisconnect)
+            this.disconnected.add(channel.id());
     }
 
     /**
