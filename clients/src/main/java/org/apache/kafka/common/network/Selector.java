@@ -240,9 +240,8 @@ public class Selector implements Selectable {
      */
     public void send(Send send) {
         String connectionId = send.destination();
-        KafkaChannel closingChannel = closingChannels.remove(connectionId);
-        if (closingChannel != null)
-            doClose(closingChannel, true);
+        if (closingChannels.containsKey(connectionId))
+            this.failedSends.add(connectionId);
         else {
             KafkaChannel channel = channelOrFail(connectionId, false);
             try {
@@ -458,17 +457,18 @@ public class Selector implements Selectable {
         this.completedReceives.clear();
         this.connected.clear();
         this.disconnected.clear();
-        this.disconnected.addAll(this.failedSends);
-        this.failedSends.clear();
-        // Remove closed channels after all their staged receives have been processed
+        // Remove closed channels after all their staged receives have been processed or if a send was requested
         for (Iterator<Map.Entry<String, KafkaChannel>> it = closingChannels.entrySet().iterator(); it.hasNext(); ) {
             KafkaChannel channel = it.next().getValue();
             Deque<NetworkReceive> deque = this.stagedReceives.get(channel);
-            if (deque == null || deque.isEmpty()) {
+            boolean sendFailed = failedSends.remove(channel.id());
+            if (deque == null || deque.isEmpty() || sendFailed) {
                 doClose(channel, true);
                 it.remove();
             }
         }
+        this.disconnected.addAll(this.failedSends);
+        this.failedSends.clear();
     }
 
     /**
@@ -530,7 +530,6 @@ public class Selector implements Selectable {
         } else
             doClose(channel, processOutstanding);
         this.channels.remove(channel.id());
-        this.sensors.connectionClosed.record();
 
         if (idleExpiryManager != null)
             idleExpiryManager.remove(channel.id());
@@ -542,6 +541,7 @@ public class Selector implements Selectable {
         } catch (IOException e) {
             log.error("Exception closing connection to node {}:", channel.id(), e);
         }
+        this.sensors.connectionClosed.record();
         this.stagedReceives.remove(channel);
         if (notifyDisconnect)
             this.disconnected.add(channel.id());
