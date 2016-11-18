@@ -72,9 +72,9 @@ public class StreamThread extends Thread {
     private static final AtomicInteger STREAM_THREAD_ID_SEQUENCE = new AtomicInteger(1);
 
     /**
-     * Stream thread states are the possible state that a stream thread can be in.
-     * A thread should only be in one state at a time
-     * The expected state transition with the following defined states is:
+     * Stream thread states are the possible states that a stream thread can be in.
+     * A thread must only be in one state at a time
+     * The expected state transitions with the following defined states is:
      *
      *                +-----------+
      *                |Not Running|
@@ -82,7 +82,7 @@ public class StreamThread extends Thread {
      *                      |
      *                      v
      *                +-----+-----+
-     *          +---->| Running   |<------------+
+     *          +-----| Running   |<------------+
      *          |     +-----+-----+             |
      *          |           |                   |
      *          |           v                   |
@@ -93,8 +93,8 @@ public class StreamThread extends Thread {
      *          |           |                   |
      *          |           v                   |
      *          |     +-----+------------+      |
-     *          |     |Partitions        |      |
-     *          |     |Assigned          |------+
+     *          |     |Assigning         |      |
+     *          |     |Partitions        |------+
      *          |     +-----+------------+
      *          |
      *          |
@@ -110,8 +110,8 @@ public class StreamThread extends Thread {
      *
      * Custom states is also allowed for cases where there are custom kafka states for different scenarios.
      */
-    public enum StreamThreadStateType { NOT_RUNNING, RUNNING, PARTITIONS_REVOKED, PARTITIONS_ASSIGNED, PENDING_SHUTDOWN }
-    public StreamThreadStateType state = StreamThreadStateType.NOT_RUNNING;
+    public enum State { NOT_RUNNING, RUNNING, PARTITIONS_REVOKED, ASSIGNING_PARTITIONS, PENDING_SHUTDOWN }
+    public volatile State state = State.NOT_RUNNING;
 
     public final PartitionGrouper partitionGrouper;
     private final StreamsMetadataState streamsMetadataState;
@@ -163,13 +163,13 @@ public class StreamThread extends Thread {
             try {
                 log.info("stream-thread [{}] New partitions [{}] assigned at the end of consumer rebalance.",
                         StreamThread.this.getName(), assignment);
-                state = StreamThreadStateType.PARTITIONS_ASSIGNED;
+                state = State.ASSIGNING_PARTITIONS;
                 addStreamTasks(assignment);
                 addStandbyTasks();
                 lastCleanMs = time.milliseconds(); // start the cleaning cycle
                 streamsMetadataState.onChange(partitionAssignor.getPartitionsByHostState(), partitionAssignor.clusterMetadata());
                 initialized.set(true);
-                state = StreamThreadStateType.RUNNING;
+                state = State.RUNNING;
             } catch (Throwable t) {
                 rebalanceException = t;
                 throw t;
@@ -181,7 +181,7 @@ public class StreamThread extends Thread {
             try {
                 log.info("stream-thread [{}] partitions [{}] revoked at the beginning of consumer rebalance.",
                         StreamThread.this.getName(), assignment);
-                state = StreamThreadStateType.PARTITIONS_REVOKED;
+                state = State.PARTITIONS_REVOKED;
                 initialized.set(false);
                 lastCleanMs = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
                 // suspend active tasks
@@ -197,6 +197,7 @@ public class StreamThread extends Thread {
         }
     };
 
+
     public boolean isInitialized() {
         return initialized.get();
     }
@@ -211,7 +212,7 @@ public class StreamThread extends Thread {
                         Time time,
                         StreamsMetadataState streamsMetadataState) {
         super("StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement());
-        this.state = StreamThreadStateType.NOT_RUNNING;
+        this.state = State.NOT_RUNNING;
         this.applicationId = applicationId;
         String threadName = getName();
         this.config = config;
@@ -265,10 +266,8 @@ public class StreamThread extends Thread {
         this.timerStartedMs = time.milliseconds();
         this.lastCleanMs = Long.MAX_VALUE; // the cleaning cycle won't start until partition assignment
         this.lastCommitMs = timerStartedMs;
-
-
         this.running = new AtomicBoolean(true);
-        this.state = StreamThreadStateType.RUNNING;
+        this.state = State.RUNNING;
     }
 
     public void partitionAssignor(StreamPartitionAssignor partitionAssignor) {
@@ -303,8 +302,9 @@ public class StreamThread extends Thread {
      * Shutdown this stream thread.
      */
     public void close() {
-        this.state = StreamThreadStateType.PENDING_SHUTDOWN;
+        log.info("{} Closing", logPrefix);
         running.set(false);
+        state = State.PENDING_SHUTDOWN;
     }
 
     public Map<TaskId, StreamTask> tasks() {
@@ -337,7 +337,7 @@ public class StreamThread extends Thread {
         removeStandbyTasks();
 
         log.info("{} Stream thread shutdown complete", logPrefix);
-        this.state = StreamThreadStateType.NOT_RUNNING;
+        state = State.NOT_RUNNING;
     }
 
     private void unAssignChangeLogPartitions(final boolean rethrowExceptions) {
@@ -540,6 +540,7 @@ public class StreamThread extends Thread {
 
             maybeClean();
         }
+        log.info("{} Shutting down at user request", logPrefix);
     }
 
     private void maybeUpdateStandbyTasks() {
@@ -586,13 +587,8 @@ public class StreamThread extends Thread {
         }
     }
 
-    private boolean stillRunning() {
-        if (!running.get()) {
-            log.debug("{} Shutting down at user request", logPrefix);
-            return false;
-        }
-
-        return true;
+    public boolean stillRunning() {
+        return running.get();
     }
 
     private void maybePunctuate(StreamTask task) {

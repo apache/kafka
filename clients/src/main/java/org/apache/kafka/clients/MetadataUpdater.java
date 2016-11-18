@@ -14,7 +14,8 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.RequestHeader;
 
 import java.util.List;
 
@@ -41,7 +42,7 @@ interface MetadataUpdater {
      * be 0 if an update has been started as a result of this call).
      *
      * If the implementation relies on `NetworkClient` to send requests, the completed receive will be passed to
-     * `maybeHandleCompletedReceive`.
+     * `handleCompletedMetadataResponse`.
      *
      * The semantics of `needed` and `possible` are implementation-dependent and may take into account a number of
      * factors like node availability, how long since the last metadata update, etc.
@@ -53,8 +54,9 @@ interface MetadataUpdater {
      *
      * This provides a mechanism for the `MetadataUpdater` implementation to use the NetworkClient instance for its own
      * requests with special handling for disconnections of such requests.
+     * @param destination
      */
-    boolean maybeHandleDisconnection(ClientRequest request);
+    void handleDisconnection(String destination);
 
     /**
      * If `request` is a metadata request, handles it and returns `true`. Otherwise, returns `false`.
@@ -62,7 +64,7 @@ interface MetadataUpdater {
      * This provides a mechanism for the `MetadataUpdater` implementation to use the NetworkClient instance for its own
      * requests with special handling for completed receives of such requests.
      */
-    boolean maybeHandleCompletedReceive(ClientRequest request, long now, Struct body);
+    void handleCompletedMetadataResponse(RequestHeader requestHeader, long now, AbstractResponse body);
 
     /**
      * Schedules an update of the current cluster metadata info. A subsequent call to `maybeUpdate` would trigger the

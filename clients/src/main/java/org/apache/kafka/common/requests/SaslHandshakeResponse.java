@@ -33,7 +33,7 @@ import org.apache.kafka.common.protocol.types.Struct;
  * Response from SASL server which indicates if the client-chosen mechanism is enabled in the server.
  * For error responses, the list of enabled mechanisms is included in the response.
  */
-public class SaslHandshakeResponse extends AbstractRequestResponse {
+public class SaslHandshakeResponse extends AbstractResponse {
 
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.SASL_HANDSHAKE.id);
 

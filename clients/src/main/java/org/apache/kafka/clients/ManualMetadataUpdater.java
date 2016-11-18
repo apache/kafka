@@ -14,7 +14,8 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.RequestHeader;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -60,13 +61,13 @@ public class ManualMetadataUpdater implements MetadataUpdater {
     }
 
     @Override
-    public boolean maybeHandleDisconnection(ClientRequest request) {
-        return false;
+    public void handleDisconnection(String destination) {
+        // Do nothing
     }
 
     @Override
-    public boolean maybeHandleCompletedReceive(ClientRequest request, long now, Struct body) {
-        return false;
+    public void handleCompletedMetadataResponse(RequestHeader requestHeader, long now, AbstractResponse body) {
+        // Do nothing
     }
 
     @Override

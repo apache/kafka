@@ -29,7 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class CreateTopicsResponse extends AbstractRequestResponse {
+public class CreateTopicsResponse extends AbstractResponse {
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.CREATE_TOPICS.id);
 
     private static final String TOPIC_ERROR_CODES_KEY_NAME = "topic_error_codes";

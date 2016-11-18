@@ -83,7 +83,7 @@ class ConnectStandaloneFileTest(Test):
         self.source = ConnectStandaloneService(self.test_context, self.kafka, [self.INPUT_FILE, self.OFFSETS_FILE])
         self.sink = ConnectStandaloneService(self.test_context, self.kafka, [self.OUTPUT_FILE, self.OFFSETS_FILE])
         self.consumer_validator = ConsoleConsumer(self.test_context, 1, self.kafka, self.TOPIC,
-                                                  consumer_timeout_ms=1000, new_consumer=True)
+                                                  consumer_timeout_ms=1000)
 
 
         self.zk.start()
