@@ -93,7 +93,7 @@ class StreamsSmokeTestBaseService(KafkaPathResolverMixin, Service):
             self.logger.info("Restarting Kafka Streams on " + str(node.account))
             self.start_node(node)
 
-    def wait(self, timeout_sec=180):
+    def wait(self, timeout_sec=360):
         for node in self.nodes:
             for pid in self.pids(node):
                 wait_until(lambda: not node.account.alive(pid), timeout_sec=timeout_sec, err_msg="Streams Smoke Test process on " + str(node.account) + " took too long to exit")
