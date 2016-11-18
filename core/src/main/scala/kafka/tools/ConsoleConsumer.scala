@@ -340,6 +340,10 @@ object ConsoleConsumer extends Logging {
       .ofType(classOf[String])
       .defaultsTo("read_uncommitted")
 
+    val groupIdOpt = parser.accepts("group", "The consumer group id of the consumer.")
+      .withRequiredArg
+      .describedAs("consumer group id")
+      .ofType(classOf[String])
 
     if (args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "The console consumer is a tool that reads data from Kafka and outputs it to standard output.")
@@ -456,10 +460,13 @@ object ConsoleConsumer extends Logging {
       KafkaMetricsReporter.startReporters(verifiableProps)
     }
 
-    //Provide the consumer with a randomly assigned group id
-    if (!consumerProps.containsKey(ConsumerConfig.GROUP_ID_CONFIG)) {
-      consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, s"console-consumer-${new Random().nextInt(100000)}")
+    if (options.has(groupIdOpt))
+      // group id provided as an argument takes precedence over one provided in the config file
+      extraConsumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, options.valueOf(groupIdOpt))
+    else if (!consumerProps.containsKey(ConsumerConfig.GROUP_ID_CONFIG) && !extraConsumerProps.containsKey(ConsumerConfig.GROUP_ID_CONFIG)) {
+      // provide the consumer with a randomly assigned group id if no group id is explicitly provided
       groupIdPassed = false
+      consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, s"console-consumer-${new Random().nextInt(100000)}")
     }
 
     def tryParse(parser: OptionParser, args: Array[String]): OptionSet = {

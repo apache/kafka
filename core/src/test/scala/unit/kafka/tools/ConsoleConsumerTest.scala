@@ -368,7 +368,8 @@ class ConsoleConsumerTest {
   def shouldParseConfigsFromFile() {
     val propsFile = TestUtils.tempFile()
     val propsStream = new FileOutputStream(propsFile)
-    propsStream.write("request.timeout.ms=1000".getBytes())
+    propsStream.write("request.timeout.ms=1000\n".getBytes())
+    propsStream.write("group.id=group1".getBytes())
     propsStream.close()
     val args: Array[String] = Array(
       "--bootstrap-server", "localhost:9092",
@@ -379,5 +380,26 @@ class ConsoleConsumerTest {
     val config = new ConsoleConsumer.ConsumerConfig(args)
 
     assertEquals("1000", config.consumerProps.getProperty("request.timeout.ms"))
+    assertEquals("group1", config.consumerProps.getProperty("group.id"))
+  }
+
+  @Test
+  def shouldOverwriteGroupIdFromConfigFileOrPropertiesWithGroupIdFromArguments() {
+    val propsFile = TestUtils.tempFile()
+    val propsStream = new FileOutputStream(propsFile)
+    propsStream.write("group.id=group-from-file".getBytes())
+    propsStream.close()
+    val args: Array[String] = Array(
+      "--bootstrap-server", "localhost:9092",
+      "--topic", "test",
+      "--group", "group-from-arguments",
+      "--consumer-property", "group.id=group-from-properties",
+      "--consumer.config", propsFile.getAbsolutePath
+    )
+
+    val config = new ConsoleConsumer.ConsumerConfig(args)
+    val props = ConsoleConsumer.getNewConsumerProps(config)
+
+    assertEquals("group-from-arguments", props.getProperty("group.id"))
   }
 }
