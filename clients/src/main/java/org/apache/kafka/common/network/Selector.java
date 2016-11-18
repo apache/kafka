@@ -546,7 +546,7 @@ public class Selector implements Selectable {
 
     private KafkaChannel channelOrFail(String id, boolean maybeClosing) {
         KafkaChannel channel = this.channels.get(id);
-        if (channel == null)
+        if (channel == null && maybeClosing)
             channel = this.closingChannels.get(id);
         if (channel == null)
             throw new IllegalStateException("Attempt to retrieve channel for which there is no connection. Connection id " + id + " existing connections " + channels.keySet());
