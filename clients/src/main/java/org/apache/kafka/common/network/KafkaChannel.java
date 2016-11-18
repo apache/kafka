@@ -101,11 +101,11 @@ public class KafkaChannel {
         muted = false;
     }
 
+    /**
+     * Returns true if this channel has been explicitly muted using {@link KafkaChannel#mute()}
+     */
     public boolean isMute() {
-        if (!disconnected)
-            return transportLayer.isMute();
-        else
-            return muted;
+        return muted;
     }
 
     public boolean ready() {

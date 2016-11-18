@@ -41,7 +41,7 @@ public class NioEchoServer extends Thread {
     private final List<SocketChannel> socketChannels;
     private final AcceptorThread acceptorThread;
     private final Selector selector;
-    private WritableByteChannel outputChannel;
+    private volatile WritableByteChannel outputChannel;
 
     public NioEchoServer(SecurityProtocol securityProtocol, Map<String, ?> configs, String serverHost) throws Exception {
         serverSocketChannel = ServerSocketChannel.open();
@@ -103,11 +103,14 @@ public class NioEchoServer extends Thread {
 
     private KafkaChannel channel(String id) {
         KafkaChannel channel = selector.channel(id);
-        if (channel == null)
-            channel = selector.closedChannel(id);
-        return channel;
+        return channel == null ? selector.closingChannel(id) : channel;
     }
 
+    /**
+     * Sets the output channel to which messages received on this server are echoed.
+     * This is useful in tests where the clients sending the messages don't receive
+     * the responses (eg. testing graceful close).
+     */
     public void outputChannel(WritableByteChannel channel) {
         this.outputChannel = channel;
     }

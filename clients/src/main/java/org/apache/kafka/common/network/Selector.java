@@ -86,7 +86,7 @@ public class Selector implements Selectable {
     private final List<NetworkReceive> completedReceives;
     private final Map<KafkaChannel, Deque<NetworkReceive>> stagedReceives;
     private final Set<SelectionKey> immediatelyConnectedKeys;
-    private final Map<String, KafkaChannel> closedChannels;
+    private final Map<String, KafkaChannel> closingChannels;
     private final List<String> disconnected;
     private final List<String> connected;
     private final List<String> failedSends;
@@ -133,7 +133,7 @@ public class Selector implements Selectable {
         this.completedReceives = new ArrayList<>();
         this.stagedReceives = new HashMap<>();
         this.immediatelyConnectedKeys = new HashSet<>();
-        this.closedChannels = new HashMap<>();
+        this.closingChannels = new HashMap<>();
         this.connected = new ArrayList<>();
         this.disconnected = new ArrayList<>();
         this.failedSends = new ArrayList<>();
@@ -239,12 +239,17 @@ public class Selector implements Selectable {
      * @param send The request to send
      */
     public void send(Send send) {
-        KafkaChannel channel = channelOrFail(send.destination());
-        try {
-            channel.setSend(send);
-        } catch (CancelledKeyException e) {
-            this.failedSends.add(send.destination());
-            close(channel, false);
+        String channelId = send.destination();
+        if (closingChannels.containsKey(channelId))
+            this.failedSends.add(channelId);
+        else {
+            KafkaChannel channel = channelOrFail(send.destination(), false);
+            try {
+                channel.setSend(send);
+            } catch (CancelledKeyException e) {
+                this.failedSends.add(send.destination());
+                close(channel, false);
+            }
         }
     }
 
@@ -397,7 +402,7 @@ public class Selector implements Selectable {
 
     @Override
     public void mute(String id) {
-        KafkaChannel channel = channelOrFail(id);
+        KafkaChannel channel = channelOrFail(id, true);
         mute(channel);
     }
 
@@ -407,7 +412,7 @@ public class Selector implements Selectable {
 
     @Override
     public void unmute(String id) {
-        KafkaChannel channel = channelOrFail(id);
+        KafkaChannel channel = channelOrFail(id, true);
         unmute(channel);
     }
 
@@ -453,7 +458,7 @@ public class Selector implements Selectable {
         this.disconnected.addAll(this.failedSends);
         this.failedSends.clear();
         // Remove closed channels after all their staged receives have been processed
-        for (Iterator<Map.Entry<String, KafkaChannel>> it = closedChannels.entrySet().iterator(); it.hasNext(); ) {
+        for (Iterator<Map.Entry<String, KafkaChannel>> it = closingChannels.entrySet().iterator(); it.hasNext(); ) {
             KafkaChannel channel = it.next().getValue();
             Deque<NetworkReceive> deque = this.stagedReceives.get(channel);
             if (deque == null || deque.isEmpty()) {
@@ -510,7 +515,7 @@ public class Selector implements Selectable {
                 if (deque.isEmpty())
                     this.stagedReceives.remove(channel);
             }
-            closedChannels.put(channel.id(), channel);
+            closingChannels.put(channel.id(), channel);
         } else
             doClose(channel);
         this.channels.remove(channel.id());
@@ -539,10 +544,10 @@ public class Selector implements Selectable {
         return channel != null && channel.ready();
     }
 
-    private KafkaChannel channelOrFail(String id) {
+    private KafkaChannel channelOrFail(String id, boolean maybeClosing) {
         KafkaChannel channel = this.channels.get(id);
         if (channel == null)
-            channel = this.closedChannels.get(id);
+            channel = this.closingChannels.get(id);
         if (channel == null)
             throw new IllegalStateException("Attempt to retrieve channel for which there is no connection. Connection id " + id + " existing connections " + channels.keySet());
         return channel;
@@ -564,10 +569,11 @@ public class Selector implements Selectable {
     }
 
     /**
-     * Return the channel with the specified id if it was closed during the last poll().
+     * Return the channel with the specified id if it was disconnected, but not yet closed
+     * since there are outstanding messages to be processed.
      */
-    public KafkaChannel closedChannel(String id) {
-        return closedChannels.get(id);
+    public KafkaChannel closingChannel(String id) {
+        return closingChannels.get(id);
     }
 
     /**

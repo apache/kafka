@@ -425,7 +425,7 @@ public class SslTransportLayerTest {
             selector.send(new NetworkSend(node, ByteBuffer.wrap(message)));
             do {
                 selector.poll(0L);
-            } while (selector.completedSends().size() == 0);
+            } while (selector.completedSends().isEmpty());
         }
         server.selector().unmuteAll();
         selector.close(node);
