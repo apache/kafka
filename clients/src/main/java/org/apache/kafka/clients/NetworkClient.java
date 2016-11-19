@@ -21,10 +21,10 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.common.requests.RequestSend;
 import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -173,8 +173,9 @@ public class NetworkClient implements KafkaClient {
     @Override
     public void close(String nodeId) {
         selector.close(nodeId);
-        for (ClientRequest request : inFlightRequests.clearAll(nodeId))
-            metadataUpdater.maybeHandleDisconnection(request);
+        for (InFlightRequest request : inFlightRequests.clearAll(nodeId))
+            if (request.isInternalMetadataRequest)
+                metadataUpdater.handleDisconnection(request.destination);
         connectionStates.remove(nodeId);
     }
 
@@ -230,22 +231,38 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Queue up the given request for sending. Requests can only be sent out to ready nodes.
-     *
      * @param request The request
      * @param now The current timestamp
      */
     @Override
     public void send(ClientRequest request, long now) {
-        String nodeId = request.request().destination();
-        if (!canSendRequest(nodeId))
-            throw new IllegalStateException("Attempt to send a request to node " + nodeId + " which is not ready.");
-        doSend(request, now);
+        doSend(request, false, now);
     }
 
-    private void doSend(ClientRequest request, long now) {
-        request.setSendTimeMs(now);
-        this.inFlightRequests.add(request);
-        selector.send(request.request());
+    private void sendInternalMetadataRequest(MetadataRequest metadataRequest, String nodeConnectionId, long now) {
+        ClientRequest clientRequest = new ClientRequest(nodeConnectionId, now, true,
+                nextRequestHeader(ApiKeys.METADATA), metadataRequest, null);
+        doSend(clientRequest, true, now);
+    }
+
+    private void doSend(ClientRequest request, boolean isInternalMetadataRequest, long now) {
+        String nodeId = request.destination();
+        if (!canSendRequest(nodeId))
+            throw new IllegalStateException("Attempt to send a request to node " + nodeId + " which is not ready.");
+
+        Send send = request.body().toSend(nodeId, request.header());
+        InFlightRequest inFlightRequest = new InFlightRequest(
+                request.header(),
+                request.createdTimeMs(),
+                request.destination(),
+                request.callback(),
+                request.expectResponse(),
+                isInternalMetadataRequest,
+                send,
+                now);
+
+        this.inFlightRequests.add(inFlightRequest);
+        selector.send(inFlightRequest.send);
     }
 
     /**
@@ -277,12 +294,10 @@ public class NetworkClient implements KafkaClient {
 
         // invoke callbacks
         for (ClientResponse response : responses) {
-            if (response.request().hasCallback()) {
-                try {
-                    response.request().callback().onComplete(response);
-                } catch (Exception e) {
-                    log.error("Uncaught error in request completion:", e);
-                }
+            try {
+                response.onComplete();
+            } catch (Exception e) {
+                log.error("Uncaught error in request completion:", e);
             }
         }
 
@@ -376,14 +391,14 @@ public class NetworkClient implements KafkaClient {
         return found;
     }
 
-    public static Struct parseResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {
+    public static AbstractResponse parseResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {
         ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer);
         // Always expect the response version id to be the same as the request version id
         short apiKey = requestHeader.apiKey();
         short apiVer = requestHeader.apiVersion();
         Struct responseBody = ProtoUtils.responseSchema(apiKey, apiVer).read(responseBuffer);
         correlate(requestHeader, responseHeader);
-        return responseBody;
+        return AbstractResponse.getResponse(apiKey, responseBody);
     }
 
     /**
@@ -395,10 +410,12 @@ public class NetworkClient implements KafkaClient {
      */
     private void processDisconnection(List<ClientResponse> responses, String nodeId, long now) {
         connectionStates.disconnected(nodeId, now);
-        for (ClientRequest request : this.inFlightRequests.clearAll(nodeId)) {
+        for (InFlightRequest request : this.inFlightRequests.clearAll(nodeId)) {
             log.trace("Cancelled request {} due to node {} being disconnected", request, nodeId);
-            if (!metadataUpdater.maybeHandleDisconnection(request))
-                responses.add(new ClientResponse(request, now, true, null));
+            if (request.isInternalMetadataRequest)
+                metadataUpdater.handleDisconnection(request.destination);
+            else
+                responses.add(request.disconnected(now));
         }
     }
 
@@ -432,10 +449,10 @@ public class NetworkClient implements KafkaClient {
     private void handleCompletedSends(List<ClientResponse> responses, long now) {
         // if no response is expected then when the send is completed, return it
         for (Send send : this.selector.completedSends()) {
-            ClientRequest request = this.inFlightRequests.lastSent(send.destination());
-            if (!request.expectResponse()) {
+            InFlightRequest request = this.inFlightRequests.lastSent(send.destination());
+            if (!request.expectResponse) {
                 this.inFlightRequests.completeLastSent(send.destination());
-                responses.add(new ClientResponse(request, now, false, null));
+                responses.add(request.completed(null, now));
             }
         }
     }
@@ -449,10 +466,12 @@ public class NetworkClient implements KafkaClient {
     private void handleCompletedReceives(List<ClientResponse> responses, long now) {
         for (NetworkReceive receive : this.selector.completedReceives()) {
             String source = receive.source();
-            ClientRequest req = inFlightRequests.completeNext(source);
-            Struct body = parseResponse(receive.payload(), req.request().header());
-            if (!metadataUpdater.maybeHandleCompletedReceive(req, now, body))
-                responses.add(new ClientResponse(req, now, false, body));
+            InFlightRequest req = inFlightRequests.completeNext(source);
+            AbstractResponse body = parseResponse(receive.payload(), req.header);
+            if (req.isInternalMetadataRequest)
+                metadataUpdater.handleCompletedMetadataResponse(req.header, now, body);
+            else
+                responses.add(req.completed(body, now));
         }
     }
 
@@ -558,33 +577,23 @@ public class NetworkClient implements KafkaClient {
         }
 
         @Override
-        public boolean maybeHandleDisconnection(ClientRequest request) {
-            ApiKeys requestKey = ApiKeys.forId(request.request().header().apiKey());
-
-            if (requestKey == ApiKeys.METADATA && request.isInitiatedByNetworkClient()) {
-                Cluster cluster = metadata.fetch();
-                if (cluster.isBootstrapConfigured()) {
-                    int nodeId = Integer.parseInt(request.request().destination());
-                    Node node = cluster.nodeById(nodeId);
-                    if (node != null)
-                        log.warn("Bootstrap broker {}:{} disconnected", node.host(), node.port());
-                }
-
-                metadataFetchInProgress = false;
-                return true;
+        public void handleDisconnection(String destination) {
+            Cluster cluster = metadata.fetch();
+            if (cluster.isBootstrapConfigured()) {
+                int nodeId = Integer.parseInt(destination);
+                Node node = cluster.nodeById(nodeId);
+                if (node != null)
+                    log.warn("Bootstrap broker {}:{} disconnected", node.host(), node.port());
             }
 
-            return false;
+            metadataFetchInProgress = false;
         }
 
         @Override
-        public boolean maybeHandleCompletedReceive(ClientRequest req, long now, Struct body) {
-            short apiKey = req.request().header().apiKey();
-            if (apiKey == ApiKeys.METADATA.id && req.isInitiatedByNetworkClient()) {
-                handleResponse(req.request().header(), body, now);
-                return true;
-            }
-            return false;
+        public void handleCompletedMetadataResponse(RequestHeader requestHeader, long now, AbstractResponse response) {
+            if (!(response instanceof MetadataResponse))
+                throw new IllegalStateException("Unexpected response type in metadata handler: " + response);
+            handleMetadataResponse(requestHeader, (MetadataResponse) response, now);
         }
 
         @Override
@@ -592,9 +601,8 @@ public class NetworkClient implements KafkaClient {
             this.metadata.requestUpdate();
         }
 
-        private void handleResponse(RequestHeader header, Struct body, long now) {
+        private void handleMetadataResponse(RequestHeader header, MetadataResponse response, long now) {
             this.metadataFetchInProgress = false;
-            MetadataResponse response = new MetadataResponse(body);
             Cluster cluster = response.cluster();
             // check if any topics metadata failed to get updated
             Map<String, Errors> errors = response.errors();
@@ -609,14 +617,6 @@ public class NetworkClient implements KafkaClient {
                 log.trace("Ignoring empty metadata response with correlation id {}.", header.correlationId());
                 this.metadata.failedUpdate(now);
             }
-        }
-
-        /**
-         * Create a metadata request for the given topics
-         */
-        private ClientRequest request(long now, String node, MetadataRequest metadata) {
-            RequestSend send = new RequestSend(node, nextRequestHeader(ApiKeys.METADATA), metadata.toStruct());
-            return new ClientRequest(now, true, send, null, true);
         }
 
         /**
@@ -644,9 +644,9 @@ public class NetworkClient implements KafkaClient {
                     metadataRequest = MetadataRequest.allTopics();
                 else
                     metadataRequest = new MetadataRequest(new ArrayList<>(metadata.topics()));
-                ClientRequest clientRequest = request(now, nodeConnectionId, metadataRequest);
+
                 log.debug("Sending metadata request {} to node {}", metadataRequest, node.id());
-                doSend(clientRequest, now);
+                sendInternalMetadataRequest(metadataRequest, nodeConnectionId, now);
                 return requestTimeoutMs;
             }
 
@@ -670,6 +670,44 @@ public class NetworkClient implements KafkaClient {
             // In either case, we just need to wait for a network event to let us know the selected
             // connection might be usable again.
             return Long.MAX_VALUE;
+        }
+
+    }
+
+    static class InFlightRequest {
+        final RequestHeader header;
+        final String destination;
+        final RequestCompletionHandler callback;
+        final boolean expectResponse;
+        final boolean isInternalMetadataRequest; // used to flag metadata fetches which are triggered internally by NetworkClient
+        final Send send;
+        final long sendTimeMs;
+        final long createdTimeMs;
+
+        public InFlightRequest(RequestHeader header,
+                               long createdTimeMs,
+                               String destination,
+                               RequestCompletionHandler callback,
+                               boolean expectResponse,
+                               boolean isInternalMetadataRequest,
+                               Send send,
+                               long sendTimeMs) {
+            this.header = header;
+            this.destination = destination;
+            this.callback = callback;
+            this.expectResponse = expectResponse;
+            this.isInternalMetadataRequest = isInternalMetadataRequest;
+            this.send = send;
+            this.sendTimeMs = sendTimeMs;
+            this.createdTimeMs = createdTimeMs;
+        }
+
+        public ClientResponse completed(AbstractResponse response, long timeMs) {
+            return new ClientResponse(header, callback, destination, createdTimeMs, timeMs, false, response);
+        }
+
+        public ClientResponse disconnected(long timeMs) {
+            return new ClientResponse(header, callback, destination, createdTimeMs, timeMs, true, null);
         }
 
     }

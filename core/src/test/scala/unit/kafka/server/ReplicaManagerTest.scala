@@ -21,7 +21,7 @@ package kafka.server
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.api.{FetchResponsePartitionData, PartitionFetchInfo}
+import kafka.api.FetchResponsePartitionData
 import kafka.cluster.Broker
 import kafka.common.TopicAndPartition
 import kafka.message.{ByteBufferMessageSet, Message, MessageSet}
@@ -31,6 +31,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{LeaderAndIsrRequest, PartitionState}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.utils.{MockTime => JMockTime}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.EasyMock
@@ -173,7 +174,7 @@ class ReplicaManagerTest {
         fetchMinBytes = 100000,
         fetchMaxBytes = Int.MaxValue,
         hardMaxBytesLimit = false,
-        fetchInfos = Seq(new TopicAndPartition(topic, 0) -> new PartitionFetchInfo(0, 100000)),
+        fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(0, 100000)),
         responseCallback = fetchCallback)
 
       // Make this replica the follower
@@ -244,7 +245,7 @@ class ReplicaManagerTest {
         fetchMinBytes = 0,
         fetchMaxBytes = Int.MaxValue,
         hardMaxBytesLimit = false,
-        fetchInfos = Seq(new TopicAndPartition(topic, 0) -> new PartitionFetchInfo(1, 100000)),
+        fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(1, 100000)),
         responseCallback = fetchCallback)
         
       
@@ -260,7 +261,7 @@ class ReplicaManagerTest {
         fetchMinBytes = 0,
         fetchMaxBytes = Int.MaxValue,
         hardMaxBytesLimit = false,
-        fetchInfos = Seq(new TopicAndPartition(topic, 0) -> new PartitionFetchInfo(1, 100000)),
+        fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(1, 100000)),
         responseCallback = fetchCallback)
           
         assertTrue(fetchCallbackFired)

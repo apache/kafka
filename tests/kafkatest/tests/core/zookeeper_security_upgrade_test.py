@@ -52,7 +52,7 @@ class ZooKeeperSecurityUpgradeTest(ProduceConsumeValidateTest):
 
         self.consumer = ConsoleConsumer(
             self.test_context, self.num_consumers, self.kafka, self.topic,
-            consumer_timeout_ms=60000, message_validator=is_int, new_consumer=True)
+            consumer_timeout_ms=60000, message_validator=is_int)
 
         self.consumer.group_id = self.group
 

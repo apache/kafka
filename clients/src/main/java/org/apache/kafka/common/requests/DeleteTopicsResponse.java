@@ -28,7 +28,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class DeleteTopicsResponse extends AbstractRequestResponse {
+public class DeleteTopicsResponse extends AbstractResponse {
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.DELETE_TOPICS.id);
     private static final String TOPIC_ERROR_CODES_KEY_NAME = "topic_error_codes";
     private static final String TOPIC_KEY_NAME = "topic";

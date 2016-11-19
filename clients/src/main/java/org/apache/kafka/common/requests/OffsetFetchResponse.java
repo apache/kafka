@@ -26,7 +26,7 @@ import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
 
-public class OffsetFetchResponse extends AbstractRequestResponse {
+public class OffsetFetchResponse extends AbstractResponse {
     
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.OFFSET_FETCH.id);
     private static final String RESPONSES_KEY_NAME = "responses";

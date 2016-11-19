@@ -24,6 +24,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.record.MemoryRecords;
 
 public class FetchRequest extends AbstractRequest {
 
@@ -80,7 +81,7 @@ public class FetchRequest extends AbstractRequest {
                 int partition = topicEntry.getKey().partition();
                 T partitionData = topicEntry.getValue();
                 if (topics.isEmpty() || !topics.get(topics.size() - 1).topic.equals(topic))
-                    topics.add(new TopicAndPartitionData(topic));
+                    topics.add(new TopicAndPartitionData<T>(topic));
                 topics.get(topics.size() - 1).partitions.put(partition, partitionData);
             }
             return topics;
@@ -131,11 +132,11 @@ public class FetchRequest extends AbstractRequest {
         struct.set(MIN_BYTES_KEY_NAME, minBytes);
         if (version >= 3)
             struct.set(MAX_BYTES_KEY_NAME, maxBytes);
-        List<Struct> topicArray = new ArrayList<Struct>();
+        List<Struct> topicArray = new ArrayList<>();
         for (TopicAndPartitionData<PartitionData> topicEntry : topicsData) {
             Struct topicData = struct.instance(TOPICS_KEY_NAME);
             topicData.set(TOPIC_KEY_NAME, topicEntry.topic);
-            List<Struct> partitionArray = new ArrayList<Struct>();
+            List<Struct> partitionArray = new ArrayList<>();
             for (Map.Entry<Integer, PartitionData> partitionEntry : topicEntry.partitions.entrySet()) {
                 PartitionData fetchPartitionData = partitionEntry.getValue();
                 Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
@@ -180,13 +181,13 @@ public class FetchRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
+    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
         Map<TopicPartition, FetchResponse.PartitionData> responseData = new LinkedHashMap<>();
 
         for (Map.Entry<TopicPartition, PartitionData> entry: fetchData.entrySet()) {
             FetchResponse.PartitionData partitionResponse = new FetchResponse.PartitionData(Errors.forException(e).code(),
-                    FetchResponse.INVALID_HIGHWATERMARK,
-                    FetchResponse.EMPTY_RECORD_SET);
+                    FetchResponse.INVALID_HIGHWATERMARK, MemoryRecords.EMPTY);
+
             responseData.put(entry.getKey(), partitionResponse);
         }
 
@@ -221,6 +222,10 @@ public class FetchRequest extends AbstractRequest {
 
     public Map<TopicPartition, PartitionData> fetchData() {
         return fetchData;
+    }
+
+    public boolean isFromFollower() {
+        return replicaId >= 0;
     }
 
     public static FetchRequest parse(ByteBuffer buffer, int versionId) {

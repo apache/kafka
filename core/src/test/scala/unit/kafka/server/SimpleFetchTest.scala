@@ -19,19 +19,18 @@ package kafka.server
 import kafka.api._
 import kafka.utils._
 import kafka.cluster.Replica
-import kafka.common.TopicAndPartition
 import kafka.log.Log
 import kafka.message.{ByteBufferMessageSet, Message, MessageSet}
 import kafka.server.QuotaFactory.UnboundedQuota
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.{MockTime => JMockTime}
-
-import org.junit.{Test, After, Before}
-
-import java.util.{Properties}
+import org.apache.kafka.common.requests.FetchRequest.PartitionData
+import org.junit.{After, Before, Test}
+import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
-import collection.JavaConversions._
 
+import kafka.common.TopicAndPartition
+import org.apache.kafka.common.TopicPartition
 import org.easymock.EasyMock
 import org.junit.Assert._
 
@@ -63,7 +62,7 @@ class SimpleFetchTest {
   val partitionId = 0
   val topicAndPartition = TopicAndPartition(topic, partitionId)
 
-  val fetchInfo = Seq(topicAndPartition -> PartitionFetchInfo(0, fetchSize))
+  val fetchInfo = Seq(new TopicPartition(topicAndPartition.topic, topicAndPartition.partition) -> new PartitionData(0, fetchSize))
 
   var replicaManager: ReplicaManager = null
 
@@ -117,7 +116,7 @@ class SimpleFetchTest {
 
     // add both of them to ISR
     val allReplicas = List(leaderReplica, followerReplica)
-    allReplicas.foreach(partition.addReplicaIfNotExists(_))
+    allReplicas.foreach(partition.addReplicaIfNotExists)
     partition.inSyncReplicas = allReplicas.toSet
   }
 

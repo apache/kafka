@@ -91,12 +91,10 @@ public class KafkaStreams {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaStreams.class);
     private static final String JMX_PREFIX = "kafka.streams";
+    public static final int DEFAULT_CLOSE_TIMEOUT = 0;
 
-    // container states
-    private static final int CREATED = 0;
-    private static final int RUNNING = 1;
-    private static final int STOPPED = 2;
-    private int state = CREATED;
+    private enum StreamsState { created, running, stopped }
+    private StreamsState state = StreamsState.created;
 
     private final StreamThread[] threads;
     private final Metrics metrics;
@@ -192,14 +190,13 @@ public class KafkaStreams {
     public synchronized void start() {
         log.debug("Starting Kafka Stream process");
 
-        if (state == CREATED) {
-            for (final StreamThread thread : threads)
+        if (state == StreamsState.created) {
+            for (final StreamThread thread : threads) {
                 thread.start();
-
-            state = RUNNING;
-
+            }
+            state = StreamsState.running;
             log.info("Started Kafka Stream process");
-        } else if (state == RUNNING) {
+        } else if (state == StreamsState.running) {
             throw new IllegalStateException("This process was already started.");
         } else {
             throw new IllegalStateException("Cannot restart after closing.");
@@ -210,30 +207,60 @@ public class KafkaStreams {
      * Shutdown this stream instance by signaling all the threads to stop,
      * and then wait for them to join.
      *
-     * @throws IllegalStateException if process has not started yet
+     * This will block until all threads have stopped.
      */
-    public synchronized void close() {
+    public void close() {
+        close(DEFAULT_CLOSE_TIMEOUT, TimeUnit.SECONDS);
+    }
+
+    /**
+     * Shutdown this stream instance by signaling all the threads to stop,
+     * and then wait up to the timeout for the threads to join.
+     *
+     * A timeout of 0 means to wait forever
+     *
+     * @param timeout   how long to wait for {@link StreamThread}s to shutdown
+     * @param timeUnit  unit of time used for timeout
+     * @return true if all threads were successfully stopped
+     */
+    public synchronized boolean close(final long timeout, final TimeUnit timeUnit) {
         log.debug("Stopping Kafka Stream process");
+        if (state == StreamsState.running) {
+            // save the current thread so that if it is a stream thread
+            // we don't attempt to join it and cause a deadlock
+            final Thread shutdown = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                        // signal the threads to stop and wait
+                        for (final StreamThread thread : threads) {
+                            thread.close();
+                        }
 
-        if (state == RUNNING) {
-            // signal the threads to stop and wait
-            for (final StreamThread thread : threads)
-                thread.close();
+                        for (final StreamThread thread : threads) {
+                            try {
+                                if (!thread.stillRunning()) {
+                                    thread.join();
+                                }
+                            } catch (final InterruptedException ex) {
+                                Thread.interrupted();
+                            }
+                        }
 
-            for (final StreamThread thread : threads) {
-                try {
-                    thread.join();
-                } catch (final InterruptedException ex) {
-                    Thread.interrupted();
-                }
+                        metrics.close();
+                        log.info("Stopped Kafka Stream process");
+                    }
+            }, "kafka-streams-close-thread");
+            shutdown.setDaemon(true);
+            shutdown.start();
+            try {
+                shutdown.join(TimeUnit.MILLISECONDS.convert(timeout, timeUnit));
+            } catch (InterruptedException e) {
+                Thread.interrupted();
             }
+            state = StreamsState.stopped;
+            return !shutdown.isAlive();
         }
-
-        if (state != STOPPED) {
-            metrics.close();
-            state = STOPPED;
-            log.info("Stopped Kafka Stream process");
-        }
+        return true;
 
     }
 
@@ -261,7 +288,7 @@ public class KafkaStreams {
      * @throws IllegalStateException if instance is currently running
      */
     public void cleanUp() {
-        if (state == RUNNING) {
+        if (state == StreamsState.running) {
             throw new IllegalStateException("Cannot clean up while running.");
         }
 
@@ -377,7 +404,7 @@ public class KafkaStreams {
     }
 
     private void validateIsRunning() {
-        if (state != RUNNING) {
+        if (state != StreamsState.running) {
             throw new IllegalStateException("KafkaStreams is not running");
         }
     }

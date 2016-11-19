@@ -18,44 +18,43 @@
 
 package org.apache.kafka.common.security.authenticator;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.channels.SelectionKey;
-import java.util.Arrays;
-import java.util.Map;
-import java.security.Principal;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
-
-import javax.security.auth.Subject;
-import javax.security.sasl.Sasl;
-import javax.security.sasl.SaslClient;
-import javax.security.sasl.SaslException;
-
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.NetworkClient;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.Mode;
-import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.NetworkReceive;
+import org.apache.kafka.common.network.NetworkSend;
+import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.SchemaException;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.common.requests.RequestSend;
 import org.apache.kafka.common.requests.SaslHandshakeRequest;
 import org.apache.kafka.common.requests.SaslHandshakeResponse;
 import org.apache.kafka.common.security.auth.AuthCallbackHandler;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
-import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.NetworkClient;
-import org.apache.kafka.common.KafkaException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.security.auth.Subject;
+import javax.security.sasl.Sasl;
+import javax.security.sasl.SaslClient;
+import javax.security.sasl.SaslException;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
+import java.security.Principal;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+import java.util.Arrays;
+import java.util.Map;
 
 public class SaslClientAuthenticator implements Authenticator {
 
@@ -81,7 +80,7 @@ public class SaslClientAuthenticator implements Authenticator {
 
     // buffers used in `authenticate`
     private NetworkReceive netInBuffer;
-    private NetworkSend netOutBuffer;
+    private Send netOutBuffer;
 
     // Current SASL state
     private SaslState saslState;
@@ -156,7 +155,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 String clientId = (String) configs.get(CommonClientConfigs.CLIENT_ID_CONFIG);
                 currentRequestHeader = new RequestHeader(ApiKeys.SASL_HANDSHAKE.id, clientId, correlationId++);
                 SaslHandshakeRequest handshakeRequest = new SaslHandshakeRequest(mechanism);
-                send(RequestSend.serialize(currentRequestHeader, handshakeRequest.toStruct()));
+                send(handshakeRequest.toSend(node, currentRequestHeader));
                 setSaslState(SaslState.RECEIVE_HANDSHAKE_RESPONSE);
                 break;
             case RECEIVE_HANDSHAKE_RESPONSE:
@@ -209,13 +208,13 @@ public class SaslClientAuthenticator implements Authenticator {
         if (!saslClient.isComplete()) {
             byte[] saslToken = createSaslToken(serverToken, isInitial);
             if (saslToken != null)
-                send(ByteBuffer.wrap(saslToken));
+                send(new NetworkSend(node, ByteBuffer.wrap(saslToken)));
         }
     }
 
-    private void send(ByteBuffer buffer) throws IOException {
+    private void send(Send send) throws IOException {
         try {
-            netOutBuffer = new NetworkSend(node, buffer);
+            netOutBuffer = send;
             flushNetOutBufferAndUpdateInterestOps();
         } catch (IOException e) {
             setSaslState(SaslState.FAILED);
@@ -281,7 +280,7 @@ public class SaslClientAuthenticator implements Authenticator {
             // TODO: introspect about e: look for GSS information.
             final String unknownServerErrorText =
                 "(Mechanism level: Server not found in Kerberos database (7) - UNKNOWN_SERVER)";
-            if (e.toString().indexOf(unknownServerErrorText) > -1) {
+            if (e.toString().contains(unknownServerErrorText)) {
                 error += " This may be caused by Java's being unable to resolve the Kafka Broker's" +
                     " hostname correctly. You may want to try to adding" +
                     " '-Dsun.net.spi.nameservice.provider.1=dns,sun' to your client's JVMFLAGS environment." +
@@ -302,10 +301,10 @@ public class SaslClientAuthenticator implements Authenticator {
     }
 
     private void handleKafkaResponse(RequestHeader requestHeader, byte[] responseBytes) {
-        Struct struct;
+        AbstractResponse response;
         ApiKeys apiKey;
         try {
-            struct = NetworkClient.parseResponse(ByteBuffer.wrap(responseBytes), requestHeader);
+            response = NetworkClient.parseResponse(ByteBuffer.wrap(responseBytes), requestHeader);
             apiKey = ApiKeys.forId(requestHeader.apiKey());
         } catch (SchemaException | IllegalArgumentException e) {
             LOG.debug("Invalid SASL mechanism response, server may be expecting only GSSAPI tokens");
@@ -313,7 +312,7 @@ public class SaslClientAuthenticator implements Authenticator {
         }
         switch (apiKey) {
             case SASL_HANDSHAKE:
-                handleSaslHandshakeResponse(new SaslHandshakeResponse(struct));
+                handleSaslHandshakeResponse((SaslHandshakeResponse) response);
                 break;
             default:
                 throw new IllegalStateException("Unexpected API key during handshake: " + apiKey);

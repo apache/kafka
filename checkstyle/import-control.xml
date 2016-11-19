@@ -81,11 +81,13 @@
     <subpackage name="protocol">
       <allow pkg="org.apache.kafka.common.errors" />
       <allow pkg="org.apache.kafka.common.protocol.types" />
+      <allow pkg="org.apache.kafka.common.record" />
     </subpackage>
 
     <subpackage name="record">
       <allow pkg="net.jpountz" />
       <allow pkg="org.apache.kafka.common.record" />
+      <allow pkg="org.apache.kafka.common.network" />
     </subpackage>
 
     <subpackage name="requests">
