@@ -19,8 +19,8 @@ package org.apache.kafka.streams.processor;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.hamcrest.BaseMatcher;
 import org.hamcrest.Description;
-import org.hamcrest.Matcher;
 import org.junit.Test;
 
 import static org.hamcrest.CoreMatchers.is;
@@ -40,7 +40,7 @@ public class TimestampExtractorTest {
 
         for (final TimestampExtractor extractor : extractors) {
             final long timestamp = extractor.extract(
-                new ConsumerRecord<Object, Object>(
+                new ConsumerRecord<>(
                     "anyTopic",
                     0,
                     0,
@@ -63,30 +63,16 @@ public class TimestampExtractorTest {
         final TimestampExtractor extractor = new WallclockTimestampExtractor();
 
         final long before = System.currentTimeMillis();
-        final long timestamp = extractor.extract(new ConsumerRecord<Object, Object>("anyTopic", 0, 0, null, null), 42);
+        final long timestamp = extractor.extract(new ConsumerRecord<>("anyTopic", 0, 0, null, null), 42);
         final long after = System.currentTimeMillis();
 
-        assertThat(timestamp, is(new Matcher<Long>() {
-            @Override
-            public boolean matches(Object item) {
-                return before <= timestamp && timestamp <= after;
-            }
-
-            @Override
-            public void describeMismatch(Object item, Description mismatchDescription) {}
-
-            @Override
-            public void _dont_implement_Matcher___instead_extend_BaseMatcher_() {}
-
-            @Override
-            public void describeTo(Description description) {}
-        }));
+        assertThat(timestamp, is(new InBetween(before, after)));
     }
 
     @Test(expected = StreamsException.class)
     public void failOnInvalidTimestamp() {
         final TimestampExtractor extractor = new FailOnInvalidTimestamp();
-        extractor.extract(new ConsumerRecord<Object, Object>("anyTopic", 0, 0, null, null), 42);
+        extractor.extract(new ConsumerRecord<>("anyTopic", 0, 0, null, null), 42);
     }
 
     @Test
@@ -95,7 +81,7 @@ public class TimestampExtractorTest {
 
         final TimestampExtractor extractor = new LogAndSkipOnInvalidTimestamp();
         final long timestamp = extractor.extract(
-            new ConsumerRecord<Object, Object>(
+            new ConsumerRecord<>(
                 "anyTopic",
                 0,
                 0,
@@ -118,11 +104,33 @@ public class TimestampExtractorTest {
 
         final TimestampExtractor extractor = new UsePreviousTimeOnInvalidTimestamp();
         final long timestamp = extractor.extract(
-            new ConsumerRecord<Object, Object>("anyTopic", 0, 0, null, null),
+            new ConsumerRecord<>("anyTopic", 0, 0, null, null),
             previousTime
         );
 
         assertThat(timestamp, is(previousTime));
+    }
+
+    private static class InBetween extends BaseMatcher<Long> {
+        private final long before;
+        private final long after;
+
+        public InBetween(long before, long after) {
+            this.before = before;
+            this.after = after;
+        }
+
+        @Override
+        public boolean matches(Object item) {
+            final long timestamp = (Long) item;
+            return before <= timestamp && timestamp <= after;
+        }
+
+        @Override
+        public void describeMismatch(Object item, Description mismatchDescription) {}
+
+        @Override
+        public void describeTo(Description description) {}
     }
 
 }

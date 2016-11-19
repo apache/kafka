@@ -39,7 +39,7 @@ public interface TimestampExtractor {
      *
      * @param record a data record
      * @param previousTimestamp the latest extracted valid timestamp of the current record's partition˙ (could be -1 if unknown)
-     * @return        the timestamp of the record
+     * @return the timestamp of the record
      */
     long extract(ConsumerRecord<Object, Object> record, long previousTimestamp);
 }

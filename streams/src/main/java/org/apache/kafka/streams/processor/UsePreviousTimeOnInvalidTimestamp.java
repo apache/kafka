@@ -51,8 +51,8 @@ public class UsePreviousTimeOnInvalidTimestamp extends ExtractRecordMetadataTime
      * @param record a data record
      * @param recordTimestamp the timestamp extractor from the record
      * @param previousTimestamp the latest extracted valid timestamp of the current record's partition˙ (could be -1 if unknown)
-     * @return the current stream-time as new timestamp for the record
-     * @throws StreamsException if current streams-time is unknown
+     * @return the provided latest extracted valid timestamp as new timestamp for the record
+     * @throws StreamsException if latest extracted valid timestamp is unknown
      */
     @Override
     public long onInvalidTimestamp(final ConsumerRecord<Object, Object> record,
@@ -61,7 +61,7 @@ public class UsePreviousTimeOnInvalidTimestamp extends ExtractRecordMetadataTime
             throws StreamsException {
         if (previousTimestamp < 0) {
             throw new StreamsException("Could not infer new timestamp for input record " + record
-                    + " because current internal Streams time in unknown");
+                    + " because latest extracted valid timestamp is unknown.");
         }
         return previousTimestamp;
     }
