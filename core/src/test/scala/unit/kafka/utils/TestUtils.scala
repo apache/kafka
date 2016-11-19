@@ -53,7 +53,6 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 
 import scala.collection.Map
-import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
 /**
@@ -1059,7 +1058,7 @@ object TestUtils extends Logging {
     val sslConfigs = TestSslUtils.createSslConfig(clientCert, true, mode, trustStore, certAlias)
 
     val sslProps = new Properties()
-    sslConfigs.foreach { case (k, v) => sslProps.put(k, v) }
+    sslConfigs.asScala.foreach { case (k, v) => sslProps.put(k, v) }
     sslProps
   }
 

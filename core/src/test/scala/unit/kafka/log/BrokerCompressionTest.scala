@@ -28,7 +28,7 @@ import org.junit.runners.Parameterized.Parameters
 import org.apache.kafka.common.record.CompressionType
 import org.apache.kafka.common.utils.Utils
 import java.util.{Collection, Properties}
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 @RunWith(value = classOf[Parameterized])
 class BrokerCompressionTest(messageCompression: String, brokerCompression: String) extends JUnitSuite {
@@ -73,8 +73,8 @@ class BrokerCompressionTest(messageCompression: String, brokerCompression: Strin
 object BrokerCompressionTest {
   @Parameters
   def parameters: Collection[Array[String]] = {
-     for (brokerCompression <- BrokerCompressionCodec.brokerCompressionOptions;
+    (for (brokerCompression <- BrokerCompressionCodec.brokerCompressionOptions;
          messageCompression <- CompressionType.values
-    ) yield Array(messageCompression.name, brokerCompression)
+    ) yield Array(messageCompression.name, brokerCompression)).asJava
   }
 }

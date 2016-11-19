@@ -86,6 +86,7 @@ public class Selector implements Selectable {
     private final List<NetworkReceive> completedReceives;
     private final Map<KafkaChannel, Deque<NetworkReceive>> stagedReceives;
     private final Set<SelectionKey> immediatelyConnectedKeys;
+    private final Map<String, KafkaChannel> closingChannels;
     private final List<String> disconnected;
     private final List<String> connected;
     private final List<String> failedSends;
@@ -132,6 +133,7 @@ public class Selector implements Selectable {
         this.completedReceives = new ArrayList<>();
         this.stagedReceives = new HashMap<>();
         this.immediatelyConnectedKeys = new HashSet<>();
+        this.closingChannels = new HashMap<>();
         this.connected = new ArrayList<>();
         this.disconnected = new ArrayList<>();
         this.failedSends = new ArrayList<>();
@@ -237,12 +239,17 @@ public class Selector implements Selectable {
      * @param send The request to send
      */
     public void send(Send send) {
-        KafkaChannel channel = channelOrFail(send.destination());
-        try {
-            channel.setSend(send);
-        } catch (CancelledKeyException e) {
-            this.failedSends.add(send.destination());
-            close(channel);
+        String connectionId = send.destination();
+        if (closingChannels.containsKey(connectionId))
+            this.failedSends.add(connectionId);
+        else {
+            KafkaChannel channel = channelOrFail(connectionId, false);
+            try {
+                channel.setSend(send);
+            } catch (CancelledKeyException e) {
+                this.failedSends.add(connectionId);
+                close(channel, false);
+            }
         }
     }
 
@@ -265,6 +272,11 @@ public class Selector implements Selectable {
      * reading a channel we read as many responses as we can and store them into "stagedReceives" and pop one response during
      * the poll to add the completedReceives. If there are any active channels in the "stagedReceives" we set "timeout" to 0
      * and pop response and add to the completedReceives.
+     *
+     * Atmost one entry is added to "completedReceives" for a channel in each poll. This is necessary to guarantee that
+     * requests from a channel are processed on the broker in the order they are sent. Since outstanding requests added
+     * by SocketServer to the request queue may be processed by different request handler threads, requests on each
+     * channel must be processed one-at-a-time to guarantee ordering.
      *
      * @param timeout The amount of time to wait, in milliseconds, which must be non-negative
      * @throws IllegalArgumentException If `timeout` is negative
@@ -354,10 +366,8 @@ public class Selector implements Selectable {
                 }
 
                 /* cancel any defunct sockets */
-                if (!key.isValid()) {
-                    close(channel);
-                    this.disconnected.add(channel.id());
-                }
+                if (!key.isValid())
+                    close(channel, true);
 
             } catch (Exception e) {
                 String desc = channel.socketDescription();
@@ -365,8 +375,7 @@ public class Selector implements Selectable {
                     log.debug("Connection with {} disconnected", desc, e);
                 else
                     log.warn("Unexpected error from {}; closing connection", desc, e);
-                close(channel);
-                this.disconnected.add(channel.id());
+                close(channel, true);
             }
         }
     }
@@ -393,7 +402,7 @@ public class Selector implements Selectable {
 
     @Override
     public void mute(String id) {
-        KafkaChannel channel = channelOrFail(id);
+        KafkaChannel channel = channelOrFail(id, true);
         mute(channel);
     }
 
@@ -403,7 +412,7 @@ public class Selector implements Selectable {
 
     @Override
     public void unmute(String id) {
-        KafkaChannel channel = channelOrFail(id);
+        KafkaChannel channel = channelOrFail(id, true);
         unmute(channel);
     }
 
@@ -430,13 +439,13 @@ public class Selector implements Selectable {
         Map.Entry<String, Long> expiredConnection = idleExpiryManager.pollExpiredConnection(currentTimeNanos);
         if (expiredConnection != null) {
             String connectionId = expiredConnection.getKey();
-
-            if (log.isTraceEnabled())
-                log.trace("About to close the idle connection from {} due to being idle for {} millis",
-                        connectionId, (currentTimeNanos - expiredConnection.getValue()) / 1000 / 1000);
-
-            disconnected.add(connectionId);
-            close(connectionId);
+            KafkaChannel channel = this.channels.get(connectionId);
+            if (channel != null) {
+                if (log.isTraceEnabled())
+                    log.trace("About to close the idle connection from {} due to being idle for {} millis",
+                            connectionId, (currentTimeNanos - expiredConnection.getValue()) / 1000 / 1000);
+                close(channel, true);
+            }
         }
     }
 
@@ -448,6 +457,16 @@ public class Selector implements Selectable {
         this.completedReceives.clear();
         this.connected.clear();
         this.disconnected.clear();
+        // Remove closed channels after all their staged receives have been processed or if a send was requested
+        for (Iterator<Map.Entry<String, KafkaChannel>> it = closingChannels.entrySet().iterator(); it.hasNext(); ) {
+            KafkaChannel channel = it.next().getValue();
+            Deque<NetworkReceive> deque = this.stagedReceives.get(channel);
+            boolean sendFailed = failedSends.remove(channel.id());
+            if (deque == null || deque.isEmpty() || sendFailed) {
+                doClose(channel, true);
+                it.remove();
+            }
+        }
         this.disconnected.addAll(this.failedSends);
         this.failedSends.clear();
     }
@@ -476,26 +495,57 @@ public class Selector implements Selectable {
     public void close(String id) {
         KafkaChannel channel = this.channels.get(id);
         if (channel != null)
-            close(channel);
+            close(channel, false);
     }
 
     /**
-     * Begin closing this connection
+     * Begin closing this connection.
+     *
+     * If 'processOutstanding' is true, the channel is disconnected here, but staged receives are
+     * processed. The channel is closed when there are no outstanding receives or if a send
+     * is requested. The channel will be added to disconnect list when it is actually closed.
+     *
+     * If 'processOutstanding' is false, outstanding receives are discarded and the channel is
+     * closed immediately. The channel will not be added to disconnected list and it is the
+     * responsibility of the caller to handle disconnect notifications.
      */
-    private void close(KafkaChannel channel) {
-        try {
-            channel.close();
-        } catch (IOException e) {
-            log.error("Exception closing connection to node {}:", channel.id(), e);
-        }
-        this.stagedReceives.remove(channel);
+    private void close(KafkaChannel channel, boolean processOutstanding) {
+
+        channel.disconnect();
+
+        // Keep track of closed channels with pending receives so that all received records
+        // may be processed. For example, when producer with acks=0 sends some records and
+        // closes its connections, a single poll() in the broker may receive records and
+        // handle close(). When the remote end closes its connection, the channel is retained until
+        // a send fails or all outstanding receives are processed. Mute state of disconnected channels
+        // are tracked to ensure that requests are processed one-by-one by the broker to preserve ordering.
+        Deque<NetworkReceive> deque = this.stagedReceives.get(channel);
+        if (processOutstanding && deque != null && !deque.isEmpty()) {
+            if (!channel.isMute()) {
+                addToCompletedReceives(channel, deque);
+                if (deque.isEmpty())
+                    this.stagedReceives.remove(channel);
+            }
+            closingChannels.put(channel.id(), channel);
+        } else
+            doClose(channel, processOutstanding);
         this.channels.remove(channel.id());
-        this.sensors.connectionClosed.record();
 
         if (idleExpiryManager != null)
             idleExpiryManager.remove(channel.id());
     }
 
+    private void doClose(KafkaChannel channel, boolean notifyDisconnect) {
+        try {
+            channel.close();
+        } catch (IOException e) {
+            log.error("Exception closing connection to node {}:", channel.id(), e);
+        }
+        this.sensors.connectionClosed.record();
+        this.stagedReceives.remove(channel);
+        if (notifyDisconnect)
+            this.disconnected.add(channel.id());
+    }
 
     /**
      * check if channel is ready
@@ -506,10 +556,12 @@ public class Selector implements Selectable {
         return channel != null && channel.ready();
     }
 
-    private KafkaChannel channelOrFail(String id) {
+    private KafkaChannel channelOrFail(String id, boolean maybeClosing) {
         KafkaChannel channel = this.channels.get(id);
+        if (channel == null && maybeClosing)
+            channel = this.closingChannels.get(id);
         if (channel == null)
-            throw new IllegalStateException("Attempt to retrieve channel for which there is no open connection. Connection id " + id + " existing connections " + channels.keySet());
+            throw new IllegalStateException("Attempt to retrieve channel for which there is no connection. Connection id " + id + " existing connections " + channels.keySet());
         return channel;
     }
 
@@ -526,6 +578,14 @@ public class Selector implements Selectable {
      */
     public KafkaChannel channel(String id) {
         return this.channels.get(id);
+    }
+
+    /**
+     * Return the channel with the specified id if it was disconnected, but not yet closed
+     * since there are outstanding messages to be processed.
+     */
+    public KafkaChannel closingChannel(String id) {
+        return closingChannels.get(id);
     }
 
     /**
@@ -576,9 +636,7 @@ public class Selector implements Selectable {
                 KafkaChannel channel = entry.getKey();
                 if (!channel.isMute()) {
                     Deque<NetworkReceive> deque = entry.getValue();
-                    NetworkReceive networkReceive = deque.poll();
-                    this.completedReceives.add(networkReceive);
-                    this.sensors.recordBytesReceived(channel.id(), networkReceive.payload().limit());
+                    addToCompletedReceives(channel, deque);
                     if (deque.isEmpty())
                         iter.remove();
                 }
@@ -586,6 +644,11 @@ public class Selector implements Selectable {
         }
     }
 
+    private void addToCompletedReceives(KafkaChannel channel, Deque<NetworkReceive> stagedDeque) {
+        NetworkReceive networkReceive = stagedDeque.poll();
+        this.completedReceives.add(networkReceive);
+        this.sensors.recordBytesReceived(channel.id(), networkReceive.payload().limit());
+    }
 
     private class SelectorMetrics {
         private final Metrics metrics;

@@ -163,7 +163,6 @@ class ThrottlingTest(ProduceConsumeValidateTest):
                                         self.num_consumers,
                                         self.kafka,
                                         self.topic,
-                                        new_consumer=True,
                                         consumer_timeout_ms=60000,
                                         message_validator=is_int,
                                         from_beginning=False)

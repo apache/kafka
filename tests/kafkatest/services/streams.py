@@ -60,6 +60,10 @@ class StreamsSmokeTestBaseService(KafkaPathResolverMixin, Service):
         except:
             return []
 
+    def stop_nodes(self, clean_shutdown=True):
+        for node in self.nodes:
+            self.stop_node(node, clean_shutdown)
+
     def stop_node(self, node, clean_shutdown=True):
         self.logger.info((clean_shutdown and "Cleanly" or "Forcibly") + " stopping Streams Smoke Test on " + str(node.account))
         pids = self.pids(node)
@@ -80,6 +84,7 @@ class StreamsSmokeTestBaseService(KafkaPathResolverMixin, Service):
             self.stop_node(node)
             self.start_node(node)
 
+
     def abortThenRestart(self):
         # We don't want to do any clean up here, just abort then restart the process. The running service is killed immediately.
         for node in self.nodes:
@@ -88,10 +93,10 @@ class StreamsSmokeTestBaseService(KafkaPathResolverMixin, Service):
             self.logger.info("Restarting Kafka Streams on " + str(node.account))
             self.start_node(node)
 
-    def wait(self):
+    def wait(self, timeout_sec=360):
         for node in self.nodes:
             for pid in self.pids(node):
-                wait_until(lambda: not node.account.alive(pid), timeout_sec=180, err_msg="Streams Smoke Test process on " + str(node.account) + " took too long to exit")
+                wait_until(lambda: not node.account.alive(pid), timeout_sec=timeout_sec, err_msg="Streams Smoke Test process on " + str(node.account) + " took too long to exit")
 
     def clean_node(self, node):
         node.account.kill_process("streams", clean_shutdown=False, allow_fail=True)
@@ -137,3 +142,7 @@ class StreamsSmokeTestDriverService(StreamsSmokeTestBaseService):
 class StreamsSmokeTestJobRunnerService(StreamsSmokeTestBaseService):
     def __init__(self, context, kafka):
         super(StreamsSmokeTestJobRunnerService, self).__init__(context, kafka, "process")
+
+class StreamsSmokeTestShutdownDeadlockService(StreamsSmokeTestBaseService):
+    def __init__(self, context, kafka):
+        super(StreamsSmokeTestShutdownDeadlockService, self).__init__(context, kafka, "close-deadlock-test")

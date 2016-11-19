@@ -163,6 +163,21 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
+  def testGracefulClose() {
+    val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
+    val serializedBytes = producerRequestBytes
+
+    for (i <- 0 until 10)
+      sendRequest(plainSocket, serializedBytes)
+    plainSocket.close()
+    for (i <- 0 until 10) {
+      val request = server.requestChannel.receiveRequest(2000)
+      assertNotNull("receiveRequest timed out", request)
+      server.requestChannel.noOperation(request.processor, request)
+    }
+  }
+
+  @Test
   def testSocketsCloseOnShutdown() {
     // open a connection
     val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
