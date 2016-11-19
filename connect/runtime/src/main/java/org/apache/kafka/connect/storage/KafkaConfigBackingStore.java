@@ -297,7 +297,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         log.debug("Writing connector configuration {} for connector {} configuration", properties, connector);
         Struct connectConfig = new Struct(CONNECTOR_CONFIGURATION_V0);
         connectConfig.put("properties", properties);
-        byte[] serializedConfig = convertFromConnectData(CONNECTOR_CONFIGURATION_V0, connectConfig);
+        byte[] serializedConfig = converter.fromConnectData(topic, CONNECTOR_CONFIGURATION_V0, connectConfig);
         updateConnectorConfig(connector, serializedConfig);
     }
 
@@ -360,7 +360,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         for (Map<String, String> taskConfig: configs) {
             Struct connectConfig = new Struct(TASK_CONFIGURATION_V0);
             connectConfig.put("properties", taskConfig);
-            byte[] serializedConfig = convertFromConnectData(TASK_CONFIGURATION_V0, connectConfig);
+            byte[] serializedConfig = converter.fromConnectData(topic, TASK_CONFIGURATION_V0, connectConfig);
             log.debug("Writing configuration for task " + index + " configuration: " + taskConfig);
             ConnectorTaskId connectorTaskId = new ConnectorTaskId(connector, index);
             configLog.send(TASK_KEY(connectorTaskId), serializedConfig);
@@ -377,7 +377,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             // Write the commit message
             Struct connectConfig = new Struct(CONNECTOR_TASKS_COMMIT_V0);
             connectConfig.put("tasks", taskCount);
-            byte[] serializedConfig = convertFromConnectData(CONNECTOR_TASKS_COMMIT_V0, connectConfig);
+            byte[] serializedConfig = converter.fromConnectData(topic, CONNECTOR_TASKS_COMMIT_V0, connectConfig);
             log.debug("Writing commit for connector " + connector + " with " + taskCount + " tasks.");
             configLog.send(COMMIT_TASKS_KEY(connector), serializedConfig);
 
@@ -402,7 +402,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
     public void putTargetState(String connector, TargetState state) {
         Struct connectTargetState = new Struct(TARGET_STATE_V0);
         connectTargetState.put("state", state.name());
-        byte[] serializedTargetState = convertFromConnectData(TARGET_STATE_V0, connectTargetState);
+        byte[] serializedTargetState = converter.fromConnectData(topic, TARGET_STATE_V0, connectTargetState);
         log.debug("Writing target state {} for connector {}", state, connector);
         configLog.send(TARGET_STATE_KEY(connector), serializedTargetState);
     }
@@ -439,9 +439,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
             final SchemaAndValue value;
             try {
-                synchronized (lock) {
-                    value = converter.toConnectData(topic, record.value());
-                }
+                value = converter.toConnectData(topic, record.value());
             } catch (DataException e) {
                 log.error("Failed to convert config data to Kafka Connect format: ", e);
                 return;
@@ -692,13 +690,5 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         else
             throw new ConnectException("Expected integer value to be either Integer or Long");
     }
-
-    // Helper method offering synchronization around the converter.
-    private byte[] convertFromConnectData(Schema schema, Object value) {
-        synchronized (lock) {
-            return converter.fromConnectData(topic, schema, value);
-        }
-    }
-
 }
 

@@ -199,15 +199,14 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
                                                  final CacheEntry<V> entry,
                                                  final boolean safeWrite) {
         final int sequence;
-        final byte[] value;
         synchronized (this) {
             this.generation = status.generation();
             if (safeWrite && !entry.canWriteSafely(status))
                 return;
             sequence = entry.increment();
-
-            value = status.state() == ConnectorStatus.State.DESTROYED ? null : serialize(status);
         }
+
+        final byte[] value = status.state() == ConnectorStatus.State.DESTROYED ? null : serialize(status);
 
         kafkaLog.send(key, value, new org.apache.kafka.clients.producer.Callback() {
             @Override
@@ -362,7 +361,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         }
     }
 
-    private synchronized void readConnectorStatus(String key, byte[] value) {
+    private void readConnectorStatus(String key, byte[] value) {
         String connector = parseConnectorStatusKey(key);
         if (connector == null || connector.isEmpty()) {
             log.warn("Discarding record with invalid connector status key {}", key);
@@ -379,12 +378,14 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         if (status == null)
             return;
 
-        log.trace("Received connector {} status update {}", connector, status);
-        CacheEntry<ConnectorStatus> entry = getOrAdd(connector);
-        entry.put(status);
+        synchronized (this) {
+            log.trace("Received connector {} status update {}", connector, status);
+            CacheEntry<ConnectorStatus> entry = getOrAdd(connector);
+            entry.put(status);
+        }
     }
 
-    private synchronized void readTaskStatus(String key, byte[] value) {
+    private void readTaskStatus(String key, byte[] value) {
         ConnectorTaskId id = parseConnectorTaskId(key);
         if (id == null) {
             log.warn("Discarding record with invalid task status key {}", key);
@@ -403,9 +404,11 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
             return;
         }
 
-        log.trace("Received task {} status update {}", id, status);
-        CacheEntry<TaskStatus> entry = getOrAdd(id);
-        entry.put(status);
+        synchronized (this) {
+            log.trace("Received task {} status update {}", id, status);
+            CacheEntry<TaskStatus> entry = getOrAdd(id);
+            entry.put(status);
+        }
     }
 
     // visible for testing
