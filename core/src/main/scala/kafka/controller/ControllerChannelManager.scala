@@ -411,7 +411,16 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
           .format(broker, stopReplicaWithDelete.mkString(",")))
         debug("The stop replica request (delete = false) sent to broker %d is %s"
           .format(broker, stopReplicaWithoutDelete.mkString(",")))
-        replicaInfoList.foreach { r =>
+
+        val (replicasToGroup, replicasToNotGroup) = replicaInfoList.partition(r => !r.deletePartition && r.callback == null)
+
+        // Send one StopReplicaRequest for all partitions that require neither delete nor callback. This potentially
+        // changes the order in which the requests are sent for the same partitions, but that's OK.
+        val stopReplicaRequest = new StopReplicaRequest(controllerId, controllerEpoch, false,
+          replicasToGroup.map(r => new TopicPartition(r.replica.topic, r.replica.partition)).toSet.asJava)
+        controller.sendRequest(broker, ApiKeys.STOP_REPLICA, None, stopReplicaRequest)
+
+        replicasToNotGroup.foreach { r =>
           val stopReplicaRequest = new StopReplicaRequest(controllerId, controllerEpoch, r.deletePartition,
             Set(new TopicPartition(r.replica.topic, r.replica.partition)).asJava)
           controller.sendRequest(broker, ApiKeys.STOP_REPLICA, None, stopReplicaRequest, r.callback)
