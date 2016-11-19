@@ -599,15 +599,22 @@ public class StreamThread extends Thread {
                         consumer.seekToEnd(ex.partitions());
                         log.info(String.format("stream-thread [%s] setting topic to consume from latest offset %s", this.getName(), partition.topic()));
                     } else {
-                        if (originalReset != null) { //client could specify "none" and not provide custom offset resets
-                            if (originalReset.equals("earliest")) {
-                                consumer.seekToBeginning(ex.partitions());
-                            } else if (originalReset.equals("latest")) {
-                                consumer.seekToEnd(ex.partitions());
-                            }
-                            log.info(String.format("stream-thread [%s] no custom setting defined for topic %s using original config  %s for offset reset", this.getName(), partition.topic(), originalReset));
+
+                        if (originalReset == null || (!originalReset.equals("earliest") && !originalReset.equals("latest"))) {
+                            String errorMessage = "No valid committed offset found for input topic %s (partition %s) and no valid reset policy configured." +
+                                    " You need to set configuration parameter \"auto.offset.reset\" or specify a topic specific reset " +
+                                    "policy via KStreamBuilder#stream(StreamsConfig.AutoOffsetReset offsetReset, ...) or KStreamBuilder#table(StreamsConfig.AutoOffsetReset offsetReset, ...)";
+                            throw new StreamsException(String.format(errorMessage, partition.topic(), partition.partition()), ex);
                         }
+
+                        if (originalReset.equals("earliest")) {
+                            consumer.seekToBeginning(ex.partitions());
+                        } else if (originalReset.equals("latest")) {
+                            consumer.seekToEnd(ex.partitions());
+                        }
+                        log.info(String.format("stream-thread [%s] no custom setting defined for topic %s using original config %s for offset reset", this.getName(), partition.topic(), originalReset));
                     }
+
                 }
 
                 if (rebalanceException != null)

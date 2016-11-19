@@ -31,6 +31,7 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.test.StreamsTestUtils;
+import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -45,6 +46,7 @@ import java.util.Properties;
 import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertThat;
 
 public class KStreamsFineGrainedAutoResetIntegrationTest {
@@ -62,6 +64,8 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
     private static final String TOPIC_C = "topic-C";
     private static final String TOPIC_Y = "topic-Y";
     private static final String TOPIC_Z = "topic-Z";
+    private static final String NOOP = "noop";
+    private final Serde<String> stringSerde = Serdes.String();
 
     private static final String STRING_SERDE_CLASSNAME = Serdes.String().getClass().getName();
     private Properties streamsConfiguration;
@@ -75,6 +79,7 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
         CLUSTER.createTopic(TOPIC_C);
         CLUSTER.createTopic(TOPIC_Y);
         CLUSTER.createTopic(TOPIC_Z);
+        CLUSTER.createTopic(NOOP);
         CLUSTER.createTopic(DEFAULT_OUTPUT_TOPIC);
 
     }
@@ -98,8 +103,6 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
 
     @Test
     public void shouldOnlyReadRecordsWhereEarliestSpecified() throws  Exception {
-        final Serde<String> stringSerde = Serdes.String();
-
         final KStreamBuilder builder = new KStreamBuilder();
 
         final KStream<String, String> pattern1Stream = builder.stream(StreamsConfig.AutoOffsetReset.EARLIEST, Pattern.compile("topic-\\d"));
@@ -144,6 +147,51 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
         Collections.sort(expectedReceivedValues);
         assertThat(actualValues, equalTo(expectedReceivedValues));
 
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionNoResetSpecified() throws Exception {
+        Properties props = new Properties();
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
+
+        Properties localConfig = StreamsTestUtils.getStreamsConfig(
+                "testAutoOffsetWithNone",
+                CLUSTER.bootstrapServers(),
+                STRING_SERDE_CLASSNAME,
+                STRING_SERDE_CLASSNAME,
+                props);
+
+        final KStreamBuilder builder = new KStreamBuilder();
+        final KStream<String, String> exceptionStream = builder.stream(NOOP);
+
+        exceptionStream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
+
+        KafkaStreams streams = new KafkaStreams(builder, localConfig);
+
+        final TestingUncaughtExceptionHandler uncaughtExceptionHandler = new TestingUncaughtExceptionHandler();
+
+        final TestCondition correctExceptionThrownCondition = new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return uncaughtExceptionHandler.correctExceptionThrown;
+            }
+        };
+
+        streams.setUncaughtExceptionHandler(uncaughtExceptionHandler);
+        streams.start();
+        TestUtils.waitForCondition(correctExceptionThrownCondition, "The expected NoOffsetForPartitionException was never thrown");
+        streams.close();
+    }
+
+
+    private static final class TestingUncaughtExceptionHandler implements Thread.UncaughtExceptionHandler {
+        boolean correctExceptionThrown = false;
+        @Override
+        public void uncaughtException(Thread t, Throwable e) {
+            assertThat(e.getClass().getSimpleName(), is("StreamsException"));
+            assertThat(e.getCause().getClass().getSimpleName(), is("NoOffsetForPartitionException"));
+            correctExceptionThrown = true;
+        }
     }
 
 }
