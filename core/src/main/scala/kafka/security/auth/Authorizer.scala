@@ -22,14 +22,14 @@ import org.apache.kafka.common.Configurable
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 
 /**
- * Top level interface that all pluggable authorizers must implement. Kafka will read the "authorizer.class" config
+ * Top level interface that all pluggable authorizers must implement. Kafka will read the "authorizer.class.name" config
  * value at startup time, create an instance of the specified class using the default constructor, and call its
  * [[configure]] method. The authorizer class must implement this interface.
  *
  * From that point onwards, every client request will first be routed to the authorize method and the request will only
  * be authorized if the method returns true.
  *
- * If authorizer.class has no value specified, then no authorization will be performed, and all operations are
+ * If authorizer.class.name has no value specified, then no authorization will be performed, and all operations are
  * permitted.
  */
 trait Authorizer extends Configurable {
