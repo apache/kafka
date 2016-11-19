@@ -17,7 +17,9 @@
 package org.apache.kafka.common.utils;
 
 /**
- * An interface abstracting the clock to use in unit testing classes that make use of clock time
+ * An interface abstracting the clock to use in unit testing classes that make use of clock time.
+ *
+ * Implementations of this class should be thread-safe.
  */
 public interface Time {
 

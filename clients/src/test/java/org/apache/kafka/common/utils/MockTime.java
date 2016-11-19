@@ -13,6 +13,7 @@
 package org.apache.kafka.common.utils;
 
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * A clock that you can manually advance by calling sleep
@@ -23,8 +24,8 @@ public class MockTime implements Time {
 
     // Values from `nanoTime` and `currentTimeMillis` are not comparable, so we store them separately to allow tests
     // using this class to detect bugs where this is incorrectly assumed to be true
-    private long timeMs;
-    private long highResTimeNs;
+    private final AtomicLong timeMs;
+    private final AtomicLong highResTimeNs;
 
     public MockTime() {
         this(0);
@@ -35,21 +36,21 @@ public class MockTime implements Time {
     }
 
     public MockTime(long autoTickMs, long currentTimeMs, long currentHighResTimeNs) {
-        this.timeMs = currentTimeMs;
-        this.highResTimeNs = currentHighResTimeNs;
+        this.timeMs = new AtomicLong(currentTimeMs);
+        this.highResTimeNs = new AtomicLong(currentHighResTimeNs);
         this.autoTickMs = autoTickMs;
     }
 
     @Override
     public long milliseconds() {
         maybeSleep(autoTickMs);
-        return timeMs;
+        return timeMs.get();
     }
 
     @Override
     public long nanoseconds() {
         maybeSleep(autoTickMs);
-        return highResTimeNs;
+        return highResTimeNs.get();
     }
 
     @Override
@@ -64,8 +65,8 @@ public class MockTime implements Time {
 
     @Override
     public void sleep(long ms) {
-        timeMs += ms;
-        highResTimeNs += TimeUnit.MILLISECONDS.toNanos(ms);
+        timeMs.addAndGet(ms);
+        highResTimeNs.addAndGet(TimeUnit.MILLISECONDS.toNanos(ms));
     }
 
 }
