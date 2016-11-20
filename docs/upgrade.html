@@ -15,18 +15,125 @@
  limitations under the License.
 -->
 
-<h3><a id="upgrade" href="#upgrade">1.5 Upgrading From Previous Versions</a></h3>
+<h4><a id="upgrade_10_1" href="#upgrade_10_1">Upgrading from 0.8.x, 0.9.x or 0.10.0.X to 0.10.1.0</a></h4>
+0.10.1.0 has wire protocol changes. By following the recommended rolling upgrade plan below, you guarantee no downtime during the upgrade.
+However, please notice the <a href="#upgrade_10_1_breaking">Potential breaking changes in 0.10.1.0</a> before upgrade.
+<br>
+Note: Because new protocols are introduced, it is important to upgrade your Kafka clusters before upgrading your clients (i.e. 0.10.1.x clients
+only support 0.10.1.x or later brokers while 0.10.1.x brokers also support older clients).
+
+<p><b>For a rolling upgrade:</b></p>
+
+<ol>
+    <li> Update server.properties file on all brokers and add the following properties:
+        <ul>
+            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. 0.8.2.0, 0.9.0.0 or 0.10.0.0).</li>
+            <li>log.message.format.version=CURRENT_KAFKA_VERSION  (See <a href="#upgrade_10_performance_impact">potential performance impact following the upgrade</a> for the details on what this configuration does.)
+        </ul>
+    </li>
+    <li> Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. </li>
+    <li> Once the entire cluster is upgraded, bump the protocol version by editing inter.broker.protocol.version and setting it to 0.10.1.0. </li>
+    <li> If your previous message format is 0.10.0, change log.message.format.version to 0.10.1 (this is a no-op as the message format is the same for both 0.10.0 and 0.10.1).
+         If your previous message format version is lower than 0.10.0, do not change log.message.format.version yet - this parameter should only change once all consumers have been upgraded to 0.10.0.0 or later.</li>
+    <li> Restart the brokers one by one for the new protocol version to take effect. </li>
+    <li> If log.message.format.version is still lower than 0.10.0 at this point, wait until all consumers have been upgraded to 0.10.0 or later,
+         then change log.message.format.version to 0.10.1 on each broker and restart them one by one. </li>
+</ol>
+
+<p><b>Note:</b> If you are willing to accept downtime, you can simply take all the brokers down, update the code and start all of them. They will start with the new protocol by default.
+
+<p><b>Note:</b> Bumping the protocol version and restarting can be done any time after the brokers were upgraded. It does not have to be immediately after.
+
+<h5><a id="upgrade_10_1_breaking" href="#upgrade_10_1_breaking">Potential breaking changes in 0.10.1.0</a></h5>
+<ul>
+    <li> The log retention time is no longer based on last modified time of the log segments. Instead it will be based on the largest timestamp of the messages in a log segment.</li>
+    <li> The log rolling time is no longer depending on log segment create time. Instead it is now based on the timestamp in the messages. More specifically. if the timestamp of the first message in the segment is T, the log will be rolled out when a new message has a timestamp greater than or equal to T + log.roll.ms </li>
+    <li> The open file handlers of 0.10.0 will increase by ~33% because of the addition of time index files for each segment.</li>
+    <li> The time index and offset index share the same index size configuration. Since each time index entry is 1.5x the size of offset index entry. User may need to increase log.index.size.max.bytes to avoid potential frequent log rolling. </li>
+    <li> Due to the increased number of index files, on some brokers with large amount the log segments (e.g. >15K), the log loading process during the broker startup could be longer. Based on our experiment, setting the num.recovery.threads.per.data.dir to one may reduce the log loading time. </li>
+</ul>
+
+<h5><a id="upgrade_1010_streams" href="#upgrade_1010_streams">Streams API changes in 0.10.1.0</a></h5>
+<ul>
+    <li> Stream grouping and aggregation split into two methods:
+        <ul>
+            <li> old: KStream #aggregateByKey(), #reduceByKey(), and #countByKey() </li>
+            <li> new: KStream#groupByKey() plus KGroupedStream #aggregate(), #reduce(), and #count() </li>
+            <li> Example: stream.countByKey() changes to stream.groupByKey().count() </li>
+        </ul>
+    </li>
+    <li> Auto Repartitioning:
+        <ul>
+            <li> a call to through() after a key-changing operator and before an aggregation/join is no longer required </li>
+            <li> Example: stream.selectKey(...).through(...).countByKey() changes to stream.selectKey().groupByKey().count() </li>
+        </ul>
+    </li>
+    <li> TopologyBuilder:
+        <ul>
+            <li> methods #sourceTopics(String applicationId) and #topicGroups(String applicationId) got simplified to #sourceTopics() and #topicGroups() </li>
+        </ul>
+    </li>
+    <li> DSL: new parameter to specify state store names:
+        <ul>
+            <li> The new Interactive Queries feature requires to specify a store name for all source KTables and window aggregation result KTables (previous parameter "operator/window name" is now the storeName) </li>
+            <li> KStreamBuilder#table(String topic) changes to #topic(String topic, String storeName) </li>
+            <li> KTable#through(String topic) changes to #through(String topic, String storeName) </li>
+            <li> KGroupedStream #aggregate(), #reduce(), and #count() require additional parameter "String storeName"</li>
+            <li> Example: stream.countByKey(TimeWindows.of("windowName", 1000)) changes to stream.groupByKey().count(TimeWindows.of(1000), "countStoreName") </li>
+        </ul>
+    </li>
+    <li> Windowing:
+        <ul>
+            <li> Windows are not named anymore: TimeWindows.of("name", 1000) changes to TimeWindows.of(1000) (cf. DSL: new parameter to specify state store names) </li>
+            <li> JoinWindows has no default size anymore: JoinWindows.of("name").within(1000) changes to JoinWindows.of(1000) </li>
+        </ul>
+    </li>
+</ul>
 
 <h5><a id="upgrade_1010_notable" href="#upgrade_1010_notable">Notable changes in 0.10.1.0</a></h5>
-
 <ul>
+    <li> The new Java consumer is no longer in beta and we recommend it for all new development. The old Scala consumers are still supported, but they will be deprecated in the next release
+         and will be removed in a future major release. </li>
+    <li> The <code>--new-consumer</code>/<code>--new.consumer</code> switch is no longer required to use tools like MirrorMaker and the Console Consumer with the new consumer; one simply
+         needs to pass a Kafka broker to connect to instead of the ZooKeeper ensemble. In addition, usage of the Console Consumer with the old consumer has been deprecated and it will be
+         removed in a future major release. </li>
+    <li> Kafka clusters can now be uniquely identified by a cluster id. It will be automatically generated when a broker is upgraded to 0.10.1.0. The cluster id is available via the kafka.server:type=KafkaServer,name=ClusterId metric and it is part of the Metadata response. Serializers, client interceptors and metric reporters can receive the cluster id by implementing the ClusterResourceListener interface. </li>
     <li> The BrokerState "RunningAsController" (value 4) has been removed. Due to a bug, a broker would only be in this state briefly before transitioning out of it and hence the impact of the removal should be minimal. The recommended way to detect if a given broker is the controller is via the kafka.controller:type=KafkaController,name=ActiveControllerCount metric. </li>
+    <li> The new Java Consumer now allows users to search offsets by timestamp on partitions. </li>
+    <li> The new Java Consumer now supports heartbeating from a background thread. There is a new configuration
+         <code>max.poll.interval.ms</code> which controls the maximum time between poll invocations before the consumer
+         will proactively leave the group (5 minutes by default). The value of the configuration
+         <code>request.timeout.ms</code> must always be larger than <code>max.poll.interval.ms</code> because this is the maximum
+         time that a JoinGroup request can block on the server while the consumer is rebalancing, so we have changed its default
+         value to just above 5 minutes. Finally, the default value of <code>session.timeout.ms</code> has been adjusted down to
+         10 seconds, and the default value of <code>max.poll.records</code> has been changed to 500.</li>
+    <li> When using an Authorizer and a user doesn't have <b>Describe</b> authorization on a topic, the broker will no
+         longer return TOPIC_AUTHORIZATION_FAILED errors to requests since this leaks topic names. Instead, the UNKNOWN_TOPIC_OR_PARTITION
+         error code will be returned. This may cause unexpected timeouts or delays when using the producer and consumer since
+         Kafka clients will typically retry automatically on unknown topic errors. You should consult the client logs if you
+         suspect this could be happening.</li>
+    <li> Fetch responses have a size limit by default (50 MB for consumers and 10 MB for replication). The existing per partition limits also apply (1 MB for consumers
+         and replication). Note that neither of these limits is an absolute maximum as explained in the next point. </li>
+    <li> Consumers and replicas can make progress if a message larger than the response/partition size limit is found. More concretely, if the first message in the
+         first non-empty partition of the fetch is larger than either or both limits, the message will still be returned. </li>
+    <li> Overloaded constructors were added to <code>kafka.api.FetchRequest</code> and <code>kafka.javaapi.FetchRequest</code> to allow the caller to specify the
+         order of the partitions (since order is significant in v3). The previously existing constructors were deprecated and the partitions are shuffled before
+         the request is sent to avoid starvation issues. </li>
+</ul>
+
+<h5><a id="upgrade_1010_new_protocols" href="#upgrade_1010_new_protocols">New Protocol Versions</a></h5>
+<ul>
+    <li> ListOffsetRequest v1 supports accurate offset search based on timestamps. </li>
+    <li> MetadataResponse v2 introduces a new field: "cluster_id". </li>
+    <li> FetchRequest v3 supports limiting the response size (in addition to the existing per partition limit), it returns messages
+         bigger than the limits if required to make progress and the order of partitions in the request is now significant. </li>
+    <li> JoinGroup v1 introduces a new field: "rebalance_timeout". </li>
 </ul>
 
 <h4><a id="upgrade_10" href="#upgrade_10">Upgrading from 0.8.x or 0.9.x to 0.10.0.0</a></h4>
-0.10.0.0 has <a href="#upgrade_10_breaking">potential breaking changes</a> (please review before upgrading) and
-there may be a <a href="#upgrade_10_performance_impact">performance impact during the upgrade</a>. Because new protocols
-are introduced, it is important to upgrade your Kafka clusters before upgrading your clients.
+0.10.0.0 has <a href="#upgrade_10_breaking">potential breaking changes</a> (please review before upgrading) and possible <a href="#upgrade_10_performance_impact">  performance impact following the upgrade</a>. By following the recommended rolling upgrade plan below, you guarantee no downtime and no performance impact during and following the upgrade.
+<br>
+Note: Because new protocols are introduced, it is important to upgrade your Kafka clusters before upgrading your clients.
 <p/>
 <b>Notes to clients with version 0.9.0.0: </b>Due to a bug introduced in 0.9.0.0,
 clients that depend on ZooKeeper (old Scala high-level Consumer and MirrorMaker if used with the old consumer) will not
@@ -36,15 +143,16 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
 <p><b>For a rolling upgrade:</b></p>
 
 <ol>
-    <li> Update server.properties file on all brokers and add the following property: inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. 0.8.2 or 0.9.0.0).
-         We recommend that users set log.message.format.version=CURRENT_KAFKA_VERSION as well to ensure that performance of 0.8 and 0.9 consumers is not affected
-         during the upgrade. See <a href="#upgrade_10_performance_impact">potential performance impact during upgrade</a> for the details.
+    <li> Update server.properties file on all brokers and add the following properties:
+         <ul>
+         <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. 0.8.2 or 0.9.0.0).</li>
+         <li>log.message.format.version=CURRENT_KAFKA_VERSION  (See <a href="#upgrade_10_performance_impact">potential performance impact following the upgrade</a> for the details on what this configuration does.)
+         </ul>
     </li>
     <li> Upgrade the brokers. This can be done a broker at a time by simply bringing it down, updating the code, and restarting it. </li>
-    <li> Once the entire cluster is upgraded, bump the protocol version by editing inter.broker.protocol.version and setting it to 0.10.0.0. </li>
+    <li> Once the entire cluster is upgraded, bump the protocol version by editing inter.broker.protocol.version and setting it to 0.10.0.0. NOTE: You shouldn't touch log.message.format.version yet - this parameter should only change once all consumers have been upgraded to 0.10.0.0 </li>
     <li> Restart the brokers one by one for the new protocol version to take effect. </li>
-    <li> Once most consumers have been upgraded to 0.10.0 and if you followed the recommendation to set log.message.format.version=CURRENT_KAFKA_VERSION, change
-         log.message.format.version to 0.10.0 on each broker and restart them one by one.
+    <li> Once all consumers have been upgraded to 0.10.0, change log.message.format.version to 0.10.0 on each broker and restart them one by one.
     </li>
 </ol>
 
@@ -52,7 +160,7 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
 
 <p><b>Note:</b> Bumping the protocol version and restarting can be done any time after the brokers were upgraded. It does not have to be immediately after.
 
-<h5><a id="upgrade_10_performance_impact" href="#upgrade_10_performance_impact">Potential performance impact during upgrade to 0.10.0.0</a></h5>
+<h5><a id="upgrade_10_performance_impact" href="#upgrade_10_performance_impact">Potential performance impact following upgrade to 0.10.0.0</a></h5>
 <p>
     The message format in 0.10.0 includes a new timestamp field and uses relative offsets for compressed messages.
     The on disk message format can be configured through log.message.format.version in the server.properties file.
@@ -60,9 +168,11 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
     message formats before 0.10.0. In this case, the broker is able to convert messages from the 0.10.0 format to an earlier format
     before sending the response to the consumer on an older version. However, the broker can't use zero-copy transfer in this case.
 
-    To avoid such message conversion before consumers are upgraded to 0.10.0.0, one can set the message format to
-    e.g. 0.9.0 when upgrading the broker to 0.10.0.0. This way, the broker can still use zero-copy transfer to send the
-    data to the old consumers. Once most consumers are upgraded, one can change the message format to 0.10.0 on the broker.
+    Reports from the Kafka community on the performance impact have shown CPU utilization going from 20% before to 100% after an upgrade, which forced an immediate upgrade of all clients to bring performance back to normal.
+
+    To avoid such message conversion before consumers are upgraded to 0.10.0.0, one can set log.message.format.version to 0.8.2 or 0.9.0 when upgrading the broker to 0.10.0.0. This way, the broker can still use zero-copy transfer to send the data to the old consumers. Once consumers are upgraded, one can change the message format to 0.10.0 on the broker and enjoy the new message format that includes new timestamp and improved compression.
+
+    The conversion is supported to ensure compatibility and can be useful to support a few apps that have not updated to newer clients yet, but is impractical to support all consumer traffic on even an overprovisioned cluster. Therefore, it is critical to avoid the message conversion as much as possible when brokers have been upgraded but the majority of clients have not.
 </p>
 <p>
     For clients that are upgraded to 0.10.0.0, there is no performance impact.
@@ -155,8 +265,8 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
     <li> The default Kafka JVM performance options (KAFKA_JVM_PERFORMANCE_OPTS) have been changed in kafka-run-class.sh. </li>
     <li> The kafka-topics.sh script (kafka.admin.TopicCommand) now exits with non-zero exit code on failure. </li>
     <li> The kafka-topics.sh script (kafka.admin.TopicCommand) will now print a warning when topic names risk metric collisions due to the use of a '.' or '_' in the topic name, and error in the case of an actual collision. </li>
-    <li> The kafka-console-producer.sh script (kafka.tools.ConsoleProducer) will use the new producer instead of the old producer be default, and users have to specify 'old-producer' to use the old producer. </li>
-    <li> By default all command line tools will print all logging messages to stderr instead of stdout. </li>
+    <li> The kafka-console-producer.sh script (kafka.tools.ConsoleProducer) will use the Java producer instead of the old Scala producer be default, and users have to specify 'old-producer' to use the old producer. </li>
+    <li> By default, all command line tools will print all logging messages to stderr instead of stdout. </li>
 </ul>
 
 <h5><a id="upgrade_901_notable" href="#upgrade_901_notable">Notable changes in 0.9.0.1</a></h5>

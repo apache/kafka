@@ -23,12 +23,14 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.CachedStateStore;
 
 public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K, K, V, T> {
 
     private final String storeName;
     private final Initializer<T> initializer;
     private final Aggregator<K, V, T> aggregator;
+
 
     private boolean sendOldValues = false;
 
@@ -56,8 +58,8 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
-
             store = (KeyValueStore<K, T>) context.getStateStore(storeName);
+            ((CachedStateStore) store).setFlushListener(new ForwardingCacheFlushListener<K, V>(context, sendOldValues));
         }
 
 
@@ -80,12 +82,6 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
 
             // update the store with the new value
             store.put(key, newAgg);
-
-            // send the old / new pair
-            if (sendOldValues)
-                context().forward(key, new Change<>(newAgg, oldAgg));
-            else
-                context().forward(key, new Change<>(newAgg, null));
         }
     }
 
@@ -98,6 +94,10 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
                 return new KStreamAggregateValueGetter();
             }
 
+            @Override
+            public String[] storeNames() {
+                return new String[]{storeName};
+            }
         };
     }
 

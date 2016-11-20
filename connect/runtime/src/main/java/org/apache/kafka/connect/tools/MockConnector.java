@@ -20,6 +20,8 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.List;
@@ -49,6 +51,8 @@ public class MockConnector extends Connector {
 
     public static final long DEFAULT_FAILURE_DELAY_MS = 15000;
 
+    private static final Logger log = LoggerFactory.getLogger(MockConnector.class);
+
     private Map<String, String> config;
     private ScheduledExecutorService executor;
 
@@ -69,10 +73,12 @@ public class MockConnector extends Connector {
             if (delayMsString != null)
                 delayMs = Long.parseLong(delayMsString);
 
+            log.debug("Started MockConnector with failure delay of {} ms", delayMs);
             executor = Executors.newSingleThreadScheduledExecutor();
             executor.schedule(new Runnable() {
                 @Override
                 public void run() {
+                    log.debug("Triggering connector failure");
                     context.raiseError(new RuntimeException());
                 }
             }, delayMs, TimeUnit.MILLISECONDS);
@@ -86,6 +92,7 @@ public class MockConnector extends Connector {
 
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
+        log.debug("Creating single task for MockConnector");
         return Collections.singletonList(config);
     }
 

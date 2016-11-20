@@ -26,6 +26,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
+import java.security.SecureRandom;
 import java.util.List;
 import java.util.Map;
 
@@ -51,6 +52,7 @@ public class SslFactory implements Configurable {
     private String[] cipherSuites;
     private String[] enabledProtocols;
     private String endpointIdentification;
+    private SecureRandom secureRandomImplementation;
     private SSLContext sslContext;
     private boolean needClientAuth;
     private boolean wantClientAuth;
@@ -82,6 +84,15 @@ public class SslFactory implements Configurable {
         String endpointIdentification = (String) configs.get(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
         if (endpointIdentification != null)
             this.endpointIdentification = endpointIdentification;
+
+        String secureRandomImplementation = (String) configs.get(SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG);
+        if (secureRandomImplementation != null) {
+            try {
+                this.secureRandomImplementation = SecureRandom.getInstance(secureRandomImplementation);
+            } catch (GeneralSecurityException e) {
+                throw new KafkaException(e);
+            }
+        }
 
         String clientAuthConfig = clientAuthConfigOverride;
         if (clientAuthConfig == null)
@@ -134,7 +145,7 @@ public class SslFactory implements Configurable {
         KeyStore ts = truststore == null ? null : truststore.load();
         tmf.init(ts);
 
-        sslContext.init(keyManagers, tmf.getTrustManagers(), null);
+        sslContext.init(keyManagers, tmf.getTrustManagers(), this.secureRandomImplementation);
         return sslContext;
     }
 

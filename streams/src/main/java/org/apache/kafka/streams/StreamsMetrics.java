@@ -24,7 +24,19 @@ import org.apache.kafka.common.metrics.Sensor;
  */
 public interface StreamsMetrics {
 
+    /**
+     * Add the latency sensor.
+     *
+     * @param scopeName Name of the scope, could be the type of the state store, etc.
+     * @param entityName Name of the entity, could be the name of the state store instance, etc.
+     * @param operationName Name of the operation, could be get / put / delete / etc.
+     * @param tags Additional tags of the sensor.
+     * @return The added sensor.
+     */
     Sensor addLatencySensor(String scopeName, String entityName, String operationName, String... tags);
 
+    /**
+     * Record the given latency value of the sensor.
+     */
     void recordLatency(Sensor sensor, long startNs, long endNs);
 }

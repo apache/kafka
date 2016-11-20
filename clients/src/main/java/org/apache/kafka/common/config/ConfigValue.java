@@ -17,7 +17,7 @@
 
 package org.apache.kafka.common.config;
 
-import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -30,7 +30,7 @@ public class ConfigValue {
     private boolean visible;
 
     public ConfigValue(String name) {
-        this(name, null, new LinkedList<Object>(), new LinkedList<String>());
+        this(name, null, new ArrayList<>(), new ArrayList<String>());
     }
 
     public ConfigValue(String name, Object value, List<Object> recommendedValues, List<String> errorMessages) {

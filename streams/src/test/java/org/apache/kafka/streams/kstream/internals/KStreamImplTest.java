@@ -19,13 +19,17 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockValueJoiner;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -37,6 +41,14 @@ public class KStreamImplTest {
 
     final private Serde<String> stringSerde = Serdes.String();
     final private Serde<Integer> intSerde = Serdes.Integer();
+    private KStream<String, String> testStream;
+    private KStreamBuilder builder;
+
+    @Before
+    public void before() {
+        builder = new KStreamBuilder();
+        testStream = builder.stream("source");
+    }
 
     @Test
     public void testNumProcesses() {
@@ -109,14 +121,14 @@ public class KStreamImplTest {
             public Integer apply(Integer value1, Integer value2) {
                 return value1 + value2;
             }
-        }, JoinWindows.of("join-0", anyWindowSize), stringSerde, intSerde, intSerde);
+        }, JoinWindows.of(anyWindowSize), stringSerde, intSerde, intSerde);
 
         KStream<String, Integer> stream5 = streams2[1].join(streams3[1], new ValueJoiner<Integer, Integer, Integer>() {
             @Override
             public Integer apply(Integer value1, Integer value2) {
                 return value1 + value2;
             }
-        }, JoinWindows.of("join-1", anyWindowSize), stringSerde, intSerde, intSerde);
+        }, JoinWindows.of(anyWindowSize), stringSerde, intSerde, intSerde);
 
         stream4.to("topic-5");
 
@@ -132,7 +144,7 @@ public class KStreamImplTest {
             1 + // to
             2 + // through
             1, // process
-            builder.build("X", null).processors().size());
+            builder.setApplicationId("X").build(null).processors().size());
     }
 
     @Test
@@ -141,4 +153,120 @@ public class KStreamImplTest {
         final KStream<String, String> inputStream = builder.stream(stringSerde, stringSerde, "input");
         inputStream.to(stringSerde, null, "output");
     }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullPredicateOnFilter() throws Exception {
+        testStream.filter(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullPredicateOnFilterNot() throws Exception {
+        testStream.filterNot(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullMapperOnSelectKey() throws Exception {
+        testStream.selectKey(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullMapperOnMap() throws Exception {
+        testStream.map(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullMapperOnMapValues() throws Exception {
+        testStream.mapValues(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullFilePathOnWriteAsText() throws Exception {
+        testStream.writeAsText(null);
+    }
+
+    @Test(expected = TopologyBuilderException.class)
+    public void shouldNotAllowEmptyFilePathOnWriteAsText() throws Exception {
+        testStream.writeAsText("\t    \t");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullMapperOnFlatMap() throws Exception {
+        testStream.flatMap(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullMapperOnFlatMapValues() throws Exception {
+        testStream.flatMapValues(null);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldHaveAtLeastOnPredicateWhenBranching() throws Exception {
+        testStream.branch();
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldCantHaveNullPredicate() throws Exception {
+        testStream.branch((Predicate) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullTopicOnThrough() throws Exception {
+        testStream.through(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullTopicOnTo() throws Exception {
+        testStream.to(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullTransformSupplierOnTransform() throws Exception {
+        testStream.transform(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullTransformSupplierOnTransformValues() throws Exception {
+        testStream.transformValues(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullProcessSupplier() throws Exception {
+        testStream.process(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullOtherStreamOnJoin() throws Exception {
+        testStream.join(null, MockValueJoiner.STRING_JOINER, JoinWindows.of(10));
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullValueJoinerOnJoin() throws Exception {
+        testStream.join(testStream, null, JoinWindows.of(10));
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullJoinWindowsOnJoin() throws Exception {
+        testStream.join(testStream, MockValueJoiner.STRING_JOINER, null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullTableOnTableJoin() throws Exception {
+        testStream.leftJoin((KTable) null, MockValueJoiner.STRING_JOINER);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullValueMapperOnTableJoin() throws Exception {
+        testStream.leftJoin(builder.table(Serdes.String(), Serdes.String(), "topic", "store"), null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullSelectorOnGroupBy() throws Exception {
+        testStream.groupBy(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullActionOnForEach() throws Exception {
+        testStream.foreach(null);
+    }
+
 }

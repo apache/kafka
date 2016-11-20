@@ -12,7 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# see kafka.server.KafkaConfig for additional details and defaults
 
 # This determines the version of kafkatest that can be published to PyPi and installed with pip
 #
@@ -23,4 +22,4 @@
 # Instead, in trunk, the version should have a suffix of the form ".devN"
 #
 # For example, when Kafka is at version 0.9.0.0-SNAPSHOT, this should be something like "0.9.0.0.dev0"
-__version__ = '0.10.1.0.dev0'
+__version__ = '0.10.2.0.dev0'

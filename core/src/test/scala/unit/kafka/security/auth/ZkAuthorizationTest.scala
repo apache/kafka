@@ -65,7 +65,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
       JaasUtils.isZkSecurityEnabled()
       fail("Should have thrown an exception")
     } catch {
-      case e: KafkaException => // Expected
+      case _: KafkaException => // Expected
     }
   }
 
@@ -286,7 +286,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
     
     // Fail the test if able to delete
     result match {
-      case Success(v) => // All done
+      case Success(_) => // All done
       case Failure(e) => fail(e.getMessage)
     }
   }
@@ -302,7 +302,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
         case "/" => deleteRecursive(zkUtils, s"/$child")
         case path => deleteRecursive(zkUtils, s"$path/$child")
       }) match {
-        case Success(v) => result
+        case Success(_) => result
         case Failure(e) => Failure(e)
       }
     path match {
@@ -314,7 +314,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
           zkUtils.deletePath(path)
           Failure(new Exception(s"Have been able to delete $path"))
         } catch {
-          case e: Exception => result
+          case _: Exception => result
         }
     }
   }

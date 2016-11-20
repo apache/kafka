@@ -14,28 +14,25 @@ package kafka.api
 
 
 import java.util
-import java.util.Properties
-
 import java.util.regex.Pattern
+import java.util.{Collections, Locale, Properties}
 
 import kafka.log.LogConfig
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.clients.producer.KafkaProducer
-import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer, ByteArraySerializer}
-import org.apache.kafka.test.{MockProducerInterceptor, MockConsumerInterceptor}
-import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{InvalidTopicException, RecordTooLargeException}
+import org.apache.kafka.common.errors.InvalidTopicException
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
-import org.apache.kafka.common.serialization.ByteArrayDeserializer
+import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, StringDeserializer, StringSerializer}
+import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.junit.Assert._
 import org.junit.Test
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
-import java.util.Locale
 
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {
@@ -55,6 +52,101 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     consumeAndVerifyRecords(consumer0, numRecords = numRecords, startingOffset = 0,
       maxPollRecords = maxPollRecords)
+  }
+
+  @Test
+  def testMaxPollIntervalMs() {
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 3000.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 2000.toString)
+
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
+
+    val listener = new TestConsumerReassignmentListener()
+    consumer0.subscribe(List(topic).asJava, listener)
+
+    // poll once to get the initial assignment
+    consumer0.poll(0)
+    assertEquals(1, listener.callsToAssigned)
+    assertEquals(1, listener.callsToRevoked)
+
+    Thread.sleep(3500)
+
+    // we should fall out of the group and need to rebalance
+    consumer0.poll(0)
+    assertEquals(2, listener.callsToAssigned)
+    assertEquals(2, listener.callsToRevoked)
+  }
+
+  @Test
+  def testMaxPollIntervalMsDelayInRevocation() {
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 5000.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false.toString)
+
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
+
+    var commitCompleted = false
+    var committedPosition: Long = -1
+
+    val listener = new TestConsumerReassignmentListener {
+      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
+        if (callsToRevoked > 0) {
+          // on the second rebalance (after we have joined the group initially), sleep longer
+          // than session timeout and then try a commit. We should still be in the group,
+          // so the commit should succeed
+          Utils.sleep(1500)
+          committedPosition = consumer0.position(tp)
+          consumer0.commitSync(Map(tp -> new OffsetAndMetadata(committedPosition)).asJava)
+          commitCompleted = true
+        }
+        super.onPartitionsRevoked(partitions)
+      }
+    }
+
+    consumer0.subscribe(List(topic).asJava, listener)
+
+    // poll once to join the group and get the initial assignment
+    consumer0.poll(0)
+
+    // force a rebalance to trigger an invocation of the revocation callback while in the group
+    consumer0.subscribe(List("otherTopic").asJava, listener)
+    consumer0.poll(0)
+
+    assertEquals(0, committedPosition)
+    assertTrue(commitCompleted)
+  }
+
+  @Test
+  def testMaxPollIntervalMsDelayInAssignment() {
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 5000.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false.toString)
+
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
+
+    val listener = new TestConsumerReassignmentListener {
+      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
+        // sleep longer than the session timeout, we should still be in the group after invocation
+        Utils.sleep(1500)
+        super.onPartitionsAssigned(partitions)
+      }
+    }
+    consumer0.subscribe(List(topic).asJava, listener)
+
+    // poll once to join the group and get the initial assignment
+    consumer0.poll(0)
+
+    // we should still be in the group after this invocation
+    consumer0.poll(0)
+
+    assertEquals(1, listener.callsToAssigned)
+    assertEquals(1, listener.callsToRevoked)
   }
 
   @Test
@@ -514,26 +606,124 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @Test
-  def testFetchRecordTooLarge() {
+  def testFetchRecordLargerThanFetchMaxBytes() {
     val maxFetchBytes = 10 * 1024
-    this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, maxFetchBytes.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, maxFetchBytes.toString)
+    checkLargeRecord(maxFetchBytes + 1)
+  }
+
+  private def checkLargeRecord(producerRecordSize: Int): Unit = {
     val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
     consumers += consumer0
 
     // produce a record that is larger than the configured fetch size
-    val record = new ProducerRecord[Array[Byte], Array[Byte]](tp.topic(), tp.partition(), "key".getBytes, new Array[Byte](maxFetchBytes + 1))
+    val record = new ProducerRecord(tp.topic(), tp.partition(), "key".getBytes,
+      new Array[Byte](producerRecordSize))
     this.producers.head.send(record)
 
-    // consuming a too-large record should fail
+    // consuming a record that is too large should succeed since KIP-74
     consumer0.assign(List(tp).asJava)
-    val e = intercept[RecordTooLargeException] {
-      consumer0.poll(20000)
+    val records = consumer0.poll(20000)
+    assertEquals(1, records.count)
+    val consumerRecord = records.iterator().next()
+    assertEquals(0L, consumerRecord.offset)
+    assertEquals(tp.topic(), consumerRecord.topic())
+    assertEquals(tp.partition(), consumerRecord.partition())
+    assertArrayEquals(record.key(), consumerRecord.key())
+    assertArrayEquals(record.value(), consumerRecord.value())
+  }
+
+  /** We should only return a large record if it's the first record in the first non-empty partition of the fetch request */
+  @Test
+  def testFetchHonoursFetchSizeIfLargeRecordNotFirst(): Unit = {
+    val maxFetchBytes = 10 * 1024
+    this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, maxFetchBytes.toString)
+    checkFetchHonoursSizeIfLargeRecordNotFirst(maxFetchBytes)
+  }
+
+  private def checkFetchHonoursSizeIfLargeRecordNotFirst(largeProducerRecordSize: Int): Unit = {
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
+
+    val smallRecord = new ProducerRecord(tp.topic(), tp.partition(), "small".getBytes,
+      "value".getBytes)
+    val largeRecord = new ProducerRecord(tp.topic(), tp.partition(), "large".getBytes,
+      new Array[Byte](largeProducerRecordSize))
+    this.producers.head.send(smallRecord)
+    this.producers.head.send(largeRecord)
+
+    // we should only get the small record in the first `poll`
+    consumer0.assign(List(tp).asJava)
+    val records = consumer0.poll(20000)
+    assertEquals(1, records.count)
+    val consumerRecord = records.iterator().next()
+    assertEquals(0L, consumerRecord.offset)
+    assertEquals(tp.topic(), consumerRecord.topic())
+    assertEquals(tp.partition(), consumerRecord.partition())
+    assertArrayEquals(smallRecord.key(), consumerRecord.key())
+    assertArrayEquals(smallRecord.value(), consumerRecord.value())
+  }
+
+  /** We should only return a large record if it's the first record in the first partition of the fetch request */
+  @Test
+  def testFetchHonoursMaxPartitionFetchBytesIfLargeRecordNotFirst(): Unit = {
+    val maxPartitionFetchBytes = 10 * 1024
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, maxPartitionFetchBytes.toString)
+    checkFetchHonoursSizeIfLargeRecordNotFirst(maxPartitionFetchBytes)
+  }
+
+  @Test
+  def testFetchRecordLargerThanMaxPartitionFetchBytes() {
+    val maxPartitionFetchBytes = 10 * 1024
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, maxPartitionFetchBytes.toString)
+    checkLargeRecord(maxPartitionFetchBytes + 1)
+  }
+
+  /** Test that we consume all partitions if fetch max bytes and max.partition.fetch.bytes are low */
+  @Test
+  def testLowMaxFetchSizeForRequestAndPartition(): Unit = {
+    // one of the effects of this is that there will be some log reads where `0 > remaining limit bytes < message size`
+    // and we don't return the message because it's not the first message in the first non-empty partition of the fetch
+    // this behaves a little different than when remaining limit bytes is 0 and it's important to test it
+    this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, "500")
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, "100")
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
+
+    val topic1 = "topic1"
+    val topic2 = "topic2"
+    val topic3 = "topic3"
+    val partitionCount = 30
+    val topics = Seq(topic1, topic2, topic3)
+    topics.foreach { topicName =>
+      TestUtils.createTopic(zkUtils, topicName, partitionCount, serverCount, servers)
     }
-    val oversizedPartitions = e.recordTooLargePartitions()
-    assertNotNull(oversizedPartitions)
-    assertEquals(1, oversizedPartitions.size)
-    // the oversized message is at offset 0
-    assertEquals(0L, oversizedPartitions.get(tp))
+
+    val partitions = topics.flatMap { topic =>
+      (0 until partitionCount).map(new TopicPartition(topic, _))
+    }
+
+    assertEquals(0, consumer0.assignment().size)
+
+    consumer0.subscribe(List(topic1, topic2, topic3).asJava)
+
+    TestUtils.waitUntilTrue(() => {
+      consumer0.poll(50)
+      consumer0.assignment() == partitions.toSet.asJava
+    }, s"Expected partitions ${partitions.asJava} but actually got ${consumer0.assignment}")
+
+    val producerRecords = partitions.flatMap(sendRecords(partitionCount, _))
+    val consumerRecords = consumeRecords(consumer0, producerRecords.size)
+
+    val expected = producerRecords.map { record =>
+      (record.topic, record.partition, new String(record.key), new String(record.value), record.timestamp)
+    }.toSet
+
+    val actual = consumerRecords.map { record =>
+      (record.topic, record.partition, new String(record.key), new String(record.value), record.timestamp)
+    }.toSet
+
+    assertEquals(expected, actual)
   }
 
   @Test
@@ -592,17 +782,15 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // create a group of consumers, subscribe the consumers to all the topics and start polling
     // for the topic partition assignment
-    val (rrConsumers, consumerPollers) = createConsumerGroupAndWaitForAssignment(10, List(topic1, topic2), subscriptions)
+    val (_, consumerPollers) = createConsumerGroupAndWaitForAssignment(10, List(topic1, topic2), subscriptions)
+    try {
+      validateGroupAssignment(consumerPollers, subscriptions, s"Did not get valid initial assignment for partitions ${subscriptions.asJava}")
 
-    // add one more consumer and validate re-assignment
-    addConsumersToGroupAndWaitForGroupAssignment(1, consumers, consumerPollers, List(topic1, topic2), subscriptions)
-
-    // done with pollers and consumers
-    for (poller <- consumerPollers)
-      poller.shutdown()
-
-    for (consumer <- consumers)
-      consumer.unsubscribe()
+      // add one more consumer and validate re-assignment
+      addConsumersToGroupAndWaitForGroupAssignment(1, consumers, consumerPollers, List(topic1, topic2), subscriptions)
+    } finally {
+      consumerPollers.foreach(_.shutdown())
+    }
   }
 
   /**
@@ -618,25 +806,25 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val subscriptions = Set(tp, tp2) ++ createTopicAndSendRecords(topic1, 5, 100)
 
     // subscribe all consumers to all topics and validate the assignment
-    val consumerPollers = subscribeConsumersAndWaitForAssignment(consumers, List(topic, topic1), subscriptions)
+    val consumerPollers = subscribeConsumers(consumers, List(topic, topic1))
 
-    // add 2 more consumers and validate re-assignment
-    addConsumersToGroupAndWaitForGroupAssignment(2, consumers, consumerPollers, List(topic, topic1), subscriptions)
+    try {
+      validateGroupAssignment(consumerPollers, subscriptions, s"Did not get valid initial assignment for partitions ${subscriptions.asJava}")
 
-    // add one more topic and validate partition re-assignment
-    val topic2 = "topic2"
-    val expandedSubscriptions = subscriptions ++ createTopicAndSendRecords(topic2, 3, 100)
-    changeConsumerGroupSubscriptionAndValidateAssignment(consumerPollers, List(topic, topic1, topic2), expandedSubscriptions)
+      // add 2 more consumers and validate re-assignment
+      addConsumersToGroupAndWaitForGroupAssignment(2, consumers, consumerPollers, List(topic, topic1), subscriptions)
 
-    // remove the topic we just added and validate re-assignment
-    changeConsumerGroupSubscriptionAndValidateAssignment(consumerPollers, List(topic, topic1), subscriptions)
+      // add one more topic and validate partition re-assignment
+      val topic2 = "topic2"
+      val expandedSubscriptions = subscriptions ++ createTopicAndSendRecords(topic2, 3, 100)
+      changeConsumerGroupSubscriptionAndValidateAssignment(consumerPollers, List(topic, topic1, topic2), expandedSubscriptions)
 
-    // done with pollers and consumers
-    for (poller <- consumerPollers)
-      poller.shutdown()
+      // remove the topic we just added and validate re-assignment
+      changeConsumerGroupSubscriptionAndValidateAssignment(consumerPollers, List(topic, topic1), subscriptions)
 
-    for (consumer <- consumers)
-      consumer.unsubscribe()
+    } finally {
+      consumerPollers.foreach(_.shutdown())
+    }
   }
 
   @Test
@@ -652,6 +840,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @Test
   def testInterceptors() {
     val appendStr = "mock"
+    MockConsumerInterceptor.resetCounters()
+    MockProducerInterceptor.resetCounters()
+
     // create producer with interceptor
     val producerProps = new Properties()
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
@@ -671,10 +862,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       testProducer.send(null, null)
       fail("Should not allow sending a null record")
     } catch {
-      case e: Throwable => {
+      case _: Throwable =>
         assertEquals("Interceptor should be notified about exception", 1, MockProducerInterceptor.ON_ERROR_COUNT.intValue())
         assertEquals("Interceptor should not receive metadata with an exception when record is null", 0, MockProducerInterceptor.ON_ERROR_WITH_METADATA_COUNT.intValue())
-      }
     }
 
     // create consumer with interceptor
@@ -686,7 +876,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // consume and verify that values are modified by interceptors
     val records = consumeRecords(testConsumer, numRecords)
     for (i <- 0 until numRecords) {
-      val record = records.get(i)
+      val record = records(i)
       assertEquals(s"key $i", new String(record.key()))
       assertEquals(s"value $i$appendStr".toUpperCase(Locale.ROOT), new String(record.value()))
     }
@@ -770,7 +960,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerProps.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockProducerInterceptor")
     producerProps.put("mock.interceptor.append", appendStr)
-    val testProducer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps, new ByteArraySerializer(), new ByteArraySerializer())
+    val testProducer = new KafkaProducer(producerProps, new ByteArraySerializer(), new ByteArraySerializer())
     producers += testProducer
 
     // producing records should succeed
@@ -786,7 +976,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // consume and verify that values are not modified by interceptors -- their exceptions are caught and logged, but not propagated
     val records = consumeRecords(testConsumer, 1)
-    val record = records.get(0)
+    val record = records.head
     assertEquals(s"value will not be modified", new String(record.value()))
   }
 
@@ -828,6 +1018,216 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     this.consumers.head.assign(List(tp2).asJava)
     consumeAndVerifyRecords(consumer = this.consumers.head, numRecords = numRecords, tp = tp2, startingOffset = 0, startingKeyAndValueIndex = 0,
       startingTimestamp = startTime, timestampType = TimestampType.LOG_APPEND_TIME)
+  }
+
+  @Test
+  def testListTopics() {
+    val numParts = 2
+    val topic1 = "part-test-topic-1"
+    val topic2 = "part-test-topic-2"
+    val topic3 = "part-test-topic-3"
+    TestUtils.createTopic(this.zkUtils, topic1, numParts, 1, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic2, numParts, 1, this.servers)
+    TestUtils.createTopic(this.zkUtils, topic3, numParts, 1, this.servers)
+
+    val topics = this.consumers.head.listTopics()
+    assertNotNull(topics)
+    assertEquals(5, topics.size())
+    assertEquals(5, topics.keySet().size())
+    assertEquals(2, topics.get(topic1).size)
+    assertEquals(2, topics.get(topic2).size)
+    assertEquals(2, topics.get(topic3).size)
+  }
+
+  @Test
+  def testOffsetsForTimes() {
+    val numParts = 2
+    val topic1 = "part-test-topic-1"
+    val topic2 = "part-test-topic-2"
+    val topic3 = "part-test-topic-3"
+    val props = new Properties()
+    props.setProperty(LogConfig.MessageFormatVersionProp, "0.9.0")
+    TestUtils.createTopic(this.zkUtils, topic1, numParts, 1, this.servers)
+    // Topic2 is in old message format.
+    TestUtils.createTopic(this.zkUtils, topic2, numParts, 1, this.servers, props)
+    TestUtils.createTopic(this.zkUtils, topic3, numParts, 1, this.servers)
+
+    val consumer = this.consumers.head
+
+    // Test negative target time
+    intercept[IllegalArgumentException](
+      consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(topic1, 0), -1)))
+
+    val timestampsToSearch = new util.HashMap[TopicPartition, java.lang.Long]()
+    var i = 0
+    for (topic <- List(topic1, topic2, topic3)) {
+      for (part <- 0 until numParts) {
+        val tp = new TopicPartition(topic, part)
+        // In sendRecords(), each message will have key, value and timestamp equal to the sequence number.
+        sendRecords(100, tp)
+        timestampsToSearch.put(tp, i * 20)
+        i += 1
+      }
+    }
+    // The timestampToSearch map should contain:
+    // (topic1Partition0 -> 0,
+    //  topic1Partitoin1 -> 20,
+    //  topic2Partition0 -> 40,
+    //  topic2Partition1 -> 60,
+    //  topic3Partition0 -> 80,
+    //  topic3Partition1 -> 100)
+    val timestampOffsets = consumer.offsetsForTimes(timestampsToSearch)
+    assertEquals(0, timestampOffsets.get(new TopicPartition(topic1, 0)).offset())
+    assertEquals(0, timestampOffsets.get(new TopicPartition(topic1, 0)).timestamp())
+    assertEquals(20, timestampOffsets.get(new TopicPartition(topic1, 1)).offset())
+    assertEquals(20, timestampOffsets.get(new TopicPartition(topic1, 1)).timestamp())
+    assertEquals("null should be returned when message format is 0.9.0",
+      null, timestampOffsets.get(new TopicPartition(topic2, 0)))
+    assertEquals("null should be returned when message format is 0.9.0",
+      null, timestampOffsets.get(new TopicPartition(topic2, 1)))
+    assertEquals(80, timestampOffsets.get(new TopicPartition(topic3, 0)).offset())
+    assertEquals(80, timestampOffsets.get(new TopicPartition(topic3, 0)).timestamp())
+    assertEquals(null, timestampOffsets.get(new TopicPartition(topic3, 1)))
+  }
+
+  @Test
+  def testEarliestOrLatestOffsets() {
+    val topic0 = "topicWithNewMessageFormat"
+    val topic1 = "topicWithOldMessageFormat"
+    createTopicAndSendRecords(topicName = topic0, numPartitions = 2, recordsPerPartition = 100)
+    val props = new Properties()
+    props.setProperty(LogConfig.MessageFormatVersionProp, "0.9.0")
+    TestUtils.createTopic(this.zkUtils, topic1, numPartitions = 1, replicationFactor = 1, this.servers, props)
+    sendRecords(100, new TopicPartition(topic1, 0))
+
+    val t0p0 = new TopicPartition(topic0, 0)
+    val t0p1 = new TopicPartition(topic0, 1)
+    val t1p0 = new TopicPartition(topic1, 0)
+    val partitions = Set(t0p0, t0p1, t1p0).asJava
+    val consumer = this.consumers.head
+
+    val earliests = consumer.beginningOffsets(partitions)
+    assertEquals(0L, earliests.get(t0p0))
+    assertEquals(0L, earliests.get(t0p1))
+    assertEquals(0L, earliests.get(t1p0))
+
+    val latests = consumer.endOffsets(partitions)
+    assertEquals(100L, latests.get(t0p0))
+    assertEquals(100L, latests.get(t0p1))
+    assertEquals(100L, latests.get(t1p0))
+  }
+
+  @Test
+  def testUnsubscribeTopic() {
+    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100") // timeout quickly to avoid slow test
+    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30")
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
+
+    val listener = new TestConsumerReassignmentListener()
+    consumer0.subscribe(List(topic).asJava, listener)
+
+    // the initial subscription should cause a callback execution
+    while (listener.callsToAssigned == 0)
+      consumer0.poll(50)
+
+    consumer0.subscribe(List[String]().asJava)
+    assertEquals(0, consumer0.assignment.size())
+  }
+
+  @Test
+  def testPauseStateNotPreservedByRebalance() {
+    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100") // timeout quickly to avoid slow test
+    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30")
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
+
+    sendRecords(5)
+    consumer0.subscribe(List(topic).asJava)
+    consumeAndVerifyRecords(consumer = consumer0, numRecords = 5, startingOffset = 0)
+    consumer0.pause(List(tp).asJava)
+
+    // subscribe to a new topic to trigger a rebalance
+    consumer0.subscribe(List("topic2").asJava)
+
+    // after rebalance, our position should be reset and our pause state lost,
+    // so we should be able to consume from the beginning
+    consumeAndVerifyRecords(consumer = consumer0, numRecords = 0, startingOffset = 5)
+  }
+
+  @Test
+  def testCommitSpecifiedOffsets() {
+    sendRecords(5, tp)
+    sendRecords(7, tp2)
+
+    this.consumers.head.assign(List(tp, tp2).asJava)
+
+    // Need to poll to join the group
+    this.consumers.head.poll(50)
+    val pos1 = this.consumers.head.position(tp)
+    val pos2 = this.consumers.head.position(tp2)
+    this.consumers.head.commitSync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(3L))).asJava)
+    assertEquals(3, this.consumers.head.committed(tp).offset)
+    assertNull(this.consumers.head.committed(tp2))
+
+    // Positions should not change
+    assertEquals(pos1, this.consumers.head.position(tp))
+    assertEquals(pos2, this.consumers.head.position(tp2))
+    this.consumers.head.commitSync(Map[TopicPartition, OffsetAndMetadata]((tp2, new OffsetAndMetadata(5L))).asJava)
+    assertEquals(3, this.consumers.head.committed(tp).offset)
+    assertEquals(5, this.consumers.head.committed(tp2).offset)
+
+    // Using async should pick up the committed changes after commit completes
+    val commitCallback = new CountConsumerCommitCallback()
+    this.consumers.head.commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp2, new OffsetAndMetadata(7L))).asJava, commitCallback)
+    awaitCommitCallback(this.consumers.head, commitCallback)
+    assertEquals(7, this.consumers.head.committed(tp2).offset)
+  }
+
+  @Test
+  def testAutoCommitOnRebalance() {
+    val topic2 = "topic2"
+    TestUtils.createTopic(this.zkUtils, topic2, 2, serverCount, this.servers)
+
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    consumers += consumer0
+
+    val numRecords = 10000
+    sendRecords(numRecords)
+
+    val rebalanceListener = new ConsumerRebalanceListener {
+      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) = {
+        // keep partitions paused in this test so that we can verify the commits based on specific seeks
+        consumer0.pause(partitions)
+      }
+
+      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) = {}
+    }
+
+    consumer0.subscribe(List(topic).asJava, rebalanceListener)
+
+    val assignment = Set(tp, tp2)
+    TestUtils.waitUntilTrue(() => {
+      consumer0.poll(50)
+      consumer0.assignment() == assignment.asJava
+    }, s"Expected partitions ${assignment.asJava} but actually got ${consumer0.assignment()}")
+
+    consumer0.seek(tp, 300)
+    consumer0.seek(tp2, 500)
+
+    // change subscription to trigger rebalance
+    consumer0.subscribe(List(topic, topic2).asJava, rebalanceListener)
+
+    val newAssignment = Set(tp, tp2, new TopicPartition(topic2, 0), new TopicPartition(topic2, 1))
+    TestUtils.waitUntilTrue(() => {
+      consumer0.poll(50)
+      consumer0.assignment() == newAssignment.asJava
+    }, s"Expected partitions ${newAssignment.asJava} but actually got ${consumer0.assignment()}")
+
+    // after rebalancing, we should have reset to the committed positions
+    assertEquals(300, consumer0.committed(tp).offset)
+    assertEquals(500, consumer0.committed(tp2).offset)
   }
 
   def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {
@@ -887,7 +1287,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    * Subscribes consumer 'consumer' to a given list of topics 'topicsToSubscribe', creates
    * consumer poller and starts polling.
    * Assumes that the consumer is not subscribed to any topics yet
-   * @param consumer consumer
+    *
+    * @param consumer consumer
    * @param topicsToSubscribe topics that this consumer will subscribe to
    * @return consumer poller for the given consumer
    */
@@ -901,34 +1302,25 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   /**
    * Creates consumer pollers corresponding to a given consumer group, one per consumer; subscribes consumers to
-   * 'topicsToSubscribe' topics, waits until consumers get topics assignment, and validates the assignment
-   * Currently, assignment validation requires that total number of partitions is greater or equal to
-   * number of consumers (i.e. subscriptions.size >= consumerGroup.size)
-   * Assumes that topics are already created with partitions corresponding to a given set of topic partitions ('subscriptions')
+   * 'topicsToSubscribe' topics, waits until consumers get topics assignment.
    *
    * When the function returns, consumer pollers will continue to poll until shutdown is called on every poller.
    *
    * @param consumerGroup consumer group
    * @param topicsToSubscribe topics to which consumers will subscribe to
-   * @param subscriptions set of all topic partitions
    * @return collection of consumer pollers
    */
-  def subscribeConsumersAndWaitForAssignment(consumerGroup: Buffer[KafkaConsumer[Array[Byte], Array[Byte]]],
-                                             topicsToSubscribe: List[String],
-                                             subscriptions: Set[TopicPartition]): Buffer[ConsumerAssignmentPoller] = {
+  def subscribeConsumers(consumerGroup: Buffer[KafkaConsumer[Array[Byte], Array[Byte]]],
+                         topicsToSubscribe: List[String]): Buffer[ConsumerAssignmentPoller] = {
     val consumerPollers = Buffer[ConsumerAssignmentPoller]()
     for (consumer <- consumerGroup)
       consumerPollers += subscribeConsumerAndStartPolling(consumer, topicsToSubscribe)
-    validateGroupAssignment(consumerPollers, subscriptions, s"Did not get valid initial assignment for partitions ${subscriptions.asJava}")
     consumerPollers
   }
 
   /**
    * Creates 'consumerCount' consumers and consumer pollers, one per consumer; subscribes consumers to
-   * 'topicsToSubscribe' topics, waits until consumers get topics assignment, and validates the assignment
-   * Currently, assignment validation requires that total number of partitions is greater or equal to
-   * number of consumers (i.e. subscriptions.size >= consumerCount)
-   * Assumes that topics are already created with partitions corresponding to a given set of topic partitions ('subscriptions')
+   * 'topicsToSubscribe' topics, waits until consumers get topics assignment.
    *
    * When the function returns, consumer pollers will continue to poll until shutdown is called on every poller.
    *
@@ -942,12 +1334,12 @@ class PlaintextConsumerTest extends BaseConsumerTest {
                                               subscriptions: Set[TopicPartition]): (Buffer[KafkaConsumer[Array[Byte], Array[Byte]]], Buffer[ConsumerAssignmentPoller]) = {
     assertTrue(consumerCount <= subscriptions.size)
     val consumerGroup = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
-    for (i <- 0 until consumerCount)
+    for (_ <- 0 until consumerCount)
       consumerGroup += new KafkaConsumer[Array[Byte], Array[Byte]](this.consumerConfig)
     consumers ++= consumerGroup
 
     // create consumer pollers, wait for assignment and validate it
-    val consumerPollers = subscribeConsumersAndWaitForAssignment(consumerGroup, topicsToSubscribe, subscriptions)
+    val consumerPollers = subscribeConsumers(consumerGroup, topicsToSubscribe)
 
     (consumerGroup, consumerPollers)
   }
@@ -971,7 +1363,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
                                                    topicsToSubscribe: List[String],
                                                    subscriptions: Set[TopicPartition]): Unit = {
     assertTrue(consumerGroup.size + numOfConsumersToAdd <= subscriptions.size)
-    for (i <- 0 until numOfConsumersToAdd) {
+    for (_ <- 0 until numOfConsumersToAdd) {
       val newConsumer = new KafkaConsumer[Array[Byte], Array[Byte]](this.consumerConfig)
       consumerGroup += newConsumer
       consumerPollers += subscribeConsumerAndStartPolling(newConsumer, topicsToSubscribe)
@@ -1022,7 +1414,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
                                                             rebalanceListener: ConsumerRebalanceListener): Unit = {
     consumer.subscribe(topicsToSubscribe.asJava, rebalanceListener)
     TestUtils.waitUntilTrue(() => {
-      val records = consumer.poll(50)
+      consumer.poll(50)
       consumer.assignment() == subscriptions.asJava
     }, s"Expected partitions ${subscriptions.asJava} but actually got ${consumer.assignment()}")
   }

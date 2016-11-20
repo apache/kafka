@@ -47,8 +47,8 @@ class FileMessageSet private[kafka](@volatile var file: File,
                                     private[log] val channel: FileChannel,
                                     private[log] val start: Int,
                                     private[log] val end: Int,
-                                    isSlice: Boolean) extends MessageSet with Logging {
-
+                                    isSlice: Boolean) extends MessageSet {
+  import FileMessageSet._
   /* the size of the message set in bytes */
   private val _size =
     if(isSlice)
@@ -117,16 +117,24 @@ class FileMessageSet private[kafka](@volatile var file: File,
     new FileMessageSet(file,
                        channel,
                        start = this.start + position,
-                       end = math.min(this.start + position + size, sizeInBytes()))
+                       end = {
+                         // Handle the integer overflow
+                         if (this.start + position + size < 0)
+                           sizeInBytes()
+                         else
+                           math.min(this.start + position + size, sizeInBytes())
+                       })
   }
 
   /**
    * Search forward for the file position of the last offset that is greater than or equal to the target offset
-   * and return its physical position. If no such offsets are found, return null.
+   * and return its physical position and the size of the message (including log overhead) at the returned offset. If
+   * no such offsets are found, return null.
+   *
    * @param targetOffset The offset to search for.
    * @param startingPosition The starting position in the file to begin searching from.
    */
-  def searchFor(targetOffset: Long, startingPosition: Int): OffsetPosition = {
+  def searchForOffsetWithSize(targetOffset: Long, startingPosition: Int): (OffsetPosition, Int) = {
     var position = startingPosition
     val buffer = ByteBuffer.allocate(MessageSet.LogOverhead)
     val size = sizeInBytes()
@@ -135,17 +143,66 @@ class FileMessageSet private[kafka](@volatile var file: File,
       channel.read(buffer, position)
       if(buffer.hasRemaining)
         throw new IllegalStateException("Failed to read complete buffer for targetOffset %d startPosition %d in %s"
-                                        .format(targetOffset, startingPosition, file.getAbsolutePath))
+          .format(targetOffset, startingPosition, file.getAbsolutePath))
       buffer.rewind()
       val offset = buffer.getLong()
-      if(offset >= targetOffset)
-        return OffsetPosition(offset, position)
       val messageSize = buffer.getInt()
-      if(messageSize < Message.MinMessageOverhead)
+      if (messageSize < Message.MinMessageOverhead)
         throw new IllegalStateException("Invalid message size: " + messageSize)
+      if (offset >= targetOffset)
+        return (OffsetPosition(offset, position), messageSize + MessageSet.LogOverhead)
       position += MessageSet.LogOverhead + messageSize
     }
     null
+  }
+
+  /**
+   * Search forward for the message whose timestamp is greater than or equals to the target timestamp.
+   *
+   * @param targetTimestamp The timestamp to search for.
+   * @param startingPosition The starting position to search.
+   * @return The timestamp and offset of the message found. None, if no message is found.
+   */
+  def searchForTimestamp(targetTimestamp: Long, startingPosition: Int): Option[TimestampOffset] = {
+    val messagesToSearch = read(startingPosition, sizeInBytes)
+    for (messageAndOffset <- messagesToSearch) {
+      val message = messageAndOffset.message
+      if (message.timestamp >= targetTimestamp) {
+        // We found a message
+        message.compressionCodec match {
+          case NoCompressionCodec =>
+            return Some(TimestampOffset(messageAndOffset.message.timestamp, messageAndOffset.offset))
+          case _ =>
+            // Iterate over the inner messages to get the exact offset.
+            for (innerMessageAndOffset <- ByteBufferMessageSet.deepIterator(messageAndOffset)) {
+              val timestamp = innerMessageAndOffset.message.timestamp
+              if (timestamp >= targetTimestamp)
+                return Some(TimestampOffset(innerMessageAndOffset.message.timestamp, innerMessageAndOffset.offset))
+            }
+            throw new IllegalStateException(s"The message set (max timestamp = ${message.timestamp}, max offset = ${messageAndOffset.offset}" +
+                s" should contain target timestamp $targetTimestamp but it does not.")
+        }
+      }
+    }
+    None
+  }
+
+  /**
+   * Return the largest timestamp of the messages after a given position in this file message set.
+   * @param startingPosition The starting position.
+   * @return The largest timestamp of the messages after the given position.
+   */
+  def largestTimestampAfter(startingPosition: Int): TimestampOffset = {
+    var maxTimestamp = Message.NoTimestamp
+    var offsetOfMaxTimestamp = -1L
+    val messagesToSearch = read(startingPosition, Int.MaxValue)
+    for (messageAndOffset <- messagesToSearch) {
+      if (messageAndOffset.message.timestamp > maxTimestamp) {
+        maxTimestamp = messageAndOffset.message.timestamp
+        offsetOfMaxTimestamp = messageAndOffset.offset
+      }
+    }
+    TimestampOffset(maxTimestamp, offsetOfMaxTimestamp)
   }
 
   /**
@@ -239,7 +296,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
   /**
    * Get a shallow iterator over the messages in the set.
    */
-  override def iterator = iterator(Int.MaxValue)
+  override def iterator: Iterator[MessageAndOffset] = iterator(Int.MaxValue)
 
   /**
    * Get an iterator over the messages in the set. We only do shallow iteration here.
@@ -294,7 +351,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
    * Append these messages to the message set
    */
   def append(messages: ByteBufferMessageSet) {
-    val written = messages.writeTo(channel, 0, messages.sizeInBytes)
+    val written = messages.writeFullyTo(channel)
     _size.getAndAdd(written)
   }
 
@@ -373,8 +430,11 @@ class FileMessageSet private[kafka](@volatile var file: File,
 
 }
 
-object FileMessageSet
+object FileMessageSet extends Logging
 {
+  //preserve the previous logger name after moving logger aspect from FileMessageSet to companion
+  override val loggerName = classOf[FileMessageSet].getName
+
   /**
    * Open a channel for the given file
    * For windows NTFS and some old LINUX file system, set preallocate to true and initFileSize

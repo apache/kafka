@@ -37,6 +37,7 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.SinkUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -149,26 +150,39 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     protected void iteration() {
-        long now = time.milliseconds();
+        try {
+            long now = time.milliseconds();
 
-        // Maybe commit
-        if (!committing && now >= nextCommit) {
-            commitOffsets(now, false);
-            nextCommit += workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
+            // Maybe commit
+            if (!committing && now >= nextCommit) {
+                commitOffsets(now, false);
+                nextCommit += workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
+            }
+
+            // Check for timed out commits
+            long commitTimeout = commitStarted + workerConfig.getLong(
+                    WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
+            if (committing && now >= commitTimeout) {
+                log.warn("Commit of {} offsets timed out", this);
+                commitFailures++;
+                committing = false;
+            }
+
+            // And process messages
+            long timeoutMs = Math.max(nextCommit - now, 0);
+            poll(timeoutMs);
+        } catch (WakeupException we) {
+            log.trace("{} consumer woken up", id);
+
+            if (isStopping())
+                return;
+
+            if (shouldPause()) {
+                pauseAll();
+            } else if (!pausedForRedelivery) {
+                resumeAll();
+            }
         }
-
-        // Check for timed out commits
-        long commitTimeout = commitStarted + workerConfig.getLong(
-                WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
-        if (committing && now >= commitTimeout) {
-            log.warn("Commit of {} offsets timed out", this);
-            commitFailures++;
-            committing = false;
-        }
-
-        // And process messages
-        long timeoutMs = Math.max(nextCommit - now, 0);
-        poll(timeoutMs);
     }
 
     private void onCommitCompleted(Throwable error, long seqno) {
@@ -197,7 +211,7 @@ class WorkerSinkTask extends WorkerTask {
      * Initializes and starts the SinkTask.
      */
     protected void initializeAndStart() {
-        log.debug("Initializing task {} with config {}", id, taskConfig);
+        log.debug("Initializing task {} ", id);
         String topicsStr = taskConfig.get(SinkTask.TOPICS_CONFIG);
         if (topicsStr == null || topicsStr.isEmpty())
             throw new ConnectException("Sink tasks require a list of topics.");
@@ -211,33 +225,20 @@ class WorkerSinkTask extends WorkerTask {
 
     /** Poll for new messages with the given timeout. Should only be invoked by the worker thread. */
     protected void poll(long timeoutMs) {
-        try {
-            rewind();
-            long retryTimeout = context.timeout();
-            if (retryTimeout > 0) {
-                timeoutMs = Math.min(timeoutMs, retryTimeout);
-                context.timeout(-1L);
-            }
-
-            log.trace("{} polling consumer with timeout {} ms", id, timeoutMs);
-            ConsumerRecords<byte[], byte[]> msgs = pollConsumer(timeoutMs);
-            assert messageBatch.isEmpty() || msgs.isEmpty();
-            log.trace("{} polling returned {} messages", id, msgs.count());
-
-            convertMessages(msgs);
-            deliverMessages();
-        } catch (WakeupException we) {
-            log.trace("{} consumer woken up", id);
-
-            if (isStopping())
-                return;
-
-            if (shouldPause()) {
-                pauseAll();
-            } else if (!pausedForRedelivery) {
-                resumeAll();
-            }
+        rewind();
+        long retryTimeout = context.timeout();
+        if (retryTimeout > 0) {
+            timeoutMs = Math.min(timeoutMs, retryTimeout);
+            context.timeout(-1L);
         }
+
+        log.trace("{} polling consumer with timeout {} ms", id, timeoutMs);
+        ConsumerRecords<byte[], byte[]> msgs = pollConsumer(timeoutMs);
+        assert messageBatch.isEmpty() || msgs.isEmpty();
+        log.trace("{} polling returned {} messages", id, msgs.count());
+
+        convertMessages(msgs);
+        deliverMessages();
     }
 
     private void doCommitSync(Map<TopicPartition, OffsetAndMetadata> offsets, int seqno) {
@@ -331,7 +332,7 @@ class WorkerSinkTask extends WorkerTask {
         // and through to the task
         Map<String, Object> props = new HashMap<>();
 
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, "connect-" + id.connector());
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, SinkUtils.consumerGroupId(id.connector()));
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
                 Utils.join(workerConfig.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
@@ -412,22 +413,22 @@ class WorkerSinkTask extends WorkerTask {
         if (offsets.isEmpty()) {
             return;
         }
-        for (TopicPartition tp: offsets.keySet()) {
-            Long offset = offsets.get(tp);
+        for (Map.Entry<TopicPartition, Long> entry: offsets.entrySet()) {
+            TopicPartition tp = entry.getKey();
+            Long offset = entry.getValue();
             if (offset != null) {
                 log.trace("Rewind {} to offset {}.", tp, offset);
                 consumer.seek(tp, offset);
                 lastCommittedOffsets.put(tp, new OffsetAndMetadata(offset));
                 currentOffsets.put(tp, new OffsetAndMetadata(offset));
+            } else {
+                log.warn("Cannot rewind {} to null offset.", tp);
             }
         }
         context.clearOffsets();
     }
 
     private void openPartitions(Collection<TopicPartition> partitions) {
-        if (partitions.isEmpty())
-            return;
-
         task.open(partitions);
     }
 
@@ -465,6 +466,8 @@ class WorkerSinkTask extends WorkerTask {
             if (rebalanceException == null || rebalanceException instanceof WakeupException) {
                 try {
                     openPartitions(partitions);
+                    // Rewind should be applied only if openPartitions succeeds.
+                    rewind();
                 } catch (RuntimeException e) {
                     // The consumer swallows exceptions raised in the rebalance listener, so we need to store
                     // exceptions and rethrow when poll() returns.

@@ -60,6 +60,9 @@ public class Protocol {
                                                                           ArrayOf.nullable(STRING),
                                                                           "An array of topics to fetch metadata for. If the topics array is null fetch metadata for all topics."));
 
+    /* The v2 metadata request is the same as v1. An additional field for cluster id has been added to the v2 metadata response */
+    public static final Schema METADATA_REQUEST_V2 = METADATA_REQUEST_V1;
+
     public static final Schema METADATA_BROKER_V0 = new Schema(new Field("node_id", INT32, "The broker id."),
                                                    new Field("host", STRING, "The hostname of the broker."),
                                                    new Field("port", INT32,
@@ -116,8 +119,17 @@ public class Protocol {
                                                                      "The broker id of the controller broker."),
                                                                  new Field("topic_metadata", new ArrayOf(TOPIC_METADATA_V1)));
 
-    public static final Schema[] METADATA_REQUEST = new Schema[] {METADATA_REQUEST_V0, METADATA_REQUEST_V1};
-    public static final Schema[] METADATA_RESPONSE = new Schema[] {METADATA_RESPONSE_V0, METADATA_RESPONSE_V1};
+    public static final Schema METADATA_RESPONSE_V2 = new Schema(new Field("brokers", new ArrayOf(METADATA_BROKER_V1),
+                                                                    "Host and port information for all brokers."),
+                                                                 new Field("cluster_id", NULLABLE_STRING,
+                                                                     "The cluster id that this broker belongs to."),
+                                                                 new Field("controller_id", INT32,
+                                                                     "The broker id of the controller broker."),
+                                                                 new Field("topic_metadata", new ArrayOf(TOPIC_METADATA_V1)));
+
+
+    public static final Schema[] METADATA_REQUEST = new Schema[] {METADATA_REQUEST_V0, METADATA_REQUEST_V1, METADATA_REQUEST_V2};
+    public static final Schema[] METADATA_RESPONSE = new Schema[] {METADATA_RESPONSE_V0, METADATA_RESPONSE_V1, METADATA_RESPONSE_V2};
 
     /* Produce api */
 
@@ -127,7 +139,7 @@ public class Protocol {
 
     public static final Schema PRODUCE_REQUEST_V0 = new Schema(new Field("acks",
                                                                    INT16,
-                                                                   "The number of nodes that should replicate the produce before returning. -1 indicates the full ISR."),
+                                                                   "The number of acknowledgments the producer requires the leader to have received before considering a request complete. Allowed values: 0 for no acknowledgments, 1 for only the leader and -1 for the full ISR."),
                                                                new Field("timeout", INT32, "The time to await a response in ms."),
                                                                new Field("topic_data", new ArrayOf(TOPIC_PRODUCE_DATA_V0)));
 
@@ -363,6 +375,12 @@ public class Protocol {
                                                                              new Field("max_num_offsets",
                                                                                        INT32,
                                                                                        "Maximum offsets to return."));
+    public static final Schema LIST_OFFSET_REQUEST_PARTITION_V1 = new Schema(new Field("partition",
+                                                                                       INT32,
+                                                                                       "Topic partition id."),
+                                                                             new Field("timestamp",
+                                                                                       INT64,
+                                                                                       "The target timestamp for the partition."));
 
     public static final Schema LIST_OFFSET_REQUEST_TOPIC_V0 = new Schema(new Field("topic",
                                                                                    STRING,
@@ -370,12 +388,24 @@ public class Protocol {
                                                                          new Field("partitions",
                                                                                    new ArrayOf(LIST_OFFSET_REQUEST_PARTITION_V0),
                                                                                    "Partitions to list offset."));
+    public static final Schema LIST_OFFSET_REQUEST_TOPIC_V1 = new Schema(new Field("topic",
+                                                                                   STRING,
+                                                                                   "Topic to list offset."),
+                                                                         new Field("partitions",
+                                                                                   new ArrayOf(LIST_OFFSET_REQUEST_PARTITION_V1),
+                                                                                   "Partitions to list offset."));
 
     public static final Schema LIST_OFFSET_REQUEST_V0 = new Schema(new Field("replica_id",
                                                                              INT32,
                                                                              "Broker id of the follower. For normal consumers, use -1."),
                                                                    new Field("topics",
                                                                              new ArrayOf(LIST_OFFSET_REQUEST_TOPIC_V0),
+                                                                             "Topics to list offsets."));
+    public static final Schema LIST_OFFSET_REQUEST_V1 = new Schema(new Field("replica_id",
+                                                                             INT32,
+                                                                             "Broker id of the follower. For normal consumers, use -1."),
+                                                                   new Field("topics",
+                                                                             new ArrayOf(LIST_OFFSET_REQUEST_TOPIC_V1),
                                                                              "Topics to list offsets."));
 
     public static final Schema LIST_OFFSET_RESPONSE_PARTITION_V0 = new Schema(new Field("partition",
@@ -386,15 +416,33 @@ public class Protocol {
                                                                                         new ArrayOf(INT64),
                                                                                         "A list of offsets."));
 
+    public static final Schema LIST_OFFSET_RESPONSE_PARTITION_V1 = new Schema(new Field("partition",
+                                                                                        INT32,
+                                                                                        "Topic partition id."),
+                                                                              new Field("error_code", INT16),
+                                                                              new Field("timestamp",
+                                                                                        INT64,
+                                                                                        "The timestamp associated with the returned offset"),
+                                                                              new Field("offset",
+                                                                                        INT64,
+                                                                                        "offset found"));
+
     public static final Schema LIST_OFFSET_RESPONSE_TOPIC_V0 = new Schema(new Field("topic", STRING),
                                                                           new Field("partition_responses",
                                                                                     new ArrayOf(LIST_OFFSET_RESPONSE_PARTITION_V0)));
 
+    public static final Schema LIST_OFFSET_RESPONSE_TOPIC_V1 = new Schema(new Field("topic", STRING),
+                                                                          new Field("partition_responses",
+                                                                                    new ArrayOf(LIST_OFFSET_RESPONSE_PARTITION_V1)));
+
     public static final Schema LIST_OFFSET_RESPONSE_V0 = new Schema(new Field("responses",
                                                                               new ArrayOf(LIST_OFFSET_RESPONSE_TOPIC_V0)));
 
-    public static final Schema[] LIST_OFFSET_REQUEST = new Schema[] {LIST_OFFSET_REQUEST_V0};
-    public static final Schema[] LIST_OFFSET_RESPONSE = new Schema[] {LIST_OFFSET_RESPONSE_V0};
+    public static final Schema LIST_OFFSET_RESPONSE_V1 = new Schema(new Field("responses",
+                                                                              new ArrayOf(LIST_OFFSET_RESPONSE_TOPIC_V1)));
+
+    public static final Schema[] LIST_OFFSET_REQUEST = new Schema[] {LIST_OFFSET_REQUEST_V0, LIST_OFFSET_REQUEST_V1};
+    public static final Schema[] LIST_OFFSET_RESPONSE = new Schema[] {LIST_OFFSET_RESPONSE_V0, LIST_OFFSET_RESPONSE_V1};
 
     /* Fetch api */
     public static final Schema FETCH_REQUEST_PARTITION_V0 = new Schema(new Field("partition",
@@ -432,6 +480,26 @@ public class Protocol {
     // Only the version number is incremented to indicate the client support message format V1 which uses
     // relative offset and has timestamp.
     public static final Schema FETCH_REQUEST_V2 = FETCH_REQUEST_V1;
+    // FETCH_REQUEST_V3 added top level max_bytes field - the total size of partition data to accumulate in response.
+    // The partition ordering is now relevant - partitions will be processed in order they appear in request.
+    public static final Schema FETCH_REQUEST_V3 = new Schema(new Field("replica_id",
+                                                                       INT32,
+                                                                       "Broker id of the follower. For normal consumers, use -1."),
+                                                             new Field("max_wait_time",
+                                                                       INT32,
+                                                                       "Maximum time in ms to wait for the response."),
+                                                             new Field("min_bytes",
+                                                                       INT32,
+                                                                       "Minimum bytes to accumulate in the response."),
+                                                             new Field("max_bytes",
+                                                                       INT32,
+                                                                       "Maximum bytes to accumulate in the response. Note that this is not an absolute maximum, " +
+                                                                       "if the first message in the first non-empty partition of the fetch is larger than this " +
+                                                                       "value, the message will still be returned to ensure that progress can be made."),
+                                                             new Field("topics",
+                                                                       new ArrayOf(FETCH_REQUEST_TOPIC_V0),
+                                                                       "Topics to fetch in the order provided."));
+
     public static final Schema FETCH_RESPONSE_PARTITION_V0 = new Schema(new Field("partition",
                                                                                   INT32,
                                                                                   "Topic partition id."),
@@ -458,9 +526,10 @@ public class Protocol {
     // record set only includes messages of v0 (magic byte 0). In v2, record set can include messages of v0 and v1
     // (magic byte 0 and 1). For details, see ByteBufferMessageSet.
     public static final Schema FETCH_RESPONSE_V2 = FETCH_RESPONSE_V1;
+    public static final Schema FETCH_RESPONSE_V3 = FETCH_RESPONSE_V2;
 
-    public static final Schema[] FETCH_REQUEST = new Schema[] {FETCH_REQUEST_V0, FETCH_REQUEST_V1, FETCH_REQUEST_V2};
-    public static final Schema[] FETCH_RESPONSE = new Schema[] {FETCH_RESPONSE_V0, FETCH_RESPONSE_V1, FETCH_RESPONSE_V2};
+    public static final Schema[] FETCH_REQUEST = new Schema[] {FETCH_REQUEST_V0, FETCH_REQUEST_V1, FETCH_REQUEST_V2, FETCH_REQUEST_V3};
+    public static final Schema[] FETCH_RESPONSE = new Schema[] {FETCH_RESPONSE_V0, FETCH_RESPONSE_V1, FETCH_RESPONSE_V2, FETCH_RESPONSE_V3};
 
     /* List groups api */
     public static final Schema LIST_GROUPS_REQUEST_V0 = new Schema();
@@ -572,9 +641,28 @@ public class Protocol {
                                                                             new ArrayOf(JOIN_GROUP_REQUEST_PROTOCOL_V0),
                                                                             "List of protocols that the member supports"));
 
+    public static final Schema JOIN_GROUP_REQUEST_V1 = new Schema(new Field("group_id",
+                                                                            STRING,
+                                                                            "The group id."),
+                                                                  new Field("session_timeout",
+                                                                            INT32,
+                                                                            "The coordinator considers the consumer dead if it receives no heartbeat after this timeout in ms."),
+                                                                  new Field("rebalance_timeout",
+                                                                            INT32,
+                                                                            "The maximum time that the coordinator will wait for each member to rejoin when rebalancing the group"),
+                                                                  new Field("member_id",
+                                                                            STRING,
+                                                                            "The assigned consumer id or an empty string for a new consumer."),
+                                                                  new Field("protocol_type",
+                                                                            STRING,
+                                                                            "Unique name for class of protocols implemented by group"),
+                                                                  new Field("group_protocols",
+                                                                            new ArrayOf(JOIN_GROUP_REQUEST_PROTOCOL_V0),
+                                                                            "List of protocols that the member supports"));
 
     public static final Schema JOIN_GROUP_RESPONSE_MEMBER_V0 = new Schema(new Field("member_id", STRING),
                                                                           new Field("member_metadata", BYTES));
+
     public static final Schema JOIN_GROUP_RESPONSE_V0 = new Schema(new Field("error_code", INT16),
                                                                    new Field("generation_id",
                                                                              INT32,
@@ -591,8 +679,10 @@ public class Protocol {
                                                                    new Field("members",
                                                                              new ArrayOf(JOIN_GROUP_RESPONSE_MEMBER_V0)));
 
-    public static final Schema[] JOIN_GROUP_REQUEST = new Schema[] {JOIN_GROUP_REQUEST_V0};
-    public static final Schema[] JOIN_GROUP_RESPONSE = new Schema[] {JOIN_GROUP_RESPONSE_V0};
+    public static final Schema JOIN_GROUP_RESPONSE_V1 = JOIN_GROUP_RESPONSE_V0;
+
+    public static final Schema[] JOIN_GROUP_REQUEST = new Schema[] {JOIN_GROUP_REQUEST_V0, JOIN_GROUP_REQUEST_V1};
+    public static final Schema[] JOIN_GROUP_RESPONSE = new Schema[] {JOIN_GROUP_RESPONSE_V0, JOIN_GROUP_RESPONSE_V1};
 
     /* SyncGroup api */
     public static final Schema SYNC_GROUP_REQUEST_MEMBER_V0 = new Schema(new Field("member_id", STRING),
@@ -770,6 +860,67 @@ public class Protocol {
     public static final Schema[] API_VERSIONS_REQUEST = new Schema[]{API_VERSIONS_REQUEST_V0};
     public static final Schema[] API_VERSIONS_RESPONSE = new Schema[]{API_VERSIONS_RESPONSE_V0};
 
+    /* Admin requests common */
+    public static final Schema CONFIG_ENTRY = new Schema(new Field("config_key", STRING, "Configuration key name"),
+        new Field("config_value", STRING, "Configuration value"));
+
+    public static final Schema PARTITION_REPLICA_ASSIGNMENT_ENTRY = new Schema(
+        new Field("partition_id", INT32),
+        new Field("replicas", new ArrayOf(INT32), "The set of all nodes that should host this partition. The first replica in the list is the preferred leader."));
+
+    public static final Schema TOPIC_ERROR_CODE = new Schema(new Field("topic", STRING), new Field("error_code", INT16));
+
+    /* CreateTopic api */
+    public static final Schema SINGLE_CREATE_TOPIC_REQUEST_V0 = new Schema(
+        new Field("topic",
+            STRING,
+            "Name for newly created topic."),
+        new Field("num_partitions",
+            INT32,
+            "Number of partitions to be created. -1 indicates unset."),
+        new Field("replication_factor",
+            INT16,
+            "Replication factor for the topic. -1 indicates unset."),
+        new Field("replica_assignment",
+            new ArrayOf(PARTITION_REPLICA_ASSIGNMENT_ENTRY),
+            "Replica assignment among kafka brokers for this topic partitions. If this is set num_partitions and replication_factor must be unset."),
+        new Field("configs",
+            new ArrayOf(CONFIG_ENTRY),
+            "Topic level configuration for topic to be set."));
+
+    public static final Schema CREATE_TOPICS_REQUEST_V0 = new Schema(
+        new Field("create_topic_requests",
+            new ArrayOf(SINGLE_CREATE_TOPIC_REQUEST_V0),
+            "An array of single topic creation requests. Can not have multiple entries for the same topic."),
+        new Field("timeout",
+            INT32,
+            "The time in ms to wait for a topic to be completely created on the controller node. Values <= 0 will trigger topic creation and return immediately"));
+
+    public static final Schema CREATE_TOPICS_RESPONSE_V0 = new Schema(
+        new Field("topic_error_codes",
+            new ArrayOf(TOPIC_ERROR_CODE),
+            "An array of per topic error codes."));
+
+    public static final Schema[] CREATE_TOPICS_REQUEST = new Schema[] {CREATE_TOPICS_REQUEST_V0};
+    public static final Schema[] CREATE_TOPICS_RESPONSE = new Schema[] {CREATE_TOPICS_RESPONSE_V0};
+
+    /* DeleteTopic api */
+    public static final Schema DELETE_TOPICS_REQUEST_V0 = new Schema(
+        new Field("topics",
+            new ArrayOf(STRING),
+            "An array of topics to be deleted."),
+        new Field("timeout",
+            INT32,
+            "The time in ms to wait for a topic to be completely deleted on the controller node. Values <= 0 will trigger topic deletion and return immediately"));
+
+    public static final Schema DELETE_TOPICS_RESPONSE_V0 = new Schema(
+        new Field("topic_error_codes",
+            new ArrayOf(TOPIC_ERROR_CODE),
+            "An array of per topic error codes."));
+
+    public static final Schema[] DELETE_TOPICS_REQUEST = new Schema[] {DELETE_TOPICS_REQUEST_V0};
+    public static final Schema[] DELETE_TOPICS_RESPONSE = new Schema[] {DELETE_TOPICS_RESPONSE_V0};
+
     /* an array of all requests and responses with all schema versions; a null value in the inner array means that the
      * particular version is not supported */
     public static final Schema[][] REQUESTS = new Schema[ApiKeys.MAX_API_KEY + 1][];
@@ -799,6 +950,8 @@ public class Protocol {
         REQUESTS[ApiKeys.LIST_GROUPS.id] = LIST_GROUPS_REQUEST;
         REQUESTS[ApiKeys.SASL_HANDSHAKE.id] = SASL_HANDSHAKE_REQUEST;
         REQUESTS[ApiKeys.API_VERSIONS.id] = API_VERSIONS_REQUEST;
+        REQUESTS[ApiKeys.CREATE_TOPICS.id] = CREATE_TOPICS_REQUEST;
+        REQUESTS[ApiKeys.DELETE_TOPICS.id] = DELETE_TOPICS_REQUEST;
 
         RESPONSES[ApiKeys.PRODUCE.id] = PRODUCE_RESPONSE;
         RESPONSES[ApiKeys.FETCH.id] = FETCH_RESPONSE;
@@ -819,6 +972,8 @@ public class Protocol {
         RESPONSES[ApiKeys.LIST_GROUPS.id] = LIST_GROUPS_RESPONSE;
         RESPONSES[ApiKeys.SASL_HANDSHAKE.id] = SASL_HANDSHAKE_RESPONSE;
         RESPONSES[ApiKeys.API_VERSIONS.id] = API_VERSIONS_RESPONSE;
+        RESPONSES[ApiKeys.CREATE_TOPICS.id] = CREATE_TOPICS_RESPONSE;
+        RESPONSES[ApiKeys.DELETE_TOPICS.id] = DELETE_TOPICS_RESPONSE;
 
         /* set the minimum and maximum version of each api */
         for (ApiKeys api : ApiKeys.values()) {

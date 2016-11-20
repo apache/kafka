@@ -19,8 +19,7 @@ package kafka.log
 
 import java.util.Properties
 
-import kafka.server.KafkaConfig
-import kafka.server.KafkaServer
+import kafka.server.{ThrottledReplicaListValidator, KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigException
 import org.junit.{Assert, Test}
@@ -61,8 +60,39 @@ class LogConfigTest {
       case LogConfig.MinCleanableDirtyRatioProp => assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2")
       case LogConfig.MinInSyncReplicasProp => assertPropertyInvalid(name, "not_a_number", "0", "-1")
       case LogConfig.MessageFormatVersionProp => assertPropertyInvalid(name, "")
-      case positiveIntProperty => assertPropertyInvalid(name, "not_a_number", "-1")
+      case _ => assertPropertyInvalid(name, "not_a_number", "-1")
     })
+  }
+
+  @Test
+  def shouldValidateThrottledReplicasConfig() {
+    assertTrue(isValid("*"))
+    assertTrue(isValid("* "))
+    assertTrue(isValid(""))
+    assertTrue(isValid(" "))
+    assertTrue(isValid("100:10"))
+    assertTrue(isValid("100:10,12:10"))
+    assertTrue(isValid("100:10,12:10,15:1"))
+    assertTrue(isValid("100:10,12:10,15:1  "))
+    assertTrue(isValid("100:0,"))
+
+    assertFalse(isValid("100"))
+    assertFalse(isValid("100:"))
+    assertFalse(isValid("100:0,10"))
+    assertFalse(isValid("100:0,10:"))
+    assertFalse(isValid("100:0,10:   "))
+    assertFalse(isValid("100 :0,10:   "))
+    assertFalse(isValid("100: 0,10:   "))
+    assertFalse(isValid("100:0,10 :   "))
+  }
+
+  private def isValid(configValue: String): Boolean = {
+    try {
+      ThrottledReplicaListValidator.ensureValidString("", configValue)
+      true
+    } catch {
+      case _: ConfigException => false
+    }
   }
 
   private def assertPropertyInvalid(name: String, values: AnyRef*) {
@@ -75,8 +105,4 @@ class LogConfigTest {
     })
   }
 
-  private def randFrom[T](choices: T*): T = {
-    import scala.util.Random
-    choices(Random.nextInt(choices.size))
-  }
 }

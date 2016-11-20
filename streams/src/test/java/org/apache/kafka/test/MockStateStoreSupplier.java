@@ -25,6 +25,8 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Map;
 
 public class MockStateStoreSupplier implements StateStoreSupplier {
     private final String name;
@@ -53,6 +55,16 @@ public class MockStateStoreSupplier implements StateStoreSupplier {
         } else {
             return new MockStateStore(name, persistent);
         }
+    }
+
+    @Override
+    public Map<String, String> logConfig() {
+        return Collections.emptyMap();
+    }
+
+    @Override
+    public boolean loggingEnabled() {
+        return loggingEnabled;
     }
 
     public static class MockStateStore implements StateStore {
@@ -99,6 +111,11 @@ public class MockStateStoreSupplier implements StateStoreSupplier {
         @Override
         public boolean persistent() {
             return persistent;
+        }
+
+        @Override
+        public boolean isOpen() {
+            return !closed;
         }
 
         public final StateRestoreCallback stateRestoreCallback = new StateRestoreCallback() {

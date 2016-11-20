@@ -91,7 +91,7 @@ class ZkNodeChangeNotificationListener(private val zkUtils: ZkUtils,
           val changeId = changeNumber(notification)
           if (changeId > lastExecutedChange) {
             val changeZnode = seqNodeRoot + "/" + notification
-            val (data, stat) = zkUtils.readDataMaybeNull(changeZnode)
+            val (data, _) = zkUtils.readDataMaybeNull(changeZnode)
             data.map(notificationHandler.processNotification(_)).getOrElse {
               logger.warn(s"read null data from $changeZnode when processing notification $notification")
             }

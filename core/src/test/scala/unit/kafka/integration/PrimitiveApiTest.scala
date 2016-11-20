@@ -60,7 +60,7 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness {
   @Test
   def testEmptyFetchRequest() {
     val partitionRequests = immutable.Map[TopicAndPartition, PartitionFetchInfo]()
-    val request = new FetchRequest(requestInfo = partitionRequests)
+    val request = new FetchRequest(requestInfo = partitionRequests.toVector)
     val fetched = consumer.fetch(request)
     assertTrue(!fetched.hasError && fetched.data.isEmpty)
   }
@@ -149,26 +149,26 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness {
       try {
         val request = builder.build()
         val response = consumer.fetch(request)
-        response.data.values.foreach(pdata => ErrorMapping.maybeThrowException(pdata.error))
+        response.data.foreach(pdata => ErrorMapping.maybeThrowException(pdata._2.error))
         fail("Expected exception when fetching message with invalid offset")
       } catch {
-        case e: OffsetOutOfRangeException => // This is good.
+        case _: OffsetOutOfRangeException => // This is good.
       }
     }
 
     {
       // send some invalid partitions
       val builder = new FetchRequestBuilder()
-      for((topic, partition) <- topics)
+      for((topic, _) <- topics)
         builder.addFetch(topic, -1, 0, 10000)
 
       try {
         val request = builder.build()
         val response = consumer.fetch(request)
-        response.data.values.foreach(pdata => ErrorMapping.maybeThrowException(pdata.error))
+        response.data.foreach(pdata => ErrorMapping.maybeThrowException(pdata._2.error))
         fail("Expected exception when fetching message with invalid partition")
       } catch {
-        case e: UnknownTopicOrPartitionException => // This is good.
+        case _: UnknownTopicOrPartitionException => // This is good.
       }
     }
 

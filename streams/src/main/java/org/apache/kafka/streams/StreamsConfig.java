@@ -27,6 +27,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ConsumerRecordTimestampExtractor;
 import org.apache.kafka.streams.processor.DefaultPartitionGrouper;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor;
@@ -46,6 +47,12 @@ import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 public class StreamsConfig extends AbstractConfig {
 
     private static final ConfigDef CONFIG;
+
+    // Prefix used to isolate consumer configs from producer configs.
+    public static final String CONSUMER_PREFIX = "consumer.";
+
+    // Prefix used to isolate producer configs from consumer configs.
+    public static final String PRODUCER_PREFIX = "producer.";
 
     /** <code>state.dir</code> */
     public static final String STATE_DIR_CONFIG = "state.dir";
@@ -103,6 +110,10 @@ public class StreamsConfig extends AbstractConfig {
     public static final String VALUE_SERDE_CLASS_CONFIG = "value.serde";
     public static final String VALUE_SERDE_CLASS_DOC = "Serializer / deserializer class for value that implements the <code>Serde</code> interface.";
 
+    /**<code>user.endpoint</code> */
+    public static final String APPLICATION_SERVER_CONFIG = "application.server";
+    public static final String APPLICATION_SERVER_DOC = "A host:port pair pointing to an embedded user defined endpoint that can be used for discovering the locations of state stores within a single KafkaStreams application";
+
     /** <code>metrics.sample.window.ms</code> */
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
 
@@ -117,6 +128,18 @@ public class StreamsConfig extends AbstractConfig {
 
     /** <code>client.id</code> */
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
+
+    /** <code>rocksdb.config.setter</code> */
+    public static final String ROCKSDB_CONFIG_SETTER_CLASS_CONFIG = "rocksdb.config.setter";
+    public static final String ROCKSDB_CONFIG_SETTER_CLASS_DOC = "A Rocks DB config setter class that implements the <code>RocksDBConfigSetter</code> interface";
+
+    /** <code>windowstore.changelog.additional.retention.ms</code> */
+    public static final String WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG = "windowstore.changelog.additional.retention.ms";
+    public static final String WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC = "Added to a windows maintainMs to ensure data is not deleted from the log prematurely. Allows for clock drift. Default is 1 day";
+
+    /** <code>cache.max.bytes.buffering</code> */
+    public static final String CACHE_MAX_BYTES_BUFFERING_CONFIG = "cache.max.bytes.buffering";
+    public static final String CACHE_MAX_BYTES_BUFFERING_DOC = "Maximum number of memory bytes to be used for buffering across all threads";
 
     static {
         CONFIG = new ConfigDef().define(APPLICATION_ID_CONFIG,      // required with no default value
@@ -213,7 +236,28 @@ public class StreamsConfig extends AbstractConfig {
                                         2,
                                         atLeast(1),
                                         Importance.LOW,
-                                        CommonClientConfigs.METRICS_NUM_SAMPLES_DOC);
+                                        CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
+                                .define(APPLICATION_SERVER_CONFIG,
+                                        Type.STRING,
+                                        "",
+                                        Importance.LOW,
+                                        APPLICATION_SERVER_DOC)
+                                .define(ROCKSDB_CONFIG_SETTER_CLASS_CONFIG,
+                                        Type.CLASS,
+                                        null,
+                                        Importance.LOW,
+                                        ROCKSDB_CONFIG_SETTER_CLASS_DOC)
+                                .define(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG,
+                                        Type.LONG,
+                                        24 * 60 * 60 * 1000,
+                                        Importance.MEDIUM,
+                                        WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC)
+                                .define(CACHE_MAX_BYTES_BUFFERING_CONFIG,
+                                        Type.LONG,
+                                        10 * 1024 * 1024L,
+                                        atLeast(0),
+                                        Importance.LOW,
+                                        CACHE_MAX_BYTES_BUFFERING_DOC);
     }
 
     // this is the list of configs for underlying clients
@@ -242,101 +286,171 @@ public class StreamsConfig extends AbstractConfig {
         public static final String STREAM_THREAD_INSTANCE = "__stream.thread.instance__";
     }
 
+    /**
+     * Prefix a property with {@link StreamsConfig#CONSUMER_PREFIX}. This is used to isolate consumer configs
+     * from producer configs
+     * @param consumerProp
+     * @return CONSUMER_PREFIX + consumerProp
+     */
+    public static String consumerPrefix(final String consumerProp) {
+        return CONSUMER_PREFIX + consumerProp;
+    }
+
+    /**
+     * Prefix a property with {@link StreamsConfig#PRODUCER_PREFIX}. This is used to isolate producer configs
+     * from consumer configs
+     * @param producerProp
+     * @return PRODUCER_PREFIX + consumerProp
+     */
+    public static String producerPrefix(final String producerProp) {
+        return PRODUCER_PREFIX + producerProp;
+    }
+
     public StreamsConfig(Map<?, ?> props) {
         super(CONFIG, props);
     }
 
+    /**
+     * Get the configs specific to the Consumer. Properties using the prefix {@link StreamsConfig#CONSUMER_PREFIX}
+     * will be used in favor over their non-prefixed versions except in the case of {@link ConsumerConfig#BOOTSTRAP_SERVERS_CONFIG}
+     * where we always use the non-prefixed version as we only support reading/writing from/to the same Kafka Cluster
+     * @param streamThread   the {@link StreamThread} creating a consumer
+     * @param groupId        consumer groupId
+     * @param clientId       clientId
+     * @return  Map of the Consumer configuration.
+     * @throws ConfigException
+     */
     public Map<String, Object> getConsumerConfigs(StreamThread streamThread, String groupId, String clientId) throws ConfigException {
-        Map<String, Object> originals = this.originals();
+
+        final Map<String, Object> consumerProps = new HashMap<>(CONSUMER_DEFAULT_OVERRIDES);
+
+        final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(CONSUMER_PREFIX, ConsumerConfig.configNames());
 
         // disable auto commit and throw exception if there is user overridden values,
         // this is necessary for streams commit semantics
-        if (originals.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
+        if (clientProvidedProps.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
             throw new ConfigException("Unexpected user-specified consumer config " + ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG
                     + ", as the streams client will always turn off auto committing.");
         }
 
-        // generate consumer configs from original properties and overridden maps
-        Map<String, Object> props = clientProps(ConsumerConfig.configNames(), originals, CONSUMER_DEFAULT_OVERRIDES);
+        consumerProps.putAll(clientProvidedProps);
 
+        // bootstrap.servers should be from StreamsConfig
+        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, this.originals().get(BOOTSTRAP_SERVERS_CONFIG));
         // add client id with stream client id prefix, and group id
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-consumer");
+        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        consumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-consumer");
 
         // add configs required for stream partition assignor
-        props.put(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE, streamThread);
-        props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, getInt(REPLICATION_FACTOR_CONFIG));
-        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, getInt(NUM_STANDBY_REPLICAS_CONFIG));
-        props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamPartitionAssignor.class.getName());
-        if (!getString(ZOOKEEPER_CONNECT_CONFIG).equals(""))
-            props.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, getString(ZOOKEEPER_CONNECT_CONFIG));
+        consumerProps.put(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE, streamThread);
+        consumerProps.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, getInt(REPLICATION_FACTOR_CONFIG));
+        consumerProps.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, getInt(NUM_STANDBY_REPLICAS_CONFIG));
+        consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamPartitionAssignor.class.getName());
+        consumerProps.put(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, getLong(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG));
+        if (!getString(ZOOKEEPER_CONNECT_CONFIG).equals("")) {
+            consumerProps.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, getString(ZOOKEEPER_CONNECT_CONFIG));
+        }
 
-        return props;
+        consumerProps.put(APPLICATION_SERVER_CONFIG, getString(APPLICATION_SERVER_CONFIG));
+        return consumerProps;
     }
 
+
+    /**
+     * Get the consumer config for the restore-consumer. Properties using the prefix {@link StreamsConfig#CONSUMER_PREFIX}
+     * will be used in favor over their non-prefixed versions except in the case of {@link ConsumerConfig#BOOTSTRAP_SERVERS_CONFIG}
+     * where we always use the non-prefixed version as we only support reading/writing from/to the same Kafka Cluster
+     * @param clientId  clientId
+     * @return  Map of the Consumer configuration
+     * @throws ConfigException
+     */
     public Map<String, Object> getRestoreConsumerConfigs(String clientId) throws ConfigException {
-        Map<String, Object> originals = this.originals();
+        Map<String, Object> consumerProps = new HashMap<>(CONSUMER_DEFAULT_OVERRIDES);
+
+        final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(CONSUMER_PREFIX, ConsumerConfig.configNames());
 
         // disable auto commit and throw exception if there is user overridden values,
         // this is necessary for streams commit semantics
-        if (originals.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
+        if (clientProvidedProps.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
             throw new ConfigException("Unexpected user-specified consumer config " + ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG
                     + ", as the streams client will always turn off auto committing.");
         }
 
-        // generate consumer configs from original properties and overridden maps
-        Map<String, Object> props = clientProps(ConsumerConfig.configNames(), originals, CONSUMER_DEFAULT_OVERRIDES);
+        consumerProps.putAll(clientProvidedProps);
+
+        // bootstrap.servers should be from StreamsConfig
+        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, this.originals().get(BOOTSTRAP_SERVERS_CONFIG));
 
         // no need to set group id for a restore consumer
-        props.remove(ConsumerConfig.GROUP_ID_CONFIG);
+        consumerProps.remove(ConsumerConfig.GROUP_ID_CONFIG);
 
         // add client id with stream client id prefix
-        props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-restore-consumer");
+        consumerProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-restore-consumer");
 
-        return props;
+        return consumerProps;
     }
 
+
+    /**
+     * Get the configs for the Producer. Properties using the prefix {@link StreamsConfig#PRODUCER_PREFIX}
+     * will be used in favor over their non-prefixed versions except in the case of {@link ProducerConfig#BOOTSTRAP_SERVERS_CONFIG}
+     * where we always use the non-prefixed version as we only support reading/writing from/to the same Kafka Cluster
+     * @param clientId  clientId
+     * @return  Map of the Consumer configuration
+     * @throws ConfigException
+     */
     public Map<String, Object> getProducerConfigs(String clientId) {
         // generate producer configs from original properties and overridden maps
-        Map<String, Object> props = clientProps(ProducerConfig.configNames(), this.originals(), PRODUCER_DEFAULT_OVERRIDES);
+        final Map<String, Object> props = new HashMap<>(PRODUCER_DEFAULT_OVERRIDES);
+        props.putAll(getClientPropsWithPrefix(PRODUCER_PREFIX, ProducerConfig.configNames()));
 
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, this.originals().get(BOOTSTRAP_SERVERS_CONFIG));
         // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-producer");
 
         return props;
     }
 
-    public Serde keySerde() {
-        Serde<?> serde = getConfiguredInstance(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serde.class);
-        serde.configure(originals(), true);
+    private Map<String, Object> getClientPropsWithPrefix(final String prefix, final Set<String> configNames) {
+        final Map<String, Object> props = clientProps(configNames, originals());
+        props.putAll(this.originalsWithPrefix(prefix));
+        return props;
+    }
 
-        return serde;
+    public Serde keySerde() {
+        try {
+            Serde<?> serde = getConfiguredInstance(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serde.class);
+            serde.configure(originals(), true);
+            return serde;
+        } catch (Exception e) {
+            throw new StreamsException(String.format("Failed to configure key serde %s", get(StreamsConfig.KEY_SERDE_CLASS_CONFIG)), e);
+        }
     }
 
     public Serde valueSerde() {
-        Serde<?> serde = getConfiguredInstance(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serde.class);
-        serde.configure(originals(), false);
-
-        return serde;
+        try {
+            Serde<?> serde = getConfiguredInstance(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serde.class);
+            serde.configure(originals(), false);
+            return serde;
+        } catch (Exception e) {
+            throw new StreamsException(String.format("Failed to configure value serde %s", get(StreamsConfig.VALUE_SERDE_CLASS_CONFIG)), e);
+        }
     }
 
     /**
-     * Filter configs that are not defined in the given set of configuration names.
+     * Override any client properties in the original configs with overrides
      *
      * @param configNames The given set of configuration names.
      * @param originals The original configs to be filtered.
-     * @param overrides The default overridden values.
-     * @return Filtered configs.
+     * @return client config with any overrides
      */
-    private Map<String, Object> clientProps(Set<String> configNames, Map<String, Object> originals, Map<String, Object> overrides) {
+    private Map<String, Object> clientProps(Set<String> configNames, Map<String, Object> originals) {
         // iterate all client config names, filter out non-client configs from the original
         // property map and use the overridden values when they are not specified by users
         Map<String, Object> parsed = new HashMap<>();
         for (String configName: configNames) {
             if (originals.containsKey(configName)) {
                 parsed.put(configName, originals.get(configName));
-            } else if (overrides.containsKey(configName)) {
-                parsed.put(configName, overrides.get(configName));
             }
         }
 

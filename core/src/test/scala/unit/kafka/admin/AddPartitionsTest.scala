@@ -69,8 +69,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
       AdminUtils.addPartitions(zkUtils, "Blah", 1)
       fail("Topic should not exist")
     } catch {
-      case e: AdminOperationException => //this is good
-      case e2: Throwable => throw e2
+      case _: AdminOperationException => //this is good
     }
   }
 
@@ -80,8 +79,7 @@ class AddPartitionsTest extends ZooKeeperTestHarness {
       AdminUtils.addPartitions(zkUtils, topic1, 2, "0:1,0:1:2")
       fail("Add partitions should fail")
     } catch {
-      case e: AdminOperationException => //this is good
-      case e2: Throwable => throw e2
+      case _: AdminOperationException => //this is good
     }
   }
 

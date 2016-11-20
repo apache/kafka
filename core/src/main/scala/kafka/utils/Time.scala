@@ -17,6 +17,8 @@
 
 package kafka.utils
 
+import java.util.concurrent.TimeUnit
+
 /**
  * Some common constants
  */
@@ -38,11 +40,13 @@ object Time {
 /**
  * A mockable interface for time functions
  */
-trait Time {
+trait Time extends org.apache.kafka.common.utils.Time {
   
   def milliseconds: Long
 
   def nanoseconds: Long
+
+  def hiResClockMs: Long = TimeUnit.NANOSECONDS.toMillis(nanoseconds)
 
   def sleep(ms: Long)
 }

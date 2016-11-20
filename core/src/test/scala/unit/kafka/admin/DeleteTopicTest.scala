@@ -20,11 +20,13 @@ import kafka.log.Log
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils
 import kafka.utils.ZkUtils._
-import kafka.server.{KafkaServer, KafkaConfig}
+import kafka.server.{KafkaConfig, KafkaServer}
 import org.junit.Assert._
 import org.junit.Test
 import java.util.Properties
+
 import kafka.common.{TopicAlreadyMarkedForDeletionException, TopicAndPartition}
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 
 class DeleteTopicTest extends ZooKeeperTestHarness {
 
@@ -122,7 +124,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     // wait until reassignment is completed
     TestUtils.waitUntilTrue(() => {
       val partitionsBeingReassigned = zkUtils.getPartitionsBeingReassigned().mapValues(_.newReplicas)
-      ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(zkUtils, topicAndPartition, newReplicas,
+      ReassignPartitionsCommand.checkIfPartitionReassignmentSucceeded(zkUtils, topicAndPartition,
         Map(topicAndPartition -> newReplicas), partitionsBeingReassigned) == ReassignmentFailed
     }, "Partition reassignment shouldn't complete.")
     val controllerId = zkUtils.getController()
@@ -162,7 +164,6 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
   @Test
   def testAddPartitionDuringDeleteTopic() {
     val topic = "test"
-    val topicAndPartition = TopicAndPartition(topic, 0)
     val servers = createTestTopicAndCluster(topic)
     // start topic deletion
     AdminUtils.deleteTopic(zkUtils, topic)
@@ -202,7 +203,12 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     val topic = topicAndPartition.topic
     val servers = createTestTopicAndCluster(topic)
     // start topic deletion
-    AdminUtils.deleteTopic(zkUtils, "test2")
+    try {
+      AdminUtils.deleteTopic(zkUtils, "test2")
+      fail("Expected UnknownTopicOrPartitionException")
+    } catch {
+      case _: UnknownTopicOrPartitionException => // expected exception
+    }
     // verify delete topic path for test2 is removed from zookeeper
     TestUtils.verifyTopicDeletion(zkUtils, "test2", 1, servers)
     // verify that topic test is untouched
@@ -263,17 +269,17 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
       fail("Expected TopicAlreadyMarkedForDeletionException")
     }
     catch {
-      case e: TopicAlreadyMarkedForDeletionException => // expected exception
+      case _: TopicAlreadyMarkedForDeletionException => // expected exception
     }
 
     TestUtils.verifyTopicDeletion(zkUtils, topic, 1, servers)
     servers.foreach(_.shutdown())
   }
 
-  private def createTestTopicAndCluster(topic: String): Seq[KafkaServer] = {
+  private def createTestTopicAndCluster(topic: String, deleteTopicEnabled: Boolean = true): Seq[KafkaServer] = {
 
     val brokerConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false)
-    brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", "true")
+    brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", deleteTopicEnabled.toString)
     )
     createTestTopicAndCluster(topic,brokerConfigs)
   }
@@ -293,11 +299,30 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
 
   private def writeDups(numKeys: Int, numDups: Int, log: Log): Seq[(Int, Int)] = {
     var counter = 0
-    for(dup <- 0 until numDups; key <- 0 until numKeys) yield {
+    for (_ <- 0 until numDups; key <- 0 until numKeys) yield {
       val count = counter
       log.append(TestUtils.singleMessageSet(payload = counter.toString.getBytes, key = key.toString.getBytes), assignOffsets = true)
       counter += 1
       (key, count)
     }
+  }
+
+  @Test
+  def testDisableDeleteTopic() {
+    val topicAndPartition = TopicAndPartition("test", 0)
+    val topic = topicAndPartition.topic
+    val servers = createTestTopicAndCluster(topic, deleteTopicEnabled = false)
+    // mark the topic for deletion
+    AdminUtils.deleteTopic(zkUtils, "test")
+    TestUtils.waitUntilTrue(() => !zkUtils.pathExists(getDeleteTopicPath(topic)),
+      "Admin path /admin/delete_topic/%s path not deleted even if deleteTopic is disabled".format(topic))
+    // verify that topic test is untouched
+    assertTrue(servers.forall(_.getLogManager().getLog(topicAndPartition).isDefined))
+    // test the topic path exists
+    assertTrue("Topic path disappeared", zkUtils.pathExists(getTopicPath(topic)))
+    // topic test should have a leader
+    val leaderIdOpt = zkUtils.getLeaderForPartition(topic, 0)
+    assertTrue("Leader should exist for topic test", leaderIdOpt.isDefined)
+    servers.foreach(_.shutdown())
   }
 }

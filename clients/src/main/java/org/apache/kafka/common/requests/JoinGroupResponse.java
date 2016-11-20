@@ -24,7 +24,8 @@ import java.util.List;
 import java.util.Map;
 
 public class JoinGroupResponse extends AbstractRequestResponse {
-    
+
+    private static final short CURRENT_VERSION = ProtoUtils.latestVersion(ApiKeys.JOIN_GROUP.id);
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.JOIN_GROUP.id);
     private static final String ERROR_CODE_KEY_NAME = "error_code";
 
@@ -65,7 +66,17 @@ public class JoinGroupResponse extends AbstractRequestResponse {
                              String memberId,
                              String leaderId,
                              Map<String, ByteBuffer> groupMembers) {
-        super(new Struct(CURRENT_SCHEMA));
+        this(CURRENT_VERSION, errorCode, generationId, groupProtocol, memberId, leaderId, groupMembers);
+    }
+
+    public JoinGroupResponse(int version,
+                             short errorCode,
+                             int generationId,
+                             String groupProtocol,
+                             String memberId,
+                             String leaderId,
+                             Map<String, ByteBuffer> groupMembers) {
+        super(new Struct(ProtoUtils.responseSchema(ApiKeys.JOIN_GROUP.id, version)));
 
         struct.set(ERROR_CODE_KEY_NAME, errorCode);
         struct.set(GENERATION_ID_KEY_NAME, generationId);

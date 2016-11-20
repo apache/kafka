@@ -20,15 +20,14 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-
+import org.apache.kafka.streams.state.internals.ThreadCache;
 import java.io.File;
 import java.util.Map;
 
-public class StandbyContextImpl implements ProcessorContext, RecordCollector.Supplier {
+public class StandbyContextImpl implements InternalProcessorContext, RecordCollector.Supplier {
 
     private final TaskId id;
     private final String applicationId;
@@ -38,6 +37,7 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
     private final StreamsConfig config;
     private final Serde<?> keySerde;
     private final Serde<?> valSerde;
+    private final ThreadCache zeroSizedCache = new ThreadCache(0);
 
     private boolean initialized;
 
@@ -120,6 +120,11 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
         throw new UnsupportedOperationException("this should not happen: getStateStore() not supported in standby tasks.");
     }
 
+    @Override
+    public ThreadCache getCache() {
+        return zeroSizedCache;
+    }
+
     /**
      * @throws UnsupportedOperationException
      */
@@ -200,5 +205,26 @@ public class StandbyContextImpl implements ProcessorContext, RecordCollector.Sup
     @Override
     public Map<String, Object> appConfigsWithPrefix(String prefix) {
         return config.originalsWithPrefix(prefix);
+    }
+
+    @Override
+    public RecordContext recordContext() {
+        throw new UnsupportedOperationException("this should not happen: recordContext not supported in standby tasks.");
+    }
+
+    @Override
+    public void setRecordContext(final RecordContext recordContext) {
+        throw new UnsupportedOperationException("this should not happen: setRecordContext not supported in standby tasks.");
+    }
+
+
+    @Override
+    public void setCurrentNode(final ProcessorNode currentNode) {
+        // no-op. can't throw as this is called on commit when the StateStores get flushed.
+    }
+
+    @Override
+    public ProcessorNode currentNode() {
+        throw new UnsupportedOperationException("this should not happen: currentNode not supported in standby tasks.");
     }
 }

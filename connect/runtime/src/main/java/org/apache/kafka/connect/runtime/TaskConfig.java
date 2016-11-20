@@ -49,6 +49,6 @@ public class TaskConfig extends AbstractConfig {
     }
 
     public TaskConfig(Map<String, ?> props) {
-        super(config, props);
+        super(config, props, true);
     }
 }

@@ -55,7 +55,7 @@ class ApiVersionsRequestTest extends BaseRequestTest {
   }
 
   private def sendApiVersionsRequest(request: ApiVersionsRequest, version: Short): ApiVersionsResponse = {
-    val response = send(request, ApiKeys.API_VERSIONS, version)
+    val response = send(request, ApiKeys.API_VERSIONS, Some(version))
     ApiVersionsResponse.parse(response)
   }
 }

@@ -18,62 +18,105 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
-import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.test.KStreamTestDriver;
-import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockAggregator;
+import org.apache.kafka.test.MockInitializer;
+import org.apache.kafka.test.MockKeyValueMapper;
+import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 
 
 public class KGroupedTableImplTest {
 
-    private File stateDir;
+    private KGroupedTable<String, String> groupedTable;
 
     @Before
-    public void setUp() throws IOException {
-        stateDir = TestUtils.tempDirectory("kafka-test");
+    public void before() {
+        final KStreamBuilder builder = new KStreamBuilder();
+        groupedTable = builder.table(Serdes.String(), Serdes.String(), "blah", "blah")
+                .groupBy(MockKeyValueMapper.<String, String>SelectValueKeyValueMapper());
     }
 
-    @SuppressWarnings("unchecked")
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullStoreNameOnAggregate() throws Exception {
+        groupedTable.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, MockAggregator.STRING_REMOVER, null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullInitializerOnAggregate() throws Exception {
+        groupedTable.aggregate(null, MockAggregator.STRING_ADDER, MockAggregator.STRING_REMOVER, "store");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullAdderOnAggregate() throws Exception {
+        groupedTable.aggregate(MockInitializer.STRING_INIT, null, MockAggregator.STRING_REMOVER, "store");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullSubtractorOnAggregate() throws Exception {
+        groupedTable.aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, null, "store");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullAdderOnReduce() throws Exception {
+        groupedTable.reduce(null, MockReducer.STRING_REMOVER, "store");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullSubtractorOnReduce() throws Exception {
+        groupedTable.reduce(MockReducer.STRING_ADDER, null, "store");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullStoreNameOnReduce() throws Exception {
+        groupedTable.reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, null);
+    }
+
     @Test
-    public void testGroupedCountOccurences() throws IOException {
+    public void shouldReduce() throws Exception {
         final KStreamBuilder builder = new KStreamBuilder();
-        final String input = "count-test-input";
-        final MockProcessorSupplier processorSupplier = new MockProcessorSupplier<>();
+        final String topic = "input";
+        final KTable<String, Integer> reduced = builder.table(Serdes.String(), Serdes.Integer(), topic, "store")
+                .groupBy(MockKeyValueMapper.<String, Integer>NoOpKeyValueMapper())
+                .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR, "reduced");
 
-        builder.table(Serdes.String(), Serdes.String(), input)
-                .groupBy(new KeyValueMapper<String, String, KeyValue<String, String>>() {
-                    @Override
-                    public KeyValue<String, String> apply(final String key, final String value) {
-                        return new KeyValue<>(value, value);
-                    }
-                }, Serdes.String(), Serdes.String())
-                .count("count")
-                .toStream()
-                .process(processorSupplier);
-
-
-        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir);
+        final Map<String, Integer> results = new HashMap<>();
+        reduced.foreach(new ForeachAction<String, Integer>() {
+            @Override
+            public void apply(final String key, final Integer value) {
+                results.put(key, value);
+            }
+        });
 
 
-        driver.process(input, "A", "green");
-        driver.process(input, "B", "green");
-        driver.process(input, "A", "blue");
-        driver.process(input, "C", "yellow");
-        driver.process(input, "D", "green");
+        final KStreamTestDriver driver = new KStreamTestDriver(builder, TestUtils.tempDirectory(), Serdes.String(), Serdes.Integer());
+        driver.setTime(10L);
+        driver.process(topic, "A", 1);
+        driver.process(topic, "B", 2);
+        driver.flushState();
 
-        final List<String> expected = Arrays.asList("green:1", "green:2", "blue:1", "green:1", "yellow:1", "green:2");
-        final List<String> actual = processorSupplier.processed;
-        assertEquals(expected, actual);
+        assertEquals(Integer.valueOf(1), results.get("A"));
+        assertEquals(Integer.valueOf(2), results.get("B"));
+
+        driver.process(topic, "A", 2);
+        driver.process(topic, "B", 1);
+        driver.process(topic, "A", 5);
+        driver.process(topic, "B", 6);
+        driver.flushState();
+
+        assertEquals(Integer.valueOf(5), results.get("A"));
+        assertEquals(Integer.valueOf(6), results.get("B"));
+
     }
 }
