@@ -18,7 +18,7 @@ import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
-public class LeaveGroupResponse extends AbstractRequestResponse {
+public class LeaveGroupResponse extends AbstractResponse {
 
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.LEAVE_GROUP.id);
     private static final String ERROR_CODE_KEY_NAME = "error_code";

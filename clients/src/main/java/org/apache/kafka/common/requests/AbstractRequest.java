@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.network.NetworkSend;
+import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -27,10 +29,14 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
         super(struct);
     }
 
+    public Send toSend(String destination, RequestHeader header) {
+        return new NetworkSend(destination, serialize(header, this));
+    }
+
     /**
      * Get an error response for a request for a given api version
      */
-    public abstract AbstractRequestResponse getErrorResponse(int versionId, Throwable e);
+    public abstract AbstractResponse getErrorResponse(int versionId, Throwable e);
 
     /**
      * Factory method for getting a request object based on ApiKey ID and a buffer

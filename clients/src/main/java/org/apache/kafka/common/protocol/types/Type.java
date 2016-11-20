@@ -18,6 +18,9 @@ package org.apache.kafka.common.protocol.types;
 
 import java.nio.ByteBuffer;
 
+import org.apache.kafka.common.record.FileRecords;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.Utils;
 
 /**
@@ -424,5 +427,50 @@ public abstract class Type {
         }
     };
 
+    public static final Type RECORDS = new Type() {
+        @Override
+        public boolean isNullable() {
+            return true;
+        }
+
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            if (o instanceof FileRecords)
+                throw new IllegalArgumentException("FileRecords must be written to the channel directly");
+            MemoryRecords records = (MemoryRecords) o;
+            NULLABLE_BYTES.write(buffer, records.buffer().duplicate());
+        }
+
+        @Override
+        public Object read(ByteBuffer buffer) {
+            ByteBuffer recordsBuffer = (ByteBuffer) NULLABLE_BYTES.read(buffer);
+            return MemoryRecords.readableRecords(recordsBuffer);
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            if (o == null)
+                return 4;
+
+            Records records = (Records) o;
+            return 4 + records.sizeInBytes();
+        }
+
+        @Override
+        public String toString() {
+            return "RECORDS";
+        }
+
+        @Override
+        public Records validate(Object item) {
+            if (item == null)
+                return null;
+
+            if (item instanceof Records)
+                return (Records) item;
+
+            throw new SchemaException(item + " is not an instance of " + Records.class.getName());
+        }
+    };
 
 }
