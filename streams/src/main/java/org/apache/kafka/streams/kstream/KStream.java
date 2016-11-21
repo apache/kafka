@@ -66,7 +66,7 @@ public interface KStream<K, V> {
 
     /**
      * Set a new key (with possibly new type) for each input record.
-     * The provided {@link KeyValueMapper} is applies to each input record and computes a new key for it.
+     * The provided {@link KeyValueMapper} is applied to each input record and computes a new key for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V>}.
      * This is a stateless record-by-record operation.
      * <p>
@@ -98,7 +98,7 @@ public interface KStream<K, V> {
     /**
      * Transform each record of the input stream into a new record in the output stream
      * (both key and value type can be altered arbitrarily).
-     * The provided {@link KeyValueMapper} is applies to each input record and computes a new output record.
+     * The provided {@link KeyValueMapper} is applied to each input record and computes a new output record.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V'>}.
      * This is a stateless record-by-record operation.
      * <p>
@@ -130,7 +130,7 @@ public interface KStream<K, V> {
 
     /**
      * Transform the value of each input record into a new value (with possible new type) of the output record.
-     * The provided {@link ValueMapper} is applies to each input record value and computes a new value for it.
+     * The provided {@link ValueMapper} is applied to each input record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
      * This is a stateless record-by-record operation (cf. {@link #transformValues(ValueTransformerSupplier, String...)}).
      * <p>
@@ -162,7 +162,7 @@ public interface KStream<K, V> {
     /**
      * Transform each record of the input stream into zero or more records in the output stream (both key and value type
      * can be altered arbitrarily).
-     * The provided {@link KeyValueMapper} is applies to each input record and computes zero or more output records.
+     * The provided {@link KeyValueMapper} is applied to each input record and computes zero or more output records.
      * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K':V'>, <K'':V''>, ...}.
      * This is a stateless record-by-record operation (cf. {@link #transform(TransformerSupplier, String...)}).
      * <p>
@@ -184,7 +184,7 @@ public interface KStream<K, V> {
      * });
      * }</pre>
      * <p>
-     * The provided {@link KeyValueMapper} must return a {@link Iterable} (e.g., any {@link java.util.Collection} type)
+     * The provided {@link KeyValueMapper} must return an {@link Iterable} (e.g., any {@link java.util.Collection} type)
      * and the return value must not be {@code null}.
      * <p>
      * Flat-mapping records might result in an internal data redistribution if a key based operator (like an aggregation
@@ -207,7 +207,7 @@ public interface KStream<K, V> {
      * more values with the same key in the new stream.
      * Transform the value of each input record into zero or more records with the same (unmodified) key in the output
      * stream (value type can be altered arbitrarily).
-     * The provided {@link ValueMapper} is applies to each input record and computes zero or more output values.
+     * The provided {@link ValueMapper} is applied to each input record and computes zero or more output values.
      * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K:V'>, <K:V''>, ...}.
      * This is a stateless record-by-record operation.
      * <p>
@@ -221,10 +221,10 @@ public interface KStream<K, V> {
      * });
      * }</pre>
      * <p>
-     * The provided {@link ValueMapper} must return a {@link Iterable} (e.g., any {@link java.util.Collection} type)
+     * The provided {@link ValueMapper} must return an {@link Iterable} (e.g., any {@link java.util.Collection} type)
      * and the return value must not be {@code null}.
      * <p>
-     * Splitting a record into multiple with the same key preserves data co-location with respect to the key.
+     * Splitting a record into multiple records with the same key preserves data co-location with respect to the key.
      * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
      * is applied to the result {@link KStream}. (cf. {@link #flatMap(KeyValueMapper)})
      *
@@ -319,7 +319,7 @@ public interface KStream<K, V> {
      * This function will use the generated name of the parent processor node to label the key/value pairs printed out
      * to the file.
      * <p>
-     * The provided serde will be use to deserialize the key or value in case the type is {@code byte[]} before calling
+     * The provided serde will be used to deserialize the key or value in case the type is {@code byte[]} before calling
      * {@code toString()} on the deserialized object.
      * <p>
      * Implementors will need to override {@code toString()} for keys and values that are not of type {@link String},
@@ -335,7 +335,7 @@ public interface KStream<K, V> {
      * Write the elements of this stream to a file at the given path.
      * This function will use the given name to label the key/value printed out to the file.
      * <p>
-     * The provided serde will be use to deserialize the key or value in case the type is {@code byte[]}
+     * The provided serde will be used to deserialize the key or value in case the type is {@code byte[]}
      * before calling {@code toString()} on the deserialized object.
      * <p>
      * Implementors will need to override {@code toString()} for keys and values that are not of type {@link String},
@@ -523,12 +523,12 @@ public interface KStream<K, V> {
     /**
      * Transform each record of the input stream into zero or more records in the output stream (both key and value type
      * can be altered arbitrarily).
-     * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applies to each input record and
+     * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
      * computes zero or more output records.
      * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K':V'>, <K'':V''>, ...}.
      * This is a stateful record-by-record operation (cf. {@link #flatMap(KeyValueMapper)}).
      * Furthermore, via {@link Transformer#punctuate(long)} the processing progress can be observed and additional
-     * periodic actions get be performed.
+     * periodic actions can be performed.
      * <p>
      * In order to assign a state, the state must be created and registered beforehand:
      * <pre>{@code
@@ -754,7 +754,7 @@ public interface KStream<K, V> {
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      * <p>
      * All data of this stream will be redistributed through the repartitioning topic by writing all records to
-     * and reread all records from it, such that the resulting {@link KGroupedStream} is partitioned on the new key.
+     * and rereading all records from it, such that the resulting {@link KGroupedStream} is partitioned on the new key.
      * <p>
      * This operation is equivalent to calling {@link #selectKey(KeyValueMapper)} followed by {@link #groupByKey()}.
      * If the key type is changed, it is recommended to use {@link #groupBy(KeyValueMapper, Serde, Serde)} instead.
@@ -780,7 +780,7 @@ public interface KStream<K, V> {
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      * <p>
      * All data of this stream will be redistributed through the repartitioning topic by writing all records to
-     * and reread all records from it, such that the resulting {@link KGroupedStream} is partitioned on the new key.
+     * and rereading all records from it, such that the resulting {@link KGroupedStream} is partitioned on the new key.
      * <p>
      * This is equivalent to calling {@link #selectKey(KeyValueMapper)} followed by {@link #groupByKey(Serde, Serde)}.
      *
@@ -802,11 +802,11 @@ public interface KStream<K, V> {
      * and default serializers and deserializers.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
-     * If a record key is {@code null} the record will not included in the resulting {@link KGroupedStream}.
+     * If a record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
      * <p>
-     * If a key changing operator was use before this operation (e.g., {@link #selectKey(KeyValueMapper)},
+     * If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
      * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)}, or
-     * {@link #transform(TransformerSupplier, String...)}), and no data redistribution did happen afterwards (e.g., via
+     * {@link #transform(TransformerSupplier, String...)}), and no data redistribution happened afterwards (e.g., via
      * {@link #through(String)}) an internal repartitioning topic will be created in Kafka.
      * This topic will be named "${applicationId}-XXX-repartition", where "applicationID" is user-specified in
      * {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
@@ -815,7 +815,7 @@ public interface KStream<K, V> {
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      * <p>
      * For this case, all data of this stream will be redistributed through the repartitioning topic by writing all
-     * records to and reread all records from it, such that the resulting {@link KGroupedStream} is partitioned
+     * records to and rereading all records from it, such that the resulting {@link KGroupedStream} is partitioned
      * correctly on its key.
      * If the last key changing operator changed the key type, it is recommended to use
      * {@link #groupByKey(Serde, Serde)} instead.
@@ -829,11 +829,11 @@ public interface KStream<K, V> {
      * Group the records by their current key into a {@link KGroupedStream} while preserving the original values.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
-     * If a record key is {@code null} the record will not included in the resulting {@link KGroupedStream}.
+     * If a record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
      * <p>
-     * If a key changing operator was use before this operation (e.g., {@link #selectKey(KeyValueMapper)},
+     * If a key changing operator was used before this operation (e.g., {@link #selectKey(KeyValueMapper)},
      * {@link #map(KeyValueMapper)}, {@link #flatMap(KeyValueMapper)}, or
-     * {@link #transform(TransformerSupplier, String...)}), and no data redistribution did happen afterwards (e.g., via
+     * {@link #transform(TransformerSupplier, String...)}), and no data redistribution happened afterwards (e.g., via
      * {@link #through(String)}) an internal repartitioning topic will be created in Kafka.
      * This topic will be named "${applicationId}-XXX-repartition", where "applicationID" is user-specified in
      * {@link org.apache.kafka.streams.StreamsConfig StreamsConfig} via parameter
@@ -842,7 +842,7 @@ public interface KStream<K, V> {
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      * <p>
      * For this case, all data of this stream will be redistributed through the repartitioning topic by writing all
-     * records to and reread all records from it, such that the resulting {@link KGroupedStream} is partitioned
+     * records to and rereading all records from it, such that the resulting {@link KGroupedStream} is partitioned
      * correctly on its key.
      *
      * @param keySerde key serdes for materializing this stream,
@@ -904,11 +904,11 @@ public interface KStream<K, V> {
      * <p>
      * Repartitioning can happen for one or both of the joining {@link KStream}s.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
-     * records to and reread all records from it, such that the join input {@link KStream} is partitioned correctly on
-     * its key.
+     * records to and rereading all records from it, such that the join input {@link KStream} is partitioned correctly
+     * on its key.
      * <p>
      * Both of the joining {@link KStream}s will be materialized in local state stores with auto-generated store names.
-     * For failure recover each store will be backed by an internal changelog topic that will be created in Kafka.
+     * For failure and recovery each store will be backed by an internal changelog topic that will be created in Kafka.
      * The changelog topic will be named "${applicationId}-storeName-changelog", where "applicationID" is user-specified
      * in {@link org.apache.kafka.streams.StreamsConfig} via parameter
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG StreamsConfig#APPLICATION_ID_CONFIG},
@@ -979,11 +979,11 @@ public interface KStream<K, V> {
      * <p>
      * Repartitioning can happen for one or both of the joining {@link KStream}s.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
-     * records to and reread all records from it, such that the join input {@link KStream} is partitioned correctly on
-     * its key.
+     * records to and rereading all records from it, such that the join input {@link KStream} is partitioned correctly
+     * on its key.
      * <p>
      * Both of the joining {@link KStream}s will be materialized in local state stores with auto-generated store names.
-     * For failure recover each store will be backed by an internal changelog topic that will be created in Kafka.
+     * For failure and recovery each store will be backed by an internal changelog topic that will be created in Kafka.
      * The changelog topic will be named "${applicationId}-storeName-changelog", where "applicationID" is user-specified
      * in {@link org.apache.kafka.streams.StreamsConfig} via parameter
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG StreamsConfig#APPLICATION_ID_CONFIG},
@@ -1059,7 +1059,7 @@ public interface KStream<K, V> {
      * The non-deterministic processing order might also lead to unexpected (but correct) results due to eager join
      * evaluation strategy:
      * Assume that for {@code K2} record {@code <K2:B>} gets processed first.
-     * As {@code <K2:b>} is not know at this point in time, there will be an result {@code <K2:ValueJoiner(B,null)>}
+     * As {@code <K2:b>} is not know at this point in time, there will be a result {@code <K2:ValueJoiner(B,null)>}
      * first; later, when {@code <K2:b>} gets processed the expected result {@code <K2:ValueJoiner(B,b)>} will be
      * computed, too.
      * <p>
@@ -1074,11 +1074,11 @@ public interface KStream<K, V> {
      * <p>
      * Repartitioning can happen for one or both of the joining {@link KStream}s
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
-     * records to and reread all records from it, such that the join input {@link KStream} is partitioned correctly on
-     * its key.
+     * records to and rereading all records from it, such that the join input {@link KStream} is partitioned correctly
+     * on its key.
      * <p>
      * Both of the joining {@link KStream}s will be materialized in local state stores with auto-generated store names.
-     * For failure recover each store will be backed by an internal changelog topic that will be created in Kafka.
+     * For failure and recovery each store will be backed by an internal changelog topic that will be created in Kafka.
      * The changelog topic will be named "${applicationId}-storeName-changelog", where "applicationID" is user-specified
      * in {@link org.apache.kafka.streams.StreamsConfig} via parameter
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG StreamsConfig#APPLICATION_ID_CONFIG},
@@ -1145,7 +1145,7 @@ public interface KStream<K, V> {
      * The non-deterministic processing order might also lead to unexpected (but correct) results due to eager join
      * evaluation strategy:
      * Assume that for {@code K2} record {@code <K2:B>} gets processed first.
-     * As {@code <K2:b>} is not know at this point in time, there will be an result {@code <K2:ValueJoiner(B,null)>}
+     * As {@code <K2:b>} is not know at this point in time, there will be a result {@code <K2:ValueJoiner(B,null)>}
      * first; later, when {@code <K2:b>} gets processed the expected result {@code <K2:ValueJoiner(B,b)>} will be
      * computed, too.
      * <p>
@@ -1160,11 +1160,11 @@ public interface KStream<K, V> {
      * <p>
      * Repartitioning can happen for one or both of the joining {@link KStream}s
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
-     * records to and reread all records from it, such that the join input {@link KStream} is partitioned correctly on
-     * its key.
+     * records to and rereading all records from it, such that the join input {@link KStream} is partitioned correctly
+     * on its key.
      * <p>
      * Both of the joining {@link KStream}s will be materialized in local state stores with auto-generated store names.
-     * For failure recover each store will be backed by an internal changelog topic that will be created in Kafka.
+     * For failure and recovery each store will be backed by an internal changelog topic that will be created in Kafka.
      * The changelog topic will be named "${applicationId}-storeName-changelog", where "applicationID" is user-specified
      * in {@link org.apache.kafka.streams.StreamsConfig} via parameter
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG StreamsConfig#APPLICATION_ID_CONFIG},
@@ -1241,7 +1241,7 @@ public interface KStream<K, V> {
      * input streams.
      * Due to eager join evaluation strategy you will get some additional results (that might be unexpected):
      * Assume that for {@code K2} record {@code <K2:B>} gets processed first.
-     * As {@code <K2:b>} is not know at this point in time, there will be an result {@code <K2:ValueJoiner(B,null)>}
+     * As {@code <K2:b>} is not know at this point in time, there will be a result {@code <K2:ValueJoiner(B,null)>}
      * first; later, when {@code <K2:b>} gets processed the expected result {@code <K2:ValueJoiner(B,b)>} will be
      * computed, too.
      * Thus, for each matching result pair, there will be one additional non-matching result (either non-matching from
@@ -1259,11 +1259,11 @@ public interface KStream<K, V> {
      * <p>
      * Repartitioning can happen for one or both of the joining {@link KStream}s
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
-     * records to and reread all records from it, such that the join input {@link KStream} is partitioned correctly on
-     * its key.
+     * records to and rereading all records from it, such that the join input {@link KStream} is partitioned correctly
+     * on its key.
      * <p>
      * Both of the joining {@link KStream}s will be materialized in local state stores with auto-generated store names.
-     * For failure recover each store will be backed by an internal changelog topic that will be created in Kafka.
+     * For failure and recovery each store will be backed by an internal changelog topic that will be created in Kafka.
      * The changelog topic will be named "${applicationId}-storeName-changelog", where "applicationID" is user-specified
      * in {@link org.apache.kafka.streams.StreamsConfig} via parameter
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG StreamsConfig#APPLICATION_ID_CONFIG},
@@ -1330,7 +1330,7 @@ public interface KStream<K, V> {
      * input streams.
      * Due to eager join evaluation strategy you will get some additional results (that might be unexpected):
      * Assume that for {@code K2} record {@code <K2:B>} gets processed first.
-     * As {@code <K2:b>} is not know at this point in time, there will be an result {@code <K2:ValueJoiner(B,null)>}
+     * As {@code <K2:b>} is not know at this point in time, there will be a result {@code <K2:ValueJoiner(B,null)>}
      * first; later, when {@code <K2:b>} gets processed the expected result {@code <K2:ValueJoiner(B,b)>} will be
      * computed, too.
      * Thus, for each matching result pair, there will be one additional non-matching result (either non-matching from
@@ -1348,11 +1348,11 @@ public interface KStream<K, V> {
      * <p>
      * Repartitioning can happen for one or both of the joining {@link KStream}s
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
-     * records to and reread all records from it, such that the join input {@link KStream} is partitioned correctly on
-     * its key.
+     * records to and rereading all records from it, such that the join input {@link KStream} is partitioned correctly
+     * on its key.
      * <p>
      * Both of the joining {@link KStream}s will be materialized in local state stores with auto-generated store names.
-     * For failure recover each store will be backed by an internal changelog topic that will be created in Kafka.
+     * For failure and recovery each store will be backed by an internal changelog topic that will be created in Kafka.
      * The changelog topic will be named "${applicationId}-storeName-changelog", where "applicationID" is user-specified
      * in {@link org.apache.kafka.streams.StreamsConfig} via parameter
      * {@link org.apache.kafka.streams.StreamsConfig#APPLICATION_ID_CONFIG StreamsConfig#APPLICATION_ID_CONFIG},
@@ -1443,8 +1443,8 @@ public interface KStream<K, V> {
      * <p>
      * Repartitioning can happen only for this {@link KStream}s.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
-     * records to and reread all records from it, such that the join input {@link KStream} is partitioned correctly on
-     * its key.
+     * records to and rereading all records from it, such that the join input {@link KStream} is partitioned correctly
+     * on its key.
      *
      * @param table  the instance of {@link KTable} joined with this stream
      * @param joiner the instance of {@link ValueJoiner}
@@ -1514,8 +1514,8 @@ public interface KStream<K, V> {
      * <p>
      * Repartitioning can happen only for this {@link KStream}s.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
-     * records to and reread all records from it, such that the join input {@link KStream} is partitioned correctly on
-     * its key.
+     * records to and rereading all records from it, such that the join input {@link KStream} is partitioned correctly
+     * on its key.
      *
      * @param table       the instance of {@link KTable} joined with this stream
      * @param valueJoiner the instance of {@link ValueJoiner}
@@ -1596,8 +1596,8 @@ public interface KStream<K, V> {
      * <p>
      * Repartitioning can happen only for this {@link KStream}s.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
-     * records to and reread all records from it, such that the join input {@link KStream} is partitioned correctly on
-     * its key.
+     * records to and rereading all records from it, such that the join input {@link KStream} is partitioned correctly
+     * on its key.
      *
      * @param table  the instance of {@link KTable} joined with this stream
      * @param joiner the instance of {@link ValueJoiner}
@@ -1670,8 +1670,8 @@ public interface KStream<K, V> {
      * <p>
      * Repartitioning can happen only for this {@link KStream}s.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
-     * records to and reread all records from it, such that the join input {@link KStream} is partitioned correctly on
-     * its key.
+     * records to and rereading all records from it, such that the join input {@link KStream} is partitioned correctly
+     * on its key.
      *
      * @param table       the instance of {@link KTable} joined with this stream
      * @param valueJoiner the instance of {@link ValueJoiner}
