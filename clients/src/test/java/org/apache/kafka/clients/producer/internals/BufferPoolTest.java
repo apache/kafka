@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.clients.producer.BufferExhaustedException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.SystemTime;
@@ -168,7 +168,7 @@ public class BufferPoolTest {
         try {
             pool.allocate(10, maxBlockTimeMs);
             fail("The buffer allocated more memory than its maximum value 10");
-        } catch (TimeoutException e) {
+        } catch (BufferExhaustedException e) {
             // this is good
         }
         long endTimeMs = systemTime.milliseconds();
@@ -185,7 +185,7 @@ public class BufferPoolTest {
         try {
             pool.allocate(2, maxBlockTimeMs);
             fail("The buffer allocated more memory than its maximum value 2");
-        } catch (TimeoutException e) {
+        } catch (BufferExhaustedException e) {
             // this is good
         }
         assertTrue(pool.queued() == 0);
@@ -239,7 +239,7 @@ public class BufferPoolTest {
             try {
                 pool.allocate(2, maxBlockTimeMs);
                 fail("The buffer allocated more memory than its maximum value 2");
-            } catch (TimeoutException e) {
+            } catch (BufferExhaustedException e) {
                 // this is good
             } catch (InterruptedException e) {
                 // this can be neglected

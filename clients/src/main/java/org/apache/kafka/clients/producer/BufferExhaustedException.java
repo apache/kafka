@@ -16,15 +16,13 @@
  */
 package org.apache.kafka.clients.producer;
 
-import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.TimeoutException;
 
 /**
- * @deprecated This exception class is deprecated and is no longer used. It will be removed in future releases.
- * This exception is thrown if the producer is in non-blocking mode and the rate of data production exceeds the rate at
- * which data can be sent for long enough for the allocated buffer to be exhausted.
+ * This exception is thrown if the rate of data production exceeds the rate at which data can be sent
+ * for long enough for the allotted buffer to be exhausted.
  */
-@Deprecated
-public class BufferExhaustedException extends KafkaException {
+public class BufferExhaustedException extends TimeoutException {
 
     private static final long serialVersionUID = 1L;
 
