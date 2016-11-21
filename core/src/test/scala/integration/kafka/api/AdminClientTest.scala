@@ -16,15 +16,16 @@
  */
 package kafka.api
 
+import java.util.Collections
+
 import kafka.admin.AdminClient
 import kafka.server.KafkaConfig
-import kafka.utils.{TestUtils, Logging}
+import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.TopicPartition
 import org.junit.{Before, Test}
 import org.junit.Assert._
-import scala.collection.JavaConversions._
 
 class AdminClientTest extends IntegrationTestHarness with Logging {
 
@@ -63,7 +64,7 @@ class AdminClientTest extends IntegrationTestHarness with Logging {
 
   @Test
   def testListGroups() {
-    consumers.head.subscribe(List(topic))
+    consumers.head.subscribe(Collections.singletonList(topic))
     TestUtils.waitUntilTrue(() => {
       consumers.head.poll(0)
       !consumers.head.assignment.isEmpty
@@ -78,7 +79,7 @@ class AdminClientTest extends IntegrationTestHarness with Logging {
 
   @Test
   def testGetConsumerGroupSummary() {
-    consumers.head.subscribe(List(topic))
+    consumers.head.subscribe(Collections.singletonList(topic))
     TestUtils.waitUntilTrue(() => {
       consumers.head.poll(0)
       !consumers.head.assignment.isEmpty
@@ -97,7 +98,7 @@ class AdminClientTest extends IntegrationTestHarness with Logging {
 
   @Test
   def testDescribeConsumerGroup() {
-    consumers.head.subscribe(List(topic))
+    consumers.head.subscribe(Collections.singletonList(topic))
     TestUtils.waitUntilTrue(() => {
       consumers.head.poll(0)
       !consumers.head.assignment.isEmpty

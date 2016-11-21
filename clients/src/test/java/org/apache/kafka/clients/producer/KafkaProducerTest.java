@@ -28,6 +28,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockProducerInterceptor;
 import org.apache.kafka.test.MockSerializer;
+import org.apache.kafka.test.MockPartitioner;
 import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Test;
@@ -115,6 +116,27 @@ public class KafkaProducerTest {
         } finally {
             // cleanup since we are using mutable static variables in MockProducerInterceptor
             MockProducerInterceptor.resetCounters();
+        }
+    }
+
+    @Test
+    public void testPartitionerClose() throws Exception {
+        try {
+            Properties props = new Properties();
+            props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+            props.setProperty(ProducerConfig.PARTITIONER_CLASS_CONFIG, MockPartitioner.class.getName());
+
+            KafkaProducer<String, String> producer = new KafkaProducer<String, String>(
+                    props, new StringSerializer(), new StringSerializer());
+            Assert.assertEquals(1, MockPartitioner.INIT_COUNT.get());
+            Assert.assertEquals(0, MockPartitioner.CLOSE_COUNT.get());
+
+            producer.close();
+            Assert.assertEquals(1, MockPartitioner.INIT_COUNT.get());
+            Assert.assertEquals(1, MockPartitioner.CLOSE_COUNT.get());
+        } finally {
+            // cleanup since we are using mutable static variables in MockPartitioner
+            MockPartitioner.resetCounters();
         }
     }
 

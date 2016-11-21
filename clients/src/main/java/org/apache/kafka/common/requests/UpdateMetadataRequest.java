@@ -242,7 +242,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
+    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
         if (versionId <= 2)
             return new UpdateMetadataResponse(Errors.forException(e).code());
         else

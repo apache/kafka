@@ -71,49 +71,26 @@ public class KTableKTableJoinIntegrationTest {
     public static Object[] parameters() {
         return new Object[][]{
             {JoinType.INNER, JoinType.INNER, Arrays.asList(
-//                new KeyValue<>("a", null),
-//                new KeyValue<>("b", null),
-//                new KeyValue<>("c", null),
-//                new KeyValue<>("a", null),
-//                new KeyValue<>("b", null),
                 new KeyValue<>("b", "B1-B2-B3")//,
-//                new KeyValue<>("c", null)
             )},
             {JoinType.INNER, JoinType.LEFT, Arrays.asList(
-//                new KeyValue<>("a", null),
-//                new KeyValue<>("b", null),
-//                new KeyValue<>("c", null),
-//                new KeyValue<>("a", null),
-//                new KeyValue<>("b", null),
                 new KeyValue<>("b", "B1-B2-B3")//,
-//                new KeyValue<>("c", null)
             )},
             {JoinType.INNER, JoinType.OUTER, Arrays.asList(
                 new KeyValue<>("a", "null-A3"),
                 new KeyValue<>("b", "null-B3"),
                 new KeyValue<>("c", "null-C3"),
-//                new KeyValue<>("a", "null-A3"),
-//                new KeyValue<>("b", "null-B3"),
                 new KeyValue<>("b", "B1-B2-B3")//,
-//                new KeyValue<>("c", "null-C3")
             )},
             {JoinType.LEFT, JoinType.INNER, Arrays.asList(
-//                new KeyValue<>("a", null),
-//                new KeyValue<>("b", null),
-//                new KeyValue<>("c", null),
                 new KeyValue<>("a", "A1-null-A3"),
                 new KeyValue<>("b", "B1-null-B3"),
                 new KeyValue<>("b", "B1-B2-B3")//,
-//                new KeyValue<>("c", null)
             )},
             {JoinType.LEFT, JoinType.LEFT, Arrays.asList(
-//                new KeyValue<>("a", null),
-//                new KeyValue<>("b", null),
-//                new KeyValue<>("c", null),
                 new KeyValue<>("a", "A1-null-A3"),
                 new KeyValue<>("b", "B1-null-B3"),
                 new KeyValue<>("b", "B1-B2-B3")//,
-//                new KeyValue<>("c", null)
             )},
             {JoinType.LEFT, JoinType.OUTER, Arrays.asList(
                 new KeyValue<>("a", "null-A3"),
@@ -122,21 +99,14 @@ public class KTableKTableJoinIntegrationTest {
                 new KeyValue<>("a", "A1-null-A3"),
                 new KeyValue<>("b", "B1-null-B3"),
                 new KeyValue<>("b", "B1-B2-B3")//,
-//                new KeyValue<>("c", "null-C3")
             )},
             {JoinType.OUTER, JoinType.INNER, Arrays.asList(
-//                new KeyValue<>("a", null),
-//                new KeyValue<>("b", null),
-//                new KeyValue<>("c", null),
                 new KeyValue<>("a", "A1-null-A3"),
                 new KeyValue<>("b", "B1-null-B3"),
                 new KeyValue<>("b", "B1-B2-B3"),
                 new KeyValue<>("c", "null-C2-C3")
             )},
             {JoinType.OUTER, JoinType.LEFT, Arrays.asList(
-//                new KeyValue<>("a", null),
-//                new KeyValue<>("b", null),
-//                new KeyValue<>("c", null),
                 new KeyValue<>("a", "A1-null-A3"),
                 new KeyValue<>("b", "B1-null-B3"),
                 new KeyValue<>("b", "B1-B2-B3"),
@@ -154,10 +124,6 @@ public class KTableKTableJoinIntegrationTest {
         };
     }
 
-    public static Object[] data() {
-        return new Object[]{0, 10 * 1024 * 1024L};
-    }
-
     @BeforeClass
     public static void beforeTest() throws Exception {
         CLUSTER.createTopic(TABLE_1);
@@ -172,7 +138,6 @@ public class KTableKTableJoinIntegrationTest {
         streamsConfig.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
-        streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1);
         streamsConfig.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
 
         final Properties producerConfig = new Properties();
@@ -262,7 +227,6 @@ public class KTableKTableJoinIntegrationTest {
 
     @Test
     public void KTableKTableJoin() throws Exception {
-        System.out.println("join: " + joinType1 + "-" + joinType2);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, joinType1 + "-" + joinType2 + "-ktable-ktable-join");
 
         streams = prepareTopology();

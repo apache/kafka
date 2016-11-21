@@ -194,7 +194,7 @@ public class CreateTopicsRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
+    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
         Map<String, Errors> topicErrors = new HashMap<>();
         for (String topic : topics.keySet()) {
             topicErrors.put(topic, Errors.forException(e));

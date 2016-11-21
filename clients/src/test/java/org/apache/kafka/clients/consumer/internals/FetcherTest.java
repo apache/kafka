@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
@@ -37,12 +37,11 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.Compressor;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.ListOffsetRequest;
@@ -166,8 +165,8 @@ public class FetcherTest {
     private MockClient.RequestMatcher matchesOffset(final TopicPartition tp, final long offset) {
         return new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request) {
-                FetchRequest fetch = new FetchRequest(request.request().body());
+            public boolean matches(AbstractRequest body) {
+                FetchRequest fetch = (FetchRequest) body;
                 return fetch.fetchData().containsKey(tp) &&
                         fetch.fetchData().get(tp).offset == offset;
             }
@@ -542,7 +541,7 @@ public class FetcherTest {
     @Test
     public void testGetAllTopics() {
         // sending response before request, as getTopicMetadata is a blocking call
-        client.prepareResponse(newMetadataResponse(topicName, Errors.NONE).toStruct());
+        client.prepareResponse(newMetadataResponse(topicName, Errors.NONE));
 
         Map<String, List<PartitionInfo>> allTopics = fetcher.getAllTopicMetadata(5000L);
 
@@ -553,7 +552,7 @@ public class FetcherTest {
     public void testGetAllTopicsDisconnect() {
         // first try gets a disconnect, next succeeds
         client.prepareResponse(null, true);
-        client.prepareResponse(newMetadataResponse(topicName, Errors.NONE).toStruct());
+        client.prepareResponse(newMetadataResponse(topicName, Errors.NONE));
         Map<String, List<PartitionInfo>> allTopics = fetcher.getAllTopicMetadata(5000L);
         assertEquals(cluster.topics().size(), allTopics.size());
     }
@@ -566,7 +565,7 @@ public class FetcherTest {
 
     @Test
     public void testGetAllTopicsUnauthorized() {
-        client.prepareResponse(newMetadataResponse(topicName, Errors.TOPIC_AUTHORIZATION_FAILED).toStruct());
+        client.prepareResponse(newMetadataResponse(topicName, Errors.TOPIC_AUTHORIZATION_FAILED));
         try {
             fetcher.getAllTopicMetadata(10L);
             fail();
@@ -577,13 +576,13 @@ public class FetcherTest {
 
     @Test(expected = InvalidTopicException.class)
     public void testGetTopicMetadataInvalidTopic() {
-        client.prepareResponse(newMetadataResponse(topicName, Errors.INVALID_TOPIC_EXCEPTION).toStruct());
+        client.prepareResponse(newMetadataResponse(topicName, Errors.INVALID_TOPIC_EXCEPTION));
         fetcher.getTopicMetadata(new MetadataRequest(Collections.singletonList(topicName)), 5000L);
     }
 
     @Test
     public void testGetTopicMetadataUnknownTopic() {
-        client.prepareResponse(newMetadataResponse(topicName, Errors.UNKNOWN_TOPIC_OR_PARTITION).toStruct());
+        client.prepareResponse(newMetadataResponse(topicName, Errors.UNKNOWN_TOPIC_OR_PARTITION));
 
         Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(new MetadataRequest(Collections.singletonList(topicName)), 5000L);
         assertNull(topicMetadata.get(topicName));
@@ -591,8 +590,8 @@ public class FetcherTest {
 
     @Test
     public void testGetTopicMetadataLeaderNotAvailable() {
-        client.prepareResponse(newMetadataResponse(topicName, Errors.LEADER_NOT_AVAILABLE).toStruct());
-        client.prepareResponse(newMetadataResponse(topicName, Errors.NONE).toStruct());
+        client.prepareResponse(newMetadataResponse(topicName, Errors.LEADER_NOT_AVAILABLE));
+        client.prepareResponse(newMetadataResponse(topicName, Errors.NONE));
 
         Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(new MetadataRequest(Collections.singletonList(topicName)), 5000L);
         assertTrue(topicMetadata.containsKey(topicName));
@@ -705,28 +704,27 @@ public class FetcherTest {
         // matches any list offset request with the provided timestamp
         return new MockClient.RequestMatcher() {
             @Override
-            public boolean matches(ClientRequest request) {
-                ListOffsetRequest req = new ListOffsetRequest(request.request().body());
+            public boolean matches(AbstractRequest body) {
+                ListOffsetRequest req = (ListOffsetRequest) body;
                 return timestamp == req.partitionTimestamps().get(tp);
             }
         };
     }
 
-    private Struct listOffsetResponse(Errors error, long timestamp, long offset) {
+    private ListOffsetResponse listOffsetResponse(Errors error, long timestamp, long offset) {
         return listOffsetResponse(tp, error, timestamp, offset);
     }
 
-    private Struct listOffsetResponse(TopicPartition tp, Errors error, long timestamp, long offset) {
+    private ListOffsetResponse listOffsetResponse(TopicPartition tp, Errors error, long timestamp, long offset) {
         ListOffsetResponse.PartitionData partitionData = new ListOffsetResponse.PartitionData(error.code(), timestamp, offset);
         Map<TopicPartition, ListOffsetResponse.PartitionData> allPartitionData = new HashMap<>();
         allPartitionData.put(tp, partitionData);
-        ListOffsetResponse response = new ListOffsetResponse(allPartitionData, 1);
-        return response.toStruct();
+        return new ListOffsetResponse(allPartitionData, 1);
     }
 
-    private Struct fetchResponse(ByteBuffer buffer, short error, long hw, int throttleTime) {
-        FetchResponse response = new FetchResponse(Collections.singletonMap(tp, new FetchResponse.PartitionData(error, hw, buffer)), throttleTime);
-        return response.toStruct();
+    private FetchResponse fetchResponse(ByteBuffer buffer, short error, long hw, int throttleTime) {
+        MemoryRecords records = MemoryRecords.readableRecords(buffer);
+        return new FetchResponse(Collections.singletonMap(tp, new FetchResponse.PartitionData(error, hw, records)), throttleTime);
     }
 
     private MetadataResponse newMetadataResponse(String topic, Errors error) {

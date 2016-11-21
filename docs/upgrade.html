@@ -53,6 +53,43 @@ only support 0.10.1.x or later brokers while 0.10.1.x brokers also support older
     <li> Due to the increased number of index files, on some brokers with large amount the log segments (e.g. >15K), the log loading process during the broker startup could be longer. Based on our experiment, setting the num.recovery.threads.per.data.dir to one may reduce the log loading time. </li>
 </ul>
 
+<h5><a id="upgrade_1010_streams" href="#upgrade_1010_streams">Streams API changes in 0.10.1.0</a></h5>
+<ul>
+    <li> Stream grouping and aggregation split into two methods:
+        <ul>
+            <li> old: KStream #aggregateByKey(), #reduceByKey(), and #countByKey() </li>
+            <li> new: KStream#groupByKey() plus KGroupedStream #aggregate(), #reduce(), and #count() </li>
+            <li> Example: stream.countByKey() changes to stream.groupByKey().count() </li>
+        </ul>
+    </li>
+    <li> Auto Repartitioning:
+        <ul>
+            <li> a call to through() after a key-changing operator and before an aggregation/join is no longer required </li>
+            <li> Example: stream.selectKey(...).through(...).countByKey() changes to stream.selectKey().groupByKey().count() </li>
+        </ul>
+    </li>
+    <li> TopologyBuilder:
+        <ul>
+            <li> methods #sourceTopics(String applicationId) and #topicGroups(String applicationId) got simplified to #sourceTopics() and #topicGroups() </li>
+        </ul>
+    </li>
+    <li> DSL: new parameter to specify state store names:
+        <ul>
+            <li> The new Interactive Queries feature requires to specify a store name for all source KTables and window aggregation result KTables (previous parameter "operator/window name" is now the storeName) </li>
+            <li> KStreamBuilder#table(String topic) changes to #topic(String topic, String storeName) </li>
+            <li> KTable#through(String topic) changes to #through(String topic, String storeName) </li>
+            <li> KGroupedStream #aggregate(), #reduce(), and #count() require additional parameter "String storeName"</li>
+            <li> Example: stream.countByKey(TimeWindows.of("windowName", 1000)) changes to stream.groupByKey().count(TimeWindows.of(1000), "countStoreName") </li>
+        </ul>
+    </li>
+    <li> Windowing:
+        <ul>
+            <li> Windows are not named anymore: TimeWindows.of("name", 1000) changes to TimeWindows.of(1000) (cf. DSL: new parameter to specify state store names) </li>
+            <li> JoinWindows has no default size anymore: JoinWindows.of("name").within(1000) changes to JoinWindows.of(1000) </li>
+        </ul>
+    </li>
+</ul>
+
 <h5><a id="upgrade_1010_notable" href="#upgrade_1010_notable">Notable changes in 0.10.1.0</a></h5>
 <ul>
     <li> The new Java consumer is no longer in beta and we recommend it for all new development. The old Scala consumers are still supported, but they will be deprecated in the next release

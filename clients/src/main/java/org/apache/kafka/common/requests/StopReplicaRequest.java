@@ -84,7 +84,7 @@ public class StopReplicaRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
+    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
         Map<TopicPartition, Short> responses = new HashMap<>(partitions.size());
         for (TopicPartition partition : partitions) {
             responses.put(partition, Errors.forException(e).code());
