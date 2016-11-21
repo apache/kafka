@@ -21,7 +21,7 @@ import com.yammer.metrics.Metrics
 import kafka.cluster.BrokerEndPoint
 import kafka.message.{ByteBufferMessageSet, Message, NoCompressionCodec}
 import kafka.server.AbstractFetcherThread.{FetchRequest, PartitionData}
-import kafka.utils.TestUtils
+import kafka.utils.{DelayedItem, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.Utils
@@ -197,6 +197,9 @@ class AbstractFetcherThreadTest {
       }
       new DummyFetchRequest(requestMap)
     }
+
+    override def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]) = delayPartitions(partitions, fetchBackOffMs.toLong)
+
   }
 
   class CorruptedPartitionData extends DummyPartitionData {

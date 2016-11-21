@@ -167,8 +167,7 @@ abstract class AbstractFetcherThread(name: String,
                       logger.error("Found invalid messages during fetch for partition [" + topic + "," + partitionId + "] offset " + currentPartitionFetchState.offset  + " error " + ime.getMessage)
 
                       // Update partitionStates with fetchBackOff delay if there is an exception during processPartitionData
-                      partitionStates.updateAndMoveToEnd(topicPartition,
-                        new PartitionFetchState(currentPartitionFetchState.offset, new DelayedItem(fetchBackOffMs)))
+                      updatePartitionsWithError(topicPartition);
                     case e: Throwable =>
                       throw new KafkaException("error processing data for partition [%s,%d] offset %d"
                         .format(topic, partitionId, currentPartitionFetchState.offset), e)
