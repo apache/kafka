@@ -213,8 +213,8 @@ import java.util.regex.Pattern;
  * <h4>Manual Offset Control</h4>
  *
  * Instead of relying on the consumer to periodically commit consumed offsets, users can also control when records
- * should be considered as consumed and hence commit their offsets. This is useful when the consumption of the
- * are coupled with some processing logic and hence a message should not be considered as consumed until it is completed processing.
+ * should be considered as consumed and hence commit their offsets. This is useful when the consumption of the messages
+ * is coupled with some processing logic and hence a message should not be considered as consumed until it is completed processing.
 
  * <p>
  * <pre>
