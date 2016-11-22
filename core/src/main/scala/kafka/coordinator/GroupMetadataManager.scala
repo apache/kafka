@@ -685,8 +685,9 @@ class GroupMetadataManager(val brokerId: Int,
   /**
    * Check if the replica is local and return the message format version and timestamp
    *
-   * @param partition Partition of GroupMetadataTopic
-   * @return Option[(MessageFormatVersion, TimeStamp)]
+   * @param partition   Partition of GroupMetadataTopic
+   *
+   * @return            Option[(MessageFormatVersion, TimeStamp)] if replica is local, None otherwise
    */
   private def getMessageFormatVersionAndTimestamp(partition: Int): Option[(Byte, Long)] = {
     val groupMetadataTopicAndPartition = new TopicAndPartition(Topic.GroupMetadataTopicName, partition)
