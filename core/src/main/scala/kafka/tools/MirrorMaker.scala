@@ -40,7 +40,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.record.Record
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.util.control.ControlThrowable
 import org.apache.kafka.clients.consumer.{ConsumerConfig => NewConsumerConfig}
@@ -431,7 +431,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
               val data = mirrorMakerConsumer.receive()
               trace("Sending message with value size %d and offset %d".format(data.value.length, data.offset))
               val records = messageHandler.handle(data)
-              records.foreach(producer.send)
+              records.asScala.foreach(producer.send)
               maybeFlushAndCommitOffsets()
             }
           } catch {
@@ -607,7 +607,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
 
     override def commit() {
-      consumer.commitSync(offsets.map { case (tp, offset) =>  (tp, new OffsetAndMetadata(offset, ""))})
+      consumer.commitSync(offsets.map { case (tp, offset) =>  (tp, new OffsetAndMetadata(offset, ""))}.asJava)
       offsets.clear()
     }
   }
