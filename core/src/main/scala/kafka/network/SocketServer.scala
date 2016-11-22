@@ -313,6 +313,10 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
       info("Awaiting socket connections on %s:%d.".format(socketAddress.getHostString, serverChannel.socket.getLocalPort))
     } catch {
       case e: SocketException =>
+        for (processor <- processors) {
+          // shutdown each processor
+          processor.tryShutdown()
+        }
         throw new KafkaException("Socket server failed to bind to %s:%d: %s.".format(socketAddress.getHostString, port, e.getMessage), e)
     }
     serverChannel
@@ -580,6 +584,12 @@ private[kafka] class Processor(val id: Int,
    */
   @Override
   def wakeup = selector.wakeup()
+
+  /**
+    * Shutdown this processor thread
+    */
+  /* shutdownComplete cannot be invoked from with Acceptor */
+  private[network] def tryShutdown(): Unit = shutdownComplete()
 
 }
 
