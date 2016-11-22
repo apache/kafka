@@ -27,7 +27,9 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -199,7 +201,37 @@ public class StreamsConfigTest {
         assertEquals(1, configs.get(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG));
     }
 
+    @Test
+    public void shouldBeNullWhenRocksDbTtlConfigNotSet() {
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        assertEquals(null, streamsConfig.getInt(StreamsConfig.ROCKSDB_TTL_SEC_CONFIG));
+    }
 
+    @Test
+    public void shouldSetRocksDbTtlConfig() {
+        props.put(StreamsConfig.ROCKSDB_TTL_SEC_CONFIG, 60);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        assertEquals(Integer.valueOf(60), streamsConfig.getInt(StreamsConfig.ROCKSDB_TTL_SEC_CONFIG));
+    }
+
+    @Rule
+    public ExpectedException thrown = ExpectedException.none();
+
+    @Test
+    public void shouldThrowConfigExceptionWhenRocksDbTtlConfigValueIsLessThanOne() {
+        thrown.expect(ConfigException.class);
+        thrown.expectMessage(String.format("Invalid value 0 for configuration %s: Value must be at least 1", StreamsConfig.ROCKSDB_TTL_SEC_CONFIG));
+        props.put(StreamsConfig.ROCKSDB_TTL_SEC_CONFIG, 0);
+        new StreamsConfig(props);
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionWhenRocksDbTtlConfigValueIsUnsupported() {
+        thrown.expect(ConfigException.class);
+        thrown.expectMessage(String.format("Invalid value unsupported for configuration %s: Not a number of type INT", StreamsConfig.ROCKSDB_TTL_SEC_CONFIG));
+        props.put(StreamsConfig.ROCKSDB_TTL_SEC_CONFIG, "unsupported");
+        new StreamsConfig(props);
+    }
 
     @Test(expected = StreamsException.class)
     public void shouldThrowStreamsExceptionIfKeySerdeConfigFails() throws Exception {

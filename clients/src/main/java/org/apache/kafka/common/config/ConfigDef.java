@@ -770,10 +770,15 @@ public class ConfigDef {
     public static class Range implements Validator {
         private final Number min;
         private final Number max;
+        private final boolean allowNulls;
 
         private Range(Number min, Number max) {
+            this(min, max, false);
+        }
+        private Range(Number min, Number max, boolean allowNulls) {
             this.min = min;
             this.max = max;
+            this.allowNulls = allowNulls;
         }
 
         /**
@@ -786,6 +791,15 @@ public class ConfigDef {
         }
 
         /**
+         * A numeric range that checks only the lower bound, but allows null values.
+         *
+         * @param min The minimum acceptable value
+         */
+        public static Range atLeastOrNull(Number min) {
+            return new Range(min, null, true);
+        }
+
+        /**
          * A numeric range that checks both the upper and lower bound
          */
         public static Range between(Number min, Number max) {
@@ -793,8 +807,10 @@ public class ConfigDef {
         }
 
         public void ensureValid(String name, Object o) {
-            if (o == null)
+            if (o == null && !allowNulls)
                 throw new ConfigException(name, o, "Value must be non-null");
+            if (o == null && allowNulls)
+                return;
             Number n = (Number) o;
             if (min != null && n.doubleValue() < min.doubleValue())
                 throw new ConfigException(name, o, "Value must be at least " + min);
@@ -804,11 +820,11 @@ public class ConfigDef {
 
         public String toString() {
             if (min == null)
-                return "[...," + max + "]";
+                return "range=[...," + max + "], allowNulls=" + allowNulls;
             else if (max == null)
-                return "[" + min + ",...]";
+                return "range=[" + min + ",...], allowNulls=" + allowNulls;
             else
-                return "[" + min + ",...," + max + "]";
+                return "range=[" + min + ",...," + max + "], allowNulls=" + allowNulls;
         }
     }
 

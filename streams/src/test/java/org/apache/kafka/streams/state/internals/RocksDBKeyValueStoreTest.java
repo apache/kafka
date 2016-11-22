@@ -25,6 +25,9 @@ import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.TestCondition;
+import org.apache.kafka.test.TestUtils;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.rocksdb.Options;
 
@@ -92,6 +95,37 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
         driver.setConfig(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TheRocksDbConfigSetter.class);
         createKeyValueStore(driver.context(), Integer.class, String.class, false);
         assertTrue(TheRocksDbConfigSetter.called);
+    }
+
+    /**
+     * This {@link RocksDBConfigSetter} should optimize RocksDB to expire records more faster.
+     * For now, it doesn't help.
+     */
+    public static class RocksDBConfigSetterOptimizedForTtlSupport implements RocksDBConfigSetter {
+        @Override
+        public void setConfig(String storeName, Options options, Map<String, Object> configs) {
+            options.setMaxBackgroundCompactions(100);
+            options.setIncreaseParallelism(4);
+            options.setMaxBackgroundFlushes(100);
+            options.getEnv().setBackgroundThreads(2);
+        }
+    }
+
+    @Ignore("Records are not expired within 60 seconds, even if TTL is set to 10 seconds. " +
+            "TODO: investigate how to write a test that checks if records are expired when using TTL.")
+    @Test
+    public void shouldExpireRecordsWhenRocksDbTtlConfigIsSet() throws Exception {
+        final KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
+        driver.setConfig(StreamsConfig.ROCKSDB_TTL_SEC_CONFIG, 10);
+        driver.setConfig(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBConfigSetterOptimizedForTtlSupport.class);
+        final KeyValueStore<Integer, String> keyValueStore = createKeyValueStore(driver.context(), Integer.class, String.class, false);
+        keyValueStore.put(1, "should expire after 10 seconds");
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return keyValueStore.get(1) == null;
+            }
+        }, 60000, "Record must expire when TTL is set.");
     }
 
     @Test
@@ -167,5 +201,6 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
         }
 
     }
+
 
 }

@@ -37,6 +37,7 @@ import org.rocksdb.CompressionType;
 import org.rocksdb.FlushOptions;
 import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
+import org.rocksdb.TtlDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
 import org.rocksdb.WriteBatch;
@@ -153,7 +154,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                 valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
         this.dbDir = new File(new File(context.stateDir(), parentDir), this.name);
-        this.db = openDB(this.dbDir, this.options, TTL_SECONDS);
+        int ttlSeconds = TTL_SECONDS;
+        if (configs.get(StreamsConfig.ROCKSDB_TTL_SEC_CONFIG) != null)
+            ttlSeconds = (int) configs.get(StreamsConfig.ROCKSDB_TTL_SEC_CONFIG);
+
+        this.db = openDB(this.dbDir, this.options, ttlSeconds);
     }
 
     public void init(ProcessorContext context, StateStore root) {
@@ -175,13 +180,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     private RocksDB openDB(File dir, Options options, int ttl) {
         try {
+            dir.getParentFile().mkdirs();
             if (ttl == TTL_NOT_USED) {
-                dir.getParentFile().mkdirs();
                 return RocksDB.open(options, dir.getAbsolutePath());
             } else {
-                throw new UnsupportedOperationException("Change log is not supported for store " + this.name + " since it is TTL based.");
-                // TODO: support TTL with change log?
-                // return TtlDB.open(options, dir.toString(), ttl, false);
+                return TtlDB.open(options, dir.getAbsolutePath(), ttl, false);
             }
         } catch (RocksDBException e) {
             throw new ProcessorStateException("Error opening store " + this.name + " at location " + dir.toString(), e);
