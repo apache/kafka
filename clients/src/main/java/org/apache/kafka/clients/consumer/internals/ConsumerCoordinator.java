@@ -25,6 +25,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
@@ -54,7 +55,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import org.apache.kafka.common.errors.InterruptException;
 
 /**
  * This class manages the coordination process with the consumer coordinator.
@@ -62,8 +62,6 @@ import org.apache.kafka.common.errors.InterruptException;
 public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private static final Logger log = LoggerFactory.getLogger(ConsumerCoordinator.class);
-
-    private static final long CLOSE_TIMEOUT_MS = 5000;
 
     private final List<PartitionAssignor> assignors;
     private final Metadata metadata;
@@ -327,7 +325,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     @Override
     protected void onJoinPrepare(int generation, String memberId) {
         // commit offsets prior to rebalance if auto-commit enabled
-        maybeAutoCommitOffsetsSync();
+        maybeAutoCommitOffsetsSync(Long.MAX_VALUE);
 
         // execute the user's callback before rebalance
         ConsumerRebalanceListener listener = subscriptions.listener();
@@ -401,26 +399,31 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    @Override
-    public void close() {
+    public void close(long timeoutMs, long requestTimeoutMs) {
         // we do not need to re-enable wakeups since we are closing already
         client.disableWakeups();
+        long startTimeMs = time.milliseconds();
         try {
-            maybeAutoCommitOffsetsSync();
-
-            Node coordinator;
-            long endTimeMs = time.milliseconds() + CLOSE_TIMEOUT_MS;
-            while ((coordinator = coordinator()) != null && client.pendingRequestCount(coordinator) > 0) {
-                long remainingTimeMs = endTimeMs - time.milliseconds();
-                if (remainingTimeMs > 0)
-                    client.poll(remainingTimeMs);
-                else {
-                    log.warn("Close timed out with {} pending requests to coordinator, terminating client connections for group {}.", client.pendingRequestCount(coordinator), groupId);
-                    break;
-                }
-            }
+            timeoutMs = Math.min(timeoutMs, requestTimeoutMs);
+            maybeAutoCommitOffsetsSync(timeoutMs);
         } finally {
             super.close();
+        }
+
+        Node coordinator;
+        long now = time.milliseconds();
+        long endTimeMs = now + Math.min(timeoutMs - (now - startTimeMs), requestTimeoutMs);
+        while ((coordinator = coordinator()) != null && client.pendingRequestCount(coordinator) > 0) {
+            long remainingTimeMs = endTimeMs - time.milliseconds();
+            if (Thread.currentThread().isInterrupted())
+                throw new InterruptException("Consumer close was interrupted");
+            if (remainingTimeMs > 0)
+                client.poll(remainingTimeMs);
+            else {
+                log.warn("Close timed out with {} pending requests to coordinator, terminating client connections for group {}.",
+                        client.pendingRequestCount(coordinator), groupId);
+                break;
+            }
         }
     }
 
@@ -499,17 +502,22 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      *             or to any of the specified partitions
      * @throws CommitFailedException if an unrecoverable error occurs before the commit can be completed
      */
-    public void commitOffsetsSync(Map<TopicPartition, OffsetAndMetadata> offsets) {
+    public void commitOffsetsSync(Map<TopicPartition, OffsetAndMetadata> offsets, long timeoutMs) {
         invokeCompletedOffsetCommitCallbacks();
 
         if (offsets.isEmpty())
             return;
 
-        while (true) {
-            ensureCoordinatorReady();
+        long startMs = time.milliseconds();
+        long remainingMs = timeoutMs;
+        while (remainingMs > 0) {
+            ensureCoordinatorReady(remainingMs);
 
             RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
-            client.poll(future);
+            if (timeoutMs == Long.MAX_VALUE)
+                client.poll(future);
+            else
+                client.poll(future, remainingMs);
 
             if (future.succeeded()) {
                 if (interceptors != null)
@@ -521,6 +529,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 throw future.exception();
 
             time.sleep(retryBackoffMs);
+            remainingMs = timeoutMs - (time.milliseconds() - startMs);
         }
     }
 
@@ -555,10 +564,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         });
     }
 
-    private void maybeAutoCommitOffsetsSync() {
+    private void maybeAutoCommitOffsetsSync(long timeoutMs) {
         if (autoCommitEnabled) {
             try {
-                commitOffsetsSync(subscriptions.allConsumed());
+                commitOffsetsSync(subscriptions.allConsumed(), timeoutMs);
             } catch (WakeupException | InterruptException e) {
                 // rethrow wakeups since they are triggered by the user
                 throw e;

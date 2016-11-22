@@ -188,14 +188,21 @@ public abstract class AbstractCoordinator implements Closeable {
      * Block until the coordinator for this group is known and is ready to receive requests.
      */
     public synchronized void ensureCoordinatorReady() {
-        while (coordinatorUnknown()) {
+        ensureCoordinatorReady(Long.MAX_VALUE);
+    }
+
+    public synchronized void ensureCoordinatorReady(long timeoutMs) {
+        long remainingMs = timeoutMs;
+        long startTimeMs = time.milliseconds();
+        while (coordinatorUnknown() && remainingMs > 0) {
             RequestFuture<Void> future = lookupCoordinator();
-            client.poll(future);
+            client.poll(future, remainingMs);
 
             if (future.failed()) {
-                if (future.isRetriable())
-                    client.awaitMetadataUpdate();
-                else
+                if (future.isRetriable()) {
+                    remainingMs = timeoutMs == Long.MAX_VALUE ? Long.MAX_VALUE : time.milliseconds() - startTimeMs;
+                    client.awaitMetadataUpdate(remainingMs);
+                } else
                     throw future.exception();
             } else if (coordinator != null && client.connectionFailed(coordinator)) {
                 // we found the coordinator, but the connection has failed, so mark
@@ -203,6 +210,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 coordinatorDead();
                 time.sleep(retryBackoffMs);
             }
+            remainingMs = timeoutMs == Long.MAX_VALUE ? Long.MAX_VALUE : (timeoutMs - time.milliseconds() - startTimeMs);
         }
     }
 
