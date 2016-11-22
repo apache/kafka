@@ -701,6 +701,9 @@ public class Fetcher<K, V> {
                     parsedRecords = new PartitionRecords<>(fetchOffset, tp, parsed);
                     ConsumerRecord<K, V> record = parsed.get(parsed.size() - 1);
                     this.sensors.recordsFetchLag.record(partition.highWatermark - record.offset());
+                } else if (partition.records.iterator().hasNext()) {
+                    log.trace("Received empty fetch response for partition {} with offset {}", tp, position);
+                    this.sensors.recordsFetchLag.record(0);
                 }
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION) {
                 log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
