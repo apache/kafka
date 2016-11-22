@@ -203,7 +203,7 @@ object LogConfig {
 
   class LogConfigDef extends ConfigDef {
 
-    final val serverDefaultConfigNames = mutable.Map[String, String]()
+    private final val serverDefaultConfigNames = mutable.Map[String, String]()
 
     def define(name: String, defType: ConfigDef.Type, defaultValue: Any, validator: Validator,
                importance: ConfigDef.Importance, doc: String, serverDefaultConfigName: String): LogConfigDef = {
@@ -234,6 +234,8 @@ object LogConfig {
         case _ => super.getConfigValue(key, headerName)
       }
     }
+    
+    def configKeysMap = serverDefaultConfigNames.toMap 
   }
 
   val configDef: LogConfigDef = {
