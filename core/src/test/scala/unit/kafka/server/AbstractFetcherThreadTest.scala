@@ -21,7 +21,7 @@ import com.yammer.metrics.Metrics
 import kafka.cluster.BrokerEndPoint
 import kafka.message.{ByteBufferMessageSet, Message, NoCompressionCodec}
 import kafka.server.AbstractFetcherThread.{FetchRequest, PartitionData}
-import kafka.utils.{DelayedItem, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.Utils
@@ -130,7 +130,7 @@ class AbstractFetcherThreadTest {
   def testFetchRequestCorruptedMessageException() {
     val partition = new TopicPartition("topic", 0)
     val fetcherThread = new TestFetcherThreadForCorruptedMessage("test", "client",
-      new BrokerEndPoint(0, "localhost", 9092), 100)
+      new BrokerEndPoint(0, "localhost", 9092), 1)
 
     fetcherThread.start()
 
@@ -153,8 +153,8 @@ class AbstractFetcherThreadTest {
                           fetchBackOffMs: Int = 0)
     extends DummyFetcherThread(name, clientId, sourceBroker, fetchBackOffMs) {
 
-    var logEndOffset = 0L
-    var fetchCount = 0
+    @volatile var logEndOffset = 0L
+    @volatile var fetchCount = 0
     val normalPartitionDataSet = List(new NormalPartitionData(Seq(0)), new NormalPartitionData(Seq(1)))
 
     override def processPartitionData(topicAndPartition: TopicPartition,
@@ -182,9 +182,7 @@ class AbstractFetcherThreadTest {
         fetchRequest.offsets.mapValues(_ => new CorruptedPartitionData).toSeq
       } else {
         // Then, the following fetches get the normal data
-        fetchRequest.offsets.map {
-          case (k, v) => (k, normalPartitionDataSet(v.toInt))
-        }.toSeq
+        fetchRequest.offsets.mapValues(v => normalPartitionDataSet(v.toInt)).toSeq
       }
     }
 
