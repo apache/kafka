@@ -17,6 +17,7 @@
 package kafka.controller
 
 
+import kafka.admin.AdminUtils
 import kafka.common.TopicAndPartition
 import kafka.server.ConfigType
 import kafka.utils.Logging
@@ -243,6 +244,11 @@ class TopicDeletionManager(controller: KafkaController, eventManager: Controller
     // move respective partition to OfflinePartition and NonExistentPartition state
     partitionStateMachine.handleStateChanges(partitionsForDeletedTopic, OfflinePartition)
     partitionStateMachine.handleStateChanges(partitionsForDeletedTopic, NonExistentPartition)
+
+    // remove topic offsets from all groups that consumed from it
+    // - old consumer based groups
+    AdminUtils.deleteAllConsumerGroupInfoForTopicInZK(controllerContext.zkUtils, topic)
+
     topicsToBeDeleted -= topic
     partitionsToBeDeleted.retain(_.topic != topic)
     val zkUtils = controllerContext.zkUtils
