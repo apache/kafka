@@ -151,10 +151,9 @@ class GroupMetadataManager(val brokerId: Int,
       // if we crash or leaders move) since the new leaders will still expire the consumers with heartbeat and
       // retry removing this group.
       val groupPartition = partitionFor(group.groupId)
-      val magicValueAndTimestampOpt = getMessageFormatVersionAndTimestamp(groupPartition)
-      getMessageFormatVersionAndTimestamp(groupPartition).foreach { magicValueAndTimestamp =>
+      getMessageFormatVersionAndTimestamp(groupPartition).foreach { case (magicValue, timestamp) =>
         val tombstone = new Message(bytes = null, key = GroupMetadataManager.groupMetadataKey(group.groupId),
-          timestamp = magicValueAndTimestamp._2, magicValue = magicValueAndTimestamp._1)
+          timestamp = timestamp, magicValue = magicValue)
 
         val partitionOpt = replicaManager.getPartition(Topic.GroupMetadataTopicName, groupPartition)
         partitionOpt.foreach { partition =>
@@ -181,14 +180,19 @@ class GroupMetadataManager(val brokerId: Int,
                         responseCallback: Errors => Unit): Option[DelayedStore] = {
     val magicValueAndTimestampOpt = getMessageFormatVersionAndTimestamp(partitionFor(group.groupId))
     magicValueAndTimestampOpt match {
-      case Some(magicValueAndTimestamp) =>
-        val groupMetadataValueVersion = if (interBrokerProtocolVersion < KAFKA_0_10_1_IV0) 0.toShort else GroupMetadataManager.CURRENT_GROUP_VALUE_SCHEMA_VERSION
+      case Some((magicValue, timestamp)) =>
+        val groupMetadataValueVersion = {
+          if (interBrokerProtocolVersion < KAFKA_0_10_1_IV0)
+            0.toShort
+          else
+            GroupMetadataManager.CURRENT_GROUP_VALUE_SCHEMA_VERSION
+        }
 
         val message = new Message(
           key = GroupMetadataManager.groupMetadataKey(group.groupId),
           bytes = GroupMetadataManager.groupMetadataValue(group, groupAssignment, version = groupMetadataValueVersion),
-          timestamp = magicValueAndTimestamp._2,
-          magicValue = magicValueAndTimestamp._1)
+          timestamp = timestamp,
+          magicValue = magicValue)
 
         val groupMetadataPartition = new TopicPartition(Topic.GroupMetadataTopicName, partitionFor(group.groupId))
 
@@ -200,7 +204,7 @@ class GroupMetadataManager(val brokerId: Int,
         // set the callback function to insert the created group into cache after log append completed
         def putCacheCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
           // the append response should only contain the topics partition
-          if (responseStatus.size != 1 || ! responseStatus.contains(groupMetadataPartition))
+          if (responseStatus.size != 1 || !responseStatus.contains(groupMetadataPartition))
             throw new IllegalStateException("Append status %s should only have one partition %s"
               .format(responseStatus, groupMetadataPartition))
 
@@ -281,13 +285,13 @@ class GroupMetadataManager(val brokerId: Int,
     // construct the message set to append
     val magicValueAndTimestampOpt = getMessageFormatVersionAndTimestamp(partitionFor(group.groupId))
     magicValueAndTimestampOpt match {
-      case Some(magicValueAndTimestamp) =>
+      case Some((magicValue, timestamp)) =>
         val messages = filteredOffsetMetadata.map { case (topicAndPartition, offsetAndMetadata) =>
           new Message(
             key = GroupMetadataManager.offsetCommitKey(group.groupId, topicAndPartition.topic, topicAndPartition.partition),
             bytes = GroupMetadataManager.offsetCommitValue(offsetAndMetadata),
-            timestamp = magicValueAndTimestamp._2,
-            magicValue = magicValueAndTimestamp._1
+            timestamp = timestamp,
+            magicValue = magicValue
           )
         }.toSeq
 
@@ -369,7 +373,7 @@ class GroupMetadataManager(val brokerId: Int,
 
       case None =>
         val commitStatus = offsetMetadata.map { case (topicAndPartition, offsetAndMetadata) =>
-            (topicAndPartition, Errors.NOT_COORDINATOR_FOR_GROUP.code())
+          (topicAndPartition, Errors.NOT_COORDINATOR_FOR_GROUP.code)
         }
         responseCallback(commitStatus)
         None
@@ -601,12 +605,12 @@ class GroupMetadataManager(val brokerId: Int,
           val offsetsPartition = partitionFor(groupId)
           val magicValueAndTimestampOpt = getMessageFormatVersionAndTimestamp(offsetsPartition)
           magicValueAndTimestampOpt match {
-            case Some(magicValueAndTimestamp) =>
+            case Some((magicValue, timestamp)) =>
               // delete the expired offsets from the table and generate tombstone messages to remove them from the log
               val tombstones = group.removeExpiredOffsets(startMs).map { case (topicPartition, offsetAndMetadata) =>
                 trace("Removing expired offset and metadata for %s, %s: %s".format(groupId, topicPartition, offsetAndMetadata))
                 val commitKey = GroupMetadataManager.offsetCommitKey(groupId, topicPartition.topic, topicPartition.partition)
-                new Message(bytes = null, key = commitKey, timestamp = magicValueAndTimestamp._2, magicValue = magicValueAndTimestamp._1)
+                new Message(bytes = null, key = commitKey, timestamp = timestamp, magicValue = magicValue)
               }.toBuffer
 
               val partitionOpt = replicaManager.getPartition(Topic.GroupMetadataTopicName, offsetsPartition)
@@ -685,15 +689,18 @@ class GroupMetadataManager(val brokerId: Int,
   /**
    * Check if the replica is local and return the message format version and timestamp
    *
-   * @param partition   Partition of GroupMetadataTopic
-   *
-   * @return            Option[(MessageFormatVersion, TimeStamp)] if replica is local, None otherwise
+   * @param   partition  Partition of GroupMetadataTopic
+   * @return  Option[(MessageFormatVersion, TimeStamp)] if replica is local, None otherwise
    */
   private def getMessageFormatVersionAndTimestamp(partition: Int): Option[(Byte, Long)] = {
     val groupMetadataTopicAndPartition = new TopicAndPartition(Topic.GroupMetadataTopicName, partition)
-    val messageFormatVersionOpt = replicaManager.getMessageFormatVersion(groupMetadataTopicAndPartition)
-    messageFormatVersionOpt.map { messageFormatVersion =>
-      val timestamp = if (messageFormatVersion == Message.MagicValue_V0) Message.NoTimestamp else time.milliseconds()
+    replicaManager.getMessageFormatVersion(groupMetadataTopicAndPartition).map { messageFormatVersion =>
+      val timestamp = {
+        if (messageFormatVersion == Message.MagicValue_V0)
+          Message.NoTimestamp
+        else
+          time.milliseconds()
+      }
       (messageFormatVersion, timestamp)
     }
   }

@@ -169,7 +169,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
         val (result, error) = replicaManager.stopReplicas(stopReplicaRequest)
         // Clearing out the cache for groups that belong to an offsets topic partition for which this broker was the leader,
-        // since this broker is no more a replica for that offsets topic partition
+        // since this broker is no longer a replica for that offsets topic partition.
         result.map { case (topicPartition, errorCode) =>
           if (errorCode == Errors.NONE.code && stopReplicaRequest.deletePartitions() && topicPartition.topic == Topic.GroupMetadataTopicName) {
             coordinator.handleGroupEmigration(topicPartition.partition)

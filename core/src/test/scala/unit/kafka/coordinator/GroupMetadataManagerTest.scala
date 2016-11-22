@@ -269,7 +269,7 @@ class GroupMetadataManagerTest {
 
     assertFalse(commitErrors.isEmpty)
     val maybeError = commitErrors.get.get(topicPartition)
-    assertEquals(Some(Errors.NOT_COORDINATOR_FOR_GROUP.code()), maybeError)
+    assertEquals(Some(Errors.NOT_COORDINATOR_FOR_GROUP.code), maybeError)
     EasyMock.verify(replicaManager)
   }
 
