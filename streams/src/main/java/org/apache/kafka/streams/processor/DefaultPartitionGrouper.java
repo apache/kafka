@@ -82,7 +82,7 @@ public class DefaultPartitionGrouper implements PartitionGrouper {
             List<PartitionInfo> partitions = metadata.partitionsForTopic(topic);
 
             if (partitions == null) {
-                log.warn("Topic not found during partition assignment: " + topic);
+                log.info("Skipping assigning topic {} to tasks since its metadata is not available yet", topic);
             } else {
                 int numPartitions = partitions.size();
                 if (numPartitions > maxNumPartitions)
