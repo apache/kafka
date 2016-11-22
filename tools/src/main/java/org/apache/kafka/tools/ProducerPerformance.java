@@ -77,7 +77,7 @@ public class ProducerPerformance {
 
                 System.out.println("Number of messages read: " + payloadList.length);
 
-                for(String payload : payloadList) {
+                for (String payload : payloadList) {
                     payloadByteList.add(payload.getBytes(StandardCharsets.UTF_8));
                 }
             }
@@ -101,7 +101,7 @@ public class ProducerPerformance {
             /* setup perf test */
             byte[] payload = null;
             Random random = new Random(0);
-            if(recordSize != null) {
+            if (recordSize != null) {
                 payload = new byte[recordSize];
                 for (int i = 0; i < payload.length; ++i)
                     payload[i] = (byte) (random.nextInt(26) + 65);
@@ -112,7 +112,7 @@ public class ProducerPerformance {
 
             ThroughputThrottler throttler = new ThroughputThrottler(throughput, startMs);
             for (int i = 0; i < numRecords; i++) {
-                if(payloadFilePath != null) {
+                if (payloadFilePath != null) {
                     payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
                 }
                 record = new ProducerRecord<>(topicName, payload);
