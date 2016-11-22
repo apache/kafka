@@ -19,7 +19,6 @@ import java.nio.ByteBuffer;
 public abstract class AbstractRequestResponse {
     protected final Struct struct;
 
-
     public AbstractRequestResponse(Struct struct) {
         this.struct = struct;
     }
@@ -62,5 +61,13 @@ public abstract class AbstractRequestResponse {
             return false;
         AbstractRequestResponse other = (AbstractRequestResponse) obj;
         return struct.equals(other.struct);
+    }
+
+    public static ByteBuffer serialize(AbstractRequestResponse header, AbstractRequestResponse body) {
+        ByteBuffer buffer = ByteBuffer.allocate(header.sizeOf() + body.sizeOf());
+        header.writeTo(buffer);
+        body.writeTo(buffer);
+        buffer.rewind();
+        return buffer;
     }
 }

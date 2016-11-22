@@ -21,7 +21,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Map;
 
@@ -30,11 +30,10 @@ import java.util.Map;
  *
  * @param <K> the type of keys
  * @param <V> the type of values
- *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
 
-public class RocksDBKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K, V>  {
+public class RocksDBKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, KeyValueStore> {
 
     private final boolean enableCaching;
 
@@ -47,7 +46,7 @@ public class RocksDBKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K,
         this.enableCaching = enableCaching;
     }
 
-    public StateStore get() {
+    public KeyValueStore get() {
         if (!enableCaching) {
             RocksDBStore<K, V> store = new RocksDBStore<>(name, keySerde, valueSerde);
             return new MeteredKeyValueStore<>(logged ? store.enableLogging() : store, "rocksdb-state", time);
@@ -55,9 +54,9 @@ public class RocksDBKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K,
 
         final RocksDBStore<Bytes, byte[]> store = new RocksDBStore<>(name, Serdes.Bytes(), Serdes.ByteArray());
         return new CachingKeyValueStore<>(new MeteredKeyValueStore<>(logged ? store.enableLogging() : store,
-                                                                     "rocksdb-state",
-                                                                     time),
-                                          keySerde,
-                                          valueSerde);
+                "rocksdb-state",
+                time),
+                keySerde,
+                valueSerde);
     }
 }

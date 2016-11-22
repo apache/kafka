@@ -12,7 +12,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -63,6 +62,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private static final Logger log = LoggerFactory.getLogger(ConsumerCoordinator.class);
+
+    private static final long CLOSE_TIMEOUT_MS = 5000;
 
     private final List<PartitionAssignor> assignors;
     private final Metadata metadata;
@@ -406,6 +407,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         client.disableWakeups();
         try {
             maybeAutoCommitOffsetsSync();
+
+            Node coordinator;
+            long endTimeMs = time.milliseconds() + CLOSE_TIMEOUT_MS;
+            while ((coordinator = coordinator()) != null && client.pendingRequestCount(coordinator) > 0) {
+                long remainingTimeMs = endTimeMs - time.milliseconds();
+                if (remainingTimeMs > 0)
+                    client.poll(remainingTimeMs);
+                else {
+                    log.warn("Close timed out with {} pending requests to coordinator, terminating client connections for group {}.", client.pendingRequestCount(coordinator), groupId);
+                    break;
+                }
+            }
         } finally {
             super.close();
         }
@@ -584,6 +597,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         Map<TopicPartition, OffsetCommitRequest.PartitionData> offsetData = new HashMap<>(offsets.size());
         for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
             OffsetAndMetadata offsetAndMetadata = entry.getValue();
+            if (offsetAndMetadata.offset() < 0) {
+                return RequestFuture.failure(new IllegalArgumentException("Invalid offset: " + offsetAndMetadata.offset()));
+            }
             offsetData.put(entry.getKey(), new OffsetCommitRequest.PartitionData(
                     offsetAndMetadata.offset(), offsetAndMetadata.metadata()));
         }
@@ -618,11 +634,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         public OffsetCommitResponseHandler(Map<TopicPartition, OffsetAndMetadata> offsets) {
             this.offsets = offsets;
-        }
-
-        @Override
-        public OffsetCommitResponse parse(ClientResponse response) {
-            return new OffsetCommitResponse(response.responseBody());
         }
 
         @Override
@@ -715,12 +726,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private class OffsetFetchResponseHandler extends CoordinatorResponseHandler<OffsetFetchResponse, Map<TopicPartition, OffsetAndMetadata>> {
-
-        @Override
-        public OffsetFetchResponse parse(ClientResponse response) {
-            return new OffsetFetchResponse(response.responseBody());
-        }
-
         @Override
         public void handle(OffsetFetchResponse response, RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future) {
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(response.responseData().size());

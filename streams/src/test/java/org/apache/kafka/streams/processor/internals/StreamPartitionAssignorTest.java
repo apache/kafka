@@ -194,18 +194,79 @@ public class StreamPartitionAssignorTest {
         Set<TaskId> allActiveTasks = new HashSet<>();
 
         // the first consumer
-        AssignmentInfo info10 = checkAssignment(assignments.get("consumer10"));
+        AssignmentInfo info10 = checkAssignment(allTopics, assignments.get("consumer10"));
         allActiveTasks.addAll(info10.activeTasks);
 
         // the second consumer
-        AssignmentInfo info11 = checkAssignment(assignments.get("consumer11"));
+        AssignmentInfo info11 = checkAssignment(allTopics, assignments.get("consumer11"));
         allActiveTasks.addAll(info11.activeTasks);
 
         assertEquals(Utils.mkSet(task0, task1), allActiveTasks);
 
         // the third consumer
-        AssignmentInfo info20 = checkAssignment(assignments.get("consumer20"));
+        AssignmentInfo info20 = checkAssignment(allTopics, assignments.get("consumer20"));
         allActiveTasks.addAll(info20.activeTasks);
+
+        assertEquals(3, allActiveTasks.size());
+        assertEquals(allTasks, new HashSet<>(allActiveTasks));
+
+        assertEquals(3, allActiveTasks.size());
+        assertEquals(allTasks, allActiveTasks);
+    }
+
+    @Test
+    public void testAssignEmptyMetadata() throws Exception {
+        StreamsConfig config = new StreamsConfig(configProps());
+
+        TopologyBuilder builder = new TopologyBuilder();
+        builder.addSource("source1", "topic1");
+        builder.addSource("source2", "topic2");
+        builder.addProcessor("processor", new MockProcessorSupplier(), "source1", "source2");
+        List<String> topics = Utils.mkList("topic1", "topic2");
+        Set<TaskId> allTasks = Utils.mkSet(task0, task1, task2);
+
+        final Set<TaskId> prevTasks10 = Utils.mkSet(task0);
+        final Set<TaskId> standbyTasks10 = Utils.mkSet(task1);
+        final  Cluster emptyMetadata = new Cluster("cluster", Arrays.asList(Node.noNode()),
+            Collections.<PartitionInfo>emptySet(),
+            Collections.<String>emptySet(),
+            Collections.<String>emptySet());
+        UUID uuid1 = UUID.randomUUID();
+        String client1 = "client1";
+
+        StreamThread thread10 = new StreamThread(builder, config, new MockClientSupplier(), "test", client1, uuid1, new Metrics(), new SystemTime(), new StreamsMetadataState(builder));
+
+        StreamPartitionAssignor partitionAssignor = new StreamPartitionAssignor();
+        partitionAssignor.configure(config.getConsumerConfigs(thread10, "test", client1));
+
+        Map<String, PartitionAssignor.Subscription> subscriptions = new HashMap<>();
+        subscriptions.put("consumer10",
+            new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid1, prevTasks10, standbyTasks10, userEndPoint).encode()));
+
+        // initially metadata is empty
+        Map<String, PartitionAssignor.Assignment> assignments = partitionAssignor.assign(emptyMetadata, subscriptions);
+
+        // check assigned partitions
+        assertEquals(Collections.<TopicPartition>emptySet(),
+            new HashSet<>(assignments.get("consumer10").partitions()));
+
+        // check assignment info
+        Set<TaskId> allActiveTasks = new HashSet<>();
+        AssignmentInfo info10 = checkAssignment(Collections.<String>emptySet(), assignments.get("consumer10"));
+        allActiveTasks.addAll(info10.activeTasks);
+
+        assertEquals(0, allActiveTasks.size());
+        assertEquals(Collections.<TaskId>emptySet(), new HashSet<>(allActiveTasks));
+
+        // then metadata gets populated
+        assignments = partitionAssignor.assign(metadata, subscriptions);
+        // check assigned partitions
+        assertEquals(Utils.mkSet(Utils.mkSet(t1p0, t2p0, t1p0, t2p0, t1p1, t2p1, t1p2, t2p2)),
+            Utils.mkSet(new HashSet<>(assignments.get("consumer10").partitions())));
+
+        // the first consumer
+        info10 = checkAssignment(allTopics, assignments.get("consumer10"));
+        allActiveTasks.addAll(info10.activeTasks);
 
         assertEquals(3, allActiveTasks.size());
         assertEquals(allTasks, new HashSet<>(allActiveTasks));
@@ -406,12 +467,12 @@ public class StreamPartitionAssignorTest {
         Set<TaskId> allStandbyTasks = new HashSet<>();
 
         // the first consumer
-        AssignmentInfo info10 = checkAssignment(assignments.get("consumer10"));
+        AssignmentInfo info10 = checkAssignment(allTopics, assignments.get("consumer10"));
         allActiveTasks.addAll(info10.activeTasks);
         allStandbyTasks.addAll(info10.standbyTasks.keySet());
 
         // the second consumer
-        AssignmentInfo info11 = checkAssignment(assignments.get("consumer11"));
+        AssignmentInfo info11 = checkAssignment(allTopics, assignments.get("consumer11"));
         allActiveTasks.addAll(info11.activeTasks);
         allStandbyTasks.addAll(info11.standbyTasks.keySet());
 
@@ -422,7 +483,7 @@ public class StreamPartitionAssignorTest {
         assertEquals(Utils.mkSet(task2), new HashSet<>(allStandbyTasks));
 
         // the third consumer
-        AssignmentInfo info20 = checkAssignment(assignments.get("consumer20"));
+        AssignmentInfo info20 = checkAssignment(allTopics, assignments.get("consumer20"));
         allActiveTasks.addAll(info20.activeTasks);
         allStandbyTasks.addAll(info20.standbyTasks.keySet());
 
@@ -714,7 +775,7 @@ public class StreamPartitionAssignorTest {
 
     }
 
-    private AssignmentInfo checkAssignment(PartitionAssignor.Assignment assignment) {
+    private AssignmentInfo checkAssignment(Set<String> expectedTopics, PartitionAssignor.Assignment assignment) {
 
         // This assumed 1) DefaultPartitionGrouper is used, and 2) there is a only one topic group.
 
@@ -734,7 +795,7 @@ public class StreamPartitionAssignorTest {
         assertEquals(activeTasks, info.activeTasks);
 
         // check if active partitions cover all topics
-        assertEquals(allTopics, activeTopics);
+        assertEquals(expectedTopics, activeTopics);
 
         // check if standby tasks are consistent
         Set<String> standbyTopics = new HashSet<>();
@@ -751,7 +812,7 @@ public class StreamPartitionAssignorTest {
 
         if (info.standbyTasks.size() > 0)
             // check if standby partitions cover all topics
-            assertEquals(allTopics, standbyTopics);
+            assertEquals(expectedTopics, standbyTopics);
 
         return info;
     }

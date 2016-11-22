@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -22,15 +22,13 @@ import org.scalatest.junit.JUnitSuite
 import org.junit.Test
 import kafka.utils.TestUtils
 import kafka.message.{DefaultCompressionCodec, NoCompressionCodec, CompressionCodec, Message}
+import scala.collection.JavaConverters._
 
 trait BaseMessageSetTestCases extends JUnitSuite {
   
   val messages = Array(new Message("abcd".getBytes()), new Message("efgh".getBytes()))
   def createMessageSet(messages: Seq[Message], compressed: CompressionCodec = NoCompressionCodec): MessageSet
-  def toMessageIterator(messageSet: MessageSet): Iterator[Message] = {
-    import scala.collection.JavaConversions._
-    messageSet.map(m => m.message).iterator
-  }
+  def toMessageIterator(messageSet: MessageSet): Iterator[Message] = messageSet.asScala.map(m => m.message).iterator
 
   @Test
   def testWrittenEqualsRead {
@@ -40,7 +38,6 @@ trait BaseMessageSetTestCases extends JUnitSuite {
 
   @Test
   def testIteratorIsConsistent() {
-    import scala.collection.JavaConversions._
     val m = createMessageSet(messages)
     // two iterators over the same set should give the same results
     TestUtils.checkEquals(m.iterator, m.iterator)
@@ -48,7 +45,6 @@ trait BaseMessageSetTestCases extends JUnitSuite {
 
   @Test
   def testIteratorIsConsistentWithCompression() {
-    import scala.collection.JavaConversions._
     val m = createMessageSet(messages, DefaultCompressionCodec)
     // two iterators over the same set should give the same results
     TestUtils.checkEquals(m.iterator, m.iterator)

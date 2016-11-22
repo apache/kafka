@@ -33,8 +33,8 @@ import org.apache.kafka.common.metrics.MetricsReporter
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.record.TimestampType
 
-import scala.collection.{JavaConverters, Map, immutable}
-import JavaConverters._
+import scala.collection.{Map, immutable}
+import scala.collection.JavaConverters._
 
 object Defaults {
   /** ********* Zookeeper Configuration ***********/
@@ -368,7 +368,7 @@ object KafkaConfig {
   val BrokerIdGenerationEnableDoc = s"Enable automatic broker id generation on the server. When enabled the value configured for $MaxReservedBrokerIdProp should be reviewed."
   val MaxReservedBrokerIdDoc = "Max number that can be used for a broker.id"
   val BrokerIdDoc = "The broker id for this server. If unset, a unique broker id will be generated." +
-  "To avoid conflicts between zookeeper generated broker id's and user configured broker id's, generated broker ids" +
+  "To avoid conflicts between zookeeper generated broker id's and user configured broker id's, generated broker ids " +
   "start from " + MaxReservedBrokerIdProp + " + 1."
   val MessageMaxBytesDoc = "The maximum size of message that the server can receive"
   val NumNetworkThreadsDoc = "the number of network threads that the server uses for handling network requests"
@@ -757,20 +757,7 @@ object KafkaConfig {
 
   }
 
-  def configNames() = {
-    import scala.collection.JavaConversions._
-    configDef.names().toList.sorted
-  }
-
-  /**
-    * Check that property names are valid
-    */
-  def validateNames(props: Properties) {
-    import scala.collection.JavaConversions._
-    val names = configDef.names()
-    for (name <- props.keys)
-      require(names.contains(name), "Unknown Kafka configuration \"%s\".".format(name))
-  }
+  def configNames() = configDef.names().asScala.toList.sorted
 
   def fromProps(props: Properties): KafkaConfig =
     fromProps(props, true)

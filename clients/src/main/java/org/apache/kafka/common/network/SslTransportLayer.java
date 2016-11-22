@@ -447,7 +447,7 @@ public class SslTransportLayer implements TransportLayer {
             netReadBuffer = Utils.ensureCapacity(netReadBuffer, netReadBufferSize());
             if (netReadBuffer.remaining() > 0) {
                 int netread = socketChannel.read(netReadBuffer);
-                if (netread == 0 && netReadBuffer.position() == 0) return netread;
+                if (netread == 0 && netReadBuffer.position() == 0) return read;
                 else if (netread < 0) throw new EOFException("EOF during read");
             }
             do {
@@ -488,7 +488,11 @@ public class SslTransportLayer implements TransportLayer {
                     }
                     break;
                 } else if (unwrapResult.getStatus() == Status.CLOSED) {
-                    throw new EOFException();
+                    // If data has been read and unwrapped, return the data. Close will be handled on the next poll.
+                    if (appReadBuffer.position() == 0 && read == 0)
+                        throw new EOFException();
+                    else
+                        break;
                 }
             } while (netReadBuffer.position() != 0);
         }

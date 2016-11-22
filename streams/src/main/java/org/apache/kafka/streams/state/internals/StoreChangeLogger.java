@@ -24,12 +24,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.StateSerdes;
 
-import java.util.HashSet;
-import java.util.Set;
-
 /**
- * Store change log collector that batches updates before sending to Kafka.
- *
  * Note that the use of array-typed keys is discouraged because they result in incorrect caching behavior.
  * If you intend to work on byte arrays as key, for example, you may want to wrap them with the {@code Bytes} class,
  * i.e. use {@code RocksDBStore<Bytes, ...>} rather than {@code RocksDBStore<byte[], ...>}.
@@ -37,87 +32,34 @@ import java.util.Set;
  * @param <K>
  * @param <V>
  */
-public class StoreChangeLogger<K, V> {
-
-    public interface ValueGetter<K, V> {
-        V get(K key);
-    }
-
-    // TODO: these values should be configurable
-    protected static final int DEFAULT_WRITE_BATCH_SIZE = 100;
+class StoreChangeLogger<K, V> {
 
     protected final StateSerdes<K, V> serialization;
 
     private final String topic;
     private final int partition;
     private final ProcessorContext context;
-    private final int maxDirty;
-    private final int maxRemoved;
+    private final RecordCollector collector;
 
-    protected Set<K> dirty;
-    protected Set<K> removed;
 
-    public StoreChangeLogger(String storeName, ProcessorContext context, StateSerdes<K, V> serialization) {
-        this(storeName, context, serialization, DEFAULT_WRITE_BATCH_SIZE, DEFAULT_WRITE_BATCH_SIZE);
+    StoreChangeLogger(String storeName, ProcessorContext context, StateSerdes<K, V> serialization) {
+        this(storeName, context, context.taskId().partition, serialization);
     }
 
-    public StoreChangeLogger(String storeName, ProcessorContext context, StateSerdes<K, V> serialization, int maxDirty, int maxRemoved) {
-        this(storeName, context, context.taskId().partition, serialization, maxDirty, maxRemoved);
-        init();
-    }
-
-    protected StoreChangeLogger(String storeName, ProcessorContext context, int partition, StateSerdes<K, V> serialization, int maxDirty, int maxRemoved) {
+    private StoreChangeLogger(String storeName, ProcessorContext context, int partition, StateSerdes<K, V> serialization) {
         this.topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName);
         this.context = context;
         this.partition = partition;
         this.serialization = serialization;
-        this.maxDirty = maxDirty;
-        this.maxRemoved = maxRemoved;
+        this.collector = ((RecordCollector.Supplier) context).recordCollector();
     }
 
-    public void init() {
-        this.dirty = new HashSet<>();
-        this.removed = new HashSet<>();
-    }
-
-    public void add(K key) {
-        this.dirty.add(key);
-        this.removed.remove(key);
-    }
-
-    public void delete(K key) {
-        this.dirty.remove(key);
-        this.removed.add(key);
-    }
-
-    public void maybeLogChange(ValueGetter<K, V> getter) {
-        if (this.dirty.size() > this.maxDirty || this.removed.size() > this.maxRemoved)
-            logChange(getter);
-    }
-
-    public void logChange(ValueGetter<K, V> getter) {
-        if (this.removed.isEmpty() && this.dirty.isEmpty())
-            return;
-
-        RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
+    void logChange(final K key, final V value) {
         if (collector != null) {
-            Serializer<K> keySerializer = serialization.keySerializer();
-            Serializer<V> valueSerializer = serialization.valueSerializer();
-
-            for (K k : this.removed) {
-                collector.send(new ProducerRecord<>(this.topic, this.partition, k, (V) null), keySerializer, valueSerializer);
-            }
-            for (K k : this.dirty) {
-                V v = getter.get(k);
-                collector.send(new ProducerRecord<>(this.topic, this.partition, context.timestamp(), k, v), keySerializer, valueSerializer);
-            }
-            this.removed.clear();
-            this.dirty.clear();
+            final Serializer<K> keySerializer = serialization.keySerializer();
+            final Serializer<V> valueSerializer = serialization.valueSerializer();
+            collector.send(new ProducerRecord<>(this.topic, this.partition, context.timestamp(), key, value), keySerializer, valueSerializer);
         }
     }
 
-    public void clear() {
-        this.removed.clear();
-        this.dirty.clear();
-    }
 }

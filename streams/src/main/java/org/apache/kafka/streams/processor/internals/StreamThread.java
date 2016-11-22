@@ -290,6 +290,7 @@ public class StreamThread extends Thread {
         removeStandbyTasks();
 
         log.info("{} Stream thread shutdown complete", logPrefix);
+        running.set(false);
     }
 
     private void unAssignChangeLogPartitions(final boolean rethrowExceptions) {
@@ -492,6 +493,7 @@ public class StreamThread extends Thread {
 
             maybeClean();
         }
+        log.debug("{} Shutting down at user request", logPrefix);
     }
 
     private void maybeUpdateStandbyTasks() {
@@ -538,13 +540,8 @@ public class StreamThread extends Thread {
         }
     }
 
-    private boolean stillRunning() {
-        if (!running.get()) {
-            log.debug("{} Shutting down at user request", logPrefix);
-            return false;
-        }
-
-        return true;
+    public boolean stillRunning() {
+        return running.get();
     }
 
     private void maybePunctuate(StreamTask task) {

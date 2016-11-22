@@ -83,7 +83,7 @@ public class SyncGroupRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
+    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
         switch (versionId) {
             case 0:
                 return new SyncGroupResponse(

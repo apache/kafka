@@ -31,10 +31,9 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.{ProduceRequest, RequestHeader}
 import org.apache.kafka.common.utils.SystemTime
-
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-
+import org.apache.kafka.common.record.MemoryRecords
 import org.junit.Assert._
 import org.junit._
 import org.scalatest.junit.JUnitSuite
@@ -117,7 +116,7 @@ class SocketServerTest extends JUnitSuite {
     val ack = 0: Short
 
     val emptyHeader = new RequestHeader(apiKey, clientId, correlationId)
-    val emptyRequest = new ProduceRequest(ack, ackTimeoutMs, new HashMap[TopicPartition, ByteBuffer]())
+    val emptyRequest = new ProduceRequest(ack, ackTimeoutMs, new HashMap[TopicPartition, MemoryRecords]())
 
     val byteBuffer = ByteBuffer.allocate(emptyHeader.sizeOf + emptyRequest.sizeOf)
     emptyHeader.writeTo(byteBuffer)
@@ -160,6 +159,21 @@ class SocketServerTest extends JUnitSuite {
       receiveResponse(socket)
     } catch {
       case _: IOException => // thats fine
+    }
+  }
+
+  @Test
+  def testGracefulClose() {
+    val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
+    val serializedBytes = producerRequestBytes
+
+    for (i <- 0 until 10)
+      sendRequest(plainSocket, serializedBytes)
+    plainSocket.close()
+    for (i <- 0 until 10) {
+      val request = server.requestChannel.receiveRequest(2000)
+      assertNotNull("receiveRequest timed out", request)
+      server.requestChannel.noOperation(request.processor, request)
     }
   }
 
@@ -270,7 +284,7 @@ class SocketServerTest extends JUnitSuite {
       val ackTimeoutMs = 10000
       val ack = 0: Short
       val emptyHeader = new RequestHeader(apiKey, clientId, correlationId)
-      val emptyRequest = new ProduceRequest(ack, ackTimeoutMs, new HashMap[TopicPartition, ByteBuffer]())
+      val emptyRequest = new ProduceRequest(ack, ackTimeoutMs, new HashMap[TopicPartition, MemoryRecords]())
 
       val byteBuffer = ByteBuffer.allocate(emptyHeader.sizeOf() + emptyRequest.sizeOf())
       emptyHeader.writeTo(byteBuffer)

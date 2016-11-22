@@ -26,7 +26,7 @@ import java.util.ArrayDeque
 
 import kafka.message.ByteBufferMessageSet.FilterResult
 import org.apache.kafka.common.errors.InvalidTimestampException
-import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.common.record.{MemoryRecords, TimestampType}
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.mutable
@@ -352,6 +352,8 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
 
   def getBuffer = buffer
 
+  override def asRecords: MemoryRecords = MemoryRecords.readableRecords(buffer.duplicate())
+
   private def shallowValidBytes: Int = {
     if (shallowValidByteCount < 0) {
       this.shallowValidByteCount = this.internalIterator(isShallow = true).map { messageAndOffset =>
@@ -369,19 +371,6 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
       written += channel.write(buffer)
     buffer.reset()
     written
-  }
-
-  /** Write the messages in this set to the given channel starting at the given offset byte.
-    * Less than the complete amount may be written, but no more than maxSize can be. The number
-    * of bytes written is returned */
-  def writeTo(channel: GatheringByteChannel, offset: Long, maxSize: Int): Int = {
-    if (offset > Int.MaxValue)
-      throw new IllegalArgumentException(s"offset should not be larger than Int.MaxValue: $offset")
-    val dup = buffer.duplicate()
-    val position = offset.toInt
-    dup.position(position)
-    dup.limit(math.min(buffer.limit, position + maxSize))
-    channel.write(dup)
   }
 
   override def isMagicValueInAllWrapperMessages(expectedMagicValue: Byte): Boolean = {

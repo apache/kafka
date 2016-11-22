@@ -88,6 +88,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.authorizer_class_name = authorizer_class_name
         self.zk_set_acl = False
         self.server_prop_overides = server_prop_overides
+        self.log_level = "DEBUG"
 
         #
         # In a heavily loaded and not very fast machine, it is
@@ -470,7 +471,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Leader for topic %s and partition %d is now: %d" % (topic, partition, leader_idx))
         return self.get_node(leader_idx)
 
-    def list_consumer_groups(self, node=None, new_consumer=False, command_config=None):
+    def list_consumer_groups(self, node=None, new_consumer=True, command_config=None):
         """ Get list of consumer groups.
         """
         if node is None:
@@ -497,7 +498,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.debug(output)
         return output
 
-    def describe_consumer_group(self, group, node=None, new_consumer=False, command_config=None):
+    def describe_consumer_group(self, group, node=None, new_consumer=True, command_config=None):
         """ Describe a consumer group.
         """
         if node is None:

@@ -129,7 +129,7 @@ public class ConnectorPluginsResourceTest {
 
     @Test
     public void testValidateConfig() throws Throwable {
-        herder.validateConfigs(EasyMock.eq(ConnectorPluginsResourceTestConnector.class.getName()), EasyMock.eq(props));
+        herder.validateConnectorConfig(EasyMock.eq(props));
 
         PowerMock.expectLastCall().andAnswer(new IAnswer<ConfigInfos>() {
             @Override

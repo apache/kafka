@@ -26,7 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class StopReplicaResponse extends AbstractRequestResponse {
+public class StopReplicaResponse extends AbstractResponse {
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.STOP_REPLICA.id);
 
     private static final String ERROR_CODE_KEY_NAME = "error_code";

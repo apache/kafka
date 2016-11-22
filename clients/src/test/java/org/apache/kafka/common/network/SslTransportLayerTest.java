@@ -16,10 +16,12 @@ import static org.junit.Assert.fail;
 
 import java.util.Arrays;
 import java.util.Map;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 
@@ -32,6 +34,8 @@ import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.test.TestCondition;
+import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.common.config.types.Password;
 import org.junit.After;
 import org.junit.Before;
@@ -390,7 +394,49 @@ public class SslTransportLayerTest {
 
         NetworkTestUtils.checkClientConnection(selector, node, 64000, 10);
     }
-    
+
+    @Test
+    public void testCloseSsl() throws Exception {
+        testClose(SecurityProtocol.SSL, new SslChannelBuilder(Mode.CLIENT));
+    }
+
+    @Test
+    public void testClosePlaintext() throws Exception {
+        testClose(SecurityProtocol.PLAINTEXT, new PlaintextChannelBuilder());
+    }
+
+    private void testClose(SecurityProtocol securityProtocol, ChannelBuilder clientChannelBuilder) throws Exception {
+        String node = "0";
+        server = NetworkTestUtils.createEchoServer(securityProtocol, sslServerConfigs);
+        clientChannelBuilder.configure(sslClientConfigs);
+        this.selector = new Selector(5000, new Metrics(), new MockTime(), "MetricGroup", clientChannelBuilder);
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+
+        NetworkTestUtils.waitForChannelReady(selector, node);
+
+        final ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
+        server.outputChannel(Channels.newChannel(bytesOut));
+        server.selector().muteAll();
+        byte[] message = TestUtils.randomString(100).getBytes();
+        int count = 20;
+        final int totalSendSize = count * (message.length + 4);
+        for (int i = 0; i < count; i++) {
+            selector.send(new NetworkSend(node, ByteBuffer.wrap(message)));
+            do {
+                selector.poll(0L);
+            } while (selector.completedSends().isEmpty());
+        }
+        server.selector().unmuteAll();
+        selector.close(node);
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                return bytesOut.toByteArray().length == totalSendSize;
+            }
+        }, 5000, "All requests sent were not processed");
+    }
+
     private void createSelector(Map<String, Object> sslClientConfigs) {
         createSelector(sslClientConfigs, null, null, null);
     }      

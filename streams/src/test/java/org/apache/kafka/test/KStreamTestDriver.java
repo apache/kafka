@@ -100,12 +100,15 @@ public class KStreamTestDriver {
     }
 
     public void process(String topicName, Object key, Object value) {
+        final ProcessorNode previous = currNode;
         currNode = topology.source(topicName);
 
         // if currNode is null, check if this topic is a changelog topic;
         // if yes, skip
-        if (topicName.endsWith(ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX))
+        if (topicName.endsWith(ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX)) {
+            currNode = previous;
             return;
+        }
         context.setRecordContext(createRecordContext(context.timestamp()));
         context.setCurrentNode(currNode);
         try {

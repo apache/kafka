@@ -12,6 +12,8 @@
  */
 package org.apache.kafka.common.protocol.types;
 
+import org.apache.kafka.common.record.Records;
+
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
@@ -106,6 +108,10 @@ public class Struct {
 
     public byte getByte(String name) {
         return (Byte) get(name);
+    }
+
+    public Records getRecords(String name) {
+        return (Records) get(name);
     }
 
     public Short getShort(Field field) {
@@ -270,16 +276,6 @@ public class Struct {
      */
     public void validate() {
         this.schema.validate(this);
-    }
-
-    /**
-     * Create a byte buffer containing the serialized form of the values in this struct. This method can choose to break
-     * the struct into multiple ByteBuffers if need be.
-     */
-    public ByteBuffer[] toBytes() {
-        ByteBuffer buffer = ByteBuffer.allocate(sizeOf());
-        writeTo(buffer);
-        return new ByteBuffer[] {buffer};
     }
 
     @Override
