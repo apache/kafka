@@ -16,6 +16,10 @@
 PIDS=$(ps ax | grep java | grep -i QuorumPeerMain | grep -v grep | awk '{print $1}')
 
 if [ -z "$PIDS" ]; then
+  PIDS=$(ps ax | grep java | grep -i proc_zookeeper| grep -v grep | awk '{print $1}')
+fi
+
+if [ -z "$PIDS" ]; then
   echo "No zookeeper server to stop"
   exit 1
 else
