@@ -170,7 +170,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         val (result, error) = replicaManager.stopReplicas(stopReplicaRequest)
         // Clearing out the cache for groups that belong to an offsets topic partition for which this broker was the leader,
         // since this broker is no longer a replica for that offsets topic partition.
-        result.map { case (topicPartition, errorCode) =>
+        // This is required to handle the following scenario :
+        // Consider old replicas : {[1,2,3], Leader = 1} is reassigned to new replicas : {[2,3,4], Leader = 2}, broker 1 does not receive a LeaderAndIsr
+        // request to become a follower due to which cache for groups that belong to an offsets topic partition for which broker 1 was the leader,
+        // is not cleared.
+        result.foreach { case (topicPartition, errorCode) =>
           if (errorCode == Errors.NONE.code && stopReplicaRequest.deletePartitions() && topicPartition.topic == Topic.GroupMetadataTopicName) {
             coordinator.handleGroupEmigration(topicPartition.partition)
           }

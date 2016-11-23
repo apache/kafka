@@ -18,7 +18,6 @@
 package kafka.coordinator
 
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.NotCoordinatorForGroupException
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.{ArrayOf, Field, Schema, Struct}
 import org.apache.kafka.common.protocol.types.Type.STRING
