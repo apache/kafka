@@ -251,7 +251,11 @@ fi
 # If Cygwin is detected, classpath is converted to Windows format.
 (( CYGWIN )) && CLASSPATH=$(cygpath --path --mixed "${CLASSPATH}")
 
-PROCNAME="-Dproc_"$DAEMON_NAME
+if [ -z "$DAEMON_NAME" ]; then
+  PROCNAME=""
+else
+  PROCNAME="-Dproc_"$DAEMON_NAME
+fi
 
 # Launch mode
 if [ "x$DAEMON_MODE" = "xtrue" ]; then
