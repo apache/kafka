@@ -177,7 +177,7 @@ public class StreamThreadTest {
             }
         };
         thread.setStateListener(stateListener);
-        assertEquals(thread.state, StreamThread.State.RUNNING);
+        assertEquals(thread.state(), StreamThread.State.RUNNING);
         initPartitionGrouper(config, thread);
 
         ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener;
@@ -194,12 +194,12 @@ public class StreamThreadTest {
         expectedGroup1 = new HashSet<>(Arrays.asList(t1p1));
 
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
-        assertEquals(thread.state, StreamThread.State.PARTITIONS_REVOKED);
+        assertEquals(thread.state(), StreamThread.State.PARTITIONS_REVOKED);
         Assert.assertEquals(stateListener.numChanges, 1);
         Assert.assertEquals(stateListener.oldState, StreamThread.State.RUNNING);
         Assert.assertEquals(stateListener.newState, StreamThread.State.PARTITIONS_REVOKED);
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
-        assertEquals(thread.state, StreamThread.State.RUNNING);
+        assertEquals(thread.state(), StreamThread.State.RUNNING);
         Assert.assertEquals(stateListener.numChanges, 3);
         Assert.assertEquals(stateListener.oldState, StreamThread.State.ASSIGNING_PARTITIONS);
         Assert.assertEquals(stateListener.newState, StreamThread.State.RUNNING);
@@ -286,8 +286,8 @@ public class StreamThreadTest {
         assertTrue(thread.tasks().isEmpty());
 
         thread.close();
-        assertTrue((thread.state == StreamThread.State.PENDING_SHUTDOWN) ||
-            (thread.state == StreamThread.State.NOT_RUNNING));
+        assertTrue((thread.state() == StreamThread.State.PENDING_SHUTDOWN) ||
+            (thread.state() == StreamThread.State.NOT_RUNNING));
     }
 
 

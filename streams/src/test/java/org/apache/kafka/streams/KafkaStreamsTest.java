@@ -61,11 +61,11 @@ public class KafkaStreamsTest {
         final KafkaStreams streams = new KafkaStreams(builder, props);
         StateListenerStub stateListener = new StateListenerStub();
         streams.setStateListener(stateListener);
-        Assert.assertEquals(streams.getState(), KafkaStreams.State.CREATED);
+        Assert.assertEquals(streams.state(), KafkaStreams.State.CREATED);
         Assert.assertEquals(stateListener.numChanges, 0);
 
         streams.start();
-        Assert.assertEquals(streams.getState(), KafkaStreams.State.RUNNING);
+        Assert.assertEquals(streams.state(), KafkaStreams.State.RUNNING);
         Assert.assertEquals(stateListener.numChanges, 1);
         Assert.assertEquals(stateListener.oldState, KafkaStreams.State.CREATED);
         Assert.assertEquals(stateListener.newState, KafkaStreams.State.RUNNING);
@@ -77,7 +77,7 @@ public class KafkaStreamsTest {
         assertTrue(streams.close(15, TimeUnit.SECONDS));
         Assert.assertEquals("each reporter initialized should also be closed",
             oldCloseCount + initCountDifference, MockMetricsReporter.CLOSE_COUNT.get());
-        Assert.assertEquals(streams.getState(), KafkaStreams.State.NOT_RUNNING);
+        Assert.assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
     }
 
     @Test

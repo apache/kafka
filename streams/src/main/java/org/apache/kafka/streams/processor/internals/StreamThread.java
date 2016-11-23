@@ -111,7 +111,7 @@ public class StreamThread extends Thread {
      * Custom states is also allowed for cases where there are custom kafka states for different scenarios.
      */
     public enum State { NOT_RUNNING, RUNNING, PARTITIONS_REVOKED, ASSIGNING_PARTITIONS, PENDING_SHUTDOWN }
-    public volatile State state = State.NOT_RUNNING;
+    private volatile State state = State.NOT_RUNNING;
     private StateListener stateListener = null;
 
     /**
@@ -133,6 +133,13 @@ public class StreamThread extends Thread {
      */
     public void setStateListener(final StateListener listener) {
         this.stateListener = listener;
+    }
+
+    /**
+     * @return The state this instance is in
+     */
+    public synchronized State state() {
+        return state;
     }
 
     private void setState(State newState) {
@@ -185,7 +192,6 @@ public class StreamThread extends Thread {
 
     private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
     private boolean processStandbyRecords = false;
-    private AtomicBoolean initialized = new AtomicBoolean(false);
 
     private ThreadCache cache;
 
@@ -200,7 +206,6 @@ public class StreamThread extends Thread {
                 addStandbyTasks();
                 lastCleanMs = time.milliseconds(); // start the cleaning cycle
                 streamsMetadataState.onChange(partitionAssignor.getPartitionsByHostState(), partitionAssignor.clusterMetadata());
-                initialized.set(true);
                 setState(State.RUNNING);
             } catch (Throwable t) {
                 rebalanceException = t;
@@ -214,7 +219,6 @@ public class StreamThread extends Thread {
                 log.info("stream-thread [{}] partitions [{}] revoked at the beginning of consumer rebalance.",
                         StreamThread.this.getName(), assignment);
                 setState(State.PARTITIONS_REVOKED);
-                initialized.set(false);
                 lastCleanMs = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
                 // suspend active tasks
                 suspendTasksAndState(true);
@@ -230,8 +234,8 @@ public class StreamThread extends Thread {
     };
 
 
-    public boolean isInitialized() {
-        return initialized.get();
+    public synchronized boolean isInitialized() {
+        return state() == State.RUNNING;
     }
 
     public StreamThread(TopologyBuilder builder,

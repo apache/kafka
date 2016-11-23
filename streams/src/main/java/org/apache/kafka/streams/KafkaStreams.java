@@ -177,7 +177,7 @@ public class KafkaStreams {
     /**
      * @return The state this instance is in
      */
-    public synchronized State getState() {
+    public synchronized State state() {
         return state;
     }
 
@@ -272,7 +272,7 @@ public class KafkaStreams {
     public synchronized void start() {
         log.debug("Starting Kafka Stream process");
 
-        if (getState() == KafkaStreams.State.CREATED) {
+        if (state() == KafkaStreams.State.CREATED) {
             for (final StreamThread thread : threads)
                 thread.start();
 
@@ -306,7 +306,7 @@ public class KafkaStreams {
      */
     public synchronized boolean close(final long timeout, final TimeUnit timeUnit) {
         log.debug("Stopping Kafka Stream process");
-        State tmpState = getState();
+        State tmpState = state();
         if (tmpState == State.CREATED ||
             tmpState == State.REBALANCING ||
             tmpState == State.RUNNING) {
@@ -375,7 +375,7 @@ public class KafkaStreams {
      * @throws IllegalStateException if instance is currently running
      */
     public void cleanUp() {
-        State tmpState = getState();
+        State tmpState = state();
         if (tmpState == KafkaStreams.State.RUNNING ||
             tmpState == KafkaStreams.State.REBALANCING) {
             throw new IllegalStateException("Cannot clean up while running.");
@@ -493,7 +493,7 @@ public class KafkaStreams {
     }
 
     private void validateIsRunning() {
-        State tmpState = getState();
+        State tmpState = state();
         if (tmpState != State.RUNNING && tmpState != State.REBALANCING) {
             throw new IllegalStateException("KafkaStreams is not running. State is " + tmpState);
         }
