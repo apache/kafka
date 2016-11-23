@@ -112,6 +112,38 @@ public class StreamThread extends Thread {
      */
     public enum State { NOT_RUNNING, RUNNING, PARTITIONS_REVOKED, ASSIGNING_PARTITIONS, PENDING_SHUTDOWN }
     public volatile State state = State.NOT_RUNNING;
+    private StateListener stateListener = null;
+
+    /**
+     * Listen to state change events
+     */
+    public interface StateListener {
+
+        /**
+         * Called when state changes
+         * @param newState     current state
+         * @param oldState     previous state
+         */
+        void onChange(final State newState, final State oldState);
+    }
+
+    /**
+     * Set the {@link StateListener} to be notified when state changes
+     * @param listener
+     */
+    public void setStateListener(final StateListener listener) {
+        this.stateListener = listener;
+    }
+
+    private void setState(State newState) {
+        State oldState = state;
+        state = newState;
+        if (stateListener != null) {
+            synchronized (stateListener) {
+                stateListener.onChange(state, oldState);
+            }
+        }
+    }
 
     public final PartitionGrouper partitionGrouper;
     private final StreamsMetadataState streamsMetadataState;
@@ -163,13 +195,13 @@ public class StreamThread extends Thread {
             try {
                 log.info("stream-thread [{}] New partitions [{}] assigned at the end of consumer rebalance.",
                         StreamThread.this.getName(), assignment);
-                state = State.ASSIGNING_PARTITIONS;
+                setState(State.ASSIGNING_PARTITIONS);
                 addStreamTasks(assignment);
                 addStandbyTasks();
                 lastCleanMs = time.milliseconds(); // start the cleaning cycle
                 streamsMetadataState.onChange(partitionAssignor.getPartitionsByHostState(), partitionAssignor.clusterMetadata());
                 initialized.set(true);
-                state = State.RUNNING;
+                setState(State.RUNNING);
             } catch (Throwable t) {
                 rebalanceException = t;
                 throw t;
@@ -181,7 +213,7 @@ public class StreamThread extends Thread {
             try {
                 log.info("stream-thread [{}] partitions [{}] revoked at the beginning of consumer rebalance.",
                         StreamThread.this.getName(), assignment);
-                state = State.PARTITIONS_REVOKED;
+                setState(State.PARTITIONS_REVOKED);
                 initialized.set(false);
                 lastCleanMs = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
                 // suspend active tasks
@@ -212,7 +244,7 @@ public class StreamThread extends Thread {
                         Time time,
                         StreamsMetadataState streamsMetadataState) {
         super("StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement());
-        this.state = State.NOT_RUNNING;
+        setState(State.NOT_RUNNING);
         this.applicationId = applicationId;
         String threadName = getName();
         this.config = config;
@@ -267,7 +299,7 @@ public class StreamThread extends Thread {
         this.lastCleanMs = Long.MAX_VALUE; // the cleaning cycle won't start until partition assignment
         this.lastCommitMs = timerStartedMs;
         this.running = new AtomicBoolean(true);
-        this.state = State.RUNNING;
+        setState(state.RUNNING);
     }
 
     public void partitionAssignor(StreamPartitionAssignor partitionAssignor) {
@@ -304,7 +336,7 @@ public class StreamThread extends Thread {
     public void close() {
         log.info("{} Closing", logPrefix);
         running.set(false);
-        state = State.PENDING_SHUTDOWN;
+        setState(State.PENDING_SHUTDOWN);
     }
 
     public Map<TaskId, StreamTask> tasks() {
@@ -337,7 +369,7 @@ public class StreamThread extends Thread {
         removeStandbyTasks();
 
         log.info("{} Stream thread shutdown complete", logPrefix);
-        state = State.NOT_RUNNING;
+        setState(State.NOT_RUNNING);
     }
 
     private void unAssignChangeLogPartitions(final boolean rethrowExceptions) {

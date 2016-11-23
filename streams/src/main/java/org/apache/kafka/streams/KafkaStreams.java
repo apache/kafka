@@ -142,9 +142,10 @@ public class KafkaStreams {
     public enum State { CREATED, RUNNING, REBALANCING, PENDING_SHUTDOWN, NOT_RUNNING }
     private volatile State state = KafkaStreams.State.CREATED;
     private StateListener stateListener = null;
+    private StreamStateListener streamStateListener = null;
 
     /**
-     * Listen to cache flush events
+     * Listen to state change events
      */
     public interface StateListener {
 
@@ -160,11 +161,11 @@ public class KafkaStreams {
      * Set the {@link StateListener} to be notified when state changes
      * @param listener
      */
-    void setStateListener(final StateListener listener) {
+    public void setStateListener(final StateListener listener) {
         this.stateListener = listener;
     }
 
-    private void setState(State newState) {
+    private synchronized void setState(State newState) {
         State oldState = state;
         state = newState;
         if (stateListener != null) {
@@ -172,6 +173,23 @@ public class KafkaStreams {
         }
     }
 
+
+    /**
+     * @return The state this instance is in
+     */
+    public synchronized State getState() {
+        return state;
+    }
+
+    private class StreamStateListener implements StreamThread.StateListener {
+        @Override
+        public void onChange(final StreamThread.State newState, final StreamThread.State oldState) {
+            if (newState == StreamThread.State.PARTITIONS_REVOKED ||
+                newState == StreamThread.State.ASSIGNING_PARTITIONS) {
+                setState(KafkaStreams.State.REBALANCING);
+            }
+        }
+    }
     /**
      * Construct the stream instance.
      *
@@ -203,7 +221,7 @@ public class KafkaStreams {
     public KafkaStreams(final TopologyBuilder builder, final StreamsConfig config, final KafkaClientSupplier clientSupplier) {
         // create the metrics
         final Time time = new SystemTime();
-
+        streamStateListener = new StreamStateListener();
         processId = UUID.randomUUID();
 
         this.config = config;
@@ -240,6 +258,7 @@ public class KafkaStreams {
                 metrics,
                 time,
                 streamsMetadataState);
+            threads[i].setStateListener(streamStateListener);
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
         }
         queryableStoreProvider = new QueryableStoreProvider(storeProviders);
@@ -253,7 +272,7 @@ public class KafkaStreams {
     public synchronized void start() {
         log.debug("Starting Kafka Stream process");
 
-        if (state == KafkaStreams.State.CREATED) {
+        if (getState() == KafkaStreams.State.CREATED) {
             for (final StreamThread thread : threads)
                 thread.start();
 
@@ -287,9 +306,10 @@ public class KafkaStreams {
      */
     public synchronized boolean close(final long timeout, final TimeUnit timeUnit) {
         log.debug("Stopping Kafka Stream process");
-        if (state == State.CREATED ||
-            state == State.REBALANCING ||
-            state == State.RUNNING) {
+        State tmpState = getState();
+        if (tmpState == State.CREATED ||
+            tmpState == State.REBALANCING ||
+            tmpState == State.RUNNING) {
             setState(KafkaStreams.State.PENDING_SHUTDOWN);
             // save the current thread so that if it is a stream thread
             // we don't attempt to join it and cause a deadlock
@@ -298,6 +318,9 @@ public class KafkaStreams {
                 public void run() {
                         // signal the threads to stop and wait
                         for (final StreamThread thread : threads) {
+                            // avoid deadlocks by stopping any further state reports
+                            // from the thread since we're shutting down
+                            thread.setStateListener(null);
                             thread.close();
                         }
 
@@ -352,8 +375,9 @@ public class KafkaStreams {
      * @throws IllegalStateException if instance is currently running
      */
     public void cleanUp() {
-        if (state == KafkaStreams.State.RUNNING ||
-            state == KafkaStreams.State.REBALANCING) {
+        State tmpState = getState();
+        if (tmpState == KafkaStreams.State.RUNNING ||
+            tmpState == KafkaStreams.State.REBALANCING) {
             throw new IllegalStateException("Cannot clean up while running.");
         }
 
@@ -469,23 +493,9 @@ public class KafkaStreams {
     }
 
     private void validateIsRunning() {
-        if (state != KafkaStreams.State.RUNNING) {
-            throw new IllegalStateException("KafkaStreams is not running");
+        State tmpState = getState();
+        if (tmpState != State.RUNNING && tmpState != State.REBALANCING) {
+            throw new IllegalStateException("KafkaStreams is not running. State is " + tmpState);
         }
     }
-
-    /**
-     * @return The state this instance is in
-     */
-    public synchronized State getState() {
-        for (final StreamThread thread : threads) {
-            StreamThread.State nowState = thread.state;
-            if (nowState == StreamThread.State.PARTITIONS_REVOKED ||
-                nowState == StreamThread.State.ASSIGNING_PARTITIONS) {
-                return KafkaStreams.State.REBALANCING;
-            }
-        }
-        return state;
-    }
-
 }

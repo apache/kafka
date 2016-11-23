@@ -40,6 +40,7 @@ import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.File;
@@ -159,6 +160,8 @@ public class StreamThreadTest {
     @Test
     public void testPartitionAssignmentChange() throws Exception {
         StreamsConfig config = new StreamsConfig(configProps());
+        StateListenerStub stateListener = new StateListenerStub();
+
 
         TopologyBuilder builder = new TopologyBuilder().setApplicationId("X");
         builder.addSource("source1", "topic1");
@@ -173,6 +176,7 @@ public class StreamThreadTest {
                 return new TestStreamTask(id, applicationId, partitionsForTask, topology, consumer, producer, restoreConsumer, config, stateDirectory);
             }
         };
+        thread.setStateListener(stateListener);
         assertEquals(thread.state, StreamThread.State.RUNNING);
         initPartitionGrouper(config, thread);
 
@@ -191,8 +195,14 @@ public class StreamThreadTest {
 
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
         assertEquals(thread.state, StreamThread.State.PARTITIONS_REVOKED);
+        Assert.assertEquals(stateListener.numChanges, 1);
+        Assert.assertEquals(stateListener.oldState, StreamThread.State.RUNNING);
+        Assert.assertEquals(stateListener.newState, StreamThread.State.PARTITIONS_REVOKED);
         rebalanceListener.onPartitionsAssigned(assignedPartitions);
         assertEquals(thread.state, StreamThread.State.RUNNING);
+        Assert.assertEquals(stateListener.numChanges, 3);
+        Assert.assertEquals(stateListener.oldState, StreamThread.State.ASSIGNING_PARTITIONS);
+        Assert.assertEquals(stateListener.newState, StreamThread.State.RUNNING);
 
         assertTrue(thread.tasks().containsKey(task1));
         assertEquals(expectedGroup1, thread.tasks().get(task1).partitions());
@@ -515,5 +525,18 @@ public class StreamThreadTest {
                 partitionAssignor.assign(metadata, Collections.singletonMap("client", subscription));
 
         partitionAssignor.onAssignment(assignments.get("client"));
+    }
+
+    public static class StateListenerStub implements StreamThread.StateListener {
+        public int numChanges = 0;
+        public StreamThread.State oldState;
+        public StreamThread.State newState;
+
+        @Override
+        public void onChange(final StreamThread.State newState, final StreamThread.State oldState) {
+            this.numChanges++;
+            this.oldState = oldState;
+            this.newState = newState;
+        }
     }
 }
