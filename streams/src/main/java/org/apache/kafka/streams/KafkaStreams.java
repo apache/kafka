@@ -115,9 +115,9 @@ public class KafkaStreams {
      *                +-----------+
      *         +<-----|Created    |
      *         |      +-----+-----+
-     *         |             |
-     *         |             v
-     *         |       +-----+---------+
+     *         |             |   +--+
+     *         |             v   |  |
+     *         |       +-----+---v--+--+
      *         +<----- | Rebalancing   |<--------+
      *         |       +-----+---------+         ^
      *         |             |                   |
@@ -168,6 +168,41 @@ public class KafkaStreams {
     private synchronized void setState(State newState) {
         State oldState = state;
         state = newState;
+        boolean throwException = false;
+
+        // validate all transitions
+        switch (newState) {
+            case NOT_RUNNING:
+                if (oldState != State.PENDING_SHUTDOWN &&
+                    oldState != State.NOT_RUNNING) {
+                    throwException = true;
+                }
+                break;
+            case RUNNING:
+                if (oldState != State.CREATED &&
+                    oldState != State.RUNNING) {
+                    throwException = true;
+                }
+                break;
+            case REBALANCING:
+                if (oldState != State.RUNNING &&
+                    oldState != State.REBALANCING) {
+                    throwException = true;
+                }
+                break;
+            case PENDING_SHUTDOWN:
+                if (oldState != State.CREATED &&
+                    oldState != State.REBALANCING &&
+                    oldState != State.RUNNING) {
+                    throwException = true;
+                }
+                break;
+            default:
+                throw new IllegalStateException("Unexpected state " + newState);
+        }
+        if (throwException) {
+            throw new IllegalStateException("Incorrect state transition from " + oldState + " to " + newState);
+        }
         if (stateListener != null) {
             stateListener.onChange(state, oldState);
         }

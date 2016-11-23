@@ -60,7 +60,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
@@ -142,9 +141,49 @@ public class StreamThread extends Thread {
         return state;
     }
 
-    private void setState(State newState) {
+    private synchronized void setState(State newState) {
         State oldState = state;
         state = newState;
+        boolean throwException = false;
+
+        // validate all transitions
+        switch (newState) {
+            case NOT_RUNNING:
+                if (oldState != State.PENDING_SHUTDOWN &&
+                    oldState != State.NOT_RUNNING) {
+                    throwException = true;
+
+                }
+                break;
+            case RUNNING:
+                if (oldState != State.NOT_RUNNING &&
+                    oldState != State.ASSIGNING_PARTITIONS) {
+                    throwException = true;
+                }
+                break;
+            case PARTITIONS_REVOKED:
+                if (oldState != State.RUNNING) {
+                    throwException = true;
+                }
+                break;
+            case ASSIGNING_PARTITIONS:
+                if (oldState != State.PARTITIONS_REVOKED) {
+                    throwException = true;
+                }
+                break;
+            case PENDING_SHUTDOWN:
+                if (oldState != State.RUNNING &&
+                    oldState != State.PARTITIONS_REVOKED) {
+                    throwException = true;
+                }
+                break;
+            default:
+                throw new StreamsException("Unexpected state " + newState);
+        }
+        if (throwException) {
+            throw new StreamsException("Incorrect state transition from " + oldState + " to " + newState);
+        }
+
         if (stateListener != null) {
             synchronized (stateListener) {
                 stateListener.onChange(state, oldState);
@@ -168,7 +207,6 @@ public class StreamThread extends Thread {
 
     private final String logPrefix;
     private final String threadClientId;
-    private final AtomicBoolean running;
     private final Map<TaskId, StreamTask> activeTasks;
     private final Map<TaskId, StandbyTask> standbyTasks;
     private final Map<TopicPartition, StreamTask> activeTasksByPartition;
@@ -199,8 +237,14 @@ public class StreamThread extends Thread {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> assignment) {
             try {
-                log.info("stream-thread [{}] New partitions [{}] assigned at the end of consumer rebalance.",
+                if (state() == State.PENDING_SHUTDOWN) {
+                    log.info("stream-thread [{}] New partitions [{}] assigned while shutting down.",
                         StreamThread.this.getName(), assignment);
+                    return;
+                }
+                log.info("stream-thread [{}] New partitions [{}] assigned at the end of consumer rebalance.",
+                    StreamThread.this.getName(), assignment);
+
                 setState(State.ASSIGNING_PARTITIONS);
                 addStreamTasks(assignment);
                 addStandbyTasks();
@@ -216,6 +260,11 @@ public class StreamThread extends Thread {
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> assignment) {
             try {
+                if (state() == State.PENDING_SHUTDOWN) {
+                    log.info("stream-thread [{}] New partitions [{}] assigned while shutting down.",
+                        StreamThread.this.getName(), assignment);
+                    return;
+                }
                 log.info("stream-thread [{}] partitions [{}] revoked at the beginning of consumer rebalance.",
                         StreamThread.this.getName(), assignment);
                 setState(State.PARTITIONS_REVOKED);
@@ -302,7 +351,6 @@ public class StreamThread extends Thread {
         this.timerStartedMs = time.milliseconds();
         this.lastCleanMs = Long.MAX_VALUE; // the cleaning cycle won't start until partition assignment
         this.lastCommitMs = timerStartedMs;
-        this.running = new AtomicBoolean(true);
         setState(state.RUNNING);
     }
 
@@ -337,9 +385,8 @@ public class StreamThread extends Thread {
     /**
      * Shutdown this stream thread.
      */
-    public void close() {
+    public synchronized void close() {
         log.info("{} Closing", logPrefix);
-        running.set(false);
         setState(State.PENDING_SHUTDOWN);
     }
 
@@ -623,8 +670,10 @@ public class StreamThread extends Thread {
         }
     }
 
-    public boolean stillRunning() {
-        return running.get();
+    public synchronized boolean stillRunning() {
+        State tmpState = state();
+        return tmpState != State.PENDING_SHUTDOWN &&
+            tmpState != State.NOT_RUNNING;
     }
 
     private void maybePunctuate(StreamTask task) {
