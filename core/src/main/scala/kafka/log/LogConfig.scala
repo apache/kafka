@@ -234,6 +234,8 @@ object LogConfig {
         case _ => super.getConfigValue(key, headerName)
       }
     }
+
+    def serverConfigName(configName: String): Option[String] = serverDefaultConfigNames.get(configName)
   }
 
   private val configDef: LogConfigDef = {
@@ -298,6 +300,8 @@ object LogConfig {
   def apply(): LogConfig = LogConfig(new Properties())
 
   def configNames: Seq[String] = configDef.names.asScala.toSeq.sorted
+
+  def serverConfigName(configName: String): Option[String] = configDef.serverConfigName(configName)
 
   /**
    * Create a log config instance using the given properties and defaults
