@@ -299,15 +299,17 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
             this.metadata.update(Cluster.bootstrap(addresses), time.milliseconds());
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config.values());
-            NetworkClient client = new NetworkClient(
-                    new Selector(config.getLong(ProducerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), this.metrics, time, "producer", channelBuilder),
-                    this.metadata,
-                    clientId,
-                    config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION),
-                    config.getLong(ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG),
-                    config.getInt(ProducerConfig.SEND_BUFFER_CONFIG),
-                    config.getInt(ProducerConfig.RECEIVE_BUFFER_CONFIG),
-                    this.requestTimeoutMs, time);
+            NetworkClient client = new NetworkClient.Builder().
+                    selector(new Selector(config.getLong(ProducerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
+                                    this.metrics, time, "producer", channelBuilder)).
+                    metadata(this.metadata).
+                    clientId(clientId).
+                    maxInFlightRequestsPerConnection(config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION)).
+                    reconnectBackoffMs(config.getLong(ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG)).
+                    socketSendBuffer(config.getInt(ProducerConfig.SEND_BUFFER_CONFIG)).
+                    socketReceiveBuffer(config.getInt(ProducerConfig.RECEIVE_BUFFER_CONFIG)).
+                    requestTimeoutMs(this.requestTimeoutMs).
+                    time(time).build();
             this.sender = new Sender(client,
                     this.metadata,
                     this.accumulator,

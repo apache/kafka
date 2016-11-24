@@ -368,16 +368,16 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           false,
           channelBuilder
         )
-        new NetworkClient(
-          selector,
-          metadataUpdater,
-          config.brokerId.toString,
-          1,
-          0,
-          Selectable.USE_DEFAULT_BUFFER_SIZE,
-          Selectable.USE_DEFAULT_BUFFER_SIZE,
-          config.requestTimeoutMs,
-          time)
+        new NetworkClient.Builder().
+          selector(selector).
+          metadataUpdater(metadataUpdater).
+          clientId(config.brokerId.toString).
+          maxInFlightRequestsPerConnection(1).
+          reconnectBackoffMs(0).
+          socketReceiveBuffer(Selectable.USE_DEFAULT_BUFFER_SIZE).
+          socketSendBuffer(Selectable.USE_DEFAULT_BUFFER_SIZE).
+          requestTimeoutMs(config.requestTimeoutMs).
+          time(time).build()
       }
 
       var shutdownSucceeded: Boolean = false

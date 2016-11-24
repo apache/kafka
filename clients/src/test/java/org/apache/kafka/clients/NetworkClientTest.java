@@ -53,11 +53,28 @@ public class NetworkClientTest {
     private Cluster cluster = TestUtils.singletonCluster("test", nodeId);
     private Node node = cluster.nodes().get(0);
     private long reconnectBackoffMsTest = 10 * 1000;
-    private NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE, reconnectBackoffMsTest, 
-            64 * 1024, 64 * 1024, requestTimeoutMs, time);
-    
-    private NetworkClient clientWithStaticNodes = new NetworkClient(selector, new ManualMetadataUpdater(Arrays.asList(node)),
-            "mock-static", Integer.MAX_VALUE, 0, 64 * 1024, 64 * 1024, requestTimeoutMs, time);
+    private NetworkClient client = new NetworkClient.Builder().
+            selector(selector).
+            metadata(metadata).
+            clientId("mock").
+            maxInFlightRequestsPerConnection(Integer.MAX_VALUE).
+            reconnectBackoffMs(reconnectBackoffMsTest).
+            socketReceiveBuffer(64 * 1024).
+            socketSendBuffer(64 * 1024).
+            requestTimeoutMs(requestTimeoutMs).
+            time(time).build();
+
+    private NetworkClient clientWithStaticNodes = new NetworkClient.Builder().
+            selector(selector).
+            metadata(metadata).
+            metadataUpdater(new ManualMetadataUpdater(Arrays.asList(node))).
+            clientId("mock-static").
+            maxInFlightRequestsPerConnection(Integer.MAX_VALUE).
+            reconnectBackoffMs(0).
+            socketReceiveBuffer(64 * 1024).
+            socketSendBuffer(64 * 1024).
+            requestTimeoutMs(requestTimeoutMs).
+            time(time).build();
 
     @Before
     public void setup() {

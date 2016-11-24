@@ -26,6 +26,7 @@ import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.ResponseHeader;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -82,30 +83,78 @@ public class NetworkClient implements KafkaClient {
 
     private final Time time;
 
-    public NetworkClient(Selectable selector,
-                         Metadata metadata,
-                         String clientId,
-                         int maxInFlightRequestsPerConnection,
-                         long reconnectBackoffMs,
-                         int socketSendBuffer,
-                         int socketReceiveBuffer,
-                         int requestTimeoutMs,
-                         Time time) {
-        this(null, metadata, selector, clientId, maxInFlightRequestsPerConnection,
-                reconnectBackoffMs, socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time);
-    }
+    static public class Builder {
+        private Selectable selector = null;
+        private MetadataUpdater metadataUpdater = null;
+        private Metadata metadata = null;
+        private int socketSendBuffer = -1;
+        private int socketReceiveBuffer = -1;
+        private String clientId = "unknownClientId";
+        private int maxInFlightRequestsPerConnection = 100;
+        private int requestTimeoutMs = 100;
+        private long reconnectBackoffMs = 100;
+        private Time time = null;
 
-    public NetworkClient(Selectable selector,
-                         MetadataUpdater metadataUpdater,
-                         String clientId,
-                         int maxInFlightRequestsPerConnection,
-                         long reconnectBackoffMs,
-                         int socketSendBuffer,
-                         int socketReceiveBuffer,
-                         int requestTimeoutMs,
-                         Time time) {
-        this(metadataUpdater, null, selector, clientId, maxInFlightRequestsPerConnection, reconnectBackoffMs,
-                socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time);
+        public Builder() {
+        }
+
+        public Builder selector(Selectable selector) {
+            this.selector = selector;
+            return this;
+        }
+
+        public Builder metadataUpdater(MetadataUpdater metadataUpdater) {
+            this.metadataUpdater = metadataUpdater;
+            return this;
+        }
+
+        public Builder metadata(Metadata metadata) {
+            this.metadata = metadata;
+            return this;
+        }
+
+        public Builder clientId(String clientId) {
+            this.clientId = clientId;
+            return this;
+        }
+
+        public Builder maxInFlightRequestsPerConnection(int maxInFlightRequestsPerConnection) {
+            this.maxInFlightRequestsPerConnection = maxInFlightRequestsPerConnection;
+            return this;
+        }
+
+        public Builder reconnectBackoffMs(long reconnectBackoffMs) {
+            this.reconnectBackoffMs = reconnectBackoffMs;
+            return this;
+        }
+
+        public Builder socketSendBuffer(int socketSendBuffer) {
+            this.socketSendBuffer = socketSendBuffer;
+            return this;
+        }
+
+        public Builder socketReceiveBuffer(int socketReceiveBuffer) {
+            this.socketReceiveBuffer = socketReceiveBuffer;
+            return this;
+        }
+
+        public Builder time(Time time) {
+            this.time = time;
+            return this;
+        }
+
+        public Builder requestTimeoutMs(int requestTimeoutMs) {
+            this.requestTimeoutMs = requestTimeoutMs;
+            return this;
+        }
+
+        public NetworkClient build() {
+            return new NetworkClient(metadataUpdater, metadata, selector,
+                    clientId, maxInFlightRequestsPerConnection,
+                    reconnectBackoffMs, socketSendBuffer,
+                    socketReceiveBuffer, requestTimeoutMs,
+                    time == null ? new SystemTime() : time);
+        }
     }
 
     private NetworkClient(MetadataUpdater metadataUpdater,
@@ -129,6 +178,9 @@ public class NetworkClient implements KafkaClient {
             this.metadataUpdater = new DefaultMetadataUpdater(metadata);
         } else {
             this.metadataUpdater = metadataUpdater;
+        }
+        if (selector == null) {
+            throw new IllegalArgumentException("`selector` must not be null");
         }
         this.selector = selector;
         this.clientId = clientId;
