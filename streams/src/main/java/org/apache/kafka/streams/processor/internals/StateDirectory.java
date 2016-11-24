@@ -94,7 +94,7 @@ public class StateDirectory {
         try {
             channel = getOrCreateFileChannel(taskId, lockFile.toPath());
         } catch (NoSuchFileException e) {
-            // FileChannel.open(WRITE,APPEND) could throw NoSuchFileException during a startup and shutdown race
+            // FileChannel.open(CREATE, WRITE) could throw NoSuchFileException during a startup and shutdown race
             // in this case we will return immediately
             return false;
         }
