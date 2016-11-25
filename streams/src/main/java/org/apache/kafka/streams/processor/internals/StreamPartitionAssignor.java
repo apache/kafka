@@ -435,8 +435,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                         if (numPartitions < task.partition + 1)
                             numPartitions = task.partition + 1;
                     }
-                }
-                if (numPartitions > -1) {
                     InternalTopicMetadata topicMetadata = new InternalTopicMetadata(topicConfig);
                     topicMetadata.numPartitions = numPartitions;
 
