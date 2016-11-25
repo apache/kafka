@@ -55,4 +55,4 @@ for i in $(seq -w 1 12); do
   docker exec knode01 bash -c "ssh knode$i hostname"
 done
 
-docker exec knode01 bash -c "cd /kfk_src; ducktape ${_DUCKTAPE_OPTIONS} --cluster-file tests/cluster_file.json ${TC_PATHS:-tests/kafkatest/tests}"
+docker exec knode01 bash -c "cd /kfk_src; ducktape ${_DUCKTAPE_OPTIONS} --cluster-file tests/travis/cluster_file.json ${TC_PATHS:-tests/kafkatest/tests}"
