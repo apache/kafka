@@ -315,34 +315,36 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
    */
   def onControllerFailover() {
     if(isRunning) {
-      info("Broker %d starting become controller state transition".format(config.brokerId))
-      //read controller epoch from zk
-      readControllerEpochFromZookeeper()
-      // increment the controller epoch
-      incrementControllerEpoch(zkUtils.zkClient)
-      // before reading source of truth from zookeeper, register the listeners to get broker/topic callbacks
-      registerReassignedPartitionsListener()
-      registerIsrChangeNotificationListener()
-      registerPreferredReplicaElectionListener()
-      partitionStateMachine.registerListeners()
-      replicaStateMachine.registerListeners()
-      initializeControllerContext()
-      replicaStateMachine.startup()
-      partitionStateMachine.startup()
-      // register the partition change listeners for all existing topics on failover
-      controllerContext.allTopics.foreach(topic => partitionStateMachine.registerPartitionChangeListener(topic))
-      info("Broker %d is ready to serve as the new controller with epoch %d".format(config.brokerId, epoch))
-      maybeTriggerPartitionReassignment()
-      maybeTriggerPreferredReplicaElection()
-      /* send partition leadership info to all live brokers */
-      sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq)
-      if (config.autoLeaderRebalanceEnable) {
-        info("starting the partition rebalance scheduler")
-        autoRebalanceScheduler.startup()
-        autoRebalanceScheduler.schedule("partition-rebalance-thread", checkAndTriggerPartitionRebalance,
-          5, config.leaderImbalanceCheckIntervalSeconds.toLong, TimeUnit.SECONDS)
+      inLock(controllerContext.controllerLock) {
+        info("Broker %d starting become controller state transition".format(config.brokerId))
+        //read controller epoch from zk
+        readControllerEpochFromZookeeper()
+        // increment the controller epoch
+        incrementControllerEpoch(zkUtils.zkClient)
+        // before reading source of truth from zookeeper, register the listeners to get broker/topic callbacks
+        registerReassignedPartitionsListener()
+        registerIsrChangeNotificationListener()
+        registerPreferredReplicaElectionListener()
+        partitionStateMachine.registerListeners()
+        replicaStateMachine.registerListeners()
+        initializeControllerContext()
+        replicaStateMachine.startup()
+        partitionStateMachine.startup()
+        // register the partition change listeners for all existing topics on failover
+        controllerContext.allTopics.foreach(topic => partitionStateMachine.registerPartitionChangeListener(topic))
+        info("Broker %d is ready to serve as the new controller with epoch %d".format(config.brokerId, epoch))
+        maybeTriggerPartitionReassignment()
+        maybeTriggerPreferredReplicaElection()
+        /* send partition leadership info to all live brokers */
+        sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq)
+        if (config.autoLeaderRebalanceEnable) {
+          info("starting the partition rebalance scheduler")
+          autoRebalanceScheduler.startup()
+          autoRebalanceScheduler.schedule("partition-rebalance-thread", checkAndTriggerPartitionRebalance,
+            5, config.leaderImbalanceCheckIntervalSeconds.toLong, TimeUnit.SECONDS)
+        }
+        deleteTopicManager.start()
       }
-      deleteTopicManager.start()
     }
     else
       info("Controller has been shut down, aborting startup/failover")
