@@ -76,40 +76,39 @@ public class StreamThread extends Thread {
      * The expected state transitions with the following defined states is:
      *
      *                +-----------+
-     *                |Not Running|
-     *                +-----+-----+
-     *                      |
-     *                      v
-     *                +-----+-----+
-     *          +-----| Running   |<------------+
-     *          |     +-----+-----+             |
-     *          |           |                   |
-     *          |           v                   |
-     *          |     +-----+------------+      |
-     *          <---- |Partitions        |      |
-     *          |     |Revoked           |      |
-     *          |     +-----+------------+      |
-     *          |           |                   |
-     *          |           v                   |
-     *          |     +-----+------------+      |
-     *          |     |Assigning         |      |
-     *          |     |Partitions        |------+
-     *          |     +-----+------------+
-     *          |
-     *          |
-     *          |    +-----+----------+
-     *          +--->|Pending         |
+     *                |Not Running|<---------------+
+     *                +-----+-----+                |
+     *                      |                      |
+     *                      v                      |
+     *                +-----+-----+                |
+     *          +-----| Running   |<------------+  |
+     *          |     +-----+-----+             |  |
+     *          |           |                   |  |
+     *          |           v                   |  |
+     *          |     +-----+------------+      |  |
+     *          <---- |Partitions        |      |  |
+     *          |     |Revoked           |      |  |
+     *          |     +-----+------------+      |  |
+     *          |           |                   |  |
+     *          |           v                   |  |
+     *          |     +-----+------------+      |  |
+     *          |     |Assigning         |      |  |
+     *          |     |Partitions        |------+  |
+     *          |     +-----+------------+         |
+     *          |                                  |
+     *          |                                  |
+     *          |    +-----+----------+            |
+     *          +--->|Pending         |------------+
      *               |Shutdown        |
      *               +-----+----------+
-     *                     |
-     *                     v
-     *               +-----+-----+
-     *               |Not Running|
-     *               +-----------+
      *
-     * Custom states is also allowed for cases where there are custom kafka states for different scenarios.
      */
-    public enum State { NOT_RUNNING, RUNNING, PARTITIONS_REVOKED, ASSIGNING_PARTITIONS, PENDING_SHUTDOWN }
+    public enum State {
+        NOT_RUNNING, RUNNING, PARTITIONS_REVOKED, ASSIGNING_PARTITIONS, PENDING_SHUTDOWN;
+        public boolean isRunning() {
+            return !this.equals(PENDING_SHUTDOWN) && !this.equals(NOT_RUNNING);
+        }
+    }
     private volatile State state = State.NOT_RUNNING;
     private StateListener stateListener = null;
 
@@ -671,9 +670,7 @@ public class StreamThread extends Thread {
     }
 
     public synchronized boolean stillRunning() {
-        State tmpState = state();
-        return tmpState != State.PENDING_SHUTDOWN &&
-            tmpState != State.NOT_RUNNING;
+        return state().isRunning();
     }
 
     private void maybePunctuate(StreamTask task) {

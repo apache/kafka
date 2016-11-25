@@ -136,10 +136,16 @@ public class KafkaStreams {
      *               +-----+-----+
      *               |Not Running|
      *               +-----------+
-     *
-     * Custom states is also allowed for cases where there are custom kafka states for different scenarios.
      */
-    public enum State { CREATED, RUNNING, REBALANCING, PENDING_SHUTDOWN, NOT_RUNNING }
+    public enum State {
+        CREATED, RUNNING, REBALANCING, PENDING_SHUTDOWN, NOT_RUNNING;
+        public boolean isRunning() {
+            return this.equals(RUNNING) || this.equals(REBALANCING);
+        }
+        public boolean isCreatedOrRunning() {
+            return isRunning() || this.equals(CREATED);
+        }
+    }
     private volatile State state = KafkaStreams.State.CREATED;
     private StateListener stateListener = null;
     private StreamStateListener streamStateListener = null;
@@ -341,10 +347,7 @@ public class KafkaStreams {
      */
     public synchronized boolean close(final long timeout, final TimeUnit timeUnit) {
         log.debug("Stopping Kafka Stream process");
-        State tmpState = state();
-        if (tmpState == State.CREATED ||
-            tmpState == State.REBALANCING ||
-            tmpState == State.RUNNING) {
+        if (state().isCreatedOrRunning()) {
             setState(KafkaStreams.State.PENDING_SHUTDOWN);
             // save the current thread so that if it is a stream thread
             // we don't attempt to join it and cause a deadlock
@@ -410,9 +413,7 @@ public class KafkaStreams {
      * @throws IllegalStateException if instance is currently running
      */
     public void cleanUp() {
-        State tmpState = state();
-        if (tmpState == KafkaStreams.State.RUNNING ||
-            tmpState == KafkaStreams.State.REBALANCING) {
+        if (state().isRunning()) {
             throw new IllegalStateException("Cannot clean up while running.");
         }
 
@@ -529,7 +530,7 @@ public class KafkaStreams {
 
     private void validateIsRunning() {
         State tmpState = state();
-        if (tmpState != State.RUNNING && tmpState != State.REBALANCING) {
+        if (!tmpState.isRunning()) {
             throw new IllegalStateException("KafkaStreams is not running. State is " + tmpState);
         }
     }
