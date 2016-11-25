@@ -67,7 +67,6 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       val preferredReplicaElectionCommand = new PreferredReplicaLeaderElectionCommand(zkUtils, partitionsForPreferredReplicaElection)
 
       preferredReplicaElectionCommand.moveLeaderToPreferredReplica()
-      println("Successfully started preferred replica election for partitions %s".format(partitionsForPreferredReplicaElection))
     } catch {
       case e: Throwable =>
         println("Failed to start preferred replica election")
@@ -119,32 +118,21 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
   }
 }
 
-class PreferredReplicaLeaderElectionCommand(zkUtils: ZkUtils, partitions: scala.collection.Set[TopicAndPartition])
+class PreferredReplicaLeaderElectionCommand(zkUtils: ZkUtils, partitionsFromUser: scala.collection.Set[TopicAndPartition])
   extends Logging {
   def moveLeaderToPreferredReplica() = {
     try {
-      val validPartitions = partitions.filter(p => validatePartition(zkUtils, p.topic, p.partition))
+      val topics = partitionsFromUser.map(_.topic).toSet
+      val partitionsFromZk = zkUtils.getPartitionsForTopics(topics.toSeq).flatMap{case (topic, partitions) =>
+        partitions.map(TopicAndPartition(topic, _))}.toSet
+
+      val (validPartitions, invalidPartitions) = partitionsFromUser.partition(p => partitionsFromZk.contains(p))
       PreferredReplicaLeaderElectionCommand.writePreferredReplicaElectionData(zkUtils, validPartitions)
+
+      info("Successfully started preferred replica election for partitions %s".format(validPartitions))
+      invalidPartitions.foreach(p => error("Skipping preferred replica leader election for partition %s since it doesn't exist.".format(p)))
     } catch {
       case e: Throwable => throw new AdminCommandFailedException("Admin command failed", e)
-    }
-  }
-
-  def validatePartition(zkUtils: ZkUtils, topic: String, partition: Int): Boolean = {
-    // check if partition exists
-    val partitionsOpt = zkUtils.getPartitionsForTopics(List(topic)).get(topic)
-    partitionsOpt match {
-      case Some(partitions) =>
-        if(partitions.contains(partition)) {
-          true
-        } else {
-          error("Skipping preferred replica leader election for partition [%s,%d] ".format(topic, partition) +
-            "since it doesn't exist")
-          false
-        }
-      case None => error("Skipping preferred replica leader election for partition " +
-        "[%s,%d] since topic %s doesn't exist".format(topic, partition, topic))
-        false
     }
   }
 }
