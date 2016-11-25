@@ -46,6 +46,9 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -112,43 +115,53 @@ public class KafkaStreams {
      * Note this instance will be in "Rebalancing" state if any of its threads is rebalancing
      * The expected state transition with the following defined states is:
      *
-     *                +-----------+
-     *         +<-----|Created    |
-     *         |      +-----+-----+
+     *                 +-----------+
+     *         +<------|Created    |
+     *         |       +-----+-----+
      *         |             |   +--+
      *         |             v   |  |
      *         |       +-----+---v--+--+
      *         +<----- | Rebalancing   |<--------+
      *         |       +-----+---------+         ^
-     *         |             |                   |
-     *         |             v                   |
-     *         |       +-----+------------+      |
-     *         |       |Running           |------+
+     *         |                 +--+            |
+     *         |                 |  |            |
+     *         |       +-----+---v--+-----+      |
+     *         +------>|Running           |------+
      *         |       +-----+------------+
      *         |             |
      *         |             v
-     *         |     +-----+----------+
+     *         |     +-------+--------+
      *         +---->|Pending         |
      *               |Shutdown        |
-     *               +-----+----------+
-     *                     |
-     *                     v
-     *               +-----+-----+
-     *               |Not Running|
-     *               +-----------+
+     *               +-------+--------+
+     *                       |
+     *                       v
+     *                 +-----+-----+
+     *                 |Not Running|
+     *                 +-----------+
      */
     public enum State {
-        CREATED, RUNNING, REBALANCING, PENDING_SHUTDOWN, NOT_RUNNING;
+        CREATED(1, 2, 3), RUNNING(2, 3), REBALANCING(1, 2, 3), PENDING_SHUTDOWN(4), NOT_RUNNING;
+
+        private final Set<Integer> validTransitions = new HashSet<>();
+
+        State(final Integer...validTransitions) {
+            this.validTransitions.addAll(Arrays.asList(validTransitions));
+        }
+
         public boolean isRunning() {
             return this.equals(RUNNING) || this.equals(REBALANCING);
         }
         public boolean isCreatedOrRunning() {
             return isRunning() || this.equals(CREATED);
         }
+        public boolean isValidTransition(final State newState) {
+            return validTransitions.contains(newState.ordinal());
+        }
     }
     private volatile State state = KafkaStreams.State.CREATED;
     private StateListener stateListener = null;
-    private StreamStateListener streamStateListener = null;
+    private final StreamStateListener streamStateListener = new StreamStateListener();
 
     /**
      * Listen to state change events
@@ -173,42 +186,10 @@ public class KafkaStreams {
 
     private synchronized void setState(State newState) {
         State oldState = state;
+        if (!state.isValidTransition(newState)) {
+            throw new IllegalStateException("Incorrect state transition from " + state + " to " + newState);
+        }
         state = newState;
-        boolean throwException = false;
-
-        // validate all transitions
-        switch (newState) {
-            case NOT_RUNNING:
-                if (oldState != State.PENDING_SHUTDOWN &&
-                    oldState != State.NOT_RUNNING) {
-                    throwException = true;
-                }
-                break;
-            case RUNNING:
-                if (oldState != State.CREATED &&
-                    oldState != State.RUNNING) {
-                    throwException = true;
-                }
-                break;
-            case REBALANCING:
-                if (oldState != State.RUNNING &&
-                    oldState != State.REBALANCING) {
-                    throwException = true;
-                }
-                break;
-            case PENDING_SHUTDOWN:
-                if (oldState != State.CREATED &&
-                    oldState != State.REBALANCING &&
-                    oldState != State.RUNNING) {
-                    throwException = true;
-                }
-                break;
-            default:
-                throw new IllegalStateException("Unexpected state " + newState);
-        }
-        if (throwException) {
-            throw new IllegalStateException("Incorrect state transition from " + oldState + " to " + newState);
-        }
         if (stateListener != null) {
             stateListener.onChange(state, oldState);
         }
@@ -262,7 +243,6 @@ public class KafkaStreams {
     public KafkaStreams(final TopologyBuilder builder, final StreamsConfig config, final KafkaClientSupplier clientSupplier) {
         // create the metrics
         final Time time = new SystemTime();
-        streamStateListener = new StreamStateListener();
         processId = UUID.randomUUID();
 
         this.config = config;
@@ -313,7 +293,7 @@ public class KafkaStreams {
     public synchronized void start() {
         log.debug("Starting Kafka Stream process");
 
-        if (state() == KafkaStreams.State.CREATED) {
+        if (state == KafkaStreams.State.CREATED) {
             for (final StreamThread thread : threads)
                 thread.start();
 
@@ -347,7 +327,7 @@ public class KafkaStreams {
      */
     public synchronized boolean close(final long timeout, final TimeUnit timeUnit) {
         log.debug("Stopping Kafka Stream process");
-        if (state().isCreatedOrRunning()) {
+        if (state.isCreatedOrRunning()) {
             setState(KafkaStreams.State.PENDING_SHUTDOWN);
             // save the current thread so that if it is a stream thread
             // we don't attempt to join it and cause a deadlock
@@ -413,7 +393,7 @@ public class KafkaStreams {
      * @throws IllegalStateException if instance is currently running
      */
     public void cleanUp() {
-        if (state().isRunning()) {
+        if (state.isRunning()) {
             throw new IllegalStateException("Cannot clean up while running.");
         }
 
@@ -529,9 +509,8 @@ public class KafkaStreams {
     }
 
     private void validateIsRunning() {
-        State tmpState = state();
-        if (!tmpState.isRunning()) {
-            throw new IllegalStateException("KafkaStreams is not running. State is " + tmpState);
+        if (!state.isRunning()) {
+            throw new IllegalStateException("KafkaStreams is not running. State is " + state);
         }
     }
 }

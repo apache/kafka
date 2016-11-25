@@ -51,6 +51,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -104,9 +105,20 @@ public class StreamThread extends Thread {
      *
      */
     public enum State {
-        NOT_RUNNING, RUNNING, PARTITIONS_REVOKED, ASSIGNING_PARTITIONS, PENDING_SHUTDOWN;
+        NOT_RUNNING(1), RUNNING(1, 2, 4), PARTITIONS_REVOKED(3, 4), ASSIGNING_PARTITIONS(1), PENDING_SHUTDOWN(0);
+
+        private final Set<Integer> validTransitions = new HashSet<>();
+
+        State(final Integer...validTransitions) {
+            this.validTransitions.addAll(Arrays.asList(validTransitions));
+        }
+
         public boolean isRunning() {
             return !this.equals(PENDING_SHUTDOWN) && !this.equals(NOT_RUNNING);
+        }
+
+        public boolean isValidTransition(final State newState) {
+            return validTransitions.contains(newState.ordinal());
         }
     }
     private volatile State state = State.NOT_RUNNING;
@@ -142,47 +154,10 @@ public class StreamThread extends Thread {
 
     private synchronized void setState(State newState) {
         State oldState = state;
+        if (!state.isValidTransition(newState)) {
+            throw new IllegalStateException("Incorrect state transition from " + state + " to " + newState);
+        }
         state = newState;
-        boolean throwException = false;
-
-        // validate all transitions
-        switch (newState) {
-            case NOT_RUNNING:
-                if (oldState != State.PENDING_SHUTDOWN &&
-                    oldState != State.NOT_RUNNING) {
-                    throwException = true;
-
-                }
-                break;
-            case RUNNING:
-                if (oldState != State.NOT_RUNNING &&
-                    oldState != State.ASSIGNING_PARTITIONS) {
-                    throwException = true;
-                }
-                break;
-            case PARTITIONS_REVOKED:
-                if (oldState != State.RUNNING) {
-                    throwException = true;
-                }
-                break;
-            case ASSIGNING_PARTITIONS:
-                if (oldState != State.PARTITIONS_REVOKED) {
-                    throwException = true;
-                }
-                break;
-            case PENDING_SHUTDOWN:
-                if (oldState != State.RUNNING &&
-                    oldState != State.PARTITIONS_REVOKED) {
-                    throwException = true;
-                }
-                break;
-            default:
-                throw new StreamsException("Unexpected state " + newState);
-        }
-        if (throwException) {
-            throw new StreamsException("Incorrect state transition from " + oldState + " to " + newState);
-        }
-
         if (stateListener != null) {
             synchronized (stateListener) {
                 stateListener.onChange(state, oldState);
@@ -236,7 +211,7 @@ public class StreamThread extends Thread {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> assignment) {
             try {
-                if (state() == State.PENDING_SHUTDOWN) {
+                if (state == State.PENDING_SHUTDOWN) {
                     log.info("stream-thread [{}] New partitions [{}] assigned while shutting down.",
                         StreamThread.this.getName(), assignment);
                     return;
@@ -259,7 +234,7 @@ public class StreamThread extends Thread {
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> assignment) {
             try {
-                if (state() == State.PENDING_SHUTDOWN) {
+                if (state == State.PENDING_SHUTDOWN) {
                     log.info("stream-thread [{}] New partitions [{}] assigned while shutting down.",
                         StreamThread.this.getName(), assignment);
                     return;
@@ -281,9 +256,8 @@ public class StreamThread extends Thread {
         }
     };
 
-
     public synchronized boolean isInitialized() {
-        return state() == State.RUNNING;
+        return state == State.RUNNING;
     }
 
     public StreamThread(TopologyBuilder builder,
@@ -296,7 +270,6 @@ public class StreamThread extends Thread {
                         Time time,
                         StreamsMetadataState streamsMetadataState) {
         super("StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement());
-        setState(State.NOT_RUNNING);
         this.applicationId = applicationId;
         String threadName = getName();
         this.config = config;
@@ -670,7 +643,7 @@ public class StreamThread extends Thread {
     }
 
     public synchronized boolean stillRunning() {
-        return state().isRunning();
+        return state.isRunning();
     }
 
     private void maybePunctuate(StreamTask task) {
