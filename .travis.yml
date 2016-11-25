@@ -31,8 +31,14 @@ jdk:
   - oraclejdk8
 
 before_install:
+  - wget http://services.gradle.org/distributions/gradle-3.2.1-bin.zip
+  - unzip gradle-3.2.1-bin.zip
+  - export GRADLE_HOME=$PWD/gradle-3.2.1
+  - export PATH=$GRADLE_HOME/bin:$PATH
+  - gradle
 
 script:
+
   - ./gradlew releaseTarGz && /bin/bash ./tests/travis/run_tests.sh
 
 services:
