@@ -96,6 +96,12 @@ public class Serdes {
             super(new ByteArraySerializer(), new ByteArrayDeserializer());
         }
     }
+    
+    static public final class GenericSerde<T> extends WrapperSerde<T> {
+        public GenericSerde() {
+            super(new GenericSerializer<T>(), new GenericDeserializer<T>());
+        }
+    }
 
     @SuppressWarnings("unchecked")
     static public <T> Serde<T> serdeFrom(Class<T> type) {
@@ -127,8 +133,8 @@ public class Serdes {
             return (Serde<T>) Bytes();
         }
 
-        // TODO: we can also serializes objects of type T using generic Java serialization by default
-        throw new IllegalArgumentException("Unknown class for built-in serializer");
+        return new GenericSerde<T>();
+        // throw new IllegalArgumentException("Unknown class for built-in serializer");
     }
 
     /**
