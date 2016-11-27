@@ -98,8 +98,8 @@ public class Serdes {
     }
     
     static public final class GenericSerde<T> extends WrapperSerde<T> {
-        public GenericSerde() {
-            super(new GenericSerializer<T>(), new GenericDeserializer<T>());
+        public GenericSerde(Class<T> type) {
+            super(new GenericSerializer<T>(type), new GenericDeserializer<T>(type));
         }
     }
 
@@ -133,7 +133,7 @@ public class Serdes {
             return (Serde<T>) Bytes();
         }
 
-        return new GenericSerde<T>();
+        return new GenericSerde<T>(type);
         // throw new IllegalArgumentException("Unknown class for built-in serializer");
     }
 

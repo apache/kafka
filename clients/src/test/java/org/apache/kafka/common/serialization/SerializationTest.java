@@ -26,8 +26,18 @@ public class SerializationTest {
 
     final private String topic = "testTopic";
 
-    private class DummyClass {
+    private static class DummyPOJO {
+        private int age;
 
+        public DummyPOJO() {}
+        
+        public int getAge() {
+            return age;
+        }
+
+        public void setAge(int age) {
+            this.age = age;
+        }
     }
 
     @Test
@@ -43,9 +53,18 @@ public class SerializationTest {
                 value, otherSerde.deserializer().deserialize(topic, thisSerde.serializer().serialize(topic, value)));
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void testSerdeFromUnknown() {
-        Serdes.serdeFrom(DummyClass.class);
+    @Test
+    public void testSerdeFromPOJO() {
+        DummyPOJO pojo = new DummyPOJO();
+        pojo.setAge(23);
+        Serde<DummyPOJO> serde = Serdes.serdeFrom(DummyPOJO.class);
+        Serializer<DummyPOJO> serializer = serde.serializer();
+        Deserializer<DummyPOJO> deserializer = serde.deserializer();
+        byte[] serBytes = serializer.serialize(topic, pojo);
+        System.out.println("length=" + serBytes.length);
+        System.out.println("JSON=" + new String(serBytes));
+        DummyPOJO newPOJO = deserializer.deserialize(topic, serBytes);
+        assertEquals(pojo.getAge(), newPOJO.getAge());
     }
 
     @Test(expected = IllegalArgumentException.class)
