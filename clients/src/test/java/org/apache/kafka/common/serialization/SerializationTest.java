@@ -61,8 +61,6 @@ public class SerializationTest {
         Serializer<DummyPOJO> serializer = serde.serializer();
         Deserializer<DummyPOJO> deserializer = serde.deserializer();
         byte[] serBytes = serializer.serialize(topic, pojo);
-        System.out.println("length=" + serBytes.length);
-        System.out.println("JSON=" + new String(serBytes));
         DummyPOJO newPOJO = deserializer.deserialize(topic, serBytes);
         assertEquals(pojo.getAge(), newPOJO.getAge());
     }
