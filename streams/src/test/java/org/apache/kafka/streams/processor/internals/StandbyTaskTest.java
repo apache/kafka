@@ -29,7 +29,7 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockStateStoreSupplier;
@@ -74,12 +74,12 @@ public class StandbyTaskTest {
             Collections.<ProcessorNode>emptyList(),
             Collections.<String, SourceNode>emptyMap(),
             Collections.<String, SinkNode>emptyMap(),
-            Utils.<StateStoreSupplier>mkList(
-                    new MockStateStoreSupplier(storeName1, false),
-                    new MockStateStoreSupplier(storeName2, true)
+            Utils.mkList(
+                    new MockStateStoreSupplier(storeName1, false).get(),
+                    new MockStateStoreSupplier(storeName2, true).get()
             ),
-            Collections.<String, String>emptyMap()
-    );
+            Collections.<String, String>emptyMap(),
+            Collections.<StateStore, ProcessorNode>emptyMap());
 
     private final TopicPartition ktable = new TopicPartition("ktable1", 0);
     private final Set<TopicPartition> ktablePartitions = Utils.mkSet(ktable);
@@ -87,15 +87,15 @@ public class StandbyTaskTest {
             Collections.<ProcessorNode>emptyList(),
             Collections.<String, SourceNode>emptyMap(),
             Collections.<String, SinkNode>emptyMap(),
-            Utils.<StateStoreSupplier>mkList(
-                    new MockStateStoreSupplier(ktable.topic(), true, false)
+            Utils.mkList(
+                    new MockStateStoreSupplier(ktable.topic(), true, false).get()
             ),
             new HashMap<String, String>() {
             {
                 put("ktable1", ktable.topic());
             }
-        }
-    );
+        },
+            Collections.<StateStore, ProcessorNode>emptyMap());
     private File baseDir;
     private StateDirectory stateDirectory;
 
@@ -199,7 +199,7 @@ public class StandbyTaskTest {
         assertEquals(Collections.emptyList(), store1.keys);
         assertEquals(Utils.mkList(1, 2, 3), store2.keys);
 
-        task.close();
+        task.closeStateManager();
 
         File taskDir = stateDirectory.directoryForTask(taskId);
         OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(taskDir, ProcessorStateManager.CHECKPOINT_FILE_NAME));
@@ -292,7 +292,7 @@ public class StandbyTaskTest {
         remaining = task.update(ktable, remaining);
         assertNull(remaining);
 
-        task.close();
+        task.closeStateManager();
 
         File taskDir = stateDirectory.directoryForTask(taskId);
         OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(taskDir, ProcessorStateManager.CHECKPOINT_FILE_NAME));

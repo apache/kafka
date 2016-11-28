@@ -24,7 +24,7 @@ import kafka.client.ClientUtils
 import kafka.api.{FetchRequestBuilder, OffsetRequest, Request}
 import kafka.cluster.BrokerEndPoint
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import kafka.common.{MessageFormatter, TopicAndPartition}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.utils.Utils
@@ -112,12 +112,12 @@ object SimpleConsumerShell extends Logging {
     val maxWaitMs = options.valueOf(maxWaitMsOpt).intValue()
     val maxMessages = options.valueOf(maxMessagesOpt).intValue
 
-    val skipMessageOnError = if (options.has(skipMessageOnErrorOpt)) true else false
-    val printOffsets = if(options.has(printOffsetOpt)) true else false
+    val skipMessageOnError = options.has(skipMessageOnErrorOpt)
+    val printOffsets = options.has(printOffsetOpt)
     val noWaitAtEndOfLog = options.has(noWaitAtEndOfLogOpt)
 
     val messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt))
-    val formatterArgs = CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt))
+    val formatterArgs = CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt).asScala)
 
     val fetchRequestBuilder = new FetchRequestBuilder()
                        .clientId(clientId)

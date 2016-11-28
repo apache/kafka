@@ -18,12 +18,13 @@
 package kafka.utils
 
 import java.io.IOException
+
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, NetworkClient}
 import org.apache.kafka.common.Node
+import org.apache.kafka.common.requests.AbstractRequest
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
-
 import org.apache.kafka.common.utils.{Time => JTime}
 
 object NetworkClientBlockingOps {
@@ -45,24 +46,52 @@ object NetworkClientBlockingOps {
 class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
 
   /**
-   * Invokes `client.ready` followed by 0 or more `client.poll` invocations until the connection to `node` is ready,
-   * the timeout expires or the connection fails.
+    * Checks whether the node is currently connected, first calling `client.poll` to ensure that any pending
+    * disconnects have been processed.
+    *
+    * This method can be used to check the status of a connection prior to calling `blockingReady` to be able
+    * to tell whether the latter completed a new connection.
+    */
+  def isReady(node: Node)(implicit time: JTime): Boolean = {
+    val currentTime = time.milliseconds()
+    client.poll(0, currentTime)
+    client.isReady(node, currentTime)
+  }
+
+  /**
+   * Invokes `client.poll` to discard pending disconnects, followed by `client.ready` and 0 or more `client.poll`
+   * invocations until the connection to `node` is ready, the timeout expires or the connection fails.
    *
    * It returns `true` if the call completes normally or `false` if the timeout expires. If the connection fails,
-   * an `IOException` is thrown instead.
+   * an `IOException` is thrown instead. Note that if the `NetworkClient` has been configured with a positive
+   * connection timeout, it is possible for this method to raise an `IOException` for a previous connection which
+   * has recently disconnected.
    *
    * This method is useful for implementing blocking behaviour on top of the non-blocking `NetworkClient`, use it with
    * care.
    */
   def blockingReady(node: Node, timeout: Long)(implicit time: JTime): Boolean = {
     require(timeout >=0, "timeout should be >= 0")
-    client.ready(node, time.milliseconds()) || pollUntil(timeout) { (_, now) =>
-      if (client.isReady(node, now))
+
+    val startTime = time.milliseconds()
+    val expiryTime = startTime + timeout
+
+    @tailrec
+    def awaitReady(iterationStartTime: Long): Boolean = {
+      if (client.isReady(node, iterationStartTime))
         true
       else if (client.connectionFailed(node))
         throw new IOException(s"Connection to $node failed")
-      else false
+      else {
+        val pollTimeout = expiryTime - iterationStartTime
+        client.poll(pollTimeout, iterationStartTime)
+        val afterPollTime = time.milliseconds()
+        if (afterPollTime < expiryTime) awaitReady(afterPollTime)
+        else false
+      }
     }
+
+    isReady(node) || client.ready(node, startTime) || awaitReady(startTime)
   }
 
   /**
@@ -74,50 +103,19 @@ class NetworkClientBlockingOps(val client: NetworkClient) extends AnyVal {
    * This method is useful for implementing blocking behaviour on top of the non-blocking `NetworkClient`, use it with
    * care.
    */
-  def blockingSendAndReceive(request: ClientRequest)(implicit time: JTime): ClientResponse = {
+  def blockingSendAndReceive(request: ClientRequest, body: AbstractRequest)(implicit time: JTime): ClientResponse = {
     client.send(request, time.milliseconds())
 
     pollContinuously { responses =>
       val response = responses.find { response =>
-        response.request.request.header.correlationId == request.request.header.correlationId
+        response.requestHeader.correlationId == request.header.correlationId
       }
       response.foreach { r =>
-        if (r.wasDisconnected) {
-          val destination = request.request.destination
-          throw new IOException(s"Connection to $destination was disconnected before the response was read")
-        }
+        if (r.wasDisconnected)
+          throw new IOException(s"Connection to ${request.destination} was disconnected before the response was read")
       }
       response
     }
-
-  }
-
-  /**
-   * Invokes `client.poll` until `predicate` returns `true` or the timeout expires.
-   *
-   * It returns `true` if the call completes normally or `false` if the timeout expires. Exceptions thrown via
-   * `predicate` are not handled and will bubble up.
-   *
-   * This method is useful for implementing blocking behaviour on top of the non-blocking `NetworkClient`, use it with
-   * care.
-   */
-  private def pollUntil(timeout: Long)(predicate: (Seq[ClientResponse], Long) => Boolean)(implicit time: JTime): Boolean = {
-    val methodStartTime = time.milliseconds()
-    val timeoutExpiryTime = methodStartTime + timeout
-
-    @tailrec
-    def recursivePoll(iterationStartTime: Long): Boolean = {
-      val pollTimeout = timeoutExpiryTime - iterationStartTime
-      val responses = client.poll(pollTimeout, iterationStartTime).asScala
-      if (predicate(responses, iterationStartTime)) true
-      else {
-        val afterPollTime = time.milliseconds()
-        if (afterPollTime < timeoutExpiryTime) recursivePoll(afterPollTime)
-        else false
-      }
-    }
-
-    recursivePoll(methodStartTime)
   }
 
   /**

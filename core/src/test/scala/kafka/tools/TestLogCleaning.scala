@@ -301,7 +301,7 @@ object TestLogCleaning {
           consumedWriter.newLine()
         }
       } catch {
-        case e: ConsumerTimeoutException => 
+        case _: ConsumerTimeoutException =>
       }
     }
     consumedWriter.close()

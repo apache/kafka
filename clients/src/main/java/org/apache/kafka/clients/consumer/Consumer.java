@@ -151,6 +151,21 @@ public interface Consumer<K, V> extends Closeable {
     public void resume(Collection<TopicPartition> partitions);
 
     /**
+     * @see KafkaConsumer#offsetsForTimes(java.util.Map)
+     */
+    public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch);
+
+    /**
+     * @see KafkaConsumer#beginningOffsets(java.util.Collection)
+     */
+    public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions);
+
+    /**
+     * @see KafkaConsumer#endOffsets(java.util.Collection)
+     */
+    public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions);
+
+    /**
      * @see KafkaConsumer#close()
      */
     public void close();

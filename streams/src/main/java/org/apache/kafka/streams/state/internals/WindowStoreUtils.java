@@ -56,6 +56,14 @@ public class WindowStoreUtils {
         return serdes.keyFrom(bytes);
     }
 
+    public static Bytes bytesKeyFromBinaryKey(byte[] binaryKey) {
+        byte[] bytes = new byte[binaryKey.length - TIMESTAMP_SIZE - SEQNUM_SIZE];
+
+        System.arraycopy(binaryKey, 0, bytes, 0, bytes.length);
+
+        return Bytes.wrap(bytes);
+    }
+
     public static long timestampFromBinaryKey(byte[] binaryKey) {
         return ByteBuffer.wrap(binaryKey).getLong(binaryKey.length - TIMESTAMP_SIZE - SEQNUM_SIZE);
     }

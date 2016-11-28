@@ -94,26 +94,26 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     public void subscribe(Pattern pattern, final ConsumerRebalanceListener listener) {
         ensureNotClosed();
         this.subscriptions.subscribe(pattern, listener);
-        List<String> topicsToSubscribe = new ArrayList<>();
+        Set<String> topicsToSubscribe = new HashSet<>();
         for (String topic: partitions.keySet()) {
             if (pattern.matcher(topic).matches() &&
                 !subscriptions.subscription().contains(topic))
                 topicsToSubscribe.add(topic);
         }
         ensureNotClosed();
-        this.subscriptions.changeSubscription(topicsToSubscribe);
+        this.subscriptions.subscribeFromPattern(topicsToSubscribe);
     }
 
     @Override
     public void subscribe(Collection<String> topics, final ConsumerRebalanceListener listener) {
         ensureNotClosed();
-        this.subscriptions.subscribe(topics, listener);
+        this.subscriptions.subscribe(new HashSet<>(topics), listener);
     }
 
     @Override
     public void assign(Collection<TopicPartition> partitions) {
         ensureNotClosed();
-        this.subscriptions.assignFromUser(partitions);
+        this.subscriptions.assignFromUser(new HashSet<>(partitions));
     }
 
     @Override
@@ -296,6 +296,35 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             subscriptions.resume(partition);
             paused.remove(partition);
         }
+    }
+
+    @Override
+    public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {
+        throw new UnsupportedOperationException("Not implemented yet.");
+    }
+
+    @Override
+    public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions) {
+        Map<TopicPartition, Long> result = new HashMap<>();
+        for (TopicPartition tp : partitions) {
+            Long beginningOffset = beginningOffsets.get(tp);
+            if (beginningOffset == null)
+                throw new IllegalStateException("The partition " + tp + " does not have a beginning offset.");
+            result.put(tp, beginningOffset);
+        }
+        return result;
+    }
+
+    @Override
+    public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions) {
+        Map<TopicPartition, Long> result = new HashMap<>();
+        for (TopicPartition tp : partitions) {
+            Long endOffset = endOffsets.get(tp);
+            if (endOffset == null)
+                throw new IllegalStateException("The partition " + tp + " does not have an end offset.");
+            result.put(tp, endOffset);
+        }
+        return result;
     }
 
     @Override

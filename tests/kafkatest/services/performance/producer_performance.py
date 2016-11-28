@@ -34,10 +34,10 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
     LOG_FILE = os.path.join(LOG_DIR, "producer_performance.log")
     LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
 
-    def __init__(self, context, num_nodes, kafka, topic, num_records, record_size, throughput, version=TRUNK, settings={},
-                 intermediate_stats=False, client_id="producer-performance", jmx_object_names=None, jmx_attributes=[]):
+    def __init__(self, context, num_nodes, kafka, topic, num_records, record_size, throughput, version=TRUNK, settings=None,
+                 intermediate_stats=False, client_id="producer-performance", jmx_object_names=None, jmx_attributes=None):
 
-        JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes)
+        JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes or [])
         PerformanceService.__init__(self, context, num_nodes)
 
         self.logs = {
@@ -71,7 +71,7 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
             'record_size': record_size,
             'throughput': throughput
         }
-        self.settings = settings
+        self.settings = settings or {}
         self.intermediate_stats = intermediate_stats
         self.client_id = client_id
 

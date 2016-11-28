@@ -50,7 +50,6 @@ import org.apache.kafka.common.serialization.{ByteArraySerializer, Serializer}
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 
 import scala.collection.Map
-import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
 
 /**
@@ -184,17 +183,18 @@ object TestUtils extends Logging {
     }.mkString(",")
 
     val props = new Properties
-    if (nodeId >= 0) props.put("broker.id", nodeId.toString)
-    props.put("listeners", listeners)
-    props.put("log.dir", TestUtils.tempDir().getAbsolutePath)
-    props.put("zookeeper.connect", zkConnect)
-    props.put("replica.socket.timeout.ms", "1500")
-    props.put("controller.socket.timeout.ms", "1500")
-    props.put("controlled.shutdown.enable", enableControlledShutdown.toString)
-    props.put("delete.topic.enable", enableDeleteTopic.toString)
-    props.put("controlled.shutdown.retry.backoff.ms", "100")
-    props.put("log.cleaner.dedupe.buffer.size", "2097152")
-    rack.foreach(props.put("broker.rack", _))
+    if (nodeId >= 0) props.put(KafkaConfig.BrokerIdProp, nodeId.toString)
+    props.put(KafkaConfig.ListenersProp, listeners)
+    props.put(KafkaConfig.LogDirProp, TestUtils.tempDir().getAbsolutePath)
+    props.put(KafkaConfig.ZkConnectProp, zkConnect)
+    props.put(KafkaConfig.ZkConnectionTimeoutMsProp, "10000")
+    props.put(KafkaConfig.ReplicaSocketTimeoutMsProp, "1500")
+    props.put(KafkaConfig.ControllerSocketTimeoutMsProp, "1500")
+    props.put(KafkaConfig.ControlledShutdownEnableProp, enableControlledShutdown.toString)
+    props.put(KafkaConfig.DeleteTopicEnableProp, enableDeleteTopic.toString)
+    props.put(KafkaConfig.ControlledShutdownRetryBackoffMsProp, "100")
+    props.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, "2097152")
+    rack.foreach(props.put(KafkaConfig.RackProp, _))
 
     if (protocolAndPorts.exists { case (protocol, _) => usesSslTransportLayer(protocol) })
       props.putAll(sslConfigs(Mode.SERVER, false, trustStoreFile, s"server$nodeId"))
@@ -206,7 +206,6 @@ object TestUtils extends Logging {
       props.put(KafkaConfig.InterBrokerSecurityProtocolProp, protocol.name)
     }
 
-    props.put("port", port.toString)
     props
   }
 
@@ -274,8 +273,9 @@ object TestUtils extends Logging {
   def singleMessageSet(payload: Array[Byte],
                        codec: CompressionCodec = NoCompressionCodec,
                        key: Array[Byte] = null,
+                       timestamp: Long = Message.NoTimestamp,
                        magicValue: Byte = Message.CurrentMagicValue) =
-    new ByteBufferMessageSet(compressionCodec = codec, messages = new Message(payload, key, Message.NoTimestamp, magicValue))
+    new ByteBufferMessageSet(compressionCodec = codec, messages = new Message(payload, key, timestamp, magicValue))
 
   /**
    * Generate an array of random bytes
@@ -821,14 +821,14 @@ object TestUtils extends Logging {
   def writeNonsenseToFile(fileName: File, position: Long, size: Int) {
     val file = new RandomAccessFile(fileName, "rw")
     file.seek(position)
-    for(i <- 0 until size)
+    for (_ <- 0 until size)
       file.writeByte(random.nextInt(255))
     file.close()
   }
 
   def appendNonsenseToFile(fileName: File, size: Int) {
     val file = new FileOutputStream(fileName, true)
-    for(i <- 0 until size)
+    for (_ <- 0 until size)
       file.write(random.nextInt(255))
     file.close()
   }
@@ -932,18 +932,24 @@ object TestUtils extends Logging {
 
   def produceMessages(servers: Seq[KafkaServer],
                       topic: String,
-                      numMessages: Int): Seq[String] = {
+                      numMessages: Int,
+                      acks: Int = -1,
+                      valueBytes: Int = -1): Seq[Array[Byte]] = {
 
     val producer = createNewProducer(
       TestUtils.getBrokerListStrFromServers(servers),
       retries = 5,
-      requestTimeoutMs = 2000
+      requestTimeoutMs = 2000,
+      acks = acks
     )
 
-    val values = (0 until numMessages).map(x => s"test-$x")
+    val values = (0 until numMessages).map(x => valueBytes match {
+      case -1 => s"test-$x".getBytes
+      case _ => new Array[Byte](valueBytes)
+    })
     
     val futures = values.map { value =>
-      producer.send(new ProducerRecord(topic, null, null, value.getBytes))
+      producer.send(new ProducerRecord(topic, value))
     }
     futures.foreach(_.get)
     producer.close()
@@ -977,7 +983,7 @@ object TestUtils extends Logging {
 
     var messages: List[String] = Nil
     val shouldGetAllMessages = nMessagesPerThread < 0
-    for ((topic, messageStreams) <- topicMessageStreams) {
+    for (messageStreams <- topicMessageStreams.values) {
       for (messageStream <- messageStreams) {
         val iterator = messageStream.iterator()
         try {
@@ -1049,7 +1055,7 @@ object TestUtils extends Logging {
     val sslConfigs = TestSslUtils.createSslConfig(clientCert, true, mode, trustStore, certAlias)
 
     val sslProps = new Properties()
-    sslConfigs.foreach { case (k, v) => sslProps.put(k, v) }
+    sslConfigs.asScala.foreach { case (k, v) => sslProps.put(k, v) }
     sslProps
   }
 
@@ -1110,7 +1116,7 @@ object TestUtils extends Logging {
           }
       }
     } catch {
-      case ie: InterruptedException => failWithTimeout()
+      case _: InterruptedException => failWithTimeout()
       case e: Throwable => exceptions += e
     } finally {
       threadPool.shutdownNow()
@@ -1118,7 +1124,6 @@ object TestUtils extends Logging {
     assertTrue(s"$message failed with exception(s) $exceptions", exceptions.isEmpty)
 
   }
-
 }
 
 class IntEncoder(props: VerifiableProperties = null) extends Encoder[Int] {

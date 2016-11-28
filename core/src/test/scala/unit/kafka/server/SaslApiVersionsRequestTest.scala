@@ -56,7 +56,7 @@ class SaslApiVersionsRequestTest extends BaseRequestTest with SaslTestHarness {
         sendApiVersionsRequest(plaintextSocket, new ApiVersionsRequest, 0)
         fail("Versions Request during Sasl handshake did not fail")
       } catch {
-        case ioe: IOException => // expected exception
+        case _: IOException => // expected exception
       }
     } finally {
       plaintextSocket.close()

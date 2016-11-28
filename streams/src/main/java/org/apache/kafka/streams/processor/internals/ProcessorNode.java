@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
@@ -44,6 +45,7 @@ public class ProcessorNode<K, V> {
         this.stateStores = stateStores;
     }
 
+
     public final String name() {
         return name;
     }
@@ -61,15 +63,23 @@ public class ProcessorNode<K, V> {
     }
 
     public void init(ProcessorContext context) {
-        processor.init(context);
-    }
-
-    public void process(K key, V value) {
-        processor.process(key, value);
+        try {
+            processor.init(context);
+        } catch (Exception e) {
+            throw new StreamsException(String.format("failed to initialize processor %s", name), e);
+        }
     }
 
     public void close() {
-        processor.close();
+        try {
+            processor.close();
+        } catch (Exception e) {
+            throw new StreamsException(String.format("failed to close processor %s", name), e);
+        }
+    }
+
+    public void process(final K key, final V value) {
+        processor.process(key, value);
     }
 
     /**

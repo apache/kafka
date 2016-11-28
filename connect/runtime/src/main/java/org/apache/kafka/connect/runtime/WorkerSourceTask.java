@@ -115,7 +115,7 @@ class WorkerSourceTask extends WorkerTask {
     }
 
     protected void close() {
-        // nothing to do
+        producer.close(30, TimeUnit.SECONDS);
     }
 
     @Override

@@ -21,13 +21,14 @@ import java.nio.ByteBuffer
 import java.nio.channels.GatheringByteChannel
 
 import kafka.common.TopicAndPartition
-import kafka.message.{MessageSet, ByteBufferMessageSet}
+import kafka.message.{ByteBufferMessageSet, MessageSet}
 import kafka.api.ApiUtils._
 import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.network.{Send, MultiSend}
+import org.apache.kafka.common.network.{MultiSend, Send}
 import org.apache.kafka.common.protocol.Errors
 
 import scala.collection._
+import scala.collection.JavaConverters._
 
 object FetchResponsePartitionData {
   def readFrom(buffer: ByteBuffer): FetchResponsePartitionData = {
@@ -75,7 +76,8 @@ class PartitionDataSend(val partitionId: Int,
       written += channel.write(buffer)
     if (!buffer.hasRemaining) {
       if (messagesSentSize < messageSize) {
-        val bytesSent = partitionData.messages.writeTo(channel, messagesSentSize, messageSize - messagesSentSize)
+        val records = partitionData.messages.asRecords
+        val bytesSent = records.writeTo(channel, messagesSentSize, messageSize - messagesSentSize).toInt
         messagesSentSize += bytesSent
         written += bytesSent
       }
@@ -100,7 +102,7 @@ object TopicData {
       val partitionData = FetchResponsePartitionData.readFrom(buffer)
       (partitionId, partitionData)
     })
-    TopicData(topic, Map(topicPartitionDataPairs:_*))
+    TopicData(topic, Seq(topicPartitionDataPairs:_*))
   }
 
   def headerSize(topic: String) =
@@ -108,9 +110,11 @@ object TopicData {
     4 /* partition count */
 }
 
-case class TopicData(topic: String, partitionData: Map[Int, FetchResponsePartitionData]) {
+case class TopicData(topic: String, partitionData: Seq[(Int, FetchResponsePartitionData)]) {
   val sizeInBytes =
-    TopicData.headerSize(topic) + partitionData.values.foldLeft(0)(_ + _.sizeInBytes + 4)
+    TopicData.headerSize(topic) + partitionData.foldLeft(0)((folded, data) => {
+      folded + data._2.sizeInBytes + 4
+    }                                  /*_ + _.sizeInBytes + 4*/)
 
   val headerSize = TopicData.headerSize(topic)
 }
@@ -135,7 +139,7 @@ class TopicDataSend(val dest: String, val topicData: TopicData) extends Send {
   buffer.rewind()
 
   private val sends = new MultiSend(dest,
-                            JavaConversions.seqAsJavaList(topicData.partitionData.toList.map(d => new PartitionDataSend(d._1, d._2))))
+    topicData.partitionData.map(d => new PartitionDataSend(d._1, d._2): Send).asJava)
 
   override def writeTo(channel: GatheringByteChannel): Long = {
     if (completed)
@@ -168,13 +172,17 @@ object FetchResponse {
     val topicCount = buffer.getInt
     val pairs = (1 to topicCount).flatMap(_ => {
       val topicData = TopicData.readFrom(buffer)
-      topicData.partitionData.map {
-        case (partitionId, partitionData) =>
-          (TopicAndPartition(topicData.topic, partitionId), partitionData)
+      topicData.partitionData.map { case (partitionId, partitionData) =>
+        (TopicAndPartition(topicData.topic, partitionId), partitionData)
       }
     })
-    FetchResponse(correlationId, Map(pairs:_*), requestVersion, throttleTime)
+    FetchResponse(correlationId, Vector(pairs:_*), requestVersion, throttleTime)
   }
+
+  type FetchResponseEntry = (Int, FetchResponsePartitionData)
+
+  def batchByTopic(data: Seq[(TopicAndPartition, FetchResponsePartitionData)]): Seq[(String, Seq[FetchResponseEntry])] =
+    FetchRequest.batchByTopic(data)
 
   // Returns the size of the response header
   def headerSize(requestVersion: Int): Int = {
@@ -185,12 +193,12 @@ object FetchResponse {
   }
 
   // Returns the size of entire fetch response in bytes (including the header size)
-  def responseSize(dataGroupedByTopic: Map[String, Map[TopicAndPartition, FetchResponsePartitionData]],
+  def responseSize(dataGroupedByTopic: Seq[(String, Seq[FetchResponseEntry])],
                    requestVersion: Int): Int = {
     headerSize(requestVersion) +
     dataGroupedByTopic.foldLeft(0) { case (folded, (topic, partitionDataMap)) =>
       val topicData = TopicData(topic, partitionDataMap.map {
-        case (topicAndPartition, partitionData) => (topicAndPartition.partition, partitionData)
+        case (partitionId, partitionData) => (partitionId, partitionData)
       })
       folded + topicData.sizeInBytes
     }
@@ -198,7 +206,7 @@ object FetchResponse {
 }
 
 case class FetchResponse(correlationId: Int,
-                         data: Map[TopicAndPartition, FetchResponsePartitionData],
+                         data: Seq[(TopicAndPartition, FetchResponsePartitionData)],
                          requestVersion: Int = 0,
                          throttleTimeMs: Int = 0)
   extends RequestOrResponse() {
@@ -206,7 +214,8 @@ case class FetchResponse(correlationId: Int,
   /**
    * Partitions the data into a map of maps (one for each topic).
    */
-  lazy val dataGroupedByTopic = data.groupBy{ case (topicAndPartition, fetchData) => topicAndPartition.topic }
+  private lazy val dataByTopicAndPartition = data.toMap
+  lazy val dataGroupedByTopic = FetchResponse.batchByTopic(data)
   val headerSizeInBytes = FetchResponse.headerSize(requestVersion)
   lazy val sizeInBytes = FetchResponse.responseSize(dataGroupedByTopic, requestVersion)
 
@@ -234,7 +243,7 @@ case class FetchResponse(correlationId: Int,
 
   private def partitionDataFor(topic: String, partition: Int): FetchResponsePartitionData = {
     val topicAndPartition = TopicAndPartition(topic, partition)
-    data.get(topicAndPartition) match {
+    dataByTopicAndPartition.get(topicAndPartition) match {
       case Some(partitionData) => partitionData
       case _ =>
         throw new IllegalArgumentException(
@@ -247,7 +256,7 @@ case class FetchResponse(correlationId: Int,
 
   def highWatermark(topic: String, partition: Int) = partitionDataFor(topic, partition).hw
 
-  def hasError = data.values.exists(_.error != Errors.NONE.code)
+  def hasError = dataByTopicAndPartition.values.exists(_.error != Errors.NONE.code)
 
   def errorCode(topic: String, partition: Int) = partitionDataFor(topic, partition).error
 }
@@ -274,10 +283,9 @@ class FetchResponseSend(val dest: String, val fetchResponse: FetchResponse) exte
   fetchResponse.writeHeaderTo(buffer)
   buffer.rewind()
 
-  private val sends = new MultiSend(dest, JavaConversions.seqAsJavaList(fetchResponse.dataGroupedByTopic.toList.map {
-    case(topic, data) => new TopicDataSend(dest, TopicData(topic,
-                                                     data.map{case(topicAndPartition, message) => (topicAndPartition.partition, message)}))
-    }))
+  private val sends = new MultiSend(dest, fetchResponse.dataGroupedByTopic.map {
+    case (topic, data) => new TopicDataSend(dest, TopicData(topic, data)): Send
+  }.asJava)
 
   override def writeTo(channel: GatheringByteChannel): Long = {
     if (completed)

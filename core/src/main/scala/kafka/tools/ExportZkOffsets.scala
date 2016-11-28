@@ -20,8 +20,8 @@ package kafka.tools
 import java.io.FileWriter
 import joptsimple._
 import kafka.utils.{Logging, ZkUtils, ZKGroupTopicDirs, CommandLineUtils}
-import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.security.JaasUtils
+import scala.collection.JavaConverters._
 
 
 /**
@@ -88,8 +88,7 @@ object ExportZkOffsets extends Logging {
         consumerGroups = zkUtils.getChildren(ZkUtils.ConsumersPath).toList
       }
       else {
-        import scala.collection.JavaConversions._
-        consumerGroups = groups
+        consumerGroups = groups.asScala
       }
       
       for (consumerGrp <- consumerGroups) {

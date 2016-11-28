@@ -58,6 +58,7 @@ import java.util.TimeZone;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -221,6 +222,35 @@ public class JsonConverterTest {
     }
 
     @Test
+    public void decimalToConnectOptional() {
+        Schema schema = Decimal.builder(2).optional().schema();
+        String msg = "{ \"schema\": { \"type\": \"bytes\", \"name\": \"org.apache.kafka.connect.data.Decimal\", \"version\": 1, \"optional\": true, \"parameters\": { \"scale\": \"2\" } }, \"payload\": null }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertNull(schemaAndValue.value());
+    }
+
+    @Test
+    public void decimalToConnectWithDefaultValue() {
+        BigDecimal reference = new BigDecimal(new BigInteger("156"), 2);
+        Schema schema = Decimal.builder(2).defaultValue(reference).build();
+        String msg = "{ \"schema\": { \"type\": \"bytes\", \"name\": \"org.apache.kafka.connect.data.Decimal\", \"version\": 1, \"default\": \"AJw=\", \"parameters\": { \"scale\": \"2\" } }, \"payload\": null }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertEquals(reference, schemaAndValue.value());
+    }
+
+    @Test
+    public void decimalToConnectOptionalWithDefaultValue() {
+        BigDecimal reference = new BigDecimal(new BigInteger("156"), 2);
+        Schema schema = Decimal.builder(2).optional().defaultValue(reference).build();
+        String msg = "{ \"schema\": { \"type\": \"bytes\", \"name\": \"org.apache.kafka.connect.data.Decimal\", \"version\": 1, \"optional\": true, \"default\": \"AJw=\", \"parameters\": { \"scale\": \"2\" } }, \"payload\": null }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertEquals(reference, schemaAndValue.value());
+    }
+
+    @Test
     public void dateToConnect() {
         Schema schema = Date.SCHEMA;
         GregorianCalendar calendar = new GregorianCalendar(1970, Calendar.JANUARY, 1, 0, 0, 0);
@@ -232,6 +262,35 @@ public class JsonConverterTest {
         java.util.Date converted = (java.util.Date) schemaAndValue.value();
         assertEquals(schema, schemaAndValue.schema());
         assertEquals(reference, converted);
+    }
+
+    @Test
+    public void dateToConnectOptional() {
+        Schema schema = Date.builder().optional().schema();
+        String msg = "{ \"schema\": { \"type\": \"int32\", \"name\": \"org.apache.kafka.connect.data.Date\", \"version\": 1, \"optional\": true }, \"payload\": null }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertNull(schemaAndValue.value());
+    }
+
+    @Test
+    public void dateToConnectWithDefaultValue() {
+        java.util.Date reference = new java.util.Date(0);
+        Schema schema = Date.builder().defaultValue(reference).schema();
+        String msg = "{ \"schema\": { \"type\": \"int32\", \"name\": \"org.apache.kafka.connect.data.Date\", \"version\": 1, \"default\": 0 }, \"payload\": null }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertEquals(reference, schemaAndValue.value());
+    }
+
+    @Test
+    public void dateToConnectOptionalWithDefaultValue() {
+        java.util.Date reference = new java.util.Date(0);
+        Schema schema = Date.builder().optional().defaultValue(reference).schema();
+        String msg = "{ \"schema\": { \"type\": \"int32\", \"name\": \"org.apache.kafka.connect.data.Date\", \"version\": 1, \"optional\": true, \"default\": 0 }, \"payload\": null }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertEquals(reference, schemaAndValue.value());
     }
 
     @Test
@@ -249,6 +308,35 @@ public class JsonConverterTest {
     }
 
     @Test
+    public void timeToConnectOptional() {
+        Schema schema = Time.builder().optional().schema();
+        String msg = "{ \"schema\": { \"type\": \"int32\", \"name\": \"org.apache.kafka.connect.data.Time\", \"version\": 1, \"optional\": true }, \"payload\": null }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertNull(schemaAndValue.value());
+    }
+
+    @Test
+    public void timeToConnectWithDefaultValue() {
+        java.util.Date reference = new java.util.Date(0);
+        Schema schema = Time.builder().defaultValue(reference).schema();
+        String msg = "{ \"schema\": { \"type\": \"int32\", \"name\": \"org.apache.kafka.connect.data.Time\", \"version\": 1, \"default\": 0 }, \"payload\": null }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertEquals(reference, schemaAndValue.value());
+    }
+
+    @Test
+    public void timeToConnectOptionalWithDefaultValue() {
+        java.util.Date reference = new java.util.Date(0);
+        Schema schema = Time.builder().optional().defaultValue(reference).schema();
+        String msg = "{ \"schema\": { \"type\": \"int32\", \"name\": \"org.apache.kafka.connect.data.Time\", \"version\": 1, \"optional\": true, \"default\": 0 }, \"payload\": null }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertEquals(reference, schemaAndValue.value());
+    }
+
+    @Test
     public void timestampToConnect() {
         Schema schema = Timestamp.SCHEMA;
         GregorianCalendar calendar = new GregorianCalendar(1970, Calendar.JANUARY, 1, 0, 0, 0);
@@ -261,6 +349,33 @@ public class JsonConverterTest {
         java.util.Date converted = (java.util.Date) schemaAndValue.value();
         assertEquals(schema, schemaAndValue.schema());
         assertEquals(reference, converted);
+    }
+
+    @Test
+    public void timestampToConnectOptional() {
+        Schema schema = Timestamp.builder().optional().schema();
+        String msg = "{ \"schema\": { \"type\": \"int64\", \"name\": \"org.apache.kafka.connect.data.Timestamp\", \"version\": 1, \"optional\": true }, \"payload\": null }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertNull(schemaAndValue.value());
+    }
+
+    @Test
+    public void timestampToConnectWithDefaultValue() {
+        Schema schema = Timestamp.builder().defaultValue(new java.util.Date(42)).schema();
+        String msg = "{ \"schema\": { \"type\": \"int64\", \"name\": \"org.apache.kafka.connect.data.Timestamp\", \"version\": 1, \"default\": 42 }, \"payload\": null }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertEquals(new java.util.Date(42), schemaAndValue.value());
+    }
+
+    @Test
+    public void timestampToConnectOptionalWithDefaultValue() {
+        Schema schema = Timestamp.builder().optional().defaultValue(new java.util.Date(42)).schema();
+        String msg = "{ \"schema\": { \"type\": \"int64\", \"name\": \"org.apache.kafka.connect.data.Timestamp\", \"version\": 1,  \"optional\": true, \"default\": 42 }, \"payload\": null }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertEquals(new java.util.Date(42), schemaAndValue.value());
     }
 
     // Schema metadata

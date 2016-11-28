@@ -29,7 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class CreateTopicsResponse extends AbstractRequestResponse {
+public class CreateTopicsResponse extends AbstractResponse {
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.CREATE_TOPICS.id);
 
     private static final String TOPIC_ERROR_CODES_KEY_NAME = "topic_error_codes";
@@ -39,6 +39,7 @@ public class CreateTopicsResponse extends AbstractRequestResponse {
     /**
      * Possible error codes:
      *
+     * REQUEST_TIMED_OUT(7)
      * INVALID_TOPIC_EXCEPTION(17)
      * CLUSTER_AUTHORIZATION_FAILED(31)
      * TOPIC_ALREADY_EXISTS(36)

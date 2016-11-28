@@ -17,6 +17,7 @@
 
 package kafka.coordinator
 
+import kafka.api.ApiVersion
 import kafka.cluster.Partition
 import kafka.common.{OffsetAndMetadata, Topic}
 import kafka.log.LogAppendInfo
@@ -46,7 +47,8 @@ class GroupMetadataManagerTest {
   val groupId = "foo"
   val groupPartitionId = 0
   val protocolType = "protocolType"
-  val sessionTimeout = 30000
+  val rebalanceTimeout = 60000
+  val sessionTimeout = 10000
 
 
   @Before
@@ -74,9 +76,8 @@ class GroupMetadataManagerTest {
 
     time = new MockTime
     replicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
-    groupMetadataManager = new GroupMetadataManager(0, offsetConfig, replicaManager, zkUtils, time)
+    groupMetadataManager = new GroupMetadataManager(0, ApiVersion.latestVersion, offsetConfig, replicaManager, zkUtils, time)
     partition = EasyMock.niceMock(classOf[Partition])
-
   }
 
   @After
@@ -100,14 +101,48 @@ class GroupMetadataManagerTest {
     expectAppendMessage(Errors.NONE)
     EasyMock.replay(replicaManager)
 
-    var errorCode: Option[Short] = None
-    def callback(error: Short) {
-      errorCode = Some(error)
+    var maybeError: Option[Errors] = None
+    def callback(error: Errors) {
+      maybeError = Some(error)
     }
 
-    val delayedStore = groupMetadataManager.prepareStoreGroup(group, Map.empty, callback)
+    val delayedStore = groupMetadataManager.prepareStoreGroup(group, Map.empty, callback).get
     groupMetadataManager.store(delayedStore)
-    assertEquals(Errors.NONE.code, errorCode.get)
+    assertEquals(Some(Errors.NONE), maybeError)
+  }
+
+  @Test
+  def testStoreGroupErrorMapping() {
+    assertStoreGroupErrorMapping(Errors.NONE, Errors.NONE)
+    assertStoreGroupErrorMapping(Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.GROUP_COORDINATOR_NOT_AVAILABLE)
+    assertStoreGroupErrorMapping(Errors.NOT_ENOUGH_REPLICAS, Errors.GROUP_COORDINATOR_NOT_AVAILABLE)
+    assertStoreGroupErrorMapping(Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND, Errors.GROUP_COORDINATOR_NOT_AVAILABLE)
+    assertStoreGroupErrorMapping(Errors.NOT_LEADER_FOR_PARTITION, Errors.NOT_COORDINATOR_FOR_GROUP)
+    assertStoreGroupErrorMapping(Errors.MESSAGE_TOO_LARGE, Errors.UNKNOWN)
+    assertStoreGroupErrorMapping(Errors.RECORD_LIST_TOO_LARGE, Errors.UNKNOWN)
+    assertStoreGroupErrorMapping(Errors.INVALID_FETCH_SIZE, Errors.UNKNOWN)
+    assertStoreGroupErrorMapping(Errors.CORRUPT_MESSAGE, Errors.CORRUPT_MESSAGE)
+  }
+
+  private def assertStoreGroupErrorMapping(appendError: Errors, expectedError: Errors) {
+    EasyMock.reset(replicaManager)
+
+    val group = new GroupMetadata(groupId)
+    groupMetadataManager.addGroup(group)
+
+    expectAppendMessage(appendError)
+    EasyMock.replay(replicaManager)
+
+    var maybeError: Option[Errors] = None
+    def callback(error: Errors) {
+      maybeError = Some(error)
+    }
+
+    val delayedStore = groupMetadataManager.prepareStoreGroup(group, Map.empty, callback).get
+    groupMetadataManager.store(delayedStore)
+    assertEquals(Some(expectedError), maybeError)
+
+    EasyMock.verify(replicaManager)
   }
 
   @Test
@@ -119,9 +154,9 @@ class GroupMetadataManagerTest {
     val group = new GroupMetadata(groupId)
     groupMetadataManager.addGroup(group)
 
-    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, sessionTimeout,
+    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
       protocolType, List(("protocol", Array[Byte]())))
-    member.awaitingJoinCallback = (joinGroupResult: JoinGroupResult) => {}
+    member.awaitingJoinCallback = _ => ()
     group.add(memberId, member)
     group.transitionTo(PreparingRebalance)
     group.initNextGeneration()
@@ -129,14 +164,42 @@ class GroupMetadataManagerTest {
     expectAppendMessage(Errors.NONE)
     EasyMock.replay(replicaManager)
 
-    var errorCode: Option[Short] = None
-    def callback(error: Short) {
-      errorCode = Some(error)
+    var maybeError: Option[Errors] = None
+    def callback(error: Errors) {
+      maybeError = Some(error)
     }
 
-    val delayedStore = groupMetadataManager.prepareStoreGroup(group, Map(memberId -> Array[Byte]()), callback)
+    val delayedStore = groupMetadataManager.prepareStoreGroup(group, Map(memberId -> Array[Byte]()), callback).get
     groupMetadataManager.store(delayedStore)
-    assertEquals(Errors.NONE.code, errorCode.get)
+    assertEquals(Some(Errors.NONE), maybeError)
+  }
+
+  @Test
+  def testStoreNonEmptyGroupWhenCoordinatorHasMoved() {
+    EasyMock.expect(replicaManager.getMessageFormatVersion(EasyMock.anyObject())).andReturn(None)
+    val memberId = "memberId"
+    val clientId = "clientId"
+    val clientHost = "localhost"
+
+    val group = new GroupMetadata(groupId)
+
+    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
+      protocolType, List(("protocol", Array[Byte]())))
+    member.awaitingJoinCallback = _ => ()
+    group.add(memberId, member)
+    group.transitionTo(PreparingRebalance)
+    group.initNextGeneration()
+
+    EasyMock.replay(replicaManager)
+
+    var maybeError: Option[Errors] = None
+    def callback(error: Errors) {
+      maybeError = Some(error)
+    }
+
+    val delayedStoreOpt = groupMetadataManager.prepareStoreGroup(group, Map(memberId -> Array[Byte]()), callback)
+    assertEquals(Some(Errors.NOT_COORDINATOR_FOR_GROUP), maybeError)
+    EasyMock.verify(replicaManager)
   }
 
   @Test
@@ -161,7 +224,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    val delayedStore = groupMetadataManager.prepareStoreOffsets(group, memberId, generationId, offsets, callback)
+    val delayedStore = groupMetadataManager.prepareStoreOffsets(group, memberId, generationId, offsets, callback).get
     assertTrue(group.hasOffsets)
 
     groupMetadataManager.store(delayedStore)
@@ -181,7 +244,8 @@ class GroupMetadataManagerTest {
   }
 
   @Test
-  def testCommitOffsetFailure() {
+  def testCommitOffsetWhenCoordinatorHasMoved() {
+    EasyMock.expect(replicaManager.getMessageFormatVersion(EasyMock.anyObject())).andReturn(None)
     val memberId = ""
     val generationId = -1
     val topicPartition = new TopicPartition("foo", 0)
@@ -194,7 +258,6 @@ class GroupMetadataManagerTest {
 
     val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset))
 
-    expectAppendMessage(Errors.NOT_LEADER_FOR_PARTITION)
     EasyMock.replay(replicaManager)
 
     var commitErrors: Option[immutable.Map[TopicPartition, Short]] = None
@@ -202,18 +265,63 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    val delayedStore = groupMetadataManager.prepareStoreOffsets(group, memberId, generationId, offsets, callback)
+    val delayedStoreOpt = groupMetadataManager.prepareStoreOffsets(group, memberId, generationId, offsets, callback)
+
+    assertFalse(commitErrors.isEmpty)
+    val maybeError = commitErrors.get.get(topicPartition)
+    assertEquals(Some(Errors.NOT_COORDINATOR_FOR_GROUP.code), maybeError)
+    EasyMock.verify(replicaManager)
+  }
+
+  @Test
+  def testCommitOffsetFailure() {
+    assertCommitOffsetErrorMapping(Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.GROUP_COORDINATOR_NOT_AVAILABLE)
+    assertCommitOffsetErrorMapping(Errors.NOT_ENOUGH_REPLICAS, Errors.GROUP_COORDINATOR_NOT_AVAILABLE)
+    assertCommitOffsetErrorMapping(Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND, Errors.GROUP_COORDINATOR_NOT_AVAILABLE)
+    assertCommitOffsetErrorMapping(Errors.NOT_LEADER_FOR_PARTITION, Errors.NOT_COORDINATOR_FOR_GROUP)
+    assertCommitOffsetErrorMapping(Errors.MESSAGE_TOO_LARGE, Errors.INVALID_COMMIT_OFFSET_SIZE)
+    assertCommitOffsetErrorMapping(Errors.RECORD_LIST_TOO_LARGE, Errors.INVALID_COMMIT_OFFSET_SIZE)
+    assertCommitOffsetErrorMapping(Errors.INVALID_FETCH_SIZE, Errors.INVALID_COMMIT_OFFSET_SIZE)
+    assertCommitOffsetErrorMapping(Errors.CORRUPT_MESSAGE, Errors.CORRUPT_MESSAGE)
+  }
+
+  private def assertCommitOffsetErrorMapping(appendError: Errors, expectedError: Errors): Unit = {
+    EasyMock.reset(replicaManager)
+
+    val memberId = ""
+    val generationId = -1
+    val topicPartition = new TopicPartition("foo", 0)
+    val offset = 37
+
+    groupMetadataManager.addPartitionOwnership(groupPartitionId)
+
+    val group = new GroupMetadata(groupId)
+    groupMetadataManager.addGroup(group)
+
+    val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset))
+
+    expectAppendMessage(appendError)
+    EasyMock.replay(replicaManager)
+
+    var commitErrors: Option[immutable.Map[TopicPartition, Short]] = None
+    def callback(errors: immutable.Map[TopicPartition, Short]) {
+      commitErrors = Some(errors)
+    }
+
+    val delayedStore = groupMetadataManager.prepareStoreOffsets(group, memberId, generationId, offsets, callback).get
     assertTrue(group.hasOffsets)
 
     groupMetadataManager.store(delayedStore)
 
     assertFalse(commitErrors.isEmpty)
     val maybeError = commitErrors.get.get(topicPartition)
-    assertEquals(Some(Errors.NOT_COORDINATOR_FOR_GROUP.code), maybeError)
+    assertEquals(Some(expectedError.code), maybeError)
     assertFalse(group.hasOffsets)
 
     val cachedOffsets = groupMetadataManager.getOffsets(groupId, Seq(topicPartition))
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicPartition).map(_.offset))
+
+    EasyMock.verify(replicaManager)
   }
 
   @Test
@@ -244,7 +352,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    val delayedStore = groupMetadataManager.prepareStoreOffsets(group, memberId, generationId, offsets, callback)
+    val delayedStore = groupMetadataManager.prepareStoreOffsets(group, memberId, generationId, offsets, callback).get
     assertTrue(group.hasOffsets)
 
     groupMetadataManager.store(delayedStore)
@@ -298,7 +406,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    val delayedStore = groupMetadataManager.prepareStoreOffsets(group, memberId, generationId, offsets, callback)
+    val delayedStore = groupMetadataManager.prepareStoreOffsets(group, memberId, generationId, offsets, callback).get
     assertTrue(group.hasOffsets)
 
     groupMetadataManager.store(delayedStore)
@@ -337,9 +445,9 @@ class GroupMetadataManagerTest {
     val group = new GroupMetadata(groupId)
     groupMetadataManager.addGroup(group)
 
-    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, sessionTimeout,
+    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
       protocolType, List(("protocol", Array[Byte]())))
-    member.awaitingJoinCallback = (joinGroupResult: JoinGroupResult) => {}
+    member.awaitingJoinCallback = _ => ()
     group.add(memberId, member)
     group.transitionTo(PreparingRebalance)
     group.initNextGeneration()
@@ -359,7 +467,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
-    val delayedStore = groupMetadataManager.prepareStoreOffsets(group, memberId, group.generationId, offsets, callback)
+    val delayedStore = groupMetadataManager.prepareStoreOffsets(group, memberId, group.generationId, offsets, callback).get
     assertTrue(group.hasOffsets)
 
     groupMetadataManager.store(delayedStore)
@@ -399,7 +507,7 @@ class GroupMetadataManagerTest {
           new PartitionResponse(error.code, 0L, Record.NO_TIMESTAMP)
         )
       )})
-    EasyMock.expect(replicaManager.getMessageFormatVersion(EasyMock.anyObject())).andReturn(Some(Message.MagicValue_V1)).anyTimes()
+    EasyMock.expect(replicaManager.getMessageFormatVersion(EasyMock.anyObject())).andStubReturn(Some(Message.MagicValue_V1))
   }
 
 

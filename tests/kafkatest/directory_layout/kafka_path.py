@@ -44,11 +44,11 @@ TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME = "tools-dependant-libs"
 
 JARS = {
     "trunk": {
-        CORE_JAR_NAME: "core/build/*/*.jar",
-        CORE_LIBS_JAR_NAME: "core/build/libs/*.jar",
-        CORE_DEPENDANT_TEST_LIBS_JAR_NAME: "core/build/dependant-testlibs/*.jar",
-        TOOLS_JAR_NAME: "tools/build/libs/kafka-tools*.jar",
-        TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME: "tools/build/dependant-libs*/*.jar"
+        CORE_JAR_NAME: "libs/*.jar",
+        CORE_LIBS_JAR_NAME: "libs/*.jar",
+        CORE_DEPENDANT_TEST_LIBS_JAR_NAME: "libs/*.jar",
+        TOOLS_JAR_NAME: "libs/*.jar",
+        TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME: "libs/*.jar"
     }
 }
 

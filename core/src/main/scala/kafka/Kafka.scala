@@ -24,7 +24,7 @@ import kafka.server.{KafkaServer, KafkaServerStartable}
 import kafka.utils.{CommandLineUtils, Logging}
 import org.apache.kafka.common.utils.Utils
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 object Kafka extends Logging {
 
@@ -47,7 +47,7 @@ object Kafka extends Logging {
         CommandLineUtils.printUsageAndDie(optionParser, "Found non argument parameters: " + options.nonOptionArguments().toArray.mkString(","))
       }
 
-      props.putAll(CommandLineUtils.parseKeyValueArgs(options.valuesOf(overrideOpt)))
+      props.putAll(CommandLineUtils.parseKeyValueArgs(options.valuesOf(overrideOpt).asScala))
     }
     props
   }

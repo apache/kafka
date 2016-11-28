@@ -19,9 +19,13 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -130,6 +134,30 @@ public class StreamsConfigTest {
         assertEquals(1, consumerConfigs.get(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG));
     }
 
+    @Test
+    public void shouldSupportPrefixedPropertiesThatAreNotPartOfConsumerConfig() throws Exception {
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        props.put(consumerPrefix("interceptor.statsd.host"), "host");
+        final Map<String, Object> consumerConfigs = streamsConfig.getConsumerConfigs(null, "groupId", "clientId");
+        assertEquals("host", consumerConfigs.get("interceptor.statsd.host"));
+    }
+
+    @Test
+    public void shouldSupportPrefixedPropertiesThatAreNotPartOfRestoreConsumerConfig() throws Exception {
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        props.put(consumerPrefix("interceptor.statsd.host"), "host");
+        final Map<String, Object> consumerConfigs = streamsConfig.getRestoreConsumerConfigs("clientId");
+        assertEquals("host", consumerConfigs.get("interceptor.statsd.host"));
+    }
+
+    @Test
+    public void shouldSupportPrefixedPropertiesThatAreNotPartOfProducerConfig() throws Exception {
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        props.put(producerPrefix("interceptor.statsd.host"), "host");
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs("clientId");
+        assertEquals("host", producerConfigs.get("interceptor.statsd.host"));
+    }
+
 
     @Test
     public void shouldSupportPrefixedProducerConfigs() throws Exception {
@@ -172,4 +200,82 @@ public class StreamsConfigTest {
     }
 
 
+
+    @Test(expected = StreamsException.class)
+    public void shouldThrowStreamsExceptionIfKeySerdeConfigFails() throws Exception {
+        props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        streamsConfig.keySerde();
+    }
+
+    @Test(expected = StreamsException.class)
+    public void shouldThrowStreamsExceptionIfValueSerdeConfigFails() throws Exception {
+        props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        streamsConfig.valueSerde();
+    }
+
+    @Test
+    public void shouldOverrideStreamsDefaultConsumerConfigs() throws Exception {
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "latest");
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "10");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.getConsumerConfigs(null, "groupId", "clientId");
+        assertEquals("latest", consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG));
+        assertEquals("10", consumerConfigs.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG));
+    }
+
+    @Test
+    public void shouldOverrideStreamsDefaultProducerConfigs() throws Exception {
+        props.put(StreamsConfig.producerPrefix(ProducerConfig.LINGER_MS_CONFIG), "10000");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs("client");
+        assertEquals("10000", producerConfigs.get(ProducerConfig.LINGER_MS_CONFIG));
+    }
+
+    @Test
+    public void shouldOverrideStreamsDefaultConsumerConifgsOnRestoreConsumer() throws Exception {
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "latest");
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "10");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        final Map<String, Object> consumerConfigs = streamsConfig.getRestoreConsumerConfigs("client");
+        assertEquals("latest", consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG));
+        assertEquals("10", consumerConfigs.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG));
+    }
+
+    @Test(expected = ConfigException.class)
+    public void shouldThrowExceptionIfConsumerAutoCommitIsOverridden() throws Exception {
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG), "true");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        streamsConfig.getConsumerConfigs(null, "a", "b");
+    }
+
+    @Test(expected = ConfigException.class)
+    public void shouldThrowExceptionIfRestoreConsumerAutoCommitIsOverridden() throws Exception {
+        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG), "true");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        streamsConfig.getRestoreConsumerConfigs("client");
+    }
+
+    static class MisconfiguredSerde implements Serde {
+        @Override
+        public void configure(final Map configs, final boolean isKey) {
+            throw new RuntimeException("boom");
+        }
+
+        @Override
+        public void close() {
+
+        }
+
+        @Override
+        public Serializer serializer() {
+            return null;
+        }
+
+        @Override
+        public Deserializer deserializer() {
+            return null;
+        }
+    }
 }

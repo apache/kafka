@@ -66,7 +66,6 @@ public interface KafkaClient extends Closeable {
 
     /**
      * Queue up the given request for sending. Requests can only be sent on ready connections.
-     * 
      * @param request The request
      * @param now The current timestamp
      */

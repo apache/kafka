@@ -14,6 +14,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
@@ -37,12 +38,15 @@ public class StreamThreadStateStoreProvider implements StateStoreProvider {
     @SuppressWarnings("unchecked")
     @Override
     public <T> List<T> stores(final String storeName, final QueryableStoreType<T> queryableStoreType) {
+        if (!streamThread.isInitialized()) {
+            throw new InvalidStateStoreException("the state store, " + storeName + ", may have migrated to another instance.");
+        }
         final List<T> stores = new ArrayList<>();
         for (StreamTask streamTask : streamThread.tasks().values()) {
             final StateStore store = streamTask.getStore(storeName);
             if (store != null && queryableStoreType.accepts(store)) {
                 if (!store.isOpen()) {
-                    throw new InvalidStateStoreException("Store: " + storeName + " isn't isOpen");
+                    throw new InvalidStateStoreException("the state store, " + storeName + ", may have migrated to another instance.");
                 }
                 stores.add((T) store);
             }

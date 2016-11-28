@@ -29,6 +29,8 @@ import kafka.integration.KafkaServerTestHarness
 import org.junit.{After, Before}
 
 import scala.collection.mutable.Buffer
+import scala.util.control.Breaks.{breakable, break}
+import java.util.ConcurrentModificationException
 
 /**
  * A helper class for writing integration tests that involve producers, consumers, and servers
@@ -63,18 +65,10 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
     consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
     consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArrayDeserializer])
     consumerConfig.putAll(consumerSecurityProps)
-    for (i <- 0 until producerCount)
-      producers += TestUtils.createNewProducer(brokerList,
-                                               securityProtocol = this.securityProtocol,
-                                               trustStoreFile = this.trustStoreFile,
-                                               saslProperties = this.saslProperties,
-                                               props = Some(producerConfig))
-    for (i <- 0 until consumerCount) {
-      consumers += TestUtils.createNewConsumer(brokerList,
-                                               securityProtocol = this.securityProtocol,
-                                               trustStoreFile = this.trustStoreFile,
-                                               saslProperties = this.saslProperties,
-                                               props = Some(consumerConfig))
+    for (_ <- 0 until producerCount)
+      producers += createNewProducer
+    for (_ <- 0 until consumerCount) {
+      consumers += createNewConsumer
     }
 
     // create the consumer offset topic
@@ -83,6 +77,22 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
       serverConfig.getProperty(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
       servers,
       servers.head.groupCoordinator.offsetsTopicConfigs)
+  }
+
+  def createNewProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
+      TestUtils.createNewProducer(brokerList,
+                                  securityProtocol = this.securityProtocol,
+                                  trustStoreFile = this.trustStoreFile,
+                                  saslProperties = this.saslProperties,
+                                  props = Some(producerConfig))
+  }
+  
+  def createNewConsumer: KafkaConsumer[Array[Byte], Array[Byte]] = {
+      TestUtils.createNewConsumer(brokerList,
+                                  securityProtocol = this.securityProtocol,
+                                  trustStoreFile = this.trustStoreFile,
+                                  saslProperties = this.saslProperties,
+                                  props = Some(consumerConfig))
   }
 
   @After

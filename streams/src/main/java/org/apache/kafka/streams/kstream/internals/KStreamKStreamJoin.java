@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -52,7 +52,6 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
         private WindowStore<K, V2> otherWindow;
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
@@ -62,14 +61,21 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
 
         @Override
-        public void process(K key, V1 value) {
-            if (key == null)
+        public void process(final K key, final V1 value) {
+            // we do join iff keys are equal, thus, if key is null we cannot join and just ignore the record
+            //
+            // we also ignore the record if value is null, because in a key-value data model a null-value indicates
+            // an empty message (ie, there is nothing to be joined) -- this contrast SQL NULL semantics
+            // furthermore, on left/outer joins 'null' in ValueJoiner#apply() indicates a missing record --
+            // thus, to be consistent and to avoid ambiguous null semantics, null values are ignored
+            if (key == null || value == null) {
                 return;
+            }
 
-            boolean needOuterJoin = KStreamKStreamJoin.this.outer;
+            boolean needOuterJoin = outer;
 
-            long timeFrom = Math.max(0L, context().timestamp() - joinBeforeMs);
-            long timeTo = Math.max(0L, context().timestamp() + joinAfterMs);
+            final long timeFrom = Math.max(0L, context().timestamp() - joinBeforeMs);
+            final long timeTo = Math.max(0L, context().timestamp() + joinAfterMs);
 
             try (WindowStoreIterator<V2> iter = otherWindow.fetch(key, timeFrom, timeTo)) {
                 while (iter.hasNext()) {
@@ -77,8 +83,9 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
                     context().forward(key, joiner.apply(value, iter.next().value));
                 }
 
-                if (needOuterJoin)
+                if (needOuterJoin) {
                     context().forward(key, joiner.apply(value, null));
+                }
             }
         }
     }

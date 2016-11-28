@@ -46,10 +46,10 @@ object PartitionStateInfo {
     val leader = buffer.getInt
     val leaderEpoch = buffer.getInt
     val isrSize = buffer.getInt
-    val isr = for(i <- 0 until isrSize) yield buffer.getInt
+    val isr = for (_ <- 0 until isrSize) yield buffer.getInt
     val zkVersion = buffer.getInt
     val replicationFactor = buffer.getInt
-    val replicas = for(i <- 0 until replicationFactor) yield buffer.getInt
+    val replicas = for (_ <- 0 until replicationFactor) yield buffer.getInt
     PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, leaderEpoch, isr.toList, zkVersion), controllerEpoch),
                        replicas.toSet)
   }
