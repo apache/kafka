@@ -57,6 +57,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
         self.kafka = kafka
         self.security_config = kafka.security_config.client_config()
         self.files = files
+        self.environment = {}
 
     def pids(self, node):
         """Return process ids for Kafka Connect processes."""
@@ -208,6 +209,8 @@ class ConnectStandaloneService(ConnectServiceBase):
     def start_cmd(self, node, connector_configs):
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG_FILE
         cmd += "export KAFKA_OPTS=%s; " % self.security_config.kafka_opts
+        for envvar in self.environment:
+            cmd += "export %s=%s; " % (envvar, str(self.environment[envvar]))
         cmd += "%s %s " % (self.path.script("connect-standalone.sh", node), self.CONFIG_FILE)
         cmd += " ".join(connector_configs)
         cmd += " & echo $! >&3 ) 1>> %s 2>> %s 3> %s" % (self.STDOUT_FILE, self.STDERR_FILE, self.PID_FILE)
@@ -227,7 +230,9 @@ class ConnectStandaloneService(ConnectServiceBase):
 
         self.logger.info("Starting Kafka Connect standalone process on " + str(node.account))
         with node.account.monitor_log(self.LOG_FILE) as monitor:
-            node.account.ssh(self.start_cmd(node, remote_connector_configs))
+            cmd = self.start_cmd(node, remote_connector_configs)
+            self.logger.debug("Connect standalone command: %s", cmd)
+            node.account.ssh(cmd)
             monitor.wait_until('Kafka Connect started', timeout_sec=30, err_msg="Never saw message indicating Kafka Connect finished startup on " + str(node.account))
 
         if len(self.pids(node)) == 0:
@@ -247,6 +252,8 @@ class ConnectDistributedService(ConnectServiceBase):
     def start_cmd(self, node):
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG_FILE
         cmd += "export KAFKA_OPTS=%s; " % self.security_config.kafka_opts
+        for envvar in self.environment:
+            cmd += "export %s=%s; " % (envvar, str(self.environment[envvar]))
         cmd += "%s %s " % (self.path.script("connect-distributed.sh", node), self.CONFIG_FILE)
         cmd += " & echo $! >&3 ) 1>> %s 2>> %s 3> %s" % (self.STDOUT_FILE, self.STDERR_FILE, self.PID_FILE)
         return cmd
@@ -262,7 +269,9 @@ class ConnectDistributedService(ConnectServiceBase):
 
         self.logger.info("Starting Kafka Connect distributed process on " + str(node.account))
         with node.account.monitor_log(self.LOG_FILE) as monitor:
-            node.account.ssh(self.start_cmd(node))
+            cmd = self.start_cmd(node)
+            self.logger.debug("Connect distributed command: %s", cmd)
+            node.account.ssh(cmd)
             monitor.wait_until('Kafka Connect started', timeout_sec=15, err_msg="Never saw message indicating Kafka Connect finished startup on " + str(node.account))
 
         if len(self.pids(node)) == 0:

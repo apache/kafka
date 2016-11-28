@@ -218,8 +218,12 @@ public class StreamsResetter {
                 }
             }
 
-            client.seekToBeginning(inputAndInternalTopicPartitions);
-            client.seekToEnd(intermediateTopicPartitions);
+            if (inputAndInternalTopicPartitions.size() > 0) {
+                client.seekToBeginning(inputAndInternalTopicPartitions);
+            }
+            if (intermediateTopicPartitions.size() > 0) {
+                client.seekToEnd(intermediateTopicPartitions);
+            }
 
             for (final TopicPartition p : partitions) {
                 client.position(p);

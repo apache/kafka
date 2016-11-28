@@ -64,6 +64,10 @@ public class StreamsSmokeTest {
                     }
                 });
                 break;
+            case "close-deadlock-test":
+                final ShutdownDeadlockTest test = new ShutdownDeadlockTest(kafka, zookeeper);
+                test.start();
+                break;
             default:
                 System.out.println("unknown command: " + command);
         }

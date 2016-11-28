@@ -326,6 +326,7 @@ public class ProcessorStateManager {
                     context.setCurrentNode(processorNode);
                 }
                 try {
+                    log.trace("{} Flushing store={}", logPrefix, store.name());
                     store.flush();
                 } catch (Exception e) {
                     throw new ProcessorStateException(String.format("%s Failed to flush state store %s", logPrefix, store.name()), e);

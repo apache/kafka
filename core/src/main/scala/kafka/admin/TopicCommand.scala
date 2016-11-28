@@ -20,8 +20,8 @@ package kafka.admin
 import java.util.Properties
 import joptsimple._
 import kafka.common.{AdminCommandFailedException, Topic}
-import kafka.consumer.{ConsumerConfig => OldConsumerConfig, Whitelist}
-import kafka.log.{Defaults, LogConfig}
+import kafka.consumer.Whitelist
+import kafka.log.LogConfig
 import kafka.server.ConfigType
 import kafka.utils.ZkUtils._
 import kafka.utils._
@@ -29,9 +29,9 @@ import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.apache.kafka.common.errors.TopicExistsException
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Utils
-import scala.collection.JavaConversions._
+
+import scala.collection.JavaConverters._
 import scala.collection._
-import org.apache.kafka.clients.consumer.{ConsumerConfig => NewConsumerConfig}
 
 
 object TopicCommand extends Logging {
@@ -199,8 +199,8 @@ object TopicCommand extends Logging {
           val describePartitions: Boolean = !reportOverriddenConfigs
           val sortedPartitions = topicPartitionAssignment.toList.sortWith((m1, m2) => m1._1 < m2._1)
           if (describeConfigs) {
-            val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
-            if (!reportOverriddenConfigs || configs.size() != 0) {
+            val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic).asScala
+            if (!reportOverriddenConfigs || configs.nonEmpty) {
               val numPartitions = topicPartitionAssignment.size
               val replicationFactor = topicPartitionAssignment.head._2.size
               println("Topic:%s\tPartitionCount:%d\tReplicationFactor:%d\tConfigs:%s"
@@ -229,7 +229,7 @@ object TopicCommand extends Logging {
   }
 
   def parseTopicConfigsToBeAdded(opts: TopicCommandOptions): Properties = {
-    val configsToBeAdded = opts.options.valuesOf(opts.configOpt).map(_.split("""\s*=\s*"""))
+    val configsToBeAdded = opts.options.valuesOf(opts.configOpt).asScala.map(_.split("""\s*=\s*"""))
     require(configsToBeAdded.forall(config => config.length == 2),
       "Invalid topic config: all configs to be added must be in the format \"key=val\".")
     val props = new Properties
@@ -244,7 +244,7 @@ object TopicCommand extends Logging {
 
   def parseTopicConfigsToBeDeleted(opts: TopicCommandOptions): Seq[String] = {
     if (opts.options.has(opts.deleteConfigOpt)) {
-      val configsToBeDeleted = opts.options.valuesOf(opts.deleteConfigOpt).map(_.trim())
+      val configsToBeDeleted = opts.options.valuesOf(opts.deleteConfigOpt).asScala.map(_.trim())
       val propsToBeDeleted = new Properties
       configsToBeDeleted.foreach(propsToBeDeleted.setProperty(_, ""))
       LogConfig.validateNames(propsToBeDeleted)

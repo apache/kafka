@@ -20,7 +20,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
-public class UpdateMetadataResponse extends AbstractRequestResponse {
+public class UpdateMetadataResponse extends AbstractResponse {
 
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.UPDATE_METADATA_KEY.id);
 

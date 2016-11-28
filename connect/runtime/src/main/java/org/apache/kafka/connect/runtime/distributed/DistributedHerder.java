@@ -17,9 +17,12 @@
 
 package org.apache.kafka.connect.runtime.distributed;
 
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -32,12 +35,16 @@ import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.rest.RestServer;
+import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
+import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
+import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.SinkUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,6 +101,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     private final Time time;
 
+    private final String workerGroupId;
     private final int workerSyncTimeoutMs;
     private final int workerUnsyncBackoffMs;
 
@@ -143,6 +151,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         super(worker, workerId, statusBackingStore, configStorage);
 
         this.time = time;
+        this.workerGroupId = config.getString(DistributedConfig.GROUP_ID_CONFIG);
         this.workerSyncTimeoutMs = config.getInt(DistributedConfig.WORKER_SYNC_TIMEOUT_MS_CONFIG);
         this.workerUnsyncBackoffMs = config.getInt(DistributedConfig.WORKER_UNSYNC_BACKOFF_MS_CONFIG);
         this.member = member != null ? member : new WorkerGroupMember(config, restUrl, this.configBackingStore, new RebalanceListener(), time);
@@ -429,10 +438,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
-    public void putConnectorConfig(final String connName, final Map<String, String> config, final boolean allowReplace,
-                                   final Callback<Created<ConnectorInfo>> callback) {
-        log.trace("Submitting connector config write request {}", connName);
-
+    public void deleteConnectorConfig(final String connName, final Callback<Created<ConnectorInfo>> callback) {
         addRequest(
                 new Callable<Void>() {
                     @Override
@@ -443,20 +449,62 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             return null;
                         }
 
-                        boolean exists = configState.contains(connName);
-                        if (!allowReplace && exists) {
-                            callback.onCompletion(new AlreadyExistsException("Connector " + connName + " already exists"), null);
+                        if (!configState.contains(connName)) {
+                            callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
+                        } else {
+                            log.trace("Removing connector config {} {}", connName, configState.connectors());
+                            configBackingStore.removeConnectorConfig(connName);
+                            callback.onCompletion(null, new Created<ConnectorInfo>(false, null));
+                        }
+                        return null;
+                    }
+                },
+                forwardErrorCallback(callback)
+        );
+    }
+
+    @Override
+    protected Map<String, ConfigValue> validateBasicConnectorConfig(Connector connector,
+                                                                    ConfigDef configDef,
+                                                                    Map<String, String> config) {
+        Map<String, ConfigValue> validatedConfig = super.validateBasicConnectorConfig(connector, configDef, config);
+        if (connector instanceof SinkConnector) {
+            ConfigValue validatedName = validatedConfig.get(ConnectorConfig.NAME_CONFIG);
+            String name = (String) validatedName.value();
+
+            if (workerGroupId.equals(SinkUtils.consumerGroupId(name))) {
+                validatedName.addErrorMessage("Consumer group for sink connector named " + name +
+                        " conflicts with Connect worker group " + workerGroupId);
+            }
+        }
+        return validatedConfig;
+    }
+
+
+    @Override
+    public void putConnectorConfig(final String connName, final Map<String, String> config, final boolean allowReplace,
+                                   final Callback<Created<ConnectorInfo>> callback) {
+        log.trace("Submitting connector config write request {}", connName);
+        addRequest(
+                new Callable<Void>() {
+                    @Override
+                    public Void call() throws Exception {
+                        ConfigInfos validatedConfig = validateConnectorConfig(config);
+                        if (validatedConfig.errorCount() > 0) {
+                            callback.onCompletion(new BadRequestException("Connector configuration is invalid " +
+                                    "(use the endpoint `/{connectorType}/config/validate` to get a full list of errors)"), null);
                             return null;
                         }
 
-                        if (config == null) {
-                            if (!exists) {
-                                callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
-                            } else {
-                                log.trace("Removing connector config {} {} {}", connName, allowReplace, configState.connectors());
-                                configBackingStore.removeConnectorConfig(connName);
-                                callback.onCompletion(null, new Created<ConnectorInfo>(false, null));
-                            }
+                        log.trace("Handling connector config request {}", connName);
+                        if (!isLeader()) {
+                            callback.onCompletion(new NotLeaderException("Only the leader can set connector configs.", leaderUrl()), null);
+                            return null;
+                        }
+
+                        boolean exists = configState.contains(connName);
+                        if (!allowReplace && exists) {
+                            callback.onCompletion(new AlreadyExistsException("Connector " + connName + " already exists"), null);
                             return null;
                         }
 

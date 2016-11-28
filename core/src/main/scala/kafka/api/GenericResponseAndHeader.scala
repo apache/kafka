@@ -14,10 +14,11 @@
 package kafka.api
 
 import java.nio.ByteBuffer
-import org.apache.kafka.common.requests.AbstractRequestResponse
+
+import org.apache.kafka.common.requests.AbstractResponse
 
 private[kafka] abstract class GenericResponseAndHeader(val correlationId: Int,
-                                                       val body: AbstractRequestResponse,
+                                                       val body: AbstractResponse,
                                                        val name: String,
                                                        override val requestId: Option[Short] = None)
   extends RequestOrResponse(requestId) {

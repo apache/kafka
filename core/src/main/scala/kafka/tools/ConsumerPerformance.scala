@@ -19,16 +19,18 @@ package kafka.tools
 
 import java.util
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import java.util.concurrent.atomic.AtomicLong
 import java.nio.channels.ClosedByInterruptException
+
 import org.apache.log4j.Logger
 import org.apache.kafka.clients.consumer.{ConsumerRebalanceListener, KafkaConsumer}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.TopicPartition
 import kafka.utils.CommandLineUtils
-import java.util.{ Random, Properties }
+import java.util.{Collections, Properties, Random}
+
 import kafka.consumer.Consumer
 import kafka.consumer.ConsumerConnector
 import kafka.consumer.KafkaStream
@@ -60,7 +62,7 @@ object ConsumerPerformance {
     var startMs, endMs = 0L
     if (!config.useOldConsumer) {
       val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](config.props)
-      consumer.subscribe(List(config.topic))
+      consumer.subscribe(Collections.singletonList(config.topic))
       startMs = System.currentTimeMillis
       consume(consumer, List(config.topic), config.numMessages, 1000, config, totalMessagesRead, totalBytesRead)
       endMs = System.currentTimeMillis
@@ -105,7 +107,7 @@ object ConsumerPerformance {
     // Wait for group join, metadata fetch, etc
     val joinTimeout = 10000
     val isAssigned = new AtomicBoolean(false)
-    consumer.subscribe(topics, new ConsumerRebalanceListener {
+    consumer.subscribe(topics.asJava, new ConsumerRebalanceListener {
       def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) {
         isAssigned.set(true)
       }
@@ -119,7 +121,7 @@ object ConsumerPerformance {
       }
       consumer.poll(100)
     }
-    consumer.seekToBeginning(List[TopicPartition]())
+    consumer.seekToBeginning(Collections.emptyList())
 
     // Now start the benchmark
     val startMs = System.currentTimeMillis
@@ -128,9 +130,9 @@ object ConsumerPerformance {
     var currentTimeMillis = lastConsumedTime
 
     while (messagesRead < count && currentTimeMillis - lastConsumedTime <= timeout) {
-      val records = consumer.poll(100)
+      val records = consumer.poll(100).asScala
       currentTimeMillis = System.currentTimeMillis
-      if (records.count() > 0)
+      if (records.nonEmpty)
         lastConsumedTime = currentTimeMillis
       for (record <- records) {
         messagesRead += 1

@@ -22,10 +22,14 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
@@ -39,6 +43,8 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 
@@ -319,5 +325,71 @@ public class KTableAggregateTest {
                  "1:2",
                  "1:2"
                  ), proc.processed);
+    }
+
+    @Test
+    public void shouldForwardToCorrectProcessorNodeWhenMultiCacheEvictions() throws Exception {
+        final String tableOne = "tableOne";
+        final String tableTwo = "tableTwo";
+        final KStreamBuilder builder = new KStreamBuilder();
+        final String reduceTopic = "TestDriver-reducer-store-repartition";
+        final Map<String, Long> reduceResults = new HashMap<>();
+
+        final KTable<String, String> one = builder.table(Serdes.String(), Serdes.String(), tableOne, tableOne);
+        final KTable<Long, String> two = builder.table(Serdes.Long(), Serdes.String(), tableTwo, tableTwo);
+
+
+        final KTable<String, Long> reduce = two.groupBy(new KeyValueMapper<Long, String, KeyValue<String, Long>>() {
+            @Override
+            public KeyValue<String, Long> apply(final Long key, final String value) {
+                return new KeyValue<>(value, key);
+            }
+        }, Serdes.String(), Serdes.Long())
+                .reduce(new Reducer<Long>() {
+                    @Override
+                    public Long apply(final Long value1, final Long value2) {
+                        return value1 + value2;
+                    }
+                }, new Reducer<Long>() {
+                    @Override
+                    public Long apply(final Long value1, final Long value2) {
+                        return value1 - value2;
+                    }
+                }, "reducer-store");
+
+        reduce.foreach(new ForeachAction<String, Long>() {
+            @Override
+            public void apply(final String key, final Long value) {
+                reduceResults.put(key, value);
+            }
+        });
+
+        one.leftJoin(reduce, new ValueJoiner<String, Long, String>() {
+            @Override
+            public String apply(final String value1, final Long value2) {
+                return value1 + ":" + value2;
+            }
+        })
+                .mapValues(new ValueMapper<String, String>() {
+                    @Override
+                    public String apply(final String value) {
+                        return value;
+                    }
+                });
+
+        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, 111);
+        driver.process(reduceTopic, "1", new Change<>(1L, null));
+        driver.process("tableOne", "2", "2");
+        // this should trigger eviction on the reducer-store topic
+        driver.process(reduceTopic, "2", new Change<>(2L, null));
+        // this wont as it is the same value
+        driver.process(reduceTopic, "2", new Change<>(2L, null));
+        assertEquals(Long.valueOf(2L), reduceResults.get("2"));
+
+        // this will trigger eviction on the tableOne topic
+        // that in turn will cause an eviction on reducer-topic. It will flush
+        // key 2 as it is the only dirty entry in the cache
+        driver.process("tableOne", "1", "5");
+        assertEquals(Long.valueOf(4L), reduceResults.get("2"));
     }
 }

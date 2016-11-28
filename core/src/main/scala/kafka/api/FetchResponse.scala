@@ -21,14 +21,14 @@ import java.nio.ByteBuffer
 import java.nio.channels.GatheringByteChannel
 
 import kafka.common.TopicAndPartition
-import kafka.message.{MessageSet, ByteBufferMessageSet}
+import kafka.message.{ByteBufferMessageSet, MessageSet}
 import kafka.api.ApiUtils._
 import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.network.{Send, MultiSend}
+import org.apache.kafka.common.network.{MultiSend, Send}
 import org.apache.kafka.common.protocol.Errors
 
 import scala.collection._
-import JavaConverters._
+import scala.collection.JavaConverters._
 
 object FetchResponsePartitionData {
   def readFrom(buffer: ByteBuffer): FetchResponsePartitionData = {
@@ -76,7 +76,8 @@ class PartitionDataSend(val partitionId: Int,
       written += channel.write(buffer)
     if (!buffer.hasRemaining) {
       if (messagesSentSize < messageSize) {
-        val bytesSent = partitionData.messages.writeTo(channel, messagesSentSize, messageSize - messagesSentSize)
+        val records = partitionData.messages.asRecords
+        val bytesSent = records.writeTo(channel, messagesSentSize, messageSize - messagesSentSize).toInt
         messagesSentSize += bytesSent
         written += bytesSent
       }
@@ -138,7 +139,7 @@ class TopicDataSend(val dest: String, val topicData: TopicData) extends Send {
   buffer.rewind()
 
   private val sends = new MultiSend(dest,
-                            JavaConversions.seqAsJavaList(topicData.partitionData.toList.map(d => new PartitionDataSend(d._1, d._2))))
+    topicData.partitionData.map(d => new PartitionDataSend(d._1, d._2): Send).asJava)
 
   override def writeTo(channel: GatheringByteChannel): Long = {
     if (completed)

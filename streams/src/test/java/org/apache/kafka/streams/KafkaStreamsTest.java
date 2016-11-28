@@ -18,16 +18,25 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
+import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.test.MockMetricsReporter;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Assert;
 import org.junit.ClassRule;
 import org.junit.Test;
 
+import java.util.Collections;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class KafkaStreamsTest {
@@ -56,7 +65,7 @@ public class KafkaStreamsTest {
         final int initCountDifference = newInitCount - oldInitCount;
         assertTrue("some reporters should be initialized by calling start()", initCountDifference > 0);
 
-        streams.close();
+        assertTrue(streams.close(15, TimeUnit.SECONDS));
         Assert.assertEquals("each reporter initialized should also be closed",
             oldCloseCount + initCountDifference, MockMetricsReporter.CLOSE_COUNT.get());
     }
@@ -86,8 +95,8 @@ public class KafkaStreamsTest {
 
         final KStreamBuilder builder = new KStreamBuilder();
         final KafkaStreams streams = new KafkaStreams(builder, props);
+        streams.start();
         streams.close();
-
         try {
             streams.start();
         } catch (final IllegalStateException e) {
@@ -147,6 +156,52 @@ public class KafkaStreamsTest {
         });
     }
 
+    @Test
+    public void shouldReturnFalseOnCloseWhenThreadsHaventTerminated() throws Exception {
+        final AtomicBoolean keepRunning = new AtomicBoolean(true);
+        try {
+            final Properties props = new Properties();
+            props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+            props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+
+            final KStreamBuilder builder = new KStreamBuilder();
+            final CountDownLatch latch = new CountDownLatch(1);
+            final String topic = "input";
+            CLUSTER.createTopic(topic);
+
+            builder.stream(Serdes.String(), Serdes.String(), topic)
+                    .foreach(new ForeachAction<String, String>() {
+                        @Override
+                        public void apply(final String key, final String value) {
+                            try {
+                                latch.countDown();
+                                while (keepRunning.get()) {
+                                    Thread.sleep(10);
+                                }
+                            } catch (InterruptedException e) {
+                                // no-op
+                            }
+                        }
+                    });
+            final KafkaStreams streams = new KafkaStreams(builder, props);
+            streams.start();
+            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(topic,
+                                                                            Collections.singletonList(new KeyValue<>("A", "A")),
+                                                                            TestUtils.producerConfig(
+                                                                                    CLUSTER.bootstrapServers(),
+                                                                                    StringSerializer.class,
+                                                                                    StringSerializer.class,
+                                                                                    new Properties()),
+                                                                                    System.currentTimeMillis());
+
+            assertTrue("Timed out waiting to receive single message", latch.await(30, TimeUnit.SECONDS));
+            assertFalse(streams.close(10, TimeUnit.MILLISECONDS));
+        } finally {
+            // stop the thread so we don't interfere with other tests etc
+            keepRunning.set(false);
+        }
+    }
+
 
     private KafkaStreams createKafkaStreams() {
         final Properties props = new Properties();
@@ -191,5 +246,4 @@ public class KafkaStreamsTest {
             streams.close();
         }
     }
-
 }

@@ -31,7 +31,15 @@ IF ["%SCALA_VERSION%"] EQU [""] (
 )
 
 IF ["%SCALA_BINARY_VERSION%"] EQU [""] (
-  set SCALA_BINARY_VERSION=2.10
+  for /f "tokens=1,2 delims=." %%a in ("%SCALA_VERSION%") do (
+    set FIRST=%%a
+    set SECOND=%%b
+    if ["!SECOND!"] EQU [""] (
+      set SCALA_BINARY_VERSION=!FIRST!
+    ) else (
+      set SCALA_BINARY_VERSION=!FIRST!.!SECOND!
+    )
+  )
 )
 
 rem Classpath addition for kafka-core dependencies

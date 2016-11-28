@@ -21,7 +21,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.WindowStore;
 
 import java.util.Map;
 
@@ -34,7 +34,7 @@ import java.util.Map;
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
 
-public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V> {
+public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, WindowStore> {
 
     private final long retentionPeriod;
     private final boolean retainDuplicates;
@@ -59,7 +59,7 @@ public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V
         return name;
     }
 
-    public StateStore get() {
+    public WindowStore get() {
         if (!enableCaching) {
             final RocksDBWindowStore<K, V> rocksDbStore = new RocksDBWindowStore<>(name, retentionPeriod, numSegments, retainDuplicates, keySerde, valueSerde);
             return new MeteredWindowStore<>(logged ? rocksDbStore.enableLogging() : rocksDbStore, "rocksdb-window", time);

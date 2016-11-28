@@ -63,7 +63,7 @@ public enum ApiKeys {
     /** an english description of the api--this is for debugging and can change */
     public final String name;
 
-    private ApiKeys(int id, String name) {
+    ApiKeys(int id, String name) {
         this.id = (short) id;
         this.name = name;
     }

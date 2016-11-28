@@ -145,18 +145,19 @@ abstract class AbstractFetcherThread(name: String,
                 case Errors.NONE =>
                   try {
                     val messages = partitionData.toByteBufferMessageSet
-                    val newOffset = messages.shallowIterator.toSeq.lastOption match {
-                      case Some(m) =>
-                        partitionStates.updateAndMoveToEnd(topicPartition, new PartitionFetchState(m.nextOffset))
-                        fetcherStats.byteRate.mark(messages.validBytes)
-                        m.nextOffset
-                      case None =>
-                        currentPartitionFetchState.offset
-                    }
+                    val newOffset = messages.shallowIterator.toSeq.lastOption.map(_.nextOffset).getOrElse(
+                      currentPartitionFetchState.offset)
 
                     fetcherLagStats.getAndMaybePut(topic, partitionId).lag = Math.max(0L, partitionData.highWatermark - newOffset)
                     // Once we hand off the partition data to the subclass, we can't mess with it any more in this thread
                     processPartitionData(topicPartition, currentPartitionFetchState.offset, partitionData)
+
+                    val validBytes = messages.validBytes
+                    if (validBytes > 0) {
+                      // Update partitionStates only if there is no exception during processPartitionData
+                      partitionStates.updateAndMoveToEnd(topicPartition, new PartitionFetchState(newOffset))
+                      fetcherStats.byteRate.mark(validBytes)
+                    }
                   } catch {
                     case ime: CorruptRecordException =>
                       // we log the error and continue. This ensures two things
@@ -164,6 +165,7 @@ abstract class AbstractFetcherThread(name: String,
                       // 2. If the message is corrupt due to a transient state in the log (truncation, partial writes can cause this), we simply continue and
                       // should get fixed in the subsequent fetches
                       logger.error("Found invalid messages during fetch for partition [" + topic + "," + partitionId + "] offset " + currentPartitionFetchState.offset  + " error " + ime.getMessage)
+                      updatePartitionsWithError(topicPartition);
                     case e: Throwable =>
                       throw new KafkaException("error processing data for partition [%s,%d] offset %d"
                         .format(topic, partitionId, currentPartitionFetchState.offset), e)
