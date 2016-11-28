@@ -382,7 +382,7 @@ public class KerberosLogin extends AbstractLogin {
     }
 
     private long currentElapsedTime() {
-        return time.nanoseconds() / 1000000;
+        return time.hiResClockMs();
     }
 
     private long currentWallTime() {
