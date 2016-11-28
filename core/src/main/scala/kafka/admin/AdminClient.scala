@@ -13,9 +13,12 @@
 package kafka.admin
 
 import java.nio.ByteBuffer
+import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.atomic.AtomicInteger
+import scala.collection.JavaConversions._
 
+import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
 import kafka.common.KafkaException
 import kafka.coordinator.GroupOverview
 import kafka.utils.Logging
@@ -78,6 +81,12 @@ class AdminClient(val time: Time,
     response.groups().asScala.map(group => GroupOverview(group.groupId(), group.protocolType())).toList
   }
 
+  def getApiVersions(node: Node): util.Collection[ApiVersion] = {
+    val response = send(node, ApiKeys.API_VERSIONS, new ApiVersionsRequest.Builder()).asInstanceOf[ApiVersionsResponse]
+    Errors.forCode(response.errorCode()).maybeThrow()
+    response.apiVersions()
+  }
+
   private def findAllBrokers(): List[Node] = {
     val request = MetadataRequest.Builder.allTopics()
     val response = sendAnyNode(ApiKeys.METADATA, request).asInstanceOf[MetadataResponse]
@@ -124,6 +133,21 @@ class AdminClient(val time: Time,
       throw response.error.exception
     response.maybeThrowFirstPartitionError
     response.responseData().asScala.map { responseData => (responseData._1, responseData._2.offset) }.toMap
+  }
+
+  def listAllBrokerVersionInfo(): Map[Node, NodeApiVersions] = {
+    findAllBrokers.map {
+      case broker =>
+        broker -> {
+          try {
+            new NodeApiVersions(getApiVersions(broker))
+          } catch {
+            case e: Exception =>
+              warn(s"Failed to find versions from broker $broker", e)
+              new NodeApiVersions(List())
+          }
+        }
+    }.toMap
   }
 
   /**
