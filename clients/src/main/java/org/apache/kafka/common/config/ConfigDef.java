@@ -99,7 +99,7 @@ public class ConfigDef {
      * @param recommender   the recommender provides valid values given the parent configuration values
      * @return This ConfigDef so you can chain calls
      */
-    public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
+    public ConfigDef define(String name, ConfigType type, Object defaultValue, Validator validator, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender) {
         if (configKeys.containsKey(name)) {
             throw new ConfigException("Configuration " + name + " is defined twice.");
@@ -127,7 +127,7 @@ public class ConfigDef {
      * @param dependents    the configurations that are dependents of this configuration
      * @return This ConfigDef so you can chain calls
      */
-    public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
+    public ConfigDef define(String name, ConfigType type, Object defaultValue, Validator validator, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName, List<String> dependents) {
         return define(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, null);
     }
@@ -147,7 +147,7 @@ public class ConfigDef {
      * @param recommender   the recommender provides valid values given the parent configuration values
      * @return This ConfigDef so you can chain calls
      */
-    public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
+    public ConfigDef define(String name, ConfigType type, Object defaultValue, Validator validator, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName, Recommender recommender) {
         return define(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, Collections.<String>emptyList(), recommender);
     }
@@ -166,7 +166,7 @@ public class ConfigDef {
      * @param displayName   the name suitable for display
      * @return This ConfigDef so you can chain calls
      */
-    public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
+    public ConfigDef define(String name, ConfigType type, Object defaultValue, Validator validator, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName) {
         return define(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, Collections.<String>emptyList());
     }
@@ -186,7 +186,7 @@ public class ConfigDef {
      * @param recommender   the recommender provides valid values given the parent configuration values
      * @return This ConfigDef so you can chain calls
      */
-    public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation,
+    public ConfigDef define(String name, ConfigType type, Object defaultValue, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender) {
         return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender);
     }
@@ -205,7 +205,7 @@ public class ConfigDef {
      * @param dependents    the configurations that are dependents of this configuration
      * @return This ConfigDef so you can chain calls
      */
-    public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation,
+    public ConfigDef define(String name, ConfigType type, Object defaultValue, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName, List<String> dependents) {
         return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, dependents, null);
     }
@@ -224,7 +224,7 @@ public class ConfigDef {
      * @param recommender   the recommender provides valid values given the parent configuration values
      * @return This ConfigDef so you can chain calls
      */
-    public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation,
+    public ConfigDef define(String name, ConfigType type, Object defaultValue, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName, Recommender recommender) {
         return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, Collections.<String>emptyList(), recommender);
     }
@@ -242,7 +242,7 @@ public class ConfigDef {
      * @param displayName   the name suitable for display
      * @return This ConfigDef so you can chain calls
      */
-    public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation,
+    public ConfigDef define(String name, ConfigType type, Object defaultValue, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName) {
         return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, Collections.<String>emptyList());
     }
@@ -261,7 +261,7 @@ public class ConfigDef {
      * @param recommender   the recommender provides valid values given the parent configuration value
      * @return This ConfigDef so you can chain calls
      */
-    public ConfigDef define(String name, Type type, Importance importance, String documentation, String group, int orderInGroup,
+    public ConfigDef define(String name, ConfigType type, Importance importance, String documentation, String group, int orderInGroup,
                             Width width, String displayName, List<String> dependents, Recommender recommender) {
         return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender);
     }
@@ -279,7 +279,7 @@ public class ConfigDef {
      * @param dependents    the configurations that are dependents of this configuration
      * @return This ConfigDef so you can chain calls
      */
-    public ConfigDef define(String name, Type type, Importance importance, String documentation, String group, int orderInGroup,
+    public ConfigDef define(String name, ConfigType type, Importance importance, String documentation, String group, int orderInGroup,
                             Width width, String displayName, List<String> dependents) {
         return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, group, orderInGroup, width, displayName, dependents, null);
     }
@@ -297,7 +297,7 @@ public class ConfigDef {
      * @param recommender   the recommender provides valid values given the parent configuration value
      * @return This ConfigDef so you can chain calls
      */
-    public ConfigDef define(String name, Type type, Importance importance, String documentation, String group, int orderInGroup,
+    public ConfigDef define(String name, ConfigType type, Importance importance, String documentation, String group, int orderInGroup,
                             Width width, String displayName, Recommender recommender) {
         return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, group, orderInGroup, width, displayName, Collections.<String>emptyList(), recommender);
     }
@@ -314,7 +314,7 @@ public class ConfigDef {
      * @param displayName   the name suitable for display
      * @return This ConfigDef so you can chain calls
      */
-    public ConfigDef define(String name, Type type, Importance importance, String documentation, String group, int orderInGroup,
+    public ConfigDef define(String name, ConfigType type, Importance importance, String documentation, String group, int orderInGroup,
                             Width width, String displayName) {
         return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, group, orderInGroup, width, displayName, Collections.<String>emptyList());
     }
@@ -329,7 +329,7 @@ public class ConfigDef {
      * @param documentation the documentation string for the config
      * @return This ConfigDef so you can chain calls
      */
-    public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation) {
+    public ConfigDef define(String name, ConfigType type, Object defaultValue, Validator validator, Importance importance, String documentation) {
         return define(name, type, defaultValue, validator, importance, documentation, null, -1, Width.NONE, name);
     }
 
@@ -342,7 +342,7 @@ public class ConfigDef {
      * @param documentation The documentation string for the config
      * @return This ConfigDef so you can chain calls
      */
-    public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation) {
+    public ConfigDef define(String name, ConfigType type, Object defaultValue, Importance importance, String documentation) {
         return define(name, type, defaultValue, null, importance, documentation);
     }
 
@@ -354,7 +354,7 @@ public class ConfigDef {
      * @param documentation The documentation string for the config
      * @return This ConfigDef so you can chain calls
      */
-    public ConfigDef define(String name, Type type, Importance importance, String documentation) {
+    public ConfigDef define(String name, ConfigType type, Importance importance, String documentation) {
         return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation);
     }
 
@@ -584,99 +584,15 @@ public class ConfigDef {
      * @param type  The expected type
      * @return The parsed object
      */
-    private Object parseType(String name, Object value, Type type) {
-        try {
-            if (value == null) return null;
-
-            String trimmed = null;
-            if (value instanceof String)
-                trimmed = ((String) value).trim();
-
-            switch (type) {
-                case BOOLEAN:
-                    if (value instanceof String) {
-                        if (trimmed.equalsIgnoreCase("true"))
-                            return true;
-                        else if (trimmed.equalsIgnoreCase("false"))
-                            return false;
-                        else
-                            throw new ConfigException(name, value, "Expected value to be either true or false");
-                    } else if (value instanceof Boolean)
-                        return value;
-                    else
-                        throw new ConfigException(name, value, "Expected value to be either true or false");
-                case PASSWORD:
-                    if (value instanceof Password)
-                        return value;
-                    else if (value instanceof String)
-                        return new Password(trimmed);
-                    else
-                        throw new ConfigException(name, value, "Expected value to be a string, but it was a " + value.getClass().getName());
-                case STRING:
-                    if (value instanceof String)
-                        return trimmed;
-                    else
-                        throw new ConfigException(name, value, "Expected value to be a string, but it was a " + value.getClass().getName());
-                case INT:
-                    if (value instanceof Integer) {
-                        return (Integer) value;
-                    } else if (value instanceof String) {
-                        return Integer.parseInt(trimmed);
-                    } else {
-                        throw new ConfigException(name, value, "Expected value to be an number.");
-                    }
-                case SHORT:
-                    if (value instanceof Short) {
-                        return (Short) value;
-                    } else if (value instanceof String) {
-                        return Short.parseShort(trimmed);
-                    } else {
-                        throw new ConfigException(name, value, "Expected value to be an number.");
-                    }
-                case LONG:
-                    if (value instanceof Integer)
-                        return ((Integer) value).longValue();
-                    if (value instanceof Long)
-                        return (Long) value;
-                    else if (value instanceof String)
-                        return Long.parseLong(trimmed);
-                    else
-                        throw new ConfigException(name, value, "Expected value to be an number.");
-                case DOUBLE:
-                    if (value instanceof Number)
-                        return ((Number) value).doubleValue();
-                    else if (value instanceof String)
-                        return Double.parseDouble(trimmed);
-                    else
-                        throw new ConfigException(name, value, "Expected value to be an number.");
-                case LIST:
-                    if (value instanceof List)
-                        return (List<?>) value;
-                    else if (value instanceof String)
-                        if (trimmed.isEmpty())
-                            return Collections.emptyList();
-                        else
-                            return Arrays.asList(trimmed.split("\\s*,\\s*", -1));
-                    else
-                        throw new ConfigException(name, value, "Expected a comma separated list.");
-                case CLASS:
-                    if (value instanceof Class)
-                        return (Class<?>) value;
-                    else if (value instanceof String)
-                        return Class.forName(trimmed, true, Utils.getContextOrKafkaClassLoader());
-                    else
-                        throw new ConfigException(name, value, "Expected a Class instance or class name.");
-                default:
-                    throw new IllegalStateException("Unknown type.");
-            }
-        } catch (NumberFormatException e) {
-            throw new ConfigException(name, value, "Not a number of type " + type);
-        } catch (ClassNotFoundException e) {
-            throw new ConfigException(name, value, "Class " + value + " could not be found.");
-        }
+    private Object parseType(String name, Object value, ConfigType type) {
+        if (value == null) return null;
+        Object trimmed = value;
+        if (value instanceof String)
+            trimmed = ((String) value).trim();
+        return type.parseType(name, trimmed);
     }
 
-    public static String convertToString(Object parsedValue, Type type) {
+    public static String convertToString(Object parsedValue, ConfigType type) {
         if (parsedValue == null) {
             return null;
         }
@@ -685,31 +601,265 @@ public class ConfigDef {
             return parsedValue.toString();
         }
 
-        switch (type) {
-            case BOOLEAN:
-            case SHORT:
-            case INT:
-            case LONG:
-            case DOUBLE:
-            case STRING:
-            case PASSWORD:
+        return type.convertToString(parsedValue);
+    }
+
+    public interface ConfigType {
+        String convertToString(Object parsedValue);
+
+        Object parseType(String name, Object value);
+    }
+
+    /**
+     * The atomic config types.
+     */
+    public enum Type implements ConfigType {
+        BOOLEAN {
+            @Override
+            public String convertToString(Object parsedValue) {
                 return parsedValue.toString();
-            case LIST:
-                List<?> valueList = (List<?>) parsedValue;
-                return Utils.join(valueList, ",");
-            case CLASS:
-                Class<?> clazz = (Class<?>) parsedValue;
-                return clazz.getCanonicalName();
-            default:
-                throw new IllegalStateException("Unknown type.");
+            }
+
+            @Override
+            public Object parseType(String name, Object value) {
+                if (value instanceof String) {
+                    if ("true".equalsIgnoreCase((String) value))
+                        return true;
+                    else if ("false".equalsIgnoreCase((String) value))
+                        return false;
+                    else
+                        throw new ConfigException(name, value, "Expected value to be either true or false");
+                } else if (value instanceof Boolean)
+                    return value;
+                else
+                    throw new ConfigException(name, value, "Expected value to be either true or false");
+            }
+        },
+        STRING {
+            @Override
+            public String convertToString(Object parsedValue) {
+                return parsedValue.toString();
+            }
+
+            @Override
+            public Object parseType(String name, Object value) {
+                if (value instanceof String)
+                    return value;
+                else
+                    throw new ConfigException(name, value, "Expected value to be a string, but it was a " + value.getClass().getName());
+            }
+        },
+        INT {
+            @Override
+            public String convertToString(Object parsedValue) {
+                return parsedValue.toString();
+            }
+
+            @Override
+            public Object parseType(String name, Object value) {
+                if (value instanceof Integer) {
+                    return value;
+                } else if (value instanceof String) {
+                    try {
+                        return Integer.parseInt((String) value);
+                    } catch (NumberFormatException nfe) {
+                        throw new ConfigException(name, value, "Not a number of type " + this);
+                    }
+                } else {
+                    throw new ConfigException(name, value, "Expected value to be an number.");
+                }
+            }
+        },
+        SHORT {
+            @Override
+            public String convertToString(Object parsedValue) {
+                return parsedValue.toString();
+            }
+
+            @Override
+            public Object parseType(String name, Object value) {
+                if (value instanceof Short) {
+                    return value;
+                } else if (value instanceof String) {
+                    try {
+                        return Short.parseShort((String) value);
+                    } catch (NumberFormatException nfe) {
+                        throw new ConfigException(name, value, "Not a number of type " + this);
+                    }
+                } else {
+                    throw new ConfigException(name, value, "Expected value to be an number.");
+                }
+            }
+        },
+        LONG {
+            @Override
+            public String convertToString(Object parsedValue) {
+                return parsedValue.toString();
+            }
+
+            @Override
+            public Object parseType(String name, Object value) {
+                if (value instanceof Integer) {
+                    return ((Integer) value).longValue();
+                } else if (value instanceof Long) {
+                    return value;
+                } else if (value instanceof String) {
+                    try {
+                        return Long.parseLong((String) value);
+                    } catch (NumberFormatException nfe) {
+                        throw new ConfigException(name, value, "Not a number of type " + this);
+                    }
+                } else {
+                    throw new ConfigException(name, value, "Expected value to be an number.");
+                }
+            }
+        },
+        DOUBLE {
+            @Override
+            public String convertToString(Object parsedValue) {
+                return parsedValue.toString();
+            }
+
+            @Override
+            public Object parseType(String name, Object value) {
+                if (value instanceof Number) {
+                    return ((Number) value).doubleValue();
+                } else if (value instanceof String) {
+                    try {
+                        return Double.parseDouble((String) value);
+                    } catch (NumberFormatException nfe) {
+                        throw new ConfigException(name, value, "Not a number of type " + this);
+                    }
+                } else {
+                    throw new ConfigException(name, value, "Expected value to be an number.");
+                }
+            }
+        },
+        /**
+         * Equivalent to {@code new ArrayType(ConfigDef.Type.STRING)}.
+         *
+         * @deprecated use {@link ArrayType}
+         */
+        @Deprecated
+        LIST {
+            @Override
+            public String convertToString(Object parsedValue) {
+                return Utils.join((List<?>) parsedValue, ",");
+            }
+
+            @Override
+            public Object parseType(String name, Object value) {
+                if (value instanceof List)
+                    return value;
+                else if (value instanceof String)
+                    if (((String) value).isEmpty())
+                        return Collections.emptyList();
+                    else
+                        return Arrays.asList(((String) value).split("\\s*,\\s*", -1));
+                else
+                    throw new ConfigException(name, value, "Expected a comma separated list.");
+            }
+        },
+        CLASS {
+            @Override
+            public String convertToString(Object parsedValue) {
+                return ((Class<?>) parsedValue).getCanonicalName();
+            }
+
+            @Override
+            public Object parseType(String name, Object value) {
+                if (value instanceof Class)
+                    return value;
+                else if (value instanceof String)
+                    try {
+                        return Class.forName((String) value, true, Utils.getContextOrKafkaClassLoader());
+                    } catch (ClassNotFoundException e) {
+                        throw new ConfigException(name, value, "Class " + value + " could not be found.");
+                    }
+                else
+                    throw new ConfigException(name, value, "Expected a Class instance or class name.");
+            }
+        },
+        PASSWORD {
+            @Override
+            public String convertToString(Object parsedValue) {
+                return parsedValue.toString();
+            }
+
+            @Override
+            public Object parseType(String name, Object value) {
+                if (value instanceof Password)
+                    return value;
+                else if (value instanceof String)
+                    return new Password((String) value);
+                else
+                    throw new ConfigException(name, value, "Expected value to be a string, but it was a " + value.getClass().getName());
+            }
         }
     }
 
     /**
-     * The config types
+     * Array of elements of the specified value type. Each element is delimited by a comma.
+     *
+     * TODO: how should escaping be handled?
+     *
+     * The runtime representation is {@code List<Object>}.
      */
-    public enum Type {
-        BOOLEAN, STRING, INT, SHORT, LONG, DOUBLE, LIST, CLASS, PASSWORD
+    public class ArrayType implements ConfigType {
+        public final Type valueType;
+
+        public ArrayType(Type valueType) {
+            this.valueType = valueType;
+        }
+
+        @Override
+        public String convertToString(Object parsedValue) {
+            // TODO
+            return null;
+        }
+
+        @Override
+        public Object parseType(String name, Object value) {
+            // TODO
+            return null;
+        }
+
+        @Override
+        public String toString() {
+            return "ARRAY[" + valueType + "]";
+        }
+    }
+
+    /**
+     * Map of String keys and specified value type. The key and value are separated by a colon, and each key-value pair is separated by comma.
+     *
+     * TODO: how should escaping be handled?
+     *
+     * The runtime representation is {@code Map<String, Object>}.
+     */
+    public class MapType implements ConfigType {
+        public final Type valueType;
+
+        public MapType(Type valueType) {
+            this.valueType = valueType;
+        }
+
+        @Override
+        public String convertToString(Object parsedValue) {
+            // TODO
+            return null;
+        }
+
+        @Override
+        public Object parseType(String name, Object value) {
+            // TODO
+            return null;
+        }
+
+        @Override
+        public String toString() {
+            return "MAP[" + valueType + "]";
+        }
     }
 
     /**
@@ -864,7 +1014,7 @@ public class ConfigDef {
 
     public static class ConfigKey {
         public final String name;
-        public final Type type;
+        public final ConfigType type;
         public final String documentation;
         public final Object defaultValue;
         public final Validator validator;
@@ -876,7 +1026,7 @@ public class ConfigDef {
         public final List<String> dependents;
         public final Recommender recommender;
 
-        public ConfigKey(String name, Type type, Object defaultValue, Validator validator,
+        public ConfigKey(String name, ConfigType type, Object defaultValue, Validator validator,
                          Importance importance, String documentation, String group,
                          int orderInGroup, Width width, String displayName,
                          List<String> dependents, Recommender recommender) {
