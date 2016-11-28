@@ -37,6 +37,7 @@ import org.apache.log4j.Logger
 import scala.reflect.ClassTag
 
 object RequestChannel extends Logging {
+  val PrioritizedApiKeys = Set(ApiKeys.LEADER_AND_ISR.id, ApiKeys.UPDATE_METADATA_KEY.id, ApiKeys.STOP_REPLICA.id)
   private val requestLogger = Logger.getLogger("kafka.request.logger")
 
   sealed trait BaseRequest
@@ -200,7 +201,7 @@ object RequestChannel extends Logging {
 
 class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMetricsGroup {
   private var responseListeners: List[(Int) => Unit] = Nil
-  private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
+  private val requestQueue = new PrioritizationAwareBlockingQueue[BaseRequest](queueSize)
   private val responseQueues = new Array[BlockingQueue[RequestChannel.Response]](numProcessors)
   for(i <- 0 until numProcessors)
     responseQueues(i) = new LinkedBlockingQueue[RequestChannel.Response]()
@@ -227,7 +228,8 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
 
   /** Send a request to be handled, potentially blocking until there is room in the queue for the request */
   def sendRequest(request: RequestChannel.Request) {
-    requestQueue.put(request)
+    val prioritized = RequestChannel.PrioritizedApiKeys.contains(request.header.apiKey().id)
+    requestQueue.put(request, prioritized)
   }
 
   /** Send a response back to the socket server to be sent over the network */
@@ -247,10 +249,6 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
   def receiveRequest(timeout: Long): RequestChannel.BaseRequest =
     requestQueue.poll(timeout, TimeUnit.MILLISECONDS)
 
-  /** Get the next request or block until there is one */
-  def receiveRequest(): RequestChannel.BaseRequest =
-    requestQueue.take()
-
   /** Get a response for the given processor if there is one */
   def receiveResponse(processor: Int): RequestChannel.Response = {
     val response = responseQueues(processor).poll()
@@ -267,7 +265,7 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
     requestQueue.clear()
   }
 
-  def sendShutdownRequest(): Unit = requestQueue.put(ShutdownRequest)
+  def sendShutdownRequest(): Unit = requestQueue.put(ShutdownRequest, prioritized = false)
 
 }
 
