@@ -36,15 +36,16 @@ import scala.math._
  * @param time: The time implementation to use
  */
 @threadsafe
-class Throttler(val desiredRatePerSec: Double, 
-                val checkIntervalMs: Long = 100L, 
-                val throttleDown: Boolean = true,
+class Throttler(desiredRatePerSec: Double,
+                checkIntervalMs: Long = 100L,
+                throttleDown: Boolean = true,
                 metricName: String = "throttler",
                 units: String = "entries",
-                val time: Time = Time.SYSTEM) extends Logging with KafkaMetricsGroup {
+                time: Time = Time.SYSTEM) extends Logging with KafkaMetricsGroup {
   
   private val lock = new Object
   private val meter = newMeter(metricName, units, TimeUnit.SECONDS)
+  private val checkIntervalNs = TimeUnit.MILLISECONDS.toNanos(checkIntervalMs)
   private var periodStartNs: Long = time.nanoseconds
   private var observedSoFar: Double = 0.0
   
@@ -59,7 +60,7 @@ class Throttler(val desiredRatePerSec: Double,
       val elapsedNs = now - periodStartNs
       // if we have completed an interval AND we have observed something, maybe
       // we should take a little nap
-      if (elapsedNs > TimeUnit.MILLISECONDS.toNanos(checkIntervalMs) && observedSoFar > 0) {
+      if (elapsedNs > checkIntervalNs && observedSoFar > 0) {
         val rateInSecs = (observedSoFar * nsPerSec) / elapsedNs
         val needAdjustment = !(throttleDown ^ (rateInSecs > desiredRatePerSec))
         if (needAdjustment) {
