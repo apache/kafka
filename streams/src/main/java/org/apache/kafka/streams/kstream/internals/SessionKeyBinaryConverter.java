@@ -23,6 +23,12 @@ import org.apache.kafka.streams.kstream.Windowed;
 
 import java.nio.ByteBuffer;
 
+/**
+ * Utility class for the {@link org.apache.kafka.streams.state.SessionStore}.
+ * Used to convert to/from the binary & non-binary representations of the
+ * {@link Windowed} key used in the store.
+ * @param <K>
+ */
 public class SessionKeyBinaryConverter<K> {
     private static final int TIMESTAMP_SIZE = 8;
     private static final String SESSIONKEY = "sessionkey";

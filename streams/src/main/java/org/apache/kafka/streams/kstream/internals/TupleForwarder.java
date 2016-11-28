@@ -21,17 +21,23 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.internals.CachedStateStore;
 
-
+/**
+ * This class is used to determine if a processor should forward values to child nodes.
+ * Forwarding only occurs when caching is not enabled.
+ *
+ * @param <K>
+ * @param <V>
+ */
 class TupleForwarder<K, V> {
     private final boolean cached;
     private final ProcessorContext context;
     private final boolean sendOldValues;
 
     @SuppressWarnings("unchecked")
-    public TupleForwarder(final StateStore store,
-                          final ProcessorContext context,
-                          final ForwardingCacheFlushListener flushListener,
-                          final boolean sendOldValues) {
+    TupleForwarder(final StateStore store,
+                   final ProcessorContext context,
+                   final ForwardingCacheFlushListener flushListener,
+                   final boolean sendOldValues) {
         this.cached = store instanceof CachedStateStore;
         this.context = context;
         this.sendOldValues = sendOldValues;

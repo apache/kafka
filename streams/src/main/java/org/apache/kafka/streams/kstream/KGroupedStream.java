@@ -120,7 +120,8 @@ public interface KGroupedStream<K, V> {
     /**
      * Combine values of this stream by key into {@link SessionWindows}
      * The resulting {@link KTable} will be materialized in a local state
-     * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
+     * store with provided by the given {@link StateStoreSupplier}. Also a changelog topic named
+     * "${applicationId}-${storeSupplier.name()}-changelog"
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
@@ -244,7 +245,8 @@ public interface KGroupedStream<K, V> {
     /**
      * Aggregate values of this stream by key into {@link SessionWindows}.
      * The resulting {@link KTable} will be materialized in a local state
-     * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
+     * store with provided by the given {@link StateStoreSupplier}. Also a changelog topic named
+     * "${applicationId}-${storeSupplier.name()}-changelog"
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
@@ -339,7 +341,8 @@ public interface KGroupedStream<K, V> {
     /**
      * Count number of records of this stream by key into {@link SessionWindows}.
      * The resulting {@link KTable} will be materialized in a local state
-     * store with the given store name. Also a changelog topic named "${applicationId}-${storeName}-changelog"
+     * store with provided by the given {@link StateStoreSupplier}. Also a changelog topic named
+     * "${applicationId}-${storeSupplier.name()}-changelog"
      * will be automatically created in Kafka for failure recovery, where "applicationID"
      * is specified by the user in {@link org.apache.kafka.streams.StreamsConfig}.
      *
