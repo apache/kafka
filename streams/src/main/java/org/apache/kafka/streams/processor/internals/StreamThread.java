@@ -389,8 +389,7 @@ public class StreamThread extends Thread {
     private void closeAllTasksOrTaskTopologies(boolean closeTopology) {
         if (closeTopology) {
             closeAllTasksTopologies();
-        }
-        else {
+        } else {
             closeAllTasks();
         }
     }
