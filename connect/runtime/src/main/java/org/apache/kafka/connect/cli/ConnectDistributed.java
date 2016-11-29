@@ -78,8 +78,7 @@ public class ConnectDistributed {
         StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(time, worker.getInternalValueConverter());
         statusBackingStore.configure(config);
 
-        ConfigBackingStore configBackingStore = new KafkaConfigBackingStore(worker.getInternalValueConverter());
-        configBackingStore.configure(config);
+        ConfigBackingStore configBackingStore = new KafkaConfigBackingStore(worker.getInternalValueConverter(), config);
 
         DistributedHerder herder = new DistributedHerder(config, time, worker, statusBackingStore, configBackingStore,
                 advertisedUrl.toString());
