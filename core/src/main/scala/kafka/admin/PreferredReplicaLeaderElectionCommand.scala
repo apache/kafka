@@ -106,7 +106,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
     val jsonData = Json.encode(Map("version" -> 1, "partitions" -> partitionsList))
     try {
       zkUtils.createPersistentPath(zkPath, jsonData)
-      info("Created preferred replica election path with %s".format(jsonData))
+      println("Created preferred replica election path with %s".format(jsonData))
     } catch {
       case _: ZkNodeExistsException =>
         val partitionsUndergoingPreferredReplicaElection =
@@ -118,19 +118,19 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
   }
 }
 
-class PreferredReplicaLeaderElectionCommand(zkUtils: ZkUtils, partitionsFromUser: scala.collection.Set[TopicAndPartition])
-  extends Logging {
+class PreferredReplicaLeaderElectionCommand(zkUtils: ZkUtils, partitionsFromUser: scala.collection.Set[TopicAndPartition]) {
   def moveLeaderToPreferredReplica() = {
     try {
       val topics = partitionsFromUser.map(_.topic).toSet
-      val partitionsFromZk = zkUtils.getPartitionsForTopics(topics.toSeq).flatMap{case (topic, partitions) =>
-        partitions.map(TopicAndPartition(topic, _))}.toSet
+      val partitionsFromZk = zkUtils.getPartitionsForTopics(topics.toSeq).flatMap{ case (topic, partitions) =>
+        partitions.map(TopicAndPartition(topic, _))
+      }.toSet
 
-      val (validPartitions, invalidPartitions) = partitionsFromUser.partition(p => partitionsFromZk.contains(p))
+      val (validPartitions, invalidPartitions) = partitionsFromUser.partition(partitionsFromZk.contains)
       PreferredReplicaLeaderElectionCommand.writePreferredReplicaElectionData(zkUtils, validPartitions)
 
-      info("Successfully started preferred replica election for partitions %s".format(validPartitions))
-      invalidPartitions.foreach(p => error("Skipping preferred replica leader election for partition %s since it doesn't exist.".format(p)))
+      println("Successfully started preferred replica election for partitions %s".format(validPartitions))
+      invalidPartitions.foreach(p => println("Skipping preferred replica leader election for partition %s since it doesn't exist.".format(p)))
     } catch {
       case e: Throwable => throw new AdminCommandFailedException("Admin command failed", e)
     }
