@@ -833,8 +833,11 @@ We do graphing and alerting on the following metrics:
       <td></td>
     </tr>
     <tr>
-      <td>Number of messages the consumer lags behind the producer by</td>
-      <td>kafka.consumer:type=ConsumerFetcherManager,name=MaxLag,clientId=([-.\w]+)</td>
+      <td>Number of messages the consumer lags behind the producer by. Published by the consumer, not broker.</td>
+      <td>
+        <p><em>Old consumer:</em> kafka.consumer:type=ConsumerFetcherManager,name=MaxLag,clientId=([-.\w]+)</p>
+        <p><em>New consumer:</em> kafka.consumer:type=consumer-fetch-manager-metrics,client-id={client-id} Attribute: records-lag-max</p>
+      </td>
       <td></td>
     </tr>
     <tr>
