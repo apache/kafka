@@ -23,7 +23,7 @@ import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.WindowStore;
 
 /**
- * {@link KGroupedStream} is an abstraction of a <i>grouped</i>record stream of key-value pairs.
+ * {@link KGroupedStream} is an abstraction of a <i>grouped</i> record stream of key-value pairs.
  * It is an intermediate representation of a {@link KStream} in order to apply an aggregation operation on the original
  * {@link KStream} records.
  * <p>
@@ -38,7 +38,7 @@ import org.apache.kafka.streams.state.WindowStore;
 public interface KGroupedStream<K, V> {
 
     /**
-     * Count the number of records of this stream by key group.
+     * Count the number of records in this stream by the grouped key.
      * Records with {@code null} value are ignored.
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
      * that can be queried using the provided {@code storeName}.
@@ -76,7 +76,7 @@ public interface KGroupedStream<K, V> {
     KTable<K, Long> count(final String storeName);
 
     /**
-     * Count the number of records of this stream by key group.
+     * Count the number of records in this stream by the grouped key.
      * Records with {@code null} value are ignored.
      * The result is written into a local {@link KeyValueStore} provided by the given {@code storeSupplier}.
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
@@ -101,15 +101,15 @@ public interface KGroupedStream<K, V> {
     KTable<K, Long> count(final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
-     * Count the number of records of this stream per windows and by key group.
+     * Count the number of records in this stream by the grouped key and the defined windows.
      * Records with {@code null} value are ignored.
      * The specified {@code windows} define either hopping time windows that can be overlapping or tumbling (c.f.
      * {@link TimeWindows}) or they define landmark windows (c.f. {@link UnlimitedWindows}).
      * The result is written into a local windowed {@link KeyValueStore} (which is basically an ever-updating
      * materialized view) that can be queried using the provided {@code storeName}.
-     * Windows are stored until their retention time expires (c.f. {@link Windows#until(long)}).
+     * Windows are retained until their retention time expires (c.f. {@link Windows#until(long)}).
      * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
-     * "windowed" implies that the {@link KTable} key is a combined keyed of the original record key and a window ID.
+     * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same window and key.
@@ -147,14 +147,14 @@ public interface KGroupedStream<K, V> {
                                                        final String storeName);
 
     /**
-     * Count the number of records of this stream per windows and by key group.
+     * Count the number of records in this stream by the grouped key and the defined windows.
      * Records with {@code null} value are ignored.
      * The specified {@code windows} define either hopping time windows that can be overlapping or tumbling (c.f.
      * {@link TimeWindows}) or they define landmark windows (c.f. {@link UnlimitedWindows}).
      * The result is written into a local windowed {@link KeyValueStore} provided by the given {@code storeSupplier}.
-     * Windows are stored until their retention time expires (c.f. {@link Windows#until(long)}).
+     * Windows are retained until their retention time expires (c.f. {@link Windows#until(long)}).
      * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
-     * "windowed" implies that the {@link KTable} key is a combined keyed of the original record key and a window ID.
+     * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
      * To query the local windowed {@link KeyValueStore} it must be obtained via
      * {@link org.apache.kafka.streams.KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}.
@@ -180,7 +180,7 @@ public interface KGroupedStream<K, V> {
                                                        final StateStoreSupplier<WindowStore> storeSupplier);
 
     /**
-     * Combine values of this stream by key group.
+     * Combine the values of records in this stream by the grouped key.
      * Records with {@code null} value are ignored.
      * Combining implies that the type of the aggregate result is the same as the type of the input value
      * (c.f. {@link #aggregate(Initializer, Aggregator, Serde, String)}).
@@ -228,7 +228,7 @@ public interface KGroupedStream<K, V> {
                         final String storeName);
 
     /**
-     * Combine values of this stream by key group.
+     * Combine the value of records in this stream by the grouped key.
      * Records with {@code null} value are ignored.
      * Combining implies that the type of the aggregate result is the same as the type of the input value
      * (c.f. {@link #aggregate(Initializer, Aggregator, StateStoreSupplier)}).
@@ -262,7 +262,7 @@ public interface KGroupedStream<K, V> {
                         final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
-     * Combine values of this stream per windows and by key group.
+     * Combine the number of records in this stream by the grouped key and the defined windows.
      * Records with {@code null} value are ignored.
      * Combining implies that the type of the aggregate result is the same as the type of the input value
      * (c.f. {@link #aggregate(Initializer, Aggregator, Windows, Serde, String)}).
@@ -270,9 +270,9 @@ public interface KGroupedStream<K, V> {
      * {@link TimeWindows}) or they define landmark windows (c.f. {@link UnlimitedWindows}).
      * The result is written into a local windowed {@link KeyValueStore} (which is basically an ever-updating
      * materialized view) that can be queried using the provided {@code storeName}.
-     * Windows are stored until their retention time expires (c.f. {@link Windows#until(long)}).
+     * Windows are retained until their retention time expires (c.f. {@link Windows#until(long)}).
      * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
-     * "windowed" implies that the {@link KTable} key is a combined keyed of the original record key and a window ID.
+     * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same key.
@@ -318,16 +318,16 @@ public interface KGroupedStream<K, V> {
                                                      final String storeName);
 
     /**
-     * Combine values of this stream per windows and by key group.
+     * Combine the values of records in this stream by the grouped key and the defined windows.
      * Records with {@code null} value are ignored.
      * Combining implies that the type of the aggregate result is the same as the type of the input value
      * (c.f. {@link #aggregate(Initializer, Aggregator, Windows, Serde, String)}).
      * The specified {@code windows} define either hopping time windows that can be overlapping or tumbling (c.f.
      * {@link TimeWindows}) or they define landmark windows (c.f. {@link UnlimitedWindows}).
      * The result is written into a local windowed {@link KeyValueStore} provided by the given {@code storeSupplier}.
-     * Windows are stored until their retention time expires (c.f. {@link Windows#until(long)}).
+     * Windows are retained until their retention time expires (c.f. {@link Windows#until(long)}).
      * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
-     * "windowed" implies that the {@link KTable} key is a combined keyed of the original record key and a window ID.
+     * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
      * The specified {@link Reducer} is applied for each input record and computes a new aggregate using the current
      * aggregate and the record's value.
@@ -362,7 +362,7 @@ public interface KGroupedStream<K, V> {
 
 
     /**
-     * Aggregate values of this stream by key group.
+     * Aggregate the values of records in this stream by the grouped key.
      * Records with {@code null} value are ignored.
      * Aggregating is a generalization of {@link #reduce(Reducer, String) combining via reduce(...)} as it allows the
      * result to have a different type than the input values.
@@ -418,7 +418,7 @@ public interface KGroupedStream<K, V> {
                                  final String storeName);
 
     /**
-     * Aggregate values of this stream by key group.
+     * Aggregate the values of records in this stream by the grouped key.
      * Records with {@code null} value are ignored.
      * Aggregating is a generalization of {@link #reduce(Reducer, StateStoreSupplier)} combining via reduce(...)} as it
      * allows the result to have a different type than the input values.
@@ -457,7 +457,7 @@ public interface KGroupedStream<K, V> {
                                  final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
-     * Aggregate values of this stream per windows and by key group.
+     * Aggregate the values of records in this stream by the grouped key and defined windows.
      * Records with {@code null} value are ignored.
      * Aggregating is a generalization of {@link #reduce(Reducer, Windows, String)} combining via reduce(...)} as it
      * allows the result to have a different type than the input values.
@@ -465,9 +465,9 @@ public interface KGroupedStream<K, V> {
      * {@link TimeWindows}) or they define landmark windows (c.f. {@link UnlimitedWindows}).
      * The result is written into a local windowed {@link KeyValueStore} (which is basically an ever-updating
      * materialized view) that can be queried using the provided {@code storeName}.
-     * Windows are stored until their retention time expires (c.f. {@link Windows#until(long)}).
+     * Windows are retained until their retention time expires (c.f. {@link Windows#until(long)}).
      * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
-     * "windowed" implies that the {@link KTable} key is a combined keyed of the original record key and a window ID.
+     * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same key.
@@ -522,16 +522,16 @@ public interface KGroupedStream<K, V> {
                                                             final String storeName);
 
     /**
-     * Aggregate values of this stream per windows and by key group.
+     * Aggregate the values of records in this stream by the grouped key and defined windows.
      * Records with {@code null} value are ignored.
      * Aggregating is a generalization of {@link #reduce(Reducer, Windows, StateStoreSupplier)} combining via
      * reduce(...)} as it allows the result to have a different type than the input values.
      * The specified {@code windows} define either hopping time windows that can be overlapping or tumbling (c.f.
      * {@link TimeWindows}) or they define landmark windows (c.f. {@link UnlimitedWindows}).
      * The result is written into a local windowed {@link KeyValueStore} provided by the given {@code storeSupplier}.
-     * Windows are stored until their retention time expires (c.f. {@link Windows#until(long)}).
+     * Windows are retained until their retention time expires (c.f. {@link Windows#until(long)}).
      * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
-     * "windowed" implies that the {@link KTable} key is a combined keyed of the original record key and a window ID.
+     * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
      * <p>
      * The specified {@link Initializer} is applied once per window directly before the first input record is
      * processed to provide an initial intermediate aggregation result that is used to process the first record.
