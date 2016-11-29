@@ -430,15 +430,18 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             for (InternalTopicConfig topicConfig : stateChangelogTopics.values()) {
                 // the expected number of partitions is the max value of TaskId.partition + 1
                 int numPartitions = -1;
-                for (TaskId task : tasksByTopicGroup.get(topicGroupId)) {
-                    if (numPartitions < task.partition + 1)
-                        numPartitions = task.partition + 1;
+                if (tasksByTopicGroup.get(topicGroupId) != null) {
+                    for (TaskId task : tasksByTopicGroup.get(topicGroupId)) {
+                        if (numPartitions < task.partition + 1)
+                            numPartitions = task.partition + 1;
+                    }
+                    InternalTopicMetadata topicMetadata = new InternalTopicMetadata(topicConfig);
+                    topicMetadata.numPartitions = numPartitions;
+
+                    changelogTopicMetadata.put(topicConfig.name(), topicMetadata);
+                } else {
+                    log.debug("stream-thread [{}] No tasks found for topic group {}", streamThread.getName(), topicGroupId);
                 }
-
-                InternalTopicMetadata topicMetadata = new InternalTopicMetadata(topicConfig);
-                topicMetadata.numPartitions = numPartitions;
-
-                changelogTopicMetadata.put(topicConfig.name(), topicMetadata);
             }
         }
 
