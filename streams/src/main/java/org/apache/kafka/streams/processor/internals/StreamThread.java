@@ -311,9 +311,8 @@ public class StreamThread extends Thread {
             activeTasks.keySet(), standbyTasks.keySet());
 
         // Commit first as there may be cached records that have not been flushed yet.
-        commitOffsets(rethrowExceptions);
         // Close all processors in topology order
-        closeAllTasks();
+        commitOffsetsAndCloseAll(rethrowExceptions, false);
         // flush state
         flushAllState(rethrowExceptions);
         // flush out any extra data sent during close
@@ -323,7 +322,6 @@ public class StreamThread extends Thread {
         // remove the changelog partitions from restore consumer
         unAssignChangeLogPartitions(rethrowExceptions);
     }
-
 
     /**
      * Similar to shutdownTasksAndState, however does not close the task managers,
@@ -335,9 +333,8 @@ public class StreamThread extends Thread {
             activeTasks.keySet(), standbyTasks.keySet());
 
         // Commit first as there may be cached records that have not been flushed yet.
-        commitOffsets(rethrowExceptions);
         // Close all topology nodes
-        closeAllTasksTopologies();
+        commitOffsetsAndCloseAll(rethrowExceptions, true);
         // flush state
         flushAllState(rethrowExceptions);
         // flush out any extra data sent during close
@@ -347,6 +344,55 @@ public class StreamThread extends Thread {
 
         updateSuspendedTasks();
 
+    }
+
+    /**
+     * Commits offsets and closes all tasks or topologies, but ensures close is called upon {@link CommitFailedException}.
+     * @param rethrowExceptions
+     * @param closeTopology if <code>true</code> method {@link #closeAllTasksTopologies()} will be called. If <code>false</code>, method {@link #closeAllTasks()} will be called.
+     */
+    private void commitOffsetsAndCloseAll(boolean rethrowExceptions, boolean closeTopology) {
+        try {
+            // Commit first as there may be cached records that have not been flushed yet.
+            commitOffsets(rethrowExceptions);
+        } catch (CommitFailedException e) {
+            log.info(String.format("%s Closing all tasks after %s: ", logPrefix, e.getClass().getSimpleName()), e);
+
+            // we must close all tasks because of resources held by Processors. If the method:
+            // org.apache.kafka.streams.processor.Processor#close is not called, we could leave any resources
+            // in Processors to be in an unclean state
+
+            // For example in KAFKA-4455: this resulted in filesystem LOCKs are not released, which caused
+            // org.rocksdb.RocksDBException: IO error: lock .../LOCK: No locks available
+            // when the next time we tried to open RocksDB state stores
+
+            // Close all topology nodes or
+            // Close all processors in topology order
+            closeAllTasksOrTaskTopologies(closeTopology);
+
+            if (rethrowExceptions) {
+                throw e;
+            }
+
+            return;
+        }
+
+        // Close all topology nodes or
+        // Close all processors in topology order
+        closeAllTasksOrTaskTopologies(closeTopology);
+    }
+
+    /**
+     *
+     * @param closeTopology if <code>true</code> method {@link #closeAllTasksTopologies()} will be called. If <code>false</code>, method {@link #closeAllTasks()} will be called.
+     */
+    private void closeAllTasksOrTaskTopologies(boolean closeTopology) {
+        if (closeTopology) {
+            closeAllTasksTopologies();
+        }
+        else {
+            closeAllTasks();
+        }
     }
 
     interface AbstractTaskAction {
