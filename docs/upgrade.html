@@ -22,7 +22,11 @@ can upgrade the brokers one at a time: shut down the broker, update the code, an
 
 <h5><a id="upgrade_10_2_0_breaking" href="#upgrade_10_2_0_breaking">Potential breaking changes in 0.10.2.0</a></h5>
 <ul>
-    <li>Several methods on the new Java consumer may now throw <code>InterruptException</code> if the calling thread is interrupted.</li>
+    <li>Several methods on the new Java consumer may now throw <code>InterruptException</code> if the calling thread is interrupted. 
+        This change is not intended to replace using <code>KafkaConsumer.wakeup()</code> for thread coordination, but is intended to support shutdown of consuming threads in situations where using the wakeup function is not possible (e.g. the KafkaConsumer is being used in a thread managed by a framework that is unaware of Kafka).
+        Using interrupts instead of <code>KafkaConsumer.wakeup()</code> for general purpose signaling to a consuming thread is discouraged.
+        In cases where using <code>KafkaConsumer.wakeup()</code> is possible, there is no reason to explicitly handle <code>InterruptException</code>, since it can be treated the same as other types of <code>KafkaException</code>.
+        In the few cases where interrupting a consuming thread is necessary, the interrupt is likely used for signaling shutdown. The consuming thread should reinterrupt itself, and attempt to shut down.</li>
 </ul>
 
 <h4><a id="upgrade_10_1" href="#upgrade_10_1">Upgrading from 0.8.x, 0.9.x or 0.10.0.X to 0.10.1.0</a></h4>
