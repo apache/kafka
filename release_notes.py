@@ -72,7 +72,9 @@ if __name__ == "__main__":
                               "Incomplete",
                               "Cannot Reproduce",
                               "Later",
-                              "Works for Me"
+                              "Works for Me",
+                              "Workaround",
+                              "Information Provided"
                               ]
     unresolved_issues = [issue for issue in issues if issue.fields.resolution in UNRESOLVED_RESOLUTIONS or issue.fields.resolution.name in UNRESOLVED_RESOLUTIONS]
     if unresolved_issues:
@@ -82,11 +84,6 @@ if __name__ == "__main__":
         print >>sys.stderr
         print >>sys.stderr, "Note that for some resolutions, you should simply remove the fix version as they have not been truly fixed in this release."
         sys.exit(1)
-
-    # Issues with some resolutions should be filtered out because they indicate the bug wasn't valid. Including them in release notes could be misleading
-    IGNORED_RESOLUTIONS = ["Workaround",
-                           "Information Provided"]
-    issues = [issue for issue in issues if issue.fields.resolution.name not in IGNORED_RESOLUTIONS]
 
     # Get list of (issue type, [issues]) sorted by the issue ID type, with each subset of issues sorted by their key so they
     # are in increasing order of bug #. To get a nice ordering of the issue types we customize the key used to sort by issue
