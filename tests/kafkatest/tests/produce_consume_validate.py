@@ -12,7 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import traceback
 
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
@@ -103,7 +102,7 @@ class ProduceConsumeValidateTest(Test):
         except BaseException as e:
             for s in self.test_context.services:
                 self.mark_for_collect(s)
-            raise Exception(traceback.format_exc(e))
+            raise
 
     @staticmethod
     def annotate_missing_msgs(missing, acked, consumed, msg):
