@@ -6,43 +6,6 @@ This directory contains Kafka system integration and performance tests.
 (ducktape is a distributed testing framework which provides test runner,
 result reporter and utilities to pull up and tear down services.)
 
-Running tests using docker
---------------------------
-Docker is used for running kafka system tests on travis-ci. And exactly same setup can be run for development purposes.
-
-* Run all tests
-```
-bash tests/travis/run_tests.sh
-```
-* Run all tests with debug on (warning will produce log of logs)
-```
-_DUCKTAPE_OPTIONS="--debug" bash tests/travis/run_tests.sh | tee debug_logs.txt
-```
-* Run a subset of tests
-```
-TC_PATHS="tests/kafkatest/tests/streams tests/kafkatest/tests/tools" bash tests/travis/run_tests.sh
-```
-
-Examining CI run
-----------------
-* Set BUILD_ID is travis ci's build id. E.g. build id is 169519874 for the following build
-```
-https://travis-ci.org/raghavgautam/kafka/builds/169519874
-```
-
-* Getting number of tests that were actually run
-```
-for id in $(curl -sSL https://api.travis-ci.org/builds/$BUILD_ID | jq '.matrix|map(.id)|.[]'); do curl -sSL "https://api.travis-ci.org/jobs/$id/log.txt?deansi=true" ; done | egrep 'SerialTestRunner.*setting up' | wc
-```
-* Getting number of tests that passed
-```
-for id in $(curl -sSL https://api.travis-ci.org/builds/$BUILD_ID | jq '.matrix|map(.id)|.[]'); do curl -sSL "https://api.travis-ci.org/jobs/$id/log.txt?deansi=true" ; done | egrep 'SerialTestRunner.*PASS' | wc
-```
-* Getting all the logs produced from a run
-```
-for id in $(curl -sSL https://api.travis-ci.org/builds/169519874 | jq '.matrix|map(.id)|.[]'); do curl -sSL "https://api.travis-ci.org/jobs/$id/log.txt?deansi=true" ; done
-```
-
 Local Quickstart
 ----------------
 This quickstart will help you run the Kafka system tests on your local machine. Note this requires bringing up a cluster of virtual machines on your local computer, which is memory intensive; it currently requires around 10G RAM.

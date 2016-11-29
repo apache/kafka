@@ -180,13 +180,13 @@ class MirrorMaker(KafkaPathResolverMixin, Service):
         cmd = self.start_cmd(node)
         self.logger.debug("Mirror maker command: %s", cmd)
         node.account.ssh(cmd, allow_fail=False)
-        wait_until(lambda: self.alive(node), timeout_sec=30, backoff_sec=.5,
+        wait_until(lambda: self.alive(node), timeout_sec=10, backoff_sec=.5,
                    err_msg="Mirror maker took to long to start.")
         self.logger.debug("Mirror maker is alive")
 
     def stop_node(self, node, clean_shutdown=True):
         node.account.kill_process("java", allow_fail=True, clean_shutdown=clean_shutdown)
-        wait_until(lambda: not self.alive(node), timeout_sec=30, backoff_sec=.5,
+        wait_until(lambda: not self.alive(node), timeout_sec=10, backoff_sec=.5,
                    err_msg="Mirror maker took to long to stop.")
 
     def clean_node(self, node):
