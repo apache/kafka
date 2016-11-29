@@ -48,6 +48,7 @@ import com.yammer.metrics.core.Gauge
 abstract class DelayedOperation(override val delayMs: Long) extends TimerTask with Logging {
 
   private val completed = new AtomicBoolean(false)
+  private val purged = new AtomicBoolean(false)
 
   /*
    * Force completing the delayed operation, if not already completed.
@@ -73,6 +74,12 @@ abstract class DelayedOperation(override val delayMs: Long) extends TimerTask wi
   }
 
   /**
+   * This is used by Watchers to be able to determine which thread actually
+   * removed the operation from its queue (in the face of concurrent iteration)
+   */
+  final def purge(): Boolean = purged.compareAndSet(false, true)
+
+  /**
    * Check if the delayed operation is already completed
    */
   def isCompleted(): Boolean = completed.get()
@@ -88,7 +95,7 @@ abstract class DelayedOperation(override val delayMs: Long) extends TimerTask wi
    */
   def onComplete(): Unit
 
-  /*
+  /**
    * Try to complete the delayed operation by first checking if the operation
    * can be completed by now. If yes execute the completion logic by calling
    * forceComplete() and return true iff forceComplete returns true; otherwise return false
@@ -96,6 +103,16 @@ abstract class DelayedOperation(override val delayMs: Long) extends TimerTask wi
    * This function needs to be defined in subclasses
    */
   def tryComplete(): Boolean
+
+  /**
+   * Thread-safe variant of tryComplete(). This can be overridden if the operation provides its
+   * own synchronization.
+   */
+  def safeTryComplete(): Boolean = {
+    synchronized {
+      tryComplete()
+    }
+  }
 
   /*
    * run() method defines a task that is executed on timeout
@@ -185,14 +202,14 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
     // operation is unnecessarily added for watch. However, this is a less severe issue since the
     // expire reaper will clean it up periodically.
 
-    var isCompletedByMe = operation synchronized operation.tryComplete()
+    var isCompletedByMe = operation.safeTryComplete()
     if (isCompletedByMe)
       return true
 
     var watchCreated = false
     for(key <- watchKeys) {
       // If the operation is already completed, stop adding it to the rest of the watcher list.
-      if (operation.isCompleted())
+      if (operation.isCompleted)
         return false
       watchForOperation(key, operation)
 
@@ -202,14 +219,14 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
       }
     }
 
-    isCompletedByMe = operation synchronized operation.tryComplete()
+    isCompletedByMe = operation.safeTryComplete()
     if (isCompletedByMe)
       return true
 
     // if it cannot be completed by now and hence is watched, add to the expire queue also
-    if (! operation.isCompleted()) {
+    if (!operation.isCompleted) {
       timeoutTimer.add(operation)
-      if (operation.isCompleted()) {
+      if (operation.isCompleted) {
         // cancel the timer task
         operation.cancel()
       }
@@ -270,7 +287,7 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
       if (watchersForKey.get(key) != watchers)
         return
 
-      if (watchers != null && watchers.watched == 0) {
+      if (watchers != null && watchers.isEmpty) {
         watchersForKey.remove(key)
       }
     }
@@ -290,34 +307,46 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
    */
   private class Watchers(val key: Any) {
 
-    private[this] val operations = new LinkedList[T]()
+    private[this] val operations = new ConcurrentLinkedQueue[T]()
+    private[this] val approximateWatched = new AtomicInteger(0)
 
-    def watched: Int = operations synchronized operations.size
+    def watched: Int = approximateWatched.get
+
+    def isEmpty: Boolean = operations.isEmpty
 
     // add the element to watch
     def watch(t: T) {
-      operations synchronized operations.add(t)
+      operations.add(t)
+      approximateWatched.incrementAndGet()
+    }
+
+    private def purge(t: T): Boolean = {
+      if (t.purge()) {
+        approximateWatched.decrementAndGet()
+        true
+      } else {
+        false
+      }
     }
 
     // traverse the list and try to complete some watched elements
     def tryCompleteWatched(): Int = {
-
       var completed = 0
-      operations synchronized {
-        val iter = operations.iterator()
-        while (iter.hasNext) {
-          val curr = iter.next()
-          if (curr.isCompleted) {
-            // another thread has completed this operation, just remove it
-            iter.remove()
-          } else if (curr synchronized curr.tryComplete()) {
+      val iter = operations.iterator()
+      while (iter.hasNext) {
+        val curr = iter.next()
+        if (curr.isCompleted) {
+          // another thread has completed this operation, just remove it
+          iter.remove()
+          purge(curr)
+        } else if (curr.safeTryComplete()) {
+          iter.remove()
+          if (purge(curr))
             completed += 1
-            iter.remove()
-          }
         }
       }
 
-      if (operations.size == 0)
+      if (operations.isEmpty)
         removeKeyIfEmpty(key, this)
 
       completed
@@ -326,18 +355,17 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
     // traverse the list and purge elements that are already completed by others
     def purgeCompleted(): Int = {
       var purged = 0
-      operations synchronized {
-        val iter = operations.iterator()
-        while (iter.hasNext) {
-          val curr = iter.next()
-          if (curr.isCompleted) {
-            iter.remove()
+      val iter = operations.iterator()
+      while (iter.hasNext) {
+        val curr = iter.next()
+        if (curr.isCompleted) {
+          iter.remove()
+          if (purge(curr))
             purged += 1
-          }
         }
       }
 
-      if (operations.size == 0)
+      if (operations.isEmpty)
         removeKeyIfEmpty(key, this)
 
       purged
