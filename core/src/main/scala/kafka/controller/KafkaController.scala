@@ -252,6 +252,11 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
             .map(topicAndPartition => (topicAndPartition, controllerContext.partitionReplicaAssignment(topicAndPartition).size))
         }
 
+      inLock(controllerContext.controllerLock) {
+        partitionStateMachine.createNewBatch()
+        replicaStateMachine.createNewBatch()
+      }
+
       allPartitionsAndReplicationFactorOnBroker.foreach {
         case(topicAndPartition, replicationFactor) =>
           // Move leadership serially to relinquish lock.
@@ -262,7 +267,7 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
                   // If the broker leads the topic partition, transition the leader and update isr. Updates zk and
                   // notifies all affected brokers
                   partitionStateMachine.handleStateChanges(Set(topicAndPartition), OnlinePartition,
-                    controlledShutdownPartitionLeaderSelector)
+                    controlledShutdownPartitionLeaderSelector, newBatch = false)
                 } else {
                   // Stop the replica first. The state change below initiates ZK changes which should take some time
                   // before which the stop replica request should be completed (in most cases)
@@ -283,12 +288,18 @@ class KafkaController(val config : KafkaConfig, zkUtils: ZkUtils, val brokerStat
                   }
                   // If the broker is a follower, updates the isr in ZK and notifies the current leader
                   replicaStateMachine.handleStateChanges(Set(PartitionAndReplica(topicAndPartition.topic,
-                    topicAndPartition.partition, id)), OfflineReplica)
+                    topicAndPartition.partition, id)), OfflineReplica, newBatch = false)
                 }
               }
             }
           }
       }
+
+      inLock(controllerContext.controllerLock) {
+        partitionStateMachine.sendRequestsToBrokers()
+        replicaStateMachine.sendRequestsToBrokers()
+      }
+
       def replicatedPartitionsBrokerLeads() = inLock(controllerContext.controllerLock) {
         trace("All leaders = " + controllerContext.partitionLeadershipInfo.mkString(","))
         controllerContext.partitionLeadershipInfo.filter {

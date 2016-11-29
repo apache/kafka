@@ -106,16 +106,34 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
    * The controller's allLeaders cache should have been updated before this
    */
   def handleStateChanges(replicas: Set[PartitionAndReplica], targetState: ReplicaState,
-                         callbacks: Callbacks = (new CallbackBuilder).build) {
+                         callbacks: Callbacks = (new CallbackBuilder).build, newBatch: Boolean = true) {
     if(replicas.nonEmpty) {
       info("Invoking state change to %s for replicas %s".format(targetState, replicas.mkString(",")))
       try {
-        brokerRequestBatch.newBatch()
+        if (newBatch)
+          brokerRequestBatch.newBatch()
         replicas.foreach(r => handleStateChange(r, targetState, callbacks))
-        brokerRequestBatch.sendRequestsToBrokers(controller.epoch)
+        if (newBatch)
+          brokerRequestBatch.sendRequestsToBrokers(controller.epoch)
       }catch {
         case e: Throwable => error("Error while moving some replicas to %s state".format(targetState), e)
       }
+    }
+  }
+
+  def createNewBatch() {
+    try {
+      brokerRequestBatch.newBatch()
+    }catch {
+      case e: Throwable => error("Error while creating new batch", e)
+    }
+  }
+
+  def sendRequestsToBrokers() {
+    try {
+      brokerRequestBatch.sendRequestsToBrokers(controller.epoch)
+    }catch {
+      case e: Throwable => error("Error while generating requests from batch", e)
     }
   }
 

@@ -135,17 +135,36 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
    */
   def handleStateChanges(partitions: Set[TopicAndPartition], targetState: PartitionState,
                          leaderSelector: PartitionLeaderSelector = noOpPartitionLeaderSelector,
-                         callbacks: Callbacks = (new CallbackBuilder).build) {
+                         callbacks: Callbacks = (new CallbackBuilder).build,
+                         newBatch: Boolean = true) {
     info("Invoking state change to %s for partitions %s".format(targetState, partitions.mkString(",")))
     try {
-      brokerRequestBatch.newBatch()
+      if (newBatch)
+        brokerRequestBatch.newBatch()
       partitions.foreach { topicAndPartition =>
         handleStateChange(topicAndPartition.topic, topicAndPartition.partition, targetState, leaderSelector, callbacks)
       }
-      brokerRequestBatch.sendRequestsToBrokers(controller.epoch)
+      if (newBatch)
+        brokerRequestBatch.sendRequestsToBrokers(controller.epoch)
     }catch {
       case e: Throwable => error("Error while moving some partitions to %s state".format(targetState), e)
       // TODO: It is not enough to bail out and log an error, it is important to trigger state changes for those partitions
+    }
+  }
+
+  def createNewBatch() {
+    try {
+      brokerRequestBatch.newBatch()
+    }catch {
+      case e: Throwable => error("Error while creating new batch", e)
+    }
+  }
+
+  def sendRequestsToBrokers() {
+    try {
+      brokerRequestBatch.sendRequestsToBrokers(controller.epoch)
+    }catch {
+      case e: Throwable => error("Error while generating requests from batch", e)
     }
   }
 
