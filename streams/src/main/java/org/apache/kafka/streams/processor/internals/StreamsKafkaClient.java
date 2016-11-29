@@ -32,14 +32,14 @@ import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.DeleteTopicsRequest;
 import org.apache.kafka.common.requests.DeleteTopicsResponse;
-import org.apache.kafka.common.requests.Req;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
@@ -128,8 +128,12 @@ public class StreamsKafkaClient {
             topicRequestDetails.put(internalTopicConfig.name(), topicDetails);
         }
         final CreateTopicsRequest createTopicsRequest = new CreateTopicsRequest(topicRequestDetails, streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG));
-        final ClientResponse clientResponse = sendRequest(createTopicsRequest.toStruct(), ApiKeys.CREATE_TOPICS);
-        final CreateTopicsResponse createTopicsResponse = new CreateTopicsResponse(clientResponse.responseBody());
+        final ClientResponse clientResponse = sendRequest(createTopicsRequest, ApiKeys.CREATE_TOPICS);
+        if (!(clientResponse.responseBody() instanceof CreateTopicsResponse)) {
+            throw new StreamsException("Inconsistent response type for internal topic creation request. Expected CreateTopicsResponse but received " + clientResponse.responseBody().getClass().getName());
+        }
+        final CreateTopicsResponse createTopicsResponse =  (CreateTopicsResponse) clientResponse.responseBody();
+
         for (InternalTopicConfig internalTopicConfig:topicsMap.keySet()) {
             short errorCode = createTopicsResponse.errors().get(internalTopicConfig.name()).code();
             if (errorCode > 0) {
@@ -164,8 +168,11 @@ public class StreamsKafkaClient {
     private void deleteTopics(final Set<String> topics) {
 
         final DeleteTopicsRequest deleteTopicsRequest = new DeleteTopicsRequest(topics, streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG));
-        final ClientResponse clientResponse = sendRequest(deleteTopicsRequest.toStruct(), ApiKeys.DELETE_TOPICS);
-        final DeleteTopicsResponse deleteTopicsResponse = new DeleteTopicsResponse(clientResponse.responseBody());
+        final ClientResponse clientResponse = sendRequest(deleteTopicsRequest, ApiKeys.DELETE_TOPICS);
+        if (!(clientResponse.responseBody() instanceof DeleteTopicsResponse)) {
+            throw new StreamsException("Inconsistent response type for internal topic deletion request. Expected DeleteTopicsResponse but received " + clientResponse.responseBody().getClass().getName());
+        }
+        final DeleteTopicsResponse deleteTopicsResponse = (DeleteTopicsResponse) clientResponse.responseBody();
         for (String topicName: deleteTopicsResponse.errors().keySet()) {
             if (deleteTopicsResponse.errors().get(topicName).code() > 0) {
                 throw new StreamsException("Could not delete topic: " + topicName);
@@ -180,7 +187,7 @@ public class StreamsKafkaClient {
      * @param request
      * @param apiKeys
      */
-    private ClientResponse sendRequest(final Struct request, final ApiKeys apiKeys) {
+    private ClientResponse sendRequest(final AbstractRequest request, final ApiKeys apiKeys) {
 
         String brokerId = null;
         final SystemTime systemTime = new SystemTime();
@@ -206,11 +213,9 @@ public class StreamsKafkaClient {
             throw new StreamsException("Could not find any available broker.");
         }
 
-        final RequestSend send = new RequestSend(brokerId,
-                kafkaClient.nextRequestHeader(apiKeys),
-                request);
+        final RequestHeader requestHeader = kafkaClient.nextRequestHeader(apiKeys);
 
-        final ClientRequest clientRequest = new ClientRequest(systemTime.milliseconds(), true, send, null);
+        final ClientRequest clientRequest = new ClientRequest(brokerId, systemTime.milliseconds(), true, requestHeader, request, null);
 
         kafkaClient.send(clientRequest, systemTime.milliseconds());
 
@@ -222,7 +227,7 @@ public class StreamsKafkaClient {
                 if (responseList.size() > 1) {
                     throw new StreamsException("Sent one request but received multiple or no responses.");
                 }
-                if (responseList.get(0).request().equals(clientRequest)) {
+                if (responseList.get(0).requestHeader().equals(requestHeader)) {
                     return responseList.get(0);
                 } else {
                     throw new StreamsException("Inconsistent response received.");
@@ -240,8 +245,11 @@ public class StreamsKafkaClient {
      */
     public MetadataResponse.TopicMetadata getTopicMetadata(final String topic) {
 
-        final ClientResponse clientResponse = sendRequest(MetadataRequest.allTopics().toStruct(), ApiKeys.METADATA);
-        final MetadataResponse metadataResponse = new MetadataResponse(clientResponse.responseBody());
+        final ClientResponse clientResponse = sendRequest(MetadataRequest.allTopics(), ApiKeys.METADATA);
+        if (!(clientResponse.responseBody() instanceof MetadataResponse)) {
+            throw new StreamsException("Inconsistent response type for internal topic metadata request. Expected MetadataResponse but received " + clientResponse.responseBody().getClass().getName());
+        }
+        final MetadataResponse metadataResponse = (MetadataResponse) clientResponse.responseBody();
         for (MetadataResponse.TopicMetadata topicMetadata: metadataResponse.topicMetadata()) {
             if (topicMetadata.topic().equalsIgnoreCase(topic)) {
                 return topicMetadata;
@@ -252,8 +260,11 @@ public class StreamsKafkaClient {
 
 
     public Collection<MetadataResponse.TopicMetadata> fetchTopicMetadata() {
-        final ClientResponse clientResponse = sendRequest(MetadataRequest.allTopics().toStruct(), ApiKeys.METADATA);
-        final MetadataResponse metadataResponse = new MetadataResponse(clientResponse.responseBody());
+        final ClientResponse clientResponse = sendRequest(MetadataRequest.allTopics(), ApiKeys.METADATA);
+        if (!(clientResponse.responseBody() instanceof MetadataResponse)) {
+            throw new StreamsException("Inconsistent response type for internal topic metadata request. Expected MetadataResponse but received " + clientResponse.responseBody().getClass().getName());
+        }
+        final MetadataResponse metadataResponse = (MetadataResponse) clientResponse.responseBody();
         return metadataResponse.topicMetadata();
     }
 
