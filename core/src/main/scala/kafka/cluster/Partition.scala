@@ -74,6 +74,34 @@ class Partition(val topic: String,
     tags
   )
 
+  newGauge("InSyncReplicasCount",
+           new Gauge[Int] {
+             def value = {
+               leaderReplicaIfLocal() match {
+                 case Some(_) =>
+                   inSyncReplicas.size
+                 case None =>
+                   0
+               }
+             }
+           },
+           tags
+  )
+
+  newGauge("AssignedReplicasCount",
+           new Gauge[Int] {
+             def value = {
+               leaderReplicaIfLocal() match {
+                 case Some(_) =>
+                   assignedReplicas.size
+                 case None =>
+                   0
+               }
+             }
+           },
+           tags
+  )
+
   def isUnderReplicated(): Boolean = {
     leaderReplicaIfLocal() match {
       case Some(_) =>
@@ -479,6 +507,8 @@ class Partition(val topic: String,
    */
   private def removePartitionMetrics() {
     removeMetric("UnderReplicated", tags)
+    removeMetric("InSyncReplicasCount", tags)
+    removeMetric("AssignedReplicasCount", tags)
   }
 
   override def equals(that: Any): Boolean = {
