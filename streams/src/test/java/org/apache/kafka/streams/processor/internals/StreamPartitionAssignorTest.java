@@ -215,11 +215,10 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void testAssignBasicSingleGroupPartitionGrouper() throws Exception {
+    public void testAssignWithPartialTopology() throws Exception {
         Properties props = configProps();
         props.put(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, SingleGroupPartitionGrouperStub.class);
         StreamsConfig config = new StreamsConfig(props);
-        SingleGroupPartitionGrouperStub test = new SingleGroupPartitionGrouperStub();
 
         TopologyBuilder builder = new TopologyBuilder();
         builder.addSource("source1", "topic1");
@@ -229,6 +228,7 @@ public class StreamPartitionAssignorTest {
         builder.addProcessor("processor2", new MockProcessorSupplier(), "source2");
         builder.addStateStore(new MockStateStoreSupplier("store2", false), "processor2");
         List<String> topics = Utils.mkList("topic1", "topic2");
+        Set<TaskId> allTasks = Utils.mkSet(task0, task1, task2);
 
         UUID uuid1 = UUID.randomUUID();
         String client1 = "client1";
@@ -242,7 +242,15 @@ public class StreamPartitionAssignorTest {
             new PartitionAssignor.Subscription(topics, new SubscriptionInfo(uuid1, Collections.<TaskId>emptySet(), Collections.<TaskId>emptySet(), userEndPoint).encode()));
 
         // will throw exception if it fails
-        partitionAssignor.assign(metadata, subscriptions);
+        Map<String, PartitionAssignor.Assignment> assignments = partitionAssignor.assign(metadata, subscriptions);
+
+        // check assignment info
+        Set<TaskId> allActiveTasks = new HashSet<>();
+        AssignmentInfo info10 = checkAssignment(Utils.mkSet("topic1"), assignments.get("consumer10"));
+        allActiveTasks.addAll(info10.activeTasks);
+
+        assertEquals(3, allActiveTasks.size());
+        assertEquals(allTasks, new HashSet<>(allActiveTasks));
     }
 
 

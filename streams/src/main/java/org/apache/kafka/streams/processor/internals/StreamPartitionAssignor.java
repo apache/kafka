@@ -439,6 +439,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                     topicMetadata.numPartitions = numPartitions;
 
                     changelogTopicMetadata.put(topicConfig.name(), topicMetadata);
+                } else {
+                    log.debug("stream-thread [{}] No tasks found for topic group {}", streamThread.getName(), topicGroupId);
                 }
             }
         }
