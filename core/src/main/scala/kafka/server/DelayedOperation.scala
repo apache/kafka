@@ -93,6 +93,12 @@ abstract class DelayedOperation(override val delayMs: Long) extends TimerTask wi
    */
   def tryComplete(): Boolean
 
+  def safeTryComplete(): Boolean = {
+    synchronized {
+      tryComplete()
+    }
+  }
+
   /*
    * run() method defines a task that is executed on timeout
    */
@@ -181,7 +187,7 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
     // operation is unnecessarily added for watch. However, this is a less severe issue since the
     // expire reaper will clean it up periodically.
 
-    var isCompletedByMe = operation synchronized operation.tryComplete()
+    var isCompletedByMe = operation.safeTryComplete()
     if (isCompletedByMe)
       return true
 
@@ -198,7 +204,7 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
       }
     }
 
-    isCompletedByMe = operation synchronized operation.tryComplete()
+    isCompletedByMe = operation.safeTryComplete()
     if (isCompletedByMe)
       return true
 
@@ -309,7 +315,7 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
       for (op <- ops) {
         if (op.isCompleted)
           completedAlready += 1
-        else if (op synchronized op.tryComplete())
+        else if (op.safeTryComplete())
           completedNow += 1
       }
 
