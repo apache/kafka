@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Random;
 
+import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -59,10 +60,6 @@ public class ProducerPerformance {
 
             if (producerProps == null && producerConfig == null) {
                 throw new ArgumentParserException("Either --producer-props or --producer.config must be specified.", parser);
-            }
-
-            if ((recordSize == null && payloadFilePath == null) || (recordSize != null && payloadFilePath != null)) {
-                throw new IllegalArgumentException("Either --record-size or --payload-file must be specified but not both.");
             }
 
             List<byte[]> payloadByteList = new ArrayList<>();
@@ -148,6 +145,11 @@ public class ProducerPerformance {
                 .defaultHelp(true)
                 .description("This tool is used to verify the producer performance.");
 
+        MutuallyExclusiveGroup payloadOptions = parser
+                .addMutuallyExclusiveGroup()
+                .required(true)
+                .description("either --record-size or --payload-file must be specified but not both.");
+
         parser.addArgument("--topic")
                 .action(store())
                 .required(true)
@@ -163,7 +165,7 @@ public class ProducerPerformance {
                 .dest("numRecords")
                 .help("number of messages to produce");
 
-        parser.addArgument("--record-size")
+        payloadOptions.addArgument("--record-size")
                 .action(store())
                 .required(false)
                 .type(Integer.class)
@@ -171,7 +173,7 @@ public class ProducerPerformance {
                 .dest("recordSize")
                 .help("message size in bytes. Note that you must provide exactly one of --record-size or --payload-file.");
 
-        parser.addArgument("--payload-file")
+        payloadOptions.addArgument("--payload-file")
                 .action(store())
                 .required(false)
                 .type(String.class)
