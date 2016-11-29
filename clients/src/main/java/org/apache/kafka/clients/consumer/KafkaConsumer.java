@@ -455,10 +455,10 @@ import org.apache.kafka.common.errors.InterruptException;
  *
  * Note that while methods that can throw {@link org.apache.kafka.common.errors.WakeupException} in response to {@link #wakeup()}
  * can also throw {@link org.apache.kafka.common.errors.InterruptException} in response to the calling thread being interrupted,
- * it is discouraged to use thread interrupts to stop/signal a consumer thread. Preferring {@link #wakeup()} will in some cases
- * allow for a cleaner shutdown than interrupts. {@link #commitSync()} will for example be allowed to finish committing offsets
- * if the consumer is awakened, while interrupts will cause {@link #commitSync()} to stop immediately. Interrupts are mainly supported
- * for those cases where using {@link #wakeup()} is impossible, e.g. when a consumer thread is managed by code that is unaware of Kafka.
+ * it is discouraged to use thread interrupts to stop/signal a consumer thread. {@link #wakeup()} will be ignored while shutting down the consumer,
+ * so in some cases {@link #wakeup()} allows for a cleaner shutdown over interrupts.
+ * Interrupts are mainly supported for those cases where using {@link #wakeup()} is impossible, e.g. when a consumer thread is managed by code that
+ * is unaware of Kafka.
  * 
  * <p>
  * We have intentionally avoided implementing a particular threading model for processing. This leaves several
@@ -1483,6 +1483,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Close the consumer, waiting indefinitely for any needed cleanup. If auto-commit is enabled, this
      * will commit the current offsets. Note that {@link #wakeup()} cannot be use to interrupt close.
+     * 
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted
+     * before or while this function is called
      */
     @Override
     public void close() {
