@@ -262,7 +262,8 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
         "new one. Some StopReplica state changes %s might be lost ".format(stopReplicaRequestMap.toString()))
     if (updateMetadataRequestBrokerSet.nonEmpty)
       throw new IllegalStateException("Controller to broker state change requests batch is not empty while creating a " +
-        "new one. Some UpdateMetadata state changes to brokers %s might be lost ".format(updateMetadataRequestBrokerSet.toString()))
+        "new one. Some UpdateMetadata state changes to brokers %s with partition info %s might be lost ".format(
+          updateMetadataRequestBrokerSet.toString(), updateMetadataRequestPartitionInfoMap.toString()))
   }
 
   def clear() {
@@ -304,7 +305,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
   def addUpdateMetadataRequestForBrokers(brokerIds: Seq[Int],
                                          partitions: collection.Set[TopicAndPartition] = Set.empty[TopicAndPartition],
                                          callback: AbstractResponse => Unit = null) {
-    def updateMetadataRequestMapFor(partition: TopicAndPartition, beingDeleted: Boolean) {
+    def updateMetadataRequestPartitionInfo(partition: TopicAndPartition, beingDeleted: Boolean) {
       val leaderIsrAndControllerEpochOpt = controllerContext.partitionLeadershipInfo.get(partition)
       leaderIsrAndControllerEpochOpt match {
         case Some(leaderIsrAndControllerEpoch) =>
@@ -333,8 +334,8 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
     }
 
     updateMetadataRequestBrokerSet ++= brokerIds.filter(_ >= 0)
-    filteredPartitions.foreach(partition => updateMetadataRequestMapFor(partition, beingDeleted = false))
-    controller.deleteTopicManager.partitionsToBeDeleted.foreach(partition => updateMetadataRequestMapFor(partition, beingDeleted = true))
+    filteredPartitions.foreach(partition => updateMetadataRequestPartitionInfo(partition, beingDeleted = false))
+    controller.deleteTopicManager.partitionsToBeDeleted.foreach(partition => updateMetadataRequestPartitionInfo(partition, beingDeleted = true))
   }
 
   def sendRequestsToBrokers(controllerEpoch: Int) {
@@ -355,15 +356,13 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
           val LeaderIsrAndControllerEpoch(leaderIsr, controllerEpoch) = partitionStateInfo.leaderIsrAndControllerEpoch
           val partitionState = new requests.PartitionState(controllerEpoch, leaderIsr.leader,
             leaderIsr.leaderEpoch, leaderIsr.isr.map(Integer.valueOf).asJava, leaderIsr.zkVersion,
-            partitionStateInfo.allReplicas.map(Integer.valueOf).asJava
-          )
+            partitionStateInfo.allReplicas.map(Integer.valueOf).asJava)
           topicPartition -> partitionState
         }
         val leaderAndIsrRequest = new LeaderAndIsrRequest(controllerId, controllerEpoch, partitionStates.asJava, leaders.asJava)
         controller.sendRequest(broker, ApiKeys.LEADER_AND_ISR, None, leaderAndIsrRequest, null)
       }
       leaderAndIsrRequestMap.clear()
-
 
       updateMetadataRequestPartitionInfoMap.foreach(p => stateChangeLogger.trace(("Controller %d epoch %d sending UpdateMetadata request %s " +
         "to brokers %s for partition %s").format(controllerId, controllerEpoch, p._2.leaderIsrAndControllerEpoch,
@@ -372,8 +371,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
         val LeaderIsrAndControllerEpoch(leaderIsr, controllerEpoch) = partitionStateInfo.leaderIsrAndControllerEpoch
         val partitionState = new requests.PartitionState(controllerEpoch, leaderIsr.leader,
           leaderIsr.leaderEpoch, leaderIsr.isr.map(Integer.valueOf).asJava, leaderIsr.zkVersion,
-          partitionStateInfo.allReplicas.map(Integer.valueOf).asJava
-        )
+          partitionStateInfo.allReplicas.map(Integer.valueOf).asJava)
         topicPartition -> partitionState
       }
 
@@ -399,7 +397,6 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
       updateMetadataRequestBrokerSet.foreach {broker =>
         controller.sendRequest(broker, ApiKeys.UPDATE_METADATA_KEY, Some(version), updateMetadataRequest, null)
       }
-
       updateMetadataRequestBrokerSet.clear()
       updateMetadataRequestPartitionInfoMap.clear()
 
@@ -424,8 +421,8 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
               s"the map is $leaderAndIsrRequestMap. Exception message: $e")
         }
         if (updateMetadataRequestBrokerSet.nonEmpty) {
-          error("Haven't been able to send metadata update requests, current state of " +
-              s"the map is $updateMetadataRequestBrokerSet. Exception message: $e")
+          error(s"Haven't been able to send metadata update requests to brokers $updateMetadataRequestBrokerSet, " +
+                s"current state of the partition info is $updateMetadataRequestPartitionInfoMap. Exception message: $e")
         }
         if (stopReplicaRequestMap.nonEmpty) {
           error("Haven't been able to send stop replica requests, current state of " +
