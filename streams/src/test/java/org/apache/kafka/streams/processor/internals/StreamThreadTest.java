@@ -529,12 +529,17 @@ public class StreamThreadTest {
 
     public static class StateListenerStub implements StreamThread.StateListener {
         public int numChanges = 0;
-        public StreamThread.State oldState;
-        public StreamThread.State newState;
+        public StreamThread.State oldState = null;
+        public StreamThread.State newState = null;
 
         @Override
         public void onChange(final StreamThread.State newState, final StreamThread.State oldState) {
             this.numChanges++;
+            if (this.newState != null) {
+                if (this.newState != oldState) {
+                    throw new RuntimeException("State mismatch " + oldState + " different from " + this.newState);
+                }
+            }
             this.oldState = oldState;
             this.newState = newState;
         }

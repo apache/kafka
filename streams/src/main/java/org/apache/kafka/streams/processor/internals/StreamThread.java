@@ -235,7 +235,7 @@ public class StreamThread extends Thread {
         public void onPartitionsRevoked(Collection<TopicPartition> assignment) {
             try {
                 if (state == State.PENDING_SHUTDOWN) {
-                    log.info("stream-thread [{}] New partitions [{}] assigned while shutting down.",
+                    log.info("stream-thread [{}] New partitions [{}] revoked while shutting down.",
                         StreamThread.this.getName(), assignment);
                     return;
                 }
@@ -358,7 +358,7 @@ public class StreamThread extends Thread {
      * Shutdown this stream thread.
      */
     public synchronized void close() {
-        log.info("{} Closing", logPrefix);
+        log.info("{} Informed thread to shut down", logPrefix);
         setState(State.PENDING_SHUTDOWN);
     }
 
