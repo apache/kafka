@@ -72,6 +72,10 @@ object ProducerPerformance extends Logging {
   }
 
   class ProducerPerfConfig(args: Array[String]) extends PerfConfig(args) {
+    val bootstrapServerListOpt = parser.accepts("bootstrap-server", "REQUIRED (only when using new producer): The bootstrap server list string.")
+      .withRequiredArg()
+      .describedAs("hostname:port,..,hostname:port")
+      .ofType(classOf[String])
     val brokerListOpt = parser.accepts("broker-list", "REQUIRED: broker info the list of broker host and port for bootstrap.")
       .withRequiredArg
       .describedAs("hostname:port,..,hostname:port")
@@ -143,7 +147,27 @@ object ProducerPerformance extends Logging {
       .defaultsTo(0)
 
     val options = parser.parse(args: _*)
-    CommandLineUtils.checkRequiredArgs(parser, options, topicsOpt, brokerListOpt, numMessagesOpt)
+
+    val brokerList = options.valueOf(brokerListOpt)
+    val bootstrapServerList = options.valueOf(bootstrapServerListOpt)
+    val useNewProducer = options.has(useNewProducerOpt)
+
+    if (useNewProducer){
+      if (options.has(brokerListOpt)){
+        CommandLineUtils.printUsageAndDie(parser, s"Option $brokerListOpt is not valid with $useNewProducerOpt.")
+      } else {
+        CommandLineUtils.checkRequiredArgs(parser, options, topicsOpt, bootstrapServerListOpt, numMessagesOpt)
+        ToolsUtils.validatePortOrDie(parser, bootstrapServerList)
+      }
+    } else {
+      if (options.has(bootstrapServerListOpt)){
+        CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerListOpt is not valid without $useNewProducerOpt.")
+      } else {
+        CommandLineUtils.checkRequiredArgs(parser, options, topicsOpt, brokerListOpt, numMessagesOpt)
+        ToolsUtils.validatePortOrDie(parser, brokerList)
+      }
+    }
+
 
     val topicsStr = options.valueOf(topicsOpt)
     val topics = topicsStr.split(",")
@@ -151,8 +175,6 @@ object ProducerPerformance extends Logging {
     val reportingInterval = options.valueOf(reportingIntervalOpt).intValue
     val dateFormat = new SimpleDateFormat(options.valueOf(dateFormatOpt))
     val hideHeader = options.has(hideHeaderOpt)
-    val brokerList = options.valueOf(brokerListOpt)
-    ToolsUtils.validatePortOrDie(parser,brokerList)
     val messageSize = options.valueOf(messageSizeOpt).intValue
     var isFixedSize = !options.has(varyMessageSizeOpt)
     var isSync = options.has(syncOpt)
@@ -167,7 +189,6 @@ object ProducerPerformance extends Logging {
     val producerRequestRequiredAcks = options.valueOf(producerRequestRequiredAcksOpt).intValue()
     val producerNumRetries = options.valueOf(producerNumRetriesOpt).intValue()
     val producerRetryBackoffMs = options.valueOf(producerRetryBackOffMsOpt).intValue()
-    val useNewProducer = options.has(useNewProducerOpt)
 
     val csvMetricsReporterEnabled = options.has(csvMetricsReporterEnabledOpt)
 
@@ -207,7 +228,7 @@ object ProducerPerformance extends Logging {
       if (config.useNewProducer) {
         import org.apache.kafka.clients.producer.ProducerConfig
         props ++= config.producerProps
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.brokerList)
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServerList)
         props.put(ProducerConfig.SEND_BUFFER_CONFIG, (64 * 1024).toString)
         props.put(ProducerConfig.CLIENT_ID_CONFIG, "producer-performance")
         props.put(ProducerConfig.ACKS_CONFIG, config.producerRequestRequiredAcks.toString)

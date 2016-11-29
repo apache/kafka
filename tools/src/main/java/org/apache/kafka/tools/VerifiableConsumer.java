@@ -28,6 +28,7 @@ import com.fasterxml.jackson.databind.module.SimpleModule;
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
+import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -491,14 +492,21 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .newArgumentParser("verifiable-consumer")
                 .defaultHelp(true)
                 .description("This tool consumes messages from a specific topic and emits consumer events (e.g. group rebalances, received messages, and offsets committed) as JSON objects to STDOUT.");
+        parser.usage("verifiable-consumer [-h] --bootstrap-server HOST1:PORT1[,HOST2:PORT2[...]] | --broker-list HOST1:PORT1[,HOST2:PORT2[...]] --topic TOPIC --group-id GROUP_ID [--max-messages MAX-MESSAGES]\n " +
+                "                          [--session-timeout TIMEOUT_MS] [--verbose] [--enable-autocommit] [--reset-policy RESETPOLICY] [--assignment-strategy ASSIGNMENTSTRATEGY] [--consumer.config CONFIG_FILE]");
 
-        parser.addArgument("--broker-list")
+        MutuallyExclusiveGroup group = parser.addMutuallyExclusiveGroup().required(true);
+        group.addArgument("--bootstrap-server")
+                .action(store()).type(String.class)
+                .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
+                .dest("bootstrapServerList")
+                .help("Comma-separated list of bootstrap servers in the form HOST1:PORT1,HOST2:PORT2,...");
+        group.addArgument("--broker-list")
                 .action(store())
-                .required(true)
                 .type(String.class)
                 .metavar("HOST1:PORT1[,HOST2:PORT2[...]]")
-                .dest("brokerList")
-                .help("Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
+                .dest("bootstrapServerList")
+                .help("DEPRECATED use --bootstrap-server instead. Comma-separated list of Kafka brokers in the form HOST1:PORT1,HOST2:PORT2,...");
 
         parser.addArgument("--topic")
                 .action(store())
@@ -591,7 +599,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         }
 
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, res.getString("groupId"));
-        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
+        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("bootstrapServerList"));
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, useAutoCommit);
         consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, res.getString("resetPolicy"));
         consumerProps.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(res.getInt("sessionTimeout")));
