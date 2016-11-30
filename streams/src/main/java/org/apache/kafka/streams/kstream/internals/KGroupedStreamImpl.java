@@ -33,7 +33,6 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.SessionStore;
 
 import java.util.Collections;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -206,9 +205,9 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                          sessionMerger,
                          sessionWindows,
                          aggValueSerde,
-                         windowedStore(aggValueSerde,
-                                       new InternalSessionWindow(sessionWindows.inactivityGap(),
-                                                                 sessionWindows.maintainMs()), true, storeName));
+                         storeFactory(keySerde, aggValueSerde, storeName)
+                          .sessionWindows(sessionWindows.maintainMs()).build());
+
 
     }
 
@@ -233,31 +232,12 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
 
     }
 
-    private class InternalSessionWindow extends Windows<TimeWindow> {
-        private final long size;
-        InternalSessionWindow(final long size, final long maintainMs) {
-            this.size = size;
-            until(maintainMs);
-        }
-        @Override
-        public Map<Long, TimeWindow> windowsFor(final long timestamp) {
-            throw new UnsupportedOperationException("windowsFor not supported by InternalSessionWindow");
-        }
-
-        @Override
-        public long size() {
-            return size;
-        }
-    }
-
     @SuppressWarnings("unchecked")
     public KTable<Windowed<K>, Long> count(final SessionWindows sessionWindows, final String storeName) {
         Objects.requireNonNull(storeName, "storeName can't be null");
         return count(sessionWindows,
-                windowedStore(Serdes.Long(),
-                              new InternalSessionWindow(sessionWindows.inactivityGap(), sessionWindows.maintainMs()),
-                              true,
-                              storeName));
+                     storeFactory(keySerde, Serdes.Long(), storeName)
+                             .sessionWindows(sessionWindows.maintainMs()).build());
     }
 
     @SuppressWarnings("unchecked")
@@ -304,9 +284,8 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
 
         Objects.requireNonNull(storeName, "storeName can't be null");
         return reduce(reducer, sessionWindows,
-                      windowedStore(valSerde,
-                                    new InternalSessionWindow(sessionWindows.inactivityGap(),
-                                                              sessionWindows.maintainMs()), true, storeName));
+                      storeFactory(keySerde, valSerde, storeName)
+                              .sessionWindows(sessionWindows.maintainMs()).build());
     }
 
     @Override
@@ -343,19 +322,6 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
 
         return aggregate(initializer, aggregator, sessionMerger, sessionWindows, valSerde, storeSupplier);
     }
-
-
-
-    private <W extends Window, T> StateStoreSupplier windowedStore(final Serde<T> aggValSerde,
-                                                                   final Windows<W> windows,
-                                                                   final boolean sessionWindows,
-                                                                   final String storeName) {
-        return storeFactory(keySerde, aggValSerde, storeName)
-                .windowed(windows.size(), windows.maintainMs(), windows.segments, false, sessionWindows)
-                .build();
-
-    }
-
 
     private <T> KTable<K, T> doAggregate(
             final KStreamAggProcessorSupplier<K, ?, V, T> aggregateSupplier,

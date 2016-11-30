@@ -104,7 +104,6 @@ public class KStreamSessionWindowAggregateProcessorTest {
         final RocksDBSessionStoreSupplier<String, Long> supplier =
                 new RocksDBSessionStoreSupplier<>(STORE_NAME,
                                                   GAP_MS * 3,
-                                                  3,
                                                   Serdes.String(),
                                                   Serdes.Long(),
                                                   false,

@@ -35,19 +35,18 @@ import java.util.Map;
 
 public class RocksDBSessionStoreSupplier<K, T> implements StateStoreSupplier, WindowStoreSupplier {
 
+    private static final int NUM_SEGMENTS = 3;
     private final String name;
     private final long retentionPeriod;
-    private final int numSegments;
     private final Serde<K> keySerde;
     private final Serde<T> valueSerde;
     private final boolean logged;
     private final Map<String, String> logConfig;
     private final boolean enableCaching;
 
-    public RocksDBSessionStoreSupplier(String name, long retentionPeriod, int numSegments, Serde<K> keySerde, Serde<T> valueSerde, boolean logged, Map<String, String> logConfig, boolean enableCaching) {
+    public RocksDBSessionStoreSupplier(String name, long retentionPeriod, Serde<K> keySerde, Serde<T> valueSerde, boolean logged, Map<String, String> logConfig, boolean enableCaching) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
-        this.numSegments = numSegments;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.logged = logged;
@@ -62,7 +61,7 @@ public class RocksDBSessionStoreSupplier<K, T> implements StateStoreSupplier, Wi
     public StateStore get() {
         final RocksDBSegmentedBytesStore bytesStore = new RocksDBSegmentedBytesStore(name,
                                                                                      retentionPeriod,
-                                                                                     numSegments,
+                                                                                     NUM_SEGMENTS,
                                                                                      new RocksDBSessionStore.SessionKeySchema());
         final MeteredSegmentedBytesStore metered = new MeteredSegmentedBytesStore(logged ? new ChangeLoggingSegmentedBytesStore(bytesStore)
                                                                                           : bytesStore, "rocksdb-session-store", new SystemTime());

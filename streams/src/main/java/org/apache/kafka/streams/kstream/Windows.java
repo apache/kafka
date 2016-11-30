@@ -26,7 +26,7 @@ import java.util.Map;
  */
 public abstract class Windows<W extends Window> {
 
-    static final int DEFAULT_NUM_SEGMENTS = 3;
+    private static final int DEFAULT_NUM_SEGMENTS = 3;
 
     static final long DEFAULT_MAINTAIN_DURATION = 24 * 60 * 60 * 1000L;   // one day
 
