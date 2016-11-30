@@ -20,6 +20,7 @@ package kafka.utils
 import java.io._
 import java.nio._
 import java.nio.channels._
+import java.nio.file.Files
 import java.util.concurrent.{Callable, Executors, TimeUnit}
 import java.util.{Properties, Random}
 import java.security.cert.X509Certificate
@@ -37,7 +38,7 @@ import kafka.api._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.consumer.{ConsumerConfig, ConsumerTimeoutException, KafkaStream}
 import kafka.serializer.{DefaultEncoder, Encoder, StringEncoder}
-import kafka.common.TopicAndPartition
+import kafka.common._
 import kafka.admin.AdminUtils
 import kafka.log._
 import kafka.utils.ZkUtils._
@@ -79,7 +80,11 @@ object TestUtils extends Logging {
    */
   def tempRelativeDir(parent: String): File = {
     val parentFile = new File(parent)
-    parentFile.mkdirs()
+    try {
+        Files.createDirectories(parentFile.toPath())    
+    } catch {
+      case e: IOException => throw new KafkaException("Error in creating directory ${parentFile.toPath}", e)
+    }
 
     JTestUtils.tempDirectory(parentFile.toPath, null)
   }
