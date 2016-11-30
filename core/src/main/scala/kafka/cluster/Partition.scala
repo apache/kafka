@@ -146,9 +146,8 @@ class Partition(val topic: String,
       leaderReplicaIdOpt = None
       val topicPartition = TopicAndPartition(topic, partitionId)
       try {
-        val renamedDir = logManager.asyncDelete(topicPartition)
+        logManager.asyncDelete(topicPartition)
         removePartitionMetrics()
-        info(s"Log for $topicPartition renamed to $renamedDir and scheduled for deletion.")
       } catch {
         case e: IOException =>
           fatal(s"Error deleting the log for partition $topicPartition", e)

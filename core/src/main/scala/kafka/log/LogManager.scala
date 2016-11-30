@@ -307,8 +307,7 @@ class LogManager(val logDirs: Array[File],
 
   /**
    *  Delete all data in a partition and start the log at the new offset
-    *
-    *  @param newOffset The new offset to start the log with
+   *  @param newOffset The new offset to start the log with
    */
   def truncateFullyAndStartAt(topicAndPartition: TopicAndPartition, newOffset: Long) {
     val log = logs.get(topicAndPartition)
@@ -408,11 +407,16 @@ class LogManager(val logDirs: Array[File],
       }
     } catch {
       case e: Throwable => 
-        error(s"Exception in kafka-delete-logs thread. Ignoring to ensure continued scheduling.", e)
+        error(s"Exception in kafka-delete-logs thread.", e)
     }
 }
 
-  def asyncDelete(topicAndPartition: TopicAndPartition) : String = {
+  /**
+    * Rename the directory of the given topic-partition "logdir" as "logdir.uuid.delete" and 
+    * add it in the queue for deletion. 
+    * @param topicAndPartition TopicPartition that needs to be deleted
+    */
+  def asyncDelete(topicAndPartition: TopicAndPartition) = {
     val removedLog: Log = logCreationOrDeletionLock synchronized {
                             logs.remove(topicAndPartition)
                           }
@@ -441,13 +445,10 @@ class LogManager(val logDirs: Array[File],
 
         logsToBeDeleted.add(removedLog)
         removedLog.removeLogMetrics()
-        info(s"Log for partition ${removedLog.topicAndPartition.topic} is renamed to ${removedLog.topicAndPartition.partition} and is scheduled for deletion")
+        info(s"Log for partition ${removedLog.topicAndPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
       } else {
         throw new KafkaStorageException("Failed to rename log directory from " + removedLog.dir.getAbsolutePath + " to " + renamedDir.getAbsolutePath)
       }
-      dirName
-    } else {
-      ""
     }
   }
 
