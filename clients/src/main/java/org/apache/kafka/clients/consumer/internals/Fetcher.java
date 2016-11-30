@@ -127,6 +127,9 @@ public class Fetcher<K, V> {
         this.retryBackoffMs = retryBackoffMs;
     }
 
+    public int getMaxPollRecords() {
+        return maxPollRecords;
+    }
     /**
      * Return whether we have any completed fetches pending return to the user. This method is thread-safe.
      * @return true if there are completed fetches, false otherwise

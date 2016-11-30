@@ -993,8 +993,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     //
                     // NOTE: since the consumed position has already been updated, we must not allow
                     // wakeups or any other errors to be triggered prior to returning the fetched records.
-                    fetcher.sendFetches();
-                    client.pollNoWakeup();
+                    if (records.size() < fetcher.getMaxPollRecords()) {
+                        fetcher.sendFetches();
+                        client.pollNoWakeup();
+                    }
 
                     if (this.interceptors == null)
                         return new ConsumerRecords<>(records);
