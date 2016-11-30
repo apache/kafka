@@ -89,10 +89,16 @@ public class SessionWindows {
         return this;
     }
 
-    public long gap() {
+    /**
+     * @return the inactivityGap
+     */
+    public long inactivityGap() {
         return gapMs;
     }
 
+    /**
+     * @return the minimum amount of time a window will be maintained for.
+     */
     public long maintainMs() {
         return maintainDurationMs;
     }

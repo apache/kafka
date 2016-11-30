@@ -91,8 +91,8 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
             TimeWindow mergedWindow = newTimeWindow;
             T agg = initializer.apply();
 
-            try (final KeyValueIterator<Windowed<K>, T> iterator = store.findSessionsToMerge(key, timestamp - windows.gap() + 1,
-                                                                                               timestamp + windows.gap() - 1)) {
+            try (final KeyValueIterator<Windowed<K>, T> iterator = store.findSessionsToMerge(key, timestamp - windows.inactivityGap() + 1,
+                                                                                               timestamp + windows.inactivityGap() - 1)) {
                 while (iterator.hasNext()) {
                     final KeyValue<Windowed<K>, T> next = iterator.next();
                     merged.add(next);
