@@ -61,7 +61,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -423,18 +422,28 @@ public class Fetcher<K, V> {
 
                 nextInLineRecords = parseFetchedData(completedFetch);
             } else {
-                recordsRemaining -= append(drained, nextInLineRecords, recordsRemaining);
+                // check if we've already fetched data for this partition. If so, just return immediately
+                // to avoid the need to recopy the records to a new collection. This case should be rare
+                // because we do not send more than one fetch for a partition at a time.
+
+                TopicPartition partition = nextInLineRecords.partition;
+                if (drained.containsKey(partition))
+                    break;
+
+                List<ConsumerRecord<K, V>> records = drainRecords(nextInLineRecords, recordsRemaining);
+                if (!records.isEmpty()) {
+                    drained.put(partition, records);
+                    recordsRemaining -= records.size();
+                }
             }
         }
 
         return drained;
     }
 
-    private int append(Map<TopicPartition, List<ConsumerRecord<K, V>>> drained,
-                       PartitionRecords<K, V> partitionRecords,
-                       int maxRecords) {
+    private List<ConsumerRecord<K, V>> drainRecords(PartitionRecords<K, V> partitionRecords, int maxRecords) {
         if (partitionRecords.isEmpty())
-            return 0;
+            return Collections.emptyList();
 
         if (!subscriptions.isAssigned(partitionRecords.partition)) {
             // this can happen when a rebalance happened before fetched records are returned to the consumer's poll call
@@ -453,16 +462,8 @@ public class Fetcher<K, V> {
                 log.trace("Returning fetched records at offset {} for assigned partition {} and update " +
                         "position to {}", position, partitionRecords.partition, nextOffset);
 
-                List<ConsumerRecord<K, V>> records = drained.get(partitionRecords.partition);
-                if (records == null) {
-                    records = partRecords;
-                    drained.put(partitionRecords.partition, records);
-                } else {
-                    records.addAll(partRecords);
-                }
-
                 subscriptions.position(partitionRecords.partition, nextOffset);
-                return partRecords.size();
+                return partRecords;
             } else {
                 // these records aren't next in line based on the last consumed position, ignore them
                 // they must be from an obsolete request
@@ -472,7 +473,7 @@ public class Fetcher<K, V> {
         }
 
         partitionRecords.discard();
-        return 0;
+        return Collections.emptyList();
     }
 
     /**
@@ -768,6 +769,7 @@ public class Fetcher<K, V> {
         private long fetchOffset;
         private TopicPartition partition;
         private List<ConsumerRecord<K, V>> records;
+        private int position = 0;
 
         public PartitionRecords(long fetchOffset, TopicPartition partition, List<ConsumerRecord<K, V>> records) {
             this.fetchOffset = fetchOffset;
@@ -776,7 +778,7 @@ public class Fetcher<K, V> {
         }
 
         private boolean isEmpty() {
-            return records == null || records.isEmpty();
+            return records == null || position >= records.size();
         }
 
         private void discard() {
@@ -784,24 +786,15 @@ public class Fetcher<K, V> {
         }
 
         private List<ConsumerRecord<K, V>> take(int n) {
-            if (records == null)
-                return new ArrayList<>();
+            if (isEmpty())
+                return Collections.emptyList();
 
-            if (n >= records.size()) {
-                List<ConsumerRecord<K, V>> res = this.records;
-                this.records = null;
-                return res;
-            }
+            int limit = Math.min(records.size(), position + n);
+            List<ConsumerRecord<K, V>> res = Collections.unmodifiableList(records.subList(position, limit));
 
-            List<ConsumerRecord<K, V>> res = new ArrayList<>(n);
-            Iterator<ConsumerRecord<K, V>> iterator = records.iterator();
-            for (int i = 0; i < n; i++) {
-                res.add(iterator.next());
-                iterator.remove();
-            }
-
-            if (iterator.hasNext())
-                this.fetchOffset = iterator.next().offset();
+            position = limit;
+            if (position < records.size())
+                fetchOffset = records.get(position).offset();
 
             return res;
         }
