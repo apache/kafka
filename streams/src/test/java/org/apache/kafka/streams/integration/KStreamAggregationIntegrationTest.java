@@ -462,7 +462,7 @@ public class KStreamAggregationIntegrationTest {
                         StringSerializer.class,
                         new Properties()),
                 t2);
-        final long t3 = t1 + sessionGap;
+        final long t3 = t1 + sessionGap + 1;
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
                 userSessionsStream,
                 Arrays.asList(
@@ -548,7 +548,7 @@ public class KStreamAggregationIntegrationTest {
                         StringSerializer.class,
                         new Properties()),
                 t2);
-        final long t3 = t1 + sessionGap;
+        final long t3 = t1 + sessionGap + 1;
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
                 userSessionsStream,
                 Arrays.asList(

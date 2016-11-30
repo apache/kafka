@@ -140,16 +140,16 @@ public class KStreamSessionWindowAggregateProcessorTest {
         assertTrue(sessionStore.findSessionsToMerge(sessionId, 0, 0).hasNext());
 
         // move time beyond gap
-        context.setTime(GAP_MS);
+        context.setTime(GAP_MS + 1);
         processor.process(sessionId, "second");
-        assertTrue(sessionStore.findSessionsToMerge(sessionId, GAP_MS, GAP_MS).hasNext());
+        assertTrue(sessionStore.findSessionsToMerge(sessionId, GAP_MS + 1, GAP_MS + 1).hasNext());
         // should still exist as not within gap
         assertTrue(sessionStore.findSessionsToMerge(sessionId, 0, 0).hasNext());
         // move time back
         context.setTime(GAP_MS / 2);
         processor.process(sessionId, "third");
 
-        final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessionsToMerge(sessionId, 0, GAP_MS);
+        final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessionsToMerge(sessionId, 0, GAP_MS + 1);
         final KeyValue<Windowed<String>, Long> kv = iterator.next();
 
         assertEquals(Long.valueOf(3), kv.value);
@@ -172,10 +172,10 @@ public class KStreamSessionWindowAggregateProcessorTest {
         long time = 0;
         context.setTime(time);
         processor.process(sessionId, "first");
-        context.setTime(time += GAP_MS);
+        context.setTime(time += GAP_MS + 1);
         processor.process(sessionId, "second");
         processor.process(sessionId, "second");
-        context.setTime(time += GAP_MS);
+        context.setTime(time += GAP_MS + 1);
         processor.process(sessionId, "third");
         processor.process(sessionId, "third");
         processor.process(sessionId, "third");
@@ -183,8 +183,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
         sessionStore.flush();
         assertEquals(Arrays.asList(
                 KeyValue.pair(new Windowed<>(sessionId, new TimeWindow(0, 0)), new Change<>(1L, null)),
-                KeyValue.pair(new Windowed<>(sessionId, new TimeWindow(GAP_MS, GAP_MS)), new Change<>(2L, null)),
-                KeyValue.pair(new Windowed<>(sessionId, new TimeWindow(GAP_MS * 2, GAP_MS * 2)), new Change<>(3L, null))
+                KeyValue.pair(new Windowed<>(sessionId, new TimeWindow(GAP_MS + 1, GAP_MS + 1)), new Change<>(2L, null)),
+                KeyValue.pair(new Windowed<>(sessionId, new TimeWindow(time, time)), new Change<>(3L, null))
 
         ), results);
 
@@ -218,14 +218,12 @@ public class KStreamSessionWindowAggregateProcessorTest {
         processor.process("d", "1");
         context.setTime(GAP_MS / 2);
         processor.process("d", "2");
-        context.setTime(GAP_MS);
+        context.setTime(GAP_MS + 1);
         processor.process("a", "2");
         processor.process("b", "2");
-        final long t = GAP_MS + GAP_MS / 2;
-        context.setTime(t);
+        context.setTime(GAP_MS + 1 + GAP_MS / 2);
         processor.process("a", "3");
         processor.process("c", "3");
-        context.setTime(t + GAP_MS);
 
         sessionStore.flush();
 
@@ -233,9 +231,9 @@ public class KStreamSessionWindowAggregateProcessorTest {
                                    KeyValue.pair(new Windowed<>("b", new TimeWindow(0, 0)), new Change<>(1L, null)),
                                    KeyValue.pair(new Windowed<>("c", new TimeWindow(0, 0)), new Change<>(1L, null)),
                                    KeyValue.pair(new Windowed<>("d", new TimeWindow(0, GAP_MS / 2)), new Change<>(2L, null)),
-                                   KeyValue.pair(new Windowed<>("b", new TimeWindow(GAP_MS, GAP_MS)), new Change<>(1L, null)),
-                                   KeyValue.pair(new Windowed<>("a", new TimeWindow(GAP_MS, GAP_MS + GAP_MS / 2)), new Change<>(2L, null)),
-                                   KeyValue.pair(new Windowed<>("c", new TimeWindow(GAP_MS + GAP_MS / 2, GAP_MS + GAP_MS / 2)), new Change<>(1L, null))
+                                   KeyValue.pair(new Windowed<>("b", new TimeWindow(GAP_MS + 1, GAP_MS + 1)), new Change<>(1L, null)),
+                                   KeyValue.pair(new Windowed<>("a", new TimeWindow(GAP_MS + 1, GAP_MS + 1 + GAP_MS / 2)), new Change<>(2L, null)),
+                                   KeyValue.pair(new Windowed<>("c", new TimeWindow(GAP_MS + 1 + GAP_MS / 2, GAP_MS + 1 + GAP_MS / 2)), new Change<>(1L, null))
                      ),
                      results);
     }
@@ -247,11 +245,11 @@ public class KStreamSessionWindowAggregateProcessorTest {
         getter.init(context);
         context.setTime(0);
         processor.process("a", "1");
-        context.setTime(GAP_MS);
+        context.setTime(GAP_MS + 1);
         processor.process("a", "1");
         processor.process("a", "2");
         final long t0 = getter.get(new Windowed<>("a", new TimeWindow(0, 0)));
-        final long t1 = getter.get(new Windowed<>("a", new TimeWindow(GAP_MS, GAP_MS)));
+        final long t1 = getter.get(new Windowed<>("a", new TimeWindow(GAP_MS + 1, GAP_MS + 1)));
         assertEquals(1L, t0);
         assertEquals(2L, t1);
     }
