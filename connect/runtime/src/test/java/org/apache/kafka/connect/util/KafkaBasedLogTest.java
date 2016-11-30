@@ -279,17 +279,11 @@ public class KafkaBasedLogTest {
                 // Once we're synchronized in a poll, start the read to end and schedule the exact set of poll events
                 // that should follow. This readToEnd call will immediately wakeup this consumer.poll() call without
                 // returning any data.
+                Map<TopicPartition, Long> newEndOffsets = new HashMap<>();
+                newEndOffsets.put(TP0, 2L);
+                newEndOffsets.put(TP1, 2L);
+                consumer.updateEndOffsets(newEndOffsets);
                 store.readToEnd(readEndFutureCallback);
-                // Needs to seek to end to find end offsets
-                consumer.schedulePollTask(new Runnable() {
-                    @Override
-                    public void run() {
-                        Map<TopicPartition, Long> newEndOffsets = new HashMap<>();
-                        newEndOffsets.put(TP0, 2L);
-                        newEndOffsets.put(TP1, 2L);
-                        consumer.updateEndOffsets(newEndOffsets);
-                    }
-                });
 
                 // Should keep polling until it reaches current log end offset for all partitions
                 consumer.scheduleNopPollTask();
