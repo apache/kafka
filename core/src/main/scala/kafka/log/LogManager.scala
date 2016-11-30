@@ -428,10 +428,10 @@ class LogManager(val logDirs: Array[File],
       }
       // renaming the directory to topic-partition.uniqueId-delete
       val dirName = new StringBuilder(removedLog.name)
-                      .append(".")
-                      .append(java.util.UUID.randomUUID.toString.replaceAll("-",""))
-                      .append(Log.DeleteDirSuffix)
-                      .toString()
+                        .append(".")
+                        .append(java.util.UUID.randomUUID.toString.replaceAll("-",""))
+                        .append(Log.DeleteDirSuffix)
+                        .toString()
       removedLog.close()
       val renamedDir = new File(removedLog.dir.getParent, dirName)
       val renameSuccessful = removedLog.dir.renameTo(renamedDir)
