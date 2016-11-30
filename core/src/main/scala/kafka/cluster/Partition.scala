@@ -88,7 +88,7 @@ class Partition(val topic: String,
            tags
   )
 
-  newGauge("AssignedReplicasCount",
+  newGauge("ReplicasCount",
            new Gauge[Int] {
              def value = {
                leaderReplicaIfLocal() match {
@@ -508,7 +508,7 @@ class Partition(val topic: String,
   private def removePartitionMetrics() {
     removeMetric("UnderReplicated", tags)
     removeMetric("InSyncReplicasCount", tags)
-    removeMetric("AssignedReplicasCount", tags)
+    removeMetric("ReplicasCount", tags)
   }
 
   override def equals(that: Any): Boolean = {
