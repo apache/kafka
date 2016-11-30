@@ -177,7 +177,7 @@ public class KafkaStreams {
     }
 
     /**
-     * Set the {@link StateListener} to be notified when state changes
+     * An app can set {@link StateListener} so that the app is notified when state changes
      * @param listener
      */
     public void setStateListener(final StateListener listener) {

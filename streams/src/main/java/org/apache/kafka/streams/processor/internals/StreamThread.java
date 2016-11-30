@@ -138,7 +138,9 @@ public class StreamThread extends Thread {
     }
 
     /**
-     * Set the {@link StateListener} to be notified when state changes
+     * Set the {@link StateListener} to be notified when state changes.
+     * Note this API is internal to Kafka Streams and is not intended to be used by an
+     * external application.
      * @param listener
      */
     public void setStateListener(final StateListener listener) {
