@@ -415,24 +415,29 @@ public class Fetcher<K, V> {
         int recordsRemaining = maxPollRecords;
 
         while (recordsRemaining > 0) {
-            if (nextInLineRecords == null || nextInLineRecords.isEmpty()) {
+            if (nextInLineRecords == null || nextInLineRecords.isDrained()) {
                 CompletedFetch completedFetch = completedFetches.poll();
                 if (completedFetch == null)
                     break;
 
                 nextInLineRecords = parseFetchedData(completedFetch);
             } else {
-                // check if we've already fetched data for this partition. If so, just return immediately
-                // to avoid the need to recopy the records to a new collection. This case should be rare
-                // because we do not send more than one fetch for a partition at a time.
-
                 TopicPartition partition = nextInLineRecords.partition;
-                if (drained.containsKey(partition))
-                    break;
 
                 List<ConsumerRecord<K, V>> records = drainRecords(nextInLineRecords, recordsRemaining);
                 if (!records.isEmpty()) {
-                    drained.put(partition, records);
+                    List<ConsumerRecord<K, V>> currentRecords = drained.get(partition);
+                    if (currentRecords == null) {
+                        drained.put(partition, records);
+                    } else {
+                        // this case shouldn't usually happen because we only send one fetch at a time per partition,
+                        // but it might conceivably happen in some rare cases (such as partition leader changes).
+                        // we have to copy to a new list because the old one may be immutable
+                        List<ConsumerRecord<K, V>> newRecords = new ArrayList<>(records.size() + currentRecords.size());
+                        newRecords.addAll(currentRecords);
+                        newRecords.addAll(records);
+                        drained.put(partition, newRecords);
+                    }
                     recordsRemaining -= records.size();
                 }
             }
@@ -442,7 +447,7 @@ public class Fetcher<K, V> {
     }
 
     private List<ConsumerRecord<K, V>> drainRecords(PartitionRecords<K, V> partitionRecords, int maxRecords) {
-        if (partitionRecords.isEmpty())
+        if (partitionRecords.isDrained())
             return Collections.emptyList();
 
         if (!subscriptions.isAssigned(partitionRecords.partition)) {
@@ -456,7 +461,7 @@ public class Fetcher<K, V> {
                 log.debug("Not returning fetched records for assigned partition {} since it is no longer fetchable", partitionRecords.partition);
             } else if (partitionRecords.fetchOffset == position) {
                 // we are ensured to have at least one record since we already checked for emptiness
-                List<ConsumerRecord<K, V>> partRecords = partitionRecords.take(maxRecords);
+                List<ConsumerRecord<K, V>> partRecords = partitionRecords.drainRecords(maxRecords);
                 long nextOffset = partRecords.get(partRecords.size() - 1).offset() + 1;
 
                 log.trace("Returning fetched records at offset {} for assigned partition {} and update " +
@@ -472,7 +477,7 @@ public class Fetcher<K, V> {
             }
         }
 
-        partitionRecords.discard();
+        partitionRecords.drain();
         return Collections.emptyList();
     }
 
@@ -601,7 +606,7 @@ public class Fetcher<K, V> {
 
     private List<TopicPartition> fetchablePartitions() {
         List<TopicPartition> fetchable = subscriptions.fetchablePartitions();
-        if (nextInLineRecords != null && !nextInLineRecords.isEmpty())
+        if (nextInLineRecords != null && !nextInLineRecords.isDrained())
             fetchable.remove(nextInLineRecords.partition);
         for (CompletedFetch completedFetch : completedFetches)
             fetchable.remove(completedFetch.partition);
@@ -777,18 +782,20 @@ public class Fetcher<K, V> {
             this.records = records;
         }
 
-        private boolean isEmpty() {
+        private boolean isDrained() {
             return records == null || position >= records.size();
         }
 
-        private void discard() {
+        private void drain() {
             this.records = null;
         }
 
-        private List<ConsumerRecord<K, V>> take(int n) {
-            if (isEmpty())
+        private List<ConsumerRecord<K, V>> drainRecords(int n) {
+            if (isDrained())
                 return Collections.emptyList();
 
+            // using a sublist avoids a potentially expensive list copy (depending on the size of the records
+            // and the maximum we can return from poll). The cost is that we cannot mutate the returned sublist.
             int limit = Math.min(records.size(), position + n);
             List<ConsumerRecord<K, V>> res = Collections.unmodifiableList(records.subList(position, limit));
 
