@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.apache.kafka.common.errors.InterruptException;
 
 /**
  * Higher level consumer access to the network layer with basic support for request futures. This class
@@ -173,6 +174,7 @@ public class ConsumerNetworkClient implements Closeable {
      * Block indefinitely until the given request future has finished.
      * @param future The request future to await.
      * @throws WakeupException if {@link #wakeup()} is called from another thread
+     * @throws InterruptException if the calling thread is interrupted
      */
     public void poll(RequestFuture<?> future) {
         while (!future.isDone())
@@ -185,6 +187,7 @@ public class ConsumerNetworkClient implements Closeable {
      * @param timeout The maximum duration (in ms) to wait for the request
      * @return true if the future is done, false otherwise
      * @throws WakeupException if {@link #wakeup()} is called from another thread
+     * @throws InterruptException if the calling thread is interrupted
      */
     public boolean poll(RequestFuture<?> future, long timeout) {
         long begin = time.milliseconds();
@@ -203,6 +206,7 @@ public class ConsumerNetworkClient implements Closeable {
      * Poll for any network IO.
      * @param timeout The maximum time to wait for an IO event.
      * @throws WakeupException if {@link #wakeup()} is called from another thread
+     * @throws InterruptException if the calling thread is interrupted
      */
     public void poll(long timeout) {
         poll(timeout, time.milliseconds(), null);
@@ -242,6 +246,9 @@ public class ConsumerNetworkClient implements Closeable {
             // trigger wakeups after checking for disconnects so that the callbacks will be ready
             // to be fired on the next call to poll()
             maybeTriggerWakeup();
+            
+            // throw InterruptException if this thread is interrupted
+            maybeThrowInterruptException();
 
             // try again to send requests since buffer space may have been
             // cleared or a connect finished in the poll
@@ -401,6 +408,12 @@ public class ConsumerNetworkClient implements Closeable {
         if (wakeupDisabledCount == 0 && wakeup.get()) {
             wakeup.set(false);
             throw new WakeupException();
+        }
+    }
+    
+    private void maybeThrowInterruptException() {
+        if (Thread.interrupted()) {
+            throw new InterruptException(new InterruptedException());
         }
     }
 

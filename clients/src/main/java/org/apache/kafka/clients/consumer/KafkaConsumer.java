@@ -63,6 +63,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
+import org.apache.kafka.common.errors.InterruptException;
 
 /**
  * A client that consumes records from a Kafka cluster.
@@ -452,6 +453,13 @@ import java.util.regex.Pattern;
  *     consumer.wakeup();
  * </pre>
  *
+ * Note that while methods that can throw {@link org.apache.kafka.common.errors.WakeupException} in response to {@link #wakeup()}
+ * can also throw {@link org.apache.kafka.common.errors.InterruptException} in response to the calling thread being interrupted,
+ * it is discouraged to use thread interrupts to stop/signal a consumer thread. {@link #wakeup()} will be ignored while shutting down the consumer,
+ * so in some cases {@link #wakeup()} allows for a cleaner shutdown over interrupts.
+ * Interrupts are mainly supported for those cases where using {@link #wakeup()} is impossible, e.g. when a consumer thread is managed by code that
+ * is unaware of Kafka.
+ * 
  * <p>
  * We have intentionally avoided implementing a particular threading model for processing. This leaves several
  * options for implementing multi-threaded processing of records.
@@ -954,6 +962,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             partitions is undefined or out of range and no offset reset policy has been configured
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
      * @throws org.apache.kafka.common.errors.AuthorizationException if caller lacks Read access to any of the subscribed
      *             topics or to the configured groupId
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. invalid groupId or
@@ -1060,6 +1070,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             or if there is an active group with the same groupId which is using group management.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
      *             configured groupId
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. if offset metadata
@@ -1092,6 +1104,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             or if there is an active group with the same groupId which is using group management.
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
      *             configured groupId
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors (e.g. if offset metadata
@@ -1228,6 +1242,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             the partition
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
      *             configured groupId
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
@@ -1259,6 +1275,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The last committed offset and metadata or null if there was no prior commit
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic or to the
      *             configured groupId
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
@@ -1301,6 +1319,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The list of partitions
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the specified topic
      * @throws org.apache.kafka.common.errors.TimeoutException if the topic metadata could not be fetched before
      *             expiration of the configured request timeout
@@ -1329,6 +1349,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The map of topics and its partitions
      * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
      *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
      * @throws org.apache.kafka.common.errors.TimeoutException if the topic metadata could not be fetched before
      *             expiration of the configured request timeout
      * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
@@ -1461,6 +1483,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Close the consumer, waiting indefinitely for any needed cleanup. If auto-commit is enabled, this
      * will commit the current offsets. Note that {@link #wakeup()} cannot be use to interrupt close.
+     * 
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted
+     * before or while this function is called
      */
     @Override
     public void close() {
@@ -1504,8 +1529,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         ClientUtils.closeQuietly(valueDeserializer, "consumer value deserializer", firstException);
         AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId);
         log.debug("The Kafka consumer has closed.");
-        if (firstException.get() != null && !swallowException) {
-            throw new KafkaException("Failed to close kafka consumer", firstException.get());
+        Throwable exception = firstException.get();
+        if (exception != null && !swallowException) {
+            if (exception instanceof InterruptException) {
+                throw (InterruptException) exception;
+            }
+            throw new KafkaException("Failed to close kafka consumer", exception);
         }
     }
 
