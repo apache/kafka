@@ -161,7 +161,7 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
 
     @Override
     public void schedule(long interval) {
-//        throw new UnsupportedOperationException("schedule() not supported.");
+        throw new UnsupportedOperationException("schedule() not supported.");
     }
 
     @Override

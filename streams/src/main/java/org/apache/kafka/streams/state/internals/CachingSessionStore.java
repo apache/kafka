@@ -56,10 +56,10 @@ class CachingSessionStore<K, AGG>  implements SessionStore<K, AGG>, CachedStateS
         this.keySchema = new RocksDBSessionStore.SessionKeySchema();
     }
 
-    public KeyValueIterator<Windowed<K>, AGG> findSessionsToMerge(final K sessionId,
+    public KeyValueIterator<Windowed<K>, AGG> findSessionsToMerge(final K key,
                                                                   final long earliestSessionEndTime,
                                                                   final long latestSessionStartTime) {
-        final Bytes binarySessionId = Bytes.wrap(keySerde.serializer().serialize(name, sessionId));
+        final Bytes binarySessionId = Bytes.wrap(keySerde.serializer().serialize(name, key));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name,
                                                                                   keySchema.lowerRange(binarySessionId,
                                                                                                        earliestSessionEndTime).get(),

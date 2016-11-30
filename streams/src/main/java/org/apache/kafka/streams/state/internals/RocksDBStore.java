@@ -62,7 +62,7 @@ import java.util.Set;
  *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
-class RocksDBStore<K, V> implements KeyValueStore<K, V> {
+public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     private static final int TTL_NOT_USED = -1;
 

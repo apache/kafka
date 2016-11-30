@@ -27,10 +27,10 @@ import org.apache.kafka.streams.processor.StateStore;
 public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K, AGG> {
 
     /**
-     * Fetch any session aggregates with the matching sessionId and the sessions end is >= earliestEndTime and the sessions
+     * Fetch any session aggregates with the matching key and the sessions end is >= earliestEndTime and the sessions
      * start is <= latestStartTime
      */
-    KeyValueIterator<Windowed<K>, AGG> findSessionsToMerge(K sessionId, long earliestSessionEndTime, long latestSessionStartTime);
+    KeyValueIterator<Windowed<K>, AGG> findSessionsToMerge(K key, long earliestSessionEndTime, long latestSessionStartTime);
 
     /**
      * Remove the session aggregated with provided {@link Windowed} key from the store

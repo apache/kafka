@@ -73,7 +73,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         }
     };
     private final KStreamSessionWindowAggregate<String, String, Long> sessionAggregator =
-            new KStreamSessionWindowAggregate<>(SessionWindows.inactivityGap(GAP_MS).until(3 * GAP_MS),
+            new KStreamSessionWindowAggregate<>(SessionWindows.with(GAP_MS).until(3 * GAP_MS),
                                                 STORE_NAME,
                                                 initializer,
                                                 aggregator,

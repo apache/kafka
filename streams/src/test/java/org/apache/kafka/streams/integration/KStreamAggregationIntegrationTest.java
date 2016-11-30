@@ -494,7 +494,7 @@ public class KStreamAggregationIntegrationTest {
         final CountDownLatch latch = new CountDownLatch(11);
         builder.stream(Serdes.String(), Serdes.String(), userSessionsStream)
                 .groupByKey(Serdes.String(), Serdes.String())
-                .count(SessionWindows.inactivityGap(sessionGap).until(maintainMillis), "UserSessionsStore")
+                .count(SessionWindows.with(sessionGap).until(maintainMillis), "UserSessionsStore")
                 .toStream()
                 .foreach(new ForeachAction<Windowed<String>, Long>() {
                     @Override
@@ -586,7 +586,7 @@ public class KStreamAggregationIntegrationTest {
                     public String apply(final String value1, final String value2) {
                         return value1 + ":" + value2;
                     }
-                }, SessionWindows.inactivityGap(sessionGap).until(maintainMillis), userSessionsStore)
+                }, SessionWindows.with(sessionGap).until(maintainMillis), userSessionsStore)
                 .foreach(new ForeachAction<Windowed<String>, String>() {
                     @Override
                     public void apply(final Windowed<String> key, final String value) {

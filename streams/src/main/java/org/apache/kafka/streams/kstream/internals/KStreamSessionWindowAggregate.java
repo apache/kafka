@@ -119,7 +119,7 @@ class KStreamSessionWindowAggregate<K, V, T> implements KStreamAggProcessorSuppl
 
     private TimeWindow mergeTimeWindow(final TimeWindow one, final TimeWindow two) {
         final long start = one.start() < two.start() ? one.start() : two.start();
-        final long end = one.end() < two.end() ? two.end() : one.end();
+        final long end = one.end() > two.end() ? one.end() : two.end();
         return new TimeWindow(start, end);
     }
 

@@ -207,7 +207,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                          sessionWindows,
                          aggValueSerde,
                          windowedStore(aggValueSerde,
-                                       new InternalSessionWindow(sessionWindows.size(),
+                                       new InternalSessionWindow(sessionWindows.gap(),
                                                                  sessionWindows.maintainMs()), true, storeName));
 
     }
@@ -255,7 +255,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
         Objects.requireNonNull(storeName, "storeName can't be null");
         return count(sessionWindows,
                 windowedStore(Serdes.Long(),
-                              new InternalSessionWindow(sessionWindows.size(), sessionWindows.maintainMs()),
+                              new InternalSessionWindow(sessionWindows.gap(), sessionWindows.maintainMs()),
                               true,
                               storeName));
     }
@@ -305,7 +305,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
         Objects.requireNonNull(storeName, "storeName can't be null");
         return reduce(reducer, sessionWindows,
                       windowedStore(valSerde,
-                                    new InternalSessionWindow(sessionWindows.size(),
+                                    new InternalSessionWindow(sessionWindows.gap(),
                                                               sessionWindows.maintainMs()), true, storeName));
     }
 

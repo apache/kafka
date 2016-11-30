@@ -17,12 +17,15 @@
 
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 /**
  * The interface for merging aggregate values for {@link SessionWindows} with the given key.
  *
  * @param <K>   key type
  * @param <T>   aggregate value type
  */
+@InterfaceStability.Unstable
 public interface SessionMerger<K, V> {
 
     /**

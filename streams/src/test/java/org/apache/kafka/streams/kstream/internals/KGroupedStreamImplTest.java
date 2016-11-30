@@ -151,7 +151,7 @@ public class KGroupedStreamImplTest {
             public Integer apply(final String aggKey, final Integer aggOne, final Integer aggTwo) {
                 return aggOne + aggTwo;
             }
-        }, SessionWindows.inactivityGap(30), Serdes.Integer(), "session-store")
+        }, SessionWindows.with(30), Serdes.Integer(), "session-store")
                 .foreach(new ForeachAction<Windowed<String>, Integer>() {
                     @Override
                     public void apply(final Windowed<String> key, final Integer value) {
@@ -181,7 +181,7 @@ public class KGroupedStreamImplTest {
     @Test
     public void shouldCountSessionWindows() throws Exception {
         final Map<Windowed<String>, Long> results = new HashMap<>();
-        groupedStream.count(SessionWindows.inactivityGap(30), "session-store")
+        groupedStream.count(SessionWindows.with(30), "session-store")
                 .foreach(new ForeachAction<Windowed<String>, Long>() {
                     @Override
                     public void apply(final Windowed<String> key, final Long value) {
@@ -216,7 +216,7 @@ public class KGroupedStreamImplTest {
                     public String apply(final String value1, final String value2) {
                         return value1 + ":" + value2;
                     }
-                }, SessionWindows.inactivityGap(30),
+                }, SessionWindows.with(30),
                 "session-store")
                 .foreach(new ForeachAction<Windowed<String>, String>() {
                     @Override
@@ -245,7 +245,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullReducerWhenReducingSessionWindows() throws Exception {
-        groupedStream.reduce(null, SessionWindows.inactivityGap(10), "store");
+        groupedStream.reduce(null, SessionWindows.with(10), "store");
     }
 
     @Test(expected = NullPointerException.class)
@@ -255,12 +255,12 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullStoreNameWhenReducingSessionWindows() throws Exception {
-        groupedStream.reduce(MockReducer.STRING_ADDER, SessionWindows.inactivityGap(10), (String) null);
+        groupedStream.reduce(MockReducer.STRING_ADDER, SessionWindows.with(10), (String) null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullStateStoreSupplierNameWhenReducingSessionWindows() throws Exception {
-        groupedStream.reduce(MockReducer.STRING_ADDER, SessionWindows.inactivityGap(10), (StateStoreSupplier<SessionStore>) null);
+        groupedStream.reduce(MockReducer.STRING_ADDER, SessionWindows.with(10), (StateStoreSupplier<SessionStore>) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -270,7 +270,7 @@ public class KGroupedStreamImplTest {
             public String apply(final String aggKey, final String aggOne, final String aggTwo) {
                 return null;
             }
-        }, SessionWindows.inactivityGap(10), Serdes.String(), "storeName");
+        }, SessionWindows.with(10), Serdes.String(), "storeName");
     }
 
     @Test(expected = NullPointerException.class)
@@ -280,7 +280,7 @@ public class KGroupedStreamImplTest {
             public String apply(final String aggKey, final String aggOne, final String aggTwo) {
                 return null;
             }
-        }, SessionWindows.inactivityGap(10), Serdes.String(), "storeName");
+        }, SessionWindows.with(10), Serdes.String(), "storeName");
     }
 
     @Test(expected = NullPointerException.class)
@@ -288,7 +288,7 @@ public class KGroupedStreamImplTest {
         groupedStream.aggregate(MockInitializer.STRING_INIT,
                                 MockAggregator.STRING_ADDER,
                                 null,
-                                SessionWindows.inactivityGap(10),
+                                SessionWindows.with(10),
                                 Serdes.String(),
                                 "storeName");
     }
@@ -310,7 +310,7 @@ public class KGroupedStreamImplTest {
             public String apply(final String aggKey, final String aggOne, final String aggTwo) {
                 return null;
             }
-        }, SessionWindows.inactivityGap(10), Serdes.String(), (String) null);
+        }, SessionWindows.with(10), Serdes.String(), (String) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -320,7 +320,7 @@ public class KGroupedStreamImplTest {
             public String apply(final String aggKey, final String aggOne, final String aggTwo) {
                 return null;
             }
-        }, SessionWindows.inactivityGap(10), Serdes.String(), (StateStoreSupplier<SessionStore>) null);
+        }, SessionWindows.with(10), Serdes.String(), (StateStoreSupplier<SessionStore>) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -330,11 +330,11 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullStoreNameWhenCountingSessionWindows() throws Exception {
-        groupedStream.count(SessionWindows.inactivityGap(90), (String) null);
+        groupedStream.count(SessionWindows.with(90), (String) null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullStoreStoreSupplierNameWhenCountingSessionWindows() throws Exception {
-        groupedStream.count(SessionWindows.inactivityGap(90), (StateStoreSupplier<SessionStore>) null);
+        groupedStream.count(SessionWindows.with(90), (StateStoreSupplier<SessionStore>) null);
     }
 }
