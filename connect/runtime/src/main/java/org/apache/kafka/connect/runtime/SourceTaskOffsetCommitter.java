@@ -82,7 +82,7 @@ class SourceTaskOffsetCommitter {
             public void run() {
                 commit(workerTask);
             }
-        }, 0, commitIntervalMs, TimeUnit.MILLISECONDS);
+        }, commitIntervalMs, commitIntervalMs, TimeUnit.MILLISECONDS);
         committers.put(id, commitFuture);
     }
 
@@ -99,15 +99,15 @@ class SourceTaskOffsetCommitter {
             // ignore
             log.trace("Offset commit thread was cancelled by another thread while removing connector task with id: {}", id);
         } catch (ExecutionException | InterruptedException e) {
-            throw new ConnectException("Unexpected interruption in SourceTaskOffsetCommitter.", e);
+            throw new ConnectException("Unexpected interruption in SourceTaskOffsetCommitter while removing task with id: " + id, e);
         }
     }
 
-    private boolean commit(WorkerSourceTask workerTask) {
+    private void commit(WorkerSourceTask workerTask) {
         log.debug("Committing offsets for {}", workerTask);
         try {
             if (workerTask.commitOffsets()) {
-                return true;
+                return;
             }
             log.error("Failed to commit offsets for {}", workerTask);
         } catch (Throwable t) {
@@ -116,6 +116,5 @@ class SourceTaskOffsetCommitter {
             // for that task
             log.error("Unhandled exception when committing {}: ", workerTask, t);
         }
-        return false;
     }
 }

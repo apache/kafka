@@ -84,8 +84,9 @@ public class SourceTaskOffsetCommitterTest extends ThreadedTest {
 
         ScheduledFuture commitFuture = PowerMock.createMock(ScheduledFuture.class);
         EasyMock.expect(executor.scheduleWithFixedDelay(
-                EasyMock.capture(taskWrapper), eq(0L), eq(DEFAULT_OFFSET_COMMIT_INTERVAL_MS),
-                eq(TimeUnit.MILLISECONDS))).andReturn(commitFuture);
+                EasyMock.capture(taskWrapper), eq(DEFAULT_OFFSET_COMMIT_INTERVAL_MS),
+                eq(DEFAULT_OFFSET_COMMIT_INTERVAL_MS), eq(TimeUnit.MILLISECONDS))
+        ).andReturn(commitFuture);
 
         ConnectorTaskId taskId = PowerMock.createMock(ConnectorTaskId.class);
         WorkerSourceTask task = PowerMock.createMock(WorkerSourceTask.class);
