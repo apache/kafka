@@ -22,7 +22,6 @@ import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1}
 import kafka.cluster.EndPoint
 import kafka.consumer.ConsumerConfig
 import kafka.coordinator.OffsetConfig
-import kafka.log.LogConfig
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, Message, MessageSet}
 import kafka.utils.CoreUtils
 import org.apache.kafka.clients.CommonClientConfigs
@@ -33,8 +32,8 @@ import org.apache.kafka.common.metrics.MetricsReporter
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.record.TimestampType
 
-import scala.collection.{JavaConverters, Map, immutable}
-import JavaConverters._
+import scala.collection.{Map, immutable}
+import scala.collection.JavaConverters._
 
 object Defaults {
   /** ********* Zookeeper Configuration ***********/
@@ -267,9 +266,9 @@ object KafkaConfig {
   val LogFlushIntervalMsProp = "log.flush.interval.ms"
   val LogFlushOffsetCheckpointIntervalMsProp = "log.flush.offset.checkpoint.interval.ms"
   val LogPreAllocateProp = "log.preallocate"
-  val LogMessageFormatVersionProp = LogConfigPrefix + LogConfig.MessageFormatVersionProp
-  val LogMessageTimestampTypeProp = LogConfigPrefix + LogConfig.MessageTimestampTypeProp
-  val LogMessageTimestampDifferenceMaxMsProp = LogConfigPrefix + LogConfig.MessageTimestampDifferenceMaxMsProp
+  val LogMessageFormatVersionProp = LogConfigPrefix + "message.format.version"
+  val LogMessageTimestampTypeProp = LogConfigPrefix + "message.timestamp.type"
+  val LogMessageTimestampDifferenceMaxMsProp = LogConfigPrefix + "message.timestamp.difference.max.ms"
   val NumRecoveryThreadsPerDataDirProp = "num.recovery.threads.per.data.dir"
   val AutoCreateTopicsEnableProp = "auto.create.topics.enable"
   val MinInSyncReplicasProp = "min.insync.replicas"
@@ -757,20 +756,7 @@ object KafkaConfig {
 
   }
 
-  def configNames() = {
-    import scala.collection.JavaConversions._
-    configDef.names().toList.sorted
-  }
-
-  /**
-    * Check that property names are valid
-    */
-  def validateNames(props: Properties) {
-    import scala.collection.JavaConversions._
-    val names = configDef.names()
-    for (name <- props.keys)
-      require(names.contains(name), "Unknown Kafka configuration \"%s\".".format(name))
-  }
+  def configNames() = configDef.names().asScala.toList.sorted
 
   def fromProps(props: Properties): KafkaConfig =
     fromProps(props, true)

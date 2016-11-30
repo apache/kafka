@@ -21,6 +21,8 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -38,6 +40,7 @@ import java.util.Set;
  */
 public class DefaultPartitionGrouper implements PartitionGrouper {
 
+    private static final Logger log = LoggerFactory.getLogger(DefaultPartitionGrouper.class);
     /**
      * Generate tasks with the assigned topic partitions.
      *
@@ -58,7 +61,8 @@ public class DefaultPartitionGrouper implements PartitionGrouper {
                 Set<TopicPartition> group = new HashSet<>(topicGroup.size());
 
                 for (String topic : topicGroup) {
-                    if (partitionId < metadata.partitionsForTopic(topic).size()) {
+                    List<PartitionInfo> partitions = metadata.partitionsForTopic(topic);
+                    if (partitions != null && partitionId < partitions.size()) {
                         group.add(new TopicPartition(topic, partitionId));
                     }
                 }
@@ -77,12 +81,13 @@ public class DefaultPartitionGrouper implements PartitionGrouper {
         for (String topic : topics) {
             List<PartitionInfo> partitions = metadata.partitionsForTopic(topic);
 
-            if (partitions == null)
-                throw new StreamsException("Topic not found during partition assignment: " + topic);
-
-            int numPartitions = partitions.size();
-            if (numPartitions > maxNumPartitions)
-                maxNumPartitions = numPartitions;
+            if (partitions == null) {
+                log.info("Skipping assigning topic {} to tasks since its metadata is not available yet", topic);
+            } else {
+                int numPartitions = partitions.size();
+                if (numPartitions > maxNumPartitions)
+                    maxNumPartitions = numPartitions;
+            }
         }
         return maxNumPartitions;
     }

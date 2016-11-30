@@ -72,6 +72,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
@@ -81,6 +86,10 @@ import static java.util.Collections.singletonMap;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+
+import org.apache.kafka.common.errors.InterruptException;
+import org.junit.Rule;
+import org.junit.rules.ExpectedException;
 
 public class KafkaConsumerTest {
     private final String topic = "test";
@@ -92,6 +101,9 @@ public class KafkaConsumerTest {
 
     private final String topic3 = "test3";
     private final TopicPartition t3p0 = new TopicPartition(topic3, 0);
+    
+    @Rule
+    public ExpectedException expectedException = ExpectedException.none();
 
     @Test
     public void testConstructorClose() throws Exception {
@@ -673,6 +685,42 @@ public class KafkaConsumerTest {
         ConsumerRecords<String, String> records = consumer.poll(0);
         assertEquals(5, records.count());
     }
+    
+    @Test
+    public void testPollThrowsInterruptExceptionIfInterrupted() throws Exception {
+        int rebalanceTimeoutMs = 60000;
+        int sessionTimeoutMs = 30000;
+        int heartbeatIntervalMs = 3000;
+
+        final Time time = new MockTime();
+        Cluster cluster = TestUtils.singletonCluster(topic, 1);
+        final Node node = cluster.nodes().get(0);
+
+        Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+        metadata.update(cluster, time.milliseconds());
+
+        final MockClient client = new MockClient(time, metadata);
+        client.setNode(node);
+        final PartitionAssignor assignor = new RoundRobinAssignor();
+
+        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
+                rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, false, 0);
+        
+        consumer.subscribe(Arrays.asList(topic), getConsumerRebalanceListener(consumer));
+        prepareRebalance(client, node, assignor, Arrays.asList(tp0), null);
+
+        consumer.poll(0);
+
+        // interrupt the thread and call poll
+        try {
+            Thread.currentThread().interrupt();
+            expectedException.expect(InterruptException.class);
+            consumer.poll(0);
+        } finally {
+            // clear interrupted state again since this thread may be reused by JUnit
+            Thread.interrupted();
+        }
+    }
 
     @Test
     public void fetchResponseWithUnexpectedPartitionIsIgnored() {
@@ -831,6 +879,7 @@ public class KafkaConsumerTest {
         assertTrue(consumer.subscription().isEmpty());
         assertTrue(consumer.assignment().isEmpty());
 
+        client.requests().clear();
         consumer.close();
     }
 
@@ -905,6 +954,7 @@ public class KafkaConsumerTest {
         for (ClientRequest req: client.requests())
             assertTrue(req.header().apiKey() != ApiKeys.OFFSET_COMMIT.id);
 
+        client.requests().clear();
         consumer.close();
     }
 
@@ -969,6 +1019,7 @@ public class KafkaConsumerTest {
         // verify that the offset commits occurred as expected
         assertTrue(commitReceived.get());
 
+        client.requests().clear();
         consumer.close();
     }
 
@@ -1032,6 +1083,7 @@ public class KafkaConsumerTest {
         for (ClientRequest req : client.requests())
             assertTrue(req.header().apiKey() != ApiKeys.OFFSET_COMMIT.id);
 
+        client.requests().clear();
         consumer.close();
     }
 
@@ -1064,6 +1116,78 @@ public class KafkaConsumerTest {
             consumer.poll(0);
         } finally {
             consumer.close();
+        }
+    }
+
+    @Test
+    public void testGracefulClose() throws Exception {
+        consumerCloseTest(true);
+    }
+
+    @Test
+    public void testCloseTimeout() throws Exception {
+        consumerCloseTest(false);
+    }
+
+    private void consumerCloseTest(boolean graceful) throws Exception {
+        int rebalanceTimeoutMs = 60000;
+        int sessionTimeoutMs = 30000;
+        int heartbeatIntervalMs = 5000;
+
+        Time time = new MockTime();
+        Cluster cluster = TestUtils.singletonCluster(topic, 1);
+        Node node = cluster.nodes().get(0);
+
+        Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+        metadata.update(cluster, time.milliseconds());
+
+        MockClient client = new MockClient(time);
+        client.setNode(node);
+        PartitionAssignor assignor = new RoundRobinAssignor();
+
+        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
+                rebalanceTimeoutMs, sessionTimeoutMs, heartbeatIntervalMs, false, 1000);
+
+        consumer.subscribe(Arrays.asList(topic), getConsumerRebalanceListener(consumer));
+        Node coordinator = prepareRebalance(client, node, assignor, Arrays.asList(tp0), null);
+
+        // Poll with responses
+        client.prepareResponseFrom(fetchResponse(tp0, 0, 1), node);
+        client.prepareResponseFrom(fetchResponse(tp0, 1, 0), node);
+        consumer.poll(0);
+
+        // Initiate close() after a commit request on another thread.
+        // Kafka consumer is single-threaded, but the implementation allows calls on a
+        // different thread as long as the calls are not executed concurrently. So this is safe.
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            Future<?> future = executor.submit(new Runnable() {
+                @Override
+                public void run() {
+                    consumer.commitAsync();
+                    consumer.close();
+                }
+            });
+
+            // Close task should not complete until commit succeeds or close times out
+            try {
+                future.get(100, TimeUnit.MILLISECONDS);
+                fail("Close completed without waiting for commit response");
+            } catch (TimeoutException e) {
+                // Expected exception
+            }
+
+            // In graceful mode, commit response results in close() completing immediately without a timeout
+            // In non-graceful mode, close() times out without an exception even though commit response is pending
+            if (graceful) {
+                Map<TopicPartition, Short> response = new HashMap<>();
+                response.put(tp0, Errors.NONE.code());
+                client.respondFrom(offsetCommitResponse(response), coordinator);
+            } else
+                time.sleep(5000);
+            future.get(500, TimeUnit.MILLISECONDS); // Should succeed without TimeoutException or ExecutionException
+        } finally {
+            executor.shutdownNow();
         }
     }
 

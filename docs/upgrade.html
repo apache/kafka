@@ -14,6 +14,17 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 -->
+<h4><a id="upgrade_10_2_0" href="#upgrade_10_2_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x or 0.10.1.0 to 0.10.2.0</a></h4>
+Users upgrading from versions prior to 0.10.1.0 should follow the upgrade guide <a href="#upgrade_10_1">here</a>. Users upgrading from 0.10.1.0
+can upgrade the brokers one at a time: shut down the broker, update the code, and restart it.
+<br>
+0.10.2.0 has <a href="#upgrade_10_2_0_breaking">Potential breaking changes</a> (Please review before upgrading).
+
+<h5><a id="upgrade_10_2_0_breaking" href="#upgrade_10_2_0_breaking">Potential breaking changes in 0.10.2.0</a></h5>
+<ul>
+    <li>Several methods on the Java consumer may now throw <code>InterruptException</code> if the calling thread is interrupted. 
+        Please refer to the <code>KafkaConsumer</code> Javadoc for a more in-depth explanation of this change.</li>
+</ul>
 
 <h4><a id="upgrade_10_1" href="#upgrade_10_1">Upgrading from 0.8.x, 0.9.x or 0.10.0.X to 0.10.1.0</a></h4>
 0.10.1.0 has wire protocol changes. By following the recommended rolling upgrade plan below, you guarantee no downtime during the upgrade.

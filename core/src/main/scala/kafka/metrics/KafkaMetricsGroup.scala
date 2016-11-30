@@ -27,6 +27,7 @@ import kafka.producer.{ProducerRequestStatsRegistry, ProducerStatsRegistry, Prod
 import kafka.utils.Logging
 
 import scala.collection.immutable
+import scala.collection.JavaConverters._
 import javax.management.ObjectName
 
 
@@ -198,7 +199,7 @@ object KafkaMetricsGroup extends KafkaMetricsGroup with Logging {
   private def removeAllMetricsInList(metricNameList: immutable.List[MetricName], clientId: String) {
     metricNameList.foreach(metric => {
       val pattern = (".*clientId=" + clientId + ".*").r
-      val registeredMetrics = scala.collection.JavaConversions.asScalaSet(Metrics.defaultRegistry().allMetrics().keySet())
+      val registeredMetrics = Metrics.defaultRegistry().allMetrics().keySet().asScala
       for (registeredMetric <- registeredMetrics) {
         if (registeredMetric.getGroup == metric.getGroup &&
           registeredMetric.getName == metric.getName &&

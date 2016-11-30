@@ -14,15 +14,16 @@ package org.apache.kafka.common.network;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.nio.channels.WritableByteChannel;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.SecurityProtocol;
@@ -40,7 +41,7 @@ public class NioEchoServer extends Thread {
     private final List<SocketChannel> socketChannels;
     private final AcceptorThread acceptorThread;
     private final Selector selector;
-    private final ConcurrentLinkedQueue<NetworkSend> inflightSends = new ConcurrentLinkedQueue<NetworkSend>();
+    private volatile WritableByteChannel outputChannel;
 
     public NioEchoServer(SecurityProtocol securityProtocol, Map<String, ?> configs, String serverHost) throws Exception {
         serverSocketChannel = ServerSocketChannel.open();
@@ -72,22 +73,23 @@ public class NioEchoServer extends Thread {
                     socketChannels.add(socketChannel);
                 }
                 newChannels.clear();
-                while (true) {
-                    NetworkSend send = inflightSends.peek();
-                    if (send != null && !selector.channel(send.destination()).hasSend()) {
-                        send = inflightSends.poll();
-                        selector.send(send);
-                    } else
-                        break;
-                }
+
                 List<NetworkReceive> completedReceives = selector.completedReceives();
                 for (NetworkReceive rcv : completedReceives) {
+                    KafkaChannel channel = channel(rcv.source());
+                    channel.mute();
                     NetworkSend send = new NetworkSend(rcv.source(), rcv.payload());
-                    if (!selector.channel(send.destination()).hasSend())
+                    if (outputChannel == null)
                         selector.send(send);
-                    else
-                        inflightSends.add(send);
+                    else {
+                        for (ByteBuffer buffer : send.buffers)
+                            outputChannel.write(buffer);
+                        channel.unmute();
+                    }
                 }
+                for (Send send : selector.completedSends())
+                    selector.unmute(send.destination());
+
             }
         } catch (IOException e) {
             // ignore
@@ -97,6 +99,24 @@ public class NioEchoServer extends Thread {
     private String id(SocketChannel channel) {
         return channel.socket().getLocalAddress().getHostAddress() + ":" + channel.socket().getLocalPort() + "-" +
                 channel.socket().getInetAddress().getHostAddress() + ":" + channel.socket().getPort();
+    }
+
+    private KafkaChannel channel(String id) {
+        KafkaChannel channel = selector.channel(id);
+        return channel == null ? selector.closingChannel(id) : channel;
+    }
+
+    /**
+     * Sets the output channel to which messages received on this server are echoed.
+     * This is useful in tests where the clients sending the messages don't receive
+     * the responses (eg. testing graceful close).
+     */
+    public void outputChannel(WritableByteChannel channel) {
+        this.outputChannel = channel;
+    }
+
+    public Selector selector() {
+        return selector;
     }
 
     public void closeConnections() throws IOException {
