@@ -83,7 +83,7 @@ case class LogAppendInfo(var firstOffset: Long,
  *
  */
 @threadsafe
-class Log(val dir: File,
+class Log(@volatile var dir: File,
           @volatile var config: LogConfig,
           @volatile var recoveryPoint: Long = 0L,
           scheduler: Scheduler,
@@ -222,7 +222,6 @@ class Log(val dir: File,
           error("Could not find index file corresponding to log file %s, rebuilding index...".format(segment.log.file.getAbsolutePath))
           segment.recover(config.maxMessageSize)
         }
-
         segments.put(start, segment)
       }
     }
@@ -263,12 +262,13 @@ class Log(val dir: File,
                                      initFileSize = this.initFileSize(),
                                      preallocate = config.preallocate))
     } else {
-      recoverLog()
-      // reset the index size of the currently active log segment to allow more entries
-      activeSegment.index.resize(config.maxIndexSize)
-      activeSegment.timeIndex.resize(config.maxIndexSize)
+      if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
+        recoverLog()
+        // reset the index size of the currently active log segment to allow more entries
+        activeSegment.index.resize(config.maxIndexSize)
+        activeSegment.timeIndex.resize(config.maxIndexSize)
+      }
     }
-
   }
 
   private def updateLogEndOffset(messageOffset: Long) {
@@ -833,7 +833,6 @@ class Log(val dir: File,
    */
   private[log] def delete() {
     lock synchronized {
-      removeLogMetrics()
       logSegments.foreach(_.delete())
       segments.clear()
       Utils.delete(dir)
@@ -1046,6 +1045,9 @@ object Log {
   /** TODO: Get rid of CleanShutdownFile in 0.8.2 */
   val CleanShutdownFile = ".kafka_cleanshutdown"
 
+  /** a directory that is scheduled to be deleted */
+  val DeleteDirSuffix = "-delete"
+
   /**
    * Make log segment file name from offset bytes. All this does is pad out the offset number with zeros
    * so that ls sorts the files numerically.
@@ -1092,10 +1094,18 @@ object Log {
    * Parse the topic and partition out of the directory name of a log
    */
   def parseTopicPartitionName(dir: File): TopicAndPartition = {
-    val name: String = dir.getName
-    if (name == null || name.isEmpty || !name.contains('-')) {
+    val dirName = dir.getName
+    if (dirName == null || dirName.isEmpty || !dirName.contains('-')) {
       throwException(dir)
     }
+
+    val name: String =
+      if (dirName.endsWith(DeleteDirSuffix)) {
+        dirName.substring(0, dirName.indexOf('.'))
+      } else {
+        dirName
+      }
+
     val index = name.lastIndexOf('-')
     val topic: String = name.substring(0, index)
     val partition: String = name.substring(index + 1)
@@ -1104,6 +1114,7 @@ object Log {
     }
     TopicAndPartition(topic, partition.toInt)
   }
+
 
   def throwException(dir: File) {
     throw new KafkaException("Found directory " + dir.getCanonicalPath + ", " +
