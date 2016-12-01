@@ -320,8 +320,14 @@ class WorkerSinkTask extends WorkerTask {
         for (Map.Entry<TopicPartition, OffsetAndMetadata> taskProvidedOffsetEntry : taskProvidedOffsets.entrySet()) {
             final TopicPartition partition = taskProvidedOffsetEntry.getKey();
             final OffsetAndMetadata taskProvidedOffset = taskProvidedOffsetEntry.getValue();
-            if (commitableOffsets.containsKey(partition) && taskProvidedOffset.offset() <= currentOffsets.get(partition).offset()) {
-                commitableOffsets.put(partition, taskProvidedOffset);
+            if (commitableOffsets.containsKey(partition)) {
+                if (taskProvidedOffset.offset() <= currentOffsets.get(partition).offset()) {
+                    commitableOffsets.put(partition, taskProvidedOffset);
+                } else {
+                    log.warn("Ignoring invalid task provided offset {}/{} -- not yet consumed", partition, taskProvidedOffset);
+                }
+            } else {
+                log.warn("Ignoring invalid task provided offset {}/{} -- partition not assigned", partition, taskProvidedOffset);
             }
         }
 

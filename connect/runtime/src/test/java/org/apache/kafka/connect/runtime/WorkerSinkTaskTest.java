@@ -63,7 +63,11 @@ import java.util.Set;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(WorkerSinkTask.class)
@@ -418,13 +422,11 @@ public class WorkerSinkTaskTest {
         // iter 1
         expectPollInitialAssignment();
 
-        {
-            // iter 2
-            expectConsumerPoll(2);
-            expectConvertMessages(2);
-            sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
-            EasyMock.expectLastCall();
-        }
+        // iter 2
+        expectConsumerPoll(2);
+        expectConvertMessages(2);
+        sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
+        EasyMock.expectLastCall();
 
         final Map<TopicPartition, OffsetAndMetadata> workerStartingOffsets = new HashMap<>();
         workerStartingOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET));
@@ -434,33 +436,29 @@ public class WorkerSinkTaskTest {
         workerCurrentOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 2));
         workerCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
 
+        final Map<TopicPartition, OffsetAndMetadata> taskOffsets = new HashMap<>();
+        taskOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1)); // act like FIRST_OFFSET+2 has not yet been flushed by the task
+        taskOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET + 1)); // should be ignored because > current offset
+        taskOffsets.put(new TopicPartition(TOPIC, 3), new OffsetAndMetadata(FIRST_OFFSET)); // should be ignored because this partition is not assigned
+
         final Map<TopicPartition, OffsetAndMetadata> committableOffsets = new HashMap<>();
-        {
-            // iter 3
+        committableOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
+        committableOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
 
-            final Map<TopicPartition, OffsetAndMetadata> taskOffsets = new HashMap<>();
-            taskOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1)); // act like FIRST_OFFSET+2 has not yet been flushed by the task
-            taskOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET + 1)); // should be ignored because > current offset
-            taskOffsets.put(new TopicPartition(TOPIC, 3), new OffsetAndMetadata(FIRST_OFFSET)); // should be ignored because this partition is not assigned
-
-            committableOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
-            committableOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
-
-            sinkTask.preCommit(workerCurrentOffsets);
-            EasyMock.expectLastCall().andReturn(taskOffsets);
-            final Capture<OffsetCommitCallback> callback = EasyMock.newCapture();
-            consumer.commitAsync(EasyMock.eq(committableOffsets), EasyMock.capture(callback));
-            EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
-                @Override
-                public Void answer() throws Throwable {
-                    callback.getValue().onComplete(committableOffsets, null);
-                    return null;
-                }
-            });
-            expectConsumerPoll(0);
-            sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
-            EasyMock.expectLastCall();
-        }
+        sinkTask.preCommit(workerCurrentOffsets);
+        EasyMock.expectLastCall().andReturn(taskOffsets);
+        final Capture<OffsetCommitCallback> callback = EasyMock.newCapture();
+        consumer.commitAsync(EasyMock.eq(committableOffsets), EasyMock.capture(callback));
+        EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
+            @Override
+            public Void answer() throws Throwable {
+                callback.getValue().onComplete(committableOffsets, null);
+                return null;
+            }
+        });
+        expectConsumerPoll(0);
+        sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
+        EasyMock.expectLastCall();
 
         PowerMock.replayAll();
 
@@ -487,13 +485,11 @@ public class WorkerSinkTaskTest {
         // iter 1
         expectPollInitialAssignment();
 
-        {
-            // iter 2
-            expectConsumerPoll(1);
-            expectConvertMessages(1);
-            sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
-            EasyMock.expectLastCall();
-        }
+        // iter 2
+        expectConsumerPoll(1);
+        expectConvertMessages(1);
+        sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
+        EasyMock.expectLastCall();
 
         final Map<TopicPartition, OffsetAndMetadata> workerStartingOffsets = new HashMap<>();
         workerStartingOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET));
@@ -503,17 +499,13 @@ public class WorkerSinkTaskTest {
         workerCurrentOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
         workerCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
 
-        {
-            // iter 3
-            sinkTask.preCommit(workerCurrentOffsets);
-            EasyMock.expectLastCall().andReturn(workerStartingOffsets);
-
-            // no actual consumer.commit() triggered
-
-            expectConsumerPoll(0);
-            sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
-            EasyMock.expectLastCall();
-        }
+        // iter 3
+        sinkTask.preCommit(workerCurrentOffsets);
+        EasyMock.expectLastCall().andReturn(workerStartingOffsets);
+        // no actual consumer.commit() triggered
+        expectConsumerPoll(0);
+        sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
+        EasyMock.expectLastCall();
 
         PowerMock.replayAll();
 
