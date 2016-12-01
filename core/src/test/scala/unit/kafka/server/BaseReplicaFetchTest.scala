@@ -83,6 +83,6 @@ abstract class BaseReplicaFetchTest extends ZooKeeperTestHarness  {
       }
       result
     }
-    waitUntilTrue(logsMatch, "Broker logs should be identical")
+    waitUntilTrue(logsMatch _, "Broker logs should be identical")
   }
 }
