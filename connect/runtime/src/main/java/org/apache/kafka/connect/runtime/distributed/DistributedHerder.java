@@ -842,6 +842,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 } catch (Throwable t) {
                     log.error("Couldn't instantiate task {} because it has an invalid task configuration. This task will not execute until reconfigured.",
                             taskId, t);
+                    onFailure(taskId, t);
                 }
                 return null;
             }
@@ -885,6 +886,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 } catch (Throwable t) {
                     log.error("Couldn't instantiate connector " + connectorName + " because it has an invalid connector " +
                             "configuration. This connector will not execute until reconfigured.", t);
+                    onFailure(connectorName, t);
                 }
                 return null;
             }
