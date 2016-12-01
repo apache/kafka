@@ -19,25 +19,34 @@ package kafka.utils
 
 import java.util.concurrent.CountDownLatch
 
-import kafka.admin._
-import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
+import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1}
 import kafka.cluster._
-import kafka.common.{KafkaException, NoEpochForPartitionException, TopicAndPartition}
 import kafka.consumer.{ConsumerThreadId, TopicCount}
-import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch, ReassignedPartitionsContext}
 import kafka.server.ConfigType
-import kafka.utils.ZkUtils._
 import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkException, ZkMarshallingError, ZkNoNodeException, ZkNodeExistsException}
 import org.I0Itec.zkclient.serialize.ZkSerializer
 import org.I0Itec.zkclient.{ZkClient, ZkConnection}
 import org.apache.kafka.common.config.ConfigException
-import org.apache.zookeeper.AsyncCallback.{DataCallback, StringCallback}
-import org.apache.zookeeper.KeeperException.Code
+import kafka.api.LeaderAndIsr
 import org.apache.zookeeper.data.{ACL, Stat}
-import org.apache.zookeeper.{CreateMode, KeeperException, ZooDefs, ZooKeeper}
+import kafka.admin._
+import kafka.common.{KafkaException, NoEpochForPartitionException}
+import kafka.controller.ReassignedPartitionsContext
+import kafka.controller.KafkaController
+import kafka.controller.LeaderIsrAndControllerEpoch
+import kafka.common.TopicAndPartition
+import kafka.utils.ZkUtils._
+import org.apache.zookeeper.AsyncCallback.{DataCallback, StatCallback, StringCallback}
+import org.apache.zookeeper.CreateMode
+import org.apache.zookeeper.KeeperException
+import org.apache.zookeeper.KeeperException.Code
+import org.apache.zookeeper.ZooKeeper
+import org.apache.zookeeper.ZooDefs
 
 import scala.collection._
 import scala.collection.JavaConverters._
+import scala.concurrent.{ExecutionContext, Future, Promise}
+import scala.util.{Failure, Success}
 
 object ZkUtils {
 
@@ -521,6 +530,47 @@ class ZkUtils(val zkClient: ZkClient,
     }
   }
 
+  def createPersistentPathAsync(path: String, data: String = "", acls: java.util.List[ACL] = UseDefaultAcls)(implicit ec: ExecutionContext): Future[Unit] = {
+    val acl = if (acls eq UseDefaultAcls) ZkUtils.defaultAcls(isSecure, path) else acls
+    zkPath.checkNamespace()
+
+    val p = Promise[Unit]()
+
+    this.zkConnection.getZookeeper.create(
+      path,
+      ZKStringSerializer.serialize(data),
+      acl,
+      CreateMode.PERSISTENT,
+      new StringCallback {
+        override def processResult(rc: Int, s: String, o: scala.Any, s1: String): Unit = {
+          Code.get(rc) match {
+            case Code.OK =>
+              p.success(Unit)
+            case Code.NONODE =>
+              // recurse
+              val parentDir = path.substring(0, path.lastIndexOf('/'))
+              if (parentDir.length != 0) {
+                p.failure(new RuntimeException(""))
+              } else {
+                createPersistentPathAsync(parentDir, "", acls).flatMap(x => {
+                  createPersistentPathAsync(path, data, acls)
+                }).onComplete {
+                  case Success(_) => p.success(Unit)
+                  case Failure(x) => p.failure(x)
+                }
+              }
+            case Code.NODEEXISTS =>
+              p.failure(new ZkNodeExistsException)
+            case code =>
+              p.failure(new RuntimeException(""))
+          }
+        }
+      },
+      null)
+
+    p.future
+  }
+
   def createSequentialPersistentPath(path: String, data: String = "", acls: java.util.List[ACL] = UseDefaultAcls): String = {
     val acl = if (acls eq UseDefaultAcls) ZkUtils.defaultAcls(isSecure, path) else acls
     zkPath.createPersistentSequential(path, data, acl)
@@ -578,6 +628,54 @@ class ZkUtils(val zkClient: ZkClient,
         (false, -1)
     }
   }
+
+  def conditionalUpdatePersistentPathAsync(path: String, data: String, expectVersion: Int,
+    optionalChecker:Option[(ZkUtils, String, String) => (Boolean,Int)] = None): Future[(Boolean, Int)] =
+  {
+    val p = Promise[(Boolean, Int)]()
+
+    val self = this
+
+    this.zkConnection.getZookeeper.setData(
+      path, ZKStringSerializer.serialize(data),
+      expectVersion,
+      new StatCallback {
+        def processResult(rc: Int, path: String, internalCtx: scala.Any, stat: Stat): Unit = {
+          Code.get(rc) match {
+            case Code.OK =>
+              debug("Conditional (async) update of path %s with value %s and expected version %d succeeded, returning the new version: %d"
+                .format(path, data, expectVersion, stat.getVersion))
+              p.success((true, stat.getVersion))
+            case Code.BADVERSION =>
+              optionalChecker match {
+                case Some(checker) =>
+                  p.success(checker(self, path, data))
+                case _ =>
+                  debug("Checker method is not passed skipping zkData match")
+                  warn("Conditional update (async) of path %s with data %s and expected version %d failed due to bad version".format(path, data,
+                    expectVersion))
+                  p.success((false, -1))
+              }
+            case Code.CONNECTIONLOSS | Code.SESSIONEXPIRED =>
+              /**
+                * When there is a ConnectionLossException during the conditional update, zkClient will retry the update and may fail
+                * since the previous update may have succeeded (but the stored zkVersion no longer matches the expected one).
+                * In this case, we will run the optionalChecker to further check if the previous write did indeed succeeded.
+                * This is the same invariant followed in the synchronous version of conditionalUpdatePersistentPath, which
+                * uses retries in the zkClient.writeDataReturnStat code path
+                */
+              fatal("Conditional update (async) of path %s with data %s and expected version %d failed due to connection/session loss %d. Retrying.".format(path, data,
+                expectVersion, Code.get(rc).intValue()))
+              sys.exit(-1)
+            case _ =>
+              warn("ZooKeeper event while setting data: %s %s".format(path, Code.get(rc)))
+              p.success((false, -1))
+          }
+        }
+      }, null)
+    p.future
+  }
+
 
   /**
    * Conditional update the persistent path data, return (true, newVersion) if it succeeds, otherwise (the current
@@ -675,6 +773,27 @@ class ZkUtils(val zkClient: ZkClient,
   }
 
   def getChildren(path: String): Seq[String] = zkClient.getChildren(path).asScala
+
+  def readDataMaybeNullAsync(path: String): Future[(Option[String], Stat)] = {
+    val p = Promise[(Option[String], Stat)]()
+    zkConnection.getZookeeper.getData(path, false,
+      new DataCallback {
+        override def processResult(rc: Int, path: String, ctx: scala.Any, data: Array[Byte], stat: Stat): Unit = {
+          val code = Code.get(rc)
+          code match {
+            case Code.OK =>
+              val deserialized = Option(data).map(ZKStringSerializer.deserialize).map(_.toString)
+              p.success((deserialized, stat))
+            case Code.NONODE =>
+              p.success(None, new Stat)
+            case _ =>
+              p.failure(KeeperException.create(code, path))
+          }
+        }
+      }
+      , null)
+    p.future
+  }
 
   def getChildrenParentMayNotExist(path: String): Seq[String] = {
     try {

@@ -25,6 +25,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.zookeeper.data.Stat
 
 import scala.collection._
+import scala.concurrent.{ExecutionContext, Future}
 
 object ReplicationUtils extends Logging {
 
@@ -38,6 +39,16 @@ object ReplicationUtils extends Logging {
     // use the epoch of the controller that made the leadership decision, instead of the current controller epoch
     val updatePersistentPath: (Boolean, Int) = zkUtils.conditionalUpdatePersistentPath(path, newLeaderData, zkVersion, Some(checkLeaderAndIsrZkData))
     updatePersistentPath
+  }
+
+  def updateLeaderAndIsrAsync(zkUtils: ZkUtils, topic: String, partitionId: Int, newLeaderAndIsr: LeaderAndIsr, controllerEpoch: Int,
+                              zkVersion: Int): Future[(Boolean,Int)] = {
+    debug("Updated ISR for partition [%s,%d] to %s".format(topic, partitionId, newLeaderAndIsr.isr.mkString(",")))
+    val path = getTopicPartitionLeaderAndIsrPath(topic, partitionId)
+    // only fill data here
+    val newLeaderData = zkUtils.leaderAndIsrZkData(newLeaderAndIsr, controllerEpoch)
+    // use the epoch of the controller that made the leadership decision, instead of the current controller epoch
+    zkUtils.conditionalUpdatePersistentPathAsync(path, newLeaderData, zkVersion, Some(checkLeaderAndIsrZkData))
   }
 
   def propagateIsrChanges(zkUtils: ZkUtils, isrChangeSet: Set[TopicPartition]): Unit = {
@@ -74,6 +85,15 @@ object ReplicationUtils extends Logging {
     val leaderAndIsrPath = getTopicPartitionLeaderAndIsrPath(topic, partition)
     val (leaderAndIsrOpt, stat) = zkUtils.readDataMaybeNull(leaderAndIsrPath)
     leaderAndIsrOpt.flatMap(leaderAndIsrStr => parseLeaderAndIsr(leaderAndIsrStr, leaderAndIsrPath, stat))
+  }
+
+  def getLeaderIsrAndEpochForPartitionAsync(zkUtils: ZkUtils, topic: String, partition: Int)(implicit ec: ExecutionContext):Future[Option[LeaderIsrAndControllerEpoch]] = {
+    val leaderAndIsrPath = getTopicPartitionLeaderAndIsrPath(topic, partition)
+    val f = zkUtils.readDataMaybeNullAsync(leaderAndIsrPath)
+    f.map({
+      case (Some(leaderAndIsrStr), stat) => parseLeaderAndIsr(leaderAndIsrStr, leaderAndIsrPath, stat)
+      case _ => None
+    })
   }
 
   private def parseLeaderAndIsr(leaderAndIsrStr: String, path: String, stat: Stat)

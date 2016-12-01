@@ -40,6 +40,7 @@ import org.apache.zookeeper.Watcher.Event.KeeperState
 
 import scala.collection._
 import scala.util.Try
+import scala.concurrent.{ExecutionContext, Future}
 
 class ControllerContext(val zkUtils: ZkUtils) {
   var controllerChannelManager: ControllerChannelManager = null
@@ -144,7 +145,7 @@ object KafkaController extends Logging {
   }
 }
 
-class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState: BrokerState, time: Time, metrics: Metrics, threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
+class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState: BrokerState, time: Time, metrics: Metrics, threadNamePrefix: Option[String] = None)(implicit ec: ExecutionContext) extends Logging with KafkaMetricsGroup {
   this.logIdent = "[Controller " + config.brokerId + "]: "
   private val stateChangeLogger = KafkaController.stateChangeLogger
   val controllerContext = new ControllerContext(zkUtils)
@@ -1043,6 +1044,86 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
       }
     }
     finalLeaderIsrAndControllerEpoch
+  }
+
+  def removeReplicaFromIsrAsync(topic: String, partition: Int, replicaId: Int):
+    Future[(Option[LeaderIsrAndControllerEpoch], () => Unit)] = {
+
+    val topicAndPartition = TopicAndPartition(topic, partition)
+    debug("Removing replica %d from ISR %s for partition %s.".format(replicaId,
+      controllerContext.partitionLeadershipInfo(topicAndPartition).leaderAndIsr.isr.mkString(","), topicAndPartition))
+
+    ReplicationUtils.getLeaderIsrAndEpochForPartitionAsync(zkUtils, topic, partition).flatMap {
+      case Some(leaderIsrAndEpoch) =>
+        val leaderAndIsr = leaderIsrAndEpoch.leaderAndIsr
+        val controllerEpoch = leaderIsrAndEpoch.controllerEpoch
+        if(controllerEpoch > epoch)
+          throw new StateChangeFailedException("Leader and isr path written by another controller. This probably" +
+            "means the current controller with epoch %d went through a soft failure and another ".format(epoch) +
+            "controller was elected with epoch %d. Aborting state change by this controller".format(controllerEpoch))
+        if (leaderAndIsr.isr.contains(replicaId)) {
+          // if the replica to be removed from the ISR is also the leader, set the new leader value to -1
+          val newLeader = if (replicaId == leaderAndIsr.leader) LeaderAndIsr.NoLeader else leaderAndIsr.leader
+          var newIsr = leaderAndIsr.isr.filter(b => b != replicaId)
+
+          // if the replica to be removed from the ISR is the last surviving member of the ISR and unclean leader election
+          // is disallowed for the corresponding topic, then we must preserve the ISR membership so that the replica can
+          // eventually be restored as the leader.
+          if (newIsr.isEmpty && !LogConfig.fromProps(config.originals, AdminUtils.fetchEntityConfig(zkUtils,
+            ConfigType.Topic, topicAndPartition.topic)).uncleanLeaderElectionEnable) {
+            info("Retaining last ISR %d of partition %s since unclean leader election is disabled".format(replicaId, topicAndPartition))
+            newIsr = leaderAndIsr.isr
+          }
+
+          val newLeaderAndIsr = new LeaderAndIsr(newLeader, leaderAndIsr.leaderEpoch + 1,
+            newIsr, leaderAndIsr.zkVersion + 1)
+          // update the new leadership decision in zookeeper or retry
+
+          ReplicationUtils.updateLeaderAndIsrAsync(zkUtils, topic, partition,
+            newLeaderAndIsr, epoch, leaderAndIsr.zkVersion).flatMap {
+            case (updateSucceeded, newVersion) =>
+
+              val veryNewLeaderAndIsr = newLeaderAndIsr.copy(zkVersion = newVersion)
+              val finalLeaderIsrAndControllerEpoch = Some(LeaderIsrAndControllerEpoch(veryNewLeaderAndIsr, epoch))
+
+              if (updateSucceeded) {
+                info("New leader and ISR for partition %s is %s".format(topicAndPartition, veryNewLeaderAndIsr.toString()))
+
+                Future.successful {
+                  (finalLeaderIsrAndControllerEpoch, () => {
+                    controllerContext.partitionLeadershipInfo.put(topicAndPartition, finalLeaderIsrAndControllerEpoch.get)
+                    Unit
+                  })
+                }
+
+              } else {
+                // retry
+                removeReplicaFromIsrAsync(topic, partition, replicaId)
+              }
+          }
+
+        } else {
+          warn("Cannot remove replica %d from ISR of partition %s since it is not in the ISR. Leader = %d ; ISR = %s"
+            .format(replicaId, topicAndPartition, leaderAndIsr.leader, leaderAndIsr.isr))
+          val finalLeaderIsrAndControllerEpoch = Some(LeaderIsrAndControllerEpoch(leaderAndIsr, epoch))
+
+          Future.successful {
+            (finalLeaderIsrAndControllerEpoch,
+              () => {
+                controllerContext.partitionLeadershipInfo.put(topicAndPartition, finalLeaderIsrAndControllerEpoch.get)
+                Unit
+              }
+              )
+          }
+        }
+
+      case None =>
+        warn("Cannot remove replica %d from ISR of %s - leaderAndIsr is empty.".format(replicaId, topicAndPartition))
+        Future.successful {
+          (Option.empty[LeaderIsrAndControllerEpoch], () => Unit)
+        }
+    }
+
   }
 
   /**
