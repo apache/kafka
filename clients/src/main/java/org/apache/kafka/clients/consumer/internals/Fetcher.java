@@ -126,7 +126,7 @@ public class Fetcher<K, V> {
         this.retryBackoffMs = retryBackoffMs;
     }
 
-    public int getMaxPollRecords() {
+    public int maxPollRecords() {
         return maxPollRecords;
     }
     /**
