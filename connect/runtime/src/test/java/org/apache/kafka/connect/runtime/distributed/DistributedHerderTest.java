@@ -41,7 +41,6 @@ import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
-import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -145,7 +144,7 @@ public class DistributedHerderTest {
 
     private static final String WORKER_ID = "localhost:8083";
 
-    @Mock private KafkaConfigBackingStore configStorage;
+    @Mock private ConfigBackingStore configBackingStore;
     @Mock private StatusBackingStore statusBackingStore;
     @Mock private WorkerGroupMember member;
     private MockTime time;
@@ -163,7 +162,7 @@ public class DistributedHerderTest {
         time = new MockTime();
 
         herder = PowerMock.createPartialMock(DistributedHerder.class, new String[]{"backoff", "updateDeletedConnectorStatus"},
-                new DistributedConfig(HERDER_CONFIG), worker, WORKER_ID, statusBackingStore, configStorage, member, MEMBER_URL, time);
+                new DistributedConfig(HERDER_CONFIG), worker, WORKER_ID, statusBackingStore, configBackingStore, member, MEMBER_URL, time);
 
         configUpdateListener = herder.new ConfigUpdateListener();
         rebalanceListener = herder.new RebalanceListener();
@@ -274,13 +273,15 @@ public class DistributedHerderTest {
 
     @Test
     public void testHaltCleansUpWorker() {
-        worker.stopConnectors();
-        PowerMock.expectLastCall();
-        worker.stopAndAwaitTasks();
+        EasyMock.expect(worker.connectorNames()).andReturn(Collections.singleton(CONN1));
+        worker.stopConnector(CONN1);
+        PowerMock.expectLastCall().andReturn(true);
+        EasyMock.expect(worker.taskIds()).andReturn(Collections.singleton(TASK1));
+        worker.stopAndAwaitTask(TASK1);
         PowerMock.expectLastCall();
         member.stop();
         PowerMock.expectLastCall();
-        configStorage.stop();
+        configBackingStore.stop();
         PowerMock.expectLastCall();
         statusBackingStore.stop();
         PowerMock.expectLastCall();
@@ -312,7 +313,7 @@ public class DistributedHerderTest {
         EasyMock.expect(connectorMock.validate(CONN2_CONFIG)).andReturn(new Config(Collections.<ConfigValue>emptyList()));
 
         // CONN2 is new, should succeed
-        configStorage.putConnectorConfig(CONN2, CONN2_CONFIG);
+        configBackingStore.putConnectorConfig(CONN2, CONN2_CONFIG);
         PowerMock.expectLastCall();
         ConnectorInfo info = new ConnectorInfo(CONN2, CONN2_CONFIG, Collections.<ConnectorTaskId>emptyList());
         putConnectorCallback.onCompletion(null, new Herder.Created<>(true, info));
@@ -494,7 +495,7 @@ public class DistributedHerderTest {
         // And delete the connector
         member.wakeup();
         PowerMock.expectLastCall();
-        configStorage.removeConnectorConfig(CONN1);
+        configBackingStore.removeConnectorConfig(CONN1);
         PowerMock.expectLastCall();
         putConnectorCallback.onCompletion(null, new Herder.Created<ConnectorInfo>(false, null));
         PowerMock.expectLastCall();
@@ -681,7 +682,7 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
 
         worker.stopAndAwaitTask(TASK0);
-        PowerMock.expectLastCall().andReturn(true);
+        PowerMock.expectLastCall();
         worker.startTask(EasyMock.eq(TASK0), EasyMock.<Map<String, String>>anyObject(), EasyMock.<Map<String, String>>anyObject(),
                 EasyMock.eq(herder), EasyMock.eq(TargetState.STARTED));
         PowerMock.expectLastCall().andReturn(true);
@@ -817,7 +818,7 @@ public class DistributedHerderTest {
         member.ensureActive();
         PowerMock.expectLastCall();
         // Checks for config updates and starts rebalance
-        EasyMock.expect(configStorage.snapshot()).andReturn(SNAPSHOT);
+        EasyMock.expect(configBackingStore.snapshot()).andReturn(SNAPSHOT);
         member.requestRejoin();
         PowerMock.expectLastCall();
         // Performs rebalance and gets new assignment
@@ -863,7 +864,7 @@ public class DistributedHerderTest {
         member.wakeup();
         member.ensureActive();
         PowerMock.expectLastCall();
-        EasyMock.expect(configStorage.snapshot()).andReturn(SNAPSHOT); // for this test, it doesn't matter if we use the same config snapshot
+        EasyMock.expect(configBackingStore.snapshot()).andReturn(SNAPSHOT); // for this test, it doesn't matter if we use the same config snapshot
         worker.stopConnector(CONN1);
         PowerMock.expectLastCall().andReturn(true);
         worker.startConnector(EasyMock.eq(CONN1), EasyMock.<Map<String, String>>anyObject(), EasyMock.<ConnectorContext>anyObject(),
@@ -906,7 +907,7 @@ public class DistributedHerderTest {
         member.ensureActive();
         PowerMock.expectLastCall();
 
-        EasyMock.expect(configStorage.snapshot()).andReturn(SNAPSHOT_PAUSED_CONN1);
+        EasyMock.expect(configBackingStore.snapshot()).andReturn(SNAPSHOT_PAUSED_CONN1);
         PowerMock.expectLastCall();
 
         worker.setTargetState(CONN1, TargetState.PAUSED);
@@ -944,7 +945,7 @@ public class DistributedHerderTest {
         member.ensureActive();
         PowerMock.expectLastCall();
 
-        EasyMock.expect(configStorage.snapshot()).andReturn(SNAPSHOT);
+        EasyMock.expect(configBackingStore.snapshot()).andReturn(SNAPSHOT);
         PowerMock.expectLastCall();
 
         // we expect reconfiguration after resuming
@@ -985,7 +986,7 @@ public class DistributedHerderTest {
         member.ensureActive();
         PowerMock.expectLastCall();
 
-        EasyMock.expect(configStorage.snapshot()).andReturn(SNAPSHOT);
+        EasyMock.expect(configBackingStore.snapshot()).andReturn(SNAPSHOT);
         PowerMock.expectLastCall();
 
         member.poll(EasyMock.anyInt());
@@ -1022,7 +1023,7 @@ public class DistributedHerderTest {
         member.ensureActive();
         PowerMock.expectLastCall();
 
-        EasyMock.expect(configStorage.snapshot()).andReturn(SNAPSHOT_PAUSED_CONN1);
+        EasyMock.expect(configBackingStore.snapshot()).andReturn(SNAPSHOT_PAUSED_CONN1);
         PowerMock.expectLastCall();
 
         worker.setTargetState(CONN1, TargetState.PAUSED);
@@ -1062,7 +1063,7 @@ public class DistributedHerderTest {
         member.ensureActive();
         PowerMock.expectLastCall();
 
-        EasyMock.expect(configStorage.snapshot()).andReturn(SNAPSHOT);
+        EasyMock.expect(configBackingStore.snapshot()).andReturn(SNAPSHOT);
         PowerMock.expectLastCall();
 
         worker.setTargetState(CONN1, TargetState.STARTED);
@@ -1097,7 +1098,7 @@ public class DistributedHerderTest {
         member.ensureActive();
         PowerMock.expectLastCall();
         // Checks for config updates and starts rebalance
-        EasyMock.expect(configStorage.snapshot()).andReturn(SNAPSHOT);
+        EasyMock.expect(configBackingStore.snapshot()).andReturn(SNAPSHOT);
         member.requestRejoin();
         PowerMock.expectLastCall();
         // Performs rebalance and gets new assignment
@@ -1128,7 +1129,7 @@ public class DistributedHerderTest {
                 ConnectProtocol.Assignment.CONFIG_MISMATCH, 1, Collections.<String>emptyList(),
                 Collections.<ConnectorTaskId>emptyList());
         // Reading to end of log times out
-        configStorage.refresh(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
+        configBackingStore.refresh(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
         EasyMock.expectLastCall().andThrow(new TimeoutException());
         member.maybeLeaveGroup();
         EasyMock.expectLastCall();
@@ -1230,7 +1231,7 @@ public class DistributedHerderTest {
         EasyMock.expect(connectorMock.config()).andReturn(new ConfigDef());
         EasyMock.expect(connectorMock.validate(CONN1_CONFIG_UPDATED)).andReturn(new Config(Collections.<ConfigValue>emptyList()));
 
-        configStorage.putConnectorConfig(CONN1, CONN1_CONFIG_UPDATED);
+        configBackingStore.putConnectorConfig(CONN1, CONN1_CONFIG_UPDATED);
         PowerMock.expectLastCall().andAnswer(new IAnswer<Object>() {
             @Override
             public Object answer() throws Throwable {
@@ -1241,7 +1242,7 @@ public class DistributedHerderTest {
         });
         // As a result of reconfig, should need to update snapshot. With only connector updates, we'll just restart
         // connector without rebalance
-        EasyMock.expect(configStorage.snapshot()).andReturn(SNAPSHOT_UPDATED_CONN1_CONFIG);
+        EasyMock.expect(configBackingStore.snapshot()).andReturn(SNAPSHOT_UPDATED_CONN1_CONFIG);
         worker.stopConnector(CONN1);
         PowerMock.expectLastCall().andReturn(true);
         worker.startConnector(EasyMock.eq(CONN1), EasyMock.<Map<String, String>>anyObject(), EasyMock.<ConnectorContext>anyObject(),
@@ -1318,13 +1319,15 @@ public class DistributedHerderTest {
         });
 
         if (revokedConnectors != null) {
-            worker.stopConnectors(revokedConnectors);
-            PowerMock.expectLastCall().andReturn(revokedConnectors);
+            for (String connector : revokedConnectors) {
+                worker.stopConnector(connector);
+                PowerMock.expectLastCall().andReturn(true);
+            }
         }
 
-        if (revokedTasks != null) {
-            worker.stopAndAwaitTasks(revokedTasks);
-            PowerMock.expectLastCall().andReturn(revokedTasks);
+        if (revokedTasks != null && !revokedTasks.isEmpty()) {
+            worker.stopAndAwaitTask(EasyMock.anyObject(ConnectorTaskId.class));
+            PowerMock.expectLastCall();
         }
 
         if (revokedConnectors != null) {
@@ -1337,9 +1340,9 @@ public class DistributedHerderTest {
     }
 
     private void expectPostRebalanceCatchup(final ClusterConfigState readToEndSnapshot) throws TimeoutException {
-        configStorage.refresh(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
+        configBackingStore.refresh(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
         EasyMock.expectLastCall();
-        EasyMock.expect(configStorage.snapshot()).andReturn(readToEndSnapshot);
+        EasyMock.expect(configBackingStore.snapshot()).andReturn(readToEndSnapshot);
     }
 
 
