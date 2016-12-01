@@ -45,6 +45,9 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -91,10 +94,6 @@ public class KafkaStreams {
     private static final Logger log = LoggerFactory.getLogger(KafkaStreams.class);
     private static final String JMX_PREFIX = "kafka.streams";
     public static final int DEFAULT_CLOSE_TIMEOUT = 0;
-
-    private enum StreamsState { created, running, stopped }
-    private StreamsState state = StreamsState.created;
-
     private final StreamThread[] threads;
     private final Metrics metrics;
     private final QueryableStoreProvider queryableStoreProvider;
@@ -108,6 +107,110 @@ public class KafkaStreams {
 
     private final StreamsConfig config;
 
+    // container states
+    /**
+     * Kafka Streams states are the possible state that a Kafka Streams instance can be in.
+     * An instance must only be in one state at a time.
+     * Note this instance will be in "Rebalancing" state if any of its threads is rebalancing
+     * The expected state transition with the following defined states is:
+     *
+     *                 +-----------+
+     *         +<------|Created    |
+     *         |       +-----+-----+
+     *         |             |   +--+
+     *         |             v   |  |
+     *         |       +-----+---v--+--+
+     *         +<----- | Rebalancing   |<--------+
+     *         |       +-----+---------+         ^
+     *         |                 +--+            |
+     *         |                 |  |            |
+     *         |       +-----+---v--+-----+      |
+     *         +------>|Running           |------+
+     *         |       +-----+------------+
+     *         |             |
+     *         |             v
+     *         |     +-------+--------+
+     *         +---->|Pending         |
+     *               |Shutdown        |
+     *               +-------+--------+
+     *                       |
+     *                       v
+     *                 +-----+-----+
+     *                 |Not Running|
+     *                 +-----------+
+     */
+    public enum State {
+        CREATED(1, 2, 3), RUNNING(2, 3), REBALANCING(1, 2, 3), PENDING_SHUTDOWN(4), NOT_RUNNING;
+
+        private final Set<Integer> validTransitions = new HashSet<>();
+
+        State(final Integer...validTransitions) {
+            this.validTransitions.addAll(Arrays.asList(validTransitions));
+        }
+
+        public boolean isRunning() {
+            return this.equals(RUNNING) || this.equals(REBALANCING);
+        }
+        public boolean isCreatedOrRunning() {
+            return isRunning() || this.equals(CREATED);
+        }
+        public boolean isValidTransition(final State newState) {
+            return validTransitions.contains(newState.ordinal());
+        }
+    }
+    private volatile State state = KafkaStreams.State.CREATED;
+    private StateListener stateListener = null;
+    private final StreamStateListener streamStateListener = new StreamStateListener();
+
+    /**
+     * Listen to state change events
+     */
+    public interface StateListener {
+
+        /**
+         * Called when state changes
+         * @param newState     current state
+         * @param oldState     previous state
+         */
+        void onChange(final State newState, final State oldState);
+    }
+
+    /**
+     * An app can set {@link StateListener} so that the app is notified when state changes
+     * @param listener
+     */
+    public void setStateListener(final StateListener listener) {
+        this.stateListener = listener;
+    }
+
+    private synchronized void setState(State newState) {
+        State oldState = state;
+        if (!state.isValidTransition(newState)) {
+            throw new IllegalStateException("Incorrect state transition from " + state + " to " + newState);
+        }
+        state = newState;
+        if (stateListener != null) {
+            stateListener.onChange(state, oldState);
+        }
+    }
+
+
+    /**
+     * @return The state this instance is in
+     */
+    public synchronized State state() {
+        return state;
+    }
+
+    private class StreamStateListener implements StreamThread.StateListener {
+        @Override
+        public void onChange(final StreamThread.State newState, final StreamThread.State oldState) {
+            if (newState == StreamThread.State.PARTITIONS_REVOKED ||
+                newState == StreamThread.State.ASSIGNING_PARTITIONS) {
+                setState(KafkaStreams.State.REBALANCING);
+            }
+        }
+    }
     /**
      * Construct the stream instance.
      *
@@ -176,6 +279,7 @@ public class KafkaStreams {
                 metrics,
                 time,
                 streamsMetadataState);
+            threads[i].setStateListener(streamStateListener);
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
         }
         queryableStoreProvider = new QueryableStoreProvider(storeProviders);
@@ -189,16 +293,15 @@ public class KafkaStreams {
     public synchronized void start() {
         log.debug("Starting Kafka Stream process");
 
-        if (state == StreamsState.created) {
-            for (final StreamThread thread : threads) {
+        if (state == KafkaStreams.State.CREATED) {
+            for (final StreamThread thread : threads)
                 thread.start();
-            }
-            state = StreamsState.running;
+
+            setState(KafkaStreams.State.RUNNING);
+
             log.info("Started Kafka Stream process");
-        } else if (state == StreamsState.running) {
-            throw new IllegalStateException("This process was already started.");
         } else {
-            throw new IllegalStateException("Cannot restart after closing.");
+            throw new IllegalStateException("Cannot start again.");
         }
     }
 
@@ -224,7 +327,8 @@ public class KafkaStreams {
      */
     public synchronized boolean close(final long timeout, final TimeUnit timeUnit) {
         log.debug("Stopping Kafka Stream process");
-        if (state == StreamsState.running) {
+        if (state.isCreatedOrRunning()) {
+            setState(KafkaStreams.State.PENDING_SHUTDOWN);
             // save the current thread so that if it is a stream thread
             // we don't attempt to join it and cause a deadlock
             final Thread shutdown = new Thread(new Runnable() {
@@ -232,6 +336,9 @@ public class KafkaStreams {
                 public void run() {
                         // signal the threads to stop and wait
                         for (final StreamThread thread : threads) {
+                            // avoid deadlocks by stopping any further state reports
+                            // from the thread since we're shutting down
+                            thread.setStateListener(null);
                             thread.close();
                         }
 
@@ -246,7 +353,7 @@ public class KafkaStreams {
                         }
 
                         metrics.close();
-                        log.info("Stopped Kafka Stream process");
+                        log.info("Stopped Kafka Streams process");
                     }
             }, "kafka-streams-close-thread");
             shutdown.setDaemon(true);
@@ -256,11 +363,10 @@ public class KafkaStreams {
             } catch (InterruptedException e) {
                 Thread.interrupted();
             }
-            state = StreamsState.stopped;
+            setState(KafkaStreams.State.NOT_RUNNING);
             return !shutdown.isAlive();
         }
         return true;
-
     }
 
     /**
@@ -287,7 +393,7 @@ public class KafkaStreams {
      * @throws IllegalStateException if instance is currently running
      */
     public void cleanUp() {
-        if (state == StreamsState.running) {
+        if (state.isRunning()) {
             throw new IllegalStateException("Cannot clean up while running.");
         }
 
@@ -403,9 +509,8 @@ public class KafkaStreams {
     }
 
     private void validateIsRunning() {
-        if (state != StreamsState.running) {
-            throw new IllegalStateException("KafkaStreams is not running");
+        if (!state.isRunning()) {
+            throw new IllegalStateException("KafkaStreams is not running. State is " + state);
         }
     }
-
 }
