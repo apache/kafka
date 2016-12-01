@@ -18,7 +18,6 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Time;
@@ -883,9 +882,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             public Void call() throws Exception {
                 try {
                     startConnector(connectorName);
-                } catch (ConfigException e) {
+                } catch (Throwable t) {
                     log.error("Couldn't instantiate connector " + connectorName + " because it has an invalid connector " +
-                            "configuration. This connector will not execute until reconfigured.", e);
+                            "configuration. This connector will not execute until reconfigured.", t);
                 }
                 return null;
             }
