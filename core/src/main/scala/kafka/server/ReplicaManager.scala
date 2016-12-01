@@ -219,10 +219,11 @@ class ReplicaManager(val config: KafkaConfig,
     scheduler.schedule("isr-change-propagation", maybePropagateIsrChanges, period = 2500L, unit = TimeUnit.MILLISECONDS)
   }
 
-  def stopReplica(topic: String, partitionId: Int, deletePartition: Boolean): Short  = {
-    stateChangeLogger.trace("Broker %d handling stop replica (delete=%s) for partition [%s,%d]".format(localBrokerId,
-      deletePartition.toString, topic, partitionId))
+  def stopReplica(topicPartition: TopicPartition, deletePartition: Boolean): Short  = {
+    stateChangeLogger.trace(s"Broker $localBrokerId handling stop replica (delete=$deletePartition) for partition $topicPartition")
     val errorCode = Errors.NONE.code
+    val topic = topicPartition.topic
+    val partitionId = topicPartition.partition
     getPartition(topic, partitionId) match {
       case Some(_) =>
         if (deletePartition) {
@@ -241,14 +242,12 @@ class ReplicaManager(val config: KafkaConfig,
           val topicAndPartition = TopicAndPartition(topic, partitionId)
 
           if(logManager.getLog(topicAndPartition).isDefined) {
-              logManager.deleteLog(topicAndPartition)
+              logManager.asyncDelete(topicAndPartition)
           }
         }
-        stateChangeLogger.trace("Broker %d ignoring stop replica (delete=%s) for partition [%s,%d] as replica doesn't exist on broker"
-          .format(localBrokerId, deletePartition, topic, partitionId))
+        stateChangeLogger.trace(s"Broker $localBrokerId ignoring stop replica (delete=$deletePartition) for partition $topicPartition as replica doesn't exist on broker")
     }
-    stateChangeLogger.trace("Broker %d finished handling stop replica (delete=%s) for partition [%s,%d]"
-      .format(localBrokerId, deletePartition, topic, partitionId))
+    stateChangeLogger.trace(s"Broker $localBrokerId finished handling stop replica (delete=$deletePartition) for partition $topicPartition")
     errorCode
   }
 
@@ -265,7 +264,7 @@ class ReplicaManager(val config: KafkaConfig,
         // First stop fetchers for all partitions, then stop the corresponding replicas
         replicaFetcherManager.removeFetcherForPartitions(partitions)
         for (topicPartition <- partitions){
-          val errorCode = stopReplica(topicPartition.topic, topicPartition.partition, stopReplicaRequest.deletePartitions)
+          val errorCode = stopReplica(topicPartition, stopReplicaRequest.deletePartitions)
           responseMap.put(topicPartition, errorCode)
         }
         (responseMap, Errors.NONE.code)

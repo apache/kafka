@@ -144,12 +144,13 @@ class Partition(val topic: String,
       assignedReplicaMap.clear()
       inSyncReplicas = Set.empty[Replica]
       leaderReplicaIdOpt = None
+      val topicPartition = TopicAndPartition(topic, partitionId)
       try {
-        logManager.deleteLog(TopicAndPartition(topic, partitionId))
+        logManager.asyncDelete(topicPartition)
         removePartitionMetrics()
       } catch {
         case e: IOException =>
-          fatal("Error deleting the log for partition [%s,%d]".format(topic, partitionId), e)
+          fatal(s"Error deleting the log for partition $topicPartition", e)
           Runtime.getRuntime().halt(1)
       }
     }
