@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.data.CyclicSchema;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -564,6 +565,35 @@ public class JsonConverterTest {
                 converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
     }
 
+    @Test
+    public void cyclicStruct() {
+        final CyclicSchema linkedListSchema = new CyclicSchema() {
+
+            private final Schema underlying = SchemaBuilder.struct().name("LinkedList")
+                    .optional()
+                    .field("value", Schema.INT64_SCHEMA)
+                    .field("next", this)
+                    .build();
+
+            @Override
+            public Schema underlying() {
+                return underlying;
+            }
+
+        };
+
+        converter.configure(Collections.singletonMap("schemas.enable", true), true);
+
+        Struct data = new Struct(linkedListSchema).put("value", 42L).put("next", new Struct(linkedListSchema).put("value", 43L));
+
+        byte[] jsonBytes = converter.fromConnectData(TOPIC, linkedListSchema, data);
+
+        JsonNode converted = parse(jsonBytes);
+        assertEquals(parse("{\"type\":\"struct\",\"fields\":[{\"type\":\"int64\",\"optional\":false,\"field\":\"value\"},{\"type\":\"LinkedList\",\"field\":\"next\"}],\"name\":\"LinkedList\",\"optional\":true}"),
+                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+
+        assertEquals(new SchemaAndValue(linkedListSchema, data), converter.toConnectData(TOPIC, jsonBytes));
+    }
 
     @Test
     public void decimalToJson() throws IOException {

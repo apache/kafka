@@ -370,9 +370,19 @@ public class SchemaBuilder implements Schema {
         return builder;
     }
 
+    public SchemaBuilder keySchema(Schema keySchema) {
+        this.keySchema = keySchema;
+        return this;
+    }
+
     @Override
     public Schema keySchema() {
         return keySchema;
+    }
+
+    public Schema valueSchema(Schema valueSchema) {
+        this.valueSchema = valueSchema;
+        return this;
     }
 
     @Override
