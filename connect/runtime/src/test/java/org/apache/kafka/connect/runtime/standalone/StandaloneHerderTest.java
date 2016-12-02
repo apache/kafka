@@ -66,7 +66,9 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
+import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
+import static java.util.Collections.singletonMap;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -296,7 +298,7 @@ public class StandaloneHerderTest {
         expectConfigValidation(connectorConfig);
 
         worker.stopAndAwaitTask(taskId);
-        EasyMock.expectLastCall().andReturn(true);
+        EasyMock.expectLastCall();
 
         worker.startTask(taskId, connectorConfig, taskConfig(SourceSink.SOURCE), herder, TargetState.STARTED);
         EasyMock.expectLastCall().andReturn(true);
@@ -321,7 +323,7 @@ public class StandaloneHerderTest {
         expectConfigValidation(connectorConfig);
 
         worker.stopAndAwaitTask(taskId);
-        EasyMock.expectLastCall().andReturn(true);
+        EasyMock.expectLastCall();
 
         worker.startTask(taskId, connectorConfig, taskConfig(SourceSink.SOURCE), herder, TargetState.STARTED);
         EasyMock.expectLastCall().andReturn(false);
@@ -391,7 +393,7 @@ public class StandaloneHerderTest {
         expectConfigValidation(connConfig);
 
         // Validate accessors with 1 connector
-        listConnectorsCb.onCompletion(null, Collections.singleton(CONNECTOR_NAME));
+        listConnectorsCb.onCompletion(null, singleton(CONNECTOR_NAME));
         EasyMock.expectLastCall();
         ConnectorInfo connInfo = new ConnectorInfo(CONNECTOR_NAME, connConfig, Arrays.asList(new ConnectorTaskId(CONNECTOR_NAME, 0)));
         connectorInfoCb.onCompletion(null, connInfo);
@@ -477,7 +479,7 @@ public class StandaloneHerderTest {
         PowerMock.replayAll();
 
         herder.putTaskConfigs(CONNECTOR_NAME,
-                Arrays.asList(Collections.singletonMap("config", "value")),
+                Arrays.asList(singletonMap("config", "value")),
                 cb);
 
         PowerMock.verifyAll();
@@ -513,7 +515,7 @@ public class StandaloneHerderTest {
     private void expectStop() {
         ConnectorTaskId task = new ConnectorTaskId(CONNECTOR_NAME, 0);
         worker.stopAndAwaitTasks(singletonList(task));
-        EasyMock.expectLastCall().andReturn(Collections.singleton(task));
+        EasyMock.expectLastCall();
         worker.stopConnector(CONNECTOR_NAME);
         EasyMock.expectLastCall().andReturn(true);
     }
