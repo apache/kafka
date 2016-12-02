@@ -296,10 +296,7 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
    * A linked list of watched delayed operations based on some key
    */
   private class Watchers(val key: Any) {
-
-    private case class WatchedOperation(op: T, purged: AtomicBoolean = new AtomicBoolean(false))
-
-    private[this] val operations = new ConcurrentLinkedQueue[WatchedOperation]()
+    private[this] val operations = new ConcurrentLinkedQueue[T]()
 
     // tracked separately because size() is O(n) for ConcurrentLinkedQueue
     private[this] val numWatched = new AtomicInteger(0)
@@ -310,52 +307,43 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
 
     // add the element to watch
     def watch(t: T) {
-      operations.add(WatchedOperation(t))
+      operations.add(t)
       numWatched.incrementAndGet()
-    }
-
-    private def purge(op: WatchedOperation): Boolean = {
-      if (op.purged.compareAndSet(false, true)) {
-        numWatched.decrementAndGet()
-        true
-      } else {
-        false
-      }
     }
 
     // traverse the list and try to complete some watched elements
     def tryCompleteWatched(): Int = {
-      var completed = 0
+      var completedNow = 0
+      var completedAlready = 0
+
       val iter = operations.iterator()
       while (iter.hasNext) {
         val curr = iter.next()
-        if (curr.op.isCompleted) {
-          // another thread has completed this operation, just remove it
-          iter.remove()
-          purge(curr)
-        } else if (curr.op.safeTryComplete()) {
-          iter.remove()
-          if (purge(curr))
-            completed += 1
-        }
+        if (curr.isCompleted)
+          completedAlready += 1
+        else if (curr.safeTryComplete())
+          completedNow += 1
       }
 
-      if (operations.isEmpty)
-        removeKeyIfEmpty(key, this)
+      if (completedNow + completedAlready > 0)
+        purgeCompleted()
 
-      completed
+      completedNow
     }
 
     // traverse the list and purge elements that are already completed by others
     def purgeCompleted(): Int = {
       var purged = 0
       val iter = operations.iterator()
-      while (iter.hasNext) {
-        val curr = iter.next()
-        if (curr.op.isCompleted) {
-          iter.remove()
-          if (purge(curr))
+
+      synchronized {
+        while (iter.hasNext) {
+          val curr = iter.next()
+          if (curr.isCompleted) {
+            iter.remove()
+            numWatched.decrementAndGet()
             purged += 1
+          }
         }
       }
 
