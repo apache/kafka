@@ -327,8 +327,10 @@ object LogConfig {
     * Check that the property values are valid relative to each other
     */
   def validateValues(props: Properties) {
-    require(props.getProperty(SegmentBytesProp).toLong <= props.getProperty(RetentionBytesProp).toLong,
-      s"segment.bytes ${props.getProperty(SegmentBytesProp)} is not less than or equal to retention.bytes ${props.getProperty(RetentionBytesProp)}")
+    val segmentBytes = if (props.getProperty(SegmentBytesProp) == null) Defaults.SegmentSize*1L else props.getProperty(SegmentBytesProp).toLong
+    val retentionBytes = if (props.getProperty(RetentionBytesProp) == null) Defaults.RetentionSize else props.getProperty(RetentionBytesProp).toLong
+    require(segmentBytes <= retentionBytes || retentionBytes == -1,
+      s"segment.bytes ${segmentBytes} is not less than or equal to retention.bytes ${retentionBytes}")
   }
 
   /**
