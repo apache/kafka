@@ -334,9 +334,9 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
     // traverse the list and purge elements that are already completed by others
     def purgeCompleted(): Int = {
       var purged = 0
-      val iter = operations.iterator()
 
       synchronized {
+        val iter = operations.iterator()
         while (iter.hasNext) {
           val curr = iter.next()
           if (curr.isCompleted) {
