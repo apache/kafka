@@ -40,9 +40,36 @@ public class CyclicSchemaTest {
 
     }
 
+    private static final class TreeSchema extends CyclicSchema {
+
+        final Schema underlying = SchemaBuilder.struct().name("Tree")
+                .field("value", Schema.INT64_SCHEMA)
+                .field("children", SchemaBuilder.array(this).build())
+                .build();
+
+        @Override
+        public Schema underlying() {
+            return underlying;
+        }
+
+    }
+
+    private static final class CyclicMapSchema extends CyclicSchema {
+
+        final Schema underlying = SchemaBuilder.map(Schema.STRING_SCHEMA, this).name("CyclicMap").build();
+
+        @Override
+        public Schema underlying() {
+            return underlying;
+        }
+
+    }
+
     @Test
     public void equals() {
         assertEquals(new LinkedListSchema(), new LinkedListSchema());
+        assertEquals(new TreeSchema(), new TreeSchema());
+        assertEquals(new CyclicMapSchema(), new CyclicMapSchema());
     }
 
 }
