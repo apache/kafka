@@ -32,6 +32,7 @@ import kafka.utils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.common.utils.Time
 import org.apache.log4j.{Level, Logger}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -316,7 +317,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
       // any requests should be accepted and queue up, but not handled
       server1.requestHandlerPool.shutdown()
 
-      val t1 = SystemTime.milliseconds
+      val t1 = Time.SYSTEM.milliseconds
       try {
         // this message should be assigned to partition 0 whose leader is on broker 0, but
         // broker 0 will not response within timeoutMs millis.
@@ -324,7 +325,7 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
       } catch {
         case _: FailedToSendMessageException => /* success */
       }
-      val t2 = SystemTime.milliseconds
+      val t2 = Time.SYSTEM.milliseconds
       // make sure we don't wait fewer than timeoutMs
       assertTrue((t2-t1) >= timeoutMs)
 

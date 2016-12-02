@@ -36,8 +36,8 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{LeaderAndIsrRequest, PartitionState, StopReplicaRequest, UpdateMetadataRequest}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
-import org.apache.kafka.common.utils.{Time => JTime}
 
 import scala.collection._
 import scala.collection.JavaConverters._
@@ -102,7 +102,6 @@ object ReplicaManager {
 class ReplicaManager(val config: KafkaConfig,
                      metrics: Metrics,
                      time: Time,
-                     jTime: JTime,
                      val zkUtils: ZkUtils,
                      scheduler: Scheduler,
                      val logManager: LogManager,
@@ -116,7 +115,7 @@ class ReplicaManager(val config: KafkaConfig,
     new Partition(t, p, time, this)
   })
   private val replicaStateChangeLock = new Object
-  val replicaFetcherManager = new ReplicaFetcherManager(config, this, metrics, jTime, threadNamePrefix, quotaManager)
+  val replicaFetcherManager = new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, quotaManager)
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
   val highWatermarkCheckpoints = config.logDirs.map(dir => (new File(dir).getAbsolutePath, new OffsetCheckpoint(new File(dir, ReplicaManager.HighWatermarkFilename)))).toMap
   private var hwThreadInitialized = false
@@ -326,9 +325,9 @@ class ReplicaManager(val config: KafkaConfig,
                      responseCallback: Map[TopicPartition, PartitionResponse] => Unit) {
 
     if (isValidRequiredAcks(requiredAcks)) {
-      val sTime = SystemTime.milliseconds
+      val sTime = time.milliseconds
       val localProduceResults = appendToLocalLog(internalTopicsAllowed, messagesPerPartition, requiredAcks)
-      debug("Produce to local log in %d ms".format(SystemTime.milliseconds - sTime))
+      debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
 
       val produceStatus = localProduceResults.map { case (topicPartition, result) =>
         topicPartition ->

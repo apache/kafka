@@ -18,15 +18,16 @@
 package kafka.cluster
 
 import kafka.log.Log
-import kafka.utils.{SystemTime, Time, Logging}
-import kafka.server.{LogReadResult, LogOffsetMetadata}
+import kafka.utils.Logging
+import kafka.server.{LogOffsetMetadata, LogReadResult}
 import kafka.common.KafkaException
-
 import java.util.concurrent.atomic.AtomicLong
+
+import org.apache.kafka.common.utils.Time
 
 class Replica(val brokerId: Int,
               val partition: Partition,
-              time: Time = SystemTime,
+              time: Time = Time.SYSTEM,
               initialHighWatermarkValue: Long = 0L,
               val log: Option[Log] = None) extends Logging {
   // the high watermark offset value, in non-leader replicas only its message offsets are kept

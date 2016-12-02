@@ -21,12 +21,11 @@ import java.io._
 import java.nio._
 import java.nio.channels._
 import java.util.concurrent.atomic._
+import java.util.concurrent.TimeUnit
 
 import kafka.utils._
 import kafka.message._
 import kafka.common.KafkaException
-import java.util.concurrent.TimeUnit
-
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record.FileRecords

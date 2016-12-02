@@ -35,6 +35,7 @@ import org.apache.kafka.common.protocol.Errors
 import scala.collection.JavaConverters._
 import com.yammer.metrics.core.Gauge
 import org.apache.kafka.common.requests.PartitionState
+import org.apache.kafka.common.utils.Time
 
 /**
  * Data structure that represents a topic partition. The leader maintains the AR, ISR, CUR, RAR

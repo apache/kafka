@@ -26,7 +26,7 @@ import com.yammer.metrics.core.Gauge
 import kafka.api.{ControlledShutdownRequest, RequestOrResponse}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.QuotaId
-import kafka.utils.{Logging, SystemTime}
+import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.network.Send
@@ -34,6 +34,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Protocol, SecurityProtocol}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.utils.Time
 import org.apache.log4j.Logger
 
 object RequestChannel extends Logging {
@@ -107,7 +108,7 @@ object RequestChannel extends Logging {
     trace("Processor %d received request : %s".format(processor, requestDesc(true)))
 
     def updateRequestMetrics() {
-      val endTimeMs = SystemTime.milliseconds
+      val endTimeMs = Time.SYSTEM.milliseconds
       // In some corner cases, apiLocalCompleteTimeMs may not be set when the request completes if the remote
       // processing time is really small. This value is set in KafkaApis from a request handling thread.
       // This may be read in a network thread before the actual update happens in KafkaApis which will cause us to
@@ -158,7 +159,7 @@ object RequestChannel extends Logging {
   }
 
   case class Response(processor: Int, request: Request, responseSend: Send, responseAction: ResponseAction) {
-    request.responseCompleteTimeMs = SystemTime.milliseconds
+    request.responseCompleteTimeMs = Time.SYSTEM.milliseconds
 
     def this(processor: Int, request: Request, responseSend: Send) =
       this(processor, request, responseSend, if (responseSend == null) NoOpAction else SendAction)
@@ -241,7 +242,7 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
   def receiveResponse(processor: Int): RequestChannel.Response = {
     val response = responseQueues(processor).poll()
     if (response != null)
-      response.request.responseDequeueTimeMs = SystemTime.milliseconds
+      response.request.responseDequeueTimeMs = Time.SYSTEM.milliseconds
     response
   }
 

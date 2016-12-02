@@ -17,7 +17,7 @@ import java.util.{Collections, Properties}
 import java.util.concurrent.atomic.AtomicInteger
 
 import kafka.common.KafkaException
-import kafka.coordinator.{GroupOverview, MemberSummary}
+import kafka.coordinator.GroupOverview
 import kafka.utils.Logging
 import org.apache.kafka.clients._
 import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, ConsumerProtocol, RequestFuture}
@@ -25,10 +25,9 @@ import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector
-import org.apache.kafka.common.protocol.types.Struct
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.utils.{SystemTime, Time, Utils}
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{Cluster, Node, TopicPartition}
 
 import scala.collection.JavaConverters._
@@ -200,7 +199,7 @@ object AdminClient {
   def create(props: Map[String, _]): AdminClient = create(new AdminConfig(props))
 
   def create(config: AdminConfig): AdminClient = {
-    val time = new SystemTime
+    val time = Time.SYSTEM
     val metrics = new Metrics(time)
     val metadata = new Metadata
     val channelBuilder = ClientUtils.createChannelBuilder(config.values())
