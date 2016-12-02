@@ -26,7 +26,8 @@ import kafka.common.{LogCleaningAbortedException, TopicAndPartition}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.OffsetCheckpoint
 import kafka.utils.CoreUtils._
-import kafka.utils.{Logging, Pool, Time}
+import kafka.utils.{Logging, Pool}
+import org.apache.kafka.common.utils.Time
 
 import scala.collection.{immutable, mutable}
 

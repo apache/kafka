@@ -28,7 +28,7 @@ import kafka.message._
 
 import scala.math._
 import joptsimple._
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Time, Utils}
 
 /**
  * This test does linear writes using either a kafka log or a file and measures throughput and latency.
@@ -201,7 +201,7 @@ object TestLinearWriteSpeed {
   
   class LogWritable(val dir: File, config: LogConfig, scheduler: Scheduler, val messages: ByteBufferMessageSet) extends Writable {
     Utils.delete(dir)
-    val log = new Log(dir, config, 0L, scheduler, SystemTime)
+    val log = new Log(dir, config, 0L, scheduler, Time.SYSTEM)
     def write(): Int = {
       log.append(messages, true)
       messages.sizeInBytes

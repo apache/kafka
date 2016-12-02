@@ -24,10 +24,9 @@ import kafka.utils._
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
-
 import java.util.Properties
 import java.io.File
 
@@ -43,7 +42,6 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
   var server: KafkaServer = null
   var logSize: Int = 100
   var simpleConsumer: SimpleConsumer = null
-  var time: Time = new MockTime()
 
   @Before
   override def setUp() {
@@ -53,8 +51,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
     config.setProperty(KafkaConfig.OffsetsRetentionCheckIntervalMsProp, retentionCheckInterval.toString)
     val logDirPath = config.getProperty("log.dir")
     logDir = new File(logDirPath)
-    time = new MockTime()
-    server = TestUtils.createServer(KafkaConfig.fromProps(config), time)
+    server = TestUtils.createServer(KafkaConfig.fromProps(config), Time.SYSTEM)
     simpleConsumer = new SimpleConsumer("localhost", server.boundPort(), 1000000, 64*1024, "test-client")
     val consumerMetadataRequest = GroupCoordinatorRequest(group)
     Stream.continually {
@@ -255,7 +252,7 @@ class OffsetCommitTest extends ZooKeeperTestHarness {
     // committed offset should expire
     val commitRequest2 = OffsetCommitRequest(
       groupId = group,
-      requestInfo = immutable.Map(topicPartition -> OffsetAndMetadata(3L, "metadata", SystemTime.milliseconds - 2*24*60*60*1000L)),
+      requestInfo = immutable.Map(topicPartition -> OffsetAndMetadata(3L, "metadata", Time.SYSTEM.milliseconds - 2*24*60*60*1000L)),
       versionId = 1
     )
     assertEquals(Errors.NONE.code, simpleConsumer.commitOffsets(commitRequest2).commitStatus.get(topicPartition).get)

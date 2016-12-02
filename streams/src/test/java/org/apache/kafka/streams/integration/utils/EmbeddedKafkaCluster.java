@@ -36,29 +36,35 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     private static final int DEFAULT_BROKER_PORT = 0; // 0 results in a random port being selected
     private EmbeddedZookeeper zookeeper = null;
     private final KafkaEmbedded[] brokers;
+    private final Properties brokerConfig;
 
     public EmbeddedKafkaCluster(final int numBrokers) {
-        brokers = new KafkaEmbedded[numBrokers];
+        this(numBrokers, new Properties());
     }
 
-    public MockTime time = new MockTime();
+    public EmbeddedKafkaCluster(final int numBrokers, final Properties brokerConfig) {
+        brokers = new KafkaEmbedded[numBrokers];
+        this.brokerConfig = brokerConfig;
+    }
+
+    public final MockTime time = new MockTime();
 
     /**
      * Creates and starts a Kafka cluster.
      */
     public void start() throws IOException, InterruptedException {
-        final Properties brokerConfig = new Properties();
-
         log.debug("Initiating embedded Kafka cluster startup");
         log.debug("Starting a ZooKeeper instance");
         zookeeper = new EmbeddedZookeeper();
         log.debug("ZooKeeper instance is running at {}", zKConnectString());
+
         brokerConfig.put(KafkaConfig$.MODULE$.ZkConnectProp(), zKConnectString());
         brokerConfig.put(KafkaConfig$.MODULE$.PortProp(), DEFAULT_BROKER_PORT);
-        brokerConfig.put(KafkaConfig$.MODULE$.DeleteTopicEnableProp(), true);
-        brokerConfig.put(KafkaConfig$.MODULE$.LogCleanerDedupeBufferSizeProp(), 2 * 1024 * 1024L);
-        brokerConfig.put(KafkaConfig$.MODULE$.GroupMinSessionTimeoutMsProp(), 0);
-        brokerConfig.put(KafkaConfig$.MODULE$.AutoCreateTopicsEnableProp(), false);
+
+        putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.DeleteTopicEnableProp(), true);
+        putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.LogCleanerDedupeBufferSizeProp(), 2 * 1024 * 1024L);
+        putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.GroupMinSessionTimeoutMsProp(), 0);
+        putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.AutoCreateTopicsEnableProp(), false);
 
         for (int i = 0; i < brokers.length; i++) {
             brokerConfig.put(KafkaConfig$.MODULE$.BrokerIdProp(), i);
@@ -68,6 +74,11 @@ public class EmbeddedKafkaCluster extends ExternalResource {
             log.debug("Kafka instance is running at {}, connected to ZooKeeper at {}",
                 brokers[i].brokerList(), brokers[i].zookeeperConnect());
         }
+    }
+
+    private void putIfAbsent(final Properties props, final String propertyKey, final Object propertyValue) {
+        if (!props.containsKey(propertyKey))
+            brokerConfig.put(propertyKey, propertyValue);
     }
 
     /**
