@@ -22,8 +22,10 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -44,13 +46,22 @@ import java.util.concurrent.TimeUnit;
 class SourceTaskOffsetCommitter {
     private static final Logger log = LoggerFactory.getLogger(SourceTaskOffsetCommitter.class);
 
-    private WorkerConfig config;
-    private ScheduledExecutorService commitExecutorService = null;
-    private final HashMap<ConnectorTaskId, ScheduledCommitTask> committers = new HashMap<>();
+    private final WorkerConfig config;
+    private final ScheduledExecutorService commitExecutorService;
+    private final ConcurrentMap<ConnectorTaskId, ScheduledFuture<?>> committers;
 
-    SourceTaskOffsetCommitter(WorkerConfig config) {
+    // visible for testing
+    SourceTaskOffsetCommitter(WorkerConfig config,
+                              ScheduledExecutorService commitExecutorService,
+                              ConcurrentMap<ConnectorTaskId, ScheduledFuture<?>> committers) {
         this.config = config;
-        commitExecutorService = Executors.newSingleThreadScheduledExecutor();
+        this.commitExecutorService = commitExecutorService;
+        this.committers = committers;
+    }
+
+    public SourceTaskOffsetCommitter(WorkerConfig config) {
+        this(config, Executors.newSingleThreadScheduledExecutor(),
+                new ConcurrentHashMap<ConnectorTaskId, ScheduledFuture<?>>());
     }
 
     public void close(long timeoutMs) {
@@ -65,72 +76,45 @@ class SourceTaskOffsetCommitter {
     }
 
     public void schedule(final ConnectorTaskId id, final WorkerSourceTask workerTask) {
-        synchronized (committers) {
-            long commitIntervalMs = config.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
-            ScheduledFuture<?> commitFuture = commitExecutorService.schedule(new Runnable() {
-                @Override
-                public void run() {
-                    commit(id, workerTask);
-                }
-            }, commitIntervalMs, TimeUnit.MILLISECONDS);
-            committers.put(id, new ScheduledCommitTask(commitFuture));
-        }
+        long commitIntervalMs = config.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
+        ScheduledFuture<?> commitFuture = commitExecutorService.scheduleWithFixedDelay(new Runnable() {
+            @Override
+            public void run() {
+                commit(workerTask);
+            }
+        }, commitIntervalMs, commitIntervalMs, TimeUnit.MILLISECONDS);
+        committers.put(id, commitFuture);
     }
 
     public void remove(ConnectorTaskId id) {
-        final ScheduledCommitTask task;
-        synchronized (committers) {
-            task = committers.remove(id);
-            task.cancelled = true;
-            task.commitFuture.cancel(false);
-        }
-        if (task.finishedLatch != null) {
-            try {
-                task.finishedLatch.await();
-            } catch (InterruptedException e) {
-                throw new ConnectException("Unexpected interruption in SourceTaskOffsetCommitter.", e);
-            }
+        final ScheduledFuture<?> task = committers.remove(id);
+        if (task == null)
+            return;
+
+        try {
+            task.cancel(false);
+            if (!task.isDone())
+                task.get();
+        } catch (CancellationException e) {
+            // ignore
+            log.trace("Offset commit thread was cancelled by another thread while removing connector task with id: {}", id);
+        } catch (ExecutionException | InterruptedException e) {
+            throw new ConnectException("Unexpected interruption in SourceTaskOffsetCommitter while removing task with id: " + id, e);
         }
     }
 
-    private void commit(ConnectorTaskId id, WorkerSourceTask workerTask) {
-        final ScheduledCommitTask task;
-        synchronized (committers) {
-            task = committers.get(id);
-            if (task == null || task.cancelled)
-                return;
-            task.finishedLatch = new CountDownLatch(1);
-        }
-
+    private void commit(WorkerSourceTask workerTask) {
+        log.debug("Committing offsets for {}", workerTask);
         try {
-            log.debug("Committing offsets for {}", workerTask);
-            boolean success = workerTask.commitOffsets();
-            if (!success) {
-                log.error("Failed to commit offsets for {}", workerTask);
+            if (workerTask.commitOffsets()) {
+                return;
             }
+            log.error("Failed to commit offsets for {}", workerTask);
         } catch (Throwable t) {
             // We're very careful about exceptions here since any uncaught exceptions in the commit
             // thread would cause the fixed interval schedule on the ExecutorService to stop running
             // for that task
             log.error("Unhandled exception when committing {}: ", workerTask, t);
-        } finally {
-            synchronized (committers) {
-                task.finishedLatch.countDown();
-                if (!task.cancelled)
-                    schedule(id, workerTask);
-            }
-        }
-    }
-
-    private static class ScheduledCommitTask {
-        ScheduledFuture<?> commitFuture;
-        boolean cancelled;
-        CountDownLatch finishedLatch;
-
-        ScheduledCommitTask(ScheduledFuture<?> commitFuture) {
-            this.commitFuture = commitFuture;
-            this.cancelled = false;
-            this.finishedLatch = null;
         }
     }
 }

@@ -181,7 +181,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         // Make each poll() take the offset commit interval
         Capture<Collection<SinkRecord>> capturedRecords
                 = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
-        expectOffsetFlush(1L, null, null, 0, true);
+        expectOffsetCommit(1L, null, null, 0, true);
         expectStopTask();
 
         PowerMock.replayAll();
@@ -207,12 +207,12 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     }
 
     @Test
-    public void testCommitTaskFlushFailure() throws Exception {
+    public void testCommitFailure() throws Exception {
         expectInitializeTask();
         expectPollInitialAssignment();
 
         Capture<Collection<SinkRecord>> capturedRecords = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
-        expectOffsetFlush(1L, new RuntimeException(), null, 0, true);
+        expectOffsetCommit(1L, new RuntimeException(), null, 0, true);
         // Should rewind to last known good positions, which in this case will be the offsets loaded during initialization
         // for all topic partitions
         consumer.seek(TOPIC_PARTITION, FIRST_OFFSET);
@@ -244,14 +244,14 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     }
 
     @Test
-    public void testCommitTaskSuccessAndFlushFailure() throws Exception {
-        // Validate that we rewind to the correct offsets if a task's flush method throws an exception
+    public void testCommitSuccessFollowedByFailure() throws Exception {
+        // Validate that we rewind to the correct offsets if a task's preCommit() method throws an exception
 
         expectInitializeTask();
         expectPollInitialAssignment();
         Capture<Collection<SinkRecord>> capturedRecords = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
-        expectOffsetFlush(1L, null, null, 0, true);
-        expectOffsetFlush(2L, new RuntimeException(), null, 0, true);
+        expectOffsetCommit(1L, null, null, 0, true);
+        expectOffsetCommit(2L, new RuntimeException(), null, 0, true);
         // Should rewind to last known committed positions
         consumer.seek(TOPIC_PARTITION, FIRST_OFFSET + 1);
         PowerMock.expectLastCall();
@@ -290,7 +290,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
 
         Capture<Collection<SinkRecord>> capturedRecords
                 = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT);
-        expectOffsetFlush(1L, null, new Exception(), 0, true);
+        expectOffsetCommit(1L, null, new Exception(), 0, true);
         expectStopTask();
 
         PowerMock.replayAll();
@@ -322,7 +322,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         // Cut down amount of time to pass in each poll so we trigger exactly 1 offset commit
         Capture<Collection<SinkRecord>> capturedRecords
                 = expectPolls(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT / 2);
-        expectOffsetFlush(2L, null, null, WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_DEFAULT, false);
+        expectOffsetCommit(2L, null, null, WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_DEFAULT, false);
         expectStopTask();
 
         PowerMock.replayAll();
@@ -633,11 +633,11 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         return EasyMock.expectLastCall();
     }
 
-    private Capture<OffsetCommitCallback> expectOffsetFlush(final long expectedMessages,
-                                                            final RuntimeException flushError,
-                                                            final Exception consumerCommitError,
-                                                            final long consumerCommitDelayMs,
-                                                            final boolean invokeCallback)
+    private Capture<OffsetCommitCallback> expectOffsetCommit(final long expectedMessages,
+                                                             final RuntimeException error,
+                                                             final Exception consumerCommitError,
+                                                             final long consumerCommitDelayMs,
+                                                             final boolean invokeCallback)
             throws Exception {
         final long finalOffset = FIRST_OFFSET + expectedMessages;
 
@@ -646,11 +646,13 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         offsetsToCommit.put(TOPIC_PARTITION, new OffsetAndMetadata(finalOffset));
         offsetsToCommit.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
         offsetsToCommit.put(TOPIC_PARTITION3, new OffsetAndMetadata(FIRST_OFFSET));
-        sinkTask.flush(offsetsToCommit);
-        IExpectationSetters<Object> flushExpectation = PowerMock.expectLastCall();
-        if (flushError != null) {
-            flushExpectation.andThrow(flushError).once();
+        sinkTask.preCommit(offsetsToCommit);
+        IExpectationSetters<Object> expectation = PowerMock.expectLastCall();
+        if (error != null) {
+            expectation.andThrow(error).once();
             return null;
+        } else {
+            expectation.andReturn(offsetsToCommit);
         }
 
         final Capture<OffsetCommitCallback> capturedCallback = EasyMock.newCapture();
